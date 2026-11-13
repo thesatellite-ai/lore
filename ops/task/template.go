@@ -528,7 +528,7 @@ func (o ops) templateList(ctx context.Context, _ TemplateListIn) (TemplateListOu
 		b.WriteString(t.Name + "  " + orDefault(t.Store, "repo") + "  1 task, " + strconv.Itoa(kids) + " sub-tasks, " + strconv.Itoa(items) + " checklist items\n")
 	}
 	if len(out.Data) == 0 {
-		b.WriteString("no task templates (lore task template add <name> --from-file <file.yaml>)\n")
+		b.WriteString("no task templates (lore task template add --name <name> --from-file <file.yaml>)\n")
 	}
 	out.Human = b.String()
 	return out, nil

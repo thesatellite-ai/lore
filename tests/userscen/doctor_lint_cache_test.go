@@ -135,7 +135,7 @@ func TestDoctorLint_ContextFindings(t *testing.T) {
 	id := ruleIDRe.FindString(p.c.MustLore("rule", "list").Stdout)
 	out := p.lint(t, "--context")
 	if !out.has("no_summary", "pinned rule has no summary", "lore rule edit --id "+id+" --summary") ||
-		!out.has("untagged", "pinned but untagged", "lore rule edit --id "+id+" --tag <tag> (create a new tag first: lore tag add --name=<tag>)") {
+		!out.has("untagged", "pinned but untagged", "lore rule edit --id "+id+" --tag <tag> (create a new tag first: lore tag add --name <tag>)") {
 		t.Fatalf("context findings on an untagged pinned rule: %+v", out)
 	}
 	// Plain lint does not include the context checks.

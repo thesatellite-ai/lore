@@ -1110,6 +1110,6 @@ func (o ops) secretsLink(ctx context.Context, in SecretsLinkIn) (SecretsBatchOut
 		return SecretsBatchOut{}, err
 	}
 	return SecretsBatchOut{Count: 1, Rows: []string{in.Row},
-		Human: fmt.Sprintf("Replaced ${secret:unstored} #%d in %s %s with ${secret:%s}.\nIts task stays open: rotate the secret, then lore task done <task>.\n",
+		Human: fmt.Sprintf("Replaced ${secret:unstored} #%d in %s %s with ${secret:%s}.\nIts task stays open: rotate the secret, then lore task done --id <task>.\n",
 			in.At, in.Row, field, targetText(newT))}, nil
 }

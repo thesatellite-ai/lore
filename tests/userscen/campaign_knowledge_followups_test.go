@@ -4,7 +4,7 @@ package userscen
 
 // Knowledge campaign follow-ups (batch 2026-11-08): the gaps the knowledge
 // campaign left open, each driven through the built binary.
-//   - `lore explain <id> --json` carries every copy (place, ref, present,
+//   - `lore explain --id <id> --json` carries every copy (place, ref, present,
 //     version stamps, winner), the winning place, its rule and the land
 //     decision, not only the id;
 //   - editing a row that landed on origin/main after this checkout's last
@@ -28,7 +28,7 @@ import (
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
-// fkExplain is `lore explain <id> --json`.
+// fkExplain is `lore explain --id <id> --json`.
 type fkExplain struct {
 	Items  []string `json:"items"`
 	ID     string   `json:"id"`

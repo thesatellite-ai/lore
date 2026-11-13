@@ -254,7 +254,7 @@ func Ops(env Env, git CommitResolver) []op.Entry {
 			Name: OpAdd, Summary: "Link a git commit to an entity (--entity=tsk_… --commit=<sha>)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "link the current commit", CLI: "lore link add --entity=tsk_<id> --commit=HEAD", Want: "✓ linked"}},
+			Examples: []op.Example{{Title: "link the current commit", CLI: "lore link add --entity tsk_<id> --commit HEAD", Want: "✓ linked"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List commit links (filter by --entity or --commit)",
@@ -285,7 +285,7 @@ type ops struct {
 func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if in.Entity == "" || in.Commit == "" {
 		return AddOut{}, errs.New(errs.InvalidInput, "--entity and --commit are required").
-			WithHint("example: lore link add --entity=tsk_<id> --commit=HEAD")
+			WithHint("example: lore link add --entity tsk_<id> --commit HEAD")
 	}
 	tbl, id, core, err := o.entity(ctx, in.Entity)
 	if err != nil {

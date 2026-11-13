@@ -229,7 +229,7 @@ func TagRefs(ctx context.Context, env Env, n Noun, project string, names []strin
 		}
 		if len(found) == 0 {
 			return nil, errs.New(errs.NotFound, n.Name+": tag "+Quote(nm)+" not found in this project").
-				WithHint("create it with `lore tag add --name=" + nm + "`")
+				WithHint("create it with `lore tag add --name " + nm + "`")
 		}
 		id := found[0]
 		if !slices.Contains(out, id) {

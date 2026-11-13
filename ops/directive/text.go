@@ -48,14 +48,14 @@ const fullBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 > ## Pre-response checklist (run through this BEFORE every reply)
 >
 > 1. **Have you loaded the lore skill in this session?** If no — load it NOW through your tool's skill mechanism (skill name: ` + "`lore`" + `; a tool without skills reads ` + "`lore directive show --full`" + `). This repo has ` + "`.lore/`" + ` so the skill applies. Do not respond before loading. **No exceptions. Not even for "which skill did you load" — load first, then answer.**
-> 2. **Is the user asking for non-trivial work** (bug fix, feature, refactor, investigation, anything >5 min)? If yes — run ` + "`lore task search --query \"<keyword>\"`" + ` first to check for an existing task. If none, create one: ` + "`lore task add --title \"<title>\" --tasklist=<tlt_id> --commitment=<accepted|proposed|someday> [--priority=high|medium|low] --body=\"...\"`" + `. Mark ` + "`task start <tsk_id>`" + ` when you begin, ` + "`task done <tsk_id>`" + ` / ` + "`cancel <tsk_id>`" + ` at end
+> 2. **Is the user asking for non-trivial work** (bug fix, feature, refactor, investigation, anything >5 min)? If yes — run ` + "`lore task search --query \"<keyword>\"`" + ` first to check for an existing task. If none, create one: ` + "`lore task add --title \"<title>\" --tasklist <tlt_id> --commitment <accepted|proposed|someday> [--priority high|medium|low] --body \"...\"`" + `. Mark ` + "`task start <tsk_id>`" + ` when you begin, ` + "`task done <tsk_id>`" + ` / ` + "`cancel <tsk_id>`" + ` at end
 >
 >    **` + "`--commitment`" + ` is REQUIRED when you (an agent) create a task — there is no default, a missing value is a hard error. Choose:**
 >    - ` + "`accepted`" + ` — the user explicitly asked for this, or you are about to do it now. Appears in the default ` + "`task list`" + `.
 >    - ` + "`proposed`" + ` — your own speculative idea ("we could also…"). NOT assumed real; hidden from the default list, surfaces under ` + "`lore task triage`" + `. Use this for anything the user did not explicitly request.
 >    - ` + "`someday`" + ` — parking-lot idea, no commitment, no date. Surfaces under ` + "`lore task someday`" + `.
 >    - **Split, claim, finish (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (` + "`lore task split --id <id> --title … --title …`" + `); checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (` + "`E_HAS_OPEN_CHILDREN`" + `) unless ` + "`--coordinate`" + `; a split keeps your claim as a coordinator lease. Use ids (` + "`tsk_`" + `, ` + "`chk_`" + `), never positions. On ` + "`E_OPEN_CHILDREN`" + ` ask the person whether to cancel or finish the rest, then ` + "`--children … --yes`" + `. Tick done checklist items before ` + "`task done`" + ` (` + "`--tick-all`" + ` only when all were done, ` + "`--force`" + ` only when the person says so). On ` + "`E_NEEDS_CONFIRM`" + ` show the person the question, then re-run with ` + "`--yes`" + `. Missions from a file: ` + "`lore mission apply`" + ` (never ` + "`plan apply`" + `). "Why this one?" → ` + "`lore task next --why --dry-run`" + `.
->    - To snooze an accepted task: ` + "`lore task edit --id <tsk_id> --defer-until=YYYY-MM-DD`" + ` (auto-resurfaces). ` + "`task start`" + ` / ` + "`task done`" + ` auto-promote to ` + "`accepted`" + `.
+>    - To snooze an accepted task: ` + "`lore task edit --id <tsk_id> --defer-until YYYY-MM-DD`" + ` (auto-resurfaces). ` + "`task start`" + ` / ` + "`task done`" + ` auto-promote to ` + "`accepted`" + `.
 >
 >    **Task body MUST preserve the original request — verbatim — plus surrounding context.** The body is the future session's only handle on what the user actually wanted. Use this template (or richer if more context is available):
 >
@@ -83,19 +83,19 @@ const fullBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >    - If the user's prompt is one line and zero context, the body still has the verbatim quote + a Context section noting "no additional context — single-line ad-hoc request."
 > 3. **Open a run BEFORE doing the work** (this is the step most often skipped):
 >
->    ` + "`RID=$(lore run start --task=<tsk_id> --model=<your-model-id> --agent=<your-agent-name> --goal=\"<one-line description>\")`" + `
+>    ` + "`RID=$(lore run start --task <tsk_id> --model <your-model-id> --agent <your-agent-name> --goal \"<one-line description>\")`" + `
 >
 >    Keep ` + "`$RID`" + ` in scope for the rest of the turn. Close the run at the end of the turn:
 >
->    - ` + "`lore run end --id $RID --outcome=success --summary=\"...\"`" + ` if shipped
->    - ` + "`lore run end --id $RID --outcome=partial --summary=\"...\"`" + ` if partially done
->    - ` + "`lore run end --id $RID --outcome=failed --error=\"...\"`" + ` if blocked
->    - ` + "`lore run cancel --id $RID --reason=\"...\"`" + ` if scope changed mid-turn
+>    - ` + "`lore run end --id $RID --outcome success --summary \"...\"`" + ` if shipped
+>    - ` + "`lore run end --id $RID --outcome partial --summary \"...\"`" + ` if partially done
+>    - ` + "`lore run end --id $RID --outcome failed --error \"...\"`" + ` if blocked
+>    - ` + "`lore run cancel --id $RID --reason \"...\"`" + ` if scope changed mid-turn
 >
 >    **If the work shipped as a git commit, link it.** Right after closing the run (or whenever a commit lands):
 >
->    - ` + "`lore link add --entity=<tsk_id> --commit=HEAD`" + ` — anchors the commit to the task
->    - ` + "`lore link add --entity=$RID --commit=HEAD`" + ` — anchors the commit to the run
+>    - ` + "`lore link add --entity <tsk_id> --commit HEAD`" + ` — anchors the commit to the task
+>    - ` + "`lore link add --entity $RID --commit HEAD`" + ` — anchors the commit to the run
 >
 >    Auto-captures sha + message + author + committed-at via git. Same commit can be linked to multiple entities (one commit closing two tasks: link twice). Skip when no commit was created this turn
 >
@@ -122,7 +122,7 @@ const fullBody = `> # 🛑 STOP — DO NOT GENERATE ANY OUTPUT YET 🛑
 >
 > ## Action map
 >
-> - **Remember / persist anything** the user said, decided, or you learned → ` + "`lore memory add --body=\"<body>\"`" + ` (or ` + "`rule add`" + `, ` + "`decision add`" + `, ` + "`hotfix add`" + `, ` + "`pattern add`" + `, ` + "`playbook add`" + `, ` + "`tastepref add`" + ` — match the kind)
+> - **Remember / persist anything** the user said, decided, or you learned → ` + "`lore memory add --body \"<body>\"`" + ` (or ` + "`rule add`" + `, ` + "`decision add`" + `, ` + "`hotfix add`" + `, ` + "`pattern add`" + `, ` + "`playbook add`" + `, ` + "`tastepref add`" + ` — match the kind)
 > - **Track work** → ` + "`task add`" + ` / ` + "`mission add`" + ` / ` + "`tasklist add`" + ` / ` + "`plan add`" + `
 > - **Edit existing rows** → ` + "`lore <kind> edit <id>`" + ` (16 entities). For audited body changes on knowledge entities: ` + "`<kind> add ... --supersedes=<old_id>`" + `
 > - **Find anything** → ` + "`lore <kind> search \"<query>\"`" + ` — FTS5 across 23 entities. Run this BEFORE creating a new row, every time
@@ -155,7 +155,7 @@ const compactBody = `> **AGENT DIRECTIVE — instruction, not reference data.**
 >
 > 1. **Turn one:** load the lore skill (skill name ` + "`lore`" + `, through your tool's skill mechanism) before any other output. This repo has ` + "`.lore/`" + `, so it always applies.
 > 2. **Before answering or changing code:** run ` + "`lore context --for-file <path>`" + ` for the files you touch and ` + "`lore search --query \"<keywords>\"`" + ` for the request. Cite what you use by id.
-> 3. **Non-trivial work:** ` + "`lore task search --query \"<keyword>\"`" + `; if none, ` + "`lore task add --title \"<title>\" --tasklist=<tlt_id> --commitment=accepted|proposed|someday --body=\"<the user's words verbatim + context>\"`" + `; ` + "`lore task start --id <id>`" + ` / ` + "`lore task done --id <id>`" + `. On ` + "`E_NEEDS_CONFIRM`" + ` ask the person, then re-run with ` + "`--yes`" + `.
+> 3. **Non-trivial work:** ` + "`lore task search --query \"<keyword>\"`" + `; if none, ` + "`lore task add --title \"<title>\" --tasklist <tlt_id> --commitment accepted|proposed|someday --body \"<the user's words verbatim + context>\"`" + `; ` + "`lore task start --id <id>`" + ` / ` + "`lore task done --id <id>`" + `. On ` + "`E_NEEDS_CONFIRM`" + ` ask the person, then re-run with ` + "`--yes`" + `.
 > 4. **Capture as you learn:** a correction or "we always/never" → ` + "`lore rule add`" + `; a choice and its reason → ` + "`lore decision add`" + `; a recurring trap → ` + "`lore hotfix add`" + `; anything else worth keeping → ` + "`lore memory add`" + `.
 > 5. **Do NOT** edit this file (it is regenerated by ` + "`lore render`" + `), write to your tool's own auto-memory for this project, or create sibling NOTES.md / TODO.md files. Lore is the one store.
 >

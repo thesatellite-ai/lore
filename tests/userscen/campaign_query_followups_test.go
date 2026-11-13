@@ -67,9 +67,9 @@ func TestCampaignQueryFollowups_SearchNegation(t *testing.T) {
 	}
 	for _, q := range []string{"-friday", "-friday -monday"} {
 		c.Lore("search", "--", q).Fails(t, cliExitUsage, "[E_INVALID_INPUT] search needs a word to search for",
-			`hint: add a word to search for: lore search "deploy -friday"`)
+			`hint: add a word to search for: lore search --query "deploy -friday"`)
 	}
-	c.Lore("search", "--help").OK(t).Says(t, "-word leaves out rows holding word", "Emoji are not indexed", `lore search "deploy -friday"`)
+	c.Lore("search", "--help").OK(t).Says(t, "-word leaves out rows holding word", "Emoji are not indexed", `lore search --query "deploy -friday"`)
 }
 
 // TestCampaignQueryFollowups_TimeSpentTaskDeletedAt (scen-query OD-4

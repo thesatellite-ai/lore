@@ -144,7 +144,7 @@ func (o ops) actorMergeOps() []op.Entry {
 		func(ctx context.Context, in ActorMergeIn) (ActorMergeOut, error) {
 			in.From, in.Into = strings.TrimSpace(in.From), strings.TrimSpace(in.Into)
 			if in.From == "" || in.Into == "" {
-				return ActorMergeOut{}, errs.New(errs.InvalidInput, "actor merge: give two actor ids: lore actor merge <from> <into>").
+				return ActorMergeOut{}, errs.New(errs.InvalidInput, "actor merge: give two actor ids: lore actor merge --from <from> --into <into>").
 					WithHint("`lore doctor` names the actors that share a stable key, with the command")
 			}
 			plan := in

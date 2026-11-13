@@ -121,7 +121,7 @@ func useCloneTop(p string) (string, error) {
 			WithHint("clone the store first: git clone <store url> " + abs + ", then lore store use --path " + abs)
 	case !isGit:
 		return "", errs.New(errs.InvalidInput, useVerb+": "+top+" is a folder store (no git), which lore already reads where it is; store use is for git clones").
-			WithHint("attach a folder store by its file:// url: lore store add <name> file://" + top)
+			WithHint("attach a folder store by its file:// url: lore store add --name <name> --url file://" + top)
 	}
 	if fi, gerr := os.Lstat(filepath.Join(top, ".git")); gerr != nil || !fi.IsDir() {
 		return "", errs.New(errs.BadPath, useVerb+": "+top+"/.git is a file (a linked worktree or a separate git dir); lore keeps its lock and state in a clone's .git folder").

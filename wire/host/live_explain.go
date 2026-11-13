@@ -36,7 +36,7 @@ const ruleDefaultReadThrough = "default-branch read-through (F1)"
 func (l liveSync) Explain(ctx context.Context, in opssync.ExplainIn) (opssync.ExplainOut, error) {
 	id := strings.TrimSpace(in.ID)
 	if id == "" {
-		return opssync.ExplainOut{}, errs.New(errs.InvalidInput, "name a row id: lore explain <id>")
+		return opssync.ExplainOut{}, errs.New(errs.InvalidInput, "name a row id: lore explain --id <id>")
 	}
 	if _, perr := ids.ParseAny(id); perr != nil { // a typo is not "found nowhere"
 		return opssync.ExplainOut{}, errs.Wrap(errs.InvalidID, "explain: "+strconv.Quote(id)+" is not a row id (like mem_…, rul_…, tsk_…)", perr).

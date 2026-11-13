@@ -266,12 +266,12 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{{Title: "comment on a memory",
-				CLI: `lore comment add --on-table=memories --on-id=mem_<id> --body="agreed; revisit Q3"`, Want: "✓ comment cmt_"}},
+				CLI: `lore comment add --on-table memories --on-id mem_<id> --body "agreed; revisit Q3"`, Want: "✓ comment cmt_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List comments (optionally filtered by entity)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
-			Examples: []op.Example{{Title: "comments of one row", CLI: "lore comment list --on-id=mem_<id> --json", Want: `"data"`}},
+			Examples: []op.Example{{Title: "comments of one row", CLI: "lore comment list --on-id mem_<id> --json", Want: `"data"`}},
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "FTS5 search across comment body",
@@ -295,7 +295,7 @@ type ops struct{ env Env }
 func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if strings.TrimSpace(in.Body) == "" {
 		return AddOut{}, errs.New(errs.EmptyBody, "comment add: the body is empty").
-			WithHint(`lore comment add --on-table=<table> --on-id=<id> --body="<text>"`)
+			WithHint(`lore comment add --on-table <table> --on-id <id> --body "<text>"`)
 	}
 	tbl, id, err := o.target(ctx, store.Source(in.To), in.OnTable, in.OnID)
 	if err != nil {

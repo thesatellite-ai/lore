@@ -136,7 +136,7 @@ func Catalog() []Step {
 		{ // ONB 4.3
 			ID:    StepGitHub,
 			Title: "Which GitHub account?",
-			Help:  "Pick the account this setup works as. lore then finds how git reaches GitHub as it: an ssh route (an alias of ~/.ssh/config, or github.com itself) that logs in as the account, else https with its gh login. lore never edits ~/.ssh/config. Skip it (save it with no answers: lore setup apply <setup> --step github --answers '{}') when your stores are not on GitHub (another git host, a local path) or this machine is offline: git then reaches each store as it is configured.",
+			Help:  "Pick the account this setup works as. lore then finds how git reaches GitHub as it: an ssh route (an alias of ~/.ssh/config, or github.com itself) that logs in as the account, else https with its gh login. lore never edits ~/.ssh/config. Skip it (save it with no answers: lore setup apply --setup <setup> --step github --answers '{}') when your stores are not on GitHub (another git host, a local path) or this machine is offline: git then reaches each store as it is configured.",
 			Kinds: allKinds(),
 			Needs: []StepID{StepIdentity},
 			// B1-24: a store on another git host or a local path, or a

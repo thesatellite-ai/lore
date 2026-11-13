@@ -163,7 +163,7 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		if fixV1Left(t, five) {
 			t.Fatal("lore fix --all <folder> left v1 rows in the repo under it")
 		}
-		lap.Lore("", "fix", "--all", filepath.Join(code, "missing")).Fails(t, 20, "is not a folder", "lore fix --all ~/code ~/work")
+		lap.Lore("", "fix", "--all", filepath.Join(code, "missing")).Fails(t, 20, "is not a folder", "lore fix --all --dirs ~/code --dirs ~/work")
 	})
 
 	w.Step("day1/fix-all-over-the-setup-folder", func() {

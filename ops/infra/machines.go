@@ -469,7 +469,7 @@ func validLabel(s string) error {
 	for _, r := range s {
 		if unicode.IsControl(r) {
 			return errs.New(errs.InvalidInput, "machine: a label must be one line with no control characters").
-				WithHint("give the label as one line of text, e.g. lore machine label work-laptop")
+				WithHint("give the label as one line of text, e.g. lore machine label --label work-laptop")
 		}
 	}
 	return nil

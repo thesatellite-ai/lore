@@ -94,7 +94,7 @@ func (a *App) personalUnplacedFindings() []DoctorFinding {
 			}
 			out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
 				Message: "personal store folder " + filepath.Join(dir, f) + " holds notes lore 0.1.17 filed for org " + f + ", which this machine has no entry for, so they load in no repo",
-				Fix:     "set org " + f + " up on this machine (its repos then read them), or move each note: lore move <id> --to me"})
+				Fix:     "set org " + f + " up on this machine (its repos then read them), or move each note: lore move --id <id> --to me"})
 		}
 	}
 	return out

@@ -186,7 +186,7 @@ func editorCommand(terminal func() bool) (string, error) {
 	}
 	if !terminal() {
 		return "", errs.New(errs.InvalidInput, "edit: no editor: $VISUAL and $EDITOR are not set, and without a terminal "+defaultEditor+" cannot run").
-			WithHint("set EDITOR (for example EDITOR=\"code --wait\"), or write a view back without an editor: lore row markdown <id> > view.md, edit it, lore edit --id <id> --file view.md")
+			WithHint("set EDITOR (for example EDITOR=\"code --wait\"), or write a view back without an editor: lore row markdown --id <id> > view.md, edit it, lore edit --id <id> --file view.md")
 	}
 	return defaultEditor, nil
 }

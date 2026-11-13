@@ -123,8 +123,13 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut, error) {
 	if wire.OldRowsRead(ctx) {
 		// D7: nothing is synced into a repo lore 0.1.17 wrote until lore fix
+		// (or whose _meta.json cannot be read, until it is fixed)
+		line := wire.OldRowsSyncLine
+		if wd, werr := os.Getwd(); werr == nil {
+			line = wire.OldRowsSyncLineAt(ctx, wd)
+		}
 		return opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport,
-			Data: opssync.RunData{Pass: syncPassLive}, Lines: []string{wire.OldRowsSyncLine}}, nil
+			Data: opssync.RunData{Pass: syncPassLive}, Lines: []string{line}}, nil
 	}
 	if l.h.cfg.RepoAddresses != nil {
 		l.h.cfg.RepoAddresses(ctx) // PROVENANCE_DESIGN 10.3: records and notices only, never fails the sync

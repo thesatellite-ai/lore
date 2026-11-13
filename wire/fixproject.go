@@ -957,7 +957,7 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 	// project's rows (formatold.go), while a write to a store already on
 	// the new format goes through.
 	if (e.Spec().Access != op.AccessWrite || OldRowsRead(ctx)) && a.opts.Notice != nil {
-		a.opts.Notice(OldRowsReadLine)
+		a.opts.Notice(OldRowsReadLineAt(top))
 	}
 	return nil
 }

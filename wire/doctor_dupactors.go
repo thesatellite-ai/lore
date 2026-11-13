@@ -181,7 +181,7 @@ func dupFinding(st *state, g []dupActor, roster store.Source) DoctorFinding {
 		"; if they are one person (an email change before 0.1.18 kept one actor), merge the older into " + keep.id.String()
 	if roster == "" {
 		return DoctorFinding{Check: DoctorCheckDuplicateActors, Level: DoctorNote,
-			Message: msg + " once this repo has an org (team profiles live in an org store: lore org create <name>); until then both stay and nothing is lost"}
+			Message: msg + " once this repo has an org (team profiles live in an org store: lore org create --org <name>); until then both stay and nothing is lost"}
 	}
 	return DoctorFinding{Check: DoctorCheckDuplicateActors, Level: DoctorWarning, Store: roster,
 		Message: msg + " (asks first; no row is rewritten, reports follow merged_into)", Fix: strings.Join(fixes, "; ")}

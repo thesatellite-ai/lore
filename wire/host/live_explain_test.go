@@ -16,7 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// TestExplain_CopiesAndWinner: `lore explain <id>` on cmd/lore (was
+// TestExplain_CopiesAndWinner: `lore explain --id <id>` on cmd/lore (was
 // E_UNSUPPORTED) names every copy of the id and the winning rule, for a
 // live row, a live tombstone, a row only on this branch and an id found
 // nowhere; every line names the real default branch (trunk), never main.

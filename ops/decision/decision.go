@@ -74,7 +74,7 @@ func Ops(env kn.Env) []op.Entry {
 			Name: OpAdd, Summary: "Add a new decision (context + chosen + alternatives + reasoning)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "record a decision", CLI: `lore decision add --title="Use SQLite" --body="Local first; no server."`, Want: "dec_"}},
+			Examples: []op.Example{{Title: "record a decision", CLI: `lore decision add --title "Use SQLite" --body "Local first; no server."`, Want: "dec_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List decisions",

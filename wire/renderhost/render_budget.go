@@ -681,7 +681,7 @@ func doubleLoads(root string, targets []contextTarget) []string {
 			}
 			for _, l := range strings.Split(string(data), "\n") {
 				if strings.TrimSpace(l) == "@"+b.profile.PointerFile {
-					out = append(out, fmt.Sprintf("context: double load: %s imports %s and both carry lore's pointer, so %s loads LORE.md twice; drop one target (lore policy set context.targets ...)",
+					out = append(out, fmt.Sprintf("context: double load: %s imports %s and both carry lore's pointer, so %s loads LORE.md twice; drop one target (lore policy set --key context.targets --value ...)",
 						a.profile.PointerFile, b.profile.PointerFile, a.profile.Name))
 					break
 				}

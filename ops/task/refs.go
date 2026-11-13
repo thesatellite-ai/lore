@@ -40,7 +40,7 @@ type taskRef = rowref.Ref
 func reservedRelations() map[string]string {
 	m := map[string]string{"blocked_by": "use lore task edit --after / --blocks"}
 	for _, r := range Relations() {
-		m[r] = "use lore task relate <id> --" + strings.ReplaceAll(r, "_", "-") + " <other>"
+		m[r] = "use lore task relate --id <id> --" + strings.ReplaceAll(r, "_", "-") + " <other>"
 	}
 	return m
 }

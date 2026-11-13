@@ -601,7 +601,7 @@ type MetaSetIn struct {
 type MetaUnsetIn struct {
 	ID   string   `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, the key to remove"`
 	Key  string   `json:"key,omitempty" arg:"1" argof:"key" desc:"the key to remove (deploy removes deploy.env too)"`
-	More []string `json:"keys,omitempty" flag:"key" desc:"more keys to remove (repeatable)"`
+	More []string `json:"keys,omitempty" flag:"key" desc:"a key to remove (repeatable; deploy removes deploy.env too)"`
 	// Where and DryRun are the bulk form (3.19).
 	Where  []string `json:"where,omitempty" flag:"where" desc:"remove from every row matching this filter (repeatable, ANDed; one batch)"`
 	DryRun bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would be removed (with --where: the rows); write nothing"`
@@ -685,7 +685,7 @@ func rowID(s string) (ids.AnyID, error) {
 			// the key only, since the value may be a secret the write scan
 			// never saw, and an error is printed and logged in clear.
 			return ids.AnyID{}, lookup.BadID("meta: "+quote(key+"=…")+" is not a row id", err).
-				WithHint("give the row id first: lore meta set <id> " + key + "=<value>")
+				WithHint("give the row id first: lore meta set --id <id> " + key + "=<value>")
 		}
 		return ids.AnyID{}, lookup.BadID("meta: "+quote(s)+" is not a row id", err)
 	}
@@ -800,7 +800,20 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	return o.metaRowWrite(ctx, id, mw, func(r row.Row) string { return "set " + setEcho(r, names, sens) })
 }
 
-// metaUnset is `lore meta unset <id> <key>` (3.2): E_META_UNKNOWN when the
+// unsetKeys are the keys a meta unset names: every --key (repeatable), and
+// the quiet positional key (v0.1.17's `lore meta unset <id> <key>`) first
+// when given. --key alone names them all; it is not only "more keys".
+func unsetKeys(in MetaUnsetIn) []string {
+	var keys []string
+	for _, k := range append([]string{in.Key}, in.More...) {
+		if k != "" {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+// metaUnset is `lore meta unset --id <id> --key <key>` (3.2): E_META_UNKNOWN when the
 // row lacks the key.
 func (o ops) metaUnset(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
 	if len(in.Where) > 0 {
@@ -810,10 +823,10 @@ func (o ops) metaUnset(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
 	if err != nil {
 		return RowOut{}, err
 	}
-	if in.Key == "" {
+	keys := unsetKeys(in)
+	if len(keys) == 0 {
 		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: name the key").WithHint("lore meta unset --id <id> --key <key>")
 	}
-	keys := append([]string{in.Key}, in.More...)
 	if in.DryRun {
 		return o.metaUnsetDry(ctx, in.ID, keys)
 	}

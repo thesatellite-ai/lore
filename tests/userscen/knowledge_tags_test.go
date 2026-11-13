@@ -87,7 +87,7 @@ func TestKnowledgeTagFilters(t *testing.T) {
 			if k.addTitle {
 				args = append(args, "--title", "x")
 			}
-			c.Lore(args...).Fails(t, th.ExitNotFound, "E_NOT_FOUND", "lore tag add --name=nosuch").Never(t, "✓")
+			c.Lore(args...).Fails(t, th.ExitNotFound, "E_NOT_FOUND", "lore tag add --name nosuch").Never(t, "✓")
 			if after := knowListRows(t, c, k).Count; after != before {
 				t.Fatalf("an add with an unknown tag wrote a row: %d → %d", before, after)
 			}

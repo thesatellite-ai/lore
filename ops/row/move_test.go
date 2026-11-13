@@ -10,7 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/row"
 )
 
-// TestMoveJSON (later 522): `lore move <id> --to me` asks first
+// TestMoveJSON (later 522): `lore move --id <id> --to me` asks first
 // (E_NEEDS_CONFIRM without --yes, nothing moved), then moves keeping the
 // id; --json carries id, table and the target, the text says so, and show
 // then finds the row in the target store.

@@ -25,7 +25,8 @@ import (
 )
 
 // TestHelpExamplesNamed: no generated command's --help Examples line gives
-// a value by position.
+// a value by position, or a flag's value with = (--severity=must): the
+// named form is --flag value.
 func TestHelpExamplesNamed(t *testing.T) {
 	root := driftRoot(t)
 	checked := 0
@@ -50,6 +51,9 @@ func TestHelpExamplesNamed(t *testing.T) {
 					if p := checkInvocation(root, strings.TrimSpace(code)); p != "" {
 						t.Errorf("%s --help example: %s\n    %s", s.CommandPath(), p, code)
 					}
+					if f := equalsValue(code); f != "" {
+						t.Errorf("%s --help example gives %s with =: write it %s\n    %s", s.CommandPath(), f, spaced(f), code)
+					}
 				}
 			}
 		}
@@ -65,7 +69,8 @@ var namedArgsSourceDirs = []string{"app", "cmd", "engine", "ops", "surface", "wi
 
 // TestPrintedCommandsNamed: every `lore …` command spelled out in a Go
 // string literal of the binary's source (a hint, a "run this" line, an
-// error message) gives its values by flag. A literal cut before its value
+// error message) gives its values by flag, each as --flag value (not
+// --flag=value). A literal cut before its value
 // ("lore task show " + id) has nothing to check and passes; write such a
 // line with the flag in the literal ("lore task show --id " + id).
 func TestPrintedCommandsNamed(t *testing.T) {
@@ -99,6 +104,10 @@ func TestPrintedCommandsNamed(t *testing.T) {
 						checked++
 						if _, ok := printedAllowed[span]; ok {
 							continue
+						}
+						if f := equalsValue(span); f != "" {
+							rel, _ := filepath.Rel(docsRoot, path)
+							t.Errorf("%s:%d: gives %s with =: write it %s\n    %s", rel, fset.Position(lit.Pos()).Line, f, spaced(f), span)
 						}
 						if p := checkInvocation(root, span); p != "" && strings.Contains(p, "positional value") && (quoted || valueLike(p)) {
 							rel, _ := filepath.Rel(docsRoot, path)
@@ -140,15 +149,73 @@ func commandSpans(line string) []string {
 	var out []string
 	for _, s := range parts {
 		s = foldSubstitutions(s)
-		for _, loc := range invocationStart.FindAllStringIndex(s, -1) {
+		for _, loc := range printedStart.FindAllStringIndex(s, -1) {
 			code := s[loc[0]+strings.Index(s[loc[0]:], binaryName):]
 			if end := commandEnd.FindStringIndex(code[len(binaryName):]); end != nil {
 				code = code[:len(binaryName)+end[0]]
 			}
-			out = append(out, strings.TrimSpace(code))
+			out = append(out, strings.TrimSpace(proseEnd(code)))
 		}
 	}
 	return out
+}
+
+// flagEquals is a flag given its value with "=" (--severity=must,
+// --body="x"). The named form is a space: --severity must.
+var flagEquals = regexp.MustCompile(`--[a-z][a-z0-9-]*=("[^"]*"|'[^']*'|\S*)`)
+
+// equalsValue is the first --flag=value of a command ("" when none). A
+// switch spelled --x=true / --x=false and an empty --x= (or --x="", an
+// example of the empty-value error) are not values and pass.
+func equalsValue(code string) string {
+	for _, m := range flagEquals.FindAllString(code, -1) {
+		_, v, _ := strings.Cut(m, "=")
+		switch v {
+		case "", `""`, "''", "true", "false":
+			continue
+		}
+		return m
+	}
+	return ""
+}
+
+// spaced is --flag=value written the named way, --flag value.
+func spaced(f string) string { return strings.Replace(f, "=", " ", 1) }
+
+// printedStart finds a command anywhere in a printed line, not only at its
+// start: a hint names it mid-sentence ("…; if it is on the wrong person,
+// lore actor contact remove --id <acn_id> there"). The docs scan keeps
+// invocationStart (prose there names lore all the time); checkInvocation
+// still only reports a real command given a value by position.
+var printedStart = regexp.MustCompile(`(?:^|[\s(,:;"'])lore\s`)
+
+// proseEnd cuts a printed command where its sentence goes on: at a ";",
+// "," or "." followed by a space or the end (outside quotes), and at a
+// double quote that closes the string the command was quoted in ("run
+// \"lore sync trash\" to …"). A literal cut at a flag's "--" (the name is
+// joined on: "… --" + relation) ends there too.
+func proseEnd(code string) string {
+	code = strings.TrimSuffix(code, " --")
+	var quote byte
+	for i := 0; i < len(code); i++ {
+		c := code[i]
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '"' && i > 0 && code[i-1] != ' ' && code[i-1] != '=':
+			return code[:i] // closes a quote opened before the command
+		case c == '"' || c == '\'':
+			if strings.IndexByte(code[i+1:], c) < 0 {
+				return code[:i] // never closed here: the line's own quote
+			}
+			quote = c
+		case (c == ';' || c == ',' || c == '.') && (i+1 == len(code) || code[i+1] == ' '):
+			return code[:i]
+		}
+	}
+	return code
 }
 
 // proseValue is a positional the scan read from a plain sentence, not a

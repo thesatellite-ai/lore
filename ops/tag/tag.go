@@ -215,7 +215,7 @@ func Ops(env Env) []op.Entry {
 			Name: OpAdd, Summary: "Create a new tag in the current project",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "add a tag", CLI: "lore tag add --name=cert_rotation", Want: "✓ tag cert_rotation tag_"}},
+			Examples: []op.Example{{Title: "add a tag", CLI: "lore tag add --name cert_rotation", Want: "✓ tag cert_rotation tag_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Summary: "List tags in the current project",
@@ -282,7 +282,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 // names the snake_case spelling.
 func checkName(name string) error {
 	if name == "" {
-		return errs.New(errs.InvalidIdentifier, "tag: the name is empty").WithHint("lore tag add --name=<snake_case>")
+		return errs.New(errs.InvalidIdentifier, "tag: the name is empty").WithHint("lore tag add --name <snake_case>")
 	}
 	if snakeCase.MatchString(name) {
 		return nil
@@ -292,7 +292,7 @@ func checkName(name string) error {
 	sug := SnakeOf(name)
 	if sug == "" {
 		return errs.New(errs.InvalidIdentifier, fmt.Sprintf("tag %q has no letter a-z or digit; a tag name is ASCII snake_case", name)).
-			WithHint("lore tag add --name=<snake_case> (e.g. --name=cert_rotation); nothing written")
+			WithHint("lore tag add --name <snake_case> (e.g. --name cert_rotation); nothing written")
 	}
 	if strings.ContainsFunc(name, func(r rune) bool { return r > unicode.MaxASCII && unicode.IsLetter(r) }) {
 		return errs.New(errs.InvalidIdentifier, fmt.Sprintf("tag %q is not snake_case: a tag name is ASCII (a-z, 0-9, _), so its other letters are dropped. Use: %s", name, sug)).
@@ -495,7 +495,7 @@ func (o ops) bind(ctx context.Context, in BindIn, mustExist bool) (engine.Ref, r
 	}
 	if mustExist && len(tags) == 0 {
 		return engine.Ref{}, row.Row{}, nil, errs.New(errs.NotFound,
-			fmt.Sprintf("tag %q not found in project; create with `lore tag add --name=%s`", name, name))
+			fmt.Sprintf("tag %q not found in project; create with `lore tag add --name %s`", name, name))
 	}
 	return engine.Ref{Store: src, Table: table, ID: id}, r, tags, nil
 }

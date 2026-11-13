@@ -178,7 +178,7 @@ type RunIn struct {
 	// Dirs (L-6): folders --all also looks through for repos, as it does a
 	// setup's folders: a lore 0.1.17 repo outside the home folder that no
 	// lore command ran in yet is found no other way.
-	Dirs []string `json:"dirs,omitempty" arg:"0" rest:"true" desc:"with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all ~/code ~/work)"`
+	Dirs []string `json:"dirs,omitempty" arg:"0" rest:"true" desc:"with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all --dirs ~/code --dirs ~/work)"`
 }
 
 // RepoResult is one repo's block of --all.

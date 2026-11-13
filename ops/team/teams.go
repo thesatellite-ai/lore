@@ -498,7 +498,7 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 	}
 	if who := handleHolder(actors, h); who != "" {
 		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+h+" is taken by "+who+" on the roster in "+r.Where()+"; a team and a person cannot share one").
-			WithHint("choose another team handle (lore team add @" + h + "-team …)")
+			WithHint("choose another team handle (lore team add --handle @" + h + "-team …)")
 	}
 	members, found, err := resolveMembers(ctx, r, in.Members)
 	if err != nil {

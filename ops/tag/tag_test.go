@@ -12,7 +12,7 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 )
 
-// v0.1.17 run (lore 0.1.17 `lore tag add --name=cert_rotation` in project
+// v0.1.17 run (lore 0.1.17 `lore tag add --name cert_rotation` in project
 // v017Project) wrote the tag file v017Tag: a tag's id is the natural id of
 // (project_id, name), and the repo store keeps v0.1.17's bytes.
 const (
@@ -181,7 +181,7 @@ func TestTagBindRefusals(t *testing.T) {
 	h.Must("tag.add", `{"name":"other"}`)
 	task := h.Seed(schema.TableTasks, nil)
 	msg := h.Fails("tag.attach", `{"on_table":"tasks","on_id":"`+task+`","tag":"nope"}`, errs.NotFound)
-	if !strings.Contains(msg, `tag "nope" not found in project; create with `+"`lore tag add --name=nope`") {
+	if !strings.Contains(msg, `tag "nope" not found in project; create with `+"`lore tag add --name nope`") {
 		t.Fatalf("unknown tag: %s", msg)
 	}
 	h.Fails("tag.attach", `{"on_table":"bogus","on_id":"`+task+`","tag":"other"}`, errs.Unsupported)

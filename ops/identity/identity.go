@@ -331,7 +331,7 @@ func Ops(m Manager) []op.Entry {
 			}
 			if in.Identity == "" {
 				return WriteOut{}, errs.New(errs.InvalidInput, "name the identity, or pass --org <entry> --key human:<email>").
-					WithHint(`run lore identity set <you>@example.com, or lore identity set "Your Name" --key human:<your email>`)
+					WithHint(`run lore identity set --identity <you>@example.com, or lore identity set --identity "Your Name" --key human:<email>`)
 			}
 			display, key, err := Key(in.Identity, in.Key)
 			if err != nil {

@@ -74,7 +74,7 @@ func setURLOp(m Manager) op.Entry {
 			return SetURLOut{}, err
 		}
 		if in.URL == "" {
-			return SetURLOut{}, errs.New(errs.InvalidInput, "store set-url: the new url is missing; usage: lore store set-url <store> <url>")
+			return SetURLOut{}, errs.New(errs.InvalidInput, "store set-url: the new url is missing; usage: lore store set-url --name <store> --url <url>")
 		}
 		if err := CheckScheme(in.URL); err != nil {
 			return SetURLOut{}, err
@@ -93,10 +93,10 @@ func setURLOp(m Manager) op.Entry {
 func checkSetURLName(name string) error {
 	switch {
 	case strings.TrimSpace(name) == "":
-		return errs.New(errs.InvalidInput, "store set-url: name the store; usage: lore store set-url <store|org|sto_id> <url>")
+		return errs.New(errs.InvalidInput, "store set-url: name the store; usage: lore store set-url --name <store|org|sto_id> --url <url>")
 	case strings.ContainsAny(name, "/ \t"):
 		return errs.New(errs.InvalidInput, "store set-url: "+quote(name)+" is not a store name; a folder entry follows its store").
-			WithHint("name the store itself: lore store set-url <store> <url>")
+			WithHint("name the store itself: lore store set-url --name <store> --url <url>")
 	case name != PersonalName && slices.Contains(attach.Reserved(), name):
 		return errs.New(errs.InvalidInput, "store "+quote(name)+" is reserved ("+strings.Join(attach.Reserved(), ", ")+")")
 	}

@@ -249,7 +249,7 @@ func takenErr(v rosterView, typ, value string, holders []row.Row) error {
 		who = append(who, n+" ("+c.ID.String()+")")
 	}
 	return errs.New(errs.ContactTaken, "identity contact "+typ+typeValueSep+value+" already belongs to "+strings.Join(who, ", ")).
-		WithHint("lore actor show --id " + typ + typeValueSep + value + " to see who has it; if it is on the wrong person, lore actor contact remove <acn_id> there")
+		WithHint("lore actor show --id " + typ + typeValueSep + value + " to see who has it; if it is on the wrong person, lore actor contact remove --id <acn_id> there")
 }
 
 // sameContact is the live contact of (actorID, typ, norm) other than skip.

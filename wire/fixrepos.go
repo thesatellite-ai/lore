@@ -136,7 +136,7 @@ func (a *App) fixNamedDirs(dirs []string) ([]string, error) {
 		p = filepath.Clean(p)
 		if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
 			return nil, errs.New(errs.InvalidInput, "lore fix --all: "+d+" is not a folder").
-				WithHint("name folders that hold your repos: lore fix --all ~/code ~/work")
+				WithHint("name folders that hold your repos: lore fix --all --dirs ~/code --dirs ~/work")
 		}
 		out = append(out, p)
 	}

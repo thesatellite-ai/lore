@@ -10,7 +10,12 @@ package wire
 // such a run (WithOldRowsRead); its hooks then run as for a read, and the
 // sync itself does nothing in the repo.
 
-import "context"
+import (
+	"context"
+	"errors"
+
+	"github.com/thesatellite-ai/lore/model/errs"
+)
 
 // oldRowsReadKey marks a run that must change no tracked file because the
 // repo still holds lore 0.1.17 rows (D7).
@@ -38,3 +43,46 @@ func HasV017RowsAt(ctx context.Context, dir string) bool {
 // OldRowsSyncLine is what `lore sync` says in such a repo instead of
 // syncing it.
 const OldRowsSyncLine = "nothing synced in this repo: it is on the lore 0.1.17 format and this lore writes nothing there until lore migrate run (a teammate's migration commit then pulls cleanly)"
+
+// metaUnreadable is the refusal text of a project whose _meta.json cannot
+// be read ("" when it can): the same words a write there refuses with
+// (formatgate.Unreadable, E_OLD_LORE), then its hint. ProjectFormatOld
+// counts such a project as old to fail closed, but its lines must not
+// claim the 0.1.17 format: lore cannot tell, and lore migrate run would be
+// a guess.
+func metaUnreadable(top string) string {
+	if top == "" {
+		return ""
+	}
+	_, err := ProjectFormatAt(top)
+	if err == nil {
+		return ""
+	}
+	var e *errs.Error
+	if !errors.As(err, &e) {
+		return err.Error()
+	}
+	if e.Hint != "" {
+		return e.Message + "; " + e.Hint
+	}
+	return e.Message
+}
+
+// OldRowsReadLineAt is the read notice of the project at top: the
+// unreadable _meta.json's own line, else OldRowsReadLine.
+func OldRowsReadLineAt(top string) string {
+	if m := metaUnreadable(top); m != "" {
+		return "lore: " + m
+	}
+	return OldRowsReadLine
+}
+
+// OldRowsSyncLineAt is what `lore sync` says in the repo dir is in
+// instead of syncing it: the unreadable _meta.json's own line, else
+// OldRowsSyncLine.
+func OldRowsSyncLineAt(ctx context.Context, dir string) string {
+	if m := metaUnreadable(gitTopLevel(ctx, dir)); m != "" {
+		return "nothing synced in this repo: " + m
+	}
+	return OldRowsSyncLine
+}
