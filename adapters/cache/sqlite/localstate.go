@@ -116,7 +116,10 @@ func moveLegacyTables(ctx context.Context, db *sql.DB) error {
 
 // execTx runs constant statements in one transaction.
 func execTx(ctx context.Context, db *sql.DB, stmts ...string) (err error) {
-	tx, err := db.BeginTx(ctx, nil)
+	// beginWrite, not BeginTx: several processes opening one fresh file run
+	// this DDL at once, and SQLite's busy handler can starve a writer past
+	// busy_timeout (busy.go)
+	tx, err := beginWrite(ctx, db)
 	if err != nil {
 		return err
 	}

@@ -155,3 +155,33 @@ func TestAuditChainAppendOutwaitsBusyTimeout(t *testing.T) {
 		t.Fatalf("Verify = %q, %d, %v", broken, n, err)
 	}
 }
+
+// TestOpenAuditChainOutwaitsBusyTimeout: opening the chain runs its DDL in
+// a write transaction (execTx). With another handle holding the write lock
+// past SQLite's busy_timeout, the open waits for it instead of failing
+// "database is locked" (race gate: TestAuditChainConcurrentAppendersNeverFork
+// lost an open to a busy file).
+func TestOpenAuditChainOutwaitsBusyTimeout(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "machine.db")
+	holder := openChain(t, path)
+	tx, err := beginWrite(ctx, holder.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hold := time.Duration(busyTimeoutMS)*time.Millisecond + time.Second
+	go func() {
+		time.Sleep(hold)
+		_ = tx.Rollback() // releases the lock; nothing was written
+	}()
+	start := time.Now()
+	ch, err := OpenAuditChain(ctx, path)
+	if err != nil {
+		t.Fatalf("open after %s: %v", time.Since(start), err)
+	}
+	t.Cleanup(func() { _ = ch.Close() })
+	if time.Since(start) < hold {
+		t.Fatalf("open returned after %s, before the lock was free", time.Since(start))
+	}
+}
