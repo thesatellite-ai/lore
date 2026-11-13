@@ -115,6 +115,18 @@ func (o InitOut) Text() string {
 	if o.Already {
 		line = "✓ " + o.URL + " is already a lore store (" + o.ID + "); recorded as " + o.Name + " in " + where + "\n"
 	}
+	if o.Org != "" {
+		if o.Already {
+			return "✓ " + o.URL + " is already a lore store (" + o.ID + "): it is org " + o.Org + "'s store, so it stays attached through the org entry in ~/.lore/config.yaml (not this repo's " + storesFileShown + ")\n"
+		}
+		verb := "created store"
+		setup := o.OrgSetup
+		if setup == "" {
+			setup = "<your admin setup>"
+		}
+		return "✓ " + verb + " " + o.ID + " at " + o.URL + ": it is org " + o.Org + "'s store, so it stays attached through the org entry in ~/.lore/config.yaml (not this repo's " + storesFileShown + ")\n" +
+			"  the org's file (lore-org.yaml) and roster were in the old store: write them again with your setup's team step, `lore setup apply " + setup + " --step team --answers '{\"org\":\"" + o.Org + "\",\"store_url\":\"" + o.URL + "\"}'` (it puts you back on the roster), then `lore member add <email>` for each teammate\n"
+	}
 	if len(o.Following) > 0 {
 		line += "  your setups " + strings.Join(o.Following, ", ") + " were on ~/.lore/stores/_me and now use it too (one personal store per person)\n"
 	}

@@ -410,7 +410,7 @@ func (ap setupApplier) personalStoreValue(choice, raw string) (value, initURL st
 		if err != nil {
 			return "", "", err
 		}
-		if mc.personalURL() == "" {
+		if mc.sharedPersonalURL(ap.a.opts.Home) == "" {
 			return "", "", errs.New(errs.InvalidInput, "setup apply personal_store: there is no shared personal store (personal.store) to be the same as").
 				WithHint("pick a repo for this setup (create, existing or a local folder), or none")
 		}

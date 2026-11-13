@@ -185,3 +185,36 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 		list.Says(t, "a new note").Never(t, "an old note", "written after the reset")
 	})
 }
+
+// TestJourneySoloFirstInitOfAnOrgStore (B2-33 regression): the first
+// `lore store init` of a brand-new store whose url the org entry already
+// lists (normal admin onboarding) records it in the repo's
+// .lore/stores.yaml, as always; only a store init after `lore store
+// forget` of that url is "start fresh" on the org's store.
+func TestJourneySoloFirstInitOfAnOrgStore(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	sam := w.Persona(jsuName, jsuEmail)
+	m := sam.Laptop()
+	notes := w.Remote("github.com/agency/notes")
+	app := m.Clone(w.Remote(jsuRepo), "site")
+
+	w.Step("day1/first-init-of-the-org-store", func() {
+		if err := os.MkdirAll(m.LorePath(), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		cfg := "orgs:\n  - name: agency\n    identity: {key: \"human:" + jsuEmail + "\", name: \"" + jsuName + "\", handle: sam}\n" +
+			"    stores:\n      - {url: \"" + notes.SSHURL() + "\", org_folder: org}\n"
+		if err := os.WriteFile(m.LorePath("config.yaml"), []byte(cfg), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		m.LoreIn(app, "init").OK(t)
+		r := m.LoreIn(app, "store", "init", "agency", notes.SSHURL(), "--yes").OK(t)
+		r.Says(t, "recorded in .lore/stores.yaml").Never(t, "old store", "team step")
+		b, err := os.ReadFile(filepath.Join(app.Dir, ".lore", "stores.yaml"))
+		if err != nil || !strings.Contains(string(b), notes.SSHURL()) {
+			t.Fatalf(".lore/stores.yaml lacks the new store (%v):\n%s", err, b)
+		}
+		m.LoreIn(app, "memory", "add", "--body", "a first agency note", "--to", "agency").OK(t)
+	})
+}

@@ -139,6 +139,12 @@ type InitOut struct {
 	// ~/.lore/stores/_me and now follow personal.store (store init me with
 	// another url): a person has one personal store `me`.
 	Following []string `json:"following,omitempty"`
+	// Org names the org whose store the url is (B2-33): the store stays
+	// attached through that org entry, never this repo's stores.yaml, and
+	// the text says how its org file and roster are written again.
+	Org string `json:"org,omitempty"`
+	// OrgSetup is this machine's admin setup of Org ("" when none).
+	OrgSetup string `json:"org_setup,omitempty"`
 }
 
 // AddIn is the input of store.add.

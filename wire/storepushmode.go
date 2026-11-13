@@ -141,6 +141,25 @@ func isOrgAdmin(home, org string) bool {
 	return false
 }
 
+// orgAdminSetup names this machine's admin setup of org ("" when none):
+// the setup whose team step writes the org's file and roster (B2-33).
+func orgAdminSetup(home, org string) string {
+	raw, err := readConfigRaw(home)
+	if err != nil || raw == nil || org == "" {
+		return ""
+	}
+	d, err := decodeSetupsDoc(raw)
+	if err != nil {
+		return ""
+	}
+	for _, e := range d.Setups {
+		if e.Kind == onboard.KindAdmin && e.Org == org {
+			return e.Name
+		}
+	}
+	return ""
+}
+
 // readStamp reads a time stamp file (zero when absent or unreadable).
 func readStamp(dir, name string) time.Time {
 	if dir == "" {

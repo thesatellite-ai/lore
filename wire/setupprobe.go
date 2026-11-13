@@ -189,6 +189,21 @@ func (sp setupProber) storeURL(ctx context.Context, r opssetup.ProbeRequest) str
 	if name, ok := strings.CutPrefix(r.Target, targetStorePrefix); ok {
 		return sp.namedStoreURL(ctx, r.Setup, strings.TrimSpace(name))
 	}
+	// The personal_store step: the store the choice names, not the url
+	// field, which the page fills for every choice (B1-27: inherit showed
+	// personal.store's v0.1.17 value "local" there, and the checks ran git
+	// on "local").
+	// A local folder lore makes itself (the `me` folder, or v0.1.17's
+	// personal.store: local folder) is not probed: nothing to reach yet.
+	switch answerText(r.Answers, onboard.QIDPersonalStore) {
+	case onboard.PersonalStoreInherit:
+		if mc, err := readMachineConfig(sp.a.opts.Home); err == nil {
+			return mc.personalURL()
+		}
+		return ""
+	case onboard.PersonalStoreLocal, onboard.PersonalStoreNone:
+		return ""
+	}
 	if u := answerText(r.Answers, onboard.QIDStoreURL); u != "" {
 		return u
 	}
@@ -212,7 +227,7 @@ func (sp setupProber) namedStoreURL(ctx context.Context, setup onboard.SetupEntr
 			if err != nil {
 				return ""
 			}
-			return mc.personalURL()
+			return mc.sharedPersonalURL(home)
 		default:
 			return ps
 		}

@@ -1,6 +1,7 @@
 package onboard
 
 import (
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"net/mail"
 	"net/url"
 	"path/filepath"
@@ -54,6 +55,10 @@ const (
 	GitSchemeSSH   = "ssh"
 	GitSchemeHTTPS = "https"
 	GitSchemeFile  = "file"
+	// GitSchemePath is a plain path to a git repository on this machine
+	// (/srv/git/me.git, ~/git/me.git, C:\git\me.git): a git store the way
+	// `git clone <path>` reaches it (decision D1).
+	GitSchemePath = "path"
 )
 
 // ParseGitURL parses a store url; why is the reason when ok is false. A
@@ -62,6 +67,12 @@ const (
 func ParseGitURL(s string) (u GitURL, why string, ok bool) {
 	if s == "" {
 		return GitURL{}, "is empty", false
+	}
+	if isLocalPath(s) {
+		if hasControl(s) {
+			return GitURL{}, "has control characters", false
+		}
+		return GitURL{Scheme: GitSchemePath}, "", true
 	}
 	// A local store is a folder, and a folder name may hold spaces
 	// ("~/My Stores/me.git"): a file:// url may carry them as typed or as
@@ -96,7 +107,7 @@ func ParseGitURL(s string) (u GitURL, why string, ok bool) {
 		return GitURL{Scheme: GitSchemeFile}, "", true
 	case GitSchemeSSH, GitSchemeHTTPS:
 	default:
-		return GitURL{}, "must be git@host:owner/repo, ssh://, https:// or file://", false
+		return GitURL{}, "must be git@host:owner/repo, ssh://, https://, file:// or a local repository path (/path/to/repo.git)", false
 	}
 	if p.User != nil {
 		if _, hasPw := p.User.Password(); hasPw || p.Scheme == GitSchemeHTTPS {
@@ -111,6 +122,12 @@ func ParseGitURL(s string) (u GitURL, why string, ok bool) {
 	}
 	o, r := ownerRepo(strings.TrimPrefix(p.Path, "/"))
 	return GitURL{Scheme: p.Scheme, Host: p.Hostname(), Owner: o, Repo: r}, "", true
+}
+
+// isLocalPath reports a store url typed as a path on this machine: an
+// absolute path, a ~/ path or a Windows drive path.
+func isLocalPath(s string) bool {
+	return !strings.Contains(s, "://") && (strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~/") || fileuri.IsDrivePath(s))
 }
 
 // isFileURL reports a file:// url (the local-folder scheme).

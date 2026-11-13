@@ -253,6 +253,10 @@ type actorEdit struct {
 func actorRefEdits(ctx context.Context, st *state, m map[string]ids.AnyID, skip map[ids.AnyID]bool, only ...store.Source) ([]actorEdit, []string, error) {
 	var out []actorEdit
 	var readOnly []string
+	// every table of every store is listed: one read of each store for
+	// all of them (B1-10: a List per table read the whole repo store again,
+	// ~5 s of a big repo's lore fix). Nothing is written in this loop.
+	ctx = engine.WithReadSnapshot(ctx)
 	// a machine-local table (runs, sessions, ...) lives in the machine
 	// store whatever store it is listed from: its rows are edited there,
 	// and listed once, not once per store

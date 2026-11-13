@@ -107,6 +107,16 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 			}
 		}
 	}
+	// B2-33: the url is an org's store (start fresh after a wipe): it is
+	// made a store again, but stays the org's, never this repo's entry.
+	org := ""
+	if in.Name != opsstores.PersonalName {
+		// only after `lore store forget` of this url: a first init of an
+		// org-listed url (onboarding) is recorded in stores.yaml as always
+		if o := orgOfURL(a.opts.Home, raw); o != "" && takeForgottenStore(a.opts.Home, raw) {
+			org, noRepo = o, true
+		}
+	}
 	if in.Name != opsstores.PersonalName && !noRepo {
 		if err = a.checkUnused(ctx, in.Name, attach.Store{URL: raw}); err != nil {
 			return opsstores.InitOut{}, err
@@ -134,7 +144,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 	if err != nil {
 		return opsstores.InitOut{}, err
 	}
-	out := opsstores.InitOut{Name: in.Name, URL: raw, Already: already}
+	out := opsstores.InitOut{Name: in.Name, URL: raw, Already: already, Org: org, OrgSetup: orgAdminSetup(a.opts.Home, org)}
 	if !got.ID.IsZero() {
 		out.ID = got.ID.String()
 	}

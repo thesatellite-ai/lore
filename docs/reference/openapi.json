@@ -76803,6 +76803,12 @@
                     "name": {
                       "type": "string"
                     },
+                    "org": {
+                      "type": "string"
+                    },
+                    "org_setup": {
+                      "type": "string"
+                    },
                     "personal": {
                       "type": "boolean"
                     },

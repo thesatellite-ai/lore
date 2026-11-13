@@ -74,6 +74,8 @@ type Backend struct {
 
 	// pushes are the pushes not yet taken by the caller (pushlog.go).
 	pushes pushLog
+	// cameBack: a sync cleared the remote-reset mark (remotereset.go).
+	cameBack atomic.Bool
 
 	// handSetUp lists what this open set up in the clone for plain git
 	// (handgit.go), for wire to say once.

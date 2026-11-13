@@ -92,3 +92,38 @@ func TestResetFoundAfterAnotherFetchPruned(t *testing.T) {
 		t.Fatalf("the emptied remote was refilled: %s", got)
 	}
 }
+
+// TestResetMarkClearsWhenTheStoreIsBack (B2-30): a clone marked reset
+// during a wipe syncs as usual again once someone put the store back
+// (the remote shares its history again), and says so once.
+func TestResetMarkClearsWhenTheStoreIsBack(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	g := newGen(t)
+	write(t, a, store.Change{Row: g.row(newID(t), "old", hlc.HLC{})})
+	if _, err := a.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	backup := remote + ".backup"
+	gitT(t, filepath.Dir(remote), "clone", "--quiet", "--bare", remote, backup)
+	if err := os.RemoveAll(remote); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch="+testBranch, remote)
+	if _, err := a.Sync(ctx); !errors.Is(err, ErrRemoteReset) {
+		t.Fatalf("sync into the wiped remote: %v", err)
+	}
+	if err := os.RemoveAll(remote); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, filepath.Dir(remote), "clone", "--quiet", "--bare", backup, remote)
+	write(t, a, store.Change{Row: g.row(newID(t), "after it came back", hlc.HLC{})})
+	if rep, err := a.Sync(ctx); err != nil || rep.Sent == 0 {
+		t.Fatalf("sync after the store came back: %+v, %v", rep, err)
+	}
+	if RemoteResetAt(a.Dir()) || !a.TakeCameBack() || a.TakeCameBack() {
+		t.Fatal("the reset mark was not cleared once, with one came-back note")
+	}
+}
