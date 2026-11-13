@@ -59,14 +59,14 @@ task lore:test:sync      # git-sync tests: row merge, the live ref, branch sync,
 task lore:test:team      # team end-to-end suite (real binary, real git, many actors)
 task lore:test:setupe2e  # setup page e2e: every machine shape via the page's HTTP API
 task lore:test:cover     # coverage of unit AND end-to-end tests; lists functions no test reaches
-task lore:check:gocache  # empty Go's build cache when it is over LORE_GOCACHE_MAX_GB (default 50)
+task lore:check:gocache  # trim Go's build cache (idle entries) when it is over LORE_GOCACHE_MAX_GB (default 50)
 ```
 
 ### Test builds are not version-stamped, and the Go cache is bounded
 
 Every task in `Taskfile.lore.yml` runs Go with `GOFLAGS=-trimpath -buildvcs=false` (its top-level `env:`; a `GOFLAGS` you export yourself wins), and the test helpers that `go build` the binary (`tests/machines`, `tests/journeys`, `tests/setupe2e`, `tests/teame2e`, `tests/userscen`) pass the same two flags. Why: a package compiled without `-trimpath` records the folder it was built in, and `-buildvcs` stamps the commit and dirty state into `cmd/lore`, so each of the ~30 worktrees on one build server compiled every package again and every commit added new cache entries; the shared Go build cache (`go env GOCACHE`, one per user) reached 1.2 TB and filled the disk. With the flags, the same code in two worktrees is one cache entry: building `cmd/lore` in a second copy of the tree added 208 MB to the cache without them and 3 MB with them (measured 2026-11-10). Test binaries carry the version `dev` (cmd/lore's default; `formatgate.DevBuild` treats it as a source build). The gate's build stage builds `tmp/bin/lore` with `lore:build:test` (version `dev`, no VCS stamp). Only `task lore:build` (and so `lore:install`) stamps the real version from `git describe` and keeps the VCS stamp, and the binary release stamps the release version through the same ldflag.
 
-Nothing else bounds the cache (Go drops entries unused for 5 days, which does not help when every worktree builds every day), so `task check` starts with `lore:check:gocache` (`tests/lib/gocache-trim.sh`): it measures `go env GOCACHE` with `du` (about 4 s on a 570 GB cache) and runs `go clean -cache` only when the cache is over `LORE_GOCACHE_MAX_GB` (default 50). `LORE_GOCACHE_TRIM=dry` only says what it would do, `LORE_GOCACHE_TRIM=off` skips the step. It touches nothing but the cache folder, never a tracked file, and runs alone before the build stage because emptying the cache under a running build fails that build (a quick-tier `go test` of another session at the same moment may fail once with a missing cache file and passes on its next run). `go clean -cache` is all or nothing, so the first build after a trim compiles from scratch.
+Nothing else bounds the cache (Go drops entries unused for 5 days, which does not help when every worktree builds every day), so `task check` starts with `lore:check:gocache` (`tests/lib/gocache-trim.sh`): it measures `go env GOCACHE` with `du` (about 4 s on a 570 GB cache) and, only when the cache is over `LORE_GOCACHE_MAX_GB` (default 50), deletes the entries no build has used for `LORE_GOCACHE_IDLE_MIN` minutes (default 120; Go refreshes an entry's time when a build uses it, so such an entry is in no running build). It never empties the whole cache: `check:fast` and the quick tier take no lock and may be building at that moment, and `go clean -cache` failed those builds and itself ("directory not empty"). A file that vanishes or appears meanwhile is not an error; if recent builds still hold the cache over the limit it says so and the next gate trims again. `LORE_GOCACHE_TRIM=dry` only says what it would do, `LORE_GOCACHE_TRIM=off` skips the step. It touches nothing but the cache folder, never a tracked file.
 
 ## The setup page (`surface/setupweb`)
 
@@ -99,7 +99,7 @@ A feature that changes what a person does over time (a new command, a new kind o
 
 | Stage | Step | What it proves |
 |---|---|---|
-| cache | `lore:check:gocache` | the shared Go build cache is emptied when it is over `LORE_GOCACHE_MAX_GB` (default 50 GB) |
+| cache | `lore:check:gocache` | entries of the shared Go build cache idle for 2 hours are deleted when it is over `LORE_GOCACHE_MAX_GB` (default 50 GB) |
 | warm | `lore:build:warm` | every package of the module compiles, plain and in the race set's `-race` variant (next to free when Go's cache has them) |
 | build | `lore:build:test` | the binary the shell scenarios and chaos runs use builds (version `dev`, no VCS stamp; `lore:build:cross` still builds every release target) |
 | test | `lore:lint:vet`, `lore:lint:fmt`, `lore:lint:staticcheck` | `go vet` (root module and every tagged suite), `gofmt`, `staticcheck` |
