@@ -94,12 +94,12 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 	w.Step("day1/lore-fix-prints-each-step-and-healthy", func() {
 		// a dry run changes nothing, so the status is today's (degraded: the
 		// ride-along hook blocks a read never installs) and it exits as doctor does
-		lap.LoreIn(one, "fix", "--migrate", "--dry-run").Fails(t, 1, "migrate", "Would upgrade 1 row", "Nothing changed (dry run).", "run `lore fix` (or `lore sync`) to install it", "Status: DEGRADED")
+		lap.LoreIn(one, "fix", "--migrate", "--dry-run").Fails(t, 1, "migrate", "Would upgrade 2 rows", "Nothing changed (dry run).", "run `lore fix` (or `lore sync`) to install it", "Status: DEGRADED")
 		if !fixV1Left(t, one) {
 			t.Fatal("lore fix --dry-run migrated the rows")
 		}
 		r := lap.LoreIn(one, "fix", "--migrate").OK(t)
-		r.Says(t, "lore fix: "+one.Dir, "migrate", "Upgraded 1 row", "render", "agent hooks", "old clones", "doctor fixes", "Status: HEALTHY")
+		r.Says(t, "lore fix: "+one.Dir, "migrate", "Upgraded 2 rows", "render", "agent hooks", "old clones", "doctor fixes", "Status: HEALTHY")
 		if !strings.HasSuffix(strings.TrimSpace(r.Stdout), "Status: HEALTHY") {
 			t.Fatalf("the status is not the last line:\n%s", r.Stdout)
 		}
@@ -159,7 +159,7 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		if !fixV1Left(t, five) {
 			t.Fatal("lore fix --all migrated without --migrate")
 		}
-		lap.Lore("", "fix", "--all", "--migrate", code).OK(t).Says(t, "== "+five.Dir, "Upgraded 1 row")
+		lap.Lore("", "fix", "--all", "--migrate", code).OK(t).Says(t, "== "+five.Dir, "Upgraded 2 rows")
 		if fixV1Left(t, five) {
 			t.Fatal("lore fix --all <folder> left v1 rows in the repo under it")
 		}
