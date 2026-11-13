@@ -70,7 +70,7 @@ $ git switch -q -c feat/login && lore task list --mine
 ## Pitfalls
 
 - **Hidden is not private.** Anything in the client's repo, on any branch or hidden list, the client can download. A hidden list is a place on GitHub that is not a branch (git calls it a ref). Private notes belong in the agency's store: a separate private repo that only the agency can open, like a locked filing cabinet next to the client's repo.
-- **Lore fetches once per command and reuses that fetch for 5 minutes.** A teammate's change from a few seconds ago may not show yet. `lore sync` always fetches.
+- **Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds.** A teammate's change from a few seconds ago may not show yet. `lore sync` always fetches.
 - **Your identity key is your email.** Keep it the same on every machine, or you become two people.
 - **A gate needs a person.** A gate is a step that waits for a person to say yes. Any person on the roster (the list of people and agents in an org) may approve it; an agent never can.
 

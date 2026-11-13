@@ -134,7 +134,7 @@ _on() {
   local EXTRA_ENV="${EXTRA_ENV:-}"
   if [ -n "${CLOCK:-}" ]; then
     # Test clock (loretest builds only): every command runs STEP seconds after the last
-    # (5 s by default, like a person typing; a section that needs lore's 60 s fetch cache
+    # (5 s by default, like a person typing; a section that needs a write's 60 s fetch cache
     # to expire between steps, such as the agents example, sets a larger STEP).
     CLOCK=$(date -u -d "$CLOCK + ${STEP:-5} seconds" +%Y-%m-%dT%H:%M:%SZ)
     # git commits made in the same step carry the same time, so merge times match lore's clock.

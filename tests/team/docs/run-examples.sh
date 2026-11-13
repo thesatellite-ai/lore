@@ -560,7 +560,8 @@ s_agents() {
     quiet alice work "git clone -q https://github.com/client2/$r && cd $r && lore org link --org agency --project client2 --yes"
   done
   quiet alice work/api "lore actor register"
-  # 70 s per step: past lore's 60 s fetch cache, so each agent sees the others' last write.
+  # 70 s per step: past the 60 s fetch cache of a write, so each agent's write sees the others' last write
+  # (a read reuses a fetch for 5 minutes: a read that must see a teammate's change runs lore sync first).
   STEP=70
 
   note "plan"
@@ -793,7 +794,8 @@ s_internals() {
 s_team_ops() {
   section team-ops
   person alice alice@agency.example; person bob bob@agency.example
-  # 70 s per step: past lore's 60 s fetch cache, so each person sees the other's last write.
+  # 70 s per step: past the 60 s fetch cache of a write, so each person's write sees the other's last write
+  # (a read reuses a fetch for 5 minutes: a read that must see a teammate's change runs lore sync first).
   STEP=70
   # First a repo with no org config (like the small-team page): the roster and shared resources.
   remote agency/billing
@@ -825,7 +827,7 @@ s_team_ops() {
   local t1; t1=$(id tsk)
   on bob work/website "lore task claim --id $t1"
   on bob work/website "lore task release --id $t1"
-  on alice work/website "lore task show --id $t1"
+  on alice work/website "lore sync >/dev/null && lore task show --id $t1"
 
   note "revoke"
   start_agent agent-backend work/website

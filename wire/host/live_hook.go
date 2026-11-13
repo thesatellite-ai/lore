@@ -795,6 +795,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
 	}
+	if !r.read {
+		ctx = wire.WithWriteFetch(ctx) // its store clones fetch at orgconf.WriteFetchTTL (M-4)
+	}
 	ctx = withRun(ctx, r)
 	defer r.finish(ctx)
 	wired := false

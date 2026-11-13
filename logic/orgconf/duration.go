@@ -27,6 +27,11 @@ const (
 	// Owner item M-4: at v0.1.17's 60 s a person's reads minutes apart each
 	// paid a fetch of every store over ssh (8 calls, ~25 s on a Mac).
 	DefaultFetchTTL = 5 * time.Minute
+	// WriteFetchTTL caps the fetch TTL of a writing command: a write needs
+	// the remote about as current as v0.1.17 kept it (a claim of a task a
+	// teammate added a minute ago must find it), so only reads reuse a
+	// fetch for DefaultFetchTTL.
+	WriteFetchTTL = 60 * time.Second
 	// DefaultLinkIndexMaxAge is how old a store copy may be and still
 	// answer links while the store is unreachable.
 	DefaultLinkIndexMaxAge = time.Hour
@@ -96,6 +101,9 @@ type Live struct {
 type LinkIndex struct {
 	MaxAge *Duration `yaml:"max_age,omitempty"`
 }
+
+// ForWrite is ttl as a writing command applies it: at most WriteFetchTTL.
+func ForWrite(ttl time.Duration) time.Duration { return min(ttl, WriteFetchTTL) }
 
 // FetchTTL is live.fetch_ttl (the entry's, else the top level's, else the
 // default).

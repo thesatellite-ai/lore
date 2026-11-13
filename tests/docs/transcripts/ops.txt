@@ -106,7 +106,7 @@ alice (work/website)$ lore sync conflicts | head -3
 
 ### support bundle
 alice (work/website)$ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1752 bytes)
+✓ wrote support bundle to bundle.json (1754 bytes)
 alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "dev",
     "binary_version": "dev",
@@ -256,7 +256,7 @@ Binary: dev
 
 Notes:
   - live: tracking refspec installed, not forced into refs/lore/*
-  - live: last fetch 20s ago
+  - live: last fetch 55s ago
   - live: post-commit and pre-push hook blocks installed
   - trash: 1 row in the trash, 0 tombstones (kept forever); lore trash stats
   - Team versions (newest save per writer and machine):

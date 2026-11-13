@@ -1588,7 +1588,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `orgs[].agent_details` | `internal` | `client` keeps agent work notes in the client repo |
 | `live.defaults.<kind>` | tasks, missions, handoffs, comments: `true`; rules, decisions, memories: `false` | which kinds are live |
 | `live.max_age` | `7d` | an open live row is copied to `main` this often while it differs |
-| `live.fetch_ttl` | `5m` | each command fetches at most this often; `lore sync` always fetches |
+| `live.fetch_ttl` | `5m` | a read fetches at most this often, a write at most every 60 seconds; `lore sync` always fetches |
 | `live.autopush` | `false` | `true` pushes each live write at once; unset, they go on `lore sync` or your own `git push` |
 | `live.compact_after` | `1000` | commits on a live ref before automatic compaction |
 | `live.remote` | `origin` | the remote for `refs/lore/*` |

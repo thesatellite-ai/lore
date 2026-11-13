@@ -26,7 +26,7 @@ trace: git push --porcelain --no-verify -- origin 05513aa29b78:refs/lore/live (<
 
 ## A teammate's task or `@handle` does not show up
 
-Lore fetches once per command and reuses that fetch for 5 minutes (`live.fetch_ttl: 5m`). `lore sync` always fetches, and it also refreshes the store link index, so a link a teammate just made shows up in `lore whoami` after it. So a row a teammate wrote seconds ago may not be in your view yet. Also, `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice (an agency developer) has registered and you have fetched since. Run `lore sync`, which always fetches:
+Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds (`live.fetch_ttl: 5m`). `lore sync` always fetches, and it also refreshes the store link index, so a link a teammate just made shows up in `lore whoami` after it. So a row a teammate wrote seconds ago may not be in your view yet. Also, `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice (an agency developer) has registered and you have fetched since. Run `lore sync`, which always fetches:
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console

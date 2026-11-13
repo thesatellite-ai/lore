@@ -56,6 +56,24 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
+// writeFetchKey is the context key of WithWriteFetch.
+type writeFetchKey struct{}
+
+// WithWriteFetch marks ctx as a writing command's (the host's live hook):
+// its store clones fetch when the last fetch is older than
+// orgconf.WriteFetchTTL, not the whole live.fetch_ttl a read reuses (owner
+// item M-4: reads went to the network on every command; a write still
+// needs the remote current, e.g. a claim of a task a teammate just added).
+func WithWriteFetch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, writeFetchKey{}, true)
+}
+
+// writeFetch reports whether ctx carries WithWriteFetch.
+func writeFetch(ctx context.Context) bool {
+	w, _ := ctx.Value(writeFetchKey{}).(bool)
+	return w
+}
+
 // envAutopushSwitch=0 turns pushing off (v0.1.17 LORE_LIVE_AUTOPUSH).
 const (
 	envAutopushSwitch = "LORE_LIVE_AUTOPUSH"
@@ -220,6 +238,9 @@ func (b *storePush) refresh(ctx context.Context) {
 	in := live.FetchInputs{Now: b.res.now(), TTL: ttl, Kind: live.FetchCached, Autopush: autopush, HasRemote: true}
 	if b.res != nil && b.res.fetchAlways {
 		in.Kind = live.FetchAlways
+	}
+	if writeFetch(ctx) && !readRun(ctx) {
+		in.TTL = orgconf.ForWrite(in.TTL) // M-4: only reads reuse a fetch for the whole TTL
 	}
 	if b.stateDir != "" {
 		in.LastFetch = live.FetchStamp(b.stateDir)

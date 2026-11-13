@@ -174,7 +174,7 @@ $ git status --short
 ## Pitfalls
 
 - **Nothing pushes by itself.** A write stays on your machine until you run `lore sync` or `git push` (the pre-push hook sends the live list with it). `lore config set --key live.autopush --value true` sends each write at once; lore then says once how to turn it off.
-- **The 5-minute cache.** Lore fetches once per command and reuses that fetch for 5 minutes (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
+- **The 5-minute cache.** Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
 - **Register first, then branch from a fresh main.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your branch holds her roster entry. A roster entry lands on main on its person's `lore sync` and then leaves the live list, so a branch cut before it landed does not see it: `git pull` main before `git switch -c`, or `git merge origin/main` into an existing branch (the same rule as any row that left live, see `lore sync peek`).
 - **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote --ids <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).

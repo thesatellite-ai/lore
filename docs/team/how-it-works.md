@@ -89,7 +89,7 @@ $ git config --get-all remote.origin.fetch
 
 The remote's hidden lists arrive in **tracking copies** under `refs/lore-remote/`. A tracking copy is your clone's note of what the remote holds. Lore then merges it into your own `refs/lore/live`. It never overwrites your copy, so a live write you made offline is kept until it can be pushed.
 
-Each lore command fetches once: one `git fetch` gets live, signals and `main` together. It skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old. `lore sync` always fetches. So a teammate's change shows up within a minute, or at once after `lore sync`:
+Each lore command fetches once: one `git fetch` gets live, signals and `main` together. A read skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old, a write if it is less than 60 seconds old. `lore sync` always fetches. So a teammate's change shows up within a minute, or at once after `lore sync`:
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console

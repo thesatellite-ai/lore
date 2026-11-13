@@ -251,10 +251,10 @@ func announceGitignore(w io.Writer, root string, added []string) {
 func announceExclude(w io.Writer, root string, added []string, migration bool) {
 	why := "a read never edits " + filepath.Join(root, gitignoreName) + ": `lore doctor --fix` adds them there"
 	switch {
-	case migration:
-		why = "a migration changes no tracked file but .lore/data: `lore doctor --fix` adds them to " + filepath.Join(root, gitignoreName)
 	case !wire.HoldsLoreData(root):
 		why = "this repo holds no lore data, so lore changes none of its tracked files"
+	case migration:
+		why = "a migration changes no tracked file but .lore/data: `lore doctor --fix` adds them to " + filepath.Join(root, gitignoreName)
 	}
 	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",
 		strings.Join(added, ", "), why)
