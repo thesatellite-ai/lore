@@ -33,7 +33,7 @@ func TestStoreMarkerFixNamesTheStore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := "lore store init " + name + " git@github.com:acme/notes.git"; !strings.Contains(f.Text, want) {
+		if want := "lore store init --name " + name + " --url git@github.com:acme/notes.git"; !strings.Contains(f.Text, want) {
 			t.Errorf("fix for %s = %q, want it to contain %q", name, f.Text, want)
 		}
 	}

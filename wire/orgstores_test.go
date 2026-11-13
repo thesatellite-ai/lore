@@ -25,7 +25,7 @@ const orgStoreID = "sto_01a1a5aca7f57659be7320c5f4b70003"
 
 // TestRenameOrgClashes: the org's linked-folder entry (a bare name at a
 // folder) is renamed "<org>/<folder>" when stores.yaml uses the bare name
-// for another place (r4: the store root made by `lore store init agency`),
+// for another place (r4: the store root made by `lore store init --name agency`),
 // kept when stores.yaml names the same url and folder, and never touched
 // when it is a company entry, a root entry, has no clash, or stores.yaml
 // cannot be read.

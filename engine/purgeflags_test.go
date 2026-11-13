@@ -17,7 +17,7 @@ func TestPurgedText(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := mid.Any()
-	line := "✓ mem_x moved to the trash (restore: lore trash restore mem_x)\n"
+	line := "✓ mem_x moved to the trash (restore: lore trash restore --target mem_x)\n"
 	purged := &PurgeRequest{Purged: []ids.AnyID{id}}
 	cases := []struct {
 		name, in string

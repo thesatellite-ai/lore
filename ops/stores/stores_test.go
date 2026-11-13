@@ -41,7 +41,7 @@ func TestMissingInitURL(t *testing.T) {
 	if !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("code %s, want E_INVALID_INPUT", errs.CodeOf(err))
 	}
-	for _, want := range []string{"store init agency", "url is missing", "lore store init <name> <url>"} {
+	for _, want := range []string{"store init agency", "url is missing", "lore store init --name <name> --url <url>"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("%q lacks %q", err.Error(), want)
 		}

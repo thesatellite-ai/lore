@@ -123,7 +123,7 @@ func (a *App) bareFolderStore(ctx context.Context, verb, folderName string) (fol
 			WithHint("e.g. lore store adopt team/" + folderName + " (`lore store folder list` shows the folders)")
 	}
 	return folderPlace{}, errs.New(errs.NotFound, verb+": no store of the org has a folder "+folderName+scan.missDetail()+scan.foundDetail()).
-		WithHint("name it as `lore store folder list` shows it, or <store>/<folder>; make it first with `lore store folder add <store> " + folderName + "`")
+		WithHint("name it as `lore store folder list` shows it, or <store>/<folder>; make it first with `lore store folder add --store <store> --folder " + folderName + "`")
 }
 
 // folderPlaceOf is the place of a folder found in the org's stores: named by

@@ -84,7 +84,7 @@ func TestResourcesAllowedInPolicy(t *testing.T) {
 	c.MustLore("policy", "show").Says(t, "resources.allowed_in")
 	c.MustLore("policy", "set", "resources.allowed_in", "store", "--yes")
 	c.Lore("resource", "add", "host", "p1", "--set", "provider=aws").
-		Fails(t, resExitRefused, "E_RESOURCE_PLACE", "resources are not allowed in repo places", "resources.allowed_in: store", "lore policy show resources")
+		Fails(t, resExitRefused, "E_RESOURCE_PLACE", "resources are not allowed in repo places", "resources.allowed_in: store", "lore policy show --id resources")
 	f := resWriteFile(t, c, "p.yaml", "resources:\n  - kind: host\n    name: p2\n    fields:\n      provider: aws\n")
 	c.Lore("resource", "import", f, "--yes").Fails(t, resExitRefused, "E_RESOURCE_PLACE")
 	if n := resList(t, c, "host").Count; n != 0 {

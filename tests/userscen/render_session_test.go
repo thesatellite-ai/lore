@@ -206,7 +206,7 @@ func TestRenderSessionStartHook(t *testing.T) {
 	if !strings.Contains(rest, changed) || strings.Contains(ctx, old) {
 		t.Errorf("only the rule changed since the last session (%s), not the older one (%s):\n%s", changed, old, ctx)
 	}
-	if !strings.Contains(ctx, "lore show "+changed) {
+	if !strings.Contains(ctx, "lore show --id "+changed) {
 		t.Errorf("each changed row names the command for its full text:\n%s", ctx)
 	}
 	if len(ctx) > 2000 {

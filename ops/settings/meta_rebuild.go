@@ -593,7 +593,7 @@ func inferType(m missingKey) (string, string) {
 	if len(kinds) == 1 {
 		for k := range kinds {
 			if k == value.KindText && dates > 0 {
-				return string(k), fmt.Sprintf("from %d values; date-like values are not typed as dates without history (fix: lore meta edit %s --type date)", n, m.name)
+				return string(k), fmt.Sprintf("from %d values; date-like values are not typed as dates without history (fix: lore meta edit --id %s --type date)", n, m.name)
 			}
 			return string(k), fmt.Sprintf("from %d values", n)
 		}

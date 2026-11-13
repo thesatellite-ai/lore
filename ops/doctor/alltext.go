@@ -177,7 +177,7 @@ func writeSetupBody(b *strings.Builder, s SetupReport, indent string) {
 		}
 	}
 	if broken {
-		fmt.Fprintf(b, "%s    repair: lore setup repair %s\n", indent, s.Name)
+		fmt.Fprintf(b, "%s    repair: lore setup repair --name %s\n", indent, s.Name)
 	}
 }
 
@@ -324,7 +324,7 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 		return strings.Join(nonEmpty(parts), " · ")
 	case a == areaGitHub:
 		if s.summary.user == "" {
-			return "no GitHub account in this setup (lore setup apply " + s.Name + " --step github)"
+			return "no GitHub account in this setup (lore setup apply --setup " + s.Name + " --step github)"
 		}
 		if s.summary.https {
 			return s.summary.user + " over https (gh login)"

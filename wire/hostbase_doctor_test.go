@@ -330,7 +330,7 @@ func TestDoctorSecretRulesOff(t *testing.T) {
 	}
 	a.doctorSecretRulesOff(background(), func(s string) { notes = append(notes, s) })
 	if len(notes) != 1 || !strings.Contains(notes[0], "generic-api-key is off at repo (fixture noise)") ||
-		!strings.Contains(notes[0], "lore secrets rule on generic-api-key --to repo") {
+		!strings.Contains(notes[0], "lore secrets rule on --id generic-api-key --to repo") {
 		t.Errorf("notes = %v", notes)
 	}
 }

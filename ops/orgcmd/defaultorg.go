@@ -9,7 +9,7 @@ package orgcmd
 // the name.
 //
 //	org <verb> without <org> ─▶ Host upgraded to DefaultOrger?
-//	    ─ no  ─▶ "name the org entry: lore org <verb> <org>"
+//	    ─ no  ─▶ "name the org entry: lore org <verb> --org <org>"
 //	    ─ yes ─▶ the only org entry on this machine
 //	           ├▶ else the active setup's org
 //	           └▶ else refused, naming every org entry and the exact command
@@ -41,7 +41,7 @@ func withDefaultOrg(ctx context.Context, h Host, name string, org *string, run f
 	verb := strings.ReplaceAll(name, ".", " ")
 	d, ok := upgrade.As[DefaultOrger](h)
 	if !ok {
-		return Report{}, errs.New(errs.InvalidInput, "name the org entry: lore "+verb+" <org>")
+		return Report{}, errs.New(errs.InvalidInput, "name the org entry: lore "+verb+" --org <org>")
 	}
 	picked, why, err := d.DefaultOrg(ctx, verb)
 	if err != nil {

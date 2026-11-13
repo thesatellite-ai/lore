@@ -91,7 +91,7 @@ func (a *App) resolveAlias(ctx context.Context, e op.Entry, d op.Decoder) (op.De
 	name, ok := orgAliases(ctx, a.opts, top)[to]
 	if !ok {
 		return nil, errs.New(errs.NotFound, "--to "+to+": this repository has no org store "+aliasWhat[to]).
-			WithHint("link the repo to an org (`lore org link <org> --project <folder>`), or name the store: --to <store>/<folder>")
+			WithHint("link the repo to an org (`lore org link --org <org> --project <folder>`), or name the store: --to <store>/<folder>")
 	}
 	return aliasDecoder{inner: d, from: to, to: string(name)}, nil
 }

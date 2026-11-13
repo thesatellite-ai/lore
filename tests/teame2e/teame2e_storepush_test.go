@@ -172,7 +172,7 @@ func spOneBatchOnTop(t *testing.T, before, after []string, memories int) {
 	}
 }
 
-// spPushView is the part of `lore store show <store> --json` the tests read.
+// spPushView is the part of `lore store show --store <store> --json` the tests read.
 type spPushView struct {
 	Push struct {
 		Store     string `json:"store"`
@@ -185,7 +185,7 @@ type spPushView struct {
 	} `json:"push"`
 }
 
-// spShow is `lore store show <store> --json`.
+// spShow is `lore store show --store <store> --json`.
 func spShow(t *testing.T, c *th.Clone, store string) spPushView {
 	t.Helper()
 	return th.DecodeJSON[spPushView](t, c.Lore("store", "show", store, "--json"))

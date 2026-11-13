@@ -84,7 +84,7 @@ func (a *App) FolderContents(ctx context.Context, name, folderName string) (opss
 	place, org := a.removePlace(src, name, dir)
 	if place == placeOrg && !isOrgAdmin(a.opts.Home, org) {
 		return opsstores.FolderContents{}, errs.New(errs.Refused, folderRemoveVerb+": store "+label+" belongs to org "+org+" and only an admin of "+org+" removes its folders; this machine has no admin setup of "+org).
-			WithHint("ask the org admin to run `lore store folder remove " + name + " " + folderName + "`")
+			WithHint("ask the org admin to run `lore store folder remove --store " + name + " --folder " + folderName + "`")
 	}
 	if a.isOrgFolder(src, folderName) {
 		return opsstores.FolderContents{}, errs.New(errs.Refused, folderRemoveVerb+": "+folderName+" is the org folder of "+label+" (org_folder): it holds the org's roster, teams and lore-org.yaml and is never removed")
@@ -106,7 +106,7 @@ func (a *App) FolderContents(ctx context.Context, name, folderName string) (opss
 	raw, err := os.ReadFile(meta)
 	if errors.Is(err, fs.ErrNotExist) {
 		return opsstores.FolderContents{}, errs.New(errs.NotFound, folderRemoveVerb+": "+label+" has no folder "+folderName+a.folderMissDetail(ctx)).
-			WithHint("`lore store folder list " + name + "` lists its folders")
+			WithHint("`lore store folder list --store " + name + "` lists its folders")
 	}
 	if err != nil {
 		return opsstores.FolderContents{}, errs.Wrap(errs.Internal, folderRemoveVerb+": read the folder's "+rowfs.MetaFileName, err)
@@ -234,7 +234,7 @@ func (a *App) RemoveFolder(ctx context.Context, in opsstores.FolderRemoveIn, c o
 	if err != nil {
 		if out.Batch != "" {
 			return opsstores.FolderRemoveOut{}, errs.Prefix(folderRemoveVerb+": the rows are in the trash under "+out.Batch+" but the folder is still there", err).
-				WithHint("rerun `lore store folder remove " + in.Store + " " + c.Folder + " --purge --yes`, or `lore trash restore " + out.Batch + "`")
+				WithHint("rerun `lore store folder remove --store " + in.Store + " --folder " + c.Folder + " --purge --yes`, or `lore trash restore --target " + out.Batch + "`")
 		}
 		return opsstores.FolderRemoveOut{}, err
 	}

@@ -162,5 +162,5 @@ func (o ops) showHistory(ctx context.Context, in ShowIn) (ShowOut, error) {
 func purgedForever(id string) error {
 	id = strings.TrimSpace(id)
 	return errs.New(errs.Purged, "trash: "+id+" was purged; purged rows never come back (DQ4)").
-		WithHint("read it: lore trash show " + id + " --from-history; then add what you still need as a new row")
+		WithHint("read it: lore trash show --id " + id + " --from-history; then add what you still need as a new row")
 }

@@ -21,13 +21,13 @@ $ lore init --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, ne
 lore: wrote ~/work/scratch/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
   scope: [master] severity: must
-$ lore task add 'write the README'
+$ lore task add --title 'write the README'
 lore: wrote ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 — write the README [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, local: no remote)
-$ lore task done tsk_162d…9666
+$ lore task done --id tsk_162d…9666
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json
 ✓ tsk_162d…9666 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
@@ -57,7 +57,7 @@ live:
 <!-- example: solo#tasks-with-the-code -->
 ```console
 # alice, in scratch
-$ lore task add 'tidy the scripts folder'
+$ lore task add --title 'tidy the scripts folder'
 lore: wrote ~/work/scratch/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — tidy the scripts folder [medium]
   on tasklist tlt_2ad3…f891 "default" (the default; --tasklist picks another)

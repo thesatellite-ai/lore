@@ -142,7 +142,7 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun, 
 	for i, h := range hits {
 		w, uerr := o.env.Update(engine.WithMeta(bctx, write(h)), engine.Ref{ID: h.Row.ID}, map[string]value.Value{})
 		if uerr != nil {
-			return RowOut{}, errs.Prefix(fmt.Sprintf("meta %s: stopped after %d of %d rows (batch %s; see: lore batch show %s)", what, i, len(hits), bid, bid), uerr)
+			return RowOut{}, errs.Prefix(fmt.Sprintf("meta %s: stopped after %d of %d rows (batch %s; see: lore batch show --id %s)", what, i, len(hits), bid, bid), uerr)
 		}
 		for _, x := range w.Warnings {
 			if !slices.Contains(warns, x.Message) {
@@ -150,7 +150,7 @@ func (o ops) metaBulk(ctx context.Context, what string, hits []metaRow, dryRun, 
 			}
 		}
 	}
-	human := fmt.Sprintf("%s on %s; batch %s (undo: lore batch undo %s)\n", what, plural.Count(len(hits), "row"), bid, bid)
+	human := fmt.Sprintf("%s on %s; batch %s (undo: lore batch undo --id %s)\n", what, plural.Count(len(hits), "row"), bid, bid)
 	for _, x := range warns {
 		human += x + "\n"
 	}
@@ -170,7 +170,7 @@ func (o ops) metaSetWhere(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	}
 	f.Meta = append(f.Meta, in.More...)
 	if f.Empty() {
-		return RowOut{}, errs.New(errs.InvalidInput, "meta set --where: nothing to set").WithHint("lore meta set --where 'client=acme' key=value")
+		return RowOut{}, errs.New(errs.InvalidInput, "meta set --where: nothing to set").WithHint("lore meta set --where 'client=acme' --pair key=value")
 	}
 	aliases, err := metalist.ScopeAliases(ctx, o.env) // 3.6 meta.scope_aliases (FA-META-12)
 	if err != nil {
@@ -210,7 +210,7 @@ func (o ops) metaUnsetWhere(ctx context.Context, in MetaUnsetIn) (RowOut, error)
 		}
 	}
 	if len(keys) == 0 {
-		return RowOut{}, errs.New(errs.InvalidInput, "meta unset --where: name the key").WithHint("lore meta unset --where 'client?' client --dry-run")
+		return RowOut{}, errs.New(errs.InvalidInput, "meta unset --where: name the key").WithHint("lore meta unset --where 'client?' --key client --dry-run")
 	}
 	all, err := o.metaHits(ctx, in.Where)
 	if err != nil {

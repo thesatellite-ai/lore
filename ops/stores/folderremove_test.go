@@ -17,7 +17,7 @@ func TestFolderRemoveWords(t *testing.T) {
 	if err := notEmptyErr(c); !errors.As(err, &e) || e.Code != errs.Refused || !strings.Contains(e.Message, "4 rows (1 in the trash) and 2 repo links") {
 		t.Fatalf("refusal: %v", err)
 	}
-	for _, want := range []string{"lore move", "lore org unlink <org>", "--project client_a", "--purge"} {
+	for _, want := range []string{"lore move", "lore org unlink --org <org>", "--project client_a", "--purge"} {
 		if !strings.Contains(e.Hint, want) {
 			t.Errorf("hint %q lacks %q", e.Hint, want)
 		}
@@ -35,7 +35,7 @@ func TestFolderRemoveWords(t *testing.T) {
 	out := RemovedOut(c)
 	out.Batch, out.Note = "bat_1", "committed here"
 	text := out.Text()
-	for _, want := range []string{"removed folder client_a (prj_1) from acme", "4 rows", "lore trash restore bat_1", "lore store folder add acme client_a", "committed here"} {
+	for _, want := range []string{"removed folder client_a (prj_1) from acme", "4 rows", "lore trash restore --target bat_1", "lore store folder add --store acme --folder client_a", "committed here"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text %q lacks %q", text, want)
 		}

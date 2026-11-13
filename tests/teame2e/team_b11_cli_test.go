@@ -224,7 +224,7 @@ func TestB11_CompatFlagsCoreNouns(t *testing.T) {
 			}
 		}
 		before := b11RowFiles(t, c, n.table)
-		c.MustLore(n.name, "delete", id, "--confirm").Says(t, "moved to the trash", "lore trash purge <id> --confirm")
+		c.MustLore(n.name, "delete", id, "--confirm").Says(t, "moved to the trash", "lore trash purge --target <id> --confirm")
 		if after := b11RowFiles(t, c, n.table); after != before {
 			t.Fatalf("%s delete --confirm purged the row file (%d -> %d)", n.name, before, after)
 		}
@@ -427,7 +427,7 @@ func TestB11_DoctorForgetsTheSecretOfADeletedRow(t *testing.T) {
 }
 
 // TestB11_SQLShortcut (old sql_shortcut_test.go TestSQLShortcut): `lore sql
-// <query>` runs sql.run like `lore sql run <query>`, flags before or after
+// <query>` runs sql.run like `lore sql run --query <query>`, flags before or after
 // the query, several words joined; a bad flag is a usage error;
 // --show-sensitive asks first.
 func TestB11_SQLShortcut(t *testing.T) {
@@ -437,7 +437,7 @@ func TestB11_SQLShortcut(t *testing.T) {
 	short := c.MustLore("sql", q, "--json").Stdout
 	long := c.MustLore("sql", "run", q, "--json").Stdout
 	if short != long {
-		t.Fatalf("lore sql <q> must equal lore sql run <q>:\n%s\n%s", short, long)
+		t.Fatalf("lore sql <q> must equal lore sql run --query <q>:\n%s\n%s", short, long)
 	}
 	// --json is indented for people (surface/cli printJSON), so read the
 	// count from the decoded result, not from the bytes.
@@ -495,7 +495,7 @@ func TestB11_ResourceMetaDeletePurgeConfirm(t *testing.T) {
 		for _, refused := range [][]string{{"--purge"}, {"--purge", "--yes"}} {
 			c.Lore(append([]string{n.noun, "delete", n.gone}, refused...)...).Fails(t, 26, "E_NEEDS_CONFIRM", "--confirm")
 		}
-		c.MustLore(n.noun, "delete", n.soft, "--confirm").Says(t, "moved to the trash", "lore trash purge <id> --confirm")
+		c.MustLore(n.noun, "delete", n.soft, "--confirm").Says(t, "moved to the trash", "lore trash purge --target <id> --confirm")
 		c.MustLore(n.noun, "delete", n.gone, "--purge", "--confirm").Says(t, "purged for good")
 	}
 	c.Lore("resource", "delete", "--kind", "host", "--where", "provider=x", "--purge").Fails(t, 26, "every matching row")

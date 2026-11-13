@@ -66,7 +66,7 @@ func (o ops) editEntry() op.Entry {
 	return op.Define(op.Spec{
 		Name: OpEdit, Summary: "Change a tag's name, color or topic glob set",
 		Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.InTrash),
-		Examples: []op.Example{{Title: "give a topic its files", CLI: "lore tag edit billing --globs \"services/billing/**\"", Want: "globs"}},
+		Examples: []op.Example{{Title: "give a topic its files", CLI: "lore tag edit --id billing --globs \"services/billing/**\"", Want: "globs"}},
 	}, o.edit)
 }
 

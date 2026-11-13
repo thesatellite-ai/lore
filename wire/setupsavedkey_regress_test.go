@@ -79,12 +79,12 @@ func rwKeyMatches(t *testing.T, w *rwWorld) rwCheck {
 	return rwCheck{}
 }
 
-// rwRunEditFix runs a `lore setup edit <name> --flag value …` fix command
+// rwRunEditFix runs a `lore setup edit --name <name> --flag value …` fix command
 // as the setup.edit op.
 func rwRunEditFix(t *testing.T, w *rwWorld, argv []string) {
 	t.Helper()
 	if len(argv) < 4 || argv[0] != "lore" || argv[1] != "setup" || argv[2] != "edit" {
-		t.Fatalf("fix %q is not a lore setup edit line", argv)
+		t.Fatalf("fix %q is not a lore setup edit --name line", argv)
 	}
 	type editIn struct {
 		Name      string `json:"name"`

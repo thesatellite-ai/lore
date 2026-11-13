@@ -10,7 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/onboard"
 )
 
-// TestSetPersonalStoreFollowed: `lore store init me <git url>` moves the
+// TestSetPersonalStoreFollowed: `lore store init --name me --url <git url>` moves the
 // one personal store `me`: setups on the default local folder follow
 // personal.store; a setup on its own repo or on none keeps it; a url that
 // is the local folder itself changes no setup.

@@ -77,7 +77,7 @@ func AddressNotice(repoID string, n opsinfra.AddressNotice) string {
 	var b strings.Builder
 	if n.CaseOnly {
 		b.WriteString("! remote changed: this clone uses " + n.Key + ", the repo record says " + n.Recorded + " (same repo, different case)\n")
-		b.WriteString("  confirm it once with: lore repo set-url " + n.Key + "\n")
+		b.WriteString("  confirm it once with: lore repo set-url --url " + n.Key + "\n")
 		return b.String()
 	}
 	recorded := n.Recorded
@@ -88,8 +88,8 @@ func AddressNotice(repoID string, n opsinfra.AddressNotice) string {
 	b.WriteString("  rows are not affected (they use repo id " + repoID + ")\n")
 	b.WriteString("  store links still use the confirmed address until you confirm this one:\n")
 	cmds := [][2]string{
-		{"lore repo set-url " + n.Key, "the repo moved or was renamed"},
-		{"lore repo set-url " + n.Key + " --mirror", "another address of the same repo"},
+		{"lore repo set-url --url " + n.Key, "the repo moved or was renamed"},
+		{"lore repo set-url --url " + n.Key + " --mirror", "another address of the same repo"},
 		{"lore repo fork", "this clone is a fork: give it its own repo id"},
 	}
 	width := 0
@@ -195,7 +195,7 @@ func (a *App) followMovedLinks(ctx context.Context, w io.Writer, in *bufio.Reade
 		}
 	}
 	if !yes {
-		_, _ = fmt.Fprintln(w, "store links not changed; to write them: lore repo set-url "+key)
+		_, _ = fmt.Fprintln(w, "store links not changed; to write them: lore repo set-url --url "+key)
 		return
 	}
 	for _, l := range a.applyRepoLinks(ctx, plan) {

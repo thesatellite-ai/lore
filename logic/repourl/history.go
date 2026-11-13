@@ -225,7 +225,7 @@ func (h History) Set(clean string, mode SetMode, from, today, by string) (out Hi
 		switch out[i].Kind {
 		case KindPrimary:
 			return h, false, errs.New(errs.InvalidInput, "repourl: "+key+" is the primary address; set another primary first").
-				WithHint("lore repo set-url <new address>")
+				WithHint("lore repo set-url --url <new-address>")
 		case KindUnconfirmed:
 			return slices.Delete(out, i, i+1), true, nil
 		default: // a mirror closes; its history stays

@@ -15,22 +15,22 @@ You want these when a guide or a support request asks you to look at a setting, 
 
 ## Step 1 — Read and write your settings
 
-`lore config set <key> <value>` writes one key of `~/.lore/config.yaml` (keeping its comments and order); `lore config get <key>` prints it, and `lore config list` prints every key you set. A key lore does not read is refused with `E_INVALID_INPUT` and nothing is written; a key that is not set is `E_NOT_FOUND` (exit 1):
+`lore config set --key <key> --value <value>` writes one key of `~/.lore/config.yaml` (keeping its comments and order); `lore config get --key <key>` prints it, and `lore config list` prints every key you set. A key lore does not read is refused with `E_INVALID_INPUT` and nothing is written; a key that is not set is `E_NOT_FOUND` (exit 1):
 
 <!-- example: ops#db-config -->
 ```console
 # alice, in website
-$ lore config set default_branch main
+$ lore config set --key default_branch --value main
 ✓ default_branch = main (~/.lore/config.yaml)
-$ lore config get default_branch
+$ lore config get --key default_branch
 main
 $ lore config list
 default_branch=main
-$ lore config set team.note 'Ask Bob before changing the build'
+$ lore config set --key team.note --value 'Ask Bob before changing the build'
 ERROR: [E_INVALID_INPUT] config key "team.note" is not a key lore reads (unknown key, ignored: line 2: team)
   hint: nothing written; team rules are set with `lore policy set`
 (exit 20)
-$ lore config get color
+$ lore config get --key color
 ERROR: [E_NOT_FOUND] config key "color" not found
   hint: `lore config list` shows the keys set in ~/.lore/config.yaml
 (exit 27)
@@ -44,10 +44,10 @@ A note such as "ask Bob before changing the build" is a rule: add it with `lore 
 <!-- example: ops#team-policy -->
 ```console
 # alice, in website
-$ lore policy set trash.retention_days 365 --yes
+$ lore policy set --key trash.retention_days --value 365 --yes
 lore: wrote ~/work/website/.lore/data/policies/pol_28f8…03df.json
 ✓ trash.retention_days = 365 (this repo, pol_…03df)
-$ lore policy show trash
+$ lore policy show --id trash
 trash.purge_on_delete	false	default
 trash.retention_days	365	repo this repo (pol_…03df)
 ```
@@ -57,7 +57,7 @@ A policy can be set at several levels: the repo (the default), a folder of a lin
 
 ## Step 3 — Let lore refuse a bad setting, then check the whole file
 
-`lore config unset <key>` removes one key the same way (comments and order of the rest kept; an emptied parent such as `personal:` goes too). `--dry-run` shows what would go and writes nothing; a key that is not set is `E_NOT_FOUND`, and a removal that would turn a valid file invalid is refused with `E_CONFIG_INVALID`. Use it for a value no setup needs any more, such as `lore config unset personal.store` after a setup was deleted permanently; the setup page lists those under "Unused settings in config.yaml" on Home, and `lore setup leftovers clear identity|personal_store` clears them from the command line.
+`lore config unset --key <key>` removes one key the same way (comments and order of the rest kept; an emptied parent such as `personal:` goes too). `--dry-run` shows what would go and writes nothing; a key that is not set is `E_NOT_FOUND`, and a removal that would turn a valid file invalid is refused with `E_CONFIG_INVALID`. Use it for a value no setup needs any more, such as `lore config unset --key personal.store` after a setup was deleted permanently; the setup page lists those under "Unused settings in config.yaml" on Home, and `lore setup leftovers clear --what identity|personal_store` clears them from the command line.
 
 `lore config fmt` rewrites `~/.lore/config.yaml` in block style (one key or list item per line) when a list or mapping sits on one line, such as `setups: [{name: personal, kind: solo, …}]` saved by an older lore; comments and key order are kept, a flat list such as `tools: [claude, codex]` stays as written, and `--dry-run` names the keys and writes nothing. No read rewrites the file: `lore doctor` warns (`config_style`) and names the command, and `lore doctor --fix` runs it.
 
@@ -66,15 +66,15 @@ A policy can be set at several levels: the repo (the default), a folder of a lin
 <!-- example: ops#config-refusals -->
 ```console
 # alice, in website
-$ lore config set live.autopush maybe
+$ lore config set --key live.autopush --value maybe
 ERROR: [E_INVALID_INPUT] config key "live.autopush": bad value "maybe" (line 3: live.autopush: expected true or false, got text)
   hint: nothing written; docs/reference/config.md lists every key with its type (a bool is true or false, a duration 45m or 2h)
 (exit 20)
-$ lore config set policies.trash.retention_days 30
+$ lore config set --key policies.trash.retention_days --value 30
 ERROR: [E_INVALID_INPUT] config key "policies.trash.retention_days" is a policy key; lore config set does not edit policies:
   hint: nothing written; edit policies: in ~/.lore/config.yaml by hand (it only tightens), or set a team rule with `lore policy set`
 (exit 20)
-$ lore config set live.autopush true
+$ lore config set --key live.autopush --value true
 ✓ live.autopush = true (~/.lore/config.yaml)
 $ lore config check
 ✓ ~/.lore/config.yaml is valid: 0 org entries
@@ -85,26 +85,26 @@ Run `lore config check` after every hand edit of `~/.lore/config.yaml`: a mistak
 
 ## Step 4 — Fix a mistake or remove a rule
 
-Each key takes one kind of value, and a value it cannot take is refused with `E_INVALID_INPUT` and a hint naming what it takes. `lore policy unset <key>` removes the row at that level (the repo by default, `--to` for another), so the next level up or the built-in default applies again; `lore policy show` then says `(unset)` and `default`:
+Each key takes one kind of value, and a value it cannot take is refused with `E_INVALID_INPUT` and a hint naming what it takes. `lore policy unset --key <key>` removes the row at that level (the repo by default, `--to` for another), so the next level up or the built-in default applies again; `lore policy show` then says `(unset)` and `default`:
 
 <!-- example: ops#policy-unset -->
 ```console
 # alice, in website
-$ lore policy set trash.retention_days soon --yes
+$ lore policy set --key trash.retention_days --value soon --yes
 ERROR: [E_INVALID_INPUT] policy set trash.retention_days: "soon" is not a valid value
   hint: trash.retention_days takes a whole number, 0 or more
 (exit 20)
-$ lore policy unset trash.retention_days --yes
+$ lore policy unset --key trash.retention_days --yes
 lore: wrote ~/work/website/.lore/data/policies/pol_28f8…03df.json
 ✓ trash.retention_days unset in this repo (pol_…03df); the next level up or the default applies
-$ lore policy show trash.retention_days
+$ lore policy show --id trash.retention_days
 trash.retention_days	(unset)	default
 ```
 <!-- /example -->
 
 ## Try it
 
-Run `lore config list` to see the keys you set in `~/.lore/config.yaml`, and `lore policy show <prefix>` in a repo to see the team rules under one prefix, each with its value and where it comes from (`default` when nobody set it). Without a prefix, `lore policy show` lists every rule:
+Run `lore config list` to see the keys you set in `~/.lore/config.yaml`, and `lore policy show --id <prefix>` in a repo to see the team rules under one prefix, each with its value and where it comes from (`default` when nobody set it). Without a prefix, `lore policy show` lists every rule:
 
 <!-- example: ops#try-settings -->
 ```console
@@ -112,7 +112,7 @@ Run `lore config list` to see the keys you set in `~/.lore/config.yaml`, and `lo
 $ lore config list
 default_branch=main
 live.autopush=true
-$ lore policy show secrets
+$ lore policy show --id secrets
 secrets.agent_reveal	ask	default
 secrets.manager_timeout	5	default
 secrets.on_detect	ask	default

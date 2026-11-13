@@ -73,7 +73,7 @@ const (
 	// clean repo); the failed steps follow.
 	// LineNoRepos is --all's line when it found no repo: how it chooses
 	// them and what to do.
-	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`) and in the folders you name; name the folders holding your repos (lore fix --all ~/code ~/work), run `lore fix` inside each repo, or add the folder to a setup"
+	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`) and in the folders you name; name the folders holding your repos (lore fix --all --dirs ~/code --dirs ~/work), run `lore fix` inside each repo, or add the folder to a setup"
 	LineStepsFailed = "Not everything is current: these steps failed, see their lines above: "
 )
 
@@ -480,7 +480,7 @@ func Ops(env Env) []op.Entry {
 				{Title: "see what it would do", CLI: "lore fix --dry-run", Want: ""},
 				{Title: "every repo on this machine", CLI: "lore fix --all", Want: ""},
 				{Title: "every repo, one at a time", CLI: "lore fix --all --jobs 1", Want: ""},
-				{Title: "also the repos under these folders", CLI: "lore fix --all ~/code ~/work", Want: ""},
+				{Title: "also the repos under these folders", CLI: "lore fix --all --dirs ~/code --dirs ~/work", Want: ""},
 				{Title: "also migrate a project on the lore 0.1.17 format", CLI: "lore fix --migrate", Want: ""},
 			},
 		}, func(ctx context.Context, in RunIn) (Out, error) {
@@ -496,7 +496,7 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	}
 	if len(in.Dirs) > 0 {
 		return Out{}, errs.New(errs.InvalidInput, "lore fix takes folders only with --all").
-			WithHint("lore fix --all " + strings.Join(in.Dirs, " "))
+			WithHint("lore fix --all --dirs " + strings.Join(in.Dirs, " "))
 	}
 	top, err := env.RepoTop(ctx)
 	if err != nil || top == "" {

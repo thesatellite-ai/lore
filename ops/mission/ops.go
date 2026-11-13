@@ -71,29 +71,29 @@ func Ops(env work.Env) []op.Entry {
 			Name: OpAdd, Summary: "Add a new mission",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.Unsupported),
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "add a mission", CLI: `lore mission add "Ship the invite flow" --target 2026-12-31`, Want: "msn_"}},
+			Examples: []op.Example{{Title: "add a mission", CLI: `lore mission add --title "Ship the invite flow" --target 2026-12-31`, Want: "msn_"}},
 		}, o.add),
 		op.Define(op.Spec{
 			Name: OpList, Examples: []op.Example{{Title: "list as JSON", CLI: "lore mission list --json", Want: `"data"`}}, Summary: "List missions (with attached tasks in --json mode)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
 		}, o.list),
 		op.Define(op.Spec{
-			Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore mission show msn_<id> --json", Want: `"data"`}}, Summary: "Show mission details + attached tasks",
+			Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore mission show --id msn_<id> --json", Want: `"data"`}}, Summary: "Show mission details + attached tasks",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
-			Name: OpEdit, Examples: []op.Example{{Title: "move the target date", CLI: "lore mission edit msn_<id> --target 2027-01-31", Want: "msn_"}}, Summary: "Edit mission fields (only flags you pass are applied)",
+			Name: OpEdit, Examples: []op.Example{{Title: "move the target date", CLI: "lore mission edit --id msn_<id> --target 2027-01-31", Want: "msn_"}}, Summary: "Edit mission fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
-			Name: OpDone, Examples: []op.Example{{Title: "finish a mission", CLI: "lore mission done msn_<id>", Want: "done"}}, Summary: "Mark mission as done",
+			Name: OpDone, Examples: []op.Example{{Title: "finish a mission", CLI: "lore mission done --id msn_<id>", Want: "done"}}, Summary: "Mark mission as done",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.done),
 		status(OpPause, "Mark mission as paused", schema.MissionStatusPaused, "paused",
-			op.Example{Title: "put a mission on hold", CLI: "lore mission pause msn_12"}),
+			op.Example{Title: "put a mission on hold", CLI: "lore mission pause --id msn_12"}),
 		status(OpResume, "Mark mission as active (resume from paused)", schema.MissionStatusActive, "resumed",
-			op.Example{Title: "pick a paused mission up again", CLI: "lore mission resume msn_12"}),
+			op.Example{Title: "pick a paused mission up again", CLI: "lore mission resume --id msn_12"}),
 		op.Define(op.Spec{
 			Name: OpDelete, Examples: []op.Example{{Title: "preview a bulk delete", CLI: "lore mission delete --where status=done --dry-run", Want: "would"}}, Summary: "Delete a mission (its tasks go with it: one batch, to the trash)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
@@ -101,7 +101,7 @@ func Ops(env work.Env) []op.Entry {
 		}, o.delete),
 		applyOp(o),
 		op.Define(op.Spec{
-			Name: OpSearch, Examples: []op.Example{{Title: "find missions", CLI: `lore mission search "invite"`, Want: "msn_"}}, Summary: "Full-text search across mission title + body + status",
+			Name: OpSearch, Examples: []op.Example{{Title: "find missions", CLI: `lore mission search --query "invite"`, Want: "msn_"}}, Summary: "Full-text search across mission title + body + status",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,
 		}, o.search),
 	}
@@ -117,7 +117,7 @@ func missionID(s string) (ids.AnyID, error) { return work.ParseID(Noun, ids.Pref
 func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
-		return ShowOut{}, errs.New(errs.InvalidInput, "mission add: the title is empty").WithHint(`lore mission add "<title>"`)
+		return ShowOut{}, errs.New(errs.InvalidInput, "mission add: the title is empty").WithHint(`lore mission add --title "<title>"`)
 	}
 	project, err := work.Project(ctx, o.env, Noun, in.Project)
 	if err != nil {

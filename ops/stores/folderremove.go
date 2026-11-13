@@ -132,8 +132,8 @@ func folderRemoveOp(m Manager) op.Entry {
 		Permission: op.PermAdmin, Access: op.AccessRead, Errors: folderRemoveErrors,
 		Confirm: op.ConfirmRule{MayAsk: true},
 		Examples: []op.Example{
-			{Title: "an empty folder made by mistake", CLI: "lore store folder remove team client_old --yes", Want: "removed folder client_old"},
-			{Title: "a folder with rows: they go to the trash first", CLI: "lore store folder remove team client_old --purge --confirm", Want: "trash"},
+			{Title: "an empty folder made by mistake", CLI: "lore store folder remove --store team --folder client_old --yes", Want: "removed folder client_old"},
+			{Title: "a folder with rows: they go to the trash first", CLI: "lore store folder remove --store team --folder client_old --purge --confirm", Want: "trash"},
 		},
 	}, func(ctx context.Context, in FolderRemoveIn) (FolderRemoveOut, error) {
 		in.Store, in.Folder = strings.TrimSpace(in.Store), strings.TrimSpace(in.Folder)
@@ -179,12 +179,12 @@ func notEmptyErr(c FolderContents) error {
 	what := contentsPhrase(c)
 	var next []string
 	if c.Rows > 0 || c.Trashed > 0 {
-		next = append(next, "move the rows you keep with `lore move <id> --to <store>/<folder>`")
+		next = append(next, "move the rows you keep with `lore move --id <id> --to <store>/<folder>`")
 	}
 	if c.Links > 0 {
-		next = append(next, "unlink each repo with `lore org unlink <org> --project "+c.Folder+"` run in that repo")
+		next = append(next, "unlink each repo with `lore org unlink --org <org> --project "+c.Folder+"` run in that repo")
 	}
-	next = append(next, "or remove it with everything in it: `lore store folder remove "+c.Store+" "+c.Folder+" --purge` (the rows go to the store's trash first)")
+	next = append(next, "or remove it with everything in it: `lore store folder remove --store "+c.Store+" --folder "+c.Folder+" --purge` (the rows go to the store's trash first)")
 	return errs.New(errs.Refused, "store folder remove: folder "+c.Folder+" of "+c.Store+" holds "+what+"; nothing was removed").
 		WithHint(strings.Join(next, "; "))
 }
@@ -246,7 +246,7 @@ func (o FolderRemoveOut) Text() string {
 	}
 	b.WriteString("\n")
 	if o.Purged && o.Batch != "" {
-		b.WriteString("  its rows are in the store's trash under " + o.Batch + "; to bring them back: `lore store folder add " + o.Store + " " + o.Folder + "`, attach the folder to a repo, then `lore trash restore " + o.Batch + "`\n")
+		b.WriteString("  its rows are in the store's trash under " + o.Batch + "; to bring them back: `lore store folder add --store " + o.Store + " --folder " + o.Folder + "`, attach the folder to a repo, then `lore trash restore --target " + o.Batch + "`\n")
 	}
 	if o.Note != "" {
 		b.WriteString("  " + o.Note + "\n")

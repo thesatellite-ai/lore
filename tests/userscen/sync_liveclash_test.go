@@ -23,7 +23,7 @@ func TestSyncTeam_LiveTitleClashIsReportedBySync(t *testing.T) {
 	a.MustLore("sync")
 	st.people[1].Online()
 	r := b.Lore("sync")
-	r.Fails(t, 23, "E_STALE", "conflict #1 live tasks/"+id, "lore sync resolve 1 --take kept|other", "lore sync conflicts")
+	r.Fails(t, 23, "E_STALE", "conflict #1 live tasks/"+id, "lore sync resolve --id 1 --take kept|other", "lore sync conflicts")
 	// B2-23: both versions of the clashing field, named by the side resolve keeps
 	b.MustLore("sync", "conflicts").Says(t, "title kept (first):", "title other (second):", `"alice title"`, `"bob title"`)
 	b.MustLore("sync", "resolve", "1", "--take", "other").Says(t, "resolved #1")

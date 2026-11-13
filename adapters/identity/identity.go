@@ -395,7 +395,7 @@ func resolveOrg(in Inputs, getenv func(string) string) (Resolved, error) {
 	key := strings.TrimSpace(in.Org.Identity.Key)
 	if key == "" {
 		return Resolved{}, errs.Wrap(errs.IdentityFailed, "identity: org "+in.Org.Name+" has no identity", ErrOrgIdentityMissing).
-			WithHint("run `lore identity set --org " + in.Org.Name + " --key human:<your email>`")
+			WithHint("run `lore identity set --org " + in.Org.Name + " --key human:<your --identity email>`")
 	}
 	r := fromKey(key, in.Org.Identity.Name, StepOrg)
 	r.Kind, r.Org, r.Handle, r.Notes = KindHuman, in.Org.Name, in.Org.Identity.Handle, notes

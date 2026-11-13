@@ -89,7 +89,7 @@ func TestShowKindAndRows(t *testing.T) {
 		t.Fatalf("show = %+v", out)
 	}
 	txt := out.Text()
-	if !strings.Contains(txt, "kind: delete") || !strings.Contains(txt, "2 more (lore batch show "+del.String()+" --all)") {
+	if !strings.Contains(txt, "kind: delete") || !strings.Contains(txt, "2 more (lore batch show --id "+del.String()+" --all)") {
 		t.Fatalf("text:\n%s", txt)
 	}
 	if out, err = o.show(ctx, ShowIn{ID: del.String(), All: true}); err != nil || out.Shown != 12 {

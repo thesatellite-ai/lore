@@ -69,7 +69,7 @@ func TestTreeCheck(t *testing.T) {
 	setParent(h, oc, dp)
 	out := h.Must(opstask.OpTreeCheck, `{}`)
 	js := h.JSON(out)
-	for _, want := range []string{`"kind":"parent_cycle"`, `"code":"E_PARENT_CYCLE"`, `"id":"` + x + `"`, "in the trash", "lore trash restore " + gone,
+	for _, want := range []string{`"kind":"parent_cycle"`, `"code":"E_PARENT_CYCLE"`, `"id":"` + x + `"`, "in the trash", "lore trash restore --target " + gone,
 		"is missing", "--no-parent", `"kind":"parent_closed"`, `"id":"` + oc + `"`} {
 		if !strings.Contains(js, want) {
 			t.Errorf("findings lack %q: %s", want, js)

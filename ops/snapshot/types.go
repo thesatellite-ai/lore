@@ -32,8 +32,8 @@ type AddIn struct {
 	engine.MetaFlags
 
 	Title   string `json:"title" flag:"title" desc:"snapshot title (required)"`
-	Body    string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
-	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
+	Body    string `json:"body,omitempty" flag:"body" desc:"body" ui:"widget=markdown"`
+	Text    string `json:"text,omitempty" arg:"0" argof:"body" desc:"the body, instead of --body"`
 	Source  string `json:"source,omitempty" flag:"source" desc:"where the snapshot came from: manual | learn-from | agent-proposal | plugin | imported | migrated (default manual)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`

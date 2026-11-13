@@ -109,12 +109,12 @@ type spPush struct {
 	Changed      bool   `json:"changed"`
 }
 
-// spShowOut is `lore store show <store> --json` (and GET /v1/stores/<store>).
+// spShowOut is `lore store show --store <store> --json` (and GET /v1/stores/<store>).
 type spShowOut struct {
 	Push spPush `json:"push"`
 }
 
-// spShow is `lore store show <store> --json` in cwd.
+// spShow is `lore store show --store <store> --json` in cwd.
 func spShow(t *testing.T, m *Machine, cwd, store string) spPush {
 	t.Helper()
 	out := lsRun(t, m, cwd, "store", "show", store)
@@ -125,7 +125,7 @@ func spShow(t *testing.T, m *Machine, cwd, store string) spPush {
 	return o.Push
 }
 
-// spSet is `lore store set <store> k=v… --json` in cwd.
+// spSet is `lore store set --store <store> --settings k=v… --json` in cwd.
 func spSet(t *testing.T, m *Machine, cwd, store string, kv ...string) spPush {
 	t.Helper()
 	out := lsRun(t, m, cwd, append([]string{"store", "set", store}, kv...)...)

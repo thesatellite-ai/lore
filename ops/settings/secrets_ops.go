@@ -174,7 +174,7 @@ func (o ops) secretIndexOps() []op.Entry {
 			Access: op.AccessRead, Errors: secretErrors,
 			Examples: []op.Example{{Title: "references a person holds", CLI: "lore secrets list --holder tomas", Want: "references"}}}, o.secretsList),
 		op.Define(op.Spec{Name: OpSecretsShow, Summary: "Show a secret reference or a row's references; --reveal prints the value (asks every time)", Permission: op.PermRead,
-			Access: op.AccessRead, Errors: secretErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one secret reference", CLI: "lore secrets show var_1c0b"}}}, o.secretsShow),
+			Access: op.AccessRead, Errors: secretErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one secret reference", CLI: "lore secrets show --id var_1c0b"}}}, o.secretsShow),
 		op.Define(op.Spec{Name: OpSecretsCheck, Summary: "Verify each referenced entry by its name (the value is read and dropped); adds the store-then-rotate tasks", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: secretErrors, Examples: []op.Example{{Title: "verify every referenced entry", CLI: "lore secrets check"}}}, o.secretsCheck),
 		op.Define(op.Spec{Name: OpSecretsMove, Summary: "Rewrite the holder of matching references (one batch; never copies a secret)", Permission: op.PermWrite,
@@ -184,7 +184,7 @@ func (o ops) secretIndexOps() []op.Entry {
 		op.Define(op.Spec{Name: OpSecretsRenameEntry, Summary: "Rewrite an entry name everywhere (a renamed vault entry; one batch)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: secretErrors, Examples: []op.Example{{Title: "a vault entry was renamed", CLI: "lore secrets rename-entry --manager gopass --from acme/db --to acme/hub/db"}}}, o.secretsRename),
 		op.Define(op.Spec{Name: OpSecretsLink, Summary: "Fill a ${secret:unstored} placeholder with the entry it is now stored in", Permission: op.PermWrite,
-			Access: op.AccessWrite, Errors: secretErrors, Examples: []op.Example{{Title: "fill an unstored placeholder", CLI: "lore secrets link mem_0c3a --at 1 --ref gopass://acme/hub/db-password"}}}, o.secretsLink),
+			Access: op.AccessWrite, Errors: secretErrors, Examples: []op.Example{{Title: "fill an unstored placeholder", CLI: "lore secrets link --id mem_0c3a --at 1 --ref gopass://acme/hub/db-password"}}}, o.secretsLink),
 	}
 }
 
@@ -400,7 +400,7 @@ func (o ops) unstoredTask(ctx context.Context, r secretRow) (string, bool, error
 // it at write time (on_detect: redact). made is false when it existed.
 func AddUnstoredTask(ctx context.Context, env work.Env, src store.Source, rowID, table string, fields []string) (string, bool, error) {
 	body := "Row " + rowID + " (" + table + "), fields " + strings.Join(fields, ", ") + ", holds $${secret:unstored} (escaped here so this task is not indexed as one).\n" +
-		"1. Store the secret in a manager, then: lore secrets link " + rowID + " --at 1 --ref <manager>://<entry>\n" +
+		"1. Store the secret in a manager, then: lore secrets link --id " + rowID + " --at 1 --ref <manager>://<entry>\n" +
 		"2. Rotate it (it was seen by a shell or an agent), then close this task."
 	tid, existed, err := task.AddSecretTask(ctx, env, task.SecretTask{Store: src, Title: fmt.Sprintf(unstoredTitle, rowID), Body: body,
 		Key: "secret-unstored-" + rowID, Rows: []string{rowID}})

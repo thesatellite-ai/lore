@@ -111,7 +111,7 @@ func (o ListOut) Text() string {
 	}
 	_ = tw.Flush()
 	if len(o.Leftovers) > 0 {
-		b.WriteString("leftovers in ~/.lore/config.yaml (no setup uses them; lore setup leftovers clear <kind>):\n")
+		b.WriteString("leftovers in ~/.lore/config.yaml (no setup uses them; lore setup leftovers clear --what <kind>):\n")
 		for _, l := range o.Leftovers {
 			b.WriteString("  " + string(l.Kind) + "  " + l.Key + " = " + l.Value + "\n")
 		}

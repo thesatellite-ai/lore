@@ -194,7 +194,7 @@ func TestPointerCopies(t *testing.T) {
 		t.Errorf("missing pointer for claude_code not reported: %+v", got)
 	}
 	if f, ok := kinds[opsrender.PointerOrphan]; !ok || f.File != codex.PointerFile ||
-		f.Fix != "lore policy set context.targets claude_code,codex --yes" || !strings.Contains(f.Message, "by hand") {
+		f.Fix != "lore policy set --key context.targets --value claude_code,codex --yes" || !strings.Contains(f.Message, "by hand") {
 		t.Errorf("orphan AGENTS.md not reported with the keep fix: %+v", got)
 	}
 	if data, _ := os.ReadFile(filepath.Join(root, codex.PointerFile)); string(data) != agents {

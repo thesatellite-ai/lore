@@ -73,10 +73,10 @@ func TestGoneScopes(t *testing.T) {
 	if len(got) != 2 || got[0].Path != "src/booking" || got[0].RenamedTo != "src/bookings" || got[1].Path != "old" || got[1].RenamedTo != "" {
 		t.Fatalf("goneScopes = %+v", got)
 	}
-	if l := got[0].Line(); !strings.Contains(l, "lore scope move src/booking src/bookings") {
+	if l := got[0].Line(); !strings.Contains(l, "lore scope move --old src/booking --new src/bookings") {
 		t.Fatalf("renamed line = %q", l)
 	}
-	if l := got[1].Line(); !strings.Contains(l, "lore scope move old <new-path>") {
+	if l := got[1].Line(); !strings.Contains(l, "lore scope move --old old --new <new-path>") {
 		t.Fatalf("deleted line = %q", l)
 	}
 	removed := HeadRemovedPaths(ctx, dir)

@@ -61,23 +61,23 @@ func Ops(env content.Env) []op.Entry {
 			Examples: []op.Example{{Title: "list as JSON", CLI: "lore workflow list --json", Want: `"data"`}},
 		}, o.list),
 		op.Define(op.Spec{
-			Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore workflow show wfl_<id> --json", Want: `"data"`}}, Summary: "Show workflow details",
+			Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore workflow show --id wfl_<id> --json", Want: `"data"`}}, Summary: "Show workflow details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
-			Name: OpEdit, Examples: []op.Example{{Title: "new steps", CLI: `lore workflow edit wfl_<id> --body "1. branch 2. test 3. PR"`, Want: "wfl_"}}, Summary: "Edit workflow fields",
+			Name: OpEdit, Examples: []op.Example{{Title: "new steps", CLI: `lore workflow edit --id wfl_<id> --body "1. branch 2. test 3. PR"`, Want: "wfl_"}}, Summary: "Edit workflow fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
-			Name: OpDelete, Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore workflow delete wfl_<id> --yes", Want: "trash"}}, Summary: "Delete a workflow (it goes to the trash; lore trash restore brings it back)",
+			Name: OpDelete, Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore workflow delete --id wfl_<id> --yes", Want: "trash"}}, Summary: "Delete a workflow (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
 			return o.c.Delete(ctx, in.ID, in.Reason)
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
-			Name: OpSearch, Examples: []op.Example{{Title: "find workflows", CLI: `lore workflow search "release"`, Want: "wfl_"}}, Summary: "Full-text search across workflow name + body",
+			Name: OpSearch, Examples: []op.Example{{Title: "find workflows", CLI: `lore workflow search --query "release"`, Want: "wfl_"}}, Summary: "Full-text search across workflow name + body",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

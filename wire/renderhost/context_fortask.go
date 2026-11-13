@@ -143,7 +143,7 @@ func (h *Host) contextForTask(ctx context.Context, raw string) (contextResult, e
 	sortTaskPicks(picks)
 	more := ""
 	if len(words) > 0 {
-		more = "lore search \"" + strings.Join(words, " ") + "\""
+		more = "lore search --query \"" + strings.Join(words, " ") + "\""
 	}
 	return contextResult{title: "task " + t.ID, picks: picks, more: more}, nil
 }
@@ -197,7 +197,7 @@ func (h *Host) linkedPick(ctx context.Context, srcs []store.Source, kind, rawID,
 		return unseen("(not available here)")
 	}
 	if !slices.Contains(srcs, src) {
-		return unseen("(in an internal store; `lore show " + rawID + "`)")
+		return unseen("(in an internal store; `lore show --id " + rawID + "`)")
 	}
 	if kind == ctxKindLinked {
 		pick.Kind = string(r.Table)

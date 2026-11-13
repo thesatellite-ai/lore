@@ -503,7 +503,7 @@ func TestSyncTeam_DeleteVersusEditKeepsTheEdit(t *testing.T) {
 	a.CommitAll("delete rule")
 	a.AdminPush("origin", "main")
 
-	b.Lore("rule", "edit", rul, "--body", "bob rule").Refused(t, "E_IN_TRASH", "lore trash restore "+rul)
+	b.Lore("rule", "edit", rul, "--body", "bob rule").Refused(t, "E_IN_TRASH", "lore trash restore --target "+rul)
 	b.MustLore("trash", "restore", rul, "--yes").Says(t, "restored 1")
 	b.MustLore("rule", "edit", rul, "--body", "bob rule")
 	b.CommitAll("bob keeps the rule")

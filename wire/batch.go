@@ -323,7 +323,7 @@ func (a *App) keepPrior(ctx context.Context, at store.Source, was row.Row, w eng
 	}
 	if err := a.recordPrior(b, at, was, w.Row.HLC); err != nil {
 		w.Warnings = append(w.Warnings, engine.Warning{Code: engine.WarnUndoUncovered,
-			Message: "lore batch undo " + b.ID.String() + " cannot put " + was.ID.String() + " back: " + err.Error()})
+			Message: "lore batch undo --id " + b.ID.String() + " cannot put " + was.ID.String() + " back: " + err.Error()})
 	}
 	return w
 }

@@ -92,8 +92,8 @@ func TestKnowledgeLifecycleEveryKind(t *testing.T) {
 			// delete asks first and keeps the row.
 			c.Lore(k.noun, "delete", id).Fails(t, th.ExitNeedsConfirm, "E_NEEDS_CONFIRM", "--yes")
 			knowShowRow(t, c, k, id)
-			c.Lore(k.noun, "delete", id, "--yes").OK(t).Says(t, "lore trash restore "+id)
-			c.Lore(k.noun, "show", id).Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore "+id)
+			c.Lore(k.noun, "delete", id, "--yes").OK(t).Says(t, "lore trash restore --target "+id)
+			c.Lore(k.noun, "show", id).Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore --target "+id)
 			if l := knowListRows(t, c, k); l.has(id) || !l.has(pos) {
 				t.Fatalf("list after delete: %v", l.ids())
 			}

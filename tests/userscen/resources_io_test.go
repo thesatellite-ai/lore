@@ -47,7 +47,7 @@ func TestResourcesImportRefusalNamesRowAndReason(t *testing.T) {
 		say        []string
 	}{
 		{"value not in the closed set", "resources:\n  - kind: host\n    name: a1\n    fields:\n      provider: aws\n  - kind: host\n    name: a2\n    fields:\n      provider: gcp\n",
-			[]string{"host a2", `provider "gcp" is not one of hetzner, aws`, "nothing written", "lore resource kind show host"}},
+			[]string{"host a2", `provider "gcp" is not one of hetzner, aws`, "nothing written", "lore resource kind show --id host"}},
 		{"unknown field", "resources:\n  - kind: host\n    name: a1\n    fields:\n      provider: aws\n      bogus: 1\n",
 			[]string{"host a1", "unknown field bogus", "nothing written"}},
 		{"unknown kind", "resources:\n  - kind: nokind\n    name: a1\n",

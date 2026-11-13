@@ -1,8 +1,8 @@
 # Team invites
 
-**Your own staff are not invited:** add them with [`lore member add`](members.md) and they join with `lore setup join <the org's store url>` (the command `member add` prints). An invite is for an outsider who needs a one-time line, such as a contractor joining with a personal email.
+**Your own staff are not invited:** add them with [`lore member add`](members.md) and they join with `lore setup join --invite "<the org's store url>"` (the command `member add` prints). An invite is for an outsider who needs a one-time line, such as a contractor joining with a personal email.
 
-**In short:** an admin runs `lore team invite <email>`; lore writes an invite row in the team's store and prints one line to send to the person. They paste it into `lore setup join`, and lore puts them on the roster with the roles and projects the invite names. An invite works once and expires after 14 days.
+**In short:** an admin runs `lore team invite --email <email>`; lore writes an invite row in the team's store and prints one line to send to the person. They paste it into `lore setup join`, and lore puts them on the roster with the roles and projects the invite names. An invite works once and expires after 14 days.
 
 You want this page when you run a team (an `admin` setup) and someone new should join it: the invite tells their lore where the team's store is, and their stint, roles and projects are set up when they accept. Every output below is a real run (`tests/team/docs/run-examples.sh invites`) against a fake GitHub; invite lines are cut after 24 characters in the examples, as they hold a random id.
 
@@ -19,13 +19,13 @@ Tomas invites Mira as a developer and reviewer on `acme-hub`, and Ana as a contr
 <!-- example: invites#invite -->
 ```console
 # tomas, in acme-hub
-$ lore team invite mira@agency.example --role dev,reviewer --project acme-hub
+$ lore team invite --email mira@agency.example --role dev,reviewer --project acme-hub
 lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 Send this to mira@agency.example (it holds no secret):
   lore setup join lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
-$ lore team invite ana@agency.example --type contractor --expires 30d
+$ lore team invite --email ana@agency.example --type contractor --expires 30d
 lore: pushed store agency/org: commit 86dbae4 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 ✓ invite inv_2ad3…f891 written to store agency (expires 2026-12-02)
@@ -54,15 +54,15 @@ A second invite for an email that still has a pending one is refused (resend or 
 <!-- example: invites#invite-refusals -->
 ```console
 # tomas, in acme-hub
-$ lore team invite mira@agency.example
+$ lore team invite --email mira@agency.example
 ERROR: [E_INVALID_INPUT] invite inv_7a67…9504 for mira@agency.example is still pending (until 2026-11-16); one invite per person
   hint: lore team invite resend mira@agency.example prints it again; lore team invite revoke mira@agency.example ends it
 (exit 20)
-$ lore team invite bo@agency.example --role dev
+$ lore team invite --email bo@agency.example --role dev
 ERROR: [E_INVALID_INPUT] --role is applied on each --project, and no --project is given
   hint: --project <project>
 (exit 20)
-$ lore --setup personal team invite bo@agency.example
+$ lore --setup personal team invite --email bo@agency.example
 ERROR: [E_REFUSED] setup personal is a solo setup; team invites are written from an admin setup of the org
   hint: run with --setup <an admin setup>, or ask the org admin to invite
 (exit 23)
@@ -79,7 +79,7 @@ The invite line grants nothing: whether the person can read and write the team's
 lore-invite:v1:<base64url of a small JSON object>
 ```
 
-Send it in chat or email; the person runs `lore setup join <line>` (see [Step 4](#step-4--what-happens-when-they-join)). The JSON names the invite id, the org, the store url, the org folder, the invited email, who invited them and the last day. It holds no secret, so it is safe in chat or email. Everything that matters (roles, projects, kind of stint, status) is read from the invite row inside the store, so changing the line cannot give anyone more.
+Send it in chat or email; the person runs `lore setup join --invite <line>` (see [Step 4](#step-4--what-happens-when-they-join)). The JSON names the invite id, the org, the store url, the org folder, the invited email, who invited them and the last day. It holds no secret, so it is safe in chat or email. Everything that matters (roles, projects, kind of stint, status) is read from the invite row inside the store, so changing the line cannot give anyone more.
 
 ## Single use, 14 days
 
@@ -138,19 +138,19 @@ $ lore team invite list --status pending --json
 <!-- example: invites#resend-and-revoke -->
 ```console
 # tomas, in acme-hub
-$ lore team invite resend mira@agency.example
+$ lore team invite resend --ref mira@agency.example
 id: inv_7a67…9504
 text: lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
-$ lore team invite revoke ana@agency.example
+$ lore team invite revoke --ref ana@agency.example
 ERROR: [E_NEEDS_CONFIRM] Revoke invite inv_2ad3…f891 for ana@agency.example?
   hint: nothing written; confirm with --yes (or "yes": true over lore api)
 (exit 26)
-$ lore team invite revoke ana@agency.example --yes
+$ lore team invite revoke --ref ana@agency.example --yes
 lore: pushed store agency/org: commit 9b40ce7 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 id: inv_2ad3…f891
 status: revoked
-$ lore team invite resend ana@agency.example
+$ lore team invite resend --ref ana@agency.example
 ERROR: [E_INVITE_REVOKED] invite inv_2ad3…f891 was revoked
   hint: lore team invite ana@agency.example
 (exit 23)
@@ -166,13 +166,13 @@ invites:
 
 ## Step 4 — What happens when they join
 
-When Mira runs `lore setup join <line>` and finishes the join step (see [Guided setup](guided-setup.md#step-6--join-a-team-from-an-invite)), lore, in her name:
+When Mira runs `lore setup join --invite <line>` and finishes the join step (see [Guided setup](guided-setup.md#step-6--join-a-team-from-an-invite)), lore, in her name:
 
 1. imports the org entry from the store (unless her machine already has one for that store; an entry of the same name for another store is refused with `E_SETUP_ORG_MISMATCH`);
 2. records her email addresses and GitHub user as identity contacts on the roster;
 3. opens a stint of the invite's type, starting today;
 4. adds a membership with the invite's roles on each of its projects;
-5. adds her to each team the invite names (`--team`, or `lore team member add @web mira@agency.example` while the invite was pending); a team removed since is skipped;
+5. adds her to each team the invite names (`--team`, or `lore team member add --handle @web --members mira@agency.example` while the invite was pending); a team removed since is skipped;
 6. marks the invite `accepted` by her;
 7. writes her `member` setup to `~/.lore/config.yaml`.
 

@@ -139,7 +139,7 @@ func (a *App) doctorRepoAddresses(ctx context.Context, warn, note func(string)) 
 		return nil
 	}
 	for _, n := range rep.Notices {
-		line := "repo address " + n.Key + " is unconfirmed (lore repo set-url " + n.Key + ", add --mirror for another address"
+		line := "repo address " + n.Key + " is unconfirmed (lore repo set-url --url " + n.Key + ", add --mirror for another address"
 		if !n.CaseOnly {
 			line += ", or lore repo fork in a fork"
 		}
@@ -202,7 +202,7 @@ func (a *App) doctorMetaQuarantine(ctx context.Context, warn func(string)) {
 		return // the cache problem is the cache check's to report
 	}
 	for _, q := range qs {
-		warn("quarantined metadata: " + q.Table + " " + q.ID + ": " + strings.Join(q.Problems, "; ") + " (fix with lore meta set " + q.ID + " …, or lore meta unset)")
+		warn("quarantined metadata: " + q.Table + " " + q.ID + ": " + strings.Join(q.Problems, "; ") + " (fix with lore meta set --id " + q.ID + " …, or lore meta unset)")
 	}
 }
 
@@ -237,7 +237,7 @@ func (a *App) doctorSecretRulesOff(ctx context.Context, note func(string)) {
 		if rule.Reason != "" {
 			line += " (" + rule.Reason + ")"
 		}
-		note(line + "; turn it back on: lore secrets rule on " + rule.RuleID + " --to " + rule.Store)
+		note(line + "; turn it back on: lore secrets rule on --id " + rule.RuleID + " --to " + rule.Store)
 	}
 }
 

@@ -5,7 +5,7 @@ package teame2e
 // move_repo_e2e_test.go — BUG-D1 and BUG-D2 (coordinator ruling 18:40),
 // real binary in the agency world:
 //
-//   - D1 (after BATCH 2): `lore move <internal mem> --to repo` lands the row
+//   - D1 (after BATCH 2): `lore move --id <internal mem> --to repo` lands the row
 //     in the client's .lore/data under its id, the mover's actor file is the
 //     projection, and the commit carrying it passes the leak hook.
 //   - D2: an org person's actor copy in a client repo is only the F18

@@ -35,7 +35,7 @@ type campPolicyRow struct {
 	Doc    string `json:"doc"`
 }
 
-// campPolicyShow is `lore policy show [key] --json`.
+// campPolicyShow is `lore policy show --id [key] --json`.
 type campPolicyShow struct {
 	Count int             `json:"count"`
 	Data  []campPolicyRow `json:"data"`

@@ -4,7 +4,7 @@ package team
 // report 2026-11-12: "those are part of the company already, so why
 // invite"). An invite is a pending row plus a line the person must paste;
 // a member is on the roster at once, and joins from their own machine by
-// their email (`lore setup join <the org's store url>`, rosterapply.go
+// their email (`lore setup join --invite <store-url>`, rosterapply.go
 // ApplyJoinMember).
 //
 //	member.add <email> [--name --handle --github --role --type --team --project
@@ -110,7 +110,7 @@ type StaffAddOut struct {
 	// derived), one line each.
 	Notes []string `json:"notes,omitempty"`
 	// JoinWith is the command each person runs on their own machine:
-	// `lore setup join <the org's store url>`. The store url, never the org
+	// `lore setup join --invite <store-url>`. The store url, never the org
 	// name: a new member's machine has no org entry yet, so only the url
 	// resolves there (B2-1). Credentials are stripped; empty when the org
 	// entry names no store.
@@ -118,7 +118,7 @@ type StaffAddOut struct {
 }
 
 // joinPlaceholder stands in for the store url when the org entry has none.
-const joinPlaceholder = "lore setup join <the org's store url>"
+const joinPlaceholder = "lore setup join --invite <store-url>"
 
 // joinCommand is the line a member runs on a fresh machine to join org:
 // its store url (credentials stripped), else the placeholder.
@@ -131,7 +131,7 @@ func joinCommand(ctx context.Context, env Env, org string) string {
 	if err != nil || clean == "" {
 		return joinPlaceholder
 	}
-	return "lore setup join " + clean
+	return "lore setup join --invite " + clean
 }
 
 // Text is one line per person, then how to join.
@@ -299,10 +299,10 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 		return s
 	}
 	return []op.Entry{
-		op.Define(asking(op.Spec{Name: OpStaffAdd, Summary: "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join <the org's store url>",
+		op.Define(asking(op.Spec{Name: OpStaffAdd, Summary: "Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite <store-url>",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.ContactTaken, errs.StatusChange}, writeErrs...),
 			Examples: []op.Example{
-				{Title: "add a developer to a team", CLI: "lore member add mira@agency.example --name 'Mira Dev' --github mira-dev --role member --team @web --yes", Want: "added"},
+				{Title: "add a developer to a team", CLI: "lore member add --email mira@agency.example --name 'Mira Dev' --github mira-dev --role member --team @web --yes", Want: "added"},
 				{Title: "add many from a file, one commit", CLI: "lore member add --from staff.csv --yes", Want: "added"},
 			}}),
 			func(ctx context.Context, in StaffAddIn) (StaffAddOut, error) { return o.staffAdd(ctx, in) }),
@@ -312,15 +312,15 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 			func(ctx context.Context, in StaffListIn) (StaffListOut, error) { return o.staffList(ctx, in) }),
 		op.Define(op.Spec{Name: OpStaffShow, Summary: "Show one person on the org roster",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: base,
-			Examples: []op.Example{{Title: "by email", CLI: "lore member show mira@agency.example", Want: "email"}}},
+			Examples: []op.Example{{Title: "by email", CLI: "lore member show --who mira@agency.example", Want: "email"}}},
 			func(ctx context.Context, in StaffRefIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
 		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle or org-level role",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit mira@agency.example --role pm", Want: "updated"}}},
+			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit --who mira@agency.example --role pm", Want: "updated"}}},
 			func(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) { return o.staffEdit(ctx, in) }),
 		op.Define(asking(op.Spec{Name: OpStaffRemove, Summary: "Take a person off the org (actor offboard: their stint and memberships end; the row stays for history)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.StatusChange}, writeErrs...),
-			Examples: []op.Example{{Title: "someone leaves", CLI: "lore member remove mira@agency.example --reason 'moved on' --yes", Want: "removed"}}}),
+			Examples: []op.Example{{Title: "someone leaves", CLI: "lore member remove --who mira@agency.example --reason 'moved on' --yes", Want: "removed"}}}),
 			func(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) { return o.staffRemove(ctx, in) }),
 	}
 }
@@ -353,7 +353,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 	}
 	if given != 1 {
 		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: give one of <email>, --from <file> or --from-invites").
-			WithHint("lore member add mira@agency.example --team @web")
+			WithHint("lore member add --email mira@agency.example --team @web")
 	}
 	r, done, err := o.env.Roster(ctx, !in.DryRun)
 	defer done()
@@ -463,7 +463,7 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 		}
 		email, err := teamprofile.Normalize(schema.ContactKindEmail, s.Email)
 		if err != nil || email == "" {
-			return nil, errs.New(errs.InvalidInput, where+": "+work.Quote(s.Email)+" is not an email address").WithHint("lore member add mira@agency.example")
+			return nil, errs.New(errs.InvalidInput, where+": "+work.Quote(s.Email)+" is not an email address").WithHint("lore member add --email mira@agency.example")
 		}
 		if seen[email] {
 			return nil, errs.New(errs.InvalidInput, where+": "+email+" is listed twice").WithHint("keep one line per person")
@@ -952,7 +952,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {
 	rm, ok := o.env.(Remover)
 	if !ok {
-		return StaffWriteOut{}, errs.New(errs.Unsupported, "member remove: this lore build cannot offboard").WithHint("lore actor offboard " + in.Who)
+		return StaffWriteOut{}, errs.New(errs.Unsupported, "member remove: this lore build cannot offboard").WithHint("lore actor offboard --actor " + in.Who)
 	}
 	r, done, err := o.env.Roster(ctx, false)
 	if err != nil {

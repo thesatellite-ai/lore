@@ -126,7 +126,7 @@ func teamStoreAt(home, org, url string) (attach.Store, error) {
 	e := cfg.FindOrg(org)
 	if e == nil || len(e.Stores) == 0 {
 		return attach.Store{}, errs.New(errs.NotFound, "setup apply team: org "+org+" has no store in ~/.lore/"+ConfigFile+" to set push on").
-			WithHint("run `lore store set <store> push=…` once the team step is saved")
+			WithHint("run `lore store set --store <store> --settings push=…` once the team step is saved")
 	}
 	pick := -1
 	for i := range e.Stores {
@@ -140,7 +140,7 @@ func teamStoreAt(home, org, url string) (attach.Store, error) {
 	}
 	if pick < 0 {
 		return attach.Store{}, errs.New(errs.NotFound, "setup apply team: org "+org+" lists no store at "+url).
-			WithHint("run `lore store set <store> push=…` on the team store")
+			WithHint("run `lore store set --store <store> --settings push=…` on the team store")
 	}
 	sc := &e.Stores[pick]
 	return attach.Store{Name: store.Source(org), URL: sc.URL, Branch: attachBranch(sc)}, nil

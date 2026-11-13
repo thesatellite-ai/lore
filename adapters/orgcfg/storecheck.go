@@ -22,7 +22,7 @@ const (
 	// counted ("and 3 more").
 	maxListedOffenders = 5
 	// hintStoreInit is the refusal's hint (v0.1.17 storeHintInit).
-	hintStoreInit = "point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml"
+	hintStoreInit = "point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml"
 )
 
 // storeAllowed reports whether one path may exist in a store: the one

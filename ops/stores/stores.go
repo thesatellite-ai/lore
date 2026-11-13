@@ -246,7 +246,7 @@ func CheckName(name string, allowMe bool) error {
 	}
 	if slices.Contains(attach.Reserved(), name) {
 		return errs.New(errs.InvalidInput, "store: "+quote(name)+" is reserved ("+strings.Join(attach.Reserved(), ", ")+")").
-			WithHint("pick another name; `me` is made with `lore store init me`")
+			WithHint("pick another name; `me` is made with `lore store init --name me`")
 	}
 	return nil
 }
@@ -267,8 +267,8 @@ var storeErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInval
 // file://~/.lore/stores/_me, per O7), and the error names exactly what is
 // missing and the usage (owner rule: exact errors), exit 20.
 func MissingInitURL(name string) error {
-	return errs.New(errs.InvalidInput, "store init "+name+": the store url is missing; usage: lore store init <name> <url> (only `"+PersonalName+"` has a default url)").
-		WithHint("e.g. lore store init " + name + " git@github.com:<owner>/<repo>, or a file:///path/to/folder")
+	return errs.New(errs.InvalidInput, "store init "+name+": the store url is missing; usage: lore store init --name <name> --url <url> (only `"+PersonalName+"` has a default url)").
+		WithHint("e.g. lore store init --name " + name + " --url git@github.com:<owner>/<repo>, or --url file:///path/to/folder")
 }
 
 // Ops returns the store operations bound to m.
@@ -282,8 +282,8 @@ func Ops(m Manager) []op.Entry {
 			// the client reads, so it asks first (the composition root).
 			Confirm: op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
 			Examples: []op.Example{
-				{Title: "your personal store, a local folder", CLI: "lore store init me", Want: "sto_"},
-				{Title: "a team store on git", CLI: "lore store init agency git@github.com:agency/notes", Want: "sto_"},
+				{Title: "your personal store, a local folder", CLI: "lore store init --name me", Want: "sto_"},
+				{Title: "a team store on git", CLI: "lore store init --name agency --url git@github.com:agency/notes", Want: "sto_"},
 			},
 		}, func(ctx context.Context, in InitIn) (InitOut, error) {
 			if err := CheckName(in.Name, true); err != nil {
@@ -308,8 +308,8 @@ func Ops(m Manager) []op.Entry {
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
 			Confirm: op.ConfirmRule{MayAsk: true, NoSecretFindings: true}, // CFG7, as for init
 			Examples: []op.Example{
-				{Title: "attach a store", CLI: "lore store add golang git@github.com:mira/lore-golang", Want: "attached store golang"},
-				{Title: "attach one folder, read-only", CLI: "lore store add tips git@github.com:agency/notes --folder tips --read-only", Want: "attached store tips"},
+				{Title: "attach a store", CLI: "lore store add --name golang --url git@github.com:mira/lore-golang", Want: "attached store golang"},
+				{Title: "attach one folder, read-only", CLI: "lore store add --name tips --url git@github.com:agency/notes --folder tips --read-only", Want: "attached store tips"},
 			},
 		}, func(ctx context.Context, in AddIn) (AddOut, error) {
 			if err := CheckName(in.Name, false); err != nil {
@@ -338,7 +338,7 @@ func Ops(m Manager) []op.Entry {
 			// --yes), after the name is known to be attached: an unknown
 			// name is E_NOT_FOUND without a question (exact errors).
 			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
-			Examples: []op.Example{{Title: "detach", CLI: "lore store remove golang --yes", Want: "detached store golang"}},
+			Examples: []op.Example{{Title: "detach", CLI: "lore store remove --name golang --yes", Want: "detached store golang"}},
 		}, func(ctx context.Context, in RemoveIn) (RemoveOut, error) {
 			if in.Name == PersonalName {
 				return RemoveOut{}, errs.New(errs.InvalidInput, "store remove: `me` is not attached by this repo").
@@ -387,7 +387,7 @@ func Ops(m Manager) []op.Entry {
 			for _, f := range folders {
 				if _, err = m.RemoveStore(ctx, f); err != nil {
 					return RemoveOut{}, errs.Prefix("store remove "+in.Name+": detached the store; folder entry "+f+" is still attached", err).
-						WithHint("rerun `lore store remove " + f + " --yes`")
+						WithHint("rerun `lore store remove --name " + f + " --yes`")
 				}
 				out.Folders = append(out.Folders, f)
 			}
@@ -451,7 +451,7 @@ func Ops(m Manager) []op.Entry {
 			Name: OpVisibility, Summary: "Set whether a store's rows may reach client repos and committed files (internal or shareable)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: visibilityErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
-			Examples: []op.Example{{Title: "make a store shareable", CLI: "lore store visibility docs_kit shareable --yes", Want: "docs_kit is shareable"}},
+			Examples: []op.Example{{Title: "make a store shareable", CLI: "lore store visibility --name docs_kit --visibility shareable --yes", Want: "docs_kit is shareable"}},
 		}, func(ctx context.Context, in VisibilityIn) (VisibilityOut, error) {
 			in.Name = strings.TrimSpace(in.Name)
 			if err := CheckStoreArg(in.Name); err != nil {
@@ -459,7 +459,7 @@ func Ops(m Manager) []op.Entry {
 			}
 			if in.Visibility != VisibilityInternal && in.Visibility != VisibilityShareable {
 				return VisibilityOut{}, errs.New(errs.InvalidInput, "store visibility: the visibility must be internal or shareable, not "+quote(in.Visibility)).
-					WithHint("internal (the default) or shareable: lore store visibility " + in.Name + " shareable")
+					WithHint("internal (the default) or shareable: lore store visibility --name " + in.Name + " --visibility shareable")
 			}
 			cur, err := m.StoreVisibility(ctx, in.Name)
 			if err != nil {
@@ -493,8 +493,8 @@ func Ops(m Manager) []op.Entry {
 			Name: OpFolderAdd, Summary: "Create a folder in a store (shown only in repos that attach it)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: visibilityErrors,
 			Examples: []op.Example{
-				{Title: "a folder for one topic", CLI: "lore store folder add golang concurrency", Want: "created folder concurrency"},
-				{Title: "a client folder in the team store, from any folder of the setup (no repo needed)", CLI: "lore store folder add team client_north", Want: "created folder client_north"},
+				{Title: "a folder for one topic", CLI: "lore store folder add --store golang --folder concurrency", Want: "created folder concurrency"},
+				{Title: "a client folder in the team store, from any folder of the setup (no repo needed)", CLI: "lore store folder add --store team --folder client_north", Want: "created folder client_north"},
 			},
 		}, func(ctx context.Context, in FolderAddIn) (FolderAddOut, error) {
 			in.Store = strings.TrimSpace(in.Store)
@@ -780,7 +780,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	}
 	if len(problems) > 0 {
 		return out, errs.New(errs.Stale, "sync: "+strings.Join(problems, "; ")).
-			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve <n> --take kept|other` settles one (or edit the row so both agree, then sync again)")
+			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve --id <n> --take kept|other` settles one (or edit the row so both agree, then sync again)")
 	}
 	return out, nil
 }

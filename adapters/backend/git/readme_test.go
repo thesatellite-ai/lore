@@ -38,7 +38,7 @@ func TestReadmeWrittenOnce(t *testing.T) {
 	if !strings.Contains(files, rowfs.ReadmeFile) {
 		t.Fatalf("the first write's commit lacks the README:\n%s", files)
 	}
-	if body := gitT(t, b.Dir(), "show", "HEAD:"+rowfs.ReadmeFile); !strings.Contains(body, "lore edit <id>") || !strings.Contains(body, ".git/lore/") {
+	if body := gitT(t, b.Dir(), "show", "HEAD:"+rowfs.ReadmeFile); !strings.Contains(body, "lore edit --id <id>") || !strings.Contains(body, ".git/lore/") {
 		t.Fatalf("README text:\n%s", body)
 	}
 

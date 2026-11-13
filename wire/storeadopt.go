@@ -109,12 +109,12 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	out := opsstores.AdoptOut{Store: label, Folder: folderName, From: top, DryRun: in.DryRun}
 	if a.isOrgFolder(src, folderName) {
 		return opsstores.AdoptOut{}, errs.New(errs.Refused, adoptVerb+": "+folderName+" is the org folder of "+label+" (org_folder): it holds the org's roster, teams and lore-org.yaml, not a repo's notes").
-			WithHint("adopt into a client or project folder: lore store folder add " + name + " <folder>")
+			WithHint("adopt into a client or project folder: lore store folder add --store " + name + " --folder <folder>")
 	}
 	meta := filepath.Join(dir, filepath.FromSlash(rowfs.LayoutStore.StorePath(folderName, rowfs.MetaFileName)))
 	if _, serr := os.Stat(meta); errors.Is(serr, fs.ErrNotExist) {
 		return opsstores.AdoptOut{}, errs.New(errs.NotFound, adoptVerb+": "+label+" has no folder "+folderName+a.folderMissDetail(ctx)+"; nothing written").
-			WithHint("make it first: lore store folder add " + name + " " + folderName + " (`lore store folder list " + name + "` lists its folders)")
+			WithHint("make it first: lore store folder add --store " + name + " --folder " + folderName + " (`lore store folder list --store " + name + "` lists its folders)")
 	}
 	root, err := rowfs.Open(dir, a.opts.storeRowfsOptions(dir)...)
 	if err != nil {

@@ -63,7 +63,7 @@ func TestTeC_NestedMetaConflictBlocksLanding(t *testing.T) {
 	}
 
 	// Settling the key with the command the merge report names (METADATA
-	// 3.12: lore meta set <id> <key>=<value>) clears the conflict; the row
+	// 3.12: lore meta set --id <id> --pair <key>=<value>) clears the conflict; the row
 	// lands like any finished row.
 	rt.c2.MustLore("meta", "set", id, "cost=5")
 	rt.c2.MustLore("task", "done", id)

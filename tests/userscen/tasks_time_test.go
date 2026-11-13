@@ -15,7 +15,7 @@ import (
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
-// tasksTimeShow is `lore task time show <id> --json`'s data.
+// tasksTimeShow is `lore task time show --id <id> --json`'s data.
 type tasksTimeShow struct {
 	TaskID         string `json:"task_id"`
 	Status         string `json:"status"`

@@ -277,7 +277,7 @@ func checkText(s sourced, field, txt string, live, vars map[string]bool, aliases
 		case refs.SchemeRow:
 			target, _, _ := strings.Cut(r.Body, rowRefSep)
 			if _, err := ids.ParseAny(target); err == nil && !live[target] {
-				at(DanglingRef, r.String()+" points at no live row", "lore edit the row, or restore "+target+" (lore trash restore "+target+")")
+				at(DanglingRef, r.String()+" points at no live row", "lore edit the row, or restore "+target+" (lore trash restore --target "+target+")")
 			}
 		case refs.SchemeVar:
 			name, _, _ := strings.Cut(r.Body, ":-")
@@ -286,7 +286,7 @@ func checkText(s sourced, field, txt string, live, vars map[string]bool, aliases
 			case aliases[name] != "":
 				at(VarOldName, r.String()+" uses an old name of ${var:"+aliases[name]+"}", "replace it with ${var:"+aliases[name]+"}")
 			default:
-				at(DanglingRef, r.String()+" names no variable", "lore vars set "+name+" <value>")
+				at(DanglingRef, r.String()+" names no variable", "lore vars set --name "+name+" --value <value>")
 			}
 		case refs.SchemeEnv, refs.SchemeMeta, refs.SchemeRes, refs.SchemeSecret:
 			// env is the reader's machine; meta, res and secret targets
@@ -321,7 +321,7 @@ func varFindings(vs []sourced) []Finding {
 			for _, s := range group[1:] {
 				out = append(out, Finding{Code: VarShadowed, ID: s.r.ID.String(), Store: string(s.src),
 					Message: "variable " + n + " is shadowed by " + win.r.ID.String() + " in " + string(win.src) + " (.lore/stores.yaml order decides)",
-					Fix:     "lore vars show " + n})
+					Fix:     "lore vars show --id " + n})
 			}
 		}
 		vals := map[string]bool{}
@@ -358,18 +358,18 @@ func taskFindings(ts []sourced) []Finding {
 			if e.HasFlag(timeentry.FlagLongSpan) {
 				out = append(out, Finding{Code: LongSpan, ID: id, Store: src,
 					Message: "time entry " + e.ID.String() + " of " + e.ActorID.String() + " is " + timeentry.FormatSeconds(e.Seconds) + " long (counted in full)",
-					Fix:     "lore task time edit " + id + " " + e.ID.String()})
+					Fix:     "lore task time edit --id " + id + " --entry " + e.ID.String()})
 			}
 		}
 		if liveN >= ManyTimeEntries {
 			out = append(out, Finding{Code: TimeEntriesMany, ID: id, Store: src,
-				Message: strconv.Itoa(liveN) + " time entries on one task", Fix: "split the task: lore task split " + id})
+				Message: strconv.Itoa(liveN) + " time entries on one task", Fix: "split the task: lore task split --id " + id})
 		}
 	}
 	for _, c := range tasktree.Build(nodes).Cycles() {
 		out = append(out, Finding{Code: ParentCycle, ID: c[0],
 			Message: "parent cycle " + strings.Join(c, " → ") + " → " + c[0] + "; " + c[0] + " is shown at top level",
-			Fix:     "lore task edit " + c[0] + " --no-parent"})
+			Fix:     "lore task edit --id " + c[0] + " --no-parent"})
 	}
 	return out
 }
@@ -387,7 +387,7 @@ func metaFindings(all map[row.Table][]sourced) []Finding {
 				if !known[k.String()] {
 					out = append(out, Finding{Code: MetaUnknownKey, ID: s.r.ID.String(), Store: string(s.src),
 						Message: "metadata key " + k.String() + " is defined in no attached store",
-						Fix:     "attach the store that defines it, or lore meta unset " + s.r.ID.String() + " <name>"})
+						Fix:     "attach the store that defines it, or lore meta unset --id " + s.r.ID.String() + " --key <name>"})
 				}
 			}
 		}

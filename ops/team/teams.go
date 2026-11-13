@@ -93,7 +93,7 @@ func TeamOps(env profilestore.Store) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpTeamAdd, Summary: "Create or update a team; @handle then resolves to the team (task add --assign @web)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "a team of two", CLI: `lore team add @web --name "Web" --members @mira,@tomas`, Want: "@web"}}},
+			Examples: []op.Example{{Title: "a team of two", CLI: `lore team add --handle @web --name "Web" --members @mira,@tomas`, Want: "@web"}}},
 			func(ctx context.Context, in TeamAddIn) (TeamWriteOut, error) { return teamAdd(ctx, env, in) }),
 		op.Define(op.Spec{Name: OpTeamList, Summary: "List the org's teams (--all adds removed ones)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrs,
@@ -101,21 +101,21 @@ func TeamOps(env profilestore.Store) []op.Entry {
 			func(ctx context.Context, in TeamListIn) (TeamListOut, error) { return teamList(ctx, env, in) }),
 		op.Define(op.Spec{Name: OpTeamShow, Summary: "Show a team and its members",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrs,
-			Examples: []op.Example{{Title: "one team", CLI: "lore team show @web", Want: "members"}}},
+			Examples: []op.Example{{Title: "one team", CLI: "lore team show --handle @web", Want: "members"}}},
 			func(ctx context.Context, in TeamRefIn) (TeamShowOut, error) { return teamShow(ctx, env, in) }),
 		op.Define(op.Spec{Name: OpTeamRemove, Summary: "Remove a team (its row is kept, so tasks that named it still read; team add brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "the team is disbanded", CLI: "lore team remove @web", Want: "removed"}}},
+			Examples: []op.Example{{Title: "the team is disbanded", CLI: "lore team remove --handle @web", Want: "removed"}}},
 			func(ctx context.Context, in TeamRefIn) (TeamWriteOut, error) { return teamRemove(ctx, env, in) }),
 		op.Define(op.Spec{Name: OpTeamMemberAdd, Summary: "Add people to a team",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "one more member", CLI: "lore team member add @web @devi", Want: "@devi"}}},
+			Examples: []op.Example{{Title: "one more member", CLI: "lore team member add --handle @web --members @devi", Want: "@devi"}}},
 			func(ctx context.Context, in TeamMembersIn) (TeamWriteOut, error) {
 				return teamMembers(ctx, env, in, true)
 			}),
 		op.Define(op.Spec{Name: OpTeamMemberRemove, Summary: "Take people off a team",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "someone moves teams", CLI: "lore team member remove @web @devi", Want: "@devi"}}},
+			Examples: []op.Example{{Title: "someone moves teams", CLI: "lore team member remove --handle @web --members @devi", Want: "@devi"}}},
 			func(ctx context.Context, in TeamMembersIn) (TeamWriteOut, error) {
 				return teamMembers(ctx, env, in, false)
 			}),
@@ -219,7 +219,7 @@ func (o TeamWriteOut) Text() string {
 	switch o.Verb {
 	case verbTeamRemoved:
 		line = work.Success + " " + t.ID + " @" + t.Handle + " removed from the roster in " + o.Where +
-			" (kept for history: tasks that named it still read; lore team add @" + t.Handle + " brings it back)"
+			" (kept for history: tasks that named it still read; lore team add --handle @" + t.Handle + " brings it back)"
 	case verbTeamMembersAdded, verbTeamMembersRemove:
 		did := "added to"
 		if o.Verb == verbTeamMembersRemove {
@@ -321,11 +321,11 @@ func (o TeamShowOut) Text() string {
 func teamHandle(in string) (string, error) {
 	h := strings.TrimPrefix(strings.TrimSpace(in), handleMark)
 	if h == "" {
-		return "", errs.New(errs.InvalidInput, "name the team as @handle").WithHint("lore team add @web --members @mira")
+		return "", errs.New(errs.InvalidInput, "name the team as @handle").WithHint("lore team add --handle @web --members @mira")
 	}
 	if c := h[0]; !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9') || strings.Trim(h, handleChars) != "" {
 		return "", errs.New(errs.InvalidInput, "team handle @"+h+" is not one lowercase word (letters, digits, '_' and '-', starting with a letter or digit)").
-			WithHint("lore team add @" + strings.ToLower(strings.Map(handleRune, h)))
+			WithHint("lore team add --handle @" + strings.ToLower(strings.Map(handleRune, h)))
 	}
 	return h, nil
 }
@@ -416,7 +416,7 @@ func teamMissErr(h, where string) error {
 			WithHint("lore team list shows the teams (lore team list --all also the removed ones)")
 	}
 	return errs.New(errs.NotFound, "no team @"+h+" on the roster in "+where).
-		WithHint("lore team list shows the teams; lore team add @" + h + " --members <people> makes it")
+		WithHint("lore team list shows the teams; lore team add --handle @" + h + " --members <people> makes it")
 }
 
 // resolveMembers turns references into actor ids, in order, each once. A
@@ -436,7 +436,7 @@ func resolveMembers(ctx context.Context, r profilestore.Roster, refs []string) (
 		}
 		if st := fieldText(a, actorFieldStatus); st == schema.ActorStatusLeft || st == schema.ActorStatusArchived {
 			return nil, nil, errs.New(errs.StatusChange, ref+" is "+st+"; someone who is "+st+" cannot join a team").
-				WithHint("lore actor rejoin " + ref + " --type employee|contractor|intern|client_contact, then add them")
+				WithHint("lore actor rejoin --actor " + ref + " --type employee|contractor|intern|client_contact, then add them")
 		}
 		id := a.ID.String()
 		if !slices.Contains(ids, id) {
@@ -645,7 +645,7 @@ func teamRemove(ctx context.Context, env profilestore.Store, in TeamRefIn) (Team
 	}
 	if fieldText(cur, teamFieldActive) == boolFalse {
 		return TeamWriteOut{}, errs.New(errs.StatusChange, "team @"+h+" is already removed; nothing to remove").
-			WithHint("lore team add @" + h + " brings it back")
+			WithHint("lore team add --handle @" + h + " brings it back")
 	}
 	w, err := r.Update(ctx, schema.TableTeams, cur.ID, map[string]value.Value{teamFieldActive: value.BoolOf(false), teamFieldLeftAt: value.DateTimeFrom(r.Today())})
 	if err != nil {
@@ -661,7 +661,7 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 		return TeamWriteOut{}, err
 	}
 	if len(splitList(in.Members)) == 0 {
-		return TeamWriteOut{}, errs.New(errs.InvalidInput, "name at least one person").WithHint("lore team member add @" + h + " @mira")
+		return TeamWriteOut{}, errs.New(errs.InvalidInput, "name at least one person").WithHint("lore team member add --handle @" + h + " --members @mira")
 	}
 	r, done, err := env.Roster(ctx, true)
 	defer done()
@@ -677,7 +677,7 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 	}
 	if fieldText(cur, teamFieldActive) == boolFalse {
 		return TeamWriteOut{}, errs.New(errs.StatusChange, "team @"+h+" is removed; its members do not change").
-			WithHint("lore team add @" + h + " brings it back first")
+			WithHint("lore team add --handle @" + h + " brings it back first")
 	}
 	actors, err := rosterActors(ctx, r)
 	if err != nil {

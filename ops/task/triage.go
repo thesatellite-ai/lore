@@ -46,12 +46,12 @@ func triageOps(o ops) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpAccept, Summary: "Accept a proposed task (commitment accepted)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
-			Examples: []op.Example{{Title: "accept into a mission", CLI: "lore task accept tsk_<id> --mission msn_<id> --priority high", Want: "tsk_"}},
+			Examples: []op.Example{{Title: "accept into a mission", CLI: "lore task accept --id tsk_<id> --mission msn_<id> --priority high", Want: "tsk_"}},
 		}, o.accept),
 		op.Define(op.Spec{
 			Name: OpDecline, Summary: "Decline a proposed task (cancelled, with a close reason)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.OpenChildren, errs.Refused),
-			Examples: []op.Example{{Title: "decline with a note", CLI: `lore task decline tsk_<id> --reason wont_do --note "we keep the name"`, Want: "cancelled"}},
+			Examples: []op.Example{{Title: "decline with a note", CLI: `lore task decline --id tsk_<id> --reason wont_do --note "we keep the name"`, Want: "cancelled"}},
 		}, o.decline),
 	}
 }
@@ -77,7 +77,7 @@ func (o ops) decline(ctx context.Context, in DeclineIn) (DoneOut, error) {
 			c = schema.TaskCommitmentAccepted // the field's default
 		}
 		return DoneOut{}, errs.New(errs.Refused, "task decline: "+id.String()+" is "+c+", not proposed; decline only answers a proposal").
-			WithHint("to stop it, lore task cancel " + id.String() + " --reason obsolete")
+			WithHint("to stop it, lore task cancel --id " + id.String() + " --reason obsolete")
 	}
 	reason := in.Reason
 	if reason == "" {

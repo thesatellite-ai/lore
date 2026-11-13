@@ -35,7 +35,7 @@ import (
 var roleName = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // roleHint is the next step of E_ROLE_UNKNOWN (TEAM_PROFILES 4).
-const roleHint = "lore role list; lore role add <name>"
+const roleHint = "lore role list; lore role add --name <name>"
 
 // RoleOut is one effective role.
 type RoleOut struct {
@@ -242,7 +242,7 @@ const (
 func roleAdd(ctx context.Context, env Env, in RoleAddIn) (RoleWriteOut, error) {
 	name := strings.TrimSpace(in.Name)
 	if !roleName.MatchString(name) {
-		return RoleWriteOut{}, errs.New(errs.InvalidInput, "role name "+work.Quote(in.Name)+" is not snake_case").WithHint("lore role add tech_lead")
+		return RoleWriteOut{}, errs.New(errs.InvalidInput, "role name "+work.Quote(in.Name)+" is not snake_case").WithHint("lore role add --name tech_lead")
 	}
 	r, done, err := env.Roster(ctx, true)
 	defer done()
@@ -254,9 +254,9 @@ func roleAdd(ctx context.Context, env Env, in RoleAddIn) (RoleWriteOut, error) {
 		return RoleWriteOut{}, err
 	}
 	if cur, ok := findRole(roles, name); ok {
-		hint := "lore role edit " + name + " --label …"
+		hint := "lore role edit --name " + name + " --label …"
 		if cur.Retired {
-			hint = "lore role edit " + name + " --unretire"
+			hint = "lore role edit --name " + name + " --unretire"
 		}
 		return RoleWriteOut{}, errs.New(errs.NameTaken, "role "+name+" already exists").WithHint(hint)
 	}

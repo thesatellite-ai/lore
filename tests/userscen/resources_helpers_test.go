@@ -87,13 +87,13 @@ type resErrJSON struct {
 	} `json:"error"`
 }
 
-// resShow decodes `lore resource show <key> --json`.
+// resShow decodes `lore resource show --id <key> --json`.
 func resShow(t *testing.T, c *th.Clone, key string) resJSON {
 	t.Helper()
 	return th.DecodeJSON[resShowJSON](t, c.Lore("resource", "show", key, "--json")).Data
 }
 
-// resList decodes `lore resource list <kind> --json [args]`.
+// resList decodes `lore resource list --kind <kind> --json [args]`.
 func resList(t *testing.T, c *th.Clone, kind string, args ...string) resListJSON {
 	t.Helper()
 	return th.DecodeJSON[resListJSON](t, c.Lore(append([]string{"resource", "list", kind, "--json"}, args...)...))

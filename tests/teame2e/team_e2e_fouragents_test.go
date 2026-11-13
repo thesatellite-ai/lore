@@ -170,7 +170,7 @@ func TestTask_ParentAutocloseOffSuggestOn(t *testing.T) {
 		p := cr.task(t, "parent "+tc.mode)
 		_, kids := splitIDs(t, c, p, "only child")
 		r := c.MustLore("task", "done", kids[0], "--no-lesson")
-		hint := "lore task done " + p
+		hint := "lore task done --id " + p
 		if got := strings.Contains(r.Out(), hint); got != tc.hintShown {
 			t.Fatalf("%s: the close hint shown=%v, want %v:\n%s", tc.mode, got, tc.hintShown, r)
 		}

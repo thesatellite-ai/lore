@@ -99,7 +99,7 @@ func historyOps(o ops) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpHistory, Summary: "Show a task's activity history (field changes, claims; --git for older versions)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(work.ReadErrors), errs.Unsupported),
-			Examples: []op.Example{{Title: "history as JSON", CLI: "lore task history tsk_<id> --json", Want: `"lines"`}},
+			Examples: []op.Example{{Title: "history as JSON", CLI: "lore task history --id tsk_<id> --json", Want: `"lines"`}},
 		}, o.taskHistory),
 	}
 }

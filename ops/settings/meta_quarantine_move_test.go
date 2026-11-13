@@ -13,7 +13,7 @@ import (
 
 // TestMoveRefusesQuarantinedMeta (METADATA 3.13, section 6, X19): a row
 // whose metadata arrived broken (a hand edit: an entry without "v") is not
-// moved: lore move answers E_META_QUARANTINED naming the row and pointing
+// moved: lore move --id answers E_META_QUARANTINED naming the row and pointing
 // at lore meta show, and the row stays where it is; once the entry is fixed
 // the same move goes through. meta show lists the problem and its fix as
 // a line, not an exit.
@@ -51,11 +51,11 @@ func TestMoveRefusesQuarantinedMeta(t *testing.T) {
 	}
 	h = h.Reopen()
 	show := opstest.Text(h.Must(settings.OpMetaShow, `{"id":"`+id+`"}`))
-	if !strings.Contains(show, "E_META_QUARANTINED  the entry has no v; fix the row file, or lore meta unset "+id+" mky_") {
+	if !strings.Contains(show, "E_META_QUARANTINED  the entry has no v; fix the row file, or lore meta unset --id "+id+" --key mky_") {
 		t.Fatalf("meta show of a quarantined row (a line, not an exit):\n%s", show)
 	}
 	_, err = h.RunYes("row.move", `{"id":"`+id+`","to":"kb/web"}`)
-	if !errs.Has(err, errs.MetaQuarantined) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore meta show "+id) {
+	if !errs.Has(err, errs.MetaQuarantined) || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore meta show --id "+id) {
 		t.Fatalf("move of a quarantined row: %v, want E_META_QUARANTINED", err)
 	}
 	if err = dir.WriteFile(name, good, 0o600); err != nil {

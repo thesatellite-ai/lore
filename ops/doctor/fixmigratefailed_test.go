@@ -21,7 +21,7 @@ func (e *migrateFailedEnv) FixSteps(context.Context, bool) []FixStep {
 // lore fix migrates first.
 func TestFixNoRepairsAfterFailedMigrate(t *testing.T) {
 	t.Parallel()
-	lead := Finding{Check: "task_lead", Level: LevelWarning, Line: "task_lead: task t1: lead is not in its assignees", Fix: "lore task edit t1"}
+	lead := Finding{Check: "task_lead", Level: LevelWarning, Line: "task_lead: task t1: lead is not in its assignees", Fix: "lore task edit --id t1"}
 	env := &migrateFailedEnv{recheckEnv{fakeEnv: fakeEnv{host: &fakeHost{base: healthy()}},
 		before: []CheckRun{{Check: "task_lead", Findings: []Finding{lead}}}}}
 	r, err := FixProject(context.Background(), env, false)

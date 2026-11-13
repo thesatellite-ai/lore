@@ -6,7 +6,7 @@ package row
 //	    └► Locator.RowLocate (wire: Engine.Get ─► the backend's RowFile) ─► the absolute file path
 //	lore row markdown <id>  (row.markdown)
 //	    └► Env.Get + logic/rowmd.Render ─► the Markdown view `lore edit` opens
-//	lore row edit <id> --file <view.md>  (row.edit; `lore edit <id>` runs the editor around it)
+//	lore row edit <id> --file <view.md>  (row.edit; `lore edit --id <id>` runs the editor around it)
 //	    └► logic/rowmd.Parse (file:line refusals) ─► Updater.Update: the one
 //	       write path (schema, references, secret scan, policy, new HLC,
 //	       updated_by/at, commit and push as any write in that setup)
@@ -120,7 +120,7 @@ func (o MarkdownOut) Text() string { return o.Markdown }
 type EditIn struct {
 	ID string `json:"id" arg:"0" desc:"the row the view is of"`
 	// File / Markdown: the edited view, from a file or inline (one of them).
-	File     string `json:"file,omitempty" flag:"file" desc:"the edited Markdown view to write back (lore row markdown <id> prints one; lore edit <id> opens it in your editor)"`
+	File     string `json:"file,omitempty" flag:"file" desc:"the edited Markdown view to write back (lore row markdown --id <id> prints one; lore edit --id <id> opens it in your editor)"`
 	Markdown string `json:"markdown,omitempty" flag:"markdown" desc:"the edited Markdown view itself, instead of --file"`
 }
 
@@ -169,22 +169,22 @@ func EditOps(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead,
 			Errors: []errs.Code{errs.InvalidID, errs.NotFound, errs.AmbiguousID, errs.Unsupported, errs.StoreUnreachable, errs.Internal},
 			Examples: []op.Example{
-				{Title: "the file of a task", CLI: "lore path tsk_<id>", Want: ".json"},
-				{Title: "open it in your editor", CLI: `$EDITOR "$(lore path tsk_<id>)"`},
-				{Title: "store, folder and path as JSON", CLI: "lore path tsk_<id> --json", Want: `"path"`},
+				{Title: "the file of a task", CLI: "lore path --id tsk_<id>", Want: ".json"},
+				{Title: "open it in your editor", CLI: `$EDITOR "$(lore path --id tsk_<id>)"`},
+				{Title: "store, folder and path as JSON", CLI: "lore path --id tsk_<id> --json", Want: `"path"`},
 			}}, o.path),
 		op.Define(op.Spec{Name: OpMarkdown, Summary: "Print any row as the Markdown view lore edit opens (fields as frontmatter, long text as body)",
 			Permission: op.PermRead, Access: op.AccessRead,
 			Errors: []errs.Code{errs.InvalidID, errs.NotFound, errs.AmbiguousID, errs.InTrash, errs.Purged, errs.Unsupported, errs.StoreUnreachable, errs.Internal},
 			Examples: []op.Example{
-				{Title: "a task as Markdown", CLI: "lore row markdown tsk_<id>", Want: "---"},
-				{Title: "edit it with any tool, then write it back", CLI: "lore row markdown tsk_<id> > t.md && lore row edit tsk_<id> --file t.md"},
+				{Title: "a task as Markdown", CLI: "lore row markdown --id tsk_<id>", Want: "---"},
+				{Title: "edit it with any tool, then write it back", CLI: "lore row markdown --id tsk_<id> > t.md && lore row edit --id tsk_<id> --file t.md"},
 			}}, o.markdown),
-		op.Define(op.Spec{Name: OpEdit, Summary: "Write back an edited Markdown view of a row (lore edit <id> opens your editor for it)",
+		op.Define(op.Spec{Name: OpEdit, Summary: "Write back an edited Markdown view of a row (lore edit --id <id> opens your editor for it)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{MayAsk: true}, Errors: editErrors,
 			Examples: []op.Example{
-				{Title: "write back a view edited with any tool", CLI: "lore row edit tsk_<id> --file t.md", Want: "updated"},
-				{Title: "open your editor instead", CLI: "lore edit tsk_<id>"},
+				{Title: "write back a view edited with any tool", CLI: "lore row edit --id tsk_<id> --file t.md", Want: "updated"},
+				{Title: "open your editor instead", CLI: "lore edit --id tsk_<id>"},
 			}}, o.edit),
 	}
 }
@@ -237,13 +237,13 @@ func noFile(id ids.AnyID, loc Location) error {
 	switch {
 	case loc.NotPulled:
 		return errs.New(errs.NotFound, id.String()+" has no file in this checkout yet: it landed on "+loc.LiveRef+" ("+loc.LivePath+") and this checkout has not pulled it").
-			WithHint("git pull brings its file; lore show " + id.String() + " prints it now")
+			WithHint("git pull brings its file; lore show --id " + id.String() + " prints it now")
 	case loc.LiveRef != "":
 		return errs.New(errs.NotFound, id.String()+" has no file of its own yet: it is a live row, kept on the git ref "+loc.LiveRef+" ("+loc.LivePath+") so everyone sees it before any commit").
-			WithHint("lore edit " + id.String() + " edits it there; lore show " + id.String() + " prints it; it gets a file at " + loc.Path + " when it lands on the default branch (lore land)")
+			WithHint("lore edit " + id.String() + " edits it there; lore show --id " + id.String() + " prints it; it gets a file at " + loc.Path + " when it lands on the default branch (lore land)")
 	case !loc.Exists:
 		return errs.New(errs.NotFound, id.String()+" is in store "+loc.Store+" but its file "+loc.Path+" is missing (deleted by hand?)").
-			WithHint("lore doctor checks the store; lore show " + id.String() + " prints the copy lore still has")
+			WithHint("lore doctor checks the store; lore show --id " + id.String() + " prints the copy lore still has")
 	}
 	return nil
 }
@@ -297,7 +297,7 @@ func (o ops) load(ctx context.Context, id ids.AnyID) (view, error) {
 // sensitiveRefusal: the view would put sensitive values in a plain file.
 func sensitiveRefusal(id ids.AnyID, fields string) error {
 	return errs.New(errs.Unsupported, id.String()+" holds sensitive values ("+fields+"); lore edit would write them into a plain temporary file, so it does not open this row").
-		WithHint("change them with the row's own command (lore resource edit " + id.String() + " …)")
+		WithHint("change them with the row's own command (lore resource edit --id " + id.String() + " …)")
 }
 
 // markdown is row.markdown.
@@ -382,5 +382,5 @@ func editText(in EditIn) ([]byte, string, error) {
 		return []byte(inline), markdownLabel, nil
 	}
 	return nil, "", errs.New(errs.InvalidInput, "edit: no view to write back: give --file <view.md> (or --markdown)").
-		WithHint("lore edit <id> opens the row in your editor and writes it back; lore row markdown <id> prints the view to edit with another tool")
+		WithHint("lore edit --id <id> opens the row in your editor and writes it back; lore row markdown --id <id> prints the view to edit with another tool")
 }

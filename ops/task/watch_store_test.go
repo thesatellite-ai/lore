@@ -10,7 +10,7 @@ import (
 // TestWatchNoOpNamesItsStore: task watch on a task already watched (the
 // adder watches it) and task unwatch on one not watched name the store the
 // task lives in, as every other task write does (the machine sweep saw
-// `"store": ""` from lore task watch right after task add).
+// `"store": ""` from lore task watch --id right after task add).
 func TestWatchNoOpNamesItsStore(t *testing.T) {
 	t.Parallel()
 	h := opstest.New(t)

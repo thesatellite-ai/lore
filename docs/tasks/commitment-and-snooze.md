@@ -24,13 +24,13 @@ Pass `--commitment` when you add the task. Neither task shows up in `lore task l
 <!-- example: tasks#commitment -->
 ```console
 # alice, in website
-$ lore task add 'Try a dark mode for the shop' --commitment someday
+$ lore task add --title 'Try a dark mode for the shop' --commitment someday
 lore: wrote ~/work/website/.lore/data/tasks/tsk_3b62…e913.json
 ✓ tsk_3b62…e913 — Try a dark mode for the shop [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit 468e9a8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task add 'Add a FAQ page' --commitment proposed
+$ lore task add --title 'Add a FAQ page' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 — Add a FAQ page [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -64,7 +64,7 @@ To accept a proposal, change its commitment with `lore task edit`. It now shows 
 <!-- example: tasks#accept -->
 ```console
 # alice, in website
-$ lore task edit tsk_f147…5139 --commitment accepted
+$ lore task edit --id tsk_f147…5139 --commitment accepted
 lore: wrote ~/work/website/.lore/data/tasks/tsk_f147…5139.json
 ✓ tsk_f147…5139 updated
 lore live: (live, pushed) commit aba91f6 to origin refs/lore/live
@@ -78,13 +78,13 @@ The shorter way is `lore task accept`, which sets the commitment to `accepted` a
 <!-- example: tasks#accept-and-decline -->
 ```console
 # alice, in website
-$ lore task add 'Add a size guide' --commitment proposed
+$ lore task add --title 'Add a size guide' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 — Add a size guide [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit d33587e to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-$ lore task add 'Rename the shop to Website Pro' --commitment proposed
+$ lore task add --title 'Rename the shop to Website Pro' --commitment proposed
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 ✓ tsk_d191…45c2 — Rename the shop to Website Pro [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -92,11 +92,11 @@ lore live: (live, pushed) commit 34010c1 to origin refs/lore/live
 $ lore task triage
 ○ tsk_77cb…76c4 Add a size guide [medium] (proposed)
 ○ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
-$ lore task accept tsk_77cb…76c4 --priority high
+$ lore task accept --id tsk_77cb…76c4 --priority high
 lore: wrote ~/work/website/.lore/data/tasks/tsk_77cb…76c4.json
 ✓ tsk_77cb…76c4 updated
 lore live: (live, pushed) commit 070bbeb to origin refs/lore/live
-$ lore task decline tsk_d191…45c2 --reason wont_do --note 'The client keeps the name'
+$ lore task decline --id tsk_d191…45c2 --reason wont_do --note 'The client keeps the name'
 lore: wrote ~/work/website/.lore/data/tasks/tsk_d191…45c2.json
 lore: wrote ~/work/website/.lore/data/comments/cmt_b4d3…11aa.json
 ✓ tsk_d191…45c2 cancelled
@@ -110,7 +110,7 @@ $ lore task list --status cancelled
 $ lore task list --status cancelled --all
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 ✗ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
-$ lore task show tsk_d191…45c2
+$ lore task show --id tsk_d191…45c2
 tsk_d191…45c2
   title:    Rename the shop to Website Pro
   status:   cancelled
@@ -132,7 +132,7 @@ A declined task keeps its `proposed` commitment, so `lore task list --status can
 <!-- example: tasks#defer -->
 ```console
 # alice, in website
-$ lore task add 'Renew the SSL certificate' --defer-until 2026-12-01
+$ lore task add --title 'Renew the SSL certificate' --defer-until 2026-12-01
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
 ✓ tsk_2537…6bbb — Renew the SSL certificate [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -158,7 +158,7 @@ On that day the task comes back into `lore task list` by itself. You do not need
 <!-- example: tasks#undefer -->
 ```console
 # alice, in website
-$ lore task edit tsk_2537…6bbb --clear-defer
+$ lore task edit --id tsk_2537…6bbb --clear-defer
 lore: wrote ~/work/website/.lore/data/tasks/tsk_2537…6bbb.json
 ✓ tsk_2537…6bbb updated
 lore live: (live, pushed) commit 9169078 to origin refs/lore/live
@@ -198,7 +198,7 @@ $ lore task list --include-deferred
 - **Agents must say how sure they are.** When a coding agent adds a task (`LORE_ACTOR=agent:…`, or a detected coding agent), `--commitment` is required; lore refuses the task without it (`E_INVALID_INPUT` naming `--commitment`). A person may leave it out and gets `accepted`, and a sub-task added with `--parent` inherits its parent's commitment, so it needs none.
 - **A proposed task is invisible in the normal list.** If you cannot find a task you just added, check `lore task triage` and `lore task someday`.
 - **Dates are whole days in `YYYY-MM-DD` form.** `--defer-until 2026-12-01` hides the task until that date; a time of day is not accepted.
-- **Decline is only for proposals.** On an accepted or someday task `lore task decline` is refused (`E_REFUSED`) and the task stays open; stop it with `lore task cancel <id> --reason <why>`.
+- **Decline is only for proposals.** On an accepted or someday task `lore task decline` is refused (`E_REFUSED`) and the task stays open; stop it with `lore task cancel --id <id> --reason <why>`.
 - **A declined task stays proposed.** `decline` cancels it but does not change its commitment, so it only shows in lists with `--all` or `--include-proposed`.
 - **Snooze is not a reminder.** A snoozed task comes back quietly; nothing tells you. If you need to be told, add a [reminder](reminders.md).
 

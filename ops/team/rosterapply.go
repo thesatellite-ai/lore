@@ -233,7 +233,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 func readInvite(ctx context.Context, r profilestore.Roster, inv onboard.Invite, id ids.AnyID) (inviteRow, error) {
 	invRow, err := r.Get(ctx, schema.TableInvites, id)
 	if errs.Has(err, errs.NotFound) || (err == nil && invRow.Deleted) {
-		return inviteRow{}, errs.New(errs.InviteNotFound, "invite "+inv.ID+" is not in "+inv.Org+"'s store; ask "+inv.By+" to run lore team invite "+inv.Email+" again")
+		return inviteRow{}, errs.New(errs.InviteNotFound, "invite "+inv.ID+" is not in "+inv.Org+"'s store; ask "+inv.By+" to run lore team invite --email "+inv.Email+" again")
 	}
 	if err != nil {
 		return inviteRow{}, err
@@ -283,7 +283,7 @@ func ensureImported(ctx context.Context, d JoinDeps, req JoinRequest, email stri
 	case err == nil:
 		if !sameStore(origin.Store, inv.Store) {
 			return false, errs.New(errs.SetupOrgMismatch, "an org entry named "+inv.Org+" exists for store "+origin.Store+", not "+inv.Store).
-				WithHint("lore org rename " + inv.Org + " <other name>, then lore setup join again")
+				WithHint("lore org rename --old " + inv.Org + " --new <other name>, then lore setup join again")
 		}
 		return false, nil
 	case !errs.Has(err, errs.NotFound):
@@ -337,7 +337,7 @@ func ApplyAdmin(ctx context.Context, d AdminDeps, req AdminRequest) (RosterResul
 	case err == nil:
 		if !sameStore(origin.Store, req.StoreURL) {
 			return RosterResult{}, errs.New(errs.SetupOrgMismatch, "an org entry named "+req.Org+" exists for store "+origin.Store+"; pick another name, or lore org rename").
-				WithHint("lore org rename " + req.Org + " <other name>")
+				WithHint("lore org rename --old " + req.Org + " --new <other name>")
 		}
 	case !errs.Has(err, errs.NotFound):
 		return RosterResult{}, err
@@ -518,7 +518,7 @@ func (w *writer) ensureContact(ctx context.Context, all []contact, typ, val, nor
 		if c.Actor != me {
 			if c.Identity {
 				return errs.New(errs.ContactTaken, typ+" "+norm+" is an identity contact of "+c.Actor+", not of "+me).
-					WithHint("lore actor show " + typ + ":" + norm + " shows who has it; ask the org admin to fix the roster")
+					WithHint("lore actor show --id " + typ + ":" + norm + " shows who has it; ask the org admin to fix the roster")
 			}
 			continue
 		}
@@ -742,7 +742,7 @@ func (w *writer) checkStints(ctx context.Context, projects []string) error {
 			end, eerr := time.Parse(value.DateLayout, fieldText(x, schema.FieldMemberEndedOn))
 			if serr != nil || eerr != nil {
 				return errs.New(errs.InvalidInput, "membership "+x.ID.String()+" has an unreadable started_on/ended_on").
-					WithHint("lore project member list " + project + " --history")
+					WithHint("lore project member list --project " + project + " --history")
 			}
 			if !(teamprofile.Span{Start: today}).Overlaps(teamprofile.Span{Start: start, End: end}) {
 				continue
@@ -1056,7 +1056,7 @@ func findMember(ctx context.Context, r profilestore.Roster, emails []string) (ro
 // cause and the next step (an admin adds them, or an invite line).
 func notMember(org, where string, emails []string) error {
 	return errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+org+" ("+where+"); nothing was written").
-		WithHint("ask an admin to run: lore member add " + emails[0] + ", then lore setup join again (an outsider joins with an invite line instead)")
+		WithHint("ask an admin to run: lore member add --email " + emails[0] + ", then lore setup join again (an outsider joins with an invite line instead)")
 }
 
 // OrgRoleAdmin is the org-level role of the person who created the org.

@@ -200,7 +200,7 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 			}
 			msg = "org entry " + o.Name + " differs from the store's suggestion " + orgFileShown(sg) + " and records no source version (stores, own, repos or defaults were changed by hand or by an older lore)"
 		}
-		out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorWarning, Message: msg, Fix: "lore org refresh " + o.Name})
+		out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorWarning, Message: msg, Fix: "lore org refresh --org " + o.Name})
 	}
 	return out, nil
 }
@@ -239,7 +239,7 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 	if sc == nil {
 		if len(o.Stores) == 0 {
 			return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "org entry "+in.Org+" lists no store, so there is no lore-org.yaml to refresh from").
-				WithHint("add the store to the entry, or import the org again: lore org import <store url>")
+				WithHint("add the store to the entry, or import the org again: lore org import --url <store-url>")
 		}
 		sc = &o.Stores[0]
 	}

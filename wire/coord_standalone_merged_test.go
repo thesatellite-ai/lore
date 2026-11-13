@@ -263,7 +263,7 @@ func TestRecordMergedBranch_TwoClonesWriteTheSameRow(t *testing.T) {
 
 // TestCoordUnknownTaskLeavesTheHintToTheHost (later.md 218): an unknown
 // task on a coordination command is E_NOT_FOUND with no hint of its own,
-// so the host's F1 answer (the `lore sync peek <remote>/<branch> tasks`
+// so the host's F1 answer (the `lore sync peek --ref <remote>/<branch> --table tasks`
 // hint, or what live knows about the id) is the one the user sees. A
 // mission id, which the host's F1 does not explain under the task noun,
 // gets its own hint; any other coordination error keeps its own.

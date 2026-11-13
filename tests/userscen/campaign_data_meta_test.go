@@ -20,7 +20,7 @@ import (
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
-// cdMetaShow is `lore meta show <id> --json`.
+// cdMetaShow is `lore meta show --id <id> --json`.
 type cdMetaShow struct {
 	ID    string `json:"id"`
 	Count int    `json:"count"`
@@ -167,7 +167,7 @@ func TestCampaignData_MetaLintTextBeforeValue(t *testing.T) {
 	c.MustLore("meta", "set", m, "tier=gold")
 	c.MustLore("meta", "value", "add", "tier", "gold")
 	lint := c.MustLore("meta", "lint").Stdout
-	if !strings.Contains(lint, "written as text before it became an allowed value") || !strings.Contains(lint, "lore meta set "+m+" tier=gold") {
+	if !strings.Contains(lint, "written as text before it became an allowed value") || !strings.Contains(lint, "lore meta set --id "+m+" --pair tier=gold") {
 		t.Fatalf("meta lint: %s", lint)
 	}
 	c.MustLore("meta", "set", m, "tier=gold")

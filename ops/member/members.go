@@ -103,7 +103,7 @@ func dayField(r row.Row, name string) (time.Time, error) {
 	t, err := time.Parse(value.DateLayout, s)
 	if err != nil {
 		return time.Time{}, errs.Wrap(errs.InvalidInput, "membership "+r.ID.String()+": "+name+" "+s+" is not YYYY-MM-DD", err).
-			WithHint("lore show " + r.ID.String())
+			WithHint("lore show --id " + r.ID.String())
 	}
 	return t, nil
 }
@@ -207,7 +207,7 @@ func parseOn(s string, today time.Time) (time.Time, error) {
 func resolveProject(ctx context.Context, env Env, r profilestore.Roster, ref string) (Project, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return Project{}, errs.New(errs.InvalidInput, "no project").WithHint("lore project member list <project>")
+		return Project{}, errs.New(errs.InvalidInput, "no project").WithHint("lore project member list --project <project>")
 	}
 	if f := finder(env); f != nil {
 		return f.FindProject(ctx, ref)
@@ -423,7 +423,7 @@ func memberAdd(ctx context.Context, env Env, in MemberAddIn) (MemberWriteOut, er
 	// projects included; rejoin first.
 	if st := teamprofile.StatusOf(mc.actor.Fields); !teamprofile.Pickable(st) {
 		return MemberWriteOut{}, errs.New(errs.StatusChange, actorShown(mc.actor)+" is "+st+"; someone who is "+st+" cannot be added to a project").
-			WithHint("lore actor rejoin " + string(in.Actor))
+			WithHint("lore actor rejoin --actor " + string(in.Actor))
 	}
 	cur := opens(mc.stints)
 	var keep []string
@@ -610,7 +610,7 @@ func memberEdit(ctx context.Context, env Env, in MemberEditIn) (MemberWriteOut, 
 // notMember is E_NOT_FOUND for a person with no open membership.
 func notMember(mc memberCtx) error {
 	return errs.New(errs.NotFound, actorShown(mc.actor)+" is not a member of "+mc.project.Shown()).
-		WithHint("lore project member list " + mc.project.Shown() + " --history")
+		WithHint("lore project member list --project " + mc.project.Shown() + " --history")
 }
 
 func memberRemove(ctx context.Context, env Env, in MemberRemoveIn) (MemberWriteOut, error) {
@@ -870,7 +870,7 @@ func teamWarnings(ctx context.Context, r profilestore.Roster, project Project, a
 			}
 			who := actorShown(a)
 			out = append(out, WarnTeamNotMember+" "+handleMark+fieldText(t, fieldTeamHandle)+": "+who+" is in the org team but not a member of "+project.Shown()+
-				" (lore project member add "+project.Shown()+" "+who+" --role "+teamprofile.RoleDev+")")
+				" (lore project member add --project "+project.Shown()+" --actor "+who+" --role "+teamprofile.RoleDev+")")
 		}
 	}
 	slices.Sort(out)
@@ -894,6 +894,6 @@ func overlapErr(mc memberCtx, m membership, on time.Time) error {
 			WithHint("the stint " + stint + " comes later: pick --on " + next + " or later, or --on " + start + " to reopen it")
 	default:
 		return errs.New(errs.PeriodOverlap, "a membership from "+from+" overlaps the stint "+stint).
-			WithHint("lore project member list " + mc.project.Shown() + " --history shows the stint " + stint + "; pick --on " + next + " or later")
+			WithHint("lore project member list --project " + mc.project.Shown() + " --history shows the stint " + stint + "; pick --on " + next + " or later")
 	}
 }

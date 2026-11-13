@@ -64,7 +64,7 @@ lore comment list --json | jq '.data[]'   # (replace with eventual `tag uses` cm
 lore comment add \
     --on-table=decisions \
     --on-id=dec_019e... \
-    "Checked again on 2026-08-01. Still right: Stripe fees are below 3% of sales."
+    --body "Checked again on 2026-08-01. Still right: Stripe fees are below 3% of sales."
 ```
 
 ### List comments

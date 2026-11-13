@@ -64,7 +64,7 @@ func (a *App) Roster(ctx context.Context, write bool) (profilestore.Roster, func
 		// TS-1: a no-org roster is the repo's committed .lore/data; contacts
 		// (TP-6: plain) would be published with the code.
 		return nil, noop, errs.New(errs.Refused, "team profiles live in an org store; this repo has no org").
-			WithHint("lore org create <name>")
+			WithHint("lore org create --org <name>")
 	}
 	x, done, err := a.rosterApp(ctx, r)
 	if err != nil {
@@ -113,7 +113,7 @@ func (a *App) profileWriter(ctx context.Context, st *state, target store.Source)
 		}
 	}
 	e := errs.New(errs.PolicyDenied, string(policy.KeyAgentsMayManagePeople)+" is false: an agent may not change team profiles; this looks like "+agent).
-		WithHint("a person runs it in their own terminal, or sets `lore policy set " + string(policy.KeyAgentsMayManagePeople) + " true`")
+		WithHint("a person runs it in their own terminal, or sets `lore policy set --key " + string(policy.KeyAgentsMayManagePeople) + " --value true`")
 	e.NeedsPerson = true
 	return e
 }

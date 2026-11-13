@@ -287,15 +287,15 @@ func Ops(env Env) []op.Entry {
 			Examples: []op.Example{{Title: "the trash as JSON", CLI: "lore trash list --json", Want: `"data"`}}}, o.list),
 		op.Define(op.Spec{Name: OpShow, Summary: "Show one row in the trash, body included (sensitive values masked)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(read), errs.NeedsConfirm, errs.Cancelled),
-			Confirm: op.ConfirmRule{When: showSensitiveField}, Examples: []op.Example{{Title: "one row in the trash", CLI: "lore trash show rul_1f3a"}}}, o.show),
+			Confirm: op.ConfirmRule{When: showSensitiveField}, Examples: []op.Example{{Title: "one row in the trash", CLI: "lore trash show --id rul_1f3a"}}}, o.show),
 		op.Define(op.Spec{Name: OpRestore, Summary: "Bring a row (with its dependents) or a whole batch back from the trash, same ids",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.SecretDetected, errs.Unsupported), // Unsupported: --local without safety copies
 			// MayAsk: the restore re-scan may ask about a secret (P2-DEL-3,
 			// FB-SEC-1), so the answer flags (--secret-ref,
 			// --secret-unstored, --not-a-secret --reason) and --yes exist.
-			Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "bring a row back", CLI: "lore trash restore rul_1f3a"}, {Title: "undo a whole bulk delete", CLI: "lore trash restore bat_9e02"}}}, o.restore),
+			Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "bring a row back", CLI: "lore trash restore --target rul_1f3a"}, {Title: "undo a whole bulk delete", CLI: "lore trash restore --target bat_9e02"}}}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good, with their comments and links (a tombstone stays forever); needs --confirm",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported), Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore trash purge --older-than 180d --dry-run"}, {Title: "remove one row for good", CLI: "lore trash purge rul_1f3a --confirm"}}}, o.purge),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported), Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore trash purge --older-than 180d --dry-run"}, {Title: "remove one row for good", CLI: "lore trash purge --target rul_1f3a --confirm"}}}, o.purge),
 		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
 			Examples: []op.Example{{Title: "trash counts as JSON", CLI: "lore trash stats --json", Want: `"tombstones"`}}}, o.stats),
@@ -500,7 +500,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 	}
 	if modes != 1 {
 		return ResultOut{}, errs.New(errs.InvalidInput, "trash purge: give exactly one of <id|batch>, --older-than, --expired or --archived-before").
-			WithHint("see what is there with `lore trash list`, then e.g. lore trash purge <id> --confirm")
+			WithHint("see what is there with `lore trash list`, then e.g. lore trash purge --target <id> --confirm")
 	}
 	if before != "" {
 		return o.purgeArchived(ctx, before, in.DryRun, in.Confirm)
@@ -1012,7 +1012,7 @@ func (o ListOut) historyText() string {
 	for _, it := range o.Data {
 		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.when() + "  by " + it.deleter() + "  last content in " + it.LastIn + "\n")
 	}
-	b.WriteString(count(o.Count, "row") + " in git history; they never come back (read one: lore trash show <id> --from-history)\n")
+	b.WriteString(count(o.Count, "row") + " in git history; they never come back (read one: lore trash show --id <id> --from-history)\n")
 	return b.String()
 }
 

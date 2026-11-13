@@ -95,7 +95,7 @@ func TestTrash_TasklistCascadeBatch(t *testing.T) {
 
 	// A task alone is refused while its tasklist is in the trash.
 	e = trashErr(t, c, "E_PARENT_DELETED", th.ExitRefused, "trash", "restore", t1)
-	if !strings.Contains(e.Error.Message, tl) || !strings.Contains(e.Error.Hint, "lore trash restore "+batch) {
+	if !strings.Contains(e.Error.Message, tl) || !strings.Contains(e.Error.Hint, "lore trash restore --target "+batch) {
 		t.Errorf("the refusal names the tasklist and the batch to restore: %+v", e.Error)
 	}
 	// The batch comes back whole, with the same ids and fields.

@@ -39,5 +39,5 @@ func (e engine) Remove(ctx context.Context, in RemoveIn) (RemoveOut, error) {
 
 // Text implements op.Texter.
 func (o RemoveOut) Text() string {
-	return "moved setup " + o.Name + " to the trash; lore setup trash restore " + o.Name + " brings it back\n"
+	return "moved setup " + o.Name + " to the trash; lore setup trash restore --name " + o.Name + " brings it back\n"
 }

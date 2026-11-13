@@ -91,7 +91,7 @@ func Open(dir string, opts ...Option) (*Root, error) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, errs.Wrap(errs.NotAStore, "rowfs: the store folder does not exist", err).
-				WithHint("check the store's url (lore store list; personal.store in ~/.lore/config.yaml), or make it with lore store init <name> <url>")
+				WithHint("check the store's url (lore store list; personal.store in ~/.lore/config.yaml), or make it with lore store init --name <name> --url <url>")
 		}
 		return nil, errs.Wrap(errs.Internal, "rowfs: resolve the store folder", err)
 	}

@@ -312,10 +312,10 @@ func (a *App) orgStoresHere(ctx context.Context) []attach.Store {
 // than a command that answers E_NEEDS_CONFIRM.
 func unattachedNote(w io.Writer, to, folderName string, fromOrg bool) {
 	if fromOrg {
-		fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add <name> <store url> --folder %s --yes (this commits the org store's url to .lore/stores.yaml, visible to everyone who can read this repo)\n", to, folderName)
+		fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add --name <name> --url <store-url> --folder %s --yes (this commits the org store's url to .lore/stores.yaml, visible to everyone who can read this repo)\n", to, folderName)
 		return
 	}
-	fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add <name> <store url> --folder %s\n", to, folderName)
+	fmt.Fprintf(w, "lore: %s is not attached in this repo, so lists here will not show its rows; to see them: lore store add --name <name> --url <store-url> --folder %s\n", to, folderName)
 }
 
 // newFolder is the store folder a `--to <store>/<folder>` write goes to

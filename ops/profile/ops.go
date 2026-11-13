@@ -67,9 +67,9 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: profilestore.OpActorEdit, Summary: "Edit a person's profile: title, timezone, location, photo, bio, birthday (team profiles)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: actorEditErrors,
 			Examples: []op.Example{
-				{Title: "fill the profile", CLI: `lore actor edit @mira --title "Backend engineer" --timezone Europe/Istanbul --location "Ankara, TR"`, Want: "edited"},
-				{Title: "clear fields", CLI: "lore actor edit @mira --clear photo_url,bio", Want: "edited"},
-				{Title: "rename at the source", CLI: `lore actor edit @mira --name "Mira Patel"`, Want: "edited"},
+				{Title: "fill the profile", CLI: `lore actor edit --actor @mira --title "Backend engineer" --timezone Europe/Istanbul --location "Ankara, TR"`, Want: "edited"},
+				{Title: "clear fields", CLI: "lore actor edit --actor @mira --clear photo_url,bio", Want: "edited"},
+				{Title: "rename at the source", CLI: `lore actor edit --actor @mira --name "Mira Patel"`, Want: "edited"},
 			}},
 			func(ctx context.Context, in ActorEditIn) (ActorEditOut, error) { return actorEdit(ctx, env, in) }),
 		op.Define(op.Spec{Name: profilestore.OpContactAdd, Summary: "Add a contact (email, GitHub login, phone, …) to a person",
@@ -77,17 +77,17 @@ func Ops(env Env) []op.Entry {
 			// --merge asks first (6.4): E_NEEDS_CONFIRM without --yes.
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
-				{Title: "an identity GitHub login", CLI: "lore actor contact add @mira github mirap --label personal --identity", Want: "added"},
-				{Title: "a work phone", CLI: `lore actor contact add @mira phone "+90 532 000 0000" --label work --primary`, Want: "added"},
+				{Title: "an identity GitHub login", CLI: "lore actor contact add --actor @mira --type github --value mirap --label personal --identity", Want: "added"},
+				{Title: "a work phone", CLI: `lore actor contact add --actor @mira --type phone --value "+90 532 000 0000" --label work --primary`, Want: "added"},
 			}},
 			func(ctx context.Context, in ContactAddIn) (ContactOut, error) { return contactAdd(ctx, env, in) }),
 		op.Define(op.Spec{Name: profilestore.OpContactEdit, Summary: "Edit a contact: value, label, primary, identity, note",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: contactEditErrors,
-			Examples: []op.Example{{Title: "make it the primary", CLI: "lore actor contact edit acn_… --primary", Want: "edited"}}},
+			Examples: []op.Example{{Title: "make it the primary", CLI: "lore actor contact edit --id acn_… --primary", Want: "edited"}}},
 			func(ctx context.Context, in ContactEditIn) (ContactOut, error) { return contactEdit(ctx, env, in) }),
 		op.Define(op.Spec{Name: profilestore.OpContactRemove, Summary: "Remove a contact (to the trash, restorable)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: contactRmErrors,
-			Examples: []op.Example{{Title: "an old phone", CLI: `lore actor contact remove acn_… --reason "number changed"`, Want: "removed"}}},
+			Examples: []op.Example{{Title: "an old phone", CLI: `lore actor contact remove --id acn_… --reason "number changed"`, Want: "removed"}}},
 			func(ctx context.Context, in ContactRemoveIn) (ContactRemoveOut, error) {
 				return contactRemove(ctx, env, in)
 			}),
@@ -103,13 +103,13 @@ func Ops(env Env) []op.Entry {
 			}),
 		op.Define(op.Spec{Name: profilestore.OpContactTypeAdd, Summary: "Add a contact type to the org's list",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: typeWriteErrors,
-			Examples: []op.Example{{Title: "Bitbucket logins", CLI: `lore contact-type add bitbucket --kind handle --identity --url-template "https://bitbucket.org/{value}"`, Want: "added"}}},
+			Examples: []op.Example{{Title: "Bitbucket logins", CLI: `lore contact-type add --name bitbucket --kind handle --identity --url-template "https://bitbucket.org/{value}"`, Want: "added"}}},
 			func(ctx context.Context, in ContactTypeAddIn) (ContactTypeOut, error) {
 				return contactTypeAdd(ctx, env, in)
 			}),
 		op.Define(op.Spec{Name: profilestore.OpContactTypeEdit, Summary: "Change a contact type's label or link, or retire it",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: typeWriteErrors,
-			Examples: []op.Example{{Title: "retire a type", CLI: "lore contact-type edit discord --retire", Want: "edited"}}},
+			Examples: []op.Example{{Title: "retire a type", CLI: "lore contact-type edit --name discord --retire", Want: "edited"}}},
 			func(ctx context.Context, in ContactTypeEditIn) (ContactTypeOut, error) {
 				return contactTypeEdit(ctx, env, in)
 			}),

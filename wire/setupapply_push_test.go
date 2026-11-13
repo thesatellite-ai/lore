@@ -2,7 +2,7 @@ package wire
 
 // setupapply_push_test.go — the setup page's push mode question
 // (setupapply_push.go): the personal store step writes config.yaml
-// personal.push and `lore store show me` reads it back; now writes
+// personal.push and `lore store show --store me` reads it back; now writes
 // nothing; a store with no remote is refused before anything is written;
 // the team step writes push into the new team store's lore-store.yaml once
 // the admin setups[] entry exists.

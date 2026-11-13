@@ -211,7 +211,7 @@ func Ops(p Port) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpGet, Summary: "Get a key of ~/.lore/config.yaml (a dotted path, e.g. live.autopush)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Local: true,
-			Examples: []op.Example{{Title: "read one key", CLI: "lore config get live.autopush", Want: ""}},
+			Examples: []op.Example{{Title: "read one key", CLI: "lore config get --key live.autopush", Want: ""}},
 		}, func(ctx context.Context, in KeyIn) (Entry, error) {
 			return get(ctx, p, in.Key)
 		}),
@@ -219,8 +219,8 @@ func Ops(p Port) []op.Entry {
 			Name: OpSet, Summary: "Set a key of ~/.lore/config.yaml (keeps comments and order)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: setErrors, Local: true,
 			Examples: []op.Example{
-				{Title: "turn autopush off", CLI: "lore config set live.autopush false", Want: "live.autopush"},
-				{Title: "a longer lease", CLI: "lore config set lease.ttl 45m", Want: "lease.ttl"},
+				{Title: "turn autopush off", CLI: "lore config set --key live.autopush --value false", Want: "live.autopush"},
+				{Title: "a longer lease", CLI: "lore config set --key lease.ttl --value 45m", Want: "lease.ttl"},
 			},
 		}, func(ctx context.Context, in SetIn) (SetOut, error) {
 			return set(ctx, p, in)
@@ -253,8 +253,8 @@ func Ops(p Port) []op.Entry {
 			Name: OpUnset, Summary: "Remove a key of ~/.lore/config.yaml (keeps comments and order); --dry-run shows what would go",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: setErrors, Local: true,
 			Examples: []op.Example{
-				{Title: "preview removing the personal store", CLI: "lore config unset personal.store --dry-run", Want: ""},
-				{Title: "remove the identity block", CLI: "lore config unset identity", Want: ""},
+				{Title: "preview removing the personal store", CLI: "lore config unset --key personal.store --dry-run", Want: ""},
+				{Title: "remove the identity block", CLI: "lore config unset --key identity", Want: ""},
 			},
 		}, func(ctx context.Context, in UnsetIn) (UnsetOut, error) {
 			return unset(ctx, p, in)

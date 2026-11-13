@@ -74,7 +74,7 @@ func (e engine) Edit(ctx context.Context, in EditIn) (EditOut, error) {
 		// entries" of a file the edit never wrote.
 		var le *errs.Error
 		if errors.As(err, &le) && le.Code == errs.ConfigInvalid {
-			return EditOut{}, le.WithHint("nothing was saved; run lore setup edit " + name + " again with a value the message allows")
+			return EditOut{}, le.WithHint("nothing was saved; run lore setup edit --name " + name + " again with a value the message allows")
 		}
 		return EditOut{}, err
 	}
@@ -124,7 +124,7 @@ func editsGitHub(in EditIn) bool {
 // editRefusedHint ends every refusal of an edit value: the edit wrote
 // nothing.
 func editRefusedHint(name, fix string) string {
-	return fix + "; nothing was saved, run lore setup edit " + name + " again"
+	return fix + "; nothing was saved, run lore setup edit --name " + name + " again"
 }
 
 // checkEditValues refuses (E_INVALID_INPUT, nothing written) a value of
@@ -283,7 +283,7 @@ func checkPersonalStore(v string) error {
 	}
 	if !ok {
 		return errs.New(errs.InvalidInput, "personal_store must be inherit, none or a git url (git@host:owner/repo.git, ssh://, https://, file://)").
-			WithHint("lore setup edit <name> --personal-store git@github.com:mira/lore-me.git")
+			WithHint("lore setup edit --name <name> --personal-store git@github.com:mira/lore-me.git")
 	}
 	if rest, found := strings.CutPrefix(v, "https://"); found {
 		if host, _, _ := strings.Cut(rest, "/"); strings.Contains(host, "@") {

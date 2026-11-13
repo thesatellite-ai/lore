@@ -50,7 +50,7 @@ func TestExplain_CopiesAndWinner(t *testing.T) {
 		"live row":       {ltTaskA, []string{ltTaskA + " in ", "live (local ", ": row, live since ", "this branch (HEAD): not present", "origin/" + branch + ": not present", "wins: the live copy (rule 4", "  land: "}},
 		"live tombstone": {ltTaskB, []string{": tombstone, ", "wins: the live tombstone (rule 4)"}},
 		"branch only":    {branchMem, []string{"live: not present", "this branch (HEAD): " + rel + " (", "wins: this branch's copy (not live)"}},
-		"nowhere":        {nowhere, []string{"live: not present", "not found in live or on this branch", "lore sync peek origin/" + branch}},
+		"nowhere":        {nowhere, []string{"live: not present", "not found in live or on this branch", "lore sync peek --ref origin/" + branch}},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

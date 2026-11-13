@@ -113,7 +113,7 @@ func TestPickUpDeleteHintNamesTheRowsNoun(t *testing.T) {
 	hand.Deleted = true
 	_, err := f.eng.PickUp(context.Background(), store.SourceRepo, base, hand)
 	var e *errs.Error
-	if !errors.As(err, &e) || !strings.Contains(e.Hint, "lore memory delete "+base.ID.String()) || strings.Contains(e.Hint, "lore task") {
+	if !errors.As(err, &e) || !strings.Contains(e.Hint, "lore memory delete --id "+base.ID.String()) || strings.Contains(e.Hint, "lore task") {
 		t.Fatalf("hand delete of a memory: %v (hint %q)", err, e.Hint)
 	}
 }

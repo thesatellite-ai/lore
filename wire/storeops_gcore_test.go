@@ -116,7 +116,7 @@ func TestCleanFileURLCredentials(t *testing.T) {
 	}
 }
 
-// TestStoreInitMeOutsideRepo (G-CORE-7): `lore store init me` runs
+// TestStoreInitMeOutsideRepo (G-CORE-7): `lore store init --name me` runs
 // outside any git work tree (a fresh folder store, then "already"; a git
 // url; a bad scheme refused), writing personal.store in config.yaml; a
 // named store outside a repo still needs one (E_NOT_A_STORE).

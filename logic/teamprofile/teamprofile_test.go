@@ -310,7 +310,7 @@ func TestCheckPeriods(t *testing.T) {
 		{"two open", []Period{p("2026-01-12", ""), p("2026-10-01", "")}, false, ""},
 		{"open before closed", []Period{p("2026-01-12", ""), p("2026-10-01", "2026-11-01")}, false, ""},
 		{"rejoin on the last day", []Period{p("2026-01-12", "2026-09-30"), p("2026-09-30", "")}, false, ""},
-		{"overlap", []Period{p("2026-01-12", "2026-09-30"), p("2026-05-01", "2026-06-01")}, false, "lore actor period list <actor> shows the stints; pick a date after the last end"},
+		{"overlap", []Period{p("2026-01-12", "2026-09-30"), p("2026-05-01", "2026-06-01")}, false, "lore actor period list --actor <actor> shows the stints; pick a date after the last end"},
 		{"same start", []Period{p("2026-01-12", "2026-01-20"), p("2026-01-12", "")}, false, ""},
 	} {
 		err := CheckPeriods(tc.ps)

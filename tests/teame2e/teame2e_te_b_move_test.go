@@ -17,7 +17,7 @@ import (
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
-// teBTreeOf is the ids `lore task show <id> --tree` prints under a parent.
+// teBTreeOf is the ids `lore task show --id <id> --tree` prints under a parent.
 func teBTreeOf(t *testing.T, c *th.Clone, parent string, kids ...string) {
 	t.Helper()
 	r := c.MustLore("task", "show", parent, "--tree")

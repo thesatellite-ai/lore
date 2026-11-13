@@ -20,7 +20,7 @@ import (
 // file, no commit) and nothing on a live ref of either side. The
 // multi-clone half (a second clone reads the note) is a team e2e
 // (T-TEAME2E, TestRecipe15_NoteOnATaskNotHeldGoesToTheStore). The fixture
-// ran `lore store init agency` in the client repo, so stores.yaml attaches
+// ran `lore store init --name agency` in the client repo, so stores.yaml attaches
 // the bare name "agency" at the store root and the linked folder is
 // attached as "agency/acme" (renameOrgClashes): coordination must use the
 // latter (it wrote into the store root before).

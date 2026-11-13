@@ -92,7 +92,7 @@ func TestSetStoreURLCarriesUnpushedClone(t *testing.T) {
 		t.Fatal(err)
 	}
 	f, err := a.DoctorStoreClones(background())
-	if err != nil || len(f) != 1 || !strings.Contains(f[0].Message, "unpushed commit(s)") || f[0].Fix != "lore store set-url "+out.ID+" "+nextURL {
+	if err != nil || len(f) != 1 || !strings.Contains(f[0].Message, "unpushed commit(s)") || f[0].Fix != "lore store set-url --name "+out.ID+" --url "+nextURL {
 		t.Fatalf("doctor on a stranded clone: %+v (%v)", f, err)
 	}
 	if _, err = run(t, a, opsstores.OpSetURL, `{"name":"`+out.ID+`","url":"`+nextURL+`"}`, true); err != nil {

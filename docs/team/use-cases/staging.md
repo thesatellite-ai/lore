@@ -32,13 +32,13 @@ Alice (an agency developer) creates the staging branch once (from her `stores` f
 <!-- example: staging#staging-branch -->
 ```console
 # alice, in stores
-$ lore store init agency_stag 'git@github.com:agency/notes?branch=staging' --yes
+$ lore store init --name agency_stag --url 'git@github.com:agency/notes?branch=staging' --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore store init: store clone ~/.lore/stores/agency/notes@staging: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 ✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
-$ lore org use agency-stag
+$ lore org use --entry agency-stag
 ✓ prj_2ad3…f891 uses org agency-stag on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore whoami
@@ -52,14 +52,14 @@ remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch staging  (org folder org)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   me -> ~/.lore/personal
-$ lore org link agency-stag --project client --yes
+$ lore org link --org agency-stag --project client --yes
 lore: pushed store github.com/agency/notes: commit 601d285 to branch staging
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
 ✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; pushed)
   nothing was written to this repo
-$ lore task add 'seed staging with demo data' --to agency-stag
+$ lore task add --title 'seed staging with demo data' --to agency-stag
 lore: pushed store agency-stag: commit 86dbae4 to branch staging
 lore: wrote 2 row file(s) in ~/.lore/personal/agency-stag (store me)
 lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store agency-stag)
@@ -67,7 +67,7 @@ lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store a
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 $ lore task list
 ○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
-$ lore org use agency
+$ lore org use --entry agency
 ✓ prj_2ad3…f891 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
@@ -95,7 +95,7 @@ With `agency` chosen again, the staging task is gone from the list. `LORE_ORG=ag
 
 ## Pitfalls
 
-- **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to create it on purpose with `lore store init <name> '<url>?branch=staging'`; `lore store add <name> <url> --branch staging` attaches a branch that already exists. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
+- **The branch must exist first.** Linking or writing to a staging entry whose branch does not exist is refused, with a hint to create it on purpose with `lore store init --name <name> --url '<url>?branch=staging'`; `lore store add --name <name> --url <url> --branch staging` attaches a branch that already exists. A typo never creates a new lore silently. See [Troubleshooting](../troubleshooting.md#store-branch-does-not-exist).
 - **Links, roster and global project are per branch.** The roster is the list of people and agents in the org. A staging entry needs its own `lore org link`, and `lore actor register` if you want `@handles` there. With a staging entry chosen, `lore whoami` counts only that branch's links: `0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)` until you link it.
 - **A branch name may not contain `/`** (`release/2026` is refused by `lore config check`), so a store branch name never clashes with lore's own refs.
 - `lore org use` is saved in `repo_orgs:` of your own `~/.lore/config.yaml`. Nothing is committed, and teammates are not affected.

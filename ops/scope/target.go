@@ -86,7 +86,7 @@ func ForWrite(ctx context.Context, env Env, raw, to, repo string, edit bool) (Ta
 		return t, nil
 	case dirscope.KindGlobal:
 		if edit {
-			return Target{}, errs.New(errs.InvalidInput, "--scope global moves a row to your personal store").WithHint("use `lore move <id> --to me`")
+			return Target{}, errs.New(errs.InvalidInput, "--scope global moves a row to your personal store").WithHint("use `lore move --id <id> --to me`")
 		}
 		if to != "" && to != toPersonal {
 			return Target{}, errs.New(errs.InvalidInput, "--scope global writes to your personal store; it cannot go with --to "+to)

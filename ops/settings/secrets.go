@@ -364,17 +364,17 @@ func (o ops) secretOps() []op.Entry {
 			Access: op.AccessRead, Errors: readErrors, RESTNoun: rulesREST, Examples: []op.Example{{Title: "every secret rule", CLI: "lore secrets rules"}}}, o.rules),
 		op.Define(op.Spec{Name: OpSecretRuleAdd, Summary: "Add a lore secret rule on top of the defaults", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: ask,
-			Examples: []op.Example{{Title: "an internal token shape", CLI: `lore secrets rule add acme-token --regex 'acme_[a-z0-9]{32}' --yes`, Want: "srl_"}}}, o.ruleAdd).Asks(o.ruleAddQuestion),
+			Examples: []op.Example{{Title: "an internal token shape", CLI: `lore secrets rule add --id acme-token --regex 'acme_[a-z0-9]{32}' --yes`, Want: "srl_"}}}, o.ruleAdd).Asks(o.ruleAddQuestion),
 		op.Define(op.Spec{Name: OpSecretRuleEdit, Summary: "Change a secret rule (lore defaults and gitleaks ids included)", Permission: op.PermWrite,
-			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "tighten a rule's pattern", CLI: "lore secrets rule edit srl_0d4e --entropy 4.5"}}}, o.ruleEdit).Asks(o.ruleEditQuestion),
+			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "tighten a rule's pattern", CLI: "lore secrets rule edit --id srl_0d4e --entropy 4.5"}}}, o.ruleEdit).Asks(o.ruleEditQuestion),
 		op.Define(op.Spec{Name: OpSecretRuleOff, Summary: "Switch a secret rule off at a level, with a reason", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "switch a rule off here", CLI: `lore secrets rule off srl_0d4e --reason "test fixtures hold sample tokens" --yes`}}}, o.ruleOff).Asks(o.ruleOffQuestion),
+			Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "switch a rule off here", CLI: `lore secrets rule off --id srl_0d4e --reason "test fixtures hold sample tokens" --yes`}}}, o.ruleOff).Asks(o.ruleOffQuestion),
 		op.Define(op.Spec{Name: OpSecretRuleOn, Summary: "Switch a secret rule back on at a level", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "switch a rule on again", CLI: "lore secrets rule on srl_0d4e"}}}, o.ruleOn).Asks(o.ruleOnQuestion),
+			Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "switch a rule on again", CLI: "lore secrets rule on --id srl_0d4e"}}}, o.ruleOn).Asks(o.ruleOnQuestion),
 		op.Define(op.Spec{Name: OpSecretAllow, Summary: "Record one finding as not a secret for one row, field and rule", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "keep a test fixture key as not a secret", CLI: `lore secrets allow mem_0c3a --rule srl_0d4e --match fixture-token-123 --reason "a test fixture"`}}}, o.allow).Checks(allowCheck),
 		op.Define(op.Spec{Name: OpSecretAllowRm, Summary: "Remove an allow entry (the finding is reported again)", Permission: op.PermWrite,
-			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "stop allowing a finding", CLI: "lore secrets allow rm sal_2e19"}}}, o.allowRm).Asks(o.allowRmQuestion),
+			Access: op.AccessWrite, Errors: writeErrors, Confirm: ask, Examples: []op.Example{{Title: "stop allowing a finding", CLI: "lore secrets allow rm --id sal_2e19"}}}, o.allowRm).Asks(o.allowRmQuestion),
 		op.Define(op.Spec{Name: OpSecretAllowList, Summary: "List the allow entries", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors, Examples: []op.Example{{Title: "every allowed (false positive) finding", CLI: "lore secrets allow list"}}}, o.allowList),
 	}, o.secretIndexOps()...)
@@ -524,7 +524,7 @@ func (o ops) ruleAdd(ctx context.Context, in RuleAddIn) (RowOut, error) {
 	if have, herr := o.ruleAt(ctx, target, in.RuleID); herr != nil {
 		return RowOut{}, herr
 	} else if have != nil {
-		return RowOut{}, errs.New(errs.InvalidInput, "rule "+in.RuleID+" already has a row in "+place(target)).WithHint("lore secrets rule edit " + in.RuleID)
+		return RowOut{}, errs.New(errs.InvalidInput, "rule "+in.RuleID+" already has a row in "+place(target)).WithHint("lore secrets rule edit --id " + in.RuleID)
 	}
 	if fields[sState], err = state(schema.SecretRuleOn); err != nil {
 		return RowOut{}, err

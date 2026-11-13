@@ -80,7 +80,7 @@ func TestTasklistRefusals(t *testing.T) {
 	for _, in := range []string{`{"body":"b"}`, `{"title":"  ","body":"b"}`, `{"title":"t","body":"a","text":"b"}`} {
 		h.Fails("tasklist.add", in, errs.InvalidInput)
 	}
-	if msg := h.Fails("tasklist.add", `{"body":"b"}`, errs.InvalidInput); !strings.Contains(msg, "a title is required") {
+	if msg := h.Fails("tasklist.add", `{"body":"b"}`, errs.InvalidInput); !strings.Contains(msg, "missing required field title") {
 		t.Fatalf("title refusal: %s", msg)
 	}
 	addID(t, h, `{"title":"Sprint 2"}`)

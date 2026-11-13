@@ -7,37 +7,37 @@
 ## Basic search
 
 ```bash
-lore memory search "invoice"
+lore memory search --query "invoice"
 # Best matches first. Upper and lower case do not matter: "Invoice" and "INVOICE" match too.
 ```
 
 ```bash
-lore memory search "invoice" --json | jq '.count, .data[0:3]'
+lore memory search --query "invoice" --json | jq '.count, .data[0:3]'
 ```
 
 ## Phrase search
 
 ```bash
-lore memory search '"unpaid invoice"'
+lore memory search --query '"unpaid invoice"'
 # Quoted phrase — matches the words IN ORDER, adjacent.
 ```
 
 ## Boolean
 
 ```bash
-lore memory search "invoice OR receipt"
+lore memory search --query "invoice OR receipt"
 # Either word. Write OR / AND / NOT in capitals.
 ```
 
 ```bash
-lore memory search "client NOT staging"
+lore memory search --query "client NOT staging"
 # Has "client" but not "staging".
 ```
 
 ## Prefix
 
 ```bash
-lore memory search "pay*"
+lore memory search --query "pay*"
 # Matches pay, payment, payments, paying, etc.
 ```
 
@@ -45,32 +45,32 @@ lore memory search "pay*"
 
 ```bash
 # Default: the repo you are in (if any) + master (the shared notes every repo sees)
-lore memory search "invoice" --repo=app
+lore memory search --query "invoice" --repo=app
 
 # All repos
-lore memory search "invoice" --all-repos
+lore memory search --query "invoice" --all-repos
 
 # Master only (notes for every repo)
-lore memory search "invoice" --master-only
+lore memory search --query "invoice" --master-only
 
 # Strict scope (don't include master fallback)
-lore memory search "invoice" --repo=app --no-inherit
+lore memory search --query "invoice" --repo=app --no-inherit
 
 # Include archived
-lore memory search "invoice" --include-archived
+lore memory search --query "invoice" --include-archived
 ```
 
 ## Limits
 
 ```bash
-lore memory search "" --limit=5         # last 5 memories
-lore memory search "" --limit=0         # unlimited (careful)
+lore memory search --query "" --limit=5         # last 5 memories
+lore memory search --query "" --limit=0         # unlimited (careful)
 ```
 
 ## Empty query = listing
 
 ```bash
-lore memory search "" --json
+lore memory search --query "" --json
 # No search at all: returns everything, newest first, scoped by flags.
 # Same as `lore memory list --json` but supports scope flags.
 ```
@@ -79,10 +79,10 @@ lore memory search "" --json
 
 ```bash
 # Notes about invoices, only well-trusted ones (trust_score: how much lore trusts a note, 0 to 1)
-lore memory search "invoice" --json | jq '.data[] | select(.row.trust_score >= 0.7)'
+lore memory search --query "invoice" --json | jq '.data[] | select(.row.trust_score >= 0.7)'
 
 # IDs only (for piping into another command)
-lore memory search "WhatsApp" --json | jq -r '.data[].id'
+lore memory search --query "WhatsApp" --json | jq -r '.data[].id'
 
 # Count by kind
 lore memory list --json | jq -r '.data[].kind' | sort | uniq -c

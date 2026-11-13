@@ -76,7 +76,7 @@ func TestOrgLinkUnlinkTexts(t *testing.T) {
 	_, err = h.Link(ctx, opsorgcmd.LinkIn{Org: "agency", Project: "acme", Own: true}, true)
 	if env := errs.EnvelopeOf(err).Error; env.Code != errs.InvalidInput ||
 		env.Message != "--own is only for repos matching the org entry's own: patterns: github.com/acme/app does not match agency's own: patterns (github.com/agency/*)" ||
-		env.Hint != "link it without --own (as a client repo), or add a matching pattern to own: in agency's lore-org.yaml and run lore org refresh agency" {
+		env.Hint != "link it without --own (as a client repo), or add a matching pattern to own: in agency's lore-org.yaml and run lore org refresh --org agency" {
 		t.Fatalf("link --own in a client repo: %+v", env)
 	}
 

@@ -194,7 +194,7 @@ func (a *App) RosterRegister(ctx context.Context, target store.Source, sp Roster
 		// register-reactivates rule, the only way back on a no-org roster.
 		if was := actorOfRow(cur); was.Kind == schema.ActorKindHuman && rosterGone(was.Status) {
 			return "", false, errs.New(errs.StatusChange, rosterShown(was)+" is "+was.Status+" on this roster; registering again does not bring someone back").
-				WithHint("ask an admin to run `lore actor rejoin " + rosterRef(was) + " --type …`")
+				WithHint("ask an admin to run `lore actor rejoin --actor " + rosterRef(was) + " --type …`")
 		}
 		fields[rosterFieldLeftAt] = value.Null{}
 		_, err = st.eng.Update(ctx, ref, fields)

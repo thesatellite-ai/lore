@@ -485,7 +485,7 @@ type allOut struct {
 
 // DisabledNote is doctor --all's one line about a disabled setup it skipped.
 func DisabledNote(name string) string {
-	return "setup " + name + " is disabled: skipped (lore setup enable " + name + ")"
+	return "setup " + name + " is disabled: skipped (lore setup enable --name " + name + ")"
 }
 
 // errNoSetupEngine is --all in a binary without the setup engine.

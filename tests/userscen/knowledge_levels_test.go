@@ -86,8 +86,8 @@ func TestKnowledgeLevels_NoPersonalStoreHint(t *testing.T) {
 		{"rule", "add", "--body", "mine everywhere", "--scope", "global"},
 	} {
 		e := knowJSONErr(t, c.Lore(append(args, "--json")...))
-		if e.Error.Code != "E_NOT_FOUND" || !strings.Contains(e.Error.Hint, "lore store init me") {
-			t.Fatalf("%v: want E_NOT_FOUND with the `lore store init me` hint, got %+v", args, e.Error)
+		if e.Error.Code != "E_NOT_FOUND" || !strings.Contains(e.Error.Hint, "lore store init --name me") {
+			t.Fatalf("%v: want E_NOT_FOUND with the `lore store init --name me` hint, got %+v", args, e.Error)
 		}
 	}
 	if got := knowIDs(t, c, "--all-repos"); len(got) != 0 {
@@ -143,7 +143,7 @@ func TestKnowledgeLevels_OrgStoreFolders(t *testing.T) {
 	// so on stderr (the --json stdout stays one document) and names the
 	// attach command; the store root, which the repo attaches, says nothing.
 	note := orgName + "/tips is not attached in this repo"
-	r1 := o.app.MustLore("memory", "add", "--body", "shared tip", "--to", orgName+"/tips", "--create", "--json").Says(t, note, "lore store add <name> <store url> --folder tips --yes")
+	r1 := o.app.MustLore("memory", "add", "--body", "shared tip", "--to", orgName+"/tips", "--create", "--json").Says(t, note, "lore store add --name <name> --url <store url> --folder tips --yes")
 	r2 := o.app.MustLore("memory", "add", "--body", "second tip", "--to", orgName+"/tips", "--json").Says(t, note)
 	r3 := o.app.MustLore("memory", "add", "--body", "agency wide", "--to", orgName, "--json").Never(t, "not attached in this repo")
 	tip, tip2, root := th.DecodeJSON[knowAdded](t, r1), th.DecodeJSON[knowAdded](t, r2), th.DecodeJSON[knowAdded](t, r3)

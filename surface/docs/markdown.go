@@ -38,7 +38,7 @@ func CommandsMarkdown(reg *op.Registry) string {
 		}
 		var flags, codes []string
 		for _, f := range e.InputFields() {
-			if f.Flag != "" {
+			if f.Flag != "" && !f.Named { // a named positional is in the usage line
 				flag := code("--" + f.Flag)
 				for _, a := range f.Aliases {
 					flag += " (or " + code("--"+a) + ")"
@@ -69,7 +69,8 @@ func ErrorsMarkdown() string {
 	return b.String()
 }
 
-// usageLine is `lore <words> <arg> [arg]`.
+// usageLine is `lore <words> --flag <arg> [--flag <arg>]`: a positional
+// shows as its flag (U-4, named args everywhere), an argof one not at all.
 func usageLine(e op.Entry) string {
 	words := op.CLIPath(e.Spec().Name)
 	args := map[int]op.FieldInfo{}
@@ -80,10 +81,17 @@ func usageLine(e op.Entry) string {
 	}
 	for i := range len(args) {
 		f := args[i]
+		if f.ArgOf != "" {
+			continue
+		}
+		w := "<" + f.Name + ">"
+		if f.Named {
+			w = "--" + f.Flag + " " + w
+		}
 		if f.Required {
-			words = append(words, "<"+f.Name+">")
+			words = append(words, w)
 		} else {
-			words = append(words, "["+f.Name+"]")
+			words = append(words, "["+w+"]")
 		}
 	}
 	return cliPrefix + strings.Join(words, " ")

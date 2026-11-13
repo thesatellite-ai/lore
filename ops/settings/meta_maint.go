@@ -57,7 +57,7 @@ type Purger interface {
 
 // MetaForgetIn is the input of meta.forget.
 type MetaForgetIn struct {
-	Keys    string `json:"keys" arg:"0" rest:"true" desc:"the unused keys to remove (names or mky_ ids, space separated)"`
+	Keys    string `json:"keys" arg:"0" rest:"true" flag:"key" desc:"the unused keys to remove (names or mky_ ids, space separated)"`
 	Confirm bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: forget removes the key rows for good"`
 	// Reason is the deleted_reason of the key rows: required while
 	// delete.require_reason is true (E_REASON_REQUIRED), as for every other
@@ -111,11 +111,11 @@ func (o MetaLintOut) Text() string {
 func (o ops) metaMaintOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpMetaForget, Summary: "Remove unused metadata keys for good (tombstones kept)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.MetaInUse, errs.ReasonRequired), RESTNoun: metaREST, Examples: []op.Example{{Title: "drop keys no row uses", CLI: "lore meta forget old_owner legacy_flag --confirm"}}}, o.metaForget),
+			Errors: append(slices.Clone(writeErrors), errs.MetaInUse, errs.ReasonRequired), RESTNoun: metaREST, Examples: []op.Example{{Title: "drop keys no row uses", CLI: "lore meta forget --key \"old_owner legacy_flag\" --confirm"}}}, o.metaForget),
 		op.Define(op.Spec{Name: OpMetaLint, Summary: "List metadata that does not fit its key, and registry problems", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{When: "fix"}, RESTNoun: metaREST, Examples: []op.Example{{Title: "metadata that does not fit its key", CLI: "lore meta lint"}}}, o.metaLint),
 		op.Define(op.Spec{Name: OpMetaShow, Summary: "Show a row's metadata (sensitive values masked unless --show-sensitive)", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, Examples: []op.Example{{Title: "a row's metadata", CLI: "lore meta show tsk_31"}}}, o.metaGet),
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, Examples: []op.Example{{Title: "a row's metadata", CLI: "lore meta show --id tsk_31"}}}, o.metaGet),
 	}
 }
 
@@ -143,13 +143,13 @@ func (o ops) metaForget(ctx context.Context, in MetaForgetIn) (RowOut, error) {
 		if u := use[k.Row.ID.String()]; u != nil {
 			key := text(k.Row, mName)
 			return RowOut{}, errs.New(errs.MetaInUse, fmt.Sprintf("%s is used on %d rows (%s)", key, u.rows, u.tableCounts())).
-				WithHint(fmt.Sprintf("to stop using it: lore meta unset --where '%s?' %s --dry-run; or lore meta delete %s", key, key, key))
+				WithHint(fmt.Sprintf("to stop using it: lore meta unset --where '%s?' %s --dry-run; or lore meta delete --id %s", key, key, key))
 		}
 		keys = append(keys, k)
 	}
 	if !in.Confirm {
 		return RowOut{}, errs.New(errs.NeedsConfirm, "meta forget removes the key rows of "+strings.Join(names, ", ")+" for good (tombstones kept)").
-			WithHint("lore meta forget " + strings.Join(names, " ") + " --confirm")
+			WithHint("lore meta forget --key \"" + strings.Join(names, " ") + "\" --confirm")
 	}
 	pg, ok := upgrade.As[Purger](o.env)
 	if !ok {
@@ -220,12 +220,12 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 			add(MetaFinding{Key: name, Problem: fmt.Sprintf("%d allowed values, over the cap of %d", len(vs), maxMetaValues)})
 		}
 		if utf8.RuneCountInString(text(k.Row, mDescription)) > maxMetaDescription {
-			add(MetaFinding{Key: name, Problem: fmt.Sprintf("description over %d characters", maxMetaDescription), Fix: "lore meta describe " + name + " \"<shorter text>\""})
+			add(MetaFinding{Key: name, Problem: fmt.Sprintf("description over %d characters", maxMetaDescription), Fix: "lore meta describe --id " + name + " --text \"<shorter text>\""})
 		}
 		u := use[id]
 		if u != nil && text(k.Row, mMergedInto) != "" {
 			add(MetaFinding{Key: name, Problem: fmt.Sprintf("retired (merged into %s) but still on %d rows", text(k.Row, mMergedInto), u.rows),
-				Fix: "lore meta edit " + name + " --merge-into " + text(k.Row, mMergedInto) + " --yes"})
+				Fix: "lore meta edit --id " + name + " --merge-into " + text(k.Row, mMergedInto) + " --yes"})
 		}
 		if u != nil && len(vs) == 0 && len(u.values) > hint {
 			add(MetaFinding{Key: name, Problem: fmt.Sprintf("%d distinct values; when the values need facts of their own (an owner, a contact), consider a resource kind (meta.resource_hint_values: %d)", len(u.values), hint)})
@@ -240,13 +240,13 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 				continue
 			}
 			if p := o.valueProblem(k, en, valueIDs[kid.String()]); p != "" {
-				fix := "lore meta set " + rid + " " + text(k.Row, mName) + "=<value>"
+				fix := "lore meta set --id " + rid + " --pair " + text(k.Row, mName) + "=<value>"
 				if s := meta.Strings(en.V); len(en.VName) == 0 && len(s) > 0 && !en.Sensitive && !flag(k.Row, mSensitive) && allIn(s, valueNamesOf[kid.String()]) {
 					// the text names an allowed value: it was written
 					// before that value was added, so the row holds the
 					// text, not the val_ id a rename would follow
 					p = quote(strings.Join(s, ", ")) + " was written as text before it became an allowed value; set it again to store the value id"
-					fix = "lore meta set " + rid + " " + text(k.Row, mName) + "=" + strings.Join(s, ",")
+					fix = "lore meta set --id " + rid + " --pair " + text(k.Row, mName) + "=" + strings.Join(s, ",")
 				}
 				add(MetaFinding{Key: text(k.Row, mName), Row: rid, Problem: p, Fix: fix})
 			}
@@ -258,7 +258,7 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 		for _, k := range keyRows {
 			name := text(k.Row, mName)
 			if slices.Contains(jsonTexts(k.Row, mRequiredOn), string(r.Row.Table)) && !slices.Contains(have, name) && text(k.Row, mMergedInto) == "" {
-				add(MetaFinding{Key: name, Row: rid, Problem: "required on " + string(r.Row.Table) + " but missing (written before the rule)", Fix: "lore meta set " + rid + " " + name + "=<value>"})
+				add(MetaFinding{Key: name, Row: rid, Problem: "required on " + string(r.Row.Table) + " but missing (written before the rule)", Fix: "lore meta set --id " + rid + " --pair " + name + "=<value>"})
 			}
 		}
 	}

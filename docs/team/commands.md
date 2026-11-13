@@ -64,11 +64,11 @@ Persist an identity: the active setup's in ~/.lore/config.yaml (top-level identi
 
 ```text
 Usage:
-  lore identity set [identity]
+  lore identity set [--identity identity]
 
 Examples:
   # your email
-  lore identity set alice@example.com
+  lore identity set --identity alice@example.com
   # inside one org
   lore identity set --org agency --key human:alice@agency.example --name "Alice Doe" --handle alice
 
@@ -89,15 +89,15 @@ Link this repo to an internal project in the org's store
 
 ```text
 Usage:
-  lore org link [org]
+  lore org link [--org org]
 
 Examples:
   # link to an internal project
-  lore org link agency --project client
+  lore org link --org agency --project client
   # one of the org's own repos
-  lore org link agency --project lore-tools --own
+  lore org link --org agency --project lore-tools --own
   # the default link of a repo with several, checked first
-  lore org link agency --project client2 --default --dry-run
+  lore org link --org agency --project client2 --default --dry-run
 
 Flags:
       --default          the link --to <org> uses when this repo has several
@@ -118,11 +118,11 @@ Choose the org entry for this project on this machine (not committed)
 
 ```text
 Usage:
-  lore org use [entry]
+  lore org use [--entry entry]
 
 Examples:
   # work against the staging store branch here
-  lore org use agency-stag
+  lore org use --entry agency-stag
   # back to automatic resolution
   lore org use --clear
 
@@ -140,13 +140,13 @@ Write the committed .lore/org.yaml (only in the org's own repos)
 
 ```text
 Usage:
-  lore org set <org>
+  lore org set --org <org>
 
 Examples:
   # name the org for every teammate
-  lore org set agency --commit
+  lore org set --org agency --commit
   # the org and its internal project
-  lore org set agency --commit --project lore-tools
+  lore org set --org agency --commit --project lore-tools
 
 Flags:
       --commit           confirm writing the committed .lore/org.yaml
@@ -163,13 +163,13 @@ Adopt the org entry a team suggests in its store, with your identity, and join i
 
 ```text
 Usage:
-  lore org import <url>
+  lore org import --url <url>
 
 Examples:
   # join an org
-  lore org import git@github.com:agency/notes --key human:me@agency.example --name Me --handle me
+  lore org import --url git@github.com:agency/notes --key human:me@agency.example --name Me --handle me
   # the suggested entry name is taken here
-  lore org import git@github.com:agency/notes --key human:me@agency.example --name Me --as agency-2
+  lore org import --url git@github.com:agency/notes --key human:me@agency.example --name Me --as agency-2
 
 Flags:
       --as string       entry name, when the suggested one is taken
@@ -214,11 +214,11 @@ Mark someone as gone (active=false, left_at); actors are never deleted
 
 ```text
 Usage:
-  lore actor deactivate <handle>
+  lore actor deactivate --handle <handle>
 
 Examples:
   # someone left the team
-  lore actor deactivate @carol
+  lore actor deactivate --handle @carol
 
 Flags:
       --json        print the result (or the error) as JSON
@@ -233,29 +233,29 @@ Team profiles are in development for lore 0.1.18 (branch `feat/team-profiles`) a
 
 | Command | Usage | What it does |
 |---|---|---|
-| `lore actor show` | `lore actor show <actor> [--store s] [--json]` | the profile, contacts, company periods and project memberships |
+| `lore actor show` | `lore actor show --id <actor> [--store s] [--json]` | the profile, contacts, company periods and project memberships |
 | `lore actor list` | `lore actor list [--store s] [--status s] [--archived] [--json]` | the roster; archived people only with `--archived` |
-| `lore actor edit` | `lore actor edit <actor> [--display-name t] [--title t] [--timezone tz] [--location t] [--photo-url u] [--bio t] [--birthday d] [--clear f,f]` | change profile fields |
-| `lore actor contact add` | `lore actor contact add <actor> <type> <value> [--label l] [--primary] [--identity] [--note t] [--merge] [--yes]` | add a contact; `--merge` folds a duplicate actor of that email into this one |
-| `lore actor contact edit` | `lore actor contact edit <acn_id> [--value v] [--label l] [--primary] [--no-primary] [--identity] [--no-identity] [--note t]` | change a contact |
-| `lore actor contact remove` | `lore actor contact remove <acn_id> [--reason t]` | remove a contact (restorable from the trash) |
-| `lore actor contact list` | `lore actor contact list [<actor>] [--type t] [--identity] [--json]` | one person's contacts, or everyone's |
+| `lore actor edit` | `lore actor edit --actor <actor> [--display-name t] [--title t] [--timezone tz] [--location t] [--photo-url u] [--bio t] [--birthday d] [--clear f,f]` | change profile fields |
+| `lore actor contact add` | `lore actor contact add --actor <actor> --type <type> --value <value> [--label l] [--primary] [--identity] [--note t] [--merge] [--yes]` | add a contact; `--merge` folds a duplicate actor of that email into this one |
+| `lore actor contact edit` | `lore actor contact edit --id <acn_id> [--value v] [--label l] [--primary] [--no-primary] [--identity] [--no-identity] [--note t]` | change a contact |
+| `lore actor contact remove` | `lore actor contact remove --id <acn_id> [--reason t]` | remove a contact (restorable from the trash) |
+| `lore actor contact list` | `lore actor contact list [--actor <actor>] [--type t] [--identity] [--json]` | one person's contacts, or everyone's |
 | `lore contact-type list` | `lore contact-type list [--retired] [--json]` | built-in and added contact types |
-| `lore contact-type add` | `lore contact-type add <name> --kind email\|handle\|phone\|url\|text [--label t] [--identity] [--url-template t]` | add a contact type |
-| `lore contact-type edit` | `lore contact-type edit <name> [--label t] [--url-template t] [--retire] [--unretire]` | change or retire a contact type |
-| `lore actor status` | `lore actor status <actor> active\|on_leave\|archived\|left [--from d] [--until d]` | change a person's status (leave, back, archive) |
-| `lore actor offboard` | `lore actor offboard <actor> [--on d] [--reason t] [--note t] [--archive] [--yes] [--json]` | someone leaves: preview, then confirm |
-| `lore actor rejoin` | `lore actor rejoin <actor> --type employee\|contractor\|intern\|client_contact [--on d] [--org-role t] [--note t] [--yes] [--json]` | someone comes back: preview, then confirm |
-| `lore actor period list` | `lore actor period list <actor> [--json]` | company periods (stints) |
-| `lore actor period add` | `lore actor period add <actor> --type t --started-on d [--ended-on d] [--org-role t]` | record a stint by hand |
-| `lore actor period edit` | `lore actor period edit <apd_id> [--type t] [--started-on d] [--ended-on d] [--org-role t] [--end-reason t] [--note t]` | fix a stint |
-| `lore project member add` | `lore project member add <project> <actor> --role a,b [--on d] [--note t]` | add someone to a project with roles |
-| `lore project member edit` | `lore project member edit <project> <actor> --role a,b` | set the current membership's roles |
-| `lore project member remove` | `lore project member remove <project> <actor> [--on d] [--reason t]` | end a membership (kept, with its dates) |
-| `lore project member list` | `lore project member list [<project>] [--actor a] [--role r] [--history] [--json]` | members; `--history` adds ended memberships |
+| `lore contact-type add` | `lore contact-type add --name <name> --kind email\|handle\|phone\|url\|text [--label t] [--identity] [--url-template t]` | add a contact type |
+| `lore contact-type edit` | `lore contact-type edit --name <name> [--label t] [--url-template t] [--retire] [--unretire]` | change or retire a contact type |
+| `lore actor status` | `lore actor status --actor <actor> --to active\|on_leave\|archived\|left [--from d] [--until d]` | change a person's status (leave, back, archive) |
+| `lore actor offboard` | `lore actor offboard --actor <actor> [--on d] [--reason t] [--note t] [--archive] [--yes] [--json]` | someone leaves: preview, then confirm |
+| `lore actor rejoin` | `lore actor rejoin --actor <actor> --type employee\|contractor\|intern\|client_contact [--on d] [--org-role t] [--note t] [--yes] [--json]` | someone comes back: preview, then confirm |
+| `lore actor period list` | `lore actor period list --actor <actor> [--json]` | company periods (stints) |
+| `lore actor period add` | `lore actor period add --actor <actor> --type t --started-on d [--ended-on d] [--org-role t]` | record a stint by hand |
+| `lore actor period edit` | `lore actor period edit --period <apd_id> [--type t] [--started-on d] [--ended-on d] [--org-role t] [--end-reason t] [--note t]` | fix a stint |
+| `lore project member add` | `lore project member add --project <project> --actor <actor> --role a,b [--on d] [--note t]` | add someone to a project with roles |
+| `lore project member edit` | `lore project member edit --project <project> --actor <actor> --role a,b` | set the current membership's roles |
+| `lore project member remove` | `lore project member remove --project <project> --actor <actor> [--on d] [--reason t]` | end a membership (kept, with its dates) |
+| `lore project member list` | `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | members; `--history` adds ended memberships |
 | `lore role list` | `lore role list [--retired] [--json]` | built-in and added roles |
-| `lore role add` | `lore role add <name> [--label t] [--description t]` | add a role |
-| `lore role edit` | `lore role edit <name> [--label t] [--description t] [--retire] [--unretire]` | change or retire a role |
+| `lore role add` | `lore role add --name <name> [--label t] [--description t]` | add a role |
+| `lore role edit` | `lore role edit --name <name> [--label t] [--description t] [--retire] [--unretire]` | change or retire a role |
 
 New error codes: `E_CONTACT_TAKEN`, `E_CONTACT_TYPE`, `E_ROLE_UNKNOWN`, `E_STATUS_CHANGE` and `E_PERIOD_OVERLAP`; each has a section in [Troubleshooting](troubleshooting.md#e_contact_taken).
 
@@ -268,13 +268,13 @@ Make a git repo or folder a lore store and attach it (me = your personal store)
 
 ```text
 Usage:
-  lore store init <name> [url]
+  lore store init --name <name> [--url url]
 
 Examples:
   # your personal store, a local folder
-  lore store init me
+  lore store init --name me
   # a team store on git
-  lore store init agency git@github.com:agency/notes
+  lore store init --name agency --url git@github.com:agency/notes
 
 Flags:
       --json                print the result (or the error) as JSON
@@ -290,13 +290,13 @@ List the configured org stores, their clones and (with --links) the link index; 
 
 ```text
 Usage:
-  lore store show [store]
+  lore store show [--store store]
 
 Examples:
   # every store
   lore store show
   # the personal store's push mode
-  lore store show me
+  lore store show --store me
 
 Flags:
       --json    print the result (or the error) as JSON
@@ -311,13 +311,13 @@ Set a store's push mode and history compaction (me, an org store as its admin, o
 
 ```text
 Usage:
-  lore store set <store> <settings...>
+  lore store set --store <store> --settings <settings...>
 
 Examples:
   # batch the personal store's pushes
-  lore store set me push=batch push_every=10m
+  lore store set --store me --settings push=batch --settings push_every=10m
   # compact an org store's history older than 30 days
-  lore store set team compact=on compact_after=30d
+  lore store set --store team --settings compact=on --settings compact_after=30d
 
 Flags:
       --json   print the result (or the error) as JSON
@@ -333,13 +333,13 @@ Squash a store's history older than an age into one snapshot commit (every row i
 
 ```text
 Usage:
-  lore store compact <store>
+  lore store compact --store <store>
 
 Examples:
   # see what would be squashed
-  lore store compact me --before 30d --dry-run
+  lore store compact --store me --before 30d --dry-run
   # compact the personal store
-  lore store compact me --yes
+  lore store compact --store me --yes
 
 Flags:
       --before string            squash history older than this age (e.g. 30d; default: the store's compact_after, else 30d)
@@ -360,11 +360,11 @@ Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>
 
 ```text
 Usage:
-  lore store open <url>
+  lore store open --url <url>
 
 Examples:
   # browse a store
-  lore store open git@github.com:agency/notes
+  lore store open --url git@github.com:agency/notes
 
 Flags:
       --branch string   store branch (default: the entry's branch)
@@ -379,11 +379,11 @@ Delete this machine's clone of a store (refused while it holds unpushed work)
 
 ```text
 Usage:
-  lore store forget <url>
+  lore store forget --url <url>
 
 Examples:
   # drop a clone
-  lore store forget git@github.com:agency/notes
+  lore store forget --url git@github.com:agency/notes
 
 Flags:
       --json   print the result (or the error) as JSON
@@ -420,13 +420,13 @@ List this project's live rows, or print one live file
 
 ```text
 Usage:
-  lore live show [id]
+  lore live show [--id id]
 
 Examples:
   # every live row
   lore live show
   # one live row's file
-  lore live show tsk_31
+  lore live show --id tsk_31
 
 Flags:
       --json   print the result (or the error) as JSON
@@ -521,7 +521,7 @@ Someone deleted `refs/lore/live` on the server. From then on every live write, `
 $ git push -q origin :refs/lore/live && git ls-remote origin
 9b40ce71af28	HEAD
 9b40ce71af28	refs/heads/main
-$ lore task add 'close the books for Q1'
+$ lore task add --title 'close the books for Q1'
 ERROR: [E_READ_ONLY] the remote live ref was deleted or rewritten; lore stopped writing to it (your local copy is kept as refs/lore-backup/live/20261102T100020)
   hint: run `lore live restore` to put your live rows back on the remote
 (exit 23)
@@ -537,7 +537,7 @@ $ lore live restore
 ✓ restored refs/lore/live: 3 rows (left out 0 already landed or purged)
 $ git ls-remote origin refs/lore/live
 05513aa29b78	refs/lore/live
-$ lore task add 'close the books for Q1'
+$ lore task add --title 'close the books for Q1'
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json
 ✓ tsk_54fe…28f2 — close the books for Q1 [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -556,13 +556,13 @@ Remove rows from live for good (leak cleanup): no clone can push them back
 
 ```text
 Usage:
-  lore live purge <ids...>
+  lore live purge --ids <ids...>
 
 Examples:
   # see what a purge would remove
-  lore live purge mem_0c3a --dry-run
+  lore live purge --ids mem_0c3a --dry-run
   # remove a leaked row from live for good
-  lore live purge mem_0c3a --confirm
+  lore live purge --ids mem_0c3a --confirm
 
 Flags:
       --confirm   required: purge removes rows from live for good
@@ -579,14 +579,14 @@ Write live rows to main now (finished rows land; open rows are copied and stay l
 
 ```text
 Usage:
-  lore land [id]
-  lore land <command>
+  lore land [--id id]
+  lore land --id <command>
 
 Examples:
   # see what would land
   lore land run --dry-run
   # land one finished task
-  lore land run tsk_31
+  lore land run --id tsk_31
 
 Available Commands:
   run         Write live rows to main now (finished rows land; open rows are copied and stay live)
@@ -608,12 +608,12 @@ Show every copy of a row (live, this branch, the default branch), which one wins
 
 ```text
 Usage:
-  lore explain <id>
-  lore explain <command>
+  lore explain --id <id>
+  lore explain --id <command>
 
 Examples:
   # why does this row look the way it does
-  lore explain mem_<id>
+  lore explain --id mem_<id>
 
 Available Commands:
   run         Show every copy of a row (live, this branch, the default branch), which one wins and why, and its land decision
@@ -632,11 +632,11 @@ Move any row to another store, keeping its id (the old copy is tombstoned)
 
 ```text
 Usage:
-  lore move <id>
+  lore move --id <id>
 
 Examples:
   # move a row to your personal store
-  lore row move mem_0c3a --to me
+  lore row move --id mem_0c3a --to me
 
 Flags:
       --drop-internal      into a client repo: remove the row's internal metadata values instead of refusing
@@ -689,13 +689,13 @@ Check a pull request body or comment before posting it (agents: always)
 
 ```text
 Usage:
-  lore check pr-body <file>
+  lore check pr-body --file <file>
 
 Examples:
   # a body file
-  lore check pr-body body.md
+  lore check pr-body --file body.md
   # from stdin
-  gh pr view 12 --json body -q .body | lore check pr-body -
+  gh pr view 12 --json body -q .body | lore check pr-body --file -
 
 Flags:
       --explain   print the rule, the source and the matched words of each finding
@@ -805,13 +805,13 @@ Add a new task
 
 ```text
 Usage:
-  lore task add [title...]
+  lore task add [--title title...]
 
 Examples:
   # add a task
-  lore task add "Fix the login redirect" --priority high
+  lore task add --title "Fix the login redirect" --priority high
   # a proposed task, as JSON
-  lore task add "Try a cache" --commitment proposed --json
+  lore task add --title "Try a cache" --commitment proposed --json
 
 Flags:
       --after stringArray        dependencies: <id>[:done|:merged][,…] (default: done in the same repo, merged across repos)
@@ -865,11 +865,11 @@ Edit task fields (only flags you pass are applied)
 
 ```text
 Usage:
-  lore task edit [id]
+  lore task edit [--id id]
 
 Examples:
   # raise the priority
-  lore task edit tsk_<id> --priority urgent
+  lore task edit --id tsk_<id> --priority urgent
 
 Flags:
       --add-assignee stringArray      add an assignee (repeatable); the first one on a task with no lead leads
@@ -987,11 +987,11 @@ Show task details
 
 ```text
 Usage:
-  lore task show <id>
+  lore task show --id <id>
 
 Examples:
   # show as JSON
-  lore task show tsk_<id> --json
+  lore task show --id tsk_<id> --json
 
 Flags:
       --expand        fill in ${var:…}, ${res:…}, ${row:…} and ${env:…} references; secrets stay masked
@@ -1013,11 +1013,11 @@ Mark a task done (with the code that finished it)
 
 ```text
 Usage:
-  lore task done <id>
+  lore task done --id <id>
 
 Examples:
   # done with a lesson
-  lore task done tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"
+  lore task done --id tsk_<id> --pr 412 --lesson "invite tokens expire in 48h"
 
 Flags:
       --children string          open sub-tasks: done | cancel them in the same write (required when there are any)
@@ -1045,11 +1045,11 @@ Record that a done task's work reached the default branch
 
 ```text
 Usage:
-  lore task merged <id>
+  lore task merged --id <id>
 
 Examples:
   # mark merged
-  lore task merged tsk_<id>
+  lore task merged --id tsk_<id>
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
@@ -1067,11 +1067,11 @@ Cancel a task
 
 ```text
 Usage:
-  lore task cancel <id>
+  lore task cancel --id <id>
 
 Examples:
   # cancel with a reason
-  lore task cancel tsk_<id> --reason obsolete
+  lore task cancel --id tsk_<id> --reason obsolete
 
 Flags:
       --children string           open sub-tasks: cancel | done them in the same write (required when there are any)
@@ -1093,11 +1093,11 @@ Add a new mission
 
 ```text
 Usage:
-  lore mission add <title...>
+  lore mission add --title <title...>
 
 Examples:
   # add a mission
-  lore mission add "Ship the invite flow" --target 2026-12-31
+  lore mission add --title "Ship the invite flow" --target 2026-12-31
 
 Flags:
       --approvers stringArray    only these people (@handle or act_…, comma separated) may approve the mission's gates
@@ -1128,11 +1128,11 @@ The whole mission at a glance: ready / waiting / gated / claimed / expired / blo
 
 ```text
 Usage:
-  lore mission status <id>
+  lore mission status --id <id>
 
 Examples:
   # as JSON
-  lore mission status msn_<id> --json
+  lore mission status --id msn_<id> --json
 
 Flags:
       --json        print the result (or the error) as JSON
@@ -1147,11 +1147,11 @@ Create a mission and its tasks from a YAML plan; a re-run adds nothing
 
 ```text
 Usage:
-  lore mission apply <file>
+  lore mission apply --file <file>
 
 Examples:
   # apply a plan file
-  lore mission apply invite.yaml
+  lore mission apply --file invite.yaml
 
 Flags:
       --dry-run                  show what would be written; write nothing
@@ -1201,11 +1201,11 @@ Claim a task (or coordinate a mission) on the signals ref, with a lease
 
 ```text
 Usage:
-  lore task claim <id>
+  lore task claim --id <id>
 
 Examples:
   # claim with owned paths
-  lore task claim tsk_<id> --owns src/routes/invite/
+  lore task claim --id tsk_<id> --owns src/routes/invite/
 
 Flags:
       --coordinate         take a coordinator lease on a parent with open sub-tasks
@@ -1251,11 +1251,11 @@ Renew your claim's lease (alive, not progress)
 
 ```text
 Usage:
-  lore task heartbeat [id]
+  lore task heartbeat [--id id]
 
 Examples:
   # renew one claim
-  lore task heartbeat tsk_<id>
+  lore task heartbeat --id tsk_<id>
 
 Flags:
       --daemon      keep renewing until the claim ends or the parent exits
@@ -1272,11 +1272,11 @@ Give back a claim you hold
 
 ```text
 Usage:
-  lore task release <id>
+  lore task release --id <id>
 
 Examples:
   # release
-  lore task release tsk_<id>
+  lore task release --id tsk_<id>
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
@@ -1293,11 +1293,11 @@ Record a progress note on a task (pushes your work branch)
 
 ```text
 Usage:
-  lore task note <id> <text...>
+  lore task note --id <id> --text <text...>
 
 Examples:
   # a checkpoint note
-  lore task note tsk_<id> "route + loader done, form next"
+  lore task note --id tsk_<id> --text "route + loader done, form next"
 
 Flags:
       --everywhere    with --to me: file the note under everywhere/ (loads in every repo)
@@ -1317,11 +1317,11 @@ Drop the current claim on a task (human override; the holder is fenced out)
 
 ```text
 Usage:
-  lore task revoke <id>
+  lore task revoke --id <id>
 
 Examples:
   # revoke
-  lore task revoke tsk_<id>
+  lore task revoke --id tsk_<id>
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
@@ -1338,7 +1338,7 @@ Assign a task to someone else, dropping any claim (human override); --from reass
 
 ```text
 Usage:
-  lore task reassign [id]
+  lore task reassign [--id id]
 
 Examples:
   # offboarding
@@ -1364,11 +1364,11 @@ Put a gate on a task (agents stop at it until a person approves)
 
 ```text
 Usage:
-  lore gate request <id>
+  lore gate request --id <id>
 
 Examples:
   # request a gate
-  lore gate request tsk_<id>
+  lore gate request --id tsk_<id>
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
@@ -1384,11 +1384,11 @@ Approve a gate (a person on the roster, from the identity file, never an agent)
 
 ```text
 Usage:
-  lore gate approve <id>
+  lore gate approve --id <id>
 
 Examples:
   # approve
-  lore gate approve tsk_<id>
+  lore gate approve --id tsk_<id>
 
 Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
@@ -1406,11 +1406,11 @@ Hold a resource exclusively (same lease, token and renew as a task claim)
 
 ```text
 Usage:
-  lore hold claim <name>
+  lore hold claim --name <name>
 
 Examples:
   # hold a test suite
-  lore hold claim full-suite --ttl 30m
+  lore hold claim --name full-suite --ttl 30m
 
 Flags:
       --json           print the result (or the error) as JSON
@@ -1427,11 +1427,11 @@ Release a resource you hold
 
 ```text
 Usage:
-  lore hold release <name>
+  lore hold release --name <name>
 
 Examples:
   # release a hold
-  lore hold release full-suite
+  lore hold release --name full-suite
 
 Flags:
       --json   print the result (or the error) as JSON
@@ -1446,11 +1446,11 @@ Leave a handoff for someone (shows in their inbox)
 
 ```text
 Usage:
-  lore handoff add [text...]
+  lore handoff add [--body text...]
 
 Examples:
   # hand work over
-  lore handoff add --for @agent-frontend --task tsk_31 "form is half done"
+  lore handoff add --for @agent-frontend --task tsk_31 --body "form is half done"
 
 Flags:
       --body string              the handoff text (instead of the positional text)
@@ -1504,7 +1504,7 @@ Flags:
 |---|---|
 | `--to <store>\|<store>/<folder>\|me` | which store the row is written to: a name from `.lore/stores.yaml`, one folder of it, or your personal store (default: this repo) |
 
-Whether a row is live (seen by everyone at once, whatever branch they are on) depends on its kind, not on a flag: tasks, missions, handoffs and comments are live; rules, decisions and memories travel with the code (`live.defaults.<kind>` below). To send one rule to `main` now, use `lore sync promote <id> --to main`.
+Whether a row is live (seen by everyone at once, whatever branch they are on) depends on its kind, not on a flag: tasks, missions, handoffs and comments are live; rules, decisions and memories travel with the code (`live.defaults.<kind>` below). To send one rule to `main` now, use `lore sync promote --ids <id> --to main`.
 
 ## Environment variables
 

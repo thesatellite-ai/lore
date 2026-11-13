@@ -596,7 +596,7 @@ func TestReposHistory(t *testing.T) {
 		t.Errorf("with the default setup in the trash: %s (%s), want none", name, why)
 	}
 	d := m.Lore(t, "", "doctor", "--all")
-	if d.Code != 1 || !strings.Contains(d.Stdout, "folders.reachable") || !strings.Contains(d.Stdout, "fix: lore setup edit side --default") {
+	if d.Code != 1 || !strings.Contains(d.Stdout, "folders.reachable") || !strings.Contains(d.Stdout, "fix: lore setup edit --name side --default") {
 		t.Errorf("doctor --all with the default trashed: %s", d)
 	}
 	m.CheckMachine(t, "history/default trashed", Gone{Trashed: []string{"dflt"}})

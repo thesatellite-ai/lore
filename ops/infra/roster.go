@@ -73,7 +73,7 @@ func RosterOps(r Roster) []op.Entry {
 			}),
 		op.Define(op.Spec{Name: OpActorDeactivate, Summary: "Mark someone as gone (active=false, left_at); actors are never deleted", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors:   append([]errs.Code{errs.InvalidInput}, writeErrors...),
-			Examples: []op.Example{{Title: "someone left the team", CLI: "lore actor deactivate @carol", Want: "deactivated"}}},
+			Examples: []op.Example{{Title: "someone left the team", CLI: "lore actor deactivate --handle @carol", Want: "deactivated"}}},
 			func(ctx context.Context, in ActorDeactivateIn) (ActorDeactivateOut, error) {
 				return actorDeactivate(ctx, r, in)
 			}),
@@ -166,7 +166,7 @@ func (o ActorDeactivateOut) Text() string {
 		who = o.ID
 	}
 	return work.Success + " " + o.ID + " " + o.Name + " deactivated (kept on the roster; old rows still resolve)\n" +
-		"  to end their projects and stint too: lore actor offboard " + who + "\n"
+		"  to end their projects and stint too: lore actor offboard --actor " + who + "\n"
 }
 
 // ActorDeleteIn is the input of actor.delete (the id is optional: the
@@ -182,7 +182,7 @@ type ActorDeleteOut struct{}
 func actorDeleteOp() op.Entry {
 	return op.Define(op.Spec{Name: OpActorDelete, Summary: "Refused: actors are never deleted (use `lore actor deactivate`)", Permission: op.PermWrite, Access: op.AccessRead,
 		Errors:   []errs.Code{errs.Refused},
-		Examples: []op.Example{{Title: "someone left: mark them gone instead", CLI: "lore actor deactivate @carol", Want: "deactivated"}}},
+		Examples: []op.Example{{Title: "someone left: mark them gone instead", CLI: "lore actor deactivate --handle @carol", Want: "deactivated"}}},
 		func(_ context.Context, in ActorDeleteIn) (ActorDeleteOut, error) {
 			return ActorDeleteOut{}, actorDeleteRefusal(in.ID)
 		})

@@ -75,7 +75,7 @@ func TestKindNameRouteCollision(t *testing.T) {
 	for _, f := range out.Findings {
 		if f.Check == "kind_route_collision" {
 			n++
-			if f.Kind != "lint" || !strings.Contains(f.Detail, "lore resource kind rename lint") {
+			if f.Kind != "lint" || !strings.Contains(f.Detail, "lore resource kind rename --id lint") {
 				t.Errorf("finding %+v", f)
 			}
 		}

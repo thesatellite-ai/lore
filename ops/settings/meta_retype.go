@@ -156,10 +156,10 @@ func (o ops) metaRetype(ctx context.Context, k located, in MetaEditIn) (RowOut, 
 		mw := engine.MetaWrite{ID: c.r.Row.ID, JSON: []meta.Term{{KeyID: kid, Value: string(c.to)}}}
 		if _, err = o.env.Update(engine.WithMeta(bctx, mw), engine.Ref{ID: c.r.Row.ID}, map[string]value.Value{}); err != nil {
 			return RowOut{}, errs.Prefix("meta edit --type: the key is "+nt.String()+" now; stopped after "+strconv.Itoa(i)+" of "+strconv.Itoa(len(convs))+
-				" rows (batch "+bid.String()+"; see: lore batch show "+bid.String()+", or lore batch undo "+bid.String()+")", err)
+				" rows (batch "+bid.String()+"; see: lore batch show --id "+bid.String()+", or lore batch undo --id "+bid.String()+")", err)
 		}
 	}
-	fmt.Fprintf(&b, "%s: %s converted in batch %s; id kept (see: lore batch show %s)\n", name, plural.Count(len(convs), "value"), bid, bid)
+	fmt.Fprintf(&b, "%s: %s converted in batch %s; id kept (see: lore batch show --id %s)\n", name, plural.Count(len(convs), "value"), bid, bid)
 	return RowOut{ID: k.Row.ID.String(), Store: string(k.Src), Batch: bid.String(), IDs: rowIDs, Human: b.String()}, nil
 }
 
@@ -182,7 +182,7 @@ func (o ops) retypeAllowed(ctx context.Context, k located, name string, old, nt 
 		// G-META-7: allowed values are val_ rows named in the old type; a
 		// conversion would have to rename and re-match every one of them.
 		return errs.New(errs.MetaType, fmt.Sprintf("%s has %d allowed values; a key with allowed values keeps its type", name, len(vals))).
-			WithHint("remove them first (lore meta edit " + name + " --remove-value <v>), or add a new key of the new type")
+			WithHint("remove them first (lore meta edit --id " + name + " --remove-value <v>), or add a new key of the new type")
 	}
 	rules := meta.Rules{Pattern: text(k.Row, mPattern), Min: text(k.Row, mMin), Max: text(k.Row, mMax)}
 	if err := meta.CheckRuleDefs(nt, rules); err != nil {

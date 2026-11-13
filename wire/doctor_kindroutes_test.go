@@ -47,7 +47,7 @@ func TestDoctorKindRoutes(t *testing.T) {
 	for i, n := range []string{"lint", "report"} {
 		f := got[i]
 		if f.Level != DoctorWarning || f.Check != DoctorCheckKindRoute || !strings.Contains(f.Message, "/v1/resources/"+n+" runs lore resource "+n) ||
-			f.Fix != "lore resource kind rename "+n+" <new_name>" {
+			f.Fix != "lore resource kind rename --id "+n+" --new-name <new_name>" {
 			t.Errorf("finding %+v", f)
 		}
 	}

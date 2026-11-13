@@ -32,7 +32,7 @@ Outside any company, `lore identity set` saves a fallback identity in `identity:
 <!-- example: people#identity only=2,3,4,5 -->
 ```console
 # alice, in ~
-$ lore identity set alice@example.com
+$ lore identity set --identity alice@example.com
 ✓ identity persisted: alice@example.com
   file: ~/.lore/config.yaml (identity:)
 
@@ -96,7 +96,7 @@ Then each new person runs one command with their own email, from any folder: no 
 <!-- example: people#org-import -->
 ```console
 # bob, in ~
-$ lore org import git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
+$ lore org import --url git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
 lore: pushed store agency/org: commit 601d285 to branch main
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 This adds to ~/.lore/config.yaml:
@@ -155,14 +155,14 @@ In the agency's own repos (not a client's), you can commit `.lore/org.yaml`, a o
 <!-- example: people#org-set -->
 ```console
 # alice, in tools
-$ lore org set agency --commit
+$ lore org set --org agency --commit
 ✓ wrote ~/work/tools/.lore/org.yaml (org agency)
   commit it with git so teammates resolve the same org
 $ cat .lore/org.yaml
 org: agency
 
 # alice, in website
-$ lore org set agency --commit
+$ lore org set --org agency --commit
 ERROR: [E_INVALID_INPUT] refusing to write .lore/org.yaml: .lore/org.yaml names agency, but no remote (github.com/client/website) matches its own: patterns; ignored (only an org's own repos may name it)
   hint: only an org's own repos (matching its own: patterns) may name it; use `lore org use` for a machine-only choice
 (exit 20)
@@ -181,7 +181,7 @@ lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 2 row file(s) in ~/work/website/.lore/data
 ✓ mem_54fe…28f2
   scope: [master]
-$ lore move mem_54fe…28f2 --to agency --yes
+$ lore move --id mem_54fe…28f2 --to agency --yes
 lore: pushed store agency: commit 9b40ce7 to branch main
 lore: pushed store agency: commit 05513aa to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
@@ -197,12 +197,12 @@ If the original was already pushed or committed, the client may have seen it; se
 
 ## Step 7 — Look inside a store, or drop your copy: `lore store open` and `forget`
 
-Lore keeps one clone of each store, a plain git clone at `~/.lore/stores/<owner>/<repo>` (lore's own lock and stamps sit in its `.git/lore/`). `lore store open` fetches it and prints where it is, so you can browse the files; another branch of the store gets its own clone, `<repo>@<branch>`. To use a clone you made yourself, `lore store use <path>`. `lore store forget` deletes this machine's copy of a store (never a clone of your own). The next command that needs it downloads it again. Both take the store's url, or the name this repo attaches it under (a name from `.lore/stores.yaml`, or `me` for your personal store); a name this repo does not attach is `E_NOT_FOUND`:
+Lore keeps one clone of each store, a plain git clone at `~/.lore/stores/<owner>/<repo>` (lore's own lock and stamps sit in its `.git/lore/`). `lore store open` fetches it and prints where it is, so you can browse the files; another branch of the store gets its own clone, `<repo>@<branch>`. To use a clone you made yourself, `lore store use --path <path>`. `lore store forget` deletes this machine's copy of a store (never a clone of your own). The next command that needs it downloads it again. Both take the store's url, or the name this repo attaches it under (a name from `.lore/stores.yaml`, or `me` for your personal store); a name this repo does not attach is `E_NOT_FOUND`:
 
 <!-- example: people#store-open-and-forget -->
 ```console
 # alice, in ~
-$ lore store open git@github.com:agency/notes
+$ lore store open --url git@github.com:agency/notes
 ✓ ~/.lore/stores/agency/notes on main (dfd8dc87ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
 $ ls ~/.lore/stores/agency/notes
 README.md
@@ -211,7 +211,7 @@ lore-store.yaml
 org
 
 # bob, in ~
-$ lore store forget git@github.com:agency/notes
+$ lore store forget --url git@github.com:agency/notes
 ✓ forgot git@github.com:agency/notes (removed ~/.lore/stores/agency/notes; the next command that needs it clones it again)
 ```
 <!-- /example -->
@@ -262,7 +262,7 @@ Alice batches her personal store. Her two notes wait on her machine, together wi
 <!-- example: store-push#batch -->
 ```console
 # alice, in website
-$ lore store set me push=batch push_every=10m
+$ lore store set --store me --settings push=batch --settings push_every=10m
 me: push batch every 10m, compact off
   set in    ~/.lore/config.yaml (personal:)
   epoch     0
@@ -277,7 +277,7 @@ $ lore memory add --body 'I prefer short standups' --to me
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_54fe…28f2.json (store me)
 ✓ mem_54fe…28f2 [me]
   scope: [master]
-$ lore store show me
+$ lore store show --store me
 me: push batch every 10m, compact off
   at        git@github.com:alice/lore-me
   used by   your setup agency (one personal store per person: any other setup of yours shares it)
@@ -304,7 +304,7 @@ With `push=manual` nothing leaves the machine until `lore sync`. `lore doctor` a
 <!-- example: store-push#manual -->
 ```console
 # alice, in website
-$ lore store set me push=manual
+$ lore store set --store me --settings push=manual
 me: push manual, compact off
   set in    ~/.lore/config.yaml (personal:)
   epoch     0
@@ -316,23 +316,23 @@ $ lore doctor | grep 'store me:'
 
 ### Where the setting lives, and who may change it
 
-- **Your personal store:** in the `personal:` block of `~/.lore/config.yaml` (keys `push`, `push_every`, `compact`, `compact_after`). `lore store set me …` writes it; `lore config set personal.push batch` works too, and `lore config check` checks the values.
+- **Your personal store:** in the `personal:` block of `~/.lore/config.yaml` (keys `push`, `push_every`, `compact`, `compact_after`). `lore store set --store me --settings …` writes it; `lore config set --key personal.push --value batch` works too, and `lore config check` checks the values.
 - **An org's store:** in the store's own `lore-store.yaml`, so every member gets the same setting. Only an admin of the org may change it: a machine whose `~/.lore/config.yaml` holds an admin setup of that org (`setups:` with `kind: admin` and `org: <org name>`, see [Guided setup](guided-setup.md)). A member cannot override it on their own machine.
-- **A store attached in `.lore/stores.yaml`** (`lore store init` or `lore store add`) that belongs to no org: in the store's own `lore-store.yaml` too, so every clone of it gets the same setting. There is no admin to ask, so anyone who can push to the store may change it with `lore store set <store> …`, and compact it. If the store holds an org's `lore-org.yaml` (it is an org's store that this machine attached by its address without `lore org import`), it is that org's store and only the org's admin may change it.
+- **A store attached in `.lore/stores.yaml`** (`lore store init` or `lore store add`) that belongs to no org: in the store's own `lore-store.yaml` too, so every clone of it gets the same setting. There is no admin to ask, so anyone who can push to the store may change it with `lore store set --store <store> --settings …`, and compact it. If the store holds an org's `lore-org.yaml` (it is an org's store that this machine attached by its address without `lore org import`), it is that org's store and only the org's admin may change it.
 
 The admin sets it once and every member's next sync picks it up:
 
 <!-- example: store-push#org-settings -->
 ```console
 # alice, in website
-$ lore store set agency push=batch push_every=15m
+$ lore store set --store agency --settings push=batch --settings push_every=15m
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin, which this machine is)
   epoch     0
   pushed    2026-11-02T10:01:05Z
 
 # bob, in website
-$ lore sync >/dev/null && lore store show agency
+$ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin)
   epoch     0
@@ -340,7 +340,7 @@ agency: push batch every 15m, compact off
 ```
 <!-- /example -->
 
-`lore store show <store>` prints a store's settings; `--json` gives them under `"push"`. With no store name, `lore store show` lists the stores of your orgs as before.
+`lore store show --store <store>` prints a store's settings; `--json` gives them under `"push"`. With no store name, `lore store show` lists the stores of your orgs as before.
 
 The values `lore store set` takes:
 
@@ -365,19 +365,19 @@ A value out of range is `E_INVALID_INPUT` (exit 20):
 <!-- example: store-push#refused -->
 ```console
 # alice, in website
-$ lore store set repo push=batch
+$ lore store set --store repo --settings push=batch
 ERROR: [E_REFUSED] store set: `repo` is the code repository's own .lore/data; lore never pushes or rewrites a code repo's history, so push and compact settings do not apply there
   hint: you push the code repo with your code; `lore live compact` compacts its live rows
 (exit 23)
 
 # bob, in website
-$ lore store set agency push=batch
+$ lore store set --store agency --settings push=batch
 ERROR: [E_REFUSED] store set: store agency belongs to org agency and only an admin of agency may change its shared settings; this machine has no admin setup of agency
   hint: ask the org admin to run `lore store set agency …`; a member cannot override the org's setting locally
 (exit 23)
 
 # alice, in website
-$ lore store set me push_every=30s
+$ lore store set --store me --settings push_every=30s
 ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
   hint: e.g. compact=on compact_after=30d; push_every at least 1m, compact_after at least 1d
 (exit 20)
@@ -386,7 +386,7 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 
 ### Folding old history: `lore store compact`
 
-`lore store compact <store>` turns every commit older than the cutoff into **one** snapshot commit, `lore: snapshot of the store history before <date>`, keeps the later commits as they were, and adds a commit `lore: compact store history (epoch N)`. Every note is kept; only the list of old commits is gone. The **epoch** is a counter in `lore-store.yaml` that goes up by one with each compaction, so every copy of the store can tell that the history was rewritten.
+`lore store compact --store <store>` turns every commit older than the cutoff into **one** snapshot commit, `lore: snapshot of the store history before <date>`, keeps the later commits as they were, and adds a commit `lore: compact store history (epoch N)`. Every note is kept; only the list of old commits is gone. The **epoch** is a counter in `lore-store.yaml` that goes up by one with each compaction, so every copy of the store can tell that the history was rewritten.
 
 - The cutoff is `--before` (such as `--before 30d`), else the store's `compact_after`, else `30d`.
 - `--dry-run` says what would change and changes nothing.
@@ -398,13 +398,13 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 <!-- example: store-push#compact only=2,3,4 -->
 ```console
 # alice, in website
-$ lore store compact agency --before 30d --dry-run
+$ lore store compact --store agency --before 30d --dry-run
 would squash 7 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 7 row file(s); epoch 0 → 1
-$ lore store compact agency --before 30d
+$ lore store compact --store agency --before 30d
 ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 7 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore store compact agency --before 30d --yes
+$ lore store compact --store agency --before 30d --yes
 ✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae476bd6)
   pushed store agency: commit 9b40ce7 to branch main
 ```
@@ -415,7 +415,7 @@ With `compact=on`, lore compacts by itself, at most once a day per store, inside
 <!-- example: store-push#auto-compact -->
 ```console
 # alice, in website
-$ lore store set me compact=on compact_after=90d
+$ lore store set --store me --settings compact=on --settings compact_after=90d
 me: push manual, compact on after 90d
   set in    ~/.lore/config.yaml (personal:)
   epoch     0
@@ -478,18 +478,18 @@ Run `lore identity show` in a repo of no org afterwards: it still shows your top
 
 ## Pitfalls
 
-- **The identity key is an email, never a name.** `lore identity set "Alice Doe"` is refused (`E_INVALID_INPUT`), because the same person on another machine with another spelling would become a second person. To keep a display name, pass the email too: `lore identity set "Alice Doe <alice@example.com>"` or `lore identity set "Alice Doe" --key human:alice@example.com`.
+- **The identity key is an email, never a name.** `lore identity set --identity "Alice Doe"` is refused (`E_INVALID_INPUT`), because the same person on another machine with another spelling would become a second person. To keep a display name, pass the email too: `lore identity set --identity "Alice Doe <alice@example.com>"` or `lore identity set --identity "Alice Doe" --key human:alice@example.com`.
 - **`lore org import` asks before risky defaults.** A suggested entry that sends rows into client repos, or a pattern that matches a whole host, needs your yes. `--yes` accepts it without a prompt, so read the printed entry first.
-- **`lore org set` is refused in client repos.** Use `lore org use <org>` there: it is a choice for your machine only and is never committed.
+- **`lore org set` is refused in client repos.** Use `lore org use --entry <org>` there: it is a choice for your machine only and is never committed.
 - **`lore move` is refused for agents with `--yes`.** Moving a note is a person's decision.
-- **`lore store forget` refuses while the copy holds work that is not pushed yet.** Run `lore sync` first. The one exception is a store whose repo was deleted and made again: there everything is unpushed, so forget asks instead, and `--yes` drops the old copy (`lore store push <store> --restore` puts it back instead). Like the other store commands, forget accepts `--yes`.
+- **`lore store forget` refuses while the copy holds work that is not pushed yet.** Run `lore sync` first. The one exception is a store whose repo was deleted and made again: there everything is unpushed, so forget asks instead, and `--yes` drops the old copy (`lore store push --store <store> --restore` puts it back instead). Like the other store commands, forget accepts `--yes`.
 - **A batched note is not on the remote yet.** In `batch` or `manual` mode your teammates and your other machines see a note only after the batch is pushed. Run `lore sync` before you switch machines.
 - **Never edit the folder `lore store open` made.** Lore writes the store branch itself; your edits there are not picked up.
 - **`lore store list` shows where each store comes from.** The SOURCE column says `stores.yaml` (attached by this repo), `org` (brought by the repo's org) or `personal`. A store url from the org is printed as `<redacted>` where output must name nothing (no terminal, CI); its visibility is still worked out from the real url. A name the org already uses cannot be taken again by `lore store init` or `lore store add` (`E_INVALID_INPUT`).
-- **Writing an org store's url into `.lore/stores.yaml` asks first.** The org link keeps the org's store urls out of the repo. `lore store add <name> <url> --folder <folder>` (also `store init` and `store set-url`) with a url that is one of your org's stores (any org in `~/.lore/config.yaml`, with or without an identity, and any spelling of its url: ssh or https, with or without `.git` or a trailing slash) would commit that url, visible to everyone who can read the repo, so lore asks at a terminal and, without one, stops with `E_NEEDS_CONFIRM` (exit 26) before writing anything; rerun with `--yes` to write it. In a client repo the same commands ask for any store url, because the client reads the file. A write to an org store folder this repo does not attach names this command with `--yes` on stderr.
+- **Writing an org store's url into `.lore/stores.yaml` asks first.** The org link keeps the org's store urls out of the repo. `lore store add --name <name> --url <url> --folder <folder>` (also `store init` and `store set-url`) with a url that is one of your org's stores (any org in `~/.lore/config.yaml`, with or without an identity, and any spelling of its url: ssh or https, with or without `.git` or a trailing slash) would commit that url, visible to everyone who can read the repo, so lore asks at a terminal and, without one, stops with `E_NEEDS_CONFIRM` (exit 26) before writing anything; rerun with `--yes` to write it. In a client repo the same commands ask for any store url, because the client reads the file. A write to an org store folder this repo does not attach names this command with `--yes` on stderr.
 - **A store url never keeps a login in `.lore/stores.yaml`.** `lore store init`, `add` and `set-url` drop the user part of an `https://user@host/…` url before writing it, because git hosts treat that user as a token, and refuse a url with a password or token in it (`E_URL_CREDENTIALS`). An ssh login such as `git@github.com:…` is kept.
 - **0.1.18 stores are git repos or folders.** A url with another scheme (`s3://`, `postgres://`, `lore://`) is refused with `E_STORE_SCHEME` before anything is written: use a git url, the path of a bare git repository on this machine (`/srv/git/notes.git`, or on Windows `C:\git\notes.git` / `C:/git/notes.git`) or `file:///<absolute path>` for a folder. A path that does not exist is `E_BAD_PATH`, naming both spellings; a `file://` url (or path) of a bare git repository is that repository as a git store, as `git clone` reads it.
-- **`lore store init me` works anywhere.** It makes your personal store and records it in `~/.lore/config.yaml`, so it needs no repo; every other `lore store` command runs inside a repo.
+- **`lore store init --name me` works anywhere.** It makes your personal store and records it in `~/.lore/config.yaml`, so it needs no repo; every other `lore store` command runs inside a repo.
 
 ## Related
 

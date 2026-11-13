@@ -8,8 +8,8 @@ import (
 
 // sqlShortcutExample is the Example of the bare `lore sql` group, v0.1.17's
 // text (saas/cmd/cli sql_shortcut.go): the shortcut and its long form.
-const sqlShortcutExample = `  lore sql "SELECT name, ip FROM res_server"
-  lore sql run "SELECT name, ip FROM res_server"`
+const sqlShortcutExample = `  lore sql --query "SELECT name, ip FROM res_server"
+  lore sql run --query "SELECT name, ip FROM res_server"`
 
 // sqlSourcesHelp explains the `source` column of the <table>_all views,
 // including the one case where it differs from lists and search: two

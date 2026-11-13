@@ -1,14 +1,14 @@
 package app
 
-// edit.go — `lore edit <id>` and `lore path <id>` (alias `lore open`), the
+// edit.go — `lore edit --id <id>` and `lore path <id>` (alias `lore open`), the
 // plain-files commands (D2, D3):
 //
 //	lore path <id>   ─► row path (shortcut; one absolute path, --json {id, table, path, store, folder})
-//	lore edit <id>   ─► row markdown (the view) ─► temp file ─► $VISUAL / $EDITOR / vi
+//	lore edit --id <id>   ─► row markdown (the view) ─► temp file ─► $VISUAL / $EDITOR / vi
 //	                 ─► row edit --file <temp> (the normal write path, its prompts and output)
 //	                 ─► success / no change: temp file removed
 //	                    refused: the error (file:line), the edited text kept, its path printed
-//	lore edit <id> --file <view.md> ─► row edit --file (no editor)
+//	lore edit --id <id> --file <view.md> ─► row edit --file (no editor)
 //
 // Why a host command around two operations: the editor needs this
 // process's terminal, and the write must be the ordinary row.edit run, so
@@ -44,6 +44,7 @@ const (
 	// editTempPattern names the temporary view (os.CreateTemp: * is random).
 	editTempPattern = "lore-edit-*.md"
 	flagFile        = "file"
+	flagID          = "id"
 	flagYes         = "yes"
 )
 
@@ -51,7 +52,7 @@ const (
 // without the row operations adds neither.
 func (h *host) mountEdit(root *cobra.Command) {
 	if p := find(root, opsrow.Noun, opsrow.PathVerb); p != nil {
-		c := shortcutOf(p, opsrow.PathVerb+" <id>", "Print the file path of any row by id (alias: open)")
+		c := shortcutOf(p, opsrow.PathVerb, "Print the file path of any row by id (alias: open)")
 		c.Aliases = []string{opsrow.OpenAlias}
 		root.AddCommand(c)
 	}
@@ -62,32 +63,36 @@ func (h *host) mountEdit(root *cobra.Command) {
 	root.AddCommand(h.editCommand(target))
 }
 
-// editCommand is `lore edit <id> [--file f] [--yes] [--json]`.
+// editCommand is `lore edit --id <id> [--file f] [--yes] [--json]`.
 func (h *host) editCommand(target *cobra.Command) *cobra.Command {
-	var file string
+	var file, id string
 	var yes, asJSON bool
 	c := &cobra.Command{
-		Use:   opsrow.EditVerb + " <id>",
+		Use:   opsrow.EditVerb + " --" + flagID + " <id>",
 		Short: "Edit any row in your editor as Markdown (fields as frontmatter, long text as body)",
 		Long: "Opens the row in $VISUAL, else $EDITOR, else vi, as Markdown: every field as YAML frontmatter, the\n" +
 			"row's long text (body, content or description) below it. Save and close the editor: lore checks\n" +
 			"the row like any write (fields, references, secret scan, policy), stamps it and writes it where the\n" +
 			"row lives (commit and push as any write there). Nothing changed: nothing is written.\n" +
 			"A refused edit names the file and line, keeps your text in a file and prints its path.\n" +
-			"The row file stays JSON: `lore path <id>` prints it, and editing it directly works too.",
-		Example: "  lore edit tsk_01a1cf02b365751bac5520b3d393eef1\n" +
-			"  EDITOR=\"code --wait\" lore edit mem_01a1cf02b365751bac5520b3d393eef1\n" +
-			"  lore edit tsk_01a1cf02b365751bac5520b3d393eef1 --file kept.md   # write back a kept or prepared view, no editor\n" +
-			"  lore row markdown tsk_01a1cf02b365751bac5520b3d393eef1           # the view, to edit with another tool",
+			"The row file stays JSON: `lore path --id <id>` prints it, and editing it directly works too.",
+		Example: "  lore edit --id tsk_01a1cf02b365751bac5520b3d393eef1\n" +
+			"  EDITOR=\"code --wait\" lore edit --id mem_01a1cf02b365751bac5520b3d393eef1\n" +
+			"  lore edit --id tsk_01a1cf02b365751bac5520b3d393eef1 --file kept.md   # write back a kept or prepared view, no editor\n" +
+			"  lore row markdown --id tsk_01a1cf02b365751bac5520b3d393eef1           # the view, to edit with another tool",
+		// The id is --id (U-4); one positional id stays a quiet alias.
 		Args: func(_ *cobra.Command, args []string) error {
-			if len(args) == 1 {
+			if (len(args) == 1) != (id != "") {
 				return nil
 			}
-			return errs.New(errs.InvalidInput, fmt.Sprintf("edit: want one row id, got %d argument(s)", len(args))).
-				WithHint("lore edit <id> (e.g. lore edit tsk_01a1cf02b365751bac5520b3d393eef1); `lore task list` or `lore search <words>` finds an id")
+			return errs.New(errs.InvalidInput, fmt.Sprintf("edit: want one row id, got %d", len(args)+min(len(id), 1))).
+				WithHint("lore edit --id <id> (e.g. lore edit --id tsk_01a1cf02b365751bac5520b3d393eef1); `lore task list` or `lore search --query <words>` finds an id")
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pass := []string{args[0]}
+			if id == "" {
+				id = args[0]
+			}
+			pass := []string{"--" + flagID, id}
 			if yes {
 				pass = append(pass, "--"+flagYes)
 			}
@@ -97,9 +102,10 @@ func (h *host) editCommand(target *cobra.Command) *cobra.Command {
 			if file != "" {
 				return forward(target)(cmd, append(pass, "--"+flagFile, file))
 			}
-			return h.editInEditor(cmd, target, args[0], pass)
+			return h.editInEditor(cmd, target, id, pass)
 		},
 	}
+	c.Flags().StringVar(&id, flagID, "", "the row id (any kind: tsk_, mem_, rul_, …)")
 	c.Flags().StringVar(&file, flagFile, "", "write back this Markdown view without opening an editor (a view kept by a refused edit, or one made with lore row markdown)")
 	c.Flags().BoolVar(&yes, flagYes, false, "answer yes to a confirmation the write asks without a terminal (a secret finding)")
 	c.Flags().BoolVar(&asJSON, cli.FlagJSON, false, "print the result (or the error) as JSON")
@@ -180,7 +186,7 @@ func editorCommand(terminal func() bool) (string, error) {
 	}
 	if !terminal() {
 		return "", errs.New(errs.InvalidInput, "edit: no editor: $VISUAL and $EDITOR are not set, and without a terminal "+defaultEditor+" cannot run").
-			WithHint("set EDITOR (for example EDITOR=\"code --wait\"), or write a view back without an editor: lore row markdown <id> > view.md, edit it, lore edit <id> --file view.md")
+			WithHint("set EDITOR (for example EDITOR=\"code --wait\"), or write a view back without an editor: lore row markdown <id> > view.md, edit it, lore edit --id <id> --file view.md")
 	}
 	return defaultEditor, nil
 }
@@ -216,5 +222,5 @@ func keepNote(cmd *cobra.Command, id, path string) {
 	if a, err := filepath.Abs(path); err == nil {
 		abs = a
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "your edited text is kept in %s\n  fix it there, then write it back: lore edit %s --file %s\n", abs, id, abs)
+	fmt.Fprintf(cmd.ErrOrStderr(), "your edited text is kept in %s\n  fix it there, then write it back: lore edit --id %s --file %s\n", abs, id, abs)
 }

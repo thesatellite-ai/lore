@@ -187,7 +187,7 @@ func (c Cut) Text() string {
 	for _, e := range c.Entries {
 		fmt.Fprintf(&b, "  %s  %s\n", e.ID, e.Reason)
 	}
-	b.WriteString("fetch any of them with `lore show <id>`\n")
+	b.WriteString("fetch any of them with `lore show --id <id>`\n")
 	return b.String()
 }
 

@@ -7,7 +7,7 @@
 | Option | Where the notes are | Who sees them | Travels with git | Set up with |
 |---|---|---|---|---|
 | **Mode A** (the default) | one small file per note in `.lore/data`, committed with your code; lore's fast index of them, the repo cache under `~/.lore/cache/repo/`, stays on your machine and is never in the repo | everyone who can read the repo | yes, with every commit, branch and pull request | `lore init` |
-| **Folder store** (replaces Mode B) | one folder on your machine, for example `~/stores/client2`, attached in each repo; notes written `--to` it, everything else stays in the repo | only you, on this machine | no: the store folder is not committed anywhere | `lore store init <name> file://<path>` once, `lore store add <name> <url>` in each other repo |
+| **Folder store** (replaces Mode B) | one folder on your machine, for example `~/stores/client2`, attached in each repo; notes written `--to` it, everything else stays in the repo | only you, on this machine | no: the store folder is not committed anywhere | `lore store init --name <name> --url file://<path>` once, `lore store add --name <name> --url <url>` in each other repo |
 | **Store group** | one internal project in your company's store (a separate notes-only repo), linked from each repo | everyone at your company who can open the store | yes, through the store repo, which lore pushes by itself | `lore store init`, then `lore org link` in each repo |
 
 A few words first:

@@ -49,20 +49,20 @@ func recurOps(o ops) []op.Entry {
 	w := append(slices.Clone(work.WriteErrors), errs.Recur, errs.Unsupported)
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpRecurShow, Examples: []op.Example{{Title: "the rule and next dates", CLI: "lore task recur show tsk_<id>", Want: "every"}}, Summary: "Show a recurring task's rule, series and next dates",
+			Name: OpRecurShow, Examples: []op.Example{{Title: "the rule and next dates", CLI: "lore task recur show --id tsk_<id>", Want: "every"}}, Summary: "Show a recurring task's rule, series and next dates",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: append(slices.Clone(work.ReadErrors), errs.Recur),
 		}, o.recurShow),
 		op.Define(op.Spec{
 			Name: OpRecurEdit, Summary: "Change the recurrence rule (this and later instances)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
-			Examples: []op.Example{{Title: "count from completion", CLI: `lore task recur edit tsk_<id> "every! 30 days"`, Want: "recurs"}},
+			Examples: []op.Example{{Title: "count from completion", CLI: `lore task recur edit --id tsk_<id> --rule "every! 30 days"`, Want: "recurs"}},
 		}, o.recurEdit),
 		op.Define(op.Spec{
-			Name: OpRecurSkip, Examples: []op.Example{{Title: "skip this week", CLI: "lore task recur skip tsk_<id>", Want: "tsk_"}}, Summary: "Close this instance as skipped and create the next one",
+			Name: OpRecurSkip, Examples: []op.Example{{Title: "skip this week", CLI: "lore task recur skip --id tsk_<id>", Want: "tsk_"}}, Summary: "Close this instance as skipped and create the next one",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(w, errs.OpenChildren),
 		}, o.recurSkip),
 		op.Define(op.Spec{
-			Name: OpRecurStop, Examples: []op.Example{{Title: "end the series", CLI: "lore task recur stop tsk_<id> --yes", Want: "stopped"}}, Summary: "Stop the series: no further instances (this one stays)",
+			Name: OpRecurStop, Examples: []op.Example{{Title: "end the series", CLI: "lore task recur stop --id tsk_<id> --yes", Want: "stopped"}}, Summary: "Stop the series: no further instances (this one stays)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: w,
 			Confirm: op.ConfirmRule{Always: true},
 		}, o.recurStop).Asks(o.recurStopQuestion),
@@ -82,7 +82,7 @@ func (o ops) recurring(ctx context.Context, raw string) (store.Source, row.Row, 
 	rc, ok := RecurOf(cur)
 	if !ok {
 		return "", row.Row{}, Recur{}, errs.New(errs.Recur, "task "+id.String()+" does not recur").
-			WithHint(`lore task edit ` + id.String() + ` --recur "every week"`)
+			WithHint("lore task edit --id " + id.String() + " --recur \"every week\"")
 	}
 	return src, cur, rc, nil
 }
@@ -156,7 +156,7 @@ func (o ops) recurSkip(ctx context.Context, in IDIn) (RecurOut, error) {
 	}
 	if rc.Stopped {
 		return RecurOut{}, errs.New(errs.Recur, "series "+rc.Series+" is stopped: nothing to skip to").
-			WithHint("lore task cancel " + cur.ID.String())
+			WithHint("lore task cancel --id " + cur.ID.String())
 	}
 	ctx, f, childLines, err := o.closeTree(ctx, cur.ID, "skip", childrenCancel, childrenCancel)
 	if err != nil {

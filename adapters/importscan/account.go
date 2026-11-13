@@ -111,7 +111,7 @@ func purgedAccount(purged []purgedSetup, login, setupName string) (purgedSetup, 
 }
 
 // SuggestAgainCommand is the CLI way back from a hidden suggestion.
-const SuggestAgainCommand = "lore setup suggest-again "
+const SuggestAgainCommand = "lore setup suggest-again --login "
 
 // purgedAccountLine is the Covered line of an account a deleted setup
 // used, in purgedLine's shape with this case's way back: "personal

@@ -175,7 +175,7 @@ func ReadMarker(dir string) (Marker, error) {
 	b, err := readCapped(filepath.Join(dir, MarkerFile), MarkerFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Marker{}, errs.Wrap(errs.NotAStore, "rowfs: no "+MarkerFile+" at the store root", store.ErrNotAStore).
-			WithHint("an empty repo or folder becomes a lore store with lore store init <name> <url>; else point the url at an existing lore store")
+			WithHint("an empty repo or folder becomes a lore store with lore store init --name <name> --url <url>; else point the url at an existing lore store")
 	}
 	if err != nil {
 		return Marker{}, err

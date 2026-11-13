@@ -223,27 +223,27 @@ func (o ops) metaOps() []op.Entry {
 	return append(append([]op.Entry{
 		op.Define(op.Spec{Name: OpMetaAdd, Summary: "Add a metadata key to a place's registry", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST,
-			Examples: []op.Example{{Title: "a closed set", CLI: "lore meta add release_window --type text --strict --values spring,summer", Want: "mky_"}}}, o.metaAdd),
+			Examples: []op.Example{{Title: "a closed set", CLI: "lore meta add --name release_window --type text --strict --values spring,summer", Want: "mky_"}}}, o.metaAdd),
 		op.Define(op.Spec{Name: OpMetaEdit, Summary: "Edit a metadata key (strict, internal, allowed values, type)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict, errs.MetaValue, errs.ReasonRequired), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "make a key strict", CLI: "lore meta edit team_owner --strict"}}}, o.metaEdit),
+			Errors: append(slices.Clone(writeErrors), errs.HasDependents, errs.MetaKey, errs.MetaType, errs.MetaInUse, errs.MetaRetired, errs.MetaConflict, errs.MetaValue, errs.ReasonRequired), Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "make a key strict", CLI: "lore meta edit --id team_owner --strict"}}}, o.metaEdit),
 		op.Define(op.Spec{Name: OpMetaDescribe, Summary: "Set a metadata key's description", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "say what a key is for", CLI: `lore meta describe team_owner "The team that owns this row"`}}}, o.metaDescribe),
+			Errors: writeErrors, Confirm: op.ConfirmRule{MayAsk: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "say what a key is for", CLI: `lore meta describe --id team_owner --text "The team that owns this row"`}}}, o.metaDescribe),
 		op.Define(op.Spec{Name: OpMetaRename, Summary: "Rename a metadata key (a label change; the id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, RESTNoun: metaREST, Examples: []op.Example{{Title: "rename a key (the id stays)", CLI: "lore meta rename team_owner owning_team"}}}, o.metaRename),
+			Errors: writeErrors, RESTNoun: metaREST, Examples: []op.Example{{Title: "rename a key (the id stays)", CLI: "lore meta rename --id team_owner --new-name owning_team"}}}, o.metaRename),
 		op.Define(op.Spec{Name: OpMetaKeys, Summary: "List the metadata keys every visible place defines", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: readErrors, RESTNoun: metaREST, Examples: []op.Example{{Title: "every key this repo sees", CLI: "lore meta keys"}}}, o.metaKeys),
 		op.Define(op.Spec{Name: OpMetaDelete, Summary: "Delete a metadata key and its allowed values", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Confirm: op.ConfirmRule{Always: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "delete a metadata key", CLI: "lore meta delete team_owner"}}}, o.metaDelete),
+			Errors: writeErrors, Confirm: op.ConfirmRule{Always: true}, RESTNoun: metaREST, Examples: []op.Example{{Title: "delete a metadata key", CLI: "lore meta delete --id team_owner"}}}, o.metaDelete),
 		op.Define(op.Spec{Name: OpMetaValueAdd, Summary: "Add an allowed value to a metadata key", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Examples: []op.Example{{Title: "allow one more value", CLI: "lore meta value add priority_band urgent --label Urgent"}}}, o.metaValueAdd),
+			Errors: writeErrors, Examples: []op.Example{{Title: "allow one more value", CLI: "lore meta value add --key priority_band --value urgent --label Urgent"}}}, o.metaValueAdd),
 		op.Define(op.Spec{Name: OpMetaSet, Summary: "Set metadata on a row by id", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one value", CLI: "lore meta set tsk_… client=acme", Want: "set client"}}}, o.metaSet),
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "one value", CLI: "lore meta set --id tsk_… --pair client=acme", Want: "set client"}}}, o.metaSet),
 		op.Define(op.Spec{Name: OpMetaUnset, Summary: "Remove a metadata key from a row (a parent removes its fields)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "remove a key from a row", CLI: "lore meta unset tsk_31 team_owner"}}}, o.metaUnset),
+			Errors: metaWriteErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "remove a key from a row", CLI: "lore meta unset --id tsk_31 --key team_owner"}}}, o.metaUnset),
 		op.Define(op.Spec{Name: OpMetaGet, Summary: "Show a row's metadata (sensitive values masked unless --show-sensitive)", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, Examples: []op.Example{{Title: "a row's metadata", CLI: "lore meta get tsk_31"}, {Title: "one key of a row", CLI: "lore meta get tsk_31 team_owner"}}}, o.metaGet),
+			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm), Confirm: op.ConfirmRule{When: metaShowSensitiveField}, Examples: []op.Example{{Title: "a row's metadata", CLI: "lore meta get --id tsk_31"}, {Title: "one key of a row", CLI: "lore meta get --id tsk_31 --key team_owner"}}}, o.metaGet),
 		op.Define(op.Spec{Name: OpMetaValueRename, Summary: "Rename an allowed value (a label change; the val_ id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: writeErrors, Examples: []op.Example{{Title: "rename an allowed value (the id stays)", CLI: "lore meta value rename priority_band urgent critical"}}}, o.metaValueRename),
+			Errors: writeErrors, Examples: []op.Example{{Title: "rename an allowed value (the id stays)", CLI: "lore meta value rename --key priority_band --value urgent --new-value critical"}}}, o.metaValueRename),
 	}, o.metaMaintOps()...), slices.Concat(o.metaIOOps(), o.metaMoveOps(), o.metaHistoryOps(), o.metaRebuildOps())...)
 }
 
@@ -600,7 +600,7 @@ type MetaSetIn struct {
 // MetaUnsetIn is the input of meta.unset.
 type MetaUnsetIn struct {
 	ID   string   `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, the key to remove"`
-	Key  string   `json:"key,omitempty" arg:"1" desc:"the key to remove (deploy removes deploy.env too)"`
+	Key  string   `json:"key,omitempty" arg:"1" argof:"key" desc:"the key to remove (deploy removes deploy.env too)"`
 	More []string `json:"keys,omitempty" flag:"key" desc:"more keys to remove (repeatable)"`
 	// Where and DryRun are the bulk form (3.19).
 	Where  []string `json:"where,omitempty" flag:"where" desc:"remove from every row matching this filter (repeatable, ANDed; one batch)"`
@@ -778,7 +778,7 @@ func (o ops) metaSet(ctx context.Context, in MetaSetIn) (RowOut, error) {
 	}
 	f.Meta = append(f.Meta, in.More...)
 	if f.Empty() {
-		return RowOut{}, errs.New(errs.InvalidInput, "meta set: nothing to set").WithHint("lore meta set <id> key=value")
+		return RowOut{}, errs.New(errs.InvalidInput, "meta set: nothing to set").WithHint("lore meta set --id <id> --pair key=value")
 	}
 	aliases, err := metalist.ScopeAliases(ctx, o.env) // 3.6 meta.scope_aliases (FA-META-12)
 	if err != nil {
@@ -811,7 +811,7 @@ func (o ops) metaUnset(ctx context.Context, in MetaUnsetIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	if in.Key == "" {
-		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: name the key").WithHint("lore meta unset <id> <key>")
+		return RowOut{}, errs.New(errs.InvalidInput, "meta unset: name the key").WithHint("lore meta unset --id <id> --key <key>")
 	}
 	keys := append([]string{in.Key}, in.More...)
 	if in.DryRun {
@@ -838,7 +838,7 @@ func (o ops) metaUnsetDry(ctx context.Context, rawID string, keys []string) (Row
 	for _, k := range keys {
 		if !have[meta.TopSegment(k)] {
 			return RowOut{}, errs.New(errs.MetaUnknown, fmt.Sprintf("%s has no metadata key %q", got.ID, k)).
-				WithHint("lore meta show " + got.ID + " lists its keys")
+				WithHint("lore meta show --id " + got.ID + " lists its keys")
 		}
 	}
 	return RowOut{ID: got.ID, DryRun: true, IDs: []string{got.ID},
@@ -864,9 +864,9 @@ func (o ops) metaGet(ctx context.Context, in MetaGetIn) (MetaGetOut, error) {
 	}
 	out := MetaGetOut{ID: r.ID.String(), Data: []MetaValue{}, ids: in.IDs}
 	for _, p := range metafilter.Quarantine(r.Meta) {
-		fix := "fix the row file, or lore meta unset " + r.ID.String() + " " + p.Key
+		fix := "fix the row file, or lore meta unset --id " + r.ID.String() + " --key " + p.Key
 		if p.Key == "" {
-			fix = "move content out of the row's metadata (lore meta unset " + r.ID.String() + " <key>)"
+			fix = "move content out of the row's metadata (lore meta unset --id " + r.ID.String() + " --key <key>)"
 		}
 		out.Quarantined = append(out.Quarantined, p.Text+"; "+fix)
 	}

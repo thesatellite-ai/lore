@@ -93,7 +93,7 @@ func TestReAddAdminAfterPurgeInARepo(t *testing.T) {
 	if err == nil {
 		t.Fatal("starting the team onto another store while the repo attaches the old one under its name was not refused")
 	}
-	for _, want := range []string{".lore/stores.yaml", TeamStoreURL(w.Accounts[0].Login, "crew-store"), "lore store remove " + org} {
+	for _, want := range []string{".lore/stores.yaml", TeamStoreURL(w.Accounts[0].Login, "crew-store"), "lore store remove --name " + org} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not name %q:\n%v", want, err)
 		}

@@ -176,7 +176,7 @@ func (o ops) applyPeople(ctx context.Context, cur row.Row, e peopleEdit, patch m
 	for _, r := range e.remove {
 		if r == p.lead && e.lead == "" && len(p.assignees) > 1 {
 			return "", errs.New(errs.InvalidInput, o.actorName(ctx, r)+" is the lead of "+cur.ID.String()+". Name a new lead in the same command").
-				WithHint("lore task edit " + cur.ID.String() + " --remove-assignee " + r + " --lead <actor>")
+				WithHint("lore task edit --id " + cur.ID.String() + " --remove-assignee " + r + " --lead <actor>")
 		}
 		p.assignees = slices.DeleteFunc(p.assignees, func(x string) bool { return x == r })
 		if r == p.lead {
@@ -316,11 +316,11 @@ type WatchIn struct {
 func watchOps(o ops) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpWatch, Examples: []op.Example{{Title: "watch a task", CLI: "lore task watch tsk_<id>", Want: ""}}, Summary: "Watch a task (changes reach your inbox)",
+			Name: OpWatch, Examples: []op.Example{{Title: "watch a task", CLI: "lore task watch --id tsk_<id>", Want: ""}}, Summary: "Watch a task (changes reach your inbox)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, func(ctx context.Context, in WatchIn) (work.WriteOut, error) { return o.watch(ctx, in, true) }),
 		op.Define(op.Spec{
-			Name: OpUnwatch, Examples: []op.Example{{Title: "stop watching", CLI: "lore task unwatch tsk_<id>", Want: ""}}, Summary: "Stop watching a task",
+			Name: OpUnwatch, Examples: []op.Example{{Title: "stop watching", CLI: "lore task unwatch --id tsk_<id>", Want: ""}}, Summary: "Stop watching a task",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, func(ctx context.Context, in WatchIn) (work.WriteOut, error) { return o.watch(ctx, in, false) }),
 	}

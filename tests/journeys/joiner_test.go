@@ -9,7 +9,7 @@ package journeys
 // where must be clear and stable, each job's team notes stay in its own
 // org stores, and Pat's own notes live in one personal store `me`, shared
 // by both setups (one `me` per person, decided 2026-11-09): the page and
-// `lore store show me` say so and name it. When Pat leaves job A that
+// `lore store show --store me` say so and name it. When Pat leaves job A that
 // setup goes while jobb keeps working, with nothing of job A's team left
 // in jobb's folders, stores or config, and `me` untouched.
 //
@@ -420,7 +420,7 @@ func TestJourneyJoiner(t *testing.T) {
 		if l := m.LoreIn(site, "memory", "list").Stdout; strings.Contains(l, jJoinerTeamNote) || !strings.Contains(l, jJoinerHomeNote) || !strings.Contains(l, jJoinerANote) {
 			t.Errorf("memory list in job B's repo:\n%s", l)
 		}
-		// `lore store show me` names the one personal store and both
+		// `lore store show --store me` names the one personal store and both
 		// setups sharing it, from either job's repo.
 		for _, rp := range []*teamharness.Clone{app, site} {
 			r := m.LoreIn(rp, "store", "show", "me", "--json").OK(t)
@@ -435,11 +435,11 @@ func TestJourneyJoiner(t *testing.T) {
 			_ = json.Unmarshal([]byte(r.Stdout), &out)
 			v := out.Push
 			if v.Store != "me" || !strings.HasSuffix(v.URL, "/.lore/stores/_me") || !v.Folder || jJoinerJSON(v.SharedBy) != jJoinerJSON([]string{jJoinerSetupB, jJoinerSetupA}) {
-				t.Errorf("lore store show me in %s: want the folder store ~/.lore/stores/_me shared by [%s %s], got %s", rp.Dir, jJoinerSetupB, jJoinerSetupA, r.Stdout)
+				t.Errorf("lore store show --store me in %s: want the folder store ~/.lore/stores/_me shared by [%s %s], got %s", rp.Dir, jJoinerSetupB, jJoinerSetupA, r.Stdout)
 			}
 			txt := m.LoreIn(rp, "store", "show", "me").OK(t).Stdout
 			if !strings.Contains(txt, "shared by your setups "+jJoinerSetupB+", "+jJoinerSetupA) || !strings.Contains(txt, "/.lore/stores/_me") {
-				t.Errorf("lore store show me does not say the personal store is shared by both setups:\n%s", txt)
+				t.Errorf("lore store show --store me does not say the personal store is shared by both setups:\n%s", txt)
 			}
 		}
 	})
@@ -545,7 +545,7 @@ func TestJourneyJoiner(t *testing.T) {
 		r := m.Lore("", "setup", "trash", "purge", jJoinerSetupA, "--confirm").OK(t)
 		// The purge says the team's notes stay on this machine until
 		// Pat forgets the store, and how.
-		if !strings.Contains(r.Stdout, "lore store forget "+teamRemote.SSHURL()) {
+		if !strings.Contains(r.Stdout, "lore store forget --url "+teamRemote.SSHURL()) {
 			t.Errorf("leaving job A, the purge does not say its notes stay on this machine nor how to drop them:\n%s", r.Stdout)
 		}
 		// The personal store `me` is named as staying, shared by all of

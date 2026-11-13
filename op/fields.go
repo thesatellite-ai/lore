@@ -57,9 +57,19 @@ type FieldInfo struct {
 	// positional head at arg 0 and flags that override the outer input's
 	// shared flags of the same name for that item.
 	Group bool
-	// Flag is the CLI flag name ("" when the field is positional or has no
-	// flag).
+	// Flag is the CLI flag name ("" when the field has no flag). A
+	// positional field has one too (U-4, named args everywhere): its
+	// `flag` tag, else its json name in kebab case (namePositionals); the
+	// positional stays a quiet alias, shown nowhere.
 	Flag string
+	// Named marks a positional field whose canonical CLI form is its flag
+	// (U-4): help, usage and docs show `--flag <value>`, never the
+	// positional.
+	Named bool
+	// ArgOf names the flag a positional is a quiet alias of (`argof:"body"`:
+	// memory add's text is --body): the field takes no flag of its own and
+	// is shown nowhere; the operation merges it into that flag's value.
+	ArgOf string
 	// Short is the one-letter CLI shorthand of Flag (`short:"n"` keeps
 	// v0.1.17's `lore live log -n 5`); "" for none.
 	Short string
@@ -139,6 +149,7 @@ const (
 	tagRest     = "rest"
 	tagAlias    = "alias"
 	tagNonEmpty = "nonempty"
+	tagArgOf    = "argof"
 )
 
 // ui tag keys.
@@ -296,10 +307,13 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		if !flagName.MatchString(fl) {
 			panic(tagError{where + ": flag " + strconv.Quote(fl) + " is not lowercase-with-hyphens"})
 		}
-		if f.Arg != NoArg {
-			panic(tagError{where + ": a field is either an arg or a flag"})
-		}
 		f.Flag = fl
+	}
+	if ao, ok := sf.Tag.Lookup(tagArgOf); ok {
+		if f.Arg == NoArg || f.Flag != "" || !flagName.MatchString(ao) {
+			panic(tagError{where + `: argof goes on a positional with no flag and names another field's flag`})
+		}
+		f.ArgOf = ao
 	}
 	if al, ok := sf.Tag.Lookup(tagAlias); ok {
 		if f.Flag == "" {
@@ -313,7 +327,7 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 		}
 	}
 	if ne, ok := sf.Tag.Lookup(tagNonEmpty); ok {
-		if f.Flag == "" || ne == "" || f.Type != TypeString {
+		if (f.Flag == "" && f.Arg == NoArg) || ne == "" || f.Type != TypeString {
 			panic(tagError{where + `: nonempty goes with a string flag and names what to give`})
 		}
 		f.NonEmpty = ne

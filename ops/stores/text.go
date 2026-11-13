@@ -101,7 +101,7 @@ func (o RemoveOut) Text() string {
 	// (B3-30: `lore store forget <name>` then said "no store named").
 	forget := "`lore store forget`"
 	if o.URL != "" && what == "store " && !strings.HasPrefix(o.URL, fileScheme) { // a folder store has no copy to forget
-		forget = "`lore store forget " + o.URL + "`"
+		forget = "`lore store forget --url " + o.URL + "`"
 	}
 	line := "✓ detached " + what + o.Name + " from " + storesFileShown + "; its rows stay in the store (" + forget + " drops this machine's copy); commit the file to share\n"
 	if len(o.Folders) > 0 {
@@ -130,8 +130,7 @@ func (o InitOut) Text() string {
 		if setup == "" {
 			setup = "<your admin setup>"
 		}
-		return "✓ " + verb + " " + o.ID + " at " + o.URL + ": it is org " + o.Org + "'s store, so it stays attached through the org entry in ~/.lore/config.yaml (not this repo's " + storesFileShown + ")\n" +
-			"  the org's file (lore-org.yaml) and roster were in the old store: write them again with your setup's team step, `lore setup apply " + setup + " --step team --answers '{\"org\":\"" + o.Org + "\",\"store_url\":\"" + o.URL + "\"}'` (it puts you back on the roster), then `lore member add <email>` for each teammate\n"
+		return "✓ " + verb + " " + o.ID + " at " + o.URL + ": it is org " + o.Org + "'s store, so it stays attached through the org entry in ~/.lore/config.yaml (not this repo's " + storesFileShown + ")\n  the org's file (lore-org.yaml) and roster were in the old store: write them again with your setup's team step, `lore setup apply --setup " + setup + " --step team --answers '{\"org\":\"" + o.Org + "\",\"store_url\":\"" + o.URL + "\"}'` (it puts you back on the roster), then `lore member add --email <email>` for each teammate\n"
 	}
 	if len(o.Following) > 0 {
 		line += "  your setups " + strings.Join(o.Following, ", ") + " were on ~/.lore/stores/_me and now use it too (one personal store per person)\n"

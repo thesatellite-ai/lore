@@ -8,20 +8,20 @@
 |---|---|---|---|
 | **Plain tasks** | a to-do list | one person or one agent does the work | `lore task add`, `lore task start`, `lore task done` |
 | **Agent identity** | a name tag for one agent session, owned by a person | an agent writes notes or takes tasks in a team | `lore agent start --label agent-backend --owner @alice` |
-| **Claim** | your name on the whiteboard next to a task | two or more workers could pick the same task | `lore task next --mission <id>`, `lore task claim <id>` |
-| **Lease and heartbeat** | the claim runs out after 20 minutes unless the agent says "still here" | always, with claims; it is how a crashed agent's task comes free | `lore task heartbeat --daemon <id>` |
+| **Claim** | your name on the whiteboard next to a task | two or more workers could pick the same task | `lore task next --mission <id>`, `lore task claim --id <id>` |
+| **Lease and heartbeat** | the claim runs out after 20 minutes unless the agent says "still here" | always, with claims; it is how a crashed agent's task comes free | `lore task heartbeat --daemon --id <id>` |
 | **Dependencies** | "do this one after that one" | one task needs another's code first, maybe in another repo | `lore task add --after <id>` (`<id>:merged` waits for the merge) |
-| **Gate** | a "stop, ask a person" sign on a task | a step is risky: a payment change, a change to the live database, a release | `lore gate request <id>`, then a person runs `lore gate approve <id>` |
-| **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore hold claim full-suite --ttl 30m`, `lore hold release full-suite` |
-| **Handoff and memory** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore memory add "<fact>"` |
+| **Gate** | a "stop, ask a person" sign on a task | a step is risky: a payment change, a change to the live database, a release | `lore gate request --id <id>`, then a person runs `lore gate approve --id <id>` |
+| **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore hold claim --name full-suite --ttl 30m`, `lore hold release --name full-suite` |
+| **Handoff and memory** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore memory add --body "<fact>"` |
 
 ## If this, then that
 
 - **If one agent works alone in your repo,** use plain tasks. No claims, no agent identity: the agent writes as you.
 - **If two or more agents share one mission** (one shared goal with its tasks), start each one with `lore agent start`, and let each take work with `lore task next --mission <id>`. It resumes the task the agent already holds, respects dependencies and gates, and handles two agents reaching for the same task at once.
-- **If a person tells an agent which task to do,** use `lore task claim <id>` instead of `next`.
-- **If a step must never happen without a person,** put a gate on it with `lore gate request <id>`. Any person on the roster (the list of people and agents in the org) may approve; a mission's `approvers:` list can narrow that. An agent never can.
-- **If an agent crashed or went quiet,** wait for its lease to run out (20 minutes by default, `lease.ttl`), and another agent takes the task with `lore task next`. To take it back at once, a person runs `lore task revoke <id>` or `lore task reassign <id>`.
+- **If a person tells an agent which task to do,** use `lore task claim --id <id>` instead of `next`.
+- **If a step must never happen without a person,** put a gate on it with `lore gate request --id <id>`. Any person on the roster (the list of people and agents in the org) may approve; a mission's `approvers:` list can narrow that. An agent never can.
+- **If an agent crashed or went quiet,** wait for its lease to run out (20 minutes by default, `lease.ttl`), and another agent takes the task with `lore task next`. To take it back at once, a person runs `lore task revoke --id <id>` or `lore task reassign --id <id>`.
 - **If the work spans several repos,** link them to one project in the store (see [How to lay out your stores](store-layout.md)) and give each task a repo; agents pass `--repo <name>` to `lore task next`.
 - **If two agents must not run the same heavy job at once,** hold a resource around it.
 - **If an agent works in a client's repo,** claims and work notes stay in the agency's store, and the client's copy of the task carries only what the client should see.

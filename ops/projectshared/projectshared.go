@@ -28,13 +28,13 @@ const (
 // Hint is the refusal's hint: the stores commands that replace a shared
 // database (v0.1.17 saas/cmd/cli/project_shared.go modeBReplacement).
 const Hint = "the shared-database mode is retired; use a store instead: " +
-	"`lore store init <name> file:///abs/path` once, then `lore store add <name> <url>` in each repo " +
+	"`lore store init --name <name> --url file:///abs/path` once, then `lore store add --name <name> --url <url>` in each repo " +
 	"(write to it with `--to <name>`); an existing shared project converts with lore fix"
 
 // In is the input of both: the v0.1.17 flags and arguments are still
 // accepted so an old invocation gets the refusal, not "unknown flag".
 type In struct {
-	Args []string `json:"args,omitempty" arg:"0" rest:"true" desc:"ignored (retired)"`
+	Args []string `json:"args,omitempty" arg:"0" rest:"true" argof:"name" desc:"ignored (retired)"`
 	DB   string   `json:"db,omitempty" flag:"db" desc:"ignored (retired)"`
 	Name string   `json:"name,omitempty" flag:"name" desc:"ignored (retired)"`
 }
@@ -52,7 +52,7 @@ func Ops() []op.Entry {
 	}
 	return []op.Entry{
 		op.Define(spec(OpSharedInit, "Retired (0.1.18): use `lore store init` + `lore store add`",
-			op.Example{Title: "instead: a store the team shares", CLI: "lore store init notes file:///srv/lore/notes", Want: "notes"}),
+			op.Example{Title: "instead: a store the team shares", CLI: "lore store init --name notes --url file:///srv/lore/notes", Want: "notes"}),
 			func(context.Context, In) (Out, error) { return Out{}, Refusal("shared-init") }),
 		op.Define(spec(OpSharedList, "Retired (0.1.18): use `lore store list`",
 			op.Example{Title: "instead: the stores this repo reads", CLI: "lore store list", Want: "store"}),

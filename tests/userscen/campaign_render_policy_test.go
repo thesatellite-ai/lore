@@ -70,7 +70,7 @@ func TestCampaignRender_PolicyReversePath(t *testing.T) {
 	if d := show(); d.Source != "default" || d.Value != "" {
 		t.Errorf("after unset: the default again: %+v", d)
 	}
-	campRefusal(t, c, campExitNotFound, "E_NOT_FOUND", "lore policy show "+key, "policy", "unset", key, "--yes")
+	campRefusal(t, c, campExitNotFound, "E_NOT_FOUND", "lore policy show --id "+key, "policy", "unset", key, "--yes")
 	// The prefix form lists the family; an unknown prefix lists nothing.
 	fam := campJSON[campPolicyShow](t, c.Lore("policy", "show", "trash", "--json"))
 	if fam.Count != 2 || len(fam.Data) != 2 {

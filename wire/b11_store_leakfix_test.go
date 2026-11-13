@@ -26,13 +26,13 @@ func TestLeakFixNamesTheActionableRow(t *testing.T) {
 		name, where, path string
 		must, mustNot     []string
 	}{
-		{"commit of a leaking repo rule", LeakWhereCommit, rowFile, []string{"lore move " + rul + " --to <org>", "lore rule delete " + rul + " --confirm"}, []string{mem}},
-		{"commit of a monorepo folder's row", LeakWhereCommit, "svc/api/" + rowFile, []string{"lore move " + rul + " --to <org>"}, nil},
-		{"push of a leaking repo rule", LeakWherePush, rowFile, []string{rul, "rewrite that commit"}, []string{"lore move " + mem}},
+		{"commit of a leaking repo rule", LeakWhereCommit, rowFile, []string{"lore move --id " + rul + " --to <org>", "lore rule delete --id " + rul + " --confirm"}, []string{mem}},
+		{"commit of a monorepo folder's row", LeakWhereCommit, "svc/api/" + rowFile, []string{"lore move --id " + rul + " --to <org>"}, nil},
+		{"push of a leaking repo rule", LeakWherePush, rowFile, []string{rul, "rewrite that commit"}, []string{"lore move --id " + mem}},
 		{"push of a source file", LeakWherePush, "src/a.ts", []string{"Remove the internal text from src/a.ts", "rewrite the commit"}, []string{"lore move"}},
 		{"commit of a source file", LeakWhereCommit, "src/a.ts", []string{"Remove the internal text from src/a.ts"}, []string{"lore move"}},
-		{"commit of a memory row", LeakWhereCommit, ".lore/data/memories/" + mem + ".json", []string{"lore memory delete " + mem}, nil},
-		{"move quoting another note", leakWhereMove, ".lore/data/memories/" + mem + ".json", []string{"Not moved", "Remove that part from " + mem}, []string{"lore move " + mem + " --to"}},
+		{"commit of a memory row", LeakWhereCommit, ".lore/data/memories/" + mem + ".json", []string{"lore memory delete --id " + mem}, nil},
+		{"move quoting another note", leakWhereMove, ".lore/data/memories/" + mem + ".json", []string{"Not moved", "Remove that part from " + mem}, []string{"lore move --id " + mem + " --to"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

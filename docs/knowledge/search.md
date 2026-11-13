@@ -1,6 +1,6 @@
 # Search
 
-**In short:** `lore search <words>` looks through every note you have (rules, memories, decisions, tasks and the rest) and shows the best matches first. Your coding tool uses the same command to find what it needs before it answers.
+**In short:** `lore search --query <words>` looks through every note you have (rules, memories, decisions, tasks and the rest) and shows the best matches first. Your coding tool uses the same command to find what it needs before it answers.
 
 ## What it is and when you want it
 
@@ -20,7 +20,7 @@ Give one or more words. Each hit shows its kind, its id, the matching text with 
 <!-- example: search#search -->
 ```console
 # alice, in website
-$ lore search payments
+$ lore search --query payments
 Found 2 hits for "payments" across 2 entity types:
 decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
 memory    mem_2ad3…f891  Old payments page is gone  (score=0.017)
@@ -34,10 +34,10 @@ memory    mem_2ad3…f891  Old payments page is gone  (score=0.017)
 <!-- example: search#search-one-kind -->
 ```console
 # alice, in website
-$ lore search payments --tables decision
+$ lore search --query payments --tables decision
 Found 1 hit for "payments" across 1 entity type:
 decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
-$ lore decision search Stripe
+$ lore decision search --query Stripe
 dec_7a67…9504 [accepted] We use Stripe for payments
 ```
 <!-- /example -->
@@ -49,7 +49,7 @@ dec_7a67…9504 [accepted] We use Stripe for payments
 <!-- example: search#search-json -->
 ```console
 # alice, in website
-$ lore search WhatsApp --json
+$ lore search --query WhatsApp --json
 {
   "schema_version": 1,
   "kind": "search.global",
@@ -80,9 +80,9 @@ Archived rows are left out unless you ask for them with `--include-archived`.
 <!-- example: search#archived -->
 ```console
 # alice, in website
-$ lore search payments --tables memory
+$ lore search --query payments --tables memory
 (no matches)
-$ lore search payments --tables memory --include-archived
+$ lore search --query payments --tables memory --include-archived
 Found 1 hit for "payments" across 1 entity type:
 memory  mem_2ad3…f891  Old payments page is gone  (score=0.017)
 ```
@@ -103,7 +103,7 @@ A project can have several repos (see [Multi-repo projects](../sync/multi-repo-p
 <!-- example: search#repo-scope -->
 ```console
 # alice, in website
-$ lore repo add web --origin https://github.com/client/website
+$ lore repo add --mount-name web --origin https://github.com/client/website
 lore: wrote ~/work/website/.lore/data/repos/rep_54fe…28f2.json
 ✓ repo web registered (rep_54fe…28f2)
 $ lore memory add --repo web --body 'The web repo deploys on every merge to main'
@@ -120,7 +120,7 @@ mem_162d…9666 [retrieved] The client replies faster on WhatsApp than email
 $ lore memory list --repo web --no-inherit
 mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
 2 hidden (2 scoped to a repo); --all shows them
-$ lore search deploys --all-repos
+$ lore search --query deploys --all-repos
 Found 1 hit for "deploys" across 1 entity type:
 memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.017)
 ```
@@ -133,19 +133,19 @@ Search matches whole words, upper or lower case alike. It does not match other f
 <!-- example: search#word-forms only=2,3,4,5 -->
 ```console
 # alice, in website
-$ lore search invoice
+$ lore search --query invoice
 Found 2 hits for "invoice" across 2 entity types:
 memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
 task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
-$ lore search invoices
+$ lore search --query invoices
 Found 2 hits for "invoices" across 2 entity types:
 memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
 task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
-$ lore search 'invoi*'
+$ lore search --query 'invoi*'
 Found 2 hits for "invoi*" across 2 entity types:
 memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
 task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
-$ lore search 'client Fridays'
+$ lore search --query 'client Fridays'
 Found 1 hit for "client Fridays" across 1 entity type:
 memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
 ```
@@ -153,9 +153,9 @@ memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
 
 ## Leave words out
 
-Put `-` in front of a word to drop the rows that hold it: `lore search "deploy -friday"` finds the rows about deploy that never mention friday. It works with a prefix (`-fri*`), a phrase (`-"on call"`), several words (`"deploy -friday -monday"`), a metadata condition (`"env:prod -friday"`) and `--include-deleted`. A `-` inside a word is part of the word: `well-known` and `x-ray` search for those words, and `-x-ray` leaves out the rows that hold `x-ray`.
+Put `-` in front of a word to drop the rows that hold it: `lore search --query "deploy -friday"` finds the rows about deploy that never mention friday. It works with a prefix (`-fri*`), a phrase (`-"on call"`), several words (`"deploy -friday -monday"`), a metadata condition (`"env:prod -friday"`) and `--include-deleted`. A `-` inside a word is part of the word: `well-known` and `x-ray` search for those words, and `-x-ray` leaves out the rows that hold `x-ray`.
 
-The query needs at least one word to search for: `lore search -- "-friday"` is refused with a hint. When the query's first word starts with `-`, put `--` before it, or the shell line reads it as a flag: `lore search -- "-friday deploy"`.
+The query needs at least one word to search for: `lore search --query=-friday` is refused with a hint. When the query's first word starts with `-`, give it with `=`, so the shell line does not read it as a flag: `lore search --query="-friday deploy"`.
 
 ## Keep the index healthy
 
@@ -189,9 +189,9 @@ note: the core rebuilds a store's whole cache; --kind memory included
 ## Pitfalls
 
 - **No word forms.** `invoice` and `invoices` are different words to the index. Use `invoic*` when you are not sure.
-- **Quote what the shell would change.** `lore search 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
+- **Quote what the shell would change.** `lore search --query 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
 - <!-- ds:block id=search-defaults-z8rpj5sv --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`). A common word in a big project can push the row you want off the list: add a second word or narrow with `--tables`.
-- **Emoji are not searchable.** The index treats emoji and other symbols as spaces between words, so `lore search 😀` finds nothing; search for the words around it.
+- **Emoji are not searchable.** The index treats emoji and other symbols as spaces between words, so `lore search --query 😀` finds nothing; search for the words around it.
 - **"(no matches)" is not an error.** The command exits 0; check the words, or add `--include-archived` or `--all-repos`.
 
 ## Related

@@ -193,8 +193,8 @@ func Ops(env Env) []op.Entry {
 			Examples: []op.Example{{Title: "open a run on a task", CLI: `lore run start --task tsk_… --goal "add rate limit to login"`, Want: "started"}}}, o.start),
 		op.Define(op.Spec{Name: OpEnd, Summary: "Close a run with an outcome (success | partial | failed | cancelled)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "close a run", CLI: "lore run end run_… --outcome success", Want: "ended"}}}, o.end),
-		op.Define(op.Spec{Name: OpCancel, Examples: []op.Example{{Title: "cancel with a reason", CLI: `lore run cancel run_<id> --reason "wrong branch"`, Want: "cancelled"}}, Summary: "Cancel a run (end it with outcome cancelled)",
+			Examples: []op.Example{{Title: "close a run", CLI: "lore run end --id run_… --outcome success", Want: "ended"}}}, o.end),
+		op.Define(op.Spec{Name: OpCancel, Examples: []op.Example{{Title: "cancel with a reason", CLI: `lore run cancel --id run_<id> --reason "wrong branch"`, Want: "cancelled"}}, Summary: "Cancel a run (end it with outcome cancelled)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs}, o.cancel),
 	}
 }

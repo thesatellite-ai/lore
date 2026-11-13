@@ -55,7 +55,7 @@ Search for a word from the old file, then render: the memory is found by `lore s
 <!-- example: knowledge#imported -->
 ```console
 # alice, in website
-$ lore search invoices
+$ lore search --query invoices
 Found 1 hit for "invoices" across 1 entity type:
 memory  mem_2e0c…0b6d  The client pays invoices on the first Monday of the month.  (score=0.017)
 $ lore render >/dev/null && grep -c 'Ask the client before changing any price' .lore/LORE.md
@@ -75,11 +75,11 @@ lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
 ✓ external-source Team wiki added
 $ lore external-source list
 [off] Team wiki (wiki) ext_e9fa…224c
-$ lore external-source enable ext_e9fa…224c && lore external-source list
+$ lore external-source enable --id ext_e9fa…224c && lore external-source list
 lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
 ✓ external-source ext_e9fa…224c enabled
 [on] Team wiki (wiki) ext_e9fa…224c
-$ lore external-source disable ext_e9fa…224c
+$ lore external-source disable --id ext_e9fa…224c
 lore: wrote ~/work/website/.lore/data/external_sources/ext_e9fa…224c.json
 ✓ external-source ext_e9fa…224c disabled
 ```

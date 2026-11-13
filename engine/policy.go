@@ -133,7 +133,7 @@ func enforceRow(pol policy.Set, def schema.TableDef, fields map[string]value.Val
 	hint := "keep a resource small: put long text in a doc or memory and link it"
 	if hist > 0 {
 		msg += ": " + strconv.Itoa(n-hist) + " bytes of values and " + strconv.Itoa(hist) + " bytes of the change history kept in the row (each change holds the old and the new value), which counts too"
-		hint += "; or raise the limit with `lore policy set " + string(policy.KeyResourcesMaxBytes) + " <bytes>`"
+		hint += "; or raise the limit with `lore policy set --key " + string(policy.KeyResourcesMaxBytes) + " --value <bytes>`"
 	}
 	return errs.New(errs.ResourceInvalid, msg).WithHint(hint)
 }
@@ -191,5 +191,5 @@ func enforceMovePlace(pol policy.Set, def schema.TableDef, to store.Source, clie
 	}
 	return errs.New(errs.ResourcePlace, "resources are not allowed in "+place+" places ("+string(to)+"; "+
 		string(policy.KeyResourcesAllowedIn)+": "+strings.Join(allowed, ", ")+where+"); nothing moved").
-		WithHint("move it to an allowed place; lore policy show resources")
+		WithHint("move it to an allowed place; lore policy show --id resources")
 }

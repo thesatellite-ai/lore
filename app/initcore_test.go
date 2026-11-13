@@ -222,7 +222,7 @@ func TestShortcutsRunTheirCommand(t *testing.T) {
 		t.Parallel()
 		w, root, _ := shortcutWorld(t)
 		code, _, errOut := w.lore(t, root, "plan", "apply", "plan.md", "--yes")
-		if code != 20 || !strings.Contains(errOut, `unknown command "apply" for "lore plan"`) || !strings.Contains(errOut, "lore mission apply plan.md --yes") {
+		if code != 20 || !strings.Contains(errOut, `unknown command "apply" for "lore plan"`) || !strings.Contains(errOut, "lore mission apply --file plan.md --yes") {
 			t.Fatalf("plan apply: exit %d %s", code, errOut)
 		}
 	})

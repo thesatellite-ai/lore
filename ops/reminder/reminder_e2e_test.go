@@ -75,7 +75,7 @@ func TestReminderLifecycle(t *testing.T) {
 	}
 
 	h.Fails("reminder.delete", `{"id":"`+rfc+`"}`, errs.NeedsConfirm)
-	if got := opstest.Text(h.MustYes("reminder.delete", `{"id":"`+rfc+`"}`)); got != "✓ "+rfc+" moved to the trash (restore: lore trash restore "+rfc+")\n" {
+	if got := opstest.Text(h.MustYes("reminder.delete", `{"id":"`+rfc+`"}`)); got != "✓ "+rfc+" moved to the trash (restore: lore trash restore --target "+rfc+")\n" {
 		t.Fatalf("delete %q", got)
 	}
 	if strings.Contains(opstest.Text(h.Must("reminder.list", ``)), rfc) {

@@ -12,9 +12,9 @@ git init -q
 lore init --non-interactive --name=platform
 
 # Register the three repos
-lore repo add app   --origin=git@github.com:client2/app.git
-lore repo add admin --origin=git@github.com:client2/admin.git
-lore repo add api   --origin=git@github.com:client2/api.git
+lore repo add --mount-name app   --origin=git@github.com:client2/app.git
+lore repo add --mount-name admin --origin=git@github.com:client2/admin.git
+lore repo add --mount-name api   --origin=git@github.com:client2/api.git
 ```
 
 ## Capture knowledge with scope
@@ -49,19 +49,19 @@ The staff-only note does NOT appear in `app/CLAUDE.md`. The blue-buttons note do
 
 ```bash
 # Default: --repo=app sees web rows + master rows.
-lore memory search "" --repo=app --json | jq '.count'
+lore memory search --query "" --repo=app --json | jq '.count'
 # 3
 
 # Strict scope (no master fallback)
-lore memory search "" --repo=app --no-inherit --json | jq '.count'
+lore memory search --query "" --repo=app --no-inherit --json | jq '.count'
 # 1
 
 # Master only
-lore memory search "" --master-only --json | jq '.count'
+lore memory search --query "" --master-only --json | jq '.count'
 # 2
 
 # Everything everywhere
-lore memory search "" --all-repos --json | jq '.count'
+lore memory search --query "" --all-repos --json | jq '.count'
 # 5
 ```
 

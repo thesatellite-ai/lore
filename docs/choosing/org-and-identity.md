@@ -19,8 +19,8 @@ Each org entry sorts repos by their address:
 
 | Role | Set by | What changes |
 |---|---|---|
-| **Own repo** | `own:` patterns, or `lore org link agency --project tools --own` | no leak guards (checks that stop private notes reaching a client); the company's notes may live in the repo |
-| **Client repo** | `repos:` patterns, or `lore org link agency --project client` (no `--own`) | leak guards on: private kinds go to the store by default, and commits and pull request text are checked for private notes |
+| **Own repo** | `own:` patterns, or `lore org link --org agency --project tools --own` | no leak guards (checks that stop private notes reaching a client); the company's notes may live in the repo |
+| **Client repo** | `repos:` patterns, or `lore org link --org agency --project client` (no `--own`) | leak guards on: private kinds go to the store by default, and commits and pull request text are checked for private notes |
 | **No org** | nothing matched | no guards; only your personal `everywhere/` notes load |
 
 A folder that an org answers for but no pattern or link marks as its own is treated as a client repo, so the guards stay on (fail closed). That includes a folder that is not a git repo at all (under a setup's `folders:`) and a clone whose only remote is a local path. `lore whoami` says so on its `repo` line: `not a git repo  (treated as a client repo: guards on)` or `git repo with no hosted remote  (treated as a client repo: guards on)`, where a matched repo shows `client repo  (guards on)`.
@@ -30,7 +30,7 @@ A folder that an org answers for but no pattern or link marks as its own is trea
 The first rule that answers wins:
 
 1. `LORE_ORG=<entry>`, for one shell or one command.
-2. `lore org use <entry>`, for this repo on this machine (saved in your config, not committed).
+2. `lore org use --entry <entry>`, for this repo on this machine (saved in your config, not committed).
 3. A committed `.lore/org.yaml`, written by `lore org set` (only in the org's own repos).
 4. A link in one org's store (made once with `lore org link`).
 5. An `own:` or `repos:` pattern that matches the repo's address, for example `github.com/client/*`.
@@ -45,7 +45,7 @@ Two entries that answer at the same rule stop with `E_ORG_AMBIGUOUS`; lore never
 - **If your company already uses lore,** run `lore org import` with your own email instead of writing the entry by hand.
 - **If you set lore up for your company,** write one org entry, create the store with `lore store init`, register yourself with `lore actor register`, and commit a suggested `lore-org.yaml` into the store's company folder so the next person can import it.
 - **If a teammate's repo should name its org for everyone,** run `lore org set` in it. It is refused in a client repo, because it would tell the client the agency's org name.
-- **If one repo matches two entries,** pick one with `lore org use <entry>` for this machine, or tighten the patterns.
+- **If one repo matches two entries,** pick one with `lore org use --entry <entry>` for this machine, or tighten the patterns.
 - **If you work for two companies,** give each entry its own `identity` with that company's email. Lore never borrows one org's identity in another org's repo, and a repo that matches no org never uses an org's identity.
 - **If you keep several setups on one machine** (your own projects and a team's), make one setup each with `lore setup plan`, `check` and `apply`; a setup that names an org decides it in its folders when nothing above it does. The prebuilt binaries add a browser page for the same steps.
 - **If you hire a contractor for one client,** see [How to lay out your stores](store-layout.md): the org setup is the same, the store layout is what limits access.

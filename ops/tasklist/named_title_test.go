@@ -27,12 +27,12 @@ func runArgs(t *testing.T, h *opstest.H, name string, args []string, flags map[s
 	return h.App.Run(context.Background(), e, op.ArgsDecoder{Args: args, Flags: flags}, op.Caller{Actor: actor})
 }
 
-// TestAddTitlePositional (U-3): `lore tasklist add "Sprint 4"` takes the
-// title as its first argument, like `lore task add "<title>"`, with an
-// optional body second; the flag forms keep working, v0.1.17's
-// `--title X "<body>"` included; a title given twice or not at all is
-// E_INVALID_INPUT.
-func TestAddTitlePositional(t *testing.T) {
+// TestAddTitleNamed (U-4, reverting U-3's positional title): `lore
+// tasklist add` takes --title like every other add, the body optional by
+// --body; v0.1.17's `--title X "<body>"` keeps working quietly. A bare
+// positional is no title, a title missing or blank and a body given twice
+// are E_INVALID_INPUT.
+func TestAddTitleNamed(t *testing.T) {
 	h := opstest.New(t)
 	cases := []struct {
 		name        string
@@ -40,9 +40,7 @@ func TestAddTitlePositional(t *testing.T) {
 		flags       map[string][]string
 		title, body string
 	}{
-		{"positional title", []string{"Sprint 4"}, nil, "Sprint 4", ""},
-		{"positional title and body", []string{"Sprint 5", "two weeks"}, nil, "Sprint 5", "two weeks"},
-		{"positional title, --body", []string{"Sprint 6"}, map[string][]string{"body": {"b6"}}, "Sprint 6", "b6"},
+		{"--title", nil, map[string][]string{"title": {"Sprint 4"}}, "Sprint 4", ""},
 		{"--title --body", nil, map[string][]string{"title": {"Sprint 7"}, "body": {"b7"}}, "Sprint 7", "b7"},
 		{"--title, positional body (v0.1.17)", []string{"b8"}, map[string][]string{"title": {"Sprint 8"}}, "Sprint 8", "b8"},
 	}
@@ -65,17 +63,17 @@ func TestAddTitlePositional(t *testing.T) {
 		args  []string
 		flags map[string][]string
 	}{
-		"no title":      {nil, map[string][]string{"body": {"b"}}},
-		"blank title":   {[]string{"  "}, nil},
-		"title twice":   {[]string{"a", "b"}, map[string][]string{"title": {"c"}}},
-		"body twice":    {[]string{"a", "b"}, map[string][]string{"body": {"c"}}},
-		"too many args": {[]string{"a", "b", "c"}, nil},
+		"no title":        {nil, map[string][]string{"body": {"b"}}},
+		"positional only": {[]string{"Sprint 4"}, nil},
+		"blank title":     {nil, map[string][]string{"title": {"  "}}},
+		"body twice":      {[]string{"a"}, map[string][]string{"title": {"t"}, "body": {"c"}}},
+		"too many args":   {[]string{"a", "b"}, map[string][]string{"title": {"t"}}},
 	} {
 		if _, err := runArgs(t, h, "tasklist.add", in.args, in.flags); !errs.Has(err, errs.InvalidInput) {
 			t.Errorf("%s: err = %v", name, err)
 		}
 	}
-	if _, err := runArgs(t, h, "tasklist.add", nil, nil); err == nil || !strings.Contains(err.Error(), "a title is required") {
+	if _, err := runArgs(t, h, "tasklist.add", nil, nil); err == nil || !strings.Contains(err.Error(), "missing required field title") {
 		t.Errorf("no input: %v", err)
 	}
 }

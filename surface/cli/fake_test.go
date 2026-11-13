@@ -95,7 +95,7 @@ func newFake(t *testing.T) *fake {
 		Name: "memory.add", Summary: "Add a memory", Permission: op.PermWrite, Access: op.AccessWrite,
 		Errors:   []errs.Code{errs.EmptyBody, errs.SecretDetected},
 		Confirm:  op.ConfirmRule{When: "force"},
-		Examples: []op.Example{{Title: "Save a lesson", CLI: `lore memory add "Retry on 502"`, Want: "mem_x"}},
+		Examples: []op.Example{{Title: "Save a lesson", CLI: `lore memory add --body "Retry on 502"`, Want: "mem_x"}},
 	}, func(ctx context.Context, in addIn) (addOut, error) {
 		check(ctx, f)
 		if code, ok := strings.CutPrefix(in.Body, failPrefix); ok {

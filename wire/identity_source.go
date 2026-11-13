@@ -312,9 +312,9 @@ func keylessSetupProblems(setups []onboard.SetupEntry) []string {
 			continue
 		}
 		name := strings.TrimSpace(s.Identity.Name)
-		set := `lore identity set "<Your Name> <your email>" --setup ` + s.Name
+		set := `lore identity set --identity "<Your Name> <your email>" --setup ` + s.Name
 		if name != "" {
-			set = `lore identity set "` + name + ` <your email>" --setup ` + s.Name
+			set = `lore identity set --identity "` + name + ` <your email>" --setup ` + s.Name
 		}
 		out = append(out, "setups["+s.Name+"].identity.key: missing, so lore ignores this identity block ("+entryOf(s.Identity).String()+
 			") and takes who you are from the next step of the chain (lore identity show names it); add  key: human:<your email>  under it, or run "+set)

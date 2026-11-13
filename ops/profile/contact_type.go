@@ -124,10 +124,10 @@ func typeForAdd(types []EffectiveType, name string) (EffectiveType, error) {
 	switch {
 	case !ok:
 		return EffectiveType{}, errs.New(errs.ContactType, "contact type "+name+" is not in the list").
-			WithHint("lore contact-type list; lore contact-type add " + name + " --kind …")
+			WithHint("lore contact-type list; lore contact-type add --name " + name + " --kind …")
 	case t.Retired:
 		return EffectiveType{}, errs.New(errs.ContactType, "contact type "+name+" is retired").
-			WithHint("lore contact-type edit " + name + " --unretire")
+			WithHint("lore contact-type edit --name " + name + " --unretire")
 	}
 	return t, nil
 }
@@ -264,9 +264,9 @@ func contactTypeAdd(ctx context.Context, env Env, in ContactTypeAddIn) (ContactT
 		if t, ok := findType(types, name); ok {
 			e := errs.New(errs.NameTaken, "contact type "+name+" is already in the list ("+t.Origin+")")
 			if t.Retired {
-				return false, e.WithHint("lore contact-type edit " + name + " --unretire")
+				return false, e.WithHint("lore contact-type edit --name " + name + " --unretire")
 			}
-			return false, e.WithHint("lore contact-type edit " + name)
+			return false, e.WithHint("lore contact-type edit --name " + name)
 		}
 		fields := map[string]value.Value{}
 		for k, s := range map[string]string{

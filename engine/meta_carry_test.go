@@ -144,7 +144,7 @@ func TestSupersedesCarryFillsRequired(t *testing.T) {
 // TestMetaTypeClashHintNamesNoMissingCommand (later 433, G-META-7): a
 // :type that differs from the registered type is E_META_TYPE, and its hint
 // names only commands that exist: drop the :type, or change the key's type
-// with `lore meta edit <key> --type <type>` (built in 4ecdd709).
+// with `lore meta edit --id <key> --type <type>` (built in 4ecdd709).
 func TestMetaTypeClashHintNamesNoMissingCommand(t *testing.T) {
 	t.Parallel()
 	f := setup(t)
@@ -155,7 +155,7 @@ func TestMetaTypeClashHintNamesNoMissingCommand(t *testing.T) {
 	if !errors.As(err, &le) || le.Code != errs.MetaType {
 		t.Fatalf("err = %v, want E_META_TYPE", err)
 	}
-	if !strings.Contains(le.Hint, "lore meta edit client --type number") || !strings.Contains(le.Hint, "drop the :type") {
+	if !strings.Contains(le.Hint, "lore meta edit --id client --type number") || !strings.Contains(le.Hint, "drop the :type") {
 		t.Fatalf("hint = %q", le.Hint)
 	}
 }

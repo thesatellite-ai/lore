@@ -35,7 +35,7 @@ var ccInteractive = [][]string{{"setup"}, {"onboard"}, {"tui"}, {"api", "serve"}
 
 // ccBareClears are leaves whose required argument may be empty on
 // purpose, so a bare call is not refused for the missing argument:
-// `lore machine label ""` clears the label and the decoder cannot tell a
+// `lore machine label --label ""` clears the label and the decoder cannot tell a
 // missing argument from "" (ops/infra MachineLabelIn, G-ORGMIG-9). A bare
 // call still refuses, here for the missing own store.
 var ccBareClears = [][]string{{"machine", "label"}}

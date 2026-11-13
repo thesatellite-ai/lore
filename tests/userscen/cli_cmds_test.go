@@ -429,7 +429,7 @@ func TestCLI_SQLFormatsAndInput(t *testing.T) {
 		args []string
 		say  []string
 	}{
-		{[]string{"sql", "run", "   "}, []string{"[E_INVALID_INPUT] sql: a query is required", `hint: lore sql run "SELECT name, ip FROM res_server"`}},
+		{[]string{"sql", "run", "   "}, []string{"[E_INVALID_INPUT] sql: a query is required", `hint: lore sql run --query "SELECT name, ip FROM res_server"`}},
 		{[]string{"sql", "run", "SELECT 1", "--format", "xml"}, []string{`[E_INVALID_INPUT] sql: unknown --format "xml"`, "hint: one of table, csv, json"}},
 		{[]string{"sql", "run", "SELECT 1", "--timeout", "-1s"}, []string{"[E_INVALID_INPUT] sql: --timeout must be positive"}},
 		{[]string{"sql", "run", "SELECT 1", "--timeout", "soon"}, []string{"[E_INVALID_INPUT]"}},

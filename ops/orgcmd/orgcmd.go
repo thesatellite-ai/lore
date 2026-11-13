@@ -188,11 +188,11 @@ func Ops(env Env) []op.Entry {
 	}
 	return append([]op.Entry{
 		op.Define(spec(OpCreate, "Start a new org on a lore store: suggest it to teammates, add it with your identity, join its roster", asking, true,
-			op.Example{Title: "create an org", CLI: "lore org create agency --store agency --own 'github.com/agency/*' --key human:mira@agency.example --name Mira --yes", Want: "added org entry"}),
+			op.Example{Title: "create an org", CLI: "lore org create --org agency --store agency --own 'github.com/agency/*' --key human:mira@agency.example --name Mira --yes", Want: "added org entry"}),
 			func(ctx context.Context, in CreateIn) (Report, error) {
 				if strings.TrimSpace(in.Store) == "" {
 					return Report{}, errs.New(errs.InvalidInput, "name the org's store with --store <name in .lore/stores.yaml | url>").
-						WithHint("make one first with `lore store init <name> <url>`")
+						WithHint("make one first with `lore store init --name <name> --url <url>`")
 				}
 				if in.OrgFolder == "" {
 					in.OrgFolder = DefaultOrgFolder
@@ -200,15 +200,15 @@ func Ops(env Env) []op.Entry {
 				return o.ask(ctx, OpCreate, func(h Host, yes bool) (Report, error) { return h.Create(ctx, in, yes) })
 			}),
 		op.Define(spec(OpImport, "Adopt the org entry a team suggests in its store, with your identity, and join its roster", asking, true,
-			op.Example{Title: "join an org", CLI: "lore org import git@github.com:agency/notes --key human:me@agency.example --name Me --handle me", Want: "added org entry"},
-			op.Example{Title: "the suggested entry name is taken here", CLI: "lore org import git@github.com:agency/notes --key human:me@agency.example --name Me --as agency-2", Want: "added org entry"}),
+			op.Example{Title: "join an org", CLI: "lore org import --url git@github.com:agency/notes --key human:me@agency.example --name Me --handle me", Want: "added org entry"},
+			op.Example{Title: "the suggested entry name is taken here", CLI: "lore org import --url git@github.com:agency/notes --key human:me@agency.example --name Me --as agency-2", Want: "added org entry"}),
 			func(ctx context.Context, in ImportIn) (Report, error) {
 				return o.ask(ctx, OpImport, func(h Host, yes bool) (Report, error) { return h.Import(ctx, in, yes) })
 			}),
 		op.Define(spec(OpLink, "Link this repo to an internal project in the org's store", asking, true,
-			op.Example{Title: "link to an internal project", CLI: "lore org link agency --project client", Want: "linked"},
-			op.Example{Title: "one of the org's own repos", CLI: "lore org link agency --project lore-tools --own", Want: "linked"},
-			op.Example{Title: "the default link of a repo with several, checked first", CLI: "lore org link agency --project client2 --default --dry-run", Want: "nothing written"}),
+			op.Example{Title: "link to an internal project", CLI: "lore org link --org agency --project client", Want: "linked"},
+			op.Example{Title: "one of the org's own repos", CLI: "lore org link --org agency --project lore-tools --own", Want: "linked"},
+			op.Example{Title: "the default link of a repo with several, checked first", CLI: "lore org link --org agency --project client2 --default --dry-run", Want: "nothing written"}),
 			func(ctx context.Context, in LinkIn) (Report, error) {
 				if strings.TrimSpace(in.Project) == "" {
 					return Report{}, errs.New(errs.InvalidInput, "name the internal project folder with --project <folder>").
@@ -219,15 +219,15 @@ func Ops(env Env) []op.Entry {
 				})
 			}),
 		op.Define(spec(OpUnlink, "Remove this repo's links to the org's internal projects (a finished client project); asks first", asking, true,
-			op.Example{Title: "the client project ended", CLI: "lore org unlink agency", Want: "unlinked"},
-			op.Example{Title: "see what would go", CLI: "lore org unlink agency --dry-run", Want: "nothing written"}),
+			op.Example{Title: "the client project ended", CLI: "lore org unlink --org agency", Want: "unlinked"},
+			op.Example{Title: "see what would go", CLI: "lore org unlink --org agency --dry-run", Want: "nothing written"}),
 			func(ctx context.Context, in UnlinkIn) (Report, error) {
 				return o.ask(ctx, OpUnlink, func(h Host, yes bool) (Report, error) {
 					return withDefaultOrg(ctx, h, OpUnlink, &in.Org, func() (Report, error) { return h.Unlink(ctx, in, yes || in.DryRun) })
 				})
 			}),
 		op.Define(spec(OpRename, "Rename an org entry on this machine (a label change; the org's id and every row stay)", codes, false,
-			op.Example{Title: "rename", CLI: "lore org rename agency northwind", Want: "is now"}),
+			op.Example{Title: "rename", CLI: "lore org rename --old agency --new northwind", Want: "is now"}),
 			func(ctx context.Context, in RenameIn) (RenameOut, error) {
 				h, err := o.host(ctx, OpRename)
 				if err != nil {
@@ -236,12 +236,12 @@ func Ops(env Env) []op.Entry {
 				return h.Rename(ctx, in)
 			}),
 		op.Define(spec(OpSet, "Write the committed .lore/org.yaml (only in the org's own repos)", codes, false,
-			op.Example{Title: "name the org for every teammate", CLI: "lore org set agency --commit", Want: "wrote"},
-			op.Example{Title: "the org and its internal project", CLI: "lore org set agency --commit --project lore-tools", Want: "wrote"}),
+			op.Example{Title: "name the org for every teammate", CLI: "lore org set --org agency --commit", Want: "wrote"},
+			op.Example{Title: "the org and its internal project", CLI: "lore org set --org agency --commit --project lore-tools", Want: "wrote"}),
 			func(ctx context.Context, in SetIn) (Report, error) {
 				if !in.Commit {
 					return Report{}, errs.New(errs.InvalidInput, "lore org set writes a COMMITTED file; pass --commit to confirm").
-						WithHint("for a machine-only choice use `lore org use " + in.Org + "`")
+						WithHint("for a machine-only choice use `lore org use --entry " + in.Org + "`")
 				}
 				h, err := o.host(ctx, OpSet)
 				if err != nil {
@@ -250,7 +250,7 @@ func Ops(env Env) []op.Entry {
 				return h.Set(ctx, in)
 			}),
 		op.Define(spec(OpUse, "Choose the org entry for this project on this machine (not committed)", codes, false,
-			op.Example{Title: "work against the staging store branch here", CLI: "lore org use agency-stag", Want: ""},
+			op.Example{Title: "work against the staging store branch here", CLI: "lore org use --entry agency-stag", Want: ""},
 			op.Example{Title: "back to automatic resolution", CLI: "lore org use --clear", Want: ""}),
 			func(ctx context.Context, in UseIn) (Report, error) {
 				if in.Clear && in.Entry != "" {

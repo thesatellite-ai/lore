@@ -76,7 +76,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		p := jPath(t, lee.Lore(web, "path", t1, "--json").OK(t))
 		storeDir = strings.TrimSuffix(p.Path, string(filepath.Separator)+filepath.Join(jHandA, "tasks", t1+".json"))
 		if storeDir == p.Path {
-			t.Fatalf("lore path %s = %s, want it under the %s folder of the store clone", t1, p.Path, jHandA)
+			t.Fatalf("lore path --id %s = %s, want it under the %s folder of the store clone", t1, p.Path, jHandA)
 		}
 		// Ann joins and works in her own clone of the store's folder
 		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email)
@@ -164,7 +164,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		if err := os.Remove(file(jHandA, t2)); err != nil {
 			t.Fatal(err)
 		}
-		lee.Lore(web, "task", "list").OK(t).Says(t, "deleted tasks "+t2, "lore trash restore "+t2).Never(t, "Task two")
+		lee.Lore(web, "task", "list").OK(t).Says(t, "deleted tasks "+t2, "lore trash restore --target "+t2).Never(t, "Task two")
 		lee.Lore(web, "trash", "list").OK(t).Says(t, t2)
 		lee.Lore(web, "trash", "restore", t2).OK(t)
 		lee.Lore(web, "show", t2).OK(t).Says(t, "Task two")

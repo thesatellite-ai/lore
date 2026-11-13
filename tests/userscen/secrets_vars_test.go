@@ -59,7 +59,7 @@ func TestSecretsVarsLifecycle(t *testing.T) {
 
 	s.c.MustLore("vars", "rm", "database_host", "--yes").Says(t, "removed variable database_host")
 	// The removed variable is in the trash, and show names the way back.
-	s.c.Lore("vars", "show", "database_host").Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore "+one.ID)
+	s.c.Lore("vars", "show", "database_host").Fails(t, th.ExitRefused, "E_IN_TRASH", "lore trash restore --target "+one.ID)
 	s.c.Lore("vars", "rm", "database_host").Refused(t)
 	s.c.MustLore("vars", "list").Never(t, "database_host")
 	// A removed variable's name may be set again.
@@ -128,7 +128,7 @@ func TestSecretsVarsNameAndTypeMatrix(t *testing.T) {
 func TestSecretsVarsReferencesAndCycles(t *testing.T) {
 	s := newSecSolo(t)
 	s.c.Lore("vars", "set", "a", "${var:b}").
-		Fails(t, 20, "E_REF_DANGLING", "a refers to ${var:b}", "lore vars set b <value> first, or pass --allow-dangling")
+		Fails(t, 20, "E_REF_DANGLING", "a refers to ${var:b}", "lore vars set --name b --value <value> first, or pass --allow-dangling")
 	s.c.MustLore("vars", "set", "a", "${var:b}", "--allow-dangling")
 	s.c.Lore("vars", "set", "b", "${var:a}").
 		Fails(t, 20, "E_REF_CYCLE", "var:b -> var:a -> var:b", "nothing written")
@@ -199,7 +199,7 @@ func TestSecretsVarsSecretsAndPlaces(t *testing.T) {
 	}
 
 	s.c.Lore("vars", "set", "region", "eu", "--to", "me").
-		Fails(t, th.ExitNotFound, "E_NOT_FOUND", "no store named me", "lore store init me")
+		Fails(t, th.ExitNotFound, "E_NOT_FOUND", "no store named me", "lore store init --name me")
 	s.c.Lore("vars", "set", "region", "eu", "--to", "nosuchstore").Fails(t, th.ExitNotFound, "E_NOT_FOUND", "nosuchstore")
 	s.c.MustLore("vars", "list").Never(t, "region")
 }

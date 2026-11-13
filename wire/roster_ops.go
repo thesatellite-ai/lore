@@ -206,7 +206,7 @@ func (a *App) rosterInactive(ctx context.Context, r rosterAt, handle string) err
 		}
 		e := errs.New(errs.StatusChange, rosterShown(x)+" is already "+x.Status+"; nothing to deactivate")
 		if x.Kind == schema.ActorKindHuman {
-			return e.WithHint("to bring them back: lore actor rejoin " + rosterRef(x) + " --type employee|contractor|intern|client_contact")
+			return e.WithHint("to bring them back: lore actor rejoin --actor " + rosterRef(x) + " --type employee|contractor|intern|client_contact")
 		}
 		return e
 	}
@@ -245,7 +245,7 @@ func (r rosterAt) handleMissErr(handle string) error {
 // goneErr refuses agents to a caller who left r (status left|archived).
 func (r rosterAt) goneErr(status, ref string) error {
 	return errs.New(errs.StatusChange, "you are "+status+" on the roster in "+r.shown()+", so you cannot start agents there").
-		WithHint("ask an admin to run `lore actor rejoin " + ref + " --type …`")
+		WithHint("ask an admin to run `lore actor rejoin --actor " + ref + " --type …`")
 }
 
 // unregisteredErr refuses agents to a caller with no row on r.

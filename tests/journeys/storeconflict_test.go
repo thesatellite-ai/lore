@@ -98,7 +98,7 @@ func TestJourneyTeamLeadStoreConflict(t *testing.T) {
 		cf := tt.lore(tlAnn, "sync", "conflicts").OK(t)
 		t.Logf("sync conflicts:\n%s", cf)
 		cf.Says(t, "#1 tasks/"+taskID, "store "+tlOrg+"/"+tlProject,
-			"both sides changed title", `"Title by ANN"`, `"Title by LEE"`, "lore sync resolve 1 --take kept|other")
+			"both sides changed title", `"Title by ANN"`, `"Title by LEE"`, "lore sync resolve --id 1 --take kept|other")
 		var js struct {
 			Data []struct {
 				Store    string   `json:"store"`

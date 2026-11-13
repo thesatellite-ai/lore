@@ -284,7 +284,7 @@ func storeConflictNumbered(out *opssync.ConflictsOut, cs []StoreConflict) {
 		}
 		out.Data = append(out.Data, opssync.Conflict{ID: int64(n), Table: string(c.Table), RowID: c.ID.String(), Kept: storeConflictKept,
 			OtherDoc: string(c.TheirsDoc), KeptDoc: string(c.MineDoc), Store: c.Store, Fields: names})
-		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (store %s: both sides changed %s; settle with lore sync resolve %d --take kept|other, or edit the row so both agree)",
+		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (store %s: both sides changed %s; settle with lore sync resolve --id %d --take kept|other, or edit the row so both agree)",
 			n, c.Table, c.ID, storeConflictKept, c.Store, what, n))
 		for _, f := range c.Fields {
 			out.Lines = append(out.Lines, "    "+f.Name+" mine (kept):    "+f.Mine, "    "+f.Name+" theirs (other): "+f.Theirs)

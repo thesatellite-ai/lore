@@ -151,8 +151,11 @@ func TestDefinePanicsOnBadTags(t *testing.T) {
 	type gap struct {
 		A string `arg:"1" json:"a"`
 	}
+	// U-4: a positional's derived flag (its json name) may not clash with
+	// another field's flag.
 	type both struct {
-		A string `arg:"0" flag:"a" json:"a"`
+		A string `arg:"0" json:"a"`
+		B string `flag:"a" json:"b"`
 	}
 	type nested struct {
 		A struct{} `json:"a"`
@@ -171,7 +174,7 @@ func TestDefinePanicsOnBadTags(t *testing.T) {
 	run("arg gap", func() {
 		Define(Spec{Name: "a.b"}, func(context.Context, gap) (struct{}, error) { return struct{}{}, nil })
 	})
-	run("arg and flag", func() {
+	run("positional flag clash", func() {
 		Define(Spec{Name: "a.b"}, func(context.Context, both) (struct{}, error) { return struct{}{}, nil })
 	})
 	run("nested input", func() {

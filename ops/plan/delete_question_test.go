@@ -24,7 +24,7 @@ func TestPlanDeleteQuestion(t *testing.T) {
 		t.Fatalf("plain question: %s", msg)
 	}
 	got := opstest.Text(h.MustYes("plan.delete", `{"id":"`+empty+`"}`))
-	if !strings.Contains(got, "moved to the trash (restore: lore trash restore "+empty+")") || strings.Contains(got, "batch") {
+	if !strings.Contains(got, "moved to the trash (restore: lore trash restore --target "+empty+")") || strings.Contains(got, "batch") {
 		t.Fatalf("plain line: %q", got)
 	}
 
@@ -37,7 +37,7 @@ func TestPlanDeleteQuestion(t *testing.T) {
 		t.Fatalf("counted question: %s", msg)
 	}
 	got = opstest.Text(h.MustYes("plan.delete", `{"id":"`+full+`"}`))
-	batch := regexp.MustCompile(`batch (bat_[0-9a-f]{32}); restore: lore trash restore (bat_[0-9a-f]{32})`).FindStringSubmatch(got)
+	batch := regexp.MustCompile(`batch (bat_[0-9a-f]{32}); restore: lore trash restore --target (bat_[0-9a-f]{32})`).FindStringSubmatch(got)
 	if batch == nil || batch[1] != batch[2] || !strings.Contains(got, "+ 2 rows moved to the trash") {
 		t.Fatalf("batch line: %q", got)
 	}

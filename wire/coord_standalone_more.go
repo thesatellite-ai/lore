@@ -286,7 +286,7 @@ func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleas
 
 // gateRequested is gate request's line.
 func gateRequested(id string) []string {
-	return []string{fmt.Sprintf("%s gate requested on %s; agents stop until a person runs `lore gate approve %s`", markOK, id, id)}
+	return []string{fmt.Sprintf("%s gate requested on %s; agents stop until a person runs `lore gate approve --id %s`", markOK, id, id)}
 }
 
 // GateRequest implements opscoord.Host (§7.4 "Gates", TEAM-028): the

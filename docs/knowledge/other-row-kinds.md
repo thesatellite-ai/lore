@@ -44,7 +44,7 @@ hfx_f147…5139 [critical] Use the old button until the fix ships.
 ```
 <!-- /example -->
 
-When the problem is fixed, archive the hotfix (`lore hotfix archive <id>`) so it stops showing.
+When the problem is fixed, archive the hotfix (`lore hotfix archive --id <id>`) so it stops showing.
 
 ## Step 2 — Add the other kinds
 
@@ -177,20 +177,20 @@ lore: wrote ~/work/website/.lore/data/tech_docs/tdc_376c…8e1a.json
 
 ## Step 4 — Read, change and search one kind
 
-Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show <id>` prints every field of any row. `lore <kind> edit <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone.
+Every kind has `show`, `search` and `delete`; most have `edit` too. `lore <kind> show <id>` prints a two-letter tag and the id, the title or name, any references and the body; `lore show --id <id>` prints every field of any row. `lore <kind> edit <id>` changes only the flags you give, and `lore <kind> search <words>` searches that kind alone.
 
 <!-- example: knowledge#other-kinds-show-edit -->
 ```console
 # alice, in website
-$ lore pattern show pat_2537…6bbb
+$ lore pattern show --id pat_2537…6bbb
 PA  pat_2537…6bbb
   title: Load data in one place
 Each page loads its data in its loader, never inside a button handler.
 created 2026-11-02T10:03:10Z by alice · updated 2026-11-02T10:03:10Z by alice
-$ lore pattern edit pat_2537…6bbb --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
+$ lore pattern edit --id pat_2537…6bbb --body 'Each page loads its data in its loader, never inside a button handler or an effect.'
 lore: wrote ~/work/website/.lore/data/patterns/pat_2537…6bbb.json
 ✓ pattern pat_2537…6bbb updated
-$ lore pattern search loader
+$ lore pattern search --query loader
 pat_2537…6bbb Load data in one place
 ```
 <!-- /example -->
@@ -200,11 +200,11 @@ pat_2537…6bbb Load data in one place
 <!-- example: knowledge#incident-edit -->
 ```console
 # alice, in website
-$ lore incident edit inc_4f89…b64b --severity high --ref pat_2537…6bbb --relation fixed_by
+$ lore incident edit --id inc_4f89…b64b --severity high --ref pat_2537…6bbb --relation fixed_by
 lore: wrote ~/work/website/.lore/data/incidents/inc_4f89…b64b.json
 lore: wrote ~/work/website/.lore/data/knowledge_refs/kfr_71f0…c07d.json
 ✓ inc_4f89…b64b updated
-$ lore incident show inc_4f89…b64b
+$ lore incident show --id inc_4f89…b64b
 IN  inc_4f89…b64b
   title: Site down for 20 minutes
   fixed_by patterns/pat_2537…6bbb
@@ -218,7 +218,7 @@ To read the whole incident, use `lore show`, which works for any id:
 <!-- example: knowledge#show-any-row only=1 -->
 ```console
 # alice, in website
-$ lore show inc_4f89…b64b
+$ lore show --id inc_4f89…b64b
 inc_4f89…b64b  incidents  repo  "Site down for 20 minutes"
   body: The disk filled up with logs. We now rotate logs daily.
   created_by_actor_id: act_ada3…c018
@@ -236,12 +236,12 @@ Hotfixes, patterns, playbooks, prompts and snapshots can be archived: the row st
 <!-- example: knowledge#other-kinds-archive -->
 ```console
 # alice, in website
-$ lore snapshot archive snp_6a86…ed8c
+$ lore snapshot archive --id snp_6a86…ed8c
 lore: wrote ~/work/website/.lore/data/snapshots/snp_6a86…ed8c.json
 ✓ snp_6a86…ed8c archived
 $ lore snapshot list
 (no snapshots)
-$ lore snapshot unarchive snp_6a86…ed8c
+$ lore snapshot unarchive --id snp_6a86…ed8c
 lore: wrote ~/work/website/.lore/data/snapshots/snp_6a86…ed8c.json
 ✓ snp_6a86…ed8c unarchived
 ```
@@ -264,7 +264,7 @@ tdc_376c…8e1a Payments docs https://docs.example.com/payments
 - **Some lists show only the id.** `lore incident list` and `lore tastepref list` print a two-letter tag and the id, not the text. Use `lore <kind> show <id>` or `lore search` to read them.
 - **`hotfix list` shows the body, not the title.** Keep the first words of the body clear.
 - **Not every kind has `edit` or `archive`.** Snapshots and tech docs have no `edit`; only rules, memories, decisions, hotfixes, patterns, playbooks, prompts and snapshots have `archive`. Run `lore <kind> --help` to see the verbs.
-- **`<kind> show` is short on purpose.** For patterns, playbooks, prompts, behaviours, architecture notes, cookbook recipes, suggestions, taste preferences, workflows and workspaces it prints the tag and the id only (the 0.1.17 shape scripts depend on). Use `lore show <id>` or `--json` to read the title and body.
+- **`<kind> show` is short on purpose.** For patterns, playbooks, prompts, behaviours, architecture notes, cookbook recipes, suggestions, taste preferences, workflows and workspaces it prints the tag and the id only (the 0.1.17 shape scripts depend on). Use `lore show --id <id>` or `--json` to read the title and body.
 - **Only rules and hotfixes are pinned.** The other kinds reach the coding tool through `lore search`, not through the rendered file. See [Render](render-and-agent-files.md).
 
 ## Related

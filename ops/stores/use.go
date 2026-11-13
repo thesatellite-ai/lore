@@ -94,8 +94,8 @@ func useOp(m Manager) op.Entry {
 		Name: OpUse, Summary: "Use your own git clone of a store (cloned anywhere) instead of lore's clone under ~/.lore/stores; --default goes back",
 		Permission: op.PermWrite, Access: op.AccessRead, Errors: useErrors,
 		Examples: []op.Example{
-			{Title: "use a clone you made yourself", CLI: "git clone git@github.com:acme/notes ~/work/notes && lore store use ~/work/notes", Want: "now uses your clone"},
-			{Title: "name the store when its url is configured twice", CLI: "lore store use ~/work/notes-staging --store notes_staging", Want: "now uses your clone"},
+			{Title: "use a clone you made yourself", CLI: "git clone git@github.com:acme/notes ~/work/notes && lore store use --path ~/work/notes", Want: "now uses your clone"},
+			{Title: "name the store when its url is configured twice", CLI: "lore store use --path ~/work/notes-staging --store notes_staging", Want: "now uses your clone"},
 			{Title: "go back to lore's own clone", CLI: "lore store use --default notes", Want: "uses lore's own clone again"},
 		},
 	}, func(ctx context.Context, in UseIn) (UseOut, error) {
@@ -103,10 +103,10 @@ func useOp(m Manager) op.Entry {
 		switch {
 		case in.Default != "" && (in.Path != "" || in.Store != ""):
 			return UseOut{}, errs.New(errs.InvalidInput, verb+": --default takes the store alone; give either <path> or --default <store>").
-				WithHint("lore store use <path> [--store <store>], or lore store use --default <store>")
+				WithHint("lore store use --path <path> [--store <store>], or lore store use --default <store>")
 		case in.Default == "" && in.Path == "":
-			return UseOut{}, errs.New(errs.InvalidInput, verb+": name your clone of the store; usage: lore store use <path> [--store <store>]").
-				WithHint("clone the store first (git clone <store url> <folder>), then lore store use <folder>; lore store use --default <store> goes back to lore's own clone")
+			return UseOut{}, errs.New(errs.InvalidInput, verb+": name your clone of the store; usage: lore store use --path <path> [--store <store>]").
+				WithHint("clone the store first (git clone <store url> <folder>), then lore store use --path <folder>; lore store use --default <store> goes back to lore's own clone")
 		}
 		u, ok := upgrade.As[CloneUser](m)
 		if !ok {

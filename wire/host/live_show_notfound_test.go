@@ -11,7 +11,7 @@ import (
 
 // TestLiveShowUnknownIDIsNotFound is the host half of the lookup parity
 // matrix (ops/internal/lookup TestLookupNotFoundMatrix, G-HOST-1): where
-// live rows apply, `lore live show <id>` answers E_NOT_FOUND for every
+// live rows apply, `lore live show --id <id>` answers E_NOT_FOUND for every
 // kind of id the live folder lacks (malformed, wrong case, huge, unicode,
 // all zeros, a well-formed unknown id of a live table and of another
 // table), with an empty live ref and with one holding rows; the id the

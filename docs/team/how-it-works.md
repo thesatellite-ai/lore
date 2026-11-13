@@ -36,7 +36,7 @@ Sometimes lore cannot tell whether the repo is a client repo: the store cannot b
 
 ## Lookup: which copy of a row wins
 
-A command that takes an id (`lore task done tsk_…`) has to find exactly one copy. A **tombstone** below is a marker on live that says "this row was deleted".
+A command that takes an id (`lore task done --id tsk_…`) has to find exactly one copy. A **tombstone** below is a marker on live that says "this row was deleted".
 
 ```text
  for each loaded source, in order:            in each source:
@@ -50,12 +50,12 @@ A command that takes an id (`lore task done tsk_…`) has to find exactly one co
  found nowhere          → E_NOT_FOUND with a `lore sync peek` hint
 ```
 
-Live always wins over branch data. So you see a teammate's edit on live, whatever your branch holds. `lore explain <id>` prints every copy and which one won:
+Live always wins over branch data. So you see a teammate's edit on live, whatever your branch holds. `lore explain --id <id>` prints every copy and which one won:
 
 <!-- example: small-team#explain -->
 ```console
 # alice, in billing
-$ lore explain tsk_54fe…28f2
+$ lore explain --id tsk_54fe…28f2
 tsk_54fe…28f2 in ~/work/billing (folder _root)
   fetched 50s ago
   live (local 6d00426): row, live since 2026-11-02T10:00:15Z, hlc 2026-11-02T10:00:40.000Z/0000/act_7a67…9504
@@ -122,7 +122,7 @@ Your branch, your staged files and your working folder are never touched. Lore b
 <!-- example: errors#refs-refused-by-the-host only=1,2 -->
 ```console
 # bob, in portal
-$ lore task add 'set up the portal CI'
+$ lore task add --title 'set up the portal CI'
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
@@ -172,14 +172,14 @@ lore live: landed on main; this checkout is on feature, so those rows show here 
 
 Run `git merge origin/main` (or `git pull origin main`) on the branch and the rows show again. Nothing is lost: the rows are on `main`, and teammates on `main` see them at once.
 
-`lore land --dry-run` prints the plan for every row with its reason. `lore explain <id>` gives the decision for one row (`land: waits: main is protected; rides on your next push`).
+`lore land --dry-run` prints the plan for every row with its reason. `lore explain --id <id>` gives the decision for one row (`land: waits: main is protected; rides on your next push`).
 
 ## Protected main: the ride-along commit
 
 A **protected branch** is one GitHub only lets you change through a pull request. When the remote refuses a direct push to `main` for this reason, the finished rows wait. Your next commit on any branch other than `main` carries them:
 
 ```text
- lore task done tsk_…        → "main is protected: the rows ride on your next push"
+ lore task done --id tsk_…        → "main is protected: the rows ride on your next push"
  git commit -m "fix login"   → post-commit hook adds a second commit:
                                   c95f118 fix login timeout
                                   8390546 lore: land 1 row (_root)     ← only the row files
@@ -189,7 +189,7 @@ A **protected branch** is one GitHub only lets you change through a pull request
 <!-- example: small-team#protected-main only=2,4,5 -->
 ```console
 # alice, in billing
-$ lore sync >/dev/null && lore task done tsk_c0f3…b5b8
+$ lore sync >/dev/null && lore task done --id tsk_c0f3…b5b8
 lore: wrote ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
@@ -270,7 +270,7 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 <!-- example: internals#signals only=2,3,4,5,6 -->
 ```console
 # agent-backend, in website
-$ lore task claim tsk_76bd…3f10
+$ lore task claim --id tsk_76bd…3f10
 lore: pushed store agency: commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147…5139.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
@@ -298,7 +298,7 @@ $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/sign
 }
 
 # agent-backend, in website
-$ lore task heartbeat tsk_76bd…3f10
+$ lore task heartbeat --id tsk_76bd…3f10
 ✓ tsk_76bd…3f10 renewed until 2026-11-02T10:21:25Z (seq 1)
 
 # alice, in ~
@@ -348,7 +348,7 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 <!-- example: agents#done-then-merged only=3,4,5,6,7 -->
 ```console
 # agent-backend, in agents/api
-$ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
+$ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 lore: pushed store agency: commit a8de760 to branch main
 lore: pushed store agency: commit 9169078 to branch main
 lore: pushed store agency: commit b733d8a to branch main
@@ -444,7 +444,7 @@ A **link** tells lore that a store folder holds the agency's private notes for o
 ## Store checks
 
 <!-- ds:block id=team-store-allowed-a7qb5uuj lines=1-30 -->
-A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore's files (the signpost `.0-needs-lore-0.1.18-or-newer` that lore 0.1.17 names when it refuses the store, row files at `<folder>/<table>/<id>.json` and `_store/<table>/<id>.json`, each folder's `_meta.json` and `_purged.json`, `lore-org.yaml`, and the files of the older layouts: `.lore/` folders and `<table>/<id>.json` at the top) plus the starter files a git host offers (`README*`, `LICENSE*`, `LICENCE*`, `COPYING*`, `.gitignore`, `.gitattributes`) and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init <name> <url>` turns a new empty repo into a store and attaches it; `lore store init <name> '<url>?branch=staging'` creates another store branch, and `lore store add <name> <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
+A repo listed under `stores:` must be a lore store: it needs `lore-store.yaml` at its root, and may hold only lore's files (the signpost `.0-needs-lore-0.1.18-or-newer` that lore 0.1.17 names when it refuses the store, row files at `<folder>/<table>/<id>.json` and `_store/<table>/<id>.json`, each folder's `_meta.json` and `_purged.json`, `lore-org.yaml`, and the files of the older layouts: `.lore/` folders and `<table>/<id>.json` at the top) plus the starter files a git host offers (`README*`, `LICENSE*`, `LICENCE*`, `COPYING*`, `.gitignore`, `.gitattributes`) and `.github/workflows/lore-*.yml`. Lore checks this (with `git ls-tree`, no checkout) every time it reads a store at a new commit, and refuses with `E_NOT_A_STORE` otherwise, so a code repo is never cloned into `~/.lore/stores` or committed to by lore. `lore store init --name <name> --url <url>` turns a new empty repo into a store and attaches it; `lore store init --name <name> --url '<url>?branch=staging'` creates another store branch, and `lore store add --name <name> --url <url> --branch staging` attaches it in another repo. A missing store branch is never created by accident.
 
 ## Leak guards
 
@@ -523,7 +523,7 @@ Agents get the private text through `lore context` and the session hooks; nothin
 ## Pitfalls
 
 - **Never edit lore's hidden lists by hand** (`refs/lore/live`, `refs/lore/signals`). Lore writes them itself. If the remote's live list is deleted or replaced (a mirror push, a mistaken delete), lore stops writing to it and keeps a local backup: every live write, `lore sync` and `lore land` refuse with `E_READ_ONLY` (exit 23) until then, and that sync exchanges nothing with the attached stores either, so it never reports success it could not deliver. `lore live restore` pushes that backup back.
-- **A protected `main` delays landing.** Finished rows wait and ride on your next commit to another branch. `lore explain <id>` says why a row has not landed yet.
+- **A protected `main` delays landing.** Finished rows wait and ride on your next commit to another branch. `lore explain --id <id>` says why a row has not landed yet.
 
 ## Related
 

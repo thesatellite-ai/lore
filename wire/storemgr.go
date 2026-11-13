@@ -100,7 +100,7 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 			if found {
 				if !samePlace(old, attach.Store{URL: raw}) {
 					return opsstores.InitOut{}, errs.New(errs.InvalidInput, "store: this repo's "+attach.FileName+" already attaches "+in.Name+" to "+old.URL+", not "+raw).
-						WithHint("drop the old entry with `lore store remove "+in.Name+"` (its rows stay in that store), then save again; or pick another team name").
+						WithHint("drop the old entry with `lore store remove --name "+in.Name+"` (its rows stay in that store), then save again; or pick another team name").
 						WithNext("lore", "store", "remove", in.Name)
 				}
 				noRepo = true
@@ -239,7 +239,7 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		if reset {
 			shown := raw
 			return rowfs.Marker{}, false, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
-				WithHint("start fresh: lore store forget " + shown + ", then run this command again; or put the old store back: lore store add <name> " + shown + ", then lore store push <name> --restore")
+				WithHint("start fresh: lore store forget --url " + shown + ", then run this command again; or put the old store back: lore store add <name> " + shown + ", then lore store push <name> --restore")
 		}
 		return old, true, nil
 	}
@@ -578,7 +578,7 @@ func (a *App) AddStore(ctx context.Context, in opsstores.AddIn) (opsstores.Entry
 				WithHint("create the branch in the store repo from its default branch (git push origin <default>:" + in.Branch + "), then attach it")
 		}
 		return opsstores.Entry{}, errs.Wrap(errs.NotAStore, "store add: "+in.Name+" has no "+rowfs.MarkerFile, store.ErrNotAStore).
-			WithHint("make it a store first: lore store init " + in.Name + " <url>")
+			WithHint("make it a store first: lore store init --name " + in.Name + " --url <url>")
 	}
 	if in.Folder != "" {
 		ok, ferr := a.folderExists(ctx, s, in.Folder)
@@ -763,7 +763,7 @@ func (a *App) checkUnused(ctx context.Context, name string, place attach.Store) 
 	for _, s := range cfg.Stores {
 		if string(s.Name) == name {
 			return errs.New(errs.InvalidInput, "store: the name "+name+" is already used in "+attach.FileName+" (for "+s.URL+")").
-				WithHint("pick another name, or drop that entry with `lore store remove "+name+"` (its rows stay in that store)").
+				WithHint("pick another name, or drop that entry with `lore store remove --name "+name+"` (its rows stay in that store)").
 				WithNext("lore", "store", "remove", name)
 		}
 	}

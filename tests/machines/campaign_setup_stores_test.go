@@ -45,7 +45,7 @@ func TestCampaignSetup_Join(t *testing.T) {
 	m := Build(t, ShapeFresh, loreBin)
 	inv := csInvite(t, "git@github.com:acme/notes.git", "2030-01-01")
 	before := csConfig(t, m)
-	for _, line := range []string{inv, "lore setup join " + inv, "  " + inv + "==  "} {
+	for _, line := range []string{inv, "lore setup join --invite " + inv, "  " + inv + "==  "} {
 		r := m.Lore(t, "", "setup", "join", line, "--no-open", "--json")
 		out := csOK(t, r)
 		csConforms(t, "setup.join", out)

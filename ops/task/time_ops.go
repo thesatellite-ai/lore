@@ -162,28 +162,28 @@ func timeOps(o ops) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpTimeShow, Summary: "Show a task's tracked time (effort, elapsed, manual, per worker)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors,
-			Examples: []op.Example{{Title: "per person with agents", CLI: "lore task time show tsk_<id> --group-by person", Want: "effort"}},
+			Examples: []op.Example{{Title: "per person with agents", CLI: "lore task time show --id tsk_<id> --group-by person", Want: "effort"}},
 		}, o.timeShow),
 		op.Define(op.Spec{
 			Name: OpTimeLog, Summary: "Log time on a task by hand",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "log a call", CLI: `lore task time log tsk_<id> 1h30m --note "call with acme"`, Want: "logged"}},
+			Examples: []op.Example{{Title: "log a call", CLI: `lore task time log --id tsk_<id> --duration 1h30m --note "call with acme"`, Want: "logged"}},
 		}, o.timeLog),
 		op.Define(op.Spec{
-			Name: OpTimeEdit, Examples: []op.Example{{Title: "fix a manual entry", CLI: `lore task time edit tme_<id> --duration 45m --note "pairing"`, Want: "tme_"}}, Summary: "Change a time entry (auto entries keep their original times)",
+			Name: OpTimeEdit, Examples: []op.Example{{Title: "fix a manual entry", CLI: `lore task time edit --id tme_<id> --duration 45m --note "pairing"`, Want: "tme_"}}, Summary: "Change a time entry (auto entries keep their original times)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
 		}, o.timeEdit),
 		op.Define(op.Spec{
-			Name: OpTimeRm, Examples: []op.Example{{Title: "remove an entry", CLI: "lore task time rm tme_<id> --yes", Want: "removed"}}, Summary: "Remove a time entry (kept as a tombstone; restore undoes it)",
+			Name: OpTimeRm, Examples: []op.Example{{Title: "remove an entry", CLI: "lore task time rm --id tme_<id> --yes", Want: "removed"}}, Summary: "Remove a time entry (kept as a tombstone; restore undoes it)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(work.WriteErrors), errs.NeedsConfirm),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.timeRm),
 		op.Define(op.Spec{
-			Name: OpTimeRestore, Examples: []op.Example{{Title: "undo a removal", CLI: "lore task time restore tme_<id>", Want: "restored"}}, Summary: "Undo the removal of a time entry",
+			Name: OpTimeRestore, Examples: []op.Example{{Title: "undo a removal", CLI: "lore task time restore --id tme_<id>", Want: "restored"}}, Summary: "Undo the removal of a time entry",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.timeRestore),
 		op.Define(op.Spec{
-			Name: OpTimeStop, Examples: []op.Example{{Title: "stop your clock", CLI: "lore task time stop tsk_<id>", Want: "stopped"}}, Summary: "Close your own open status span; the status stays",
+			Name: OpTimeStop, Examples: []op.Example{{Title: "stop your clock", CLI: "lore task time stop --id tsk_<id>", Want: "stopped"}}, Summary: "Close your own open status span; the status stays",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
 		}, o.timeStop),
 	}
@@ -818,7 +818,7 @@ func (o ops) timeLog(ctx context.Context, in TimeLogIn) (work.WriteOut, error) {
 				continue
 			}
 			if timecalc.Overlaps(e.StartTime(), e.EndTime(), x.StartTime(), x.EndTime()) {
-				human += "  hint: this overlaps " + string(x.Source) + " time " + x.Start + " to " + x.End + " (" + x.ID.String() + "); if it is the same work, remove one: lore task time rm " + eid.String() + "\n"
+				human += "  hint: this overlaps " + string(x.Source) + " time " + x.Start + " to " + x.End + " (" + x.ID.String() + "); if it is the same work, remove one: lore task time rm --id " + eid.String() + "\n"
 				break
 			}
 		}
@@ -862,7 +862,7 @@ func (o ops) findEntry(ctx context.Context, raw string) (entryHit, error) {
 	}
 	switch len(hits) {
 	case 0:
-		return entryHit{}, errs.New(errs.NotFound, "no time entry "+work.Quote(raw)).WithHint("lore task time show <task> --entries lists the ids")
+		return entryHit{}, errs.New(errs.NotFound, "no time entry "+work.Quote(raw)).WithHint("lore task time show --id <task> --entries lists the ids")
 	case 1:
 		return hits[0], nil
 	}

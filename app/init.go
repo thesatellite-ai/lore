@@ -103,23 +103,23 @@ func initScope(o *wire.Options) {
 	o.DefaultTarget = nil
 }
 
-// initCommand is `lore init [<path>] [--name] [--target] [--non-interactive]`;
+// initCommand is `lore init [--path <path>] [--name] [--target] [--non-interactive]`;
 // run has already taken <path> off the arguments (initpath.go).
 func (h *host) initCommand(wd string) *cobra.Command {
 	var in repoinit.InitIn
 	// Read now, before any command opens the store (and creates the cache).
 	ih := h.initHost(wd, hasLocalState(h.home, wd))
 	cmd := &cobra.Command{
-		Use:   "init [path]",
+		Use:   "init [--" + initPathFlag + " <path>]",
 		Short: "Initialize a lore project in this repository (project row and repo id)",
 		Example: "  # set up the repo you are in (points AGENTS.md, or the tool files found, at .lore/LORE.md)\n" +
 			"  lore init\n" +
 			"  # a monorepo package as its own project, wired for Claude Code\n" +
-			"  lore init services/billing --target claude_code",
+			"  lore init --path services/billing --target claude_code",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 { // run takes the path off first; reaching here means it could not
-				return errs.New(errs.InvalidInput, "init: run lore init "+args[0]+" as the whole command")
+				return errs.New(errs.InvalidInput, "init: run lore init --path "+args[0]+" as the whole command")
 			}
 			// the rows init writes are named like any write's (wire/host
 			// writeloc.go: lore repo init runs through that hook)
@@ -138,6 +138,9 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			return err
 		},
 	}
+	// --path is read before the command runs (initPathArg); declared here
+	// so --help lists it.
+	_ = cmd.Flags().String(initPathFlag, "", "the folder to set up (default: the one you are in)")
 	cmd.Flags().StringVar(&in.Name, initFlagName, "", "project name (default: the repo name of origin's URL, else the folder name)")
 	cmd.Flags().StringSliceVar(&in.Target, flagTarget, nil, "AI tool profile(s) or file(s) to point at .lore/LORE.md (default: the tools of the setup that applies here, else tool files found in the repo, else AGENTS.md)")
 	cmd.Flags().BoolVar(&in.NonInteractive, flagNonInteractive, false, "accepted for v0.1.17 scripts; init never asks")

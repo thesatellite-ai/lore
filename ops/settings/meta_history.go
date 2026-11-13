@@ -102,7 +102,7 @@ func (o ops) metaHistoryOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpMetaHistory, Summary: "Dated metadata value changes of one row, from git history (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors:   append(slices.Clone(readErrors), errs.Unsupported),
-			Examples: []op.Example{{Title: "one key's history", CLI: "lore meta history tsk_… cost_hours", Want: "set"}}}, o.metaHistory),
+			Examples: []op.Example{{Title: "one key's history", CLI: "lore meta history --id tsk_… --key cost_hours", Want: "set"}}}, o.metaHistory),
 	}
 }
 

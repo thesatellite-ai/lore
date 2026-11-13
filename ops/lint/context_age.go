@@ -53,7 +53,7 @@ func ageFindings(all map[row.Table][]sourced, now time.Time) []Finding {
 				!s.r.CreatedAt.IsZero() && now.Sub(s.r.CreatedAt) > highHotfixMaxAge {
 				out = append(out, Finding{Code: HighHotfixOld, ID: id, Store: string(s.src),
 					Message: "high hotfix is " + days(now.Sub(s.r.CreatedAt)) + " old (over 45): lower it to medium, or turn it into a rule",
-					Fix:     "lore hotfix edit " + id + " --severity medium"})
+					Fix:     "lore hotfix edit --id " + id + " --severity medium"})
 			}
 			checked, from := s.r.CreatedAt, "never validated, created "
 			if dt, ok := s.r.Fields[fValidated].(value.DateTime); ok && !dt.Time().IsZero() {
@@ -62,7 +62,7 @@ func ageFindings(all map[row.Table][]sourced, now time.Time) []Finding {
 			if !checked.IsZero() && now.Sub(checked) > validatedMaxAge {
 				out = append(out, Finding{Code: NotValidated, ID: id, Store: string(s.src),
 					Message: "pinned " + t.noun + " " + from + days(now.Sub(checked)) + " ago (over 90): check it still holds",
-					Fix:     "lore show " + id + "; if it no longer holds: lore archive " + id})
+					Fix:     "lore show --id " + id + "; if it no longer holds: lore archive " + id})
 			}
 		}
 	}
@@ -119,7 +119,7 @@ func (o ops) usageFindings(ctx context.Context, all map[row.Table][]sourced, now
 			}
 			out = append(out, Finding{Code: NotUsed, ID: id, Store: string(sr.src),
 				Message: "pinned, but no `lore context` on this machine printed it in " + days(now.Sub(u.LastUsed)) + " (over 60)",
-				Fix:     "lore show " + id + "; if nobody needs it pinned, lower its severity or archive it"})
+				Fix:     "lore show --id " + id + "; if nobody needs it pinned, lower its severity or archive it"})
 		}
 	}
 	return out

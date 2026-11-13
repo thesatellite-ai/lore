@@ -10,7 +10,7 @@ package machines
 //	   and a config write leaves both blocks as they are
 //	2. the keep fix (lore identity migrate --keep setup) leaves the setup
 //	   the only identity: no top-level block, whoami says the kept name
-//	3. lore actor show <act> lists both stores; the copy written under the
+//	3. lore actor show --id <act> lists both stores; the copy written under the
 //	   other name is stale until the next write to its store
 //	4. after a write to each store both copies are current with the kept
 //	   name (CLI and REST)

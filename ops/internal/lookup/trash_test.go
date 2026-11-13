@@ -82,7 +82,7 @@ func TestLookupInTrashMatrix(t *testing.T) {
 						mu.Lock()
 						hits[name] = true
 						mu.Unlock()
-						if !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore "+id) {
+						if !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore trash restore --target "+id) {
 							t.Errorf("%s %s: %v: no restore hint", name, id, err)
 						}
 					case errs.Has(err, errs.NotFound):

@@ -60,7 +60,7 @@ func TestShowCut(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.Text()
-	for _, want := range []string{"file:     .lore/LORE.md (profile codex)", "bytes:    15000 of 16000 budget (every pinned entry in full: 20000)", "index:    collapsed to one line", "moved out of the core (2):", "  rul_2  budget", "lore show <id>"} {
+	for _, want := range []string{"file:     .lore/LORE.md (profile codex)", "bytes:    15000 of 16000 budget (every pinned entry in full: 20000)", "index:    collapsed to one line", "moved out of the core (2):", "  rul_2  budget", "lore show --id <id>"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("cut misses %q:\n%s", want, text)
 		}

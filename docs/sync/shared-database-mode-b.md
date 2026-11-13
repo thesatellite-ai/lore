@@ -25,11 +25,11 @@ Alice (an agency developer) has client 2's repos in `~/work`. In the first repo 
 <!-- example: projects#one-store -->
 ```console
 # alice, in app
-$ lore store init client2 file://$HOME/stores/client2
+$ lore store init --name client2 --url file://$HOME/stores/client2
 ✓ created store client2 (sto_b4f4…a5b0) at file://~/stores/client2; recorded in .lore/stores.yaml; commit it to share
 
 # alice, in api
-$ lore store add client2 file://$HOME/stores/client2
+$ lore store add --name client2 --url file://$HOME/stores/client2
 ✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 
 # alice, in app
@@ -87,26 +87,26 @@ $ git status --short
 
 ## Step 3 — Archive or delete a project
 
-`lore project archive <id>` hides a project and `unarchive` brings it back. `lore project delete <id>` removes it for good; lore asks first, and without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`:
+`lore project archive --id <id>` hides a project and `unarchive` brings it back. `lore project delete --id <id>` removes it for good; lore asks first, and without a terminal it stops with `E_NEEDS_CONFIRM` until you add `--yes`:
 
 <!-- example: projects#archive-a-project -->
 ```console
 # alice, in scratch
 $ lore project list
 prj_b69e…5ed7  scratch  https://github.com/client2/scratch
-$ lore project archive prj_b69e…5ed7
+$ lore project archive --id prj_b69e…5ed7
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
 ✓ scratch archived
 $ lore project list
 prj_b69e…5ed7  scratch  https://github.com/client2/scratch [archived]
-$ lore project unarchive prj_b69e…5ed7
+$ lore project unarchive --id prj_b69e…5ed7
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
 ✓ scratch unarchived
-$ lore project delete prj_b69e…5ed7
+$ lore project delete --id prj_b69e…5ed7
 ERROR: [E_NEEDS_CONFIRM] project delete prj_b69e…5ed7?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore project delete prj_b69e…5ed7 --yes
+$ lore project delete --id prj_b69e…5ed7 --yes
 lore: wrote ~/work/scratch/.lore/data/repos/rep_0aae…a61f.json
 lore: wrote ~/work/scratch/.lore/data/projects/prj_b69e…5ed7.json
 ✓ scratch (and this repo's row) moved to the trash (batch bat_6a86…ed8c; restore: lore trash restore bat_6a86…ed8c)
@@ -165,7 +165,7 @@ Run it in each repo that pointed at the shared database. Repos that pointed at t
 
 ## Step 5 — Check the migration, undo it, or declare a format feature
 
-`lore migrate status` shows, for every place lore writes (the repo and each attached store), how many row files are still in the v0.1.17 format (`V1`), in the 0.1.18 format (`V2`) or newer than this lore knows (`NEWER`), the format features the repo has declared, the last migration with its backup ref, and the migration lock. In `infra` it shows the conversion from Step 4 and that it cannot be rolled back (`lore migrate rollback` there answers `E_UNSUPPORTED` and changes nothing; the way back to v0.1.17 is renaming `.lore/lore.yaml.migrated` back to `.lore/lore.yaml` and removing the `shared` entry from `.lore/stores.yaml`); in `app`, which never ran a migration, `lore migrate rollback` has nothing to undo. `lore migrate unlock` releases this machine's lock after a migration crashed (`--team` clears a stale team lock and asks first). `lore migrate enable <feature>` declares a format feature in `.lore/data/_meta.json` before its first use, so an older lore on a teammate's machine stops with a clear "upgrade" message instead of misreading the files; running it twice changes nothing:
+`lore migrate status` shows, for every place lore writes (the repo and each attached store), how many row files are still in the v0.1.17 format (`V1`), in the 0.1.18 format (`V2`) or newer than this lore knows (`NEWER`), the format features the repo has declared, the last migration with its backup ref, and the migration lock. In `infra` it shows the conversion from Step 4 and that it cannot be rolled back (`lore migrate rollback` there answers `E_UNSUPPORTED` and changes nothing; the way back to v0.1.17 is renaming `.lore/lore.yaml.migrated` back to `.lore/lore.yaml` and removing the `shared` entry from `.lore/stores.yaml`); in `app`, which never ran a migration, `lore migrate rollback` has nothing to undo. `lore migrate unlock` releases this machine's lock after a migration crashed (`--team` clears a stale team lock and asks first). `lore migrate enable --feature <feature>` declares a format feature in `.lore/data/_meta.json` before its first use, so an older lore on a teammate's machine stops with a clear "upgrade" message instead of misreading the files; running it twice changes nothing:
 
 <!-- example: projects#migration-status -->
 ```console
@@ -196,12 +196,12 @@ ERROR: [E_NOT_FOUND] migrate: no migration to roll back on this machine
 (exit 27)
 $ lore migrate unlock
 no migration lock on this machine
-$ lore migrate enable meta
+$ lore migrate enable --feature meta
 feature: meta
 added: true
 features: hlc, meta, policy
 min_lore_version: 0.1.18
-$ lore migrate enable meta
+$ lore migrate enable --feature meta
 feature: meta
 features: hlc, meta, policy
 min_lore_version: 0.1.18

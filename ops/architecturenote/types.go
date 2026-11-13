@@ -34,8 +34,8 @@ type AddIn struct {
 
 	// Title is set with --title, as v0.1.17 add did.
 	Title string `json:"title" flag:"title" desc:"title (required)"`
-	Body  string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
-	Text  string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
+	Body  string `json:"body,omitempty" flag:"body" desc:"body" ui:"widget=markdown"`
+	Text  string `json:"text,omitempty" arg:"0" argof:"body" desc:"the body, instead of --body"`
 	Repo  string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`
 	// Scope is --scope (CONTEXT_BUDGET 6.2.3, CQ12): a folder scope ranks
 	// the row in lore context only.

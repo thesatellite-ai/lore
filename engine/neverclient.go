@@ -32,5 +32,5 @@ func (e *Engine) refuseNeverClient(st Attached, table row.Table) error {
 	}
 	return errs.New(errs.LeakBlocked, ""+string(table)+" rows never go into client store "+string(st.Name)+
 		": team profile and invite rows live only in the org store (TP-7, ONBOARDING 4.5)").
-		WithHint("write it to the org roster store; lore actor show <actor> reads it there")
+		WithHint("write it to the org roster store; lore actor show --id <actor> reads it there")
 }

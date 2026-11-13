@@ -988,7 +988,7 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	// where the other copy was (Move, interrupted-move rule).
 	keep := parts[len(parts)-1]
 	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")+": two live copies of one row").
-		WithHint("keep one copy: `lore row move " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+		WithHint("keep one copy: `lore row move --id " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
 }
 
 // newestCopy is the copy an unqualified actor ref means when several

@@ -97,15 +97,15 @@ func TestCampaignTeam_BadInputMatrix(t *testing.T) {
 		// contact types and roles
 		{"contact-type bad name", []string{"contact-type", "add", "BadName!", "--kind", "handle"}, orgExitBadInput, "E_INVALID_INPUT", []string{"snake_case", "work_slack"}},
 		{"contact-type bad kind", []string{"contact-type", "add", "matrix", "--kind", "weird"}, orgExitBadInput, "E_INVALID_INPUT", []string{"email, handle, phone, url, text"}},
-		{"contact-type taken", []string{"contact-type", "add", "github", "--kind", "handle"}, th.ExitRefused, "E_NAME_TAKEN", []string{"lore contact-type edit github"}},
+		{"contact-type taken", []string{"contact-type", "add", "github", "--kind", "handle"}, th.ExitRefused, "E_NAME_TAKEN", []string{"lore contact-type edit --name github"}},
 		{"contact-type edit unknown", []string{"contact-type", "edit", "nosuch", "--label", "x"}, orgExitBadInput, "E_CONTACT_TYPE", []string{"lore contact-type list"}},
-		{"role taken", []string{"role", "add", "dev"}, th.ExitRefused, "E_NAME_TAKEN", []string{"lore role edit dev"}},
-		{"role bad name", []string{"role", "add", "Bad Role"}, orgExitBadInput, "E_INVALID_INPUT", []string{"snake_case", "lore role add tech_lead"}},
+		{"role taken", []string{"role", "add", "dev"}, th.ExitRefused, "E_NAME_TAKEN", []string{"lore role edit --name dev"}},
+		{"role bad name", []string{"role", "add", "Bad Role"}, orgExitBadInput, "E_INVALID_INPUT", []string{"snake_case", "lore role add --name tech_lead"}},
 		{"role edit unknown", []string{"role", "edit", "nosuch", "--label", "x"}, orgExitBadInput, "E_ROLE_UNKNOWN", []string{"lore role list"}},
 		// projects and members
 		// An unknown prj_ id answers as archive/unarchive/delete do (the
 		// row lookup's not-found, whose hint names the newer-main case).
-		{"project show unknown", []string{"project", "show", teamUnknownPrj}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore sync peek origin/main projects"}},
+		{"project show unknown", []string{"project", "show", teamUnknownPrj}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore sync peek --ref origin/main --table projects"}},
 		{"project archive unknown", []string{"project", "archive", teamUnknownPrj}, th.ExitNotFound, "E_NOT_FOUND", nil},
 		{"project unarchive unknown", []string{"project", "unarchive", teamUnknownPrj}, th.ExitNotFound, "E_NOT_FOUND", nil},
 		{"project delete unknown", []string{"project", "delete", teamUnknownPrj, "--yes"}, th.ExitNotFound, "E_NOT_FOUND", nil},
@@ -115,15 +115,15 @@ func TestCampaignTeam_BadInputMatrix(t *testing.T) {
 		{"member add unknown person", []string{"project", "member", "add", "app", "@nobody", "--role", "dev"}, th.ExitNotFound, "E_NOT_FOUND", []string{"@nobody"}},
 		{"member add unknown role", []string{"project", "member", "add", "app", "@mira", "--role", "nosuchrole"}, orgExitBadInput, "E_ROLE_UNKNOWN", []string{"lore role list"}},
 		{"member add unknown project", []string{"project", "member", "add", "nosuchproj", "@mira", "--role", "dev"}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore project list"}},
-		{"member edit not a member", []string{"project", "member", "edit", "app", "@mira", "--role", "lead"}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore project member list app --history"}},
-		{"member remove not a member", []string{"project", "member", "remove", "app", "@mira"}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore project member list app --history"}},
+		{"member edit not a member", []string{"project", "member", "edit", "app", "@mira", "--role", "lead"}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore project member list --project app --history"}},
+		{"member remove not a member", []string{"project", "member", "remove", "app", "@mira"}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore project member list --project app --history"}},
 		{"member list unknown project", []string{"project", "member", "list", "nosuchproj"}, th.ExitNotFound, "E_NOT_FOUND", nil},
 		{"shared-init retired", []string{"project", "shared-init"}, th.ExitRefused, "E_UNSUPPORTED", []string{"lore store init"}},
 		{"shared-list retired", []string{"project", "shared-list"}, th.ExitRefused, "E_UNSUPPORTED", []string{"lore store"}},
 		// orgs
 		{"org rename unknown", []string{"org", "rename", "nosuch", "x"}, th.ExitNotFound, "E_NOT_FOUND", []string{"agency"}},
 		{"org use unknown", []string{"org", "use", "nosuch"}, orgExitBadInput, "E_INVALID_INPUT", []string{"agency"}},
-		{"org set unconfirmed", []string{"org", "set", orgName}, orgExitBadInput, "E_INVALID_INPUT", []string{"--commit", "lore org use agency"}},
+		{"org set unconfirmed", []string{"org", "set", orgName}, orgExitBadInput, "E_INVALID_INPUT", []string{"--commit", "lore org use --entry agency"}},
 		{"org set no org", []string{"org", "set"}, orgExitBadInput, "E_INVALID_INPUT", []string{"org"}},
 		{"org link no project", []string{"org", "link", orgName}, orgExitBadInput, "E_INVALID_INPUT", []string{"--project"}},
 		{"org create taken", []string{"org", "create", orgName, "--store", "https://" + orgSlugNotes, "--yes"}, orgExitBadInput, "E_INVALID_INPUT", []string{"already exists", "lore org link"}},

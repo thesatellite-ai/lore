@@ -113,7 +113,7 @@ func mergedStampScenario(t *testing.T, together bool) {
 	}
 }
 
-// TestMerged_ManualMarkKeepsCheckoutClean: `lore task merged <id>` on a
+// TestMerged_ManualMarkKeepsCheckoutClean: `lore task merged --id <id>` on a
 // repo row (a task done without a commit: "done (merge unknown)") is the
 // same stamp written by hand, so it takes the same path: live ref, then a
 // landing; never an uncommitted .lore/data change. Marking twice says so

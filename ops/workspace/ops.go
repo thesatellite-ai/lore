@@ -63,26 +63,26 @@ func Ops(env content.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show workspace details",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
-			Examples: []op.Example{{Title: "one workspace as JSON", CLI: "lore workspace show wsp_01jd9a00c001 --json", Want: `"data"`}},
+			Examples: []op.Example{{Title: "one workspace as JSON", CLI: "lore workspace show --id wsp_01jd9a00c001 --json", Want: `"data"`}},
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit workspace fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "rename a workspace", CLI: `lore workspace edit wsp_01jd9a00c001 --title "Site redesign"`, Want: "wsp_"}},
+			Examples: []op.Example{{Title: "rename a workspace", CLI: `lore workspace edit --id wsp_01jd9a00c001 --title "Site redesign"`, Want: "wsp_"}},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a workspace (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm:  op.ConfirmRule{Always: true},
-			Examples: []op.Example{{Title: "delete, restorable from the trash", CLI: `lore workspace delete wsp_01jd9a00c001 --reason "merged into billing" --yes`, Want: "wsp_"}},
+			Examples: []op.Example{{Title: "delete, restorable from the trash", CLI: `lore workspace delete --id wsp_01jd9a00c001 --reason "merged into billing" --yes`, Want: "wsp_"}},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
 			return o.c.Delete(ctx, in.ID, in.Reason)
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across workspace name + body",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
-			Examples: []op.Example{{Title: "find a workspace by a word of its name or body", CLI: "lore workspace search refunds", Want: "wsp_"}},
+			Examples: []op.Example{{Title: "find a workspace by a word of its name or body", CLI: "lore workspace search --query refunds", Want: "wsp_"}},
 		}, o.search),
 	}
 }

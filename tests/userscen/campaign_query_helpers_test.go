@@ -130,7 +130,7 @@ type cqSearchOut struct {
 	} `json:"data"`
 }
 
-// cqSearch runs `lore search run <q> --json extra…` and decodes it; a
+// cqSearch runs `lore search run --query <q> --json extra…` and decodes it; a
 // refusal fails the test.
 func cqSearch(t *testing.T, c *th.Clone, q string, extra ...string) cqSearchOut {
 	t.Helper()

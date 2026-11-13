@@ -276,7 +276,7 @@ When the user asks to **delete**, **wipe**, **drop**, **rm -rf**, **start fresh*
 | User says | You should emit |
 |---|---|
 | "Delete the .lore dir entirely — wipe everything." | check `git status .lore/data` is clean first, then warn "This is irreversible — confirm and I'll proceed." Do NOT silently `rm -rf .lore`. |
-| "Drop all rules." | `lore rule list --json` to review, then `lore rule archive rul_<id>` (soft) or `lore rule delete rul_<id> --yes` (to the trash; `lore trash restore` undoes it). |
+| "Drop all rules." | `lore rule list --json` to review, then `lore rule archive --id rul_<id>` (soft) or `lore rule delete --id rul_<id> --yes` (to the trash; `lore trash restore` undoes it). |
 | "Reset the DB." | `lore doctor` first; the DB is a cache of `.lore/data`, so moving it away and running `lore sync` rebuilds it — never `rm -rf .lore`. |
 | "Start completely fresh." | Same as "delete": commit first, confirm, then proceed. |
 
@@ -307,7 +307,7 @@ Task added:
 
 **Right** (emit the actual command):
 ```bash
-lore task add "refactor the auth middleware" --tasklist=tlt_default --priority=medium
+lore task add --title "refactor the auth middleware" --tasklist=tlt_default --priority=medium
 lore render
 ```
 
@@ -341,12 +341,12 @@ lore architecturenote add --title="overview" --body="$(cat ARCHITECTURE.md)"
 lore memory add --body="$LONG_BODY"
 ```
 
-**Exceptions (positional is *title*, not body — title is the primary input here):**
+**Exceptions (the primary input is `--title`, not `--body`):**
 
 | Entity | Shape |
 |---|---|
-| `task add` | `lore task add "<title>" --tasklist=<id> [--body="..."]` |
-| `mission add` | `lore mission add "<title>" [--body="..."]` |
+| `task add` | `lore task add --title "<title>" --tasklist=<id> [--body="..."]` |
+| `mission add` | `lore mission add --title "<title>" [--body="..."]` |
 
 ### Revising existing captures (don't create duplicates)
 
@@ -355,15 +355,15 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 | User says | Run |
 |---|---|
 | "Flag dec_<id> for re-evaluation / revisit later" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>"` (dec_<id> stays active) |
-| "Mark mission msn_<id> as done / ship msn_<id>" | `lore mission done msn_<id>` (mission has its own `done` verb — NOT `task done` for msn_<id> IDs) |
-| "Cancel tsk_<id> because <reason>" | `lore task cancel tsk_<id>` + `lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` (CLI has no native --reason flag) |
-| "Unarchive rul_<id>" | `lore rule unarchive rul_<id>` (every entity supports unarchive after archive) |
-| "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit dec_<id> --body="<new>"` (direct mutation; no need to show first if user provided the new content) |
-| "Update the X prompt template" | `lore prompt edit <X> --body="<new>"` |
-| "Update pattern X" | `lore pattern edit <X> --body="<new>"` |
+| "Mark mission msn_<id> as done / ship msn_<id>" | `lore mission done --id msn_<id>` (mission has its own `done` verb — NOT `task done` for msn_<id> IDs) |
+| "Cancel tsk_<id> because <reason>" | `lore task cancel --id tsk_<id>` + `lore comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` (CLI has no native --reason flag) |
+| "Unarchive rul_<id>" | `lore rule unarchive --id rul_<id>` (every entity supports unarchive after archive) |
+| "Update dec_<id>'s body" / "Edit decision dec_<id>" | `lore decision edit --id dec_<id> --body="<new>"` (direct mutation; no need to show first if user provided the new content) |
+| "Update the X prompt template" | `lore prompt edit --id <X> --body="<new>"` |
+| "Update pattern X" | `lore pattern edit --id <X> --body="<new>"` |
 | "Bulk archive mem_<id>, mem_<id>, mem_<id>" | One `lore memory archive` call per ID (no bulk syntax — emit 3 commands) |
-| "Mission msn_<id> is complete / ship msn_<id>" | `lore mission done msn_<id>` (mission has its own `done` verb; do NOT use `task done` for msn_<id> IDs) |
-| "Done with mission msn_<id>" | `lore mission done msn_<id>` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
+| "Mission msn_<id> is complete / ship msn_<id>" | `lore mission done --id msn_<id>` (mission has its own `done` verb; do NOT use `task done` for msn_<id> IDs) |
+| "Done with mission msn_<id>" | `lore mission done --id msn_<id>` (mission/handoff have no `archive` — use status transitions: `mission done`, `mission cancel`, `mission pause`/`resume`, `handoff ack`) |
 | "Flag dec_<id> for re-eval (don't archive)" | `lore comment add --on-table=decisions --on-id=dec_<id> --body="REVISIT: <why>"` (dec_<id> stays active; do NOT create a new decision) |
 
 ### Correction / confirmation (revising captured knowledge)
@@ -371,8 +371,8 @@ When the user wants to flag, revisit, or update an EXISTING capture, do NOT crea
 When the user asks to **revise**, **scratch**, **reverse**, or **update** an existing rule, the workflow is `search → archive → (optionally add new)`. Emit it as ONE atomic shell script using `$(…)` command substitution — do NOT split into "Step 1 / Step 2" commands, because weak models stop after the search.
 
 ```bash
-RID=$(lore rule search "globals" --json | jq -r '.data[0].id')
-lore rule archive "$RID"
+RID=$(lore rule search --query "globals" --json | jq -r '.data[0].id')
+lore rule archive --id "$RID"
 lore rule add --severity=should --body="A single global request-id context is allowed for tracing"
 lore render
 ```
@@ -437,35 +437,35 @@ lore render
 
 | User says | Run |
 |---|---|
-| "add a task to X" | `lore task add "<X>" --tasklist=<tlt_id> --priority=medium` |
-| "high priority task: X" | `lore task add "<X>" --tasklist=<tlt_id> --priority=high` |
-| "urgent: X" | `lore task add "<X>" --tasklist=<tlt_id> --priority=urgent` |
-| "track an initiative: X" | `lore mission add "<X>" --target=YYYY-MM-DD` |
+| "add a task to X" | `lore task add --title "<X>" --tasklist=<tlt_id> --priority=medium` |
+| "high priority task: X" | `lore task add --title "<X>" --tasklist=<tlt_id> --priority=high` |
+| "urgent: X" | `lore task add --title "<X>" --tasklist=<tlt_id> --priority=urgent` |
+| "track an initiative: X" | `lore mission add --title "<X>" --target=YYYY-MM-DD` |
 | "what tasks are open?" | `lore task list --json` (default already hides done + cancelled; use `--all` for full history, `--status=X` for explicit filter) |
 | "show everything including done/cancelled" | `lore task list --all --json` |
 | "what is assigned to me / to X?" | `lore task list --assignee=@me --json` (also takes an actor_id (act_*), stable_key or display name; composes with `--status`, `--all` etc.) |
-| "start work on tsk_<id>" | `lore task start tsk_<id>` |
-| "mark tsk_<id> done" | `lore task done tsk_<id>` |
-| "cancel tsk_<id>" | `lore task cancel tsk_<id>` |
-| "move tsk_<id> to tasklist L-5" | `lore task edit tsk_<id> --tasklist=tlt_<id>` (or any other field via `edit`) |
-| "reassign tsk_<id> to act_xx" | `lore task edit tsk_<id> --assigned-to=act_xx` |
-| "detach tsk_<id> from its mission" | `lore task edit tsk_<id> --clear-mission` |
-| "pause mission msn_<id>" | `lore mission pause msn_<id>` |
-| "resume mission msn_<id>" | `lore mission resume msn_<id>` |
-| "ack handoff hnd_<id>" / "I've processed handoff hnd_<id>" | `lore handoff ack hnd_<id>` |
-| "remind me on YYYY-MM-DD to X" | `lore reminder add "<X>" --due=YYYY-MM-DD` |
-| "every week, remind me to X" | `lore reminder add "<X>" --due=<next> --recurrence=7d` |
+| "start work on tsk_<id>" | `lore task start --id tsk_<id>` |
+| "mark tsk_<id> done" | `lore task done --id tsk_<id>` |
+| "cancel tsk_<id>" | `lore task cancel --id tsk_<id>` |
+| "move tsk_<id> to tasklist L-5" | `lore task edit --id tsk_<id> --tasklist=tlt_<id>` (or any other field via `edit`) |
+| "reassign tsk_<id> to act_xx" | `lore task edit --id tsk_<id> --assigned-to=act_xx` |
+| "detach tsk_<id> from its mission" | `lore task edit --id tsk_<id> --clear-mission` |
+| "pause mission msn_<id>" | `lore mission pause --id msn_<id>` |
+| "resume mission msn_<id>" | `lore mission resume --id msn_<id>` |
+| "ack handoff hnd_<id>" / "I've processed handoff hnd_<id>" | `lore handoff ack --id hnd_<id>` |
+| "remind me on YYYY-MM-DD to X" | `lore reminder add --message "<X>" --due=YYYY-MM-DD` |
+| "every week, remind me to X" | `lore reminder add --message "<X>" --due=<next> --recurrence=7d` |
 
 ### Lifecycle / cleanup
 
 | User says | Run |
 |---|---|
-| "archive mem_<id>" / "stop showing mem_<id>" | `lore memory archive mem_<id>` (works for every entity: rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
-| "unarchive mem_<id>" | `lore memory unarchive mem_<id>` |
-| "mem_<id> is no longer true as of today" (bitemporal — keep history) | `lore memory invalidate mem_<id>` (sets `valid_until=now`; preferred over archive when you want to remember WHEN it became wrong) |
+| "archive mem_<id>" / "stop showing mem_<id>" | `lore memory archive --id mem_<id>` (works for every entity: rule, decision, hotfix, pattern, playbook, prompt, project, repo) |
+| "unarchive mem_<id>" | `lore memory unarchive --id mem_<id>` |
+| "mem_<id> is no longer true as of today" (bitemporal — keep history) | `lore memory invalidate --id mem_<id>` (sets `valid_until=now`; preferred over archive when you want to remember WHEN it became wrong) |
 | "supersede mem_<id> with new memory X" | `lore memory add --body="X" --supersedes=mem_<id>` (preserves chain) |
-| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit mem_<id> --body="..."` (no chain — use `--supersedes` instead if audit trail matters) |
-| "archive project PRJ-X" / "retire repo REP-Y" | `lore project archive PRJ-X` / `lore repo archive REP-Y` |
+| "edit mem_<id>" / "fix typo in mem_<id> body" | `lore memory edit --id mem_<id> --body="..."` (no chain — use `--supersedes` instead if audit trail matters) |
+| "archive project PRJ-X" / "retire repo REP-Y" | `lore project archive --id PRJ-X` / `lore repo archive --id REP-Y` |
 
 ### Directive (lock the file against agent drift)
 
@@ -487,20 +487,20 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 
 | User says | Run |
 |---|---|
-| "what do we know about X?" | `lore memory search "X" --json` |
+| "what do we know about X?" | `lore memory search --query "X" --json` |
 | "find any rule/task/decision about X" | `lore <kind> search "X" --json` — works on every entity (memory, rule, decision, hotfix, pattern, playbook, prompt, architecturenote, behaviour, cookbookrecipe, incident, suggestion, tastepref, snapshot, handoff, mission, task, tasklist, plan, workflow, workspace, techdoc, comment) |
-| "search across all task fields" | `lore task search "auth*"` — FTS5 BM25 across title + body; relations eager-loaded in JSON |
+| "search across all task fields" | `lore task search --query "auth*"` — FTS5 BM25 across title + body; relations eager-loaded in JSON |
 | "wildcard / phrase / boolean search" | FTS5 syntax: `auth*` (prefix), `"connection pool"` (phrase), `redis OR cache`, `auth NOT login` |
-| "restrict search to specific columns" | `lore memory search "X" --column body` (every kind's `search` except `task search`, which always covers title + body) |
+| "restrict search to specific columns" | `lore memory search --query "X" --column body` (every kind's `search` except `task search`, which always covers title + body) |
 | "list all memories" / "what memories exist?" | `lore memory list [--archived] [--json]` |
-| "show mem_<id>" | `lore memory show mem_<id> [--json]` (includes archived_at, valid_until, superseded_by) |
+| "show mem_<id>" | `lore memory show --id mem_<id> [--json]` (includes archived_at, valid_until, superseded_by) |
 | "is search working / how healthy is the index" | `lore search status` — per-entity row counts + drift detection |
 | "rebuild the search index" | `lore search rebuild [--kind=<entity>]` |
 | "who modified X / audit trail for X / when was X last changed" | `lore audit log --limit 0 --json \| jq '.data[] \| select(.target_id == "X" or .target_table == "X")'` (newest first; `lore audit verify` checks the chain) |
-| "find anything starting with auth" (prefix) | `lore memory search "auth*" --json` |
-| "things mentioning X or Y" | `lore memory search "X OR Y" --json` |
-| "things mentioning X or Y but NOT Z" | `lore memory search "(X OR Y) NOT Z" --json` (use FTS5 NOT; **don't** post-filter with `jq | select(... | not)`) |
-| "exact phrase 'connection pool'" | `lore memory search '"connection pool"' --json` (quoted = adjacent words in order) |
+| "find anything starting with auth" (prefix) | `lore memory search --query "auth*" --json` |
+| "things mentioning X or Y" | `lore memory search --query "X OR Y" --json` |
+| "things mentioning X or Y but NOT Z" | `lore memory search --query "(X OR Y) NOT Z" --json` (use FTS5 NOT; **don't** post-filter with `jq | select(... | not)`) |
+| "exact phrase 'connection pool'" | `lore memory search --query '"connection pool"' --json` (quoted = adjacent words in order) |
 | "what rules exist?" | `lore rule list --json` |
 | "what decisions about X?" | `lore decision list --json \| jq '.data[] \| select(.title \| test("X";"i"))'` |
 | "why did you do X?" | `lore why-context --rendered` |
@@ -536,7 +536,7 @@ Default read scope = current repo + inherits project-master rows. Use scope-wide
 
 1. **Read the core.** It is already in your context through the pointer file; obey its must rules and hotfixes.
 2. **Before you touch a path, run `lore context --for-file <path>`.** It prints the rules, hotfixes and notes that apply to that file and its folders, including the ones the core shows as one line. For a task: `lore context --for-task <tsk_id>`; for a topic from the core's index: `lore context --topic <topic>` (`--topics` lists them).
-3. **For everything else, `lore search "<keywords>"`** before a substantive answer (directive step 5). Cite hits by id (`per dec_<id>, …`).
+3. **For everything else, `lore search --query "<keywords>"`** before a substantive answer (directive step 5). Cite hits by id (`per dec_<id>, …`).
 
 With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 for you on each file the tool reads or edits; run it yourself anyway when a hook is not installed.
 
@@ -551,7 +551,7 @@ With `lore setup --agent-hooks`, Claude Code, Codex and Gemini CLI run step 2 fo
 | User says | Run |
 |---|---|
 | "who am I / whoami / what identity" | `lore identity show` |
-| "set my identity to X" | `lore identity set "X <x@example.com>"` (an email is required: `alice@x`, `"Name <email>"`, or a name with `--key human:<email>`) |
+| "set my identity to X" | `lore identity set --identity "X <x@example.com>"` (an email is required: `alice@x`, `"Name <email>"`, or a name with `--key human:<email>`) |
 | "unset identity / go back to auto-detected" | `lore identity unset` (clears `identity:` in ~/.lore/config.yaml) |
 | "is everything OK?" | `lore doctor` |
 | "what does doctor check?" | `lore doctor --help` (or `--json` to see structured output of checks) |
@@ -572,11 +572,11 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 |---|---|
 | "is lore in sync / what's pending?" | `lore sync status` (`--json`) |
 | "sync now" / after editing a `.lore/data` file by hand | `lore sync` |
-| "what knowledge is on branch X?" | `lore sync peek origin/X [table]` (read-only, nothing imported) |
-| "make this rule apply on main now" | `lore sync promote <id> --to main` (local commit on main, never pushes; confirm with the user first) |
-| "lore says conflict" | `lore sync conflicts` → show both versions → `lore sync resolve <n> --take kept\|other` after the user chooses |
+| "what knowledge is on branch X?" | `lore sync peek --ref origin/X [--table table]` (read-only, nothing imported) |
+| "make this rule apply on main now" | `lore sync promote --ids <id> --to main` (local commit on main, never pushes; confirm with the user first) |
+| "lore says conflict" | `lore sync conflicts` → show both versions → `lore sync resolve --id <n> --take kept\|other` after the user chooses |
 | "I lost a memory after git clean / revert" | `lore trash list --local` → `git checkout HEAD -- .lore/data/<table>/<id>.json` (core rows come back from git) |
-| "same fact recorded twice" | `lore search "<text>"` → `lore sync merge-rows <table> --keep <id> --drop <other-id>` (references move to the kept row; the dropped one goes to the trash) |
+| "same fact recorded twice" | `lore search --query "<text>"` → `lore sync merge-rows --table <table> --keep <id> --drop <other-id>` (references move to the kept row; the dropped one goes to the trash) |
 | ".lore/data got deleted" | `git checkout HEAD -- .lore/data` (the files are the truth) |
 | "two project ids after a merge" | `lore sync fix-projects` |
 | "remove archived stuff for good" | `lore trash purge --archived-before 90d --dry-run`, then `--confirm` with user OK |
@@ -590,7 +590,7 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 
 | User asks for | Status | Workaround |
 |---|---|---|
-| `lore task block <tsk_id>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit tsk_<id> --status=blocked` (works via universal `edit`) |
+| `lore task block <tsk_id>` | No native verb (despite `blocked` being a valid status enum) | `lore task edit --id tsk_<id> --status=blocked` (works via universal `edit`) |
 | Cancel-with-reason as one verb | `task cancel` has no `--reason` flag | Two-cmd: `task cancel tsk_<id>` + `comment add --on-table=tasks --on-id=tsk_<id> --body="cancelled: <reason>"` |
 
 ### Hard delete (escape hatch)
@@ -603,7 +603,7 @@ lore mirrors every shared row to one JSON file under `.lore/data/<table>/<id>.js
 `<kind> delete <id>` works on 25 entities. **Requires `--confirm`** to fire — accidentally typing it without the flag returns an error pointing at archive. Soft-archive should be preferred whenever the entity supports it (memory, rule, decision, hotfix, pattern, playbook, prompt, snapshot, project, repo); delete is the escape hatch for "I captured a secret" / "I need it gone for real."
 
 > **Closed gaps** (do NOT re-add as workarounds):
-> - "Attach tasks to a tasklist" → `lore task edit tsk_<id> --tasklist=<tlt_id>` (covered by universal `edit`)
+> - "Attach tasks to a tasklist" → `lore task edit --id tsk_<id> --tasklist=<tlt_id>` (covered by universal `edit`)
 > - "Move task between tasklists / missions / plans" → `task edit tsk_<id> --tasklist=… --mission=… --plan=…` (or `--clear-mission` to detach)
 > - "`memory search ""` returns null" → fixed; emits `results: []`
 > - "Archive memory / rule / decision / etc." → `lore <kind> archive <id>` / `unarchive <id>` (9 entities supported)
@@ -696,7 +696,7 @@ Read-only mode, render-diff check. **Recipe: [PLAYBOOKS.md § P12](./PLAYBOOKS.m
 ### P14 — Promote a memory to a rule
 Soft fact turns out to be a hard constraint. **Recipe: [PLAYBOOKS.md § P14](./PLAYBOOKS.md).**
 
-> **ALL 4 STEPS REQUIRED — do NOT skip the show.** The first step (`lore memory show mem_<id>`) fetches the actual body so the rule text is faithful to the original — never invent or paraphrase the rule content. Order: `memory show` → `rule add` → `memory archive` → `render`.
+> **ALL 4 STEPS REQUIRED — do NOT skip the show.** The first step (`lore memory show --id mem_<id>`) fetches the actual body so the rule text is faithful to the original — never invent or paraphrase the rule content. Order: `memory show` → `rule add` → `memory archive` → `render`.
 
 ### P15 — Demote a rule to a memory
 Rule was too strict; relax it. **Recipe: [PLAYBOOKS.md § P15](./PLAYBOOKS.md).**
@@ -725,12 +725,12 @@ Commit `.lore/data` → `lore upgrade` → nothing else to run (the cache rebuil
 Run `lore whoami` once per repo: it says which org applies, why, and which identity you write as. Rules that hold in a team:
 
 - **Tasks are live:** a task you add or edit reaches everyone at once on any branch, and lands on `main` when done. Use `--live` to share a rule or memory at once; `--no-live` keeps a row with your branch.
-- **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19), and so is a push of one (the pre-push hook). Never pass `--no-verify` to `git commit` or `git push` there: it skips every local check. Move a note to the client on purpose with `lore move <id> --to repo`.
+- **Never put internal content into a client repo.** Without `--to`, notes in a client repo go to the org's internal store. Before posting a PR body or comment run `lore check pr-body --file <file>`; a commit carrying internal ids or sentences is refused (`E_LEAK_BLOCKED`, exit 19), and so is a push of one (the pre-push hook). Never pass `--no-verify` to `git commit` or `git push` there: it skips every local check. Move a note to the client on purpose with `lore move --id <id> --to repo`.
 - **A commit refused for a secret** (lore's commit check names the file, line, rule and a `sha256:…` fingerprint, never the value): strip a real secret and keep it in the vault. A placeholder (`${DB_PASSWORD}`, `<your-password>`, `***`) is never flagged. When the person confirms a finding is not a secret (a schema field named `password`, a test fixture), run the ready `lore secrets allow --file <path> --rule <rule> --match-hash sha256:… --reason "<why>"` line the refusal printed under that finding and commit the new `.lore/data/secret_allows` file with the change; a repo's own `.gitleaksignore` (gitleaks' `<path>:<rule>:<line>`) is honoured too. Never `--no-verify`.
-- **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note <id> "<progress>"`, `lore task done <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
-- **Splitting and claiming (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (`lore task split <id> --title … --title …`); use checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (`E_HAS_OPEN_CHILDREN`) unless `--coordinate`, and a split keeps your claim as a coordinator lease. Use ids (`tsk_`, `chk_`), never positions, in scripts. Before closing a parent, read `E_OPEN_CHILDREN` and ask the person whether to cancel or finish the rest, then use `--children` with `--yes`. Tick checklist items that were done before `task done`; `--tick-all` only when every item really was done, `--force` only after the person says so. On any `E_NEEDS_CONFIRM`, show the person `error.question` from `--json`, then, after they agree, run your own command again with `--yes` (a secret finding is the exception: `--yes` alone is not an answer; add one of `error.next.add_args_one_of`). Create a mission and its tasks from a file with `lore mission apply`, never `lore plan apply`. When a person asks "why this one?", run `lore task next --why --dry-run` or `lore task show <id> --why`.
-- **Gates:** an agent never approves; it stops at a gated task until a human runs `lore gate approve <id>`.
-- Facts every agent should know: `lore memory add "<text>"` (every agent finds it with `lore search`). Notes for the next agent: `lore handoff add --for @<handle> --task <id> "<text>"`.
+- **As an agent**, start with `lore agent start --label <name> --owner @<human>` and export what it prints, then loop: `lore inbox`, `lore task next --mission <id>` (exit 10 = no ready work), work, `lore task heartbeat` while working, `lore task note --id <id> --text "<progress>"`, `lore task done --id <id> --pr <n> --lesson "<what you learned>"`. Exit 12, 13 or 14 means the task is no longer yours: stop work on it.
+- **Splitting and claiming (TASK 21.2):** split a task with more than one independent piece or more than about an hour of work (`lore task split --id <id> --title … --title …`); use checklists for steps within one piece. Claim leaves, not umbrellas: a parent with open sub-tasks is refused (`E_HAS_OPEN_CHILDREN`) unless `--coordinate`, and a split keeps your claim as a coordinator lease. Use ids (`tsk_`, `chk_`), never positions, in scripts. Before closing a parent, read `E_OPEN_CHILDREN` and ask the person whether to cancel or finish the rest, then use `--children` with `--yes`. Tick checklist items that were done before `task done`; `--tick-all` only when every item really was done, `--force` only after the person says so. On any `E_NEEDS_CONFIRM`, show the person `error.question` from `--json`, then, after they agree, run your own command again with `--yes` (a secret finding is the exception: `--yes` alone is not an answer; add one of `error.next.add_args_one_of`). Create a mission and its tasks from a file with `lore mission apply`, never `lore plan apply`. When a person asks "why this one?", run `lore task next --why --dry-run` or `lore task show --id <id> --why`.
+- **Gates:** an agent never approves; it stops at a gated task until a human runs `lore gate approve --id <id>`.
+- Facts every agent should know: `lore memory add --body "<text>"` (every agent finds it with `lore search`). Notes for the next agent: `lore handoff add --for @<handle> --task <id> --body "<text>"`.
 
 ## 7 · Command tree (one-liner per command)
 
@@ -799,7 +799,7 @@ lore
 
 ## 7b · Where rows live: files, the cache and `lore sql`
 
-**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). The cache `~/.lore/cache/repo/<repo folder>-<hash>.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from), e.g. `lore sql "SELECT source, count(*) FROM memories_all GROUP BY source"`.
+**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). The cache `~/.lore/cache/repo/<repo folder>-<hash>.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from), e.g. `lore sql --query "SELECT source, count(*) FROM memories_all GROUP BY source"`.
 
 | Group | Tables (`.lore/data/<table>/`, and `lore sql` names) | Written with |
 |---|---|---|
@@ -881,7 +881,7 @@ Quick reactions:
 | `E_NOT_FOUND` (exit 27) | Well-formed but not here: check the repo, `lore <kind> list`, `lore trash list`. |
 | `E_STORE_LOCKED` / `E_CONTENDED` | Another writer is busy or won a race; wait a few seconds and retry. |
 | `E_OFFLINE` / `E_STORE_UNREACHABLE` / `E_META_STORE_UNREADABLE` | A remote or org store cannot be reached; nothing was written. Retry online. |
-| `E_META_QUARANTINED` | The row's metadata is quarantined; `lore meta show <id>` prints each problem and its fix. |
+| `E_META_QUARANTINED` | The row's metadata is quarantined; `lore meta show --id <id>` prints each problem and its fix. |
 | `E_DB_CORRUPT` | `rm -f ~/.lore/cache/repo/<repo folder>-*`: the next command rebuilds the cache from `.lore/data`. |
 | `E_NOT_PROJECT_ROOT` | `cd` into the project (`--db` is refused on row commands: their rows are files in the repository). |
 | `E_ROOT_REFUSED` | Run as the normal user; `LORE_ALLOW_ROOT=1` only if the user explicitly wants it. |
@@ -919,7 +919,7 @@ Quick reactions:
 5. **Scope before storing.** Repo-specific → `--repo=<mount>`. Cross-cutting → master.
 6. **Errors are codes, not prose.** Match `E_*` strings; the registry is in `docs/reference/cli-commands.md#errors`.
 7. **Never wrap lore in your own retry loop for `UNIQUE constraint failed`.** lore already retries 8x internally.
-8. **Never edit the cache (under `~/.lore/cache/`); prefer the CLI for row files.** The cache is rebuilt from the row files, so a direct edit is lost. A row file may be edited by hand (`lore edit <id>` opens it as Markdown; in a store clone the next lore command checks, commits or refuses the change), but the CLI is the safest path: it validates and runs the secret checks before anything is written.
+8. **Never edit the cache (under `~/.lore/cache/`); prefer the CLI for row files.** The cache is rebuilt from the row files, so a direct edit is lost. A row file may be edited by hand (`lore edit --id <id>` opens it as Markdown; in a store clone the next lore command checks, commits or refuses the change), but the CLI is the safest path: it validates and runs the secret checks before anything is written.
 9. **Never commit the cache to git — commit `.lore/data/` instead.** The cache lives in lore's home (`~/.lore/cache/repo/`), never in the repo; the shared knowledge is the JSON files under `.lore/data/` (plus `.gitattributes`). Commit them with the code that produced the knowledge.
 10. **One render per capture batch.** Batch N captures, then render once.
 

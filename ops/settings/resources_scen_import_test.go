@@ -33,8 +33,8 @@ func TestResourcesScenImportRefusalReason(t *testing.T) {
 	for _, tc := range []struct {
 		name, body, reason, hint string
 	}{
-		{"closed set", `{"resources":[{"kind":"host","name":"a1","fields":{"provider":"gcp"}}]}`, `provider "gcp" is not one of hetzner, aws`, "lore resource kind show host"},
-		{"wrong type", `{"resources":[{"kind":"host","name":"a1","fields":{"provider":"aws","cores":"many"}}]}`, "cores", "lore resource kind show host"},
+		{"closed set", `{"resources":[{"kind":"host","name":"a1","fields":{"provider":"gcp"}}]}`, `provider "gcp" is not one of hetzner, aws`, "lore resource kind show --id host"},
+		{"wrong type", `{"resources":[{"kind":"host","name":"a1","fields":{"provider":"aws","cores":"many"}}]}`, "cores", "lore resource kind show --id host"},
 		{"unknown field", `{"resources":[{"kind":"host","name":"a1","fields":{"provider":"aws","zzz":"1"}}]}`, "unknown field zzz", ""},
 		{"required missing", `{"resources":[{"kind":"host","name":"a1"}]}`, "required field provider is missing", ""},
 		{"unknown kind", `{"resources":[{"kind":"nokind","name":"a1"}]}`, `no resource kind "nokind"`, "lore resource kinds"},

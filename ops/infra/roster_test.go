@@ -119,7 +119,7 @@ func TestActorDeactivateHintsOffboard(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := "✓ act_1 Carol deactivated (kept on the roster; old rows still resolve)\n  to end their projects and stint too: lore actor offboard @carol\n"
+		want := "✓ act_1 Carol deactivated (kept on the roster; old rows still resolve)\n  to end their projects and stint too: lore actor offboard --actor @carol\n"
 		if got := out.Text(); got != want {
 			t.Fatalf("%q: text = %q, want %q", in, got, want)
 		}

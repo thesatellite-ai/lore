@@ -30,7 +30,7 @@ func (o ops) editOp(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		}
 		if strings.TrimSpace(in.ID) == "" {
 			return work.WriteOut{}, errs.New(errs.InvalidInput, "task edit: give a task id or --where").
-				WithHint("lore task edit tsk_<id> --priority high, or lore task edit --where 'status:todo' --priority high")
+				WithHint("lore task edit --id tsk_<id> --priority high, or lore task edit --where 'status:todo' --priority high")
 		}
 		return o.edit(ctx, in)
 	}
@@ -71,13 +71,13 @@ func (o ops) editOp(ctx context.Context, in EditIn) (work.WriteOut, error) {
 		if eerr != nil {
 			// Partial failure is reported with the batch id, so the rows
 			// already changed can be undone as one batch.
-			return work.WriteOut{}, errs.Prefix("task edit --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" changed (lore batch show "+batch.String()+")", eerr)
+			return work.WriteOut{}, errs.Prefix("task edit --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" changed (lore batch show --id "+batch.String()+")", eerr)
 		}
 		warn = append(warn, w.Warnings...)
 	}
 	rows, one := work.BulkRows(hits)
 	return work.WriteOut{ID: batch.String(), Store: one, Rows: rows, Warnings: warn,
-		Human: work.Success + " " + strconv.Itoa(len(hits)) + " tasks changed (batch " + batch.String() + "); lore batch show " + batch.String() + "\n"}, nil
+		Human: work.Success + " " + strconv.Itoa(len(hits)) + " tasks changed (batch " + batch.String() + "); lore batch show --id " + batch.String() + "\n"}, nil
 }
 
 // deleteOp is task.delete: one task (delete) or every task --where
@@ -95,7 +95,7 @@ func (o ops) deleteOp(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 		}
 		if strings.TrimSpace(in.ID) == "" {
 			return work.WriteOut{}, errs.New(errs.InvalidInput, "task delete: give a task id or --where").
-				WithHint("lore task delete tsk_<id>, or lore task delete --where 'status:cancelled' --yes")
+				WithHint("lore task delete --id tsk_<id>, or lore task delete --where 'status:cancelled' --yes")
 		}
 		return o.delete(ctx, in)
 	}
@@ -168,7 +168,7 @@ func (o ops) deleteOp(ctx context.Context, in DeleteIn) (work.WriteOut, error) {
 	}
 	for _, s := range roots {
 		if _, derr := work.Delete(bctx, o.env, Noun, table, s.Row.ID, ""); derr != nil {
-			return work.WriteOut{}, errs.Prefix("task delete --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" went to the trash (lore trash restore "+batch.String()+")", derr)
+			return work.WriteOut{}, errs.Prefix("task delete --where: "+s.Row.ID.String()+" failed after earlier tasks of batch "+batch.String()+" went to the trash (lore trash restore --target "+batch.String()+")", derr)
 		}
 	}
 	human := trashline.MovedBatch(strconv.Itoa(len(affected))+" tasks (--where)", batch.String())

@@ -7,7 +7,7 @@ Every example output below is real: it was produced on purpose by `tests/team/do
 First steps for anything odd:
 
 - `lore whoami` (add `--explain`): which org, which identity, which store, and why.
-- `lore explain <id>`: every copy of a row, which one won, and its landing decision.
+- `lore explain --id <id>`: every copy of a row, which one won, and its landing decision.
 - `lore doctor`: hooks, fetch settings, live rows waiting, clock skew, stores.
 - `lore store doctor`: every store this repo and machine use (`.lore/stores.yaml`, the org's stores, your personal store `me`): reachable, unpushed commits and how old the oldest is, a refused push, the clone folders; then every v0.1.17 org store (`orgs[].stores` in `~/.lore/config.yaml`). `lore sync status` prints one line per store: ahead and behind its remote, and the last push. When two people edited the same row, the conflict is listed once, under `refused pushes`, for the store folder that holds the row; the store's other folders are listed under `held pushes` as `held: waiting on <folder>'s conflict (<row>)`, because one clone pushes every folder of a store at once. Settle that one row and run `lore sync`; every folder's commits go out together.
 - `--trace` on any command (or `LORE_TRACE=1`): every git command lore runs for live rows, with timing; a fetch, push or ls-remote to a store also names the host it reached (`remote git@github-work` when a setup with a host alias owns the store), so a call that went out as the wrong account shows.
@@ -71,7 +71,7 @@ A **store** is a separate private repo that holds only lore notes, like a locked
 # alice, in website
 $ lore whoami
 ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
-  hint: point stores: at a repo made with `lore store init <name> <url>`, or remove the entry from ~/.lore/config.yaml
+  hint: point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 
 # alice, in ~
@@ -82,7 +82,7 @@ ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs:
 ```
 <!-- /example -->
 
-Fix: remove the code repo from `stores:`. To make a store, create a new, empty repo and run `lore store init <name> <url>` on it. A code repo can never be a store.
+Fix: remove the code repo from `stores:`. To make a store, create a new, empty repo and run `lore store init --name <name> --url <url>` on it. A code repo can never be a store.
 
 ## `E_ORG_AMBIGUOUS`
 
@@ -114,7 +114,7 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
 
 Fix, any one of:
 
-- `lore org use <entry>` for this repo on this machine.
+- `lore org use --entry <entry>` for this repo on this machine.
 - `LORE_ORG=<entry>` for one command.
 - Narrow the `own:` / `repos:` patterns so only one entry matches.
 
@@ -147,12 +147,12 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 # alice, in website
 $ LORE_ORG=agency-stag lore org link agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init <name> <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
+  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
 (exit 20)
 ```
 <!-- /example -->
 
-Fix: if you meant it, create the branch once with `lore store init <name> '<url>?branch=<branch>'` (or attach an existing one with `lore store add <name> <url> --branch <branch>`); otherwise fix `branch:` in the config.
+Fix: if you meant it, create the branch once with `lore store init --name <name> --url '<url>?branch=<branch>'` (or attach an existing one with `lore store add --name <name> --url <url> --branch <branch>`); otherwise fix `branch:` in the config.
 
 ## `E_OFFLINE` on a claim, heartbeat or done
 
@@ -161,7 +161,7 @@ A **claim** is an agent putting its name on a task, like writing your name on a 
 <!-- example: errors#offline-claim only=1 -->
 ```console
 # alice, in website
-$ lore task claim tsk_2ad3…f891
+$ lore task claim --id tsk_2ad3…f891
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)
@@ -206,10 +206,10 @@ ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with t
 ```
 <!-- /example -->
 
-- The text should not be there: remove it, or `lore move <id> --to <org>` if a note was filed in the wrong place.
-- When the leaking file is a lore row of this repo (a rule, memory or task file), the hint names that row: `lore move <row> --to <org>` to keep it internal, or `lore <kind> delete <row> --confirm` to remove it.
+- The text should not be there: remove it, or `lore move --id <id> --to <org>` if a note was filed in the wrong place.
+- When the leaking file is a lore row of this repo (a rule, memory or task file), the hint names that row: `lore move --id <row> --to <org>` to keep it internal, or `lore <kind> delete <row> --confirm` to remove it.
 - When a `lore <kind> add --to repo` is refused, the hint says "Nothing written": nothing was saved; write it with `--to <org>` instead.
-- It really should be shared with the client: `lore move <id> --to repo` (it keeps the id; see [Sharing an internal note](use-cases/sharing-a-note.md)).
+- It really should be shared with the client: `lore move --id <id> --to repo` (it keeps the id; see [Sharing an internal note](use-cases/sharing-a-note.md)).
 - `lore check leaks --explain` shows the rule and the matched words.
 - When the file is a team profile row (`actor_contacts`, `actor_periods`, `project_members`, `roles` or `contact_types` under `.lore/data/`) or an actor file with a profile field, the message says "team profile rows live only in the org store; remove the file". Remove the file from the commit: those rows belong only in the org's store (see [Team profiles](profiles.md#client-repos)).
 
@@ -226,7 +226,7 @@ Lore shares live rows through a hidden list on the remote that is not a branch (
 <!-- example: errors#refs-refused-by-the-host -->
 ```console
 # bob, in portal
-$ lore task add 'set up the portal CI'
+$ lore task add --title 'set up the portal CI'
 lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
 lore: wrote 2 row file(s) in ~/work/portal/.lore/data
 ✓ tsk_54fe…28f2 — set up the portal CI [medium]
@@ -294,21 +294,21 @@ The sections below are about [team profiles](profiles.md), which are in developm
 
 ### `E_CONTACT_TAKEN`
 
-An identity contact can belong to only one person. `lore actor contact add … --identity` answers `E_CONTACT_TAKEN` when that value (after normalising: `Mira.Patel@Gmail.com` and `mira.patel@gmail.com` are the same) is already an identity contact of another person, or when that email already has its own actor on the roster, which happens when someone committed from it before it was added to their profile.
+An identity contact can belong to only one person. `lore actor contact add --actor … --identity` answers `E_CONTACT_TAKEN` when that value (after normalising: `Mira.Patel@Gmail.com` and `mira.patel@gmail.com` are the same) is already an identity contact of another person, or when that email already has its own actor on the roster, which happens when someone committed from it before it was added to their profile.
 
-- Run `lore actor show email:mira.patel@gmail.com` (or `github:<login>`, …) to see who holds it.
+- Run `lore actor show --id email:mira.patel@gmail.com` (or `github:<login>`, …) to see who holds it.
 - It is the same person, recorded twice: rerun the add with `--merge`. Lore shows how many rows the other actor has and asks; without a terminal, rerun with `--merge --yes`. The other actor is marked as merged into this one; no row is rewritten.
-- It is the wrong person: remove the contact from them with `lore actor contact remove <acn_id>`, then add it again.
+- It is the wrong person: remove the contact from them with `lore actor contact remove --id <acn_id>`, then add it again.
 
 `lore doctor` reports "identity contacts held by two actors" when two clones each added the same value to different people. Until that is fixed, lore matches neither of them for that value: it never guesses.
 
 ### `E_CONTACT_TYPE`
 
-The contact type is unknown or retired, the value fails the type's check (an email without `@`, a phone with fewer than 7 digits, a URL that is not `http` or `https`), or `--identity` was given on a type that is not an identity type (only `email`, `github`, `gitlab` and types added with `--identity` are). Run `lore contact-type list` to see the types; add one with `lore contact-type add <name> --kind email|handle|phone|url|text`, or bring a retired one back with `lore contact-type edit <name> --unretire`.
+The contact type is unknown or retired, the value fails the type's check (an email without `@`, a phone with fewer than 7 digits, a URL that is not `http` or `https`), or `--identity` was given on a type that is not an identity type (only `email`, `github`, `gitlab` and types added with `--identity` are). Run `lore contact-type list` to see the types; add one with `lore contact-type add --name <name> --kind email|handle|phone|url|text`, or bring a retired one back with `lore contact-type edit --name <name> --unretire`.
 
 ### `E_ROLE_UNKNOWN`
 
-A `--role` name on `lore project member add` or `edit` is not in the role list, or is retired. Run `lore role list`; add the role with `lore role add <name>`, or bring a retired one back with `lore role edit <name> --unretire`. Role names are compared as written, in snake_case.
+A `--role` name on `lore project member add` or `edit` is not in the role list, or is retired. Run `lore role list`; add the role with `lore role add --name <name>`, or bring a retired one back with `lore role edit --name <name> --unretire`. Role names are compared as written, in snake_case.
 
 ### `E_STATUS_CHANGE`
 
@@ -316,16 +316,16 @@ The status change is not one `lore actor status` makes, or the person is in the 
 
 | You ran | Use instead |
 |---|---|
-| `lore actor status <a> left` or `archived` on an active or on-leave person | `lore actor offboard <a>` (add `--archive` to archive) |
-| `lore actor status <a> active` on a left or archived person | `lore actor rejoin <a> --type …` |
-| `lore actor offboard` on someone who already left ("already left on <date>") | nothing to do; `lore actor status <a> archived` to archive |
+| `lore actor status --actor <a> --to left` or `archived` on an active or on-leave person | `lore actor offboard --actor <a>` (add `--archive` to archive) |
+| `lore actor status --actor <a> --to active` on a left or archived person | `lore actor rejoin --actor <a> --type …` |
+| `lore actor offboard` on someone who already left ("already left on <date>") | nothing to do; `lore actor status --actor <a> --to archived` to archive |
 | `lore actor rejoin` on someone who is active | nothing to do |
-| `lore project member add` for a left or archived person | `lore actor rejoin <a>` first |
-| `lore actor register` or `lore agent start` by a person who left or was archived | ask an admin to run `lore actor rejoin <a> --type …` |
+| `lore project member add` for a left or archived person | `lore actor rejoin --actor <a>` first |
+| `lore actor register` or `lore agent start` by a person who left or was archived | ask an admin to run `lore actor rejoin --actor <a> --type …` |
 
 ### `E_PERIOD_OVERLAP`
 
-A date would make two company periods overlap, end a period before it starts, or (offboarding) end the current stint before the day it started; a person also has at most one open stint. Run `lore actor period list <actor>` and pick a date after the last stint ended, or fix a mistyped date with `lore actor period edit <apd_id>`.
+A date would make two company periods overlap, end a period before it starts, or (offboarding) end the current stint before the day it started; a person also has at most one open stint. Run `lore actor period list --actor <actor>` and pick a date after the last stint ended, or fix a mistyped date with `lore actor period edit --period <apd_id>`.
 
 ### `E_NEEDS_CONFIRM` on offboard, rejoin or `--merge`
 
@@ -333,7 +333,7 @@ A date would make two company periods overlap, end a period before it starts, or
 
 ### `E_POLICY_DENIED` naming `agents.may_manage_people`
 
-An agent ran a command that changes profiles, contacts, statuses, stints, memberships, roles or contact types, and a team set the policy flag `agents.may_manage_people` to false. The flag is true by default (an agent acts for its person), so this refusal only comes from a team's choice; `lore policy show agents.may_manage_people` names the level that set it. Hand the change to a person, or have a person unset the flag at that level (`lore policy unset agents.may_manage_people --to <store>/org`) if agents should manage people. Reading (`show`, `list`) is always allowed. Creating an org or a team is never refused by this flag: the new store has no policy yet.
+An agent ran a command that changes profiles, contacts, statuses, stints, memberships, roles or contact types, and a team set the policy flag `agents.may_manage_people` to false. The flag is true by default (an agent acts for its person), so this refusal only comes from a team's choice; `lore policy show --id agents.may_manage_people` names the level that set it. Hand the change to a person, or have a person unset the flag at that level (`lore policy unset --key agents.may_manage_people --to <store>/org`) if agents should manage people. Reading (`show`, `list`) is always allowed. Creating an org or a team is never refused by this flag: the new store has no policy yet.
 
 ### "has no person behind it"
 
@@ -341,17 +341,17 @@ A coding agent acts for its person: what it changes on the roster (the team step
 
 ### `E_REFUSED` "team profiles live in an org store"
 
-The repo has no org, so its roster is the repo's own committed `.lore/data`, and contacts written there would be published with the code. Profile writes are refused there; reads still work. Create an org with `lore org create <name>` or join one (see [Identity and stores](identity-and-stores.md)), then run the command again.
+The repo has no org, so its roster is the repo's own committed `.lore/data`, and contacts written there would be published with the code. Profile writes are refused there; reads still work. Create an org with `lore org create --org <name>` or join one (see [Identity and stores](identity-and-stores.md)), then run the command again.
 
 ## Where a store's clone lives
 
 [Stores as plain folders](../sync/store-clones.md) walks through a clone step by step; this section is the short version.
 
-Each git store has one clone on your machine, a normal git clone you can open and browse: `~/.lore/stores/<owner>/<repo>/` (the host is not in the path; a git repository on this machine, such as `/srv/git/notes.git`, is cloned at `~/.lore/stores/_local/notes/`, and a second one named `notes` at `notes~2`; a clone an earlier build made at the repository's whole path moves there on the next command). Its files are the store's files; `.git/` inside is git's own, and `.git/lore/` holds what lore keeps for itself: the store lock (`lock`), the pending audit journal (`state/`), and the fetch and push stamps. Nothing of lore's sits among the store's files. A store pinned to a branch is its own clone at `<repo>@<branch>/`. Two stores whose paths agree on different hosts get `<repo>/` and `<repo>~2/`; `~/.lore/state/store-clones.json` records the second one. To use a clone you made yourself (`git clone <url> ~/work/notes`), run `lore store use ~/work/notes`; `lore store use --default <store>` goes back to lore's own clone and leaves yours alone.
+Each git store has one clone on your machine, a normal git clone you can open and browse: `~/.lore/stores/<owner>/<repo>/` (the host is not in the path; a git repository on this machine, such as `/srv/git/notes.git`, is cloned at `~/.lore/stores/_local/notes/`, and a second one named `notes` at `notes~2`; a clone an earlier build made at the repository's whole path moves there on the next command). Its files are the store's files; `.git/` inside is git's own, and `.git/lore/` holds what lore keeps for itself: the store lock (`lock`), the pending audit journal (`state/`), and the fetch and push stamps. Nothing of lore's sits among the store's files. A store pinned to a branch is its own clone at `<repo>@<branch>/`. Two stores whose paths agree on different hosts get `<repo>/` and `<repo>~2/`; `~/.lore/state/store-clones.json` records the second one. To use a clone you made yourself (`git clone <url> ~/work/notes`), run `lore store use --path ~/work/notes`; `lore store use --default <store>` goes back to lore's own clone and leaves yours alone.
 
-Inside the clone a folder's rows sit right under it: `client/tasks/tsk_….json`, `client/_meta.json` (the folder's id and repo links), `org/lore-org.yaml` (the org's suggested settings), and the store's own rows (its root folder) in `_store/` (`_store/tasks/`, `_store/memories/`, …, `_store/_meta.json`), so every other top-level folder is a project or the org folder. There is no `.lore/data` inside a store; a code repo keeps its own rows in `.lore/data`, apart from its code. A store folder may not be named like a kind of row, nor start with `_` or `.` (`_store` is lore's): `lore store folder add <store> tasks` is refused with the list of reserved names. Lore writes a `README.md` into each store once, with its next commit there, explaining the folders and how to edit a row by hand (`lore edit <id>`, `lore path <id>`); it never writes it again, and `lore doctor` notes a store without one (`store_readme`). You may edit, add, delete or move row files there by hand, or use plain git: the next lore command checks each change, commits the valid ones as you and refuses a broken file with its line and reason ([Editing by hand](../sync/editing-by-hand.md)); `lore doctor` names files there that are not rows and row files still waiting to be committed (`store_files`). A store that is a plain folder (`file://…`) keeps lore's lock and pending journal in `.lore-state/` at its top.
+Inside the clone a folder's rows sit right under it: `client/tasks/tsk_….json`, `client/_meta.json` (the folder's id and repo links), `org/lore-org.yaml` (the org's suggested settings), and the store's own rows (its root folder) in `_store/` (`_store/tasks/`, `_store/memories/`, …, `_store/_meta.json`), so every other top-level folder is a project or the org folder. There is no `.lore/data` inside a store; a code repo keeps its own rows in `.lore/data`, apart from its code. A store folder may not be named like a kind of row, nor start with `_` or `.` (`_store` is lore's): `lore store folder add --store <store> --folder tasks` is refused with the list of reserved names. Lore writes a `README.md` into each store once, with its next commit there, explaining the folders and how to edit a row by hand (`lore edit --id <id>`, `lore path --id <id>`); it never writes it again, and `lore doctor` notes a store without one (`store_readme`). You may edit, add, delete or move row files there by hand, or use plain git: the next lore command checks each change, commits the valid ones as you and refuses a broken file with its line and reason ([Editing by hand](../sync/editing-by-hand.md)); `lore doctor` names files there that are not rows and row files still waiting to be committed (`store_files`). A store that is a plain folder (`file://…`) keeps lore's lock and pending journal in `.lore-state/` at its top.
 
-`lore doctor` names a clone only when lore cannot use it as it is (check `store_clone`), with the command that fixes it: a clone whose git data is broken (`rm -rf` the folder after copying out anything you still need; the next command clones again), a first clone that was cut short before its files were checked out (lore finishes it on the next open, or `lore store forget <url>`), or your own clone recorded by `lore store use` whose folder is gone (`lore store use --default <url>`). Doctor never deletes a clone folder itself, `--fix` included.
+`lore doctor` names a clone only when lore cannot use it as it is (check `store_clone`), with the command that fixes it: a clone whose git data is broken (`rm -rf` the folder after copying out anything you still need; the next command clones again), a first clone that was cut short before its files were checked out (lore finishes it on the next open, or `lore store forget --url <url>`), or your own clone recorded by `lore store use` whose folder is gone (`lore store use --default <url>`). Doctor never deletes a clone folder itself, `--fix` included.
 
 ## "Database is locked" and slow commands
 

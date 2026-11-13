@@ -209,7 +209,7 @@ func (o ops) checkRegistryCaps(ctx context.Context, target store.Source, name st
 }
 
 // registryCapHint is the fix for a registry at or past its key cap.
-const registryCapHint = "fold or forget unused keys: lore meta keys --unused; lore meta forget <key> --confirm"
+const registryCapHint = "fold or forget unused keys: lore meta keys --unused; lore meta forget --key <key> --confirm"
 
 // registryLimits reads meta.max_key_length and meta.max_keys_per_registry
 // for target (the defaults when env reads no policy).

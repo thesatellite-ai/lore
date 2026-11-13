@@ -38,7 +38,7 @@ A **pointer** is a short note that says "read that file too". It is a few lines 
 - **Never edit `.lore/LORE.md` by hand.** The next render replaces it. Change the notes and render again.
 - **Render again after you add or change notes.** When a `git pull` brings in a teammate's notes, lore refreshes `.lore/LORE.md` by itself, but only at the default path and only when you run lore from the repo root. A file moved with `--out` and your own new notes wait for the next `lore render`.
 - **The private file is for this machine only.** Lore hides `CLAUDE.local.md` (and the other tools' private files) through `.git/info/exclude` (a private ignore list that stays on your machine), never through the client's `.gitignore`, so the client never sees that it exists. Do not commit it.
-- **Each tool has a budget.** Render prints a `must` rule in full or as one line by how much room the tool's budget leaves; `lore render --report` shows what was cut, and `lore pin set <id> --context full` keeps one rule in full.
+- **Each tool has a budget.** Render prints a `must` rule in full or as one line by how much room the tool's budget leaves; `lore render --report` shows what was cut, and `lore pin set --id <id> --context full` keeps one rule in full.
 - **`lore skill compile` sends your text to an outside service.** It needs network access and an account there, and every run gives slightly different output. Treat the result as a draft.
 
 ## Guides and examples for each option

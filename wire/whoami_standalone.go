@@ -350,9 +350,9 @@ func orgUseHint(cfg *orgconf.Config) string {
 	case 0:
 		return ""
 	case 1:
-		return "lore org use " + names[0]
+		return "lore org use --entry " + names[0]
 	default:
-		return "lore org use <entry> (" + strings.Join(names, ", ") + ")"
+		return "lore org use --entry <entry> (" + strings.Join(names, ", ") + ")"
 	}
 }
 

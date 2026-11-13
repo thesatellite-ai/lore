@@ -79,7 +79,7 @@ func (a *App) strandedCloneFindings(ctx context.Context) []DoctorFinding {
 			}
 			out = append(out, DoctorFinding{Check: DoctorCheckStoreClone, Level: DoctorWarning,
 				Message: s.found.Paths.Dir + " is a clone of store " + id + " at its old address " + s.found.Origin + " and holds " + strings.Join(s.pending, ", ") + "; the store is now at " + addr + ", so no sync sends them",
-				Fix:     "lore store set-url " + id + " " + addr})
+				Fix:     "lore store set-url --name " + id + " --url " + addr})
 		}
 	}
 	return out
@@ -102,7 +102,7 @@ func storeCloneFinding(c gitbackend.CloneFound) (DoctorFinding, bool) {
 	case gitbackend.CloneNotCheckedOut:
 		fix := "rm -rf " + shellQuote(p.Dir)
 		if c.Origin != "" {
-			fix = "lore store forget " + c.Origin
+			fix = "lore store forget --url " + c.Origin
 		}
 		return DoctorFinding{Check: DoctorCheckStoreClone, Level: DoctorNote,
 			Message: p.Dir + " is a first clone that was cut short before its files were checked out; lore finishes it the next time it opens the store, or remove it if you no longer use that store",

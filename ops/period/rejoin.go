@@ -56,7 +56,7 @@ func (o RejoinOut) Preview() string {
 		b.WriteString(lead + "(none ended at the last offboard)\n")
 	}
 	for _, m := range o.Memberships {
-		fmt.Fprintf(&b, "%s%s (%s): lore project member add %s %s --role %s\n", lead, m.Project, strings.Join(m.Roles, listSep), m.Project, o.ID, strings.Join(m.Roles, clearSep))
+		fmt.Fprintf(&b, "%s%s (%s): lore project member add --project %s --actor %s --role %s\n", lead, m.Project, strings.Join(m.Roles, listSep), m.Project, o.ID, strings.Join(m.Roles, clearSep))
 		lead = "             "
 	}
 	if len(o.Memberships) > 0 {
@@ -64,7 +64,7 @@ func (o RejoinOut) Preview() string {
 	}
 	lead = "  trashed    "
 	for _, m := range o.TrashedMemberships {
-		fmt.Fprintf(&b, "%s%s (%s) starting %s, %s: lore trash restore %s\n", lead, m.Project, strings.Join(m.Roles, listSep), m.StartsOn, MemberTrashReasonUnstarted, m.ID)
+		fmt.Fprintf(&b, "%s%s (%s) starting %s, %s: lore trash restore --target %s\n", lead, m.Project, strings.Join(m.Roles, listSep), m.StartsOn, MemberTrashReasonUnstarted, m.ID)
 		lead = "             "
 	}
 	if len(o.TrashedMemberships) > 0 {
@@ -72,7 +72,7 @@ func (o RejoinOut) Preview() string {
 	}
 	lead = "  agents     "
 	for _, a := range o.Agents {
-		fmt.Fprintf(&b, "%s%s stays inactive: lore actor status %s active\n", lead, a.Name, a.ID)
+		fmt.Fprintf(&b, "%s%s stays inactive: lore actor status --actor %s --to active\n", lead, a.Name, a.ID)
 		lead = "             "
 	}
 	fmt.Fprintf(&b, "  status     %s%s%s\n", o.From, arrow, schema.ActorStatusActive)
@@ -107,12 +107,12 @@ func (o ops) rejoin(ctx context.Context, in RejoinIn) (RejoinOut, error) {
 	}
 	if !isHuman(a) {
 		return RejoinOut{}, errs.New(errs.InvalidInput, "rejoin is for people; an agent is reactivated by its owner").
-			WithHint("lore actor status " + a.ID.String() + " active")
+			WithHint("lore actor status --actor " + a.ID.String() + " --to active")
 	}
 	from := teamprofile.StatusOf(a.Fields)
 	if teamprofile.Pickable(from) {
 		return RejoinOut{}, errs.New(errs.StatusChange, nameOf(a)+" is "+from+", not left or archived").
-			WithHint("nothing to rejoin; lore actor status " + in.Actor + " active ends a leave")
+			WithHint("nothing to rejoin; lore actor status --actor " + in.Actor + " --to active ends a leave")
 	}
 	today := r.Today()
 	on, err := day("on", in.On, today)
@@ -132,7 +132,7 @@ func (o ops) rejoin(ctx context.Context, in RejoinIn) (RejoinOut, error) {
 	for _, p := range ps {
 		if p.Open() {
 			return RejoinOut{}, errs.New(errs.PeriodOverlap, "the stint from "+dayText(p.StartedOn)+" is still open").
-				WithHint("end it first: lore actor period edit " + p.ID.String() + " --ended-on <their last day>")
+				WithHint("end it first: lore actor period edit --period " + p.ID.String() + " --ended-on <their last day>")
 		}
 		if p.EndedOn.After(lastEnd) {
 			lastEnd = p.EndedOn

@@ -74,7 +74,7 @@ func (a *App) checkNewPlace(ctx context.Context, place attach.Store) error {
 			where += " (folder " + want.folder + ")"
 		}
 		return errs.New(errs.InvalidInput, "store "+name+" already attaches "+where).
-			WithHint("use --to " + name + ", or remove it first: lore store remove " + name)
+			WithHint("use --to " + name + ", or remove it first: lore store remove --name " + name)
 	}
 	return nil
 }

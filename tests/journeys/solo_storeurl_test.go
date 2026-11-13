@@ -8,7 +8,7 @@ package journeys
 //
 //	day 1    Sam's personal store lore-me holds a note; he renames the repo
 //	         on GitHub to lore-personal before his next note is pushed
-//	day 1    `lore store set-url me <new>` carries the clone holding the
+//	day 1    `lore store set-url --name me --url <new>` carries the clone holding the
 //	         waiting note: the next sync pushes it to lore-personal, the
 //	         note stays in every list, doctor is quiet
 //	day 2    a repo first set up with a local-path remote is cloned from
@@ -206,7 +206,7 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 		if r.Code == 0 {
 			t.Errorf("the desk's sync must be refused: %s", r)
 		}
-		r.Says(t, "started fresh", "lore store forget "+kb.SSHURL()+" --yes", "lore sync").Never(t, "lore store init")
+		r.Says(t, "started fresh", "lore store forget --url "+kb.SSHURL()+" --yes", "lore sync").Never(t, "lore store init")
 		desk.LoreIn(deskApp, "store", "push", kb.SSHURL(), "--restore", "--yes").Says(t, "started fresh", "lore store forget").Never(t, "store push --restore")
 		desk.LoreIn(deskApp, "store", "forget", kb.SSHURL(), "--yes").OK(t)
 		desk.LoreIn(deskApp, "sync").OK(t)

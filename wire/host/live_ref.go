@@ -91,7 +91,7 @@ func (a *liveRefAdapter) File(ctx context.Context, id string) ([]byte, error) {
 		}
 	}
 	return nil, errs.New(errs.NotFound, id+" is not live in "+a.folder).
-		WithHint("`lore live show` lists the live rows; a row that is not live reads with `lore row show <id>`")
+		WithHint("`lore live show` lists the live rows; a row that is not live reads with `lore row show --id <id>`")
 }
 
 // Refs implements opslive.Ref.

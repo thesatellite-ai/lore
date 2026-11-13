@@ -110,7 +110,7 @@ func (o OffboardOut) Preview() string {
 		b.WriteString(lead + "(none)\n")
 	}
 	for _, t := range o.OpenTasks {
-		fmt.Fprintf(&b, "%s%s  %q  %s  %s  reassign: lore task edit %s --assign @<someone>\n", lead, t.ID, t.Title, t.Store, t.How, t.ID)
+		fmt.Fprintf(&b, "%s%s  %q  %s  %s  reassign: lore task edit --id %s --assign @<someone>\n", lead, t.ID, t.Title, t.Store, t.How, t.ID)
 		lead = "             "
 	}
 	lead = "  agents     "
@@ -166,7 +166,7 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 	// Step 1: people only, and only someone still here.
 	if !isHuman(a) {
 		return OffboardOut{}, errs.New(errs.InvalidInput, "offboard is for people; agents follow their owner").
-			WithHint("lore actor status " + a.ID.String() + " left")
+			WithHint("lore actor status --actor " + a.ID.String() + " --to left")
 	}
 	from := teamprofile.StatusOf(a.Fields)
 	if !teamprofile.Pickable(from) {
@@ -176,7 +176,7 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 				msg = nameOf(a) + " already left on " + dayText(t)
 			}
 		}
-		return OffboardOut{}, errs.New(errs.StatusChange, msg).WithHint("lore actor rejoin " + in.Actor + " --type employee|contractor|intern|client_contact")
+		return OffboardOut{}, errs.New(errs.StatusChange, msg).WithHint("lore actor rejoin --actor " + in.Actor + " --type employee|contractor|intern|client_contact")
 	}
 	// Step 2: the day.
 	today := r.Today()
@@ -238,7 +238,7 @@ func (o ops) offboardPlan(ctx context.Context, r profilestore.Roster, a row.Row,
 	if open, ok := openPeriod(ps); ok {
 		if on.Before(open.StartedOn) {
 			return offboardPlan{}, errs.New(errs.PeriodOverlap, "--on "+dayText(on)+" is before their stint started on "+dayText(open.StartedOn)).
-				WithHint("lore actor period list " + in.Actor + " shows the stints; pick a date on or after the start")
+				WithHint("lore actor period list --actor " + in.Actor + " shows the stints; pick a date on or after the start")
 		}
 		open.EndedOn, open.EndReason = on, in.Reason
 		if in.Note != "" {
@@ -258,7 +258,7 @@ func (o ops) offboardPlan(ctx context.Context, r profilestore.Roster, a row.Row,
 		}
 		if on.Before(m.started) {
 			return offboardPlan{}, errs.New(errs.PeriodOverlap, "--on "+dayText(on)+" is before their membership of "+m.project+" started on "+dayText(m.started)).
-				WithHint("lore project member list " + m.project + " --history; pick a date on or after it")
+				WithHint("lore project member list --project " + m.project + " --history; pick a date on or after it")
 		}
 		p.out.Memberships = append(p.out.Memberships, MemberEnd{ID: m.row.ID.String(), Project: m.project, Roles: m.roles, EndsOn: dayText(on)})
 	}

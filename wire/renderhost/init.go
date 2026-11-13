@@ -64,7 +64,7 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 	if err := h.writeContextTargets(ctx, names); err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "%s saved as %s; change with: lore policy set %s <profiles> --yes\n", h.decor.muted("·"), policy.KeyContextTargets, policy.KeyContextTargets)
+	fmt.Fprintf(w, "%s saved as %s; change with: lore policy set --key %s --value <profiles> --yes\n", h.decor.muted("·"), policy.KeyContextTargets, policy.KeyContextTargets)
 	return nil
 }
 

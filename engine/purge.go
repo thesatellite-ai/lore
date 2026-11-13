@@ -161,7 +161,7 @@ func purgedErr(ctx context.Context, st Attached, table row.Table, id ids.AnyID) 
 		}
 	}
 	return errs.New(errs.Purged, ""+what+" from store "+string(st.Name)+"; purged rows never come back (DQ4)").
-		WithHint("read what it held: lore trash show " + id.String() + " --from-history; then write what you still need as a new row (a new id)")
+		WithHint("read what it held: lore trash show --id " + id.String() + " --from-history; then write what you still need as a new row (a new id)")
 }
 
 // purgerName is how a person reads who purged a row (DELETION_DESIGN 2.7

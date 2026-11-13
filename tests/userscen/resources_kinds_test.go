@@ -191,7 +191,7 @@ func TestResourcesFieldRulesAndKindJSON(t *testing.T) {
 	c := resRepo(t)
 	resHostService(t, c)
 	c.Lore("resource", "add", "host", "h1", "--set", "provider=gcp").
-		Fails(t, resExitInvalid, "E_RESOURCE_INVALID", `provider "gcp" is not one of hetzner, aws`, "lore resource kind show host")
+		Fails(t, resExitInvalid, "E_RESOURCE_INVALID", `provider "gcp" is not one of hetzner, aws`, "lore resource kind show --id host")
 	c.Lore("resource", "add", "host", "h1").
 		Fails(t, resExitInvalid, "E_RESOURCE_INVALID", "required field provider is missing")
 	c.MustLore("resource", "add", "host", "h1", "--set", "provider=aws")

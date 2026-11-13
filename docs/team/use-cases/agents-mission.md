@@ -46,7 +46,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store a
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 
 # agent-coord, in api
-$ lore mission apply invite.yaml
+$ lore mission apply --file invite.yaml
 lore: pushed store agency: commit 86dbae4 to branch main
 lore: pushed store agency: commit 9b40ce7 to branch main
 lore: pushed store agency: commit 05513aa to branch main
@@ -64,13 +64,13 @@ lore: wrote 11 row file(s) in ~/.lore/stores/agency/notes/client2 (store agency)
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
   tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
-$ lore mission apply invite.yaml
+$ lore mission apply --file invite.yaml
 ✓ msn_2ad3…f891 Invite landing page (found) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
   tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
-$ lore task claim msn_2ad3…f891
+$ lore task claim --id msn_2ad3…f891
 ✓ claimed msn_2ad3…f891 (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 ```
 <!-- /example -->
@@ -147,12 +147,12 @@ lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_28f8…03df.json (s
   scope: [master]
 
 # agent-backend, in agents/api
-$ lore sync >/dev/null && lore search 'invite links'
+$ lore sync >/dev/null && lore search --query 'invite links'
 Found 1 hit for "invite links" across 1 entity type:
 memory  mem_28f8…03df  invite links must use the public website address, not the server name  [agency/client2]  (score=0.017)
 
 # agent-infra, in agents/infra
-$ lore task done tsk_05e9…4603
+$ lore task done --id tsk_05e9…4603
 lore: pushed store agency: commit 468e9a8 to branch main
 lore: pushed store agency: commit 9ea0ca8 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
@@ -168,13 +168,13 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (stor
 <!-- example: agents#done-then-merged -->
 ```console
 # agent-backend, in agents/api
-$ lore task note tsk_162d…9666 'the API sends the invite email and returns a link; the email text is in invite.html'
+$ lore task note --id tsk_162d…9666 --text 'the API sends the invite email and returns a link; the email text is in invite.html'
 lore: pushed store agency: commit aba91f6 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_4c59…6c38.json (store agency)
 ✓ note cmt_4c59…6c38 on tsk_162d…9666
 $ git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite
 lore: set lore.clientrepo=true in ~/work/agents/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
-$ lore task done tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
+$ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 lore: pushed store agency: commit a8de760 to branch main
 lore: pushed store agency: commit 9169078 to branch main
 lore: pushed store agency: commit b733d8a to branch main
@@ -219,7 +219,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (stor
 # agent-frontend, in agents/app
 $ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'
 lore: set lore.clientrepo=true in ~/work/agents/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
-$ lore task note tsk_54fe…28f2 'route + loader done, form next'
+$ lore task note --id tsk_54fe…28f2 --text 'route + loader done, form next'
 lore: pushed store agency: commit dd85e7d to branch main
 lore: pushed store agency: commit d18179e to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
@@ -230,7 +230,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_f147…5139.json (s
 # agent-coord, in api
 $ lore inbox
 msn_2ad3…f891  EXPIRED  agent-frontend tsk_54fe…28f2 claimed by agent-frontend, lease expired 8 min ago; work branch pushed (agent-frontend/invite-route)
-$ lore mission status msn_2ad3…f891
+$ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 2 done · 0 claimed · 0 ready · 1 waiting · 0 gated · 1 expired · 0 blocked
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  not merged yet 4m
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
@@ -263,13 +263,13 @@ $ git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_
 f4b8da2 invite page
 
 # agent-frontend, in agents/app
-$ lore task done tsk_54fe…28f2
+$ lore task done --id tsk_54fe…28f2
 ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:45AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 
 # agent-frontend-2, in agents/fe2/app
-$ git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done tsk_54fe…28f2 --commit $(git rev-parse HEAD)
+$ git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done --id tsk_54fe…28f2 --commit $(git rev-parse HEAD)
 lore: set lore.clientrepo=true in ~/work/agents/fe2/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 lore: pushed store agency: commit 34010c1 to branch main
 lore: pushed store agency: commit 070bbeb to branch main
@@ -295,7 +295,7 @@ ERROR: [E_NO_WORK] nothing ready:
 (exit 10)
 
 # alice, in infra
-$ lore task merged tsk_05e9…4603
+$ lore task merged --id tsk_05e9…4603
 lore: pushed store agency: commit 1c99293 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
 ✓ tsk_05e9…4603 merged (marked by hand, 11:04)
@@ -313,14 +313,14 @@ ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve tsk_c0f3…b5b8)
   hint: lore task board shows what each task waits on
 (exit 10)
-$ lore gate approve tsk_c0f3…b5b8
+$ lore gate approve --id tsk_c0f3…b5b8
 lore: the command was refused, so what it changed first is undone (.git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] approvals come from your identity file, never from LORE_ACTOR (LORE_ACTOR is set here)
   hint: an agent session cannot approve; run `lore gate approve` in your own shell
 (exit 20)
 
 # alice, in api
-$ lore gate approve tsk_c0f3…b5b8
+$ lore gate approve --id tsk_c0f3…b5b8
 lore: pushed store agency: commit feabf31 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash 71fdf1e3…
@@ -341,13 +341,13 @@ From any of the client 2 repos:
 <!-- example: agents#mission-status -->
 ```console
 # alice, in infra
-$ lore mission status msn_2ad3…f891
+$ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
   claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:29) 1m
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:04 4m
   done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
-$ lore task show tsk_c0f3…b5b8 --from agency/client2
+$ lore task show --id tsk_c0f3…b5b8 --from agency/client2
 tsk_c0f3…b5b8
   title:    deploy to staging
   status:   in_progress
@@ -363,7 +363,7 @@ tsk_c0f3…b5b8
   token:    ct_3de87…  epoch 1
   expires:  2026-11-02T11:29:20Z  renewed_seq 0
 created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:09:20Z by agent-coord
-$ lore task show tsk_54fe…28f2
+$ lore task show --id tsk_54fe…28f2
 tsk_54fe…28f2
   title:    build the invite page
   status:   done
@@ -405,9 +405,9 @@ created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:02:20Z by a
 
 ## Pitfalls
 
-- **Keep the lease alive.** A long test run must not let the lease expire. Call `lore task heartbeat` (no id: every claim of this session, at most once per `lease.renew_every`) from your agent tool's hook, or run the daemon. `lore task heartbeat --daemon <id>` renews at once and then every `lease.renew_every`, and checks every 5 seconds that the process that started it is still running. When that process is gone, it stops (it also stops when the claim ends). So start it from a process that lives as long as the work: the agent's own long-running shell or wrapper script, or the same shell command as the long step (`lore task heartbeat --daemon <id> & go test ./...; kill $!`). A detached launch from a short-lived script or tool call (`setsid … &`, then the script exits) stops within seconds, together with that script. It needs the agent's `LORE_ACTOR` and `LORE_SESSION` in its environment. A heartbeat says "alive", not "progress". Record progress with `lore task note`.
+- **Keep the lease alive.** A long test run must not let the lease expire. Call `lore task heartbeat` (no id: every claim of this session, at most once per `lease.renew_every`) from your agent tool's hook, or run the daemon. `lore task heartbeat --daemon --id <id>` renews at once and then every `lease.renew_every`, and checks every 5 seconds that the process that started it is still running. When that process is gone, it stops (it also stops when the claim ends). So start it from a process that lives as long as the work: the agent's own long-running shell or wrapper script, or the same shell command as the long step (`lore task heartbeat --daemon --id <id> & go test ./...; kill $!`). A detached launch from a short-lived script or tool call (`setsid … &`, then the script exits) stops within seconds, together with that script. It needs the agent's `LORE_ACTOR` and `LORE_SESSION` in its environment. A heartbeat says "alive", not "progress". Record progress with `lore task note`.
 - **Push work before you might die.** `lore task note` pushes the claim's work branch, so a replacement can fetch it. Work never pushed is lost with the session, and `lore mission status` says so.
-- **Done is not merged.** A plain `after:` (or `--after <id>`) waits for **merged** when the task it waits for is in another repo, and only for **done** when both are in the same repo. To make a same-repo dependency wait for the merge, add or edit the task with `--after <id>:merged` (`:done` forces the other way): `lore task add 'build the invite page' --after tsk_162d…9666:merged`. A plan file's `after:` takes the same suffixes on a key: `after: ["backend:merged"]`. Pass `--commit <sha>` or `--pr <n>` to `lore task done` (a holder finishing on its work branch records the branch HEAD, unless that commit is already on `main`). Otherwise lore cannot see the merge (`merge unknown`); use `lore task merged <id>` to mark it by hand. With `merge_check.adapter: github`, lore asks `gh` about pull requests.
+- **Done is not merged.** A plain `after:` (or `--after <id>`) waits for **merged** when the task it waits for is in another repo, and only for **done** when both are in the same repo. To make a same-repo dependency wait for the merge, add or edit the task with `--after <id>:merged` (`:done` forces the other way): `lore task add --title 'build the invite page' --after tsk_162d…9666:merged`. A plan file's `after:` takes the same suffixes on a key: `after: ["backend:merged"]`. Pass `--commit <sha>` or `--pr <n>` to `lore task done` (a holder finishing on its work branch records the branch HEAD, unless that commit is already on `main`). Otherwise lore cannot see the merge (`merge unknown`); use `lore task merged --id <id>` to mark it by hand. With `merge_check.adapter: github`, lore asks `gh` about pull requests.
 - **Claims fail closed.** Offline, a claim, heartbeat, release, done on a claimed task or an approval fails with `E_OFFLINE` (exit 15). Nothing is queued to happen later.
 - **Speed and scale.** A claim is a git round trip (a second or two). Others see changes on their next fetch. Ten to twenty agents per store branch are fine.
 - **Task ids from the store** are found from any linked repo by every task command (`task show`, `task next`, `task done`, `mission status`); `--from agency/client2` picks the source when an id exists in two places.

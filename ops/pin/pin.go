@@ -78,9 +78,9 @@ func Ops(env Env) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpSet, Summary: "Pin how a must rule or critical/high hotfix appears in LORE.md: --context full or line",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
-			Examples: []op.Example{{Title: "always in full", CLI: "lore pin set rul_01b2c3d4e5f60718293a4b5c6d7e8f90 --context full", Want: "pinned"}}}, o.set),
+			Examples: []op.Example{{Title: "always in full", CLI: "lore pin set --id rul_01b2c3d4e5f60718293a4b5c6d7e8f90 --context full", Want: "pinned"}}}, o.set),
 		op.Define(op.Spec{Name: OpUnset, Summary: "Remove a pin; render ranks the entry again",
-			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "let render rank a pinned rule again", CLI: "lore pin unset rul_1f3a"}}}, o.unset),
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors, Examples: []op.Example{{Title: "let render rank a pinned rule again", CLI: "lore pin unset --id rul_1f3a"}}}, o.unset),
 	}
 }
 
@@ -90,7 +90,7 @@ type ops struct{ env Env }
 func (o ops) set(ctx context.Context, in SetIn) (Out, error) {
 	form := strings.TrimSpace(in.Context)
 	if form != FormFull && form != FormLine {
-		return Out{}, errs.New(errs.InvalidInput, "pin: --context must be full or line").WithHint("lore pin set <id> --context full")
+		return Out{}, errs.New(errs.InvalidInput, "pin: --context must be full or line").WithHint("lore pin set --id <id> --context full")
 	}
 	v, err := value.TextOf(form)
 	if err != nil {

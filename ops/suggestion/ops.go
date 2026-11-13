@@ -67,18 +67,18 @@ func Ops(env content.Env) []op.Entry {
 		}, o.list),
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show suggestion details",
-			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore suggestion show sug_<id> --json", Want: `"data"`}},
+			Examples:   []op.Example{{Title: "show one as JSON", CLI: "lore suggestion show --id sug_<id> --json", Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(content.ReadErrors()), Confirm: expand.RevealConfirm,
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit suggestion fields",
-			Examples:   []op.Example{{Title: "change the body", CLI: `lore suggestion edit sug_<id> --body "the new text"`, Want: "sug_"}},
+			Examples:   []op.Example{{Title: "change the body", CLI: `lore suggestion edit --id sug_<id> --body "the new text"`, Want: "sug_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a suggestion (it goes to the trash; lore trash restore brings it back)",
-			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore suggestion delete sug_<id> --yes", Want: "sug_"}},
+			Examples:   []op.Example{{Title: "delete without a terminal", CLI: "lore suggestion delete --id sug_<id> --yes", Want: "sug_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.DeleteErrors(),
 			Confirm: op.ConfirmRule{Always: true},
 		}, func(ctx context.Context, in DeleteIn) (content.WriteOut, error) {
@@ -86,7 +86,7 @@ func Ops(env content.Env) []op.Entry {
 		}).Asks(func(ctx context.Context, in DeleteIn) (string, error) { return o.c.DeleteQuestion(ctx, in.ID) }),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search across suggestion title + body + status",
-			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore suggestion search "retry" --json`, Want: `"data"`}},
+			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore suggestion search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: content.SearchErrors(),
 		}, o.search),
 	}

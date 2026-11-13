@@ -138,8 +138,8 @@ func (o ops) actorMergeOps() []op.Entry {
 		Permission: op.PermWrite, Access: op.AccessWrite, Errors: append([]errs.Code{errs.Refused}, writeErrors...),
 		Confirm: op.ConfirmRule{MayAsk: true},
 		Examples: []op.Example{
-			{Title: "see what a merge rewrites", CLI: "lore actor merge act_<from> act_<into> --dry-run", Want: "would merge"},
-			{Title: "merge a duplicate into the roster's actor", CLI: "lore actor merge act_<from> act_<into> --yes", Want: "merged"},
+			{Title: "see what a merge rewrites", CLI: "lore actor merge --from act_<from> --into act_<into> --dry-run", Want: "would merge"},
+			{Title: "merge a duplicate into the roster's actor", CLI: "lore actor merge --from act_<from> --into act_<into> --yes", Want: "merged"},
 		}},
 		func(ctx context.Context, in ActorMergeIn) (ActorMergeOut, error) {
 			in.From, in.Into = strings.TrimSpace(in.From), strings.TrimSpace(in.Into)

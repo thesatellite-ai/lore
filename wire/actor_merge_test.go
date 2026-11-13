@@ -118,7 +118,7 @@ func TestActorMergeSharedKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(finds) != 1 || finds[0].Level != DoctorWarning || !strings.Contains(finds[0].Message, mergeFrom) || !strings.Contains(finds[0].Message, mergeInto) ||
-		!strings.Contains(finds[0].Message, mergeKey) || finds[0].Fix != "lore actor merge "+mergeFrom+" "+mergeInto {
+		!strings.Contains(finds[0].Message, mergeKey) || finds[0].Fix != "lore actor merge --from "+mergeFrom+" --into "+mergeInto {
 		t.Fatalf("doctor = %+v, want one warning naming both ids and the merge", finds)
 	}
 
@@ -227,7 +227,7 @@ func TestLikelyHandleDuplicate(t *testing.T) {
 	}
 	got := likelyHandleDuplicates(byID, map[ids.AnyID]bool{})
 	if len(got) != 1 || got[0].Level != DoctorNote || !strings.Contains(got[0].Message, mergeFrom) || !strings.Contains(got[0].Message, "@una "+mergeInto) ||
-		got[0].Fix != "if it is the same person: lore actor merge "+mergeFrom+" "+mergeInto {
+		got[0].Fix != "if it is the same person: lore actor merge --from "+mergeFrom+" --into "+mergeInto {
 		t.Fatalf("likely duplicates = %+v", got)
 	}
 }
@@ -315,7 +315,7 @@ func TestFixMergesSharedKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(raw, "needs --yes") || !strings.Contains(raw, "lore actor merge "+mergeFrom+" "+mergeInto) {
+	if !strings.Contains(raw, "needs --yes") || !strings.Contains(raw, "lore actor merge --from "+mergeFrom+" --into "+mergeInto) {
 		t.Fatalf("fix without --yes = %s; want the warning saying it needs --yes and naming the merge", raw)
 	}
 	if got := assignee(t, a, task); got != mergeFrom {

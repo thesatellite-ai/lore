@@ -132,7 +132,7 @@ func TestParentAutocloseModes(t *testing.T) {
 				t.Fatalf("next = %+v, want a close suggestion: %v", last.Next, c.wantNext)
 			}
 			if c.wantNext && (len(last.Next.Args) != 3 || last.Next.Args[1] != "done" || last.Next.Args[2] != p) {
-				t.Fatalf("the suggestion must be lore task done %s, got %v", p, last.Next.Args)
+				t.Fatalf("the suggestion must be lore task done --id %s, got %v", p, last.Next.Args)
 			}
 		})
 	}

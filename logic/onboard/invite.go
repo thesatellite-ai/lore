@@ -55,9 +55,9 @@ func invalidInvite(why string, cause error) *errs.Error {
 		msg += " (" + why + ")"
 	}
 	if cause != nil {
-		return errs.Wrap(errs.InviteInvalid, msg, cause).WithHint("ask the person who invited you to run lore team invite resend <your email>")
+		return errs.Wrap(errs.InviteInvalid, msg, cause).WithHint("ask the person who invited you to run lore team invite resend --ref <your-email>")
 	}
-	return errs.New(errs.InviteInvalid, msg).WithHint("ask the person who invited you to run lore team invite resend <your email>")
+	return errs.New(errs.InviteInvalid, msg).WithHint("ask the person who invited you to run lore team invite resend --ref <your-email>")
 }
 
 // check is the shape every v1 invite must have; why names the first gap.
@@ -183,13 +183,13 @@ func DecideInvite(rec InviteRecord, by string, today time.Time, who Acceptor) (I
 	switch rec.Status {
 	case schema.InviteStatusRevoked:
 		return "", errs.New(errs.InviteRevoked, "invite "+rec.ID+" was revoked; "+ask).
-			WithHint(ask + " to run lore team invite " + rec.Email)
+			WithHint(ask + " to run lore team invite --email " + rec.Email)
 	case schema.InviteStatusAccepted:
 		if rec.AcceptedBy != "" && rec.AcceptedBy == who.Actor {
 			return VerdictAlready, nil
 		}
 		return "", errs.New(errs.InviteUsed, "invite "+rec.ID+" was already used by "+orSomeone(rec.AcceptedBy)+"; "+ask+" for a new one").
-			WithHint(ask + " to run lore team invite " + rec.Email)
+			WithHint(ask + " to run lore team invite --email " + rec.Email)
 	case schema.InviteStatusExpired, schema.InviteStatusPending:
 	default:
 		return "", errs.New(errs.InviteInvalid, "invite "+rec.ID+" has status "+rec.Status+", which this lore does not know").
@@ -197,11 +197,11 @@ func DecideInvite(rec InviteRecord, by string, today time.Time, who Acceptor) (I
 	}
 	if rec.Status == schema.InviteStatusExpired || Expired(rec.ExpiresOn, today) {
 		return "", errs.New(errs.InviteExpired, "invite "+rec.ID+" expired on "+rec.ExpiresOn.Format(value.DateLayout)+"; "+ask+" for a new one").
-			WithHint(ask + " to run lore team invite " + rec.Email)
+			WithHint(ask + " to run lore team invite --email " + rec.Email)
 	}
 	if !SameEmail(rec.Email, who.Email) {
 		return "", errs.New(errs.InviteEmail, "invite "+rec.ID+" is for "+rec.Email+"; use that address or ask for a new invite").
-			WithHint("lore setup edit <setup> with identity email " + rec.Email + ", or " + ask + " to invite " + orSomeone(who.Email))
+			WithHint("lore setup edit --name <setup> with identity email " + rec.Email + ", or " + ask + " to invite " + orSomeone(who.Email))
 	}
 	return VerdictAccept, nil
 }

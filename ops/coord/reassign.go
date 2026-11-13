@@ -92,7 +92,7 @@ func (o ops) reassign(ctx context.Context, in ReassignIn) (ReassignOut, error) {
 			// Partial failure names the batch, so the tasks already changed
 			// can be found as one batch.
 			return out, errs.Prefix(reassignWhat+": "+t.ID+" failed after "+strconv.Itoa(len(out.Tasks))+
-				" earlier tasks of batch "+batch.String()+" changed (lore batch show "+batch.String()+")", rerr)
+				" earlier tasks of batch "+batch.String()+" changed (lore batch show --id "+batch.String()+")", rerr)
 		}
 		out.Tasks = append(out.Tasks, t.ID)
 		if logged {
@@ -101,8 +101,7 @@ func (o ops) reassign(ctx context.Context, in ReassignIn) (ReassignOut, error) {
 			}
 		}
 	}
-	out.Lines = append(out.Lines, successMark+" "+strconv.Itoa(len(out.Tasks))+" tasks reassigned to "+in.Assign+
-		" (batch "+batch.String()+"); lore batch show "+batch.String())
+	out.Lines = append(out.Lines, successMark+" "+strconv.Itoa(len(out.Tasks))+" tasks reassigned to "+in.Assign+" (batch "+batch.String()+"); lore batch show --id "+batch.String())
 	if !logged {
 		out.Lines = append(out.Lines, noBatchLogNote)
 	}

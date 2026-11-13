@@ -19,7 +19,7 @@ import (
 )
 
 // movesMove is the command every notice must name.
-const movesMove = "lore scope move src/booking src/bookings"
+const movesMove = "lore scope move --old src/booking --new src/bookings"
 
 func TestJourneyMovesFolderAndRepo(t *testing.T) {
 	t.Parallel()

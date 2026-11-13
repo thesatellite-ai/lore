@@ -225,7 +225,7 @@ growth: needs renders at least a day apart
 
 ## Pin how a rule appears
 
-Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) is printed in full or as one line, by how much room the tool's budget leaves. `lore pin set <id> --context full` makes an entry always print in full, ahead of the other `must` rules; `--context line` makes it always one line that points at `lore show <id>`. The pin applies on the next `lore render`. `lore pin unset <id>` gives the choice back to render.
+Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) is printed in full or as one line, by how much room the tool's budget leaves. `lore pin set --id <id> --context full` makes an entry always print in full, ahead of the other `must` rules; `--context line` makes it always one line that points at `lore show --id <id>`. The pin applies on the next `lore render`. `lore pin unset --id <id>` gives the choice back to render.
 
 <!-- example: render#pin -->
 ```console
@@ -234,12 +234,12 @@ $ lore rule add --body 'Every price change needs the client written OK' --severi
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2
   scope: [master] severity: must
-$ lore pin set rul_54fe…28f2 --context line
+$ lore pin set --id rul_54fe…28f2 --context line
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context line (lore render to apply)
 $ lore render >/dev/null && grep -n 'price change' .lore/LORE.md
 42:- `rul_54fe…28f2` Every price change needs the client written OK Full: `lore show rul_54fe…28f2`
-$ lore pin set rul_54fe…28f2 --context full
+$ lore pin set --id rul_54fe…28f2 --context full
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context full (lore render to apply)
 $ lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md
@@ -247,7 +247,7 @@ $ lore render >/dev/null && grep -n -B1 -A2 'price change' .lore/LORE.md
 39:Every price change needs the client written OK
 40-</rule>
 41-
-$ lore pin unset rul_54fe…28f2
+$ lore pin unset --id rul_54fe…28f2
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 unpinned (render ranks it again)
 ```
@@ -257,7 +257,7 @@ Only `must` rules and `critical`/`high` hotfixes can be pinned; other notes are 
 
 ## Rules for one folder
 
-A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts and the file that serves it, and `lore scope show <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
+A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
 
 <!-- example: render#scope -->
 ```console
@@ -270,7 +270,7 @@ lore: wrote ~/work/website/.lore/data/rules/rul_c0f3…b5b8.json
 $ lore scope list
 scope                            rules hotfixes notes  file                                  bytes
 dir:src/checkout                     1        0     0  (none)                                    0
-$ lore scope show src/checkout/pay.ts
+$ lore scope show --path src/checkout/pay.ts
 scope chain for src/checkout/pay.ts (general first; later wins on conflict)
   project  this project                 2 rules, 1 hotfix  .lore/LORE.md
   repo     this repo                    0 rules  .lore/LORE.md
@@ -284,12 +284,12 @@ $ lore render
 ```
 <!-- /example -->
 
-When you rename the folder, tell lore with `lore scope move <old> <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
+When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
 
 <!-- example: render#scope-move -->
 ```console
 # alice, in website
-$ lore scope move src/checkout src/payments
+$ lore scope move --old src/checkout --new src/payments
 lore: wrote ~/work/website/.lore/data/scopes/scp_05e9…4603.json
 ✓ scp_05e9…4603 path src/checkout -> src/payments (ids unchanged)
 next: lore render

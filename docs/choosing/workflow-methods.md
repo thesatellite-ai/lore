@@ -15,7 +15,7 @@
 | what broke and what you did | `lore incident add` | `--ref` points it at the rows it touched | no |
 | one value many notes mention (a host name) | `lore vars set` and `${var:<name>}` | change it in one place | no |
 | extra fields on any row (`client=acme`) | `lore meta set` | filter, export and check them | no |
-| servers, domains and services with typed fields | `lore resource add <kind> <name>` | values are checked, refs between rows are followed | no |
+| servers, domains and services with typed fields | `lore resource add --kind <kind> --name <name>` | values are checked, refs between rows are followed | no |
 
 The other kinds (pattern, snapshot, behaviour, architecture note, cookbook recipe, suggestion, taste preference, tech doc, workflow, workspace) work the same way; pick the one whose name says what the note is for, so `lore search --tables <kind>` finds it.
 
@@ -34,7 +34,7 @@ The other kinds (pattern, snapshot, behaviour, architecture note, cookbook recip
 | a date that only needs to tell you ("Renew the domain on 1 June") | `lore reminder add --due` (`--recurrence 1y` to repeat) | an overdue mark in `lore reminder list`, no status to manage |
 | a bigger goal made of tasks | `lore mission add`, tasks with `--mission <id>` | `lore mission status`: ready, waiting, gated, claimed, blocked, done |
 | a written note on how you will get there | `lore plan add` | prose; tasks can point at it with `--plan` |
-| a list of tasks with their order, in a file | `lore mission apply <file>` | one mission and its tasks from a YAML plan file; a re-run adds nothing |
+| a list of tasks with their order, in a file | `lore mission apply --file <file>` | one mission and its tasks from a YAML plan file; a re-run adds nothing |
 | an idea, not yet agreed | `lore task add --commitment proposed` (or `someday`) | `lore task triage` lists it until someone says yes |
 
 - **If only a date matters,** use a reminder; if someone has to do something, use a task.
@@ -46,10 +46,10 @@ The other kinds (pattern, snapshot, behaviour, architecture note, cookbook recip
 |---|---|
 | a note reviewed and merged with the change it belongs to | write it on your branch (`--no-live`, the default for every kind but tasks, missions, handoffs and comments) |
 | everyone to see a note now, whatever branch they are on | `--live` (see [Keep a note with the code, or share it at once](with-code-or-live.md)) |
-| to read the notes on a teammate's branch without switching | `lore sync peek <branch>` |
-| one note from your branch on `main` before the pull request merges | `lore sync promote <id> --to main` |
+| to read the notes on a teammate's branch without switching | `lore sync peek --ref <branch>` |
+| one note from your branch on `main` before the pull request merges | `lore sync promote --ids <id> --to main` |
 | a finished live note copied onto `main` now | `lore land` |
-| a note out of the repo into a store, keeping its id | `lore row move <id> --to <store>` |
+| a note out of the repo into a store, keeping its id | `lore row move --id <id> --to <store>` |
 
 ## Merging notes: hooks and merge driver, or the CI merge
 
@@ -60,7 +60,7 @@ The other kinds (pattern, snapshot, behaviour, architecture note, cookbook recip
 
 - **If everyone merges on their own machine,** you need nothing more: the merge driver is already in place.
 - **If people merge with the GitHub button,** install the action, and keep it manual until you know you want it to spend GitHub Actions minutes on every pull request.
-- **If a merge left a conflict lore could not settle,** `lore sync conflicts` lists it and `lore sync resolve <id>` settles it.
+- **If a merge left a conflict lore could not settle,** `lore sync conflicts` lists it and `lore sync resolve --id <id>` settles it.
 
 ## Talking to lore: command line, local API or terminal browser
 

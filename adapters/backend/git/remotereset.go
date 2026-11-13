@@ -111,10 +111,10 @@ func (b *Backend) remoteResetError(ctx context.Context, why, remote, h string) e
 	}
 	if newID, oldID := b.storeIDAtCommit(ctx, remote), b.storeIDAtCommit(ctx, h); newID != "" && oldID != "" && newID != oldID {
 		return errs.Wrap(errs.Refused, "git: the store at "+shown+" was started fresh by someone (it is now store "+newID+"); this machine's clone "+b.work+" still holds the old store "+oldID+", which lore will not push there", ErrRemoteReset).
-			WithHint("drop this machine's old copy with lore store forget " + shown + " --yes, then run lore sync to clone the new store (or ask whoever reset it)")
+			WithHint("drop this machine's old copy with lore store forget --url " + shown + " --yes, then run lore sync to clone the new store (or ask whoever reset it)")
 	}
 	return errs.Wrap(errs.Refused, "git: the store at "+shown+" was reset ("+why+"), but this machine's clone "+b.work+" still holds the old store; lore will not push it there on its own", ErrRemoteReset).
-		WithHint("put this copy back: lore store push --restore " + shown + "; or start fresh: lore store forget " + shown + ", then lore store init <name> " + shown)
+		WithHint("put this copy back: lore store push --restore " + shown + "; or start fresh: lore store forget --url " + shown + ", then lore store init <name> " + shown)
 }
 
 // checkRemoteReset decides, after a fetch, whether the remote was reset:

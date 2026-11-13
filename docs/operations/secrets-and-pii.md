@@ -55,7 +55,7 @@ Delete the row (or edit the key out) before you commit:
 <!-- example: ops#allow-secrets only=3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_3b62…e913 --yes
+$ lore memory delete --id mem_3b62…e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 ```
@@ -110,23 +110,23 @@ $ lore task list
 ```
 <!-- /example -->
 
-Once the value is in your manager, `lore secrets link <row> --at <n> --ref "<manager>://<entry>"` fills placeholder number `n` (as `lore secrets list --unstored` counts them). For a personal manager such as gopass, lore records this machine as the holder, because only this machine can read the entry; for the shared ones (`op`, `vault`, `aws-secrets`) no holder is recorded. The task stays open until you rotate the value:
+Once the value is in your manager, `lore secrets link --id <row> --at <n> --ref "<manager>://<entry>"` fills placeholder number `n` (as `lore secrets list --unstored` counts them). For a personal manager such as gopass, lore records this machine as the holder, because only this machine can read the entry; for the shared ones (`op`, `vault`, `aws-secrets`) no holder is recorded. The task stays open until you rotate the value:
 
 <!-- example: secrets#link -->
 ```console
 # alice, in website
-$ lore secrets link mem_2ad3…f891 --at 1 --ref 'gopass://acme/website/mail-relay'
+$ lore secrets link --id mem_2ad3…f891 --at 1 --ref 'gopass://acme/website/mail-relay'
 lore: wrote ~/work/website/.lore/data/memories/mem_2ad3…f891.json
 Replaced ${secret:unstored} #1 in mem_2ad3…f891 body with ${secret:gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff}.
 Its task stays open: rotate the secret, then lore task done <task>.
-$ lore secrets show mem_2ad3…f891
+$ lore secrets show --id mem_2ad3…f891
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff	mch_017941fe	mem_2ad3…f891 body	-
 1 reference in 1 row. Not revealed (add --reveal).
 ```
 <!-- /example -->
 
-`lore secrets show <row>` lists the references of one row, and `lore secrets show <manager://entry>` every row and field that holds that entry (in USED IN, as `lore secrets list` shows them).
+`lore secrets show --id <row>` lists the references of one row, and `lore secrets show --id <manager://entry>` every row and field that holds that entry (in USED IN, as `lore secrets list` shows them).
 
 ## Step 5 — Check that every entry still exists
 
@@ -154,16 +154,16 @@ env://STAGING_DB_PASSWORD	-	mem_b4f4…a5b0 body	present
 ```
 <!-- /example -->
 
-To read a value, `lore secrets show <ref> --reveal` asks every time and records the reveal in the audit log. Without a terminal it stops with `E_NEEDS_CONFIRM`; a person answers with `--yes`, and an agent alone needs `--force`, which is recorded as forced:
+To read a value, `lore secrets show --id <ref> --reveal` asks every time and records the reveal in the audit log. Without a terminal it stops with `E_NEEDS_CONFIRM`; a person answers with `--yes`, and an agent alone needs `--force`, which is recorded as forced:
 
 <!-- example: secrets#reveal -->
 ```console
 # alice, in website
-$ lore secrets show env://STAGING_DB_PASSWORD --reveal
+$ lore secrets show --id env://STAGING_DB_PASSWORD --reveal
 ERROR: [E_NEEDS_CONFIRM] lore will read 1 secret(s) from env (STAGING_DB_PASSWORD) and print it in clear. This is recorded in the audit log. Continue?
   hint: ask the person, then rerun with --yes (an agent alone: --force, audited as FORCED)
 (exit 26)
-$ lore secrets show env://STAGING_DB_PASSWORD --reveal --force
+$ lore secrets show --id env://STAGING_DB_PASSWORD --reveal --force
 env://STAGING_DB_PASSWORD = dummy-value
 W_REVEAL_FORCED: revealed without a person's answer; recorded in the audit log as forced
 ```
@@ -223,7 +223,7 @@ $ lore task list
 
 ## Step 7 — Review what was marked not a secret
 
-Every `--not-a-secret` answer is recorded as an allow entry: one row, one field, one rule, with your reason and only a hash of the matched text. `lore secrets allow list` shows them, `lore secrets allow rm <sal_…>` removes one (the finding is reported again on the next scan), and `lore secrets allow <row> --rule <rule> --match <text> --reason <why>` (or `--match-hash` with the `sha256:…` fingerprint a refused commit printed, or the number `lore check leaks --rows` prints) adds one by hand for a finding on a row that is already saved: A finding in an ordinary repo file (a schema field named `password`, a test fixture) has no row: a refused commit prints the ready line for it under the finding, `lore secrets allow --file <path> --rule <rule> --match-hash sha256:… --reason "<why>"` with the real path, rule and hash filled in (a finding in a `.lore/data` row file gets `lore secrets allow <row id> --rule <rule> --field <field> --match-hash sha256:… --reason "<why>"`), which records the repo-relative path, rule and hash; commit the new `.lore/data/secret_allows` file with the change and the commit check accepts that value in that file only (another value in the file, or the same value in another file, is still refused). No `--no-verify` is ever needed.
+Every `--not-a-secret` answer is recorded as an allow entry: one row, one field, one rule, with your reason and only a hash of the matched text. `lore secrets allow list` shows them, `lore secrets allow rm --id <sal_…>` removes one (the finding is reported again on the next scan), and `lore secrets allow --row-id <row> --rule <rule> --match <text> --reason <why>` (or `--match-hash` with the `sha256:…` fingerprint a refused commit printed, or the number `lore check leaks --rows` prints) adds one by hand for a finding on a row that is already saved: A finding in an ordinary repo file (a schema field named `password`, a test fixture) has no row: a refused commit prints the ready line for it under the finding, `lore secrets allow --file <path> --rule <rule> --match-hash sha256:… --reason "<why>"` with the real path, rule and hash filled in (a finding in a `.lore/data` row file gets `lore secrets allow --row-id <row-id> --rule <rule> --field <field> --match-hash sha256:… --reason "<why>"`), which records the repo-relative path, rule and hash; commit the new `.lore/data/secret_allows` file with the change and the commit check accepts that value in that file only (another value in the file, or the same value in another file, is still refused). No `--no-verify` is ever needed.
 
 A repo that already keeps a gitleaks `.gitleaksignore` at its top keeps it: the commit and push checks read it from the index (stage it with the change, like an allow entry) and let through each finding it names by fingerprint in gitleaks' staged form `<path>:<rule>:<line>`. A commit-pinned line (`<commit>:<path>:<rule>:<line>`, what a gitleaks history scan writes) accepts a finding in that one commit only, so the commit and push checks skip it, as gitleaks does: add the staged form for a value that is still in the file. The rule may be lore's id as the refusal prints it or the gitleaks rule it covers (`lore secrets rules --replaced`); a finding on another line is still refused.
 
@@ -242,12 +242,12 @@ $ lore secrets allow list
 ID	ROW	FIELD	RULE	REASON
 sal_28f8…03df	mem_3b62…e913	body	github_token	fixture in tests (confirmed not a secret by alice (memory add))
 sal_4c59…6c38	mem_3b62…e913	body	github-pat	fixture in tests (confirmed not a secret by alice (memory add))
-$ lore secrets allow rm sal_4c59…6c38 --yes
+$ lore secrets allow rm --id sal_4c59…6c38 --yes
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 ✓ removed sal_…6c38; the finding is reported again on the next scan
 $ lore secrets allow list | grep -c sal_
 1
-$ lore secrets allow mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
+$ lore secrets allow --row-id mem_3b62…e913 --rule github-pat --match 'ghp_''16C7e42F292c6912E7710c838347Ae178B4a' --reason 'fixture in tests'
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_f147…5139.json
 ✓ github-pat: mem_…e913.body marked not a secret (sal_…5139)
 ```
@@ -262,7 +262,7 @@ One piece of text can match more than one rule (here `github_token` and `github-
 <!-- example: ops#pii-pattern -->
 ```console
 # alice, in website
-$ lore secrets rule add invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
+$ lore secrets rule add --id invoice-number --regex 'INV-[0-9]{6}' --description 'our invoice numbers' --yes
 lore: wrote ~/work/website/.lore/data/secret_rules/srl_b4f4…a5b0.json
 ✓ invoice-number added in this repo (srl_…a5b0)
 $ lore secrets rules
@@ -275,24 +275,24 @@ ERROR: [E_NEEDS_CONFIRM] body looks like a secret (invoice-number) at line 1: sh
 ```
 <!-- /example -->
 
-`lore secrets rules` lists only the rule rows: rules you added, changed or switched off, with their level and where they live. With none, the built-in rules apply (the gitleaks set plus lore's own pack). `lore secrets rule off <rule> --reason <why>` switches a rule off (lore doctor lists it), `lore secrets rule edit <rule>` changes its pattern (`--regex`), `--keywords`, `--entropy` or `--description` (built-in rules included), and `lore secrets rule on <rule>` removes the off row again. Each takes `--to` for the place: `repo` (default), `me` (your own notes only), `<store>` or `<store>/<folder>`:
+`lore secrets rules` lists only the rule rows: rules you added, changed or switched off, with their level and where they live. With none, the built-in rules apply (the gitleaks set plus lore's own pack). `lore secrets rule off --id <rule> --reason <why>` switches a rule off (lore doctor lists it), `lore secrets rule edit --id <rule>` changes its pattern (`--regex`), `--keywords`, `--entropy` or `--description` (built-in rules included), and `lore secrets rule on --id <rule>` removes the off row again. Each takes `--to` for the place: `repo` (default), `me` (your own notes only), `<store>` or `<store>/<folder>`:
 
 <!-- example: secrets#rules -->
 ```console
 # alice, in website
 $ lore secrets rules
 (no rule rows: gitleaks defaults and lore's own pack apply)
-$ lore secrets rule off generic-password --reason 'our tests use fake passwords' --yes
+$ lore secrets rule off --id generic-password --reason 'our tests use fake passwords' --yes
 lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
 ✓ generic-password off in this repo (srl_…6bbb)
-$ lore secrets rule edit aws_access_key --description 'cloud keys, any account' --yes
+$ lore secrets rule edit --id aws_access_key --description 'cloud keys, any account' --yes
 lore: wrote ~/work/website/.lore/data/secret_rules/srl_b69e…5ed7.json
 ✓ aws_access_key changed in this repo (srl_…5ed7)
 $ lore secrets rules
 RULE	STATE	LEVEL	WHERE	NOTE
 aws_access_key	changed	repo	this repo	cloud keys, any account
 generic-password	off	repo	this repo	our tests use fake passwords
-$ lore secrets rule on generic-password --yes
+$ lore secrets rule on --id generic-password --yes
 lore: wrote ~/work/website/.lore/data/secret_rules/srl_2537…6bbb.json
 ✓ generic-password on in this repo (srl_…6bbb removed)
 $ lore secrets rules
@@ -312,7 +312,7 @@ $ lore pii-pattern add --name phone --regex '[0-9]{10}'
 ERROR: [E_INVALID_INPUT] lore pii-pattern add was replaced by lore secrets rule add (secret rules are settings rows)
   hint: use `lore secrets rule add`; `lore secrets rules` lists every rule
 (exit 20)
-$ lore pii-pattern disable phone
+$ lore pii-pattern disable --id phone
 ERROR: [E_INVALID_INPUT] lore pii-pattern disable was replaced by lore secrets rule off (secret rules are settings rows)
   hint: use `lore secrets rule off`; `lore secrets rules` lists every rule
 (exit 20)

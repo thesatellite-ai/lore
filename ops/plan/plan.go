@@ -87,8 +87,8 @@ type AddIn struct {
 
 	Title string `json:"title" flag:"title" desc:"title (required)"`
 	// Body is required, by --body or as the first argument.
-	Body    string `json:"body,omitempty" flag:"body" desc:"body (required; or give it as the first argument)" ui:"widget=markdown"`
-	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
+	Body    string `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
+	Text    string `json:"text,omitempty" arg:"0" argof:"body" desc:"the body, instead of --body"`
 	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }
@@ -236,9 +236,9 @@ func Ops(env work.Env) []op.Entry {
 			Examples: []op.Example{{Title: "add a plan document", CLI: `lore plan add --title "Invite flow" --body "1. backend 2. landing page"`, Want: "pln_"}},
 		}, o.add),
 		op.Define(op.Spec{Name: OpList, Examples: []op.Example{{Title: "list as JSON", CLI: "lore plan list --json", Want: `"data"`}}, Summary: "List plans", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.list),
-		op.Define(op.Spec{Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore plan show pln_<id> --json", Want: `"data"`}}, Summary: "Show plan details", Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm}, o.showExpand),
+		op.Define(op.Spec{Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore plan show --id pln_<id> --json", Want: `"data"`}}, Summary: "Show plan details", Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm}, o.showExpand),
 		op.Define(op.Spec{
-			Name: OpEdit, Examples: []op.Example{{Title: "retitle", CLI: `lore plan edit pln_<id> --title "Invite flow v2"`, Want: "pln_"}}, Summary: "Edit plan fields (only flags you pass are applied)",
+			Name: OpEdit, Examples: []op.Example{{Title: "retitle", CLI: `lore plan edit --id pln_<id> --title "Invite flow v2"`, Want: "pln_"}}, Summary: "Edit plan fields (only flags you pass are applied)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
@@ -248,7 +248,7 @@ func Ops(env work.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.delete),
 		op.Define(op.Spec{
-			Name: OpSearch, Examples: []op.Example{{Title: "find plans", CLI: `lore plan search "invite"`, Want: "pln_"}}, Summary: "Full-text search across plan title + body + status",
+			Name: OpSearch, Examples: []op.Example{{Title: "find plans", CLI: `lore plan search --query "invite"`, Want: "pln_"}}, Summary: "Full-text search across plan title + body + status",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,
 		}, o.search),
 	}

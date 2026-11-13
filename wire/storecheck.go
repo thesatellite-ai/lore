@@ -134,7 +134,7 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 	if gitbackend.RemoteResetAt(s.dir) {
 		// B2-29: say what sync says; the waiting commits are not pushed
 		// by the next command while the store stays reset.
-		c.Problems = append(c.Problems, fmt.Sprintf("the store at %s was reset (deleted and made again); this clone %s still holds the old store (%d commit(s) not pushed) and lore will not push it there on its own: put it back with `lore store push --restore %s`, or start fresh with `lore store forget %s --yes`, then `lore store init <name> %s`", s.entry.URL, s.dir, st.Ahead, s.entry.URL, s.entry.URL, s.entry.URL))
+		c.Problems = append(c.Problems, fmt.Sprintf("the store at %s was reset (deleted and made again); this clone %s still holds the old store (%d commit(s) not pushed) and lore will not push it there on its own: put it back with `lore store push --restore --store %s`, or start fresh with `lore store forget --url %s --yes`, then `lore store init --name <name> --url %s`", s.entry.URL, s.dir, st.Ahead, s.entry.URL, s.entry.URL, s.entry.URL))
 	} else if st.Ahead > 0 {
 		age := ""
 		if !st.OldestUnpushed.IsZero() {

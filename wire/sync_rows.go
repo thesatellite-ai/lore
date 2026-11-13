@@ -151,7 +151,7 @@ func (s syncRows) SyncTrashRestore(ctx context.Context, in opssync.TrashRestoreI
 	if !fallback(err) {
 		return out, err
 	}
-	s.app.notice(fmt.Sprintf(syncTrashPointer, "lore trash restore --local "+in.ID))
+	s.app.notice(fmt.Sprintf(syncTrashPointer, "lore trash restore --local --target "+in.ID))
 	e, ok := s.app.reg.Lookup(opstrash.OpRestore)
 	if !ok {
 		return opssync.DoneOut{}, errs.New(errs.Internal, "sync trash restore: "+opstrash.OpRestore+" is not registered")
@@ -209,7 +209,7 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 				continue
 			}
 			out.Data.Conflicts = append(out.Data.Conflicts, opssync.ConflictNote{Path: c.Table + "/" + c.RowID, Kept: c.Kept, Why: syncLiveConflictWhy})
-			out.Lines = append(out.Lines, fmt.Sprintf("conflict #%d live %s/%s: %s (lore sync resolve %d --take kept|other)", c.ID, c.Table, c.RowID, syncLiveConflictWhy, c.ID))
+			out.Lines = append(out.Lines, fmt.Sprintf("conflict #%d live %s/%s: %s (lore sync resolve --id %d --take kept|other)", c.ID, c.Table, c.RowID, syncLiveConflictWhy, c.ID))
 		}
 	}
 	if files, ferr := s.app.BranchConflicts(ctx); ferr == nil {
@@ -251,7 +251,7 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 		// the sync ran, but rows wait on a person: say so in the exit code
 		// too, as a refused store row does (E_STALE)
 		serr = errs.New(errs.Stale, fmt.Sprintf("sync: %d row(s) hold a conflict to settle", len(out.Data.Conflicts))).
-			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve <n> --take kept|other` settles one (or edit the row)")
+			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve --id <n> --take kept|other` settles one (or edit the row)")
 	}
 	if serr != nil {
 		for _, l := range out.Lines {
@@ -317,7 +317,7 @@ func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (op
 	for _, f := range files {
 		n := len(out.Data) + 1
 		out.Data = append(out.Data, opssync.Conflict{ID: int64(n), Table: f.Table, RowID: f.RowID, Kept: branchConflictKept})
-		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (%s: git conflict markers; settle with lore sync resolve %d --take kept|other, or fix the file)",
+		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (%s: git conflict markers; settle with lore sync resolve --id %d --take kept|other, or fix the file)",
 			n, f.Table, f.RowID, branchConflictKept, f.Place, n))
 	}
 	storeConflictNumbered(&out, stores)
@@ -435,7 +435,7 @@ const storeRefusalNext = "the commits wait in the local clone: fix what the stor
 // storeConflictNext is the next step of a push held back because both
 // sides changed the same rows (E_STALE, E_RESOURCE_CONFLICT): no push rule
 // is involved, the person settles the rows.
-const storeConflictNext = "the commits wait in the local clone: someone else changed the same row(s); `lore sync conflicts` shows both versions of each, `lore sync resolve <n> --take kept|other` settles one (or edit the row here so both agree, then run `lore sync`)"
+const storeConflictNext = "the commits wait in the local clone: someone else changed the same row(s); `lore sync conflicts` shows both versions of each, `lore sync resolve --id <n> --take kept|other` settles one (or edit the row here so both agree, then run `lore sync`)"
 
 // storeRefusalNextFor is the next step for a refusal code.
 func storeRefusalNextFor(code string) string {

@@ -174,7 +174,7 @@ func linesWith(text, s string) []string {
 func attachTwice(t *testing.T, a *th.Clone, url string) {
 	t.Helper()
 	res := a.Lore("store", "add", "stag2", url, "--branch", "staging", "--yes")
-	if res.Code == 0 || !strings.Contains(res.Stderr, "store stag already attaches") || !strings.Contains(res.Stderr, "lore store remove stag") {
+	if res.Code == 0 || !strings.Contains(res.Stderr, "store stag already attaches") || !strings.Contains(res.Stderr, "lore store remove --name stag") {
 		t.Fatalf("a second entry for one store branch must be refused, naming stag: code %d\n%s%s", res.Code, res.Stdout, res.Stderr)
 	}
 	body, ok := a.ReadFile(".lore/stores.yaml")

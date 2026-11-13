@@ -320,7 +320,7 @@ const linkFolderPlaceholder = "<folder>"
 func (w *coordWorld) linkCommand(ctx context.Context) string {
 	cmd := "lore org link"
 	if w.sit.Org != nil && w.sit.Org.Name != "" {
-		cmd += " " + w.sit.Org.Name
+		cmd += " --org " + w.sit.Org.Name
 	}
 	folder := linkFolderPlaceholder
 	if top, err := w.a.repoTop(ctx); err == nil && top != "" {
@@ -992,7 +992,7 @@ func coordErr(err error) error {
 	var hoc *coord.HasOpenChildrenError
 	switch {
 	case errors.As(err, &hoc):
-		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim " + hoc.Children[0] + "   (or: lore task claim " + hoc.Task + " --coordinate)")
+		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim --id " + hoc.Children[0] + "   (or: lore task claim --id " + hoc.Task + " --coordinate)")
 	case errors.As(err, &fe):
 		code := errs.LostClaim // an unknown kind fails closed as a lost claim
 		switch fe.Kind {

@@ -19,7 +19,7 @@ The mistake, and what the client sees:
 <!-- example: leak-cleanup#the-mistake -->
 ```console
 # alice, in website
-$ lore task add 'chase the client about the unpaid March invoice' --to repo
+$ lore task add --title 'chase the client about the unpaid March invoice' --to repo
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 3 row file(s) in ~/work/website/.lore/data
 ✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]
@@ -32,12 +32,12 @@ $ lore sync >/dev/null; lore task list
 ```
 <!-- /example -->
 
-The cleanup has two steps. `lore live purge <id> --confirm` removes the row from live (like `lore trash purge`, it asks first: without `--confirm` it refuses and purges nothing, and `--dry-run` lists what would go) and writes its id to a purge list on the live ref. So every clone drops it on its next fetch, and no clone can push it back. `lore live compact` then rewrites the live ref to a single commit. So the row is gone from the ref's history too:
+The cleanup has two steps. `lore live purge --ids <id> --confirm` removes the row from live (like `lore trash purge`, it asks first: without `--confirm` it refuses and purges nothing, and `--dry-run` lists what would go) and writes its id to a purge list on the live ref. So every clone drops it on its next fetch, and no clone can push it back. `lore live compact` then rewrites the live ref to a single commit. So the row is gone from the ref's history too:
 
 <!-- example: leak-cleanup#purge -->
 ```console
 # alice, in website
-$ lore live purge tsk_7a67…9504 --confirm
+$ lore live purge --ids tsk_7a67…9504 --confirm
 ✓ purged tsk_7a67…9504 from live; run `lore live compact` to drop them from the ref's history too
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
 $ lore live compact --dry-run
@@ -64,7 +64,7 @@ Carol no longer sees it. A fresh mirror of everything the remote serves (every b
 
 ## The runbook
 
-1. **`lore live purge <id> --confirm`**: removes the row from the live ref for good. Purge entries are kept for 30 days. A clone that has not run lore since then could push the row back; `lore doctor` reports that.
+1. **`lore live purge --ids <id> --confirm`**: removes the row from the live ref for good. Purge entries are kept for 30 days. A clone that has not run lore since then could push the row back; `lore doctor` reports that.
 2. **`lore live compact`**: drops the row from the live ref's history. Your own previous live ref is kept locally as `refs/lore-backup/live/<stamp>`.
 3. **If it landed on `main`** (or rode along in a merged pull request), it is an ordinary git history problem. Revert it, and rewrite history if the text must be gone.
 4. **If it contained a secret**, rotate the secret. A pushed secret must be treated as known.

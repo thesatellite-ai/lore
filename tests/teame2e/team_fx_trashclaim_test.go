@@ -22,7 +22,7 @@ func TestF07_TrashedClaimReleasesAcrossClones(t *testing.T) {
 	cr.toolsC.MustLore("task", "delete", doomed, "--yes").Says(t, "moved to the trash")
 
 	// The agent learns of it in its inbox (TASK 20 "deleted").
-	ac.MustLore("inbox").Says(t, "deleted", doomed, "lore task release "+doomed)
+	ac.MustLore("inbox").Says(t, "deleted", doomed, "lore task release --id "+doomed)
 
 	// The trashed task does not count toward the WIP limit of 1.
 	ac.MustLore("task", "claim", next).Says(t, "claimed "+next)

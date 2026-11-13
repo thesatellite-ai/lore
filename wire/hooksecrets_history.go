@@ -301,5 +301,5 @@ func (a *App) migratedSecretsLine(ctx context.Context, top, tree, data string, d
 		more = ", and " + strconv.Itoa(n-len(named)) + " more"
 	}
 	return "warning: " + strconv.Itoa(n) + " secret-looking value(s) in the rewritten rows (row field rule fingerprint): " + strings.Join(named, "; ") + more +
-		". They were already committed, so the commit check lets this migration through; still move each real secret to your vault (lore edit <id>, ${secret:…}), or mark one that is not: lore secrets allow <id> --field <field> --rule <rule> --match-hash <fingerprint> --reason \"<why>\" (every one: lore check leaks --rows)"
+		". They were already committed, so the commit check lets this migration through; still move each real secret to your vault (lore edit --id <id>, ${secret:…}), or mark one that is not: lore secrets allow <id> --field <field> --rule <rule> --match-hash <fingerprint> --reason \"<why>\" (every one: lore check leaks --rows)"
 }

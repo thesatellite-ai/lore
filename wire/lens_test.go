@@ -138,7 +138,7 @@ func TestLensClientRepoSeesOnlyRepo(t *testing.T) {
 	}
 }
 
-// kindWorld runs spec 15 step 5 in a: `lore resource kind add server`,
+// kindWorld runs spec 15 step 5 in a: `lore resource kind add --kind server`,
 // two field adds (ip, and the sensitive admin_ip), two resources.
 func kindWorld(t *testing.T, a *App) {
 	t.Helper()

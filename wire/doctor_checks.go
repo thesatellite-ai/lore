@@ -216,7 +216,7 @@ func (a *App) DoctorTriageOwner(ctx context.Context) ([]DoctorFinding, error) {
 	}
 	return []DoctorFinding{{Check: DoctorCheckTriageOwner, Level: DoctorWarning,
 		Message: string(policy.KeyTasksTriageOwner) + " is " + raw + ", which matches no actor; no inbox lists proposed tasks",
-		Fix:     "lore policy set " + string(policy.KeyTasksTriageOwner) + " <id or @handle> --to team"}}, nil
+		Fix:     "lore policy set --key " + string(policy.KeyTasksTriageOwner) + " --value \"<id or @handle>\" --to team"}}, nil
 }
 
 // normName is a name as the inbox compares it: trimmed, no leading @,

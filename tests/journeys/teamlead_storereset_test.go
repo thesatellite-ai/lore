@@ -117,7 +117,7 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 		storesFile := filepath.Join(tt.repo[tlLee.Email].Dir, ".lore", "stores.yaml")
 		before, _ := os.ReadFile(storesFile)
 		r := tt.lore(tlLee, "store", "init", tlOrg, tt.store.SSHURL(), "--yes").OK(t)
-		r.Says(t, "org "+tlOrg+"'s store", "lore setup apply "+tlLeadSetup+" --step team", "lore member add").Never(t, "recorded in .lore/stores.yaml")
+		r.Says(t, "org "+tlOrg+"'s store", "lore setup apply --setup "+tlLeadSetup+" --step team", "lore member add").Never(t, "recorded in .lore/stores.yaml")
 		if after, _ := os.ReadFile(storesFile); string(after) != string(before) {
 			t.Errorf("store init changed the code repo's .lore/stores.yaml:\n%s", after)
 		}

@@ -365,7 +365,7 @@ func cloneOps(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "List the configured org stores, their clones and (with --links) the link index; with a store name, its push mode and compaction",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
-			Examples: []op.Example{{Title: "every store", CLI: "lore store show", Want: ""}, {Title: "the personal store's push mode", CLI: "lore store show me", Want: "push"}},
+			Examples: []op.Example{{Title: "every store", CLI: "lore store show", Want: ""}, {Title: "the personal store's push mode", CLI: "lore store show --store me", Want: "push"}},
 		}, func(ctx context.Context, in ShowIn) (ClonesOut, error) {
 			if name := strings.TrimSpace(in.Store); name != "" {
 				p, err := pusher(m, "show")
@@ -388,7 +388,7 @@ func cloneOps(m Manager) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpOpen, Summary: "Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>, or <repo>@<branch>), fetched first",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
-			Examples: []op.Example{{Title: "browse a store", CLI: "lore store open git@github.com:agency/notes", Want: "✓"}},
+			Examples: []op.Example{{Title: "browse a store", CLI: "lore store open --url git@github.com:agency/notes", Want: "✓"}},
 		}, func(ctx context.Context, in OpenIn) (OpenOut, error) {
 			c, err := cloner(m, "open")
 			if err != nil {
@@ -414,7 +414,7 @@ func cloneOps(m Manager) []op.Entry {
 			// MayAsk only so --yes is accepted like on every other store
 			// command (B3-29): forget itself never asks.
 			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
-			Examples: []op.Example{{Title: "drop a clone", CLI: "lore store forget git@github.com:agency/notes", Want: ""}},
+			Examples: []op.Example{{Title: "drop a clone", CLI: "lore store forget --url git@github.com:agency/notes", Want: ""}},
 		}, func(ctx context.Context, in ForgetIn) (ForgetOut, error) {
 			c, err := cloner(m, "forget")
 			if err != nil {

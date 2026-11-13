@@ -51,7 +51,7 @@ func Approve(ctx context.Context, env Env, req ApproveRequest) (Approval, error)
 			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, req.ID)
 		}
 		if doc.Str(keyGate) == "" {
-			return signals.Change{}, nil, fmt.Errorf("%w: %s (request one with `lore gate request %s`)", ErrNotGated, req.ID, req.ID)
+			return signals.Change{}, nil, fmt.Errorf("%w: %s (request one with `lore gate request --id %s`)", ErrNotGated, req.ID, req.ID)
 		}
 		next := doc.Clone()
 		at := v.Now.UTC().Truncate(time.Second)

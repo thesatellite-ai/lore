@@ -41,7 +41,7 @@ func TestWithDefaultOrg(t *testing.T) {
 	}
 	org = ""
 	_, err = withDefaultOrg(ctx, &fakeHost{}, OpRefresh, &org, func() (Report, error) { return Report{}, nil })
-	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "lore org refresh <org>") {
+	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "lore org refresh --org <org>") {
 		t.Fatalf("no default: %v", err)
 	}
 	h.err = errs.New(errs.InvalidInput, "name the org")

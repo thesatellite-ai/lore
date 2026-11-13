@@ -18,7 +18,7 @@ import (
 )
 
 // TestCampaignDataFollowups_ResourceExpand: a ${var:…} in a text value is
-// filled in by `resource show --expand` and `lore show res_… --expand`,
+// filled in by `resource show --expand` and `lore show --id res_… --expand`,
 // stays as written without the flag, and a sensitive text value is never
 // expanded (with or without --expand).
 func TestCampaignDataFollowups_ResourceExpand(t *testing.T) {
@@ -53,7 +53,7 @@ func TestCampaignDataFollowups_ResourceExpand(t *testing.T) {
 		Expanded map[string]string `json:"expanded"`
 	}
 	if r := th.DecodeJSON[rowOut](t, c.Lore("show", id, "--json").OK(t)); len(r.Expanded) != 0 {
-		t.Errorf("lore show without --expand expanded: %v", r.Expanded)
+		t.Errorf("lore show --id without --expand expanded: %v", r.Expanded)
 	}
 	r := th.DecodeJSON[rowOut](t, c.Lore("show", id, "--expand", "--json").OK(t))
 	if r.Expanded["fields.note"] != "in eu" || len(r.Expanded) != 1 {
@@ -159,7 +159,7 @@ func TestCampaignDataFollowups_ResourceSizeNamesHistory(t *testing.T) {
 			t.Errorf("refusal does not say %q: %s", want, e.Message)
 		}
 	}
-	if !strings.Contains(e.Hint, "lore policy set resources.max_bytes") {
+	if !strings.Contains(e.Hint, "lore policy set --key resources.max_bytes") {
 		t.Errorf("hint names no way out: %s", e.Hint)
 	}
 	if cdTreeHash(t, c) != before {

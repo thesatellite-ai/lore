@@ -515,7 +515,7 @@ func TestJourneyAgents(t *testing.T) {
 		}
 		// Both ways back say it is gone for good and how to read it.
 		for _, args := range [][]string{{"trash", "restore", id, "--yes"}, {"trash", "restore", id, "--from-history"}} {
-			r := m.LoreIn(app, args...).Refused(t, "E_PURGED", "lore trash show "+id+" --from-history")
+			r := m.LoreIn(app, args...).Refused(t, "E_PURGED", "lore trash show --id "+id+" --from-history")
 			if strings.Contains(r.Out(), "by act_") {
 				t.Errorf("the refusal names the purger by actor id, not by name: %s", r)
 			}

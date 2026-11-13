@@ -129,14 +129,14 @@ type FieldRetypeIn struct {
 func (o ops) maintOps() []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpResRename, Summary: "Rename a resource (ids and refs stay)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceName), Examples: []op.Example{{Title: "rename a resource", CLI: "lore resource rename prod_db primary_db"}}}, o.resRename),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceName), Examples: []op.Example{{Title: "rename a resource", CLI: "lore resource rename --id prod_db --new-name primary_db"}}}, o.resRename),
 		op.Define(op.Spec{Name: OpResMerge, Summary: "Fold a duplicate resource into another of the same kind: refs move, values fill, the duplicate is archived", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceKindMismatch), Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "fold a duplicate", CLI: "lore resource merge hub_prod_old --into hub_prod --yes", Want: "merged"}}}, o.resMerge),
+			Examples: []op.Example{{Title: "fold a duplicate", CLI: "lore resource merge --id hub_prod_old --into hub_prod --yes", Want: "merged"}}}, o.resMerge),
 		op.Define(op.Spec{Name: OpResLint, Summary: "Find dangling and bare-name refs, missing required fields, deprecated fields, due reminders and duplicates", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: writeErrors, Examples: []op.Example{{Title: "resources that do not fit their kind", CLI: "lore resource lint"}}}, o.resLint),
 		op.Define(op.Spec{Name: OpFieldRetype, Summary: "Change a field's type: every value is checked first, then converted (the field id stays)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "preview a type change", CLI: "lore resource field retype database port int --dry-run"}}}, o.fieldRetype),
+			Errors: append(slices.Clone(writeErrors), errs.ResourceInvalid, errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "preview a type change", CLI: "lore resource field retype --kind database --field port --type int --dry-run"}}}, o.fieldRetype),
 	}
 }
 
@@ -310,7 +310,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 		fixed := false
 		// R10 3.15: values that break their field's rule are listed, never dropped.
 		for _, q := range quarantineOf(d, stored) {
-			add(lintQuarantined, q.Field, q.Rule+"; fix: lore resource edit "+name+" --set "+q.Field+"=<value>")
+			add(lintQuarantined, q.Field, q.Rule+"; fix: lore resource edit --id "+name+" --set "+q.Field+"=<value>")
 		}
 		for _, fname := range d.fieldNames() {
 			f := d.byName[fname]
@@ -376,7 +376,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 	for _, k := range kinds {
 		if n := text(k.Row, kName); slices.Contains(reserved, n) {
 			out.Findings = append(out.Findings, LintFinding{Check: lintKindRoute, Row: k.Row.ID.String(), Kind: n,
-				Detail: "kind " + quote(n) + " has the name of a resource command, so its REST route " + resourcesRoutePrefix + n + " runs lore resource " + n + "; rename it: lore resource kind rename " + n + " <new_name>"})
+				Detail: "kind " + quote(n) + " has the name of a resource command, so its REST route " + resourcesRoutePrefix + n + " runs lore resource " + n + "; rename it: lore resource kind rename --id " + n + " <new_name>"})
 		}
 	}
 	out.Count = len(out.Findings)

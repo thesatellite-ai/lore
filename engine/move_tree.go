@@ -55,7 +55,7 @@ func (e *Engine) refuseOrphanChild(ctx context.Context, to store.Source, cur row
 		return err
 	}
 	return errs.New(errs.LeakBlocked, ""+cur.ID.String()+" is a sub-task of "+p+", which client repo "+string(to)+" cannot see; nothing moved").
-		WithHint("lore move " + p + " --to " + string(to) + " --with-children   (or detach first: lore task edit " + cur.ID.String() + " --no-parent)")
+		WithHint("lore move --id " + p + " --to " + string(to) + " --with-children   (or detach first: lore task edit --id " + cur.ID.String() + " --no-parent)")
 }
 
 // WarnMovedFromParent is the line of a sub-task moved without its parent
@@ -168,7 +168,7 @@ func (e *Engine) moveChildren(ctx context.Context, to store.Source, kids []ids.A
 		cw, err := e.MoveWith(ctx, Ref{Table: schema.TableTasks, ID: k}, to, child)
 		if err != nil {
 			return errs.Prefix(""+strconv.Itoa(i)+" of "+strconv.Itoa(len(kids))+" sub-tasks moved; "+k.String()+" did not", err).
-				WithHint("fix the cause, then lore move " + k.String() + " --to " + string(to) + " --with-children (and its later siblings)")
+				WithHint("fix the cause, then lore move --id " + k.String() + " --to " + string(to) + " --with-children (and its later siblings)")
 		}
 		w.Also = append(w.Also, Changed{Store: to, Row: cw.Row})
 		for _, wn := range cw.Warnings {

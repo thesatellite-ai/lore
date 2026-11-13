@@ -154,7 +154,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 		sel, err = reg.Select(names, repoProbe{root: root})
 		if err != nil {
 			return opsdirective.Pick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(err).Error.Message, string(policy.KeyContextTargets)+": "), err).
-				WithHint("change it with: lore policy set " + string(policy.KeyContextTargets) + " <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
+				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
 		}
 	} else {
 		sel = reg.Resolve(repoProbe{root: root})
@@ -193,12 +193,12 @@ func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) [
 	for _, p := range sel.Unwired {
 		hint := "lore render --target " + p.Name
 		if sel.Reason == toolprofile.ReasonSetting {
-			hint = "lore policy set " + key + " <profiles incl. " + p.Name + "> --yes"
+			hint = "lore policy set --key " + key + " --value \"<profiles incl. " + p.Name + ">\" --yes"
 		}
 		out = append(out, "· "+p.PointerFile+" found but not wired to lore; add it with: "+hint)
 	}
 	for _, p := range sel.Unlisted {
-		out = append(out, fmt.Sprintf("· %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set %s <profiles incl. %s> --yes",
+		out = append(out, fmt.Sprintf("· %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set --key %s --value \"<profiles incl. %s>\" --yes",
 			p.PointerFile, key, key, p.Name))
 	}
 	return out

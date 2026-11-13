@@ -85,7 +85,7 @@ func TestDeletePurgeMatrix(t *testing.T) {
 		}
 		// confirm alone, without yes: answers the question (DQ8), soft.
 		soft := opstest.Text(h.Must(c.op, `{"id":"`+c.soft+`","confirm":true}`))
-		if !strings.Contains(soft, "moved to the trash") || !strings.Contains(soft, "lore trash purge <id> --confirm") {
+		if !strings.Contains(soft, "moved to the trash") || !strings.Contains(soft, "lore trash purge --target <id> --confirm") {
 			t.Errorf("%s confirm: want a soft delete with the purge note, got %q", c.op, soft)
 		}
 		res := h.Must(c.op, `{"id":"`+c.gone+`","purge":true,"confirm":true}`)

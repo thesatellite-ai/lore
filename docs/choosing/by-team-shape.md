@@ -20,7 +20,7 @@
 
 - **If you are not sure which row you are,** start with the one-person row. Adding a store, an org entry or a pin later never rewrites the notes you already have.
 - **If a client can read the repo,** treat it as the agency row even when you work alone: your notes about the client go to a store the client cannot open.
-- **If people join and leave,** keep the org's roster in its store and bring people in with an invite (`lore team invite <email>`, then `lore setup join` on their side), and take their GitHub access away when they leave.
+- **If people join and leave,** keep the org's roster in its store and bring people in with an invite (`lore team invite --email <email>`, then `lore setup join` on their side), and take their GitHub access away when they leave.
 - **If each person uses several setups on one machine** (own projects and a team's), make one setup each with `lore setup plan`, `check` and `apply` ([Setups from the command line](../team/setup-cli.md)); lore picks the setup from the folder you are in. The prebuilt binaries add a browser page for the same steps.
 - **If two people may run different lore versions,** pin one version in `.lore/data/_meta.json`; `lore upgrade` then installs that version and `lore doctor` says when someone is on another.
 - **If agents run unattended,** give each its own label with `lore agent start`, put a gate on every step a person must approve, and stop an agent when `lore task next` exits with status 10 (nothing ready) instead of letting it loop.

@@ -74,15 +74,13 @@ type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
 
-	// Title is --title or the first argument (U-3: `lore tasklist add
-	// "Sprint 4"` takes its title the way `lore task add "<title>"` does).
-	Title string `json:"title,omitempty" flag:"title" desc:"title (required; or give it as the first argument)"`
-	// Name is the first argument: the title, or the body when --title is
-	// given (the v0.1.17 form `--title X "<body>"` keeps working).
-	Name string `json:"name,omitempty" arg:"0" desc:"the title, instead of --title (with --title: the body)"`
-	// Body is optional, by --body or as the second argument.
-	Body    string `json:"body,omitempty" flag:"body" desc:"body (optional; or give it as the second argument)" ui:"widget=markdown"`
-	Text    string `json:"text,omitempty" arg:"1" desc:"the body, instead of --body"`
+	// Title is --title, as on every add (U-4 reverts U-3's positional
+	// title: named args everywhere).
+	Title string `json:"title" flag:"title" desc:"title (required)"`
+	// Body is optional, by --body (or, quietly, as the first argument: the
+	// v0.1.17 form `--title X "<body>"`).
+	Body    string `json:"body,omitempty" flag:"body" desc:"body (optional)" ui:"widget=markdown"`
+	Text    string `json:"text,omitempty" arg:"0" argof:"body" desc:"the body, instead of --body"`
 	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
 }
@@ -226,12 +224,12 @@ func Ops(env work.Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpAdd, Summary: "Add a new tasklist",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "add a list", CLI: `lore tasklist add "Sprint 4" --body "two weeks"`, Want: "tlt_"}},
+			Examples: []op.Example{{Title: "add a list", CLI: `lore tasklist add --title "Sprint 4" --body "two weeks"`, Want: "tlt_"}},
 		}, o.add),
 		op.Define(op.Spec{Name: OpList, Examples: []op.Example{{Title: "list as JSON", CLI: "lore tasklist list --json", Want: `"data"`}}, Summary: "List tasklists", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.list),
-		op.Define(op.Spec{Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore tasklist show tlt_<id> --json", Want: `"data"`}}, Summary: "Show tasklist details", Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm}, o.showExpand),
+		op.Define(op.Spec{Name: OpShow, Examples: []op.Example{{Title: "show as JSON", CLI: "lore tasklist show --id tlt_<id> --json", Want: `"data"`}}, Summary: "Show tasklist details", Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(work.ReadErrors), Confirm: expand.RevealConfirm}, o.showExpand),
 		op.Define(op.Spec{
-			Name: OpEdit, Examples: []op.Example{{Title: "retitle", CLI: `lore tasklist edit tlt_<id> --title "Backlog"`, Want: "tlt_"}}, Summary: "Edit tasklist fields",
+			Name: OpEdit, Examples: []op.Example{{Title: "retitle", CLI: `lore tasklist edit --id tlt_<id> --title "Backlog"`, Want: "tlt_"}}, Summary: "Edit tasklist fields",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.edit),
 		op.Define(op.Spec{
@@ -241,7 +239,7 @@ func Ops(env work.Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors, Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.delete),
 		op.Define(op.Spec{
-			Name: OpSearch, Examples: []op.Example{{Title: "find tasklists", CLI: `lore tasklist search "inbox"`, Want: "tlt_"}}, Summary: "Full-text search across tasklist title + body + status",
+			Name: OpSearch, Examples: []op.Example{{Title: "find tasklists", CLI: `lore tasklist search --query "inbox"`, Want: "tlt_"}}, Summary: "Full-text search across tasklist title + body + status",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: work.SearchErrors,
 		}, o.search),
 	}
@@ -262,30 +260,20 @@ func recordOf(lab work.Labeler, src store.Source, r row.Row) Record {
 	}
 }
 
-// addTitleBody sorts the add's title and body out of its flags and
-// arguments: `add "<title>" ["<body>"]`, `add --title <t> [--body <b>]`,
-// and v0.1.17's `add --title <t> "<body>"` (one argument after --title is
-// the body). A title is required; a body is optional, as on task add.
+// addTitleBody reads the add's title and body: `add --title <t> [--body
+// <b>]`, and v0.1.17's `add --title <t> "<body>"` (the argument is the
+// body). A title is required; a body is optional, as on task add.
 func addTitleBody(in AddIn) (title, body string, err error) {
-	title, text := in.Title, in.Text
-	switch {
-	case title == "":
-		title = in.Name
-	case in.Name != "" && text != "":
-		return "", "", errs.New(errs.InvalidInput, "tasklist add: give the title once, as the first argument or with --title, not both").
-			WithHint(`lore tasklist add "Sprint 4" "two weeks"`)
-	case in.Name != "":
-		text = in.Name // --title X "<body>" (v0.1.17)
-	}
-	title = strings.TrimSpace(title)
+	title = strings.TrimSpace(in.Title)
 	if title == "" {
-		return "", "", errs.New(errs.InvalidInput, "tasklist add: a title is required").
-			WithHint(`lore tasklist add "Sprint 4" (or --title "Sprint 4")`)
+		return "", "", errs.New(errs.InvalidInput, "tasklist add: --title is required").
+			WithHint(`lore tasklist add --title "Sprint 4"`)
 	}
-	if in.Body != "" && text != "" {
-		return "", "", errs.New(errs.InvalidInput, "tasklist add: give the body once, as an argument or with --body, not both")
+	if in.Body != "" && in.Text != "" {
+		return "", "", errs.New(errs.InvalidInput, "tasklist add: give the body once, with --body").
+			WithHint(`lore tasklist add --title "Sprint 4" --body "two weeks"`)
 	}
-	return title, in.Body + text, nil
+	return title, in.Body + in.Text, nil
 }
 
 // add creates one tasklist.

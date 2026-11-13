@@ -167,8 +167,8 @@ func Ops(env Env) []op.Entry {
 			},
 			Confirm: op.ConfirmRule{When: showSensitiveField},
 			Examples: []op.Example{
-				{Title: "count memories per store", CLI: `lore sql run "SELECT source, COUNT(*) AS n FROM memories_all GROUP BY source"`, Want: "source"},
-				{Title: "every resource as csv", CLI: `lore sql run "SELECT kind, name FROM res__all ORDER BY kind, name" --format csv`, Want: "kind,name"},
+				{Title: "count memories per store", CLI: `lore sql run --query "SELECT source, COUNT(*) AS n FROM memories_all GROUP BY source"`, Want: "source"},
+				{Title: "every resource as csv", CLI: `lore sql run --query "SELECT kind, name FROM res__all ORDER BY kind, name" --format csv`, Want: "kind,name"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) { return run(ctx, env, in) }),
 	}
@@ -183,7 +183,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 	q := strings.TrimSpace(in.Query)
 	if q == "" {
 		return RunOut{}, errs.New(errs.InvalidInput, "sql: a query is required").
-			WithHint(`lore sql run "SELECT name, ip FROM res_server"`)
+			WithHint(`lore sql run --query "SELECT name, ip FROM res_server"`)
 	}
 	format := in.Format
 	if format == "" {

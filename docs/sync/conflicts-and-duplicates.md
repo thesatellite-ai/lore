@@ -33,12 +33,12 @@ Alice makes "Buttons are blue" a must-have rule (the `severity` field). At the s
 <!-- example: sync#merge-by-field only=5,6,7,8 -->
 ```console
 # alice, in website
-$ lore rule edit rul_b4f4…a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
+$ lore rule edit --id rul_b4f4…a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 
 # bob, in website
-$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
+$ lore rule edit --id rul_b4f4…a5b0 --body 'Buttons are blue, links are green.' && git commit -qam 'lore: link colour'
 lore: wrote ~/work/website/.lore/data/actors/act_28f8…03df.json
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
@@ -62,12 +62,12 @@ Now Alice writes "dark blue" and Bob writes "light blue". Alice pulls and gets a
 <!-- example: sync#same-text-conflict only=2,3,4,5 -->
 ```console
 # alice, in website
-$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
+$ lore rule edit --id rul_b4f4…a5b0 --body 'Buttons are dark blue.' && git commit -qam 'lore: dark blue'
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 
 # bob, in website
-$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
+$ lore rule edit --id rul_b4f4…a5b0 --body 'Buttons are light blue.' && git commit -qam 'lore: light blue' && git push -q origin main
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 
@@ -92,7 +92,7 @@ $ git commit -qam 'merge'
 ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in a value)
   hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
 (exit 1)
-$ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue.'
+$ lore rule edit --id rul_b4f4…a5b0 --body 'Buttons are blue.'
 lore: invalid-file store repo: .lore/data/rules/rul_b4f4…a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4…a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
@@ -102,7 +102,7 @@ $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin m
 
 You can also edit the value in the file by hand; the next lore command reads it in.
 
-Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land, each clashing field with the text `kept` and `other` would leave; kept is the first section, the edit of the machine that merged the two), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve <number> --take kept` keeps the first side of every marker block in that row (for a live row, the edit of the machine that merged the two, which is not always yours: check the two versions `lore sync conflicts` prints; for a git merge, the branch you are on), `--take other` keeps the second (for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
+Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land, each clashing field with the text `kept` and `other` would leave; kept is the first section, the edit of the machine that merged the two), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve --id <number> --take kept` keeps the first side of every marker block in that row (for a live row, the edit of the machine that merged the two, which is not always yours: check the two versions `lore sync conflicts` prints; for a git merge, the branch you are on), `--take other` keeps the second (for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
 
 - A row file is written back in place and the local cache refreshed; you still `git add` and commit the merge yourself, lore never commits it for you.
 - A live row gets a new live version, pushed like any other live edit.
@@ -115,8 +115,8 @@ Or let lore pick one side for you. `lore sync conflicts` lists every row that st
 Rows of a team or personal store do not travel with your code commits: `lore sync` sends them to the store's own repo. When Alice and Bob both retitle the same shared task and Bob syncs first, Alice's `lore sync` cannot merge the two titles. It keeps both edits (hers waits in her local copy of the store, unsent) and stops with `E_STALE`, naming the row. Then, in her repo (or inside the store's folder):
 
 - `lore sync conflicts` lists the row with its store, the fields both sides changed, and both values of each (`mine (kept)` and `theirs (other)`); `--json` carries both row files (`kept_doc`, `other_doc`).
-- `lore explain <id>` says which store holds the row and that it waits on a conflict.
-- `lore sync resolve <n> --take kept` keeps her version of each field both changed, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. Only the clashing fields take the chosen side: a field only one of them changed (her status, his priority) keeps that change.
+- `lore explain --id <id>` says which store holds the row and that it waits on a conflict.
+- `lore sync resolve --id <n> --take kept` keeps her version of each field both changed, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. Only the clashing fields take the chosen side: a field only one of them changed (her status, his priority) keeps that change.
 - Or she edits the row to any value (hers, Bob's, or a third one) and runs `lore sync`: an edit made after the conflict was reported settles the clashing fields with her values, and Bob's changes to the other fields are kept.
 
 This works from her repo even for a row in a folder of the org's store that the repo does not attach (one she reached by its id, or wrote with `--to <org>/<folder>`): `lore sync conflicts` and `lore sync resolve` read that folder for the one command.
@@ -146,7 +146,7 @@ Lore 0.1.18 keeps no second copy in its cache that could disagree with the file,
 
 ## Step 4 — The same fact written twice
 
-Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. `lore sync merge-rows <table> --keep <id> --drop <id>` folds them: every reference to the dropped row (links, comments, tags, `${…}` references in other rows) moves to the row you keep, and the dropped row goes to the trash in one batch, so `lore trash restore` can bring it back (`lore trash list` shows it with the reason `merged into <kept id>`). Edit the kept row first if it should carry some of the other's text. Deleting the duplicate with its own command also works, but leaves references to it dangling (`lore lint` reports them).
+Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" on their own machines. Two ids, one fact. After the merge, both rows are there; `lore memory list` (or `lore search`) shows them side by side. `lore sync merge-rows --table <table> --keep <id> --drop <id>` folds them: every reference to the dropped row (links, comments, tags, `${…}` references in other rows) moves to the row you keep, and the dropped row goes to the trash in one batch, so `lore trash restore` can bring it back (`lore trash list` shows it with the reason `merged into <kept id>`). Edit the kept row first if it should carry some of the other's text. Deleting the duplicate with its own command also works, but leaves references to it dangling (`lore lint` reports them).
 
 <!-- example: sync#duplicates only=2,3,4,5,6,7,8 -->
 ```console
@@ -165,7 +165,7 @@ $ git pull -q --no-rebase origin main
 $ lore memory list | grep -i invoice
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 mem_3b62…e913 [retrieved] send the invoice reminder before the demo on friday.
-$ lore sync merge-rows memories --keep mem_4c59…6c38 --drop mem_3b62…e913
+$ lore sync merge-rows --table memories --keep mem_4c59…6c38 --drop mem_3b62…e913
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ merged mem_3b62…e913 into mem_4c59…6c38 (0 row(s) re-pointed; mem_3b62…e913 is in the trash, batch bat_f147…5139)
 $ lore memory list
@@ -222,14 +222,14 @@ $ lore rule add --body 'Ship only after the client sign-off, see ${row:mem_9a34�
 lore: wrote ~/work/website/.lore/data/rules/rul_bfed…eeea.json
 ✓ rul_bfed…eeea
   scope: [master] severity: must
-$ lore memory delete mem_9a34…b418 --yes
+$ lore memory delete --id mem_9a34…b418 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 ✓ mem_9a34…b418 moved to the trash (restore: lore trash restore mem_9a34…b418)
 $ lore lint
 dangling_ref rul_bfed…eeea (repo): body: ${row:mem_9a34…b418} points at no live row
   fix: lore edit the row, or restore mem_9a34…b418 (lore trash restore mem_9a34…b418)
 1 finding(s)
-$ lore trash restore mem_9a34…b418 >/dev/null && lore lint --code dangling_ref
+$ lore trash restore --target mem_9a34…b418 >/dev/null && lore lint --code dangling_ref
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 lint: no findings
 ```

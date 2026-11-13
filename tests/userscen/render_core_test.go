@@ -102,7 +102,7 @@ func TestRenderEveryKindLandsInItsTier(t *testing.T) {
 		t.Errorf("the must rule is in full: %q", must)
 	}
 	high := renderSection(md, "## High hotfixes")
-	if !strings.Contains(high, "`"+ids["high"]+"` Flaky CI") || !strings.Contains(high, "`lore show "+ids["high"]+"`") || strings.Contains(high, "rerun the job once") {
+	if !strings.Contains(high, "`"+ids["high"]+"` Flaky CI") || !strings.Contains(high, "`lore show --id "+ids["high"]+"`") || strings.Contains(high, "rerun the job once") {
 		t.Errorf("the high hotfix is one line with its fetch command, no body: %q", high)
 	}
 	// Search-only kinds: neither id nor text in the summary.

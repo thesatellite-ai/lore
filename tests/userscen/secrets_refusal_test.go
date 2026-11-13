@@ -314,7 +314,7 @@ func TestSecretsCustomRuleLifecycle(t *testing.T) {
 	s.c.MustLore("secrets", "rule", "add", "invoice-number", "--regex", "INV-[0-9]{6}", "--description", "our invoice numbers", "--yes").
 		Says(t, "invoice-number added in this repo")
 	s.c.Lore("secrets", "rule", "add", "invoice-number", "--regex", "INV-[0-9]{6}", "--yes").
-		Fails(t, 20, "E_INVALID_INPUT", "already has a row in this repo", "lore secrets rule edit invoice-number")
+		Fails(t, 20, "E_INVALID_INPUT", "already has a row in this repo", "lore secrets rule edit --id invoice-number")
 	s.c.Lore("secrets", "rule", "add", "bad-re", "--regex", "INV-[", "--yes").
 		Fails(t, 20, "E_INVALID_INPUT", "--regex is not an RE2 pattern")
 
@@ -337,7 +337,7 @@ func TestSecretsCustomRuleLifecycle(t *testing.T) {
 
 	s.c.Lore("memory", "add", "--body", "Invoice "+inv+" is open").
 		Fails(t, th.ExitNeedsConfirm, "looks like a secret (invoice-number)").Never(t, inv)
-	s.c.Lore("secrets", "rule", "off", "invoice-number").Fails(t, 20, "E_INVALID_INPUT", "missing required field reason", "pass --reason <reason>")
+	s.c.Lore("secrets", "rule", "off", "invoice-number").Fails(t, 20, "E_INVALID_INPUT", "missing required field reason", `pass --reason "<reason>"`)
 	s.c.MustLore("secrets", "rule", "off", "invoice-number", "--reason", "test numbers only", "--yes").Says(t, "invoice-number off")
 	rs = th.DecodeJSON[rules](t, s.c.Lore("secrets", "rules", "--json"))
 	if rs.Count != 1 || rs.Data[0].State != "off" {

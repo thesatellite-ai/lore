@@ -115,7 +115,7 @@ func (f *Fake) Roster(_ context.Context, write bool) (profilestore.Roster, func(
 	case f.Client:
 		return nil, done, errs.New(errs.LeakBlocked, "roster: "+string(DefaultSource)+" is a client repo; the roster lives in the org's store")
 	case write && f.NoOrg:
-		return nil, done, errs.New(errs.Refused, "team profiles live in an org store").WithHint("lore org create <name>")
+		return nil, done, errs.New(errs.Refused, "team profiles live in an org store").WithHint("lore org create --org <name>")
 	case write && f.Agent && !f.MayManagePeople:
 		return nil, done, errs.New(errs.PolicyDenied, "agents.may_manage_people is false: an agent may not change team profiles").
 			WithHint("a person runs it in their own terminal")

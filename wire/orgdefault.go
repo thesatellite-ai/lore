@@ -26,7 +26,7 @@ func (h *standaloneOrg) DefaultOrg(ctx context.Context, verb string) (name, why 
 	switch len(names) {
 	case 0:
 		return "", "", errs.New(errs.NotFound, "lore "+verb+": this machine has no org entry in ~/.lore/config.yaml").
-			WithHint("join an org first: lore org import <store url> (or start one: lore org create <org> --store <url>)")
+			WithHint("join an org first: lore org import --url <store-url> (or start one: lore org create --org <org> --store <url>)")
 	case 1:
 		return names[0], "the only org entry on this machine", nil
 	}

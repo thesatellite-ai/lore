@@ -100,7 +100,7 @@ func TestFolderListText(t *testing.T) {
 	}
 	got := out.Text()
 	for _, want := range []string{"store acme folders:", "FOLDER", "ATTACHED HERE", "client_north", "prj_1", "Lee Lead", "2026-01-05T09:00:00Z", "yes", "client_south", "no",
-		"store me: no folders yet (`lore store folder add me <folder>`)"} {
+		"store me: no folders yet (`lore store folder add --store me --folder <folder>`)"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Text() lacks %q:\n%s", want, got)
 		}

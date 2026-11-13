@@ -76,7 +76,7 @@ Tasks are live by default. Adding one writes it to a hidden list on GitHub that 
 <!-- example: getting-started#first-live-task -->
 ```console
 # alice, in notes-app
-$ lore task add 'fix login timeout'
+$ lore task add --title 'fix login timeout'
 lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — fix login timeout [medium]
@@ -105,7 +105,7 @@ Finishing a task lands it. Lore writes it to `main`'s `.lore/data` with a commit
 <!-- example: getting-started#first-landing -->
 ```console
 # alice, in notes-app
-$ lore task done tsk_05e9…4603
+$ lore task done --id tsk_05e9…4603
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
@@ -172,7 +172,7 @@ identity:
 
 The `actor_copies` line is the copy of Alice's actor row in this repo, written before the v0.1.17 identity file named her Alice Doe, brought up to date from her identity; commit `.lore/data` as the run says.
 
-An identity file from before v0.1.17 (`~/.lore/identity.toml`) is not read at all: set who you are with `lore identity set <email>`, and `lore identity unset` removes the old file. A project's v0.1.17 shared-database pointer (`.lore/lore.yaml`, or the older `.lore/lore.toml`) is read only by `lore migrate run`, which converts the project to row files (see [Shared database (Mode B)](../sync/shared-database-mode-b.md)).
+An identity file from before v0.1.17 (`~/.lore/identity.toml`) is not read at all: set who you are with `lore identity set --identity <email>`, and `lore identity unset` removes the old file. A project's v0.1.17 shared-database pointer (`.lore/lore.yaml`, or the older `.lore/lore.toml`) is read only by `lore migrate run`, which converts the project to row files (see [Shared database (Mode B)](../sync/shared-database-mode-b.md)).
 
 Your **identity key** is your email address with `human:` in front (`human:alice@example.com`). Lore uses it, not your name, to tell people apart. So keep it the same on every machine.
 
@@ -203,14 +203,14 @@ orgs:
 | Key | What it says |
 |---|---|
 | `identity` | who you are in repos that match no org |
-| `personal.store` | where your personal notes live (`--to me`): a git URL of your own private repo, which every machine you use attaches with `lore store init me <url>`; a folder `file://~/.lore/stores/_me` (what `lore store init me` with no URL makes); or the lore 0.1.17 value `local` (`~/.lore/personal`, used in these examples). See [Personal notes](use-cases/personal-notes.md) |
+| `personal.store` | where your personal notes live (`--to me`): a git URL of your own private repo, which every machine you use attaches with `lore store init --name me --url <url>`; a folder `file://~/.lore/stores/_me` (what `lore store init --name me` with no URL makes); or the lore 0.1.17 value `local` (`~/.lore/personal`, used in these examples). See [Personal notes](use-cases/personal-notes.md) |
 | `orgs[].name` | the org's name, also used in `--to agency` |
 | `orgs[].identity` | who you are inside this org: `key` (`human:<your email there>`), `name`, `handle` (your `@name` on the roster) |
 | `orgs[].stores` | the org's store repos; `org_folder` marks the folder that holds the roster and company rules |
 | `orgs[].own` | URL patterns of the org's own repos (no client guards) |
 | `orgs[].repos` | URL patterns of client repos (guards on) |
 
-Check it. Create the store (once per company, from a new empty repo): `lore store init <name> <url>` runs inside one of the org's own repos and attaches the store there by name. Then see the result in that repo:
+Check it. Create the store (once per company, from a new empty repo): `lore store init --name <name> --url <url>` runs inside one of the org's own repos and attaches the store there by name. Then see the result in that repo:
 
 <!-- example: getting-started#first-config only=2,4,5,6 -->
 ```console
@@ -219,7 +219,7 @@ $ lore config check
 ✓ ~/.lore/config.yaml is valid: 1 org entry (agency)
 
 # alice, in tools
-$ lore store init agency git@github.com:agency/notes --yes
+$ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store agency (sto_d431…313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
@@ -270,7 +270,7 @@ In any repo where you ran `lore init`, add a task and list it. The task is live 
 <!-- example: getting-started#first-live-task only=1,2 -->
 ```console
 # alice, in notes-app
-$ lore task add 'fix login timeout'
+$ lore task add --title 'fix login timeout'
 lore: wrote ~/work/notes-app/.lore/data/task_lists/tlt_54fe…28f2.json
 lore: wrote ~/work/notes-app/.lore/data/tasks/tsk_05e9…4603.json
 ✓ tsk_05e9…4603 — fix login timeout [medium]

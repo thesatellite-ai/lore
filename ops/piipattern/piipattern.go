@@ -160,7 +160,7 @@ type AddIn struct {
 	// Positional is the name typed v0.1.17-style without --name (`lore
 	// pii-pattern add invoice --regex x`): taken so that form also gets
 	// the replacement refusal, not "too many arguments" (INTEG-QUESTIONS-10).
-	Positional string `json:"positional,omitempty" arg:"0" desc:"pattern name (moved: see lore secrets rule add)"`
+	Positional string `json:"positional,omitempty" arg:"0" argof:"name" desc:"pattern name (moved: see lore secrets rule add)"`
 	Name       string `json:"name,omitempty" flag:"name" desc:"pattern name"`
 	Regex      string `json:"regex,omitempty" flag:"regex" desc:"regex pattern"`
 	Source     string `json:"source,omitempty" flag:"source" desc:"source_kind"`

@@ -144,12 +144,12 @@ func taskViewOps(o ops) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{Name: OpViewAdd, Summary: "Save a task list filter as a named view",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors,
-			Examples: []op.Example{{Title: "an urgent-first view", CLI: "lore task view add my_urgent --where 'priority>=high' --sort urgency:desc", Want: "tvw_"}},
+			Examples: []op.Example{{Title: "an urgent-first view", CLI: "lore task view add --name my_urgent --where 'priority>=high' --sort urgency:desc", Want: "tvw_"}},
 		}, o.viewAdd),
 		op.Define(op.Spec{Name: OpViewList, Examples: []op.Example{{Title: "list as JSON", CLI: "lore task view list --json", Want: `"data"`}}, Summary: "List saved task views", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.viewList),
-		op.Define(op.Spec{Name: OpViewShow, Examples: []op.Example{{Title: "one view", CLI: "lore task view show my_urgent", Want: "my_urgent"}}, Summary: "Show a saved task view", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.viewShow),
-		op.Define(op.Spec{Name: OpViewEdit, Examples: []op.Example{{Title: "change the sort", CLI: "lore task view edit my_urgent --sort due_at:asc", Want: "tvw_"}}, Summary: "Change a saved task view (only the flags you pass)", Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors}, o.viewEdit),
-		op.Define(op.Spec{Name: OpViewDelete, Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task view delete my_urgent --yes", Want: "trash"}}, Summary: "Delete a saved task view", Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
+		op.Define(op.Spec{Name: OpViewShow, Examples: []op.Example{{Title: "one view", CLI: "lore task view show --name my_urgent", Want: "my_urgent"}}, Summary: "Show a saved task view", Permission: op.PermRead, Access: op.AccessRead, Errors: work.ReadErrors}, o.viewShow),
+		op.Define(op.Spec{Name: OpViewEdit, Examples: []op.Example{{Title: "change the sort", CLI: "lore task view edit --name my_urgent --sort due_at:asc", Want: "tvw_"}}, Summary: "Change a saved task view (only the flags you pass)", Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.WriteErrors}, o.viewEdit),
+		op.Define(op.Spec{Name: OpViewDelete, Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore task view delete --name my_urgent --yes", Want: "trash"}}, Summary: "Delete a saved task view", Permission: op.PermWrite, Access: op.AccessWrite, Errors: work.DeleteErrors,
 			Confirm: op.ConfirmRule{Always: true}}, o.viewDelete),
 	}
 }
@@ -199,7 +199,7 @@ func specOf(r row.Row) (ViewSpec, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&s); err != nil {
 		return ViewSpec{}, errs.New(errs.InvalidInput, "task view "+work.Field(r, schema.FieldTaskViewName)+": filter_json is not {where, sort, group_by, columns}").
-			WithHint("lore task view edit " + r.ID.String() + " --where '…'")
+			WithHint("lore task view edit --name " + r.ID.String() + " --where '…'")
 	}
 	return s, nil
 }
@@ -220,7 +220,7 @@ func (o ops) viewAdd(ctx context.Context, in ViewAddIn) (ViewOut, error) {
 		return ViewOut{}, err
 	}
 	if _, _, ferr := o.findView(ctx, name); ferr == nil {
-		return ViewOut{}, errs.New(errs.InvalidInput, "task view "+strconv.Quote(name)+" exists").WithHint("lore task view edit " + name + " --where '…'")
+		return ViewOut{}, errs.New(errs.InvalidInput, "task view "+strconv.Quote(name)+" exists").WithHint("lore task view edit --name " + name + " --where '…'")
 	} else if !errs.Has(ferr, errs.NotFound) {
 		return ViewOut{}, ferr
 	}
@@ -308,7 +308,7 @@ func (o ops) viewList(ctx context.Context, in ViewListIn) (ViewListOut, error) {
 		}
 		v, verr := viewOutOf(s.Source, s.Row)
 		if verr != nil {
-			v.Spec.Where = "(unreadable filter_json: lore task view edit " + v.ID + ")"
+			v.Spec.Where = "(unreadable filter_json: lore task view edit --name " + v.ID + ")"
 		}
 		out.Views = append(out.Views, v)
 	}

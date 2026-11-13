@@ -244,7 +244,7 @@ func (o KindOut) Text() string {
 	}
 	fmt.Fprintf(&b, "%s  %s  (%s)\n", k.ID, k.Name, k.Store)
 	if k.Unreviewed {
-		b.WriteString("  added by an agent, not reviewed yet (lore resource kind edit " + k.Name + " --reviewed)\n")
+		b.WriteString("  added by an agent, not reviewed yet (lore resource kind edit --id " + k.Name + " --reviewed)\n")
 	}
 	if k.Description != "" {
 		fmt.Fprintf(&b, "  %s\n", k.Description)
@@ -327,25 +327,25 @@ func (o ops) kindOps() []op.Entry {
 	return append([]op.Entry{
 		op.Define(op.Spec{Name: OpKindAdd, Summary: "Add a resource kind (a kinds settings row)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "add a kind", CLI: `lore resource kind add host --description "a server"`, Want: "knd_"}}}, o.kindAdd),
+			Examples: []op.Example{{Title: "add a kind", CLI: `lore resource kind add --kind host --description "a server"`, Want: "knd_"}}}, o.kindAdd),
 		op.Define(op.Spec{Name: OpKindEdit, Summary: "Edit a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: layerErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "describe a kind", CLI: `lore resource kind edit database --description "A database server"`}}}, o.kindEdit),
+			Errors: layerErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "describe a kind", CLI: `lore resource kind edit --id database --description "A database server"`}}}, o.kindEdit),
 		op.Define(op.Spec{Name: OpKindShow, Summary: "Show a resource kind and its fields", Permission: op.PermRead, Access: op.AccessRead,
-			Errors: append(slices.Clone(readErrors), errs.KindConflict, errs.ResourceStale), Examples: []op.Example{{Title: "a kind and its fields", CLI: "lore resource kind show database"}}}, o.kindShow),
+			Errors: append(slices.Clone(readErrors), errs.KindConflict, errs.ResourceStale), Examples: []op.Example{{Title: "a kind and its fields", CLI: "lore resource kind show --id database"}}}, o.kindShow),
 		op.Define(op.Spec{Name: OpKindRename, Summary: "Rename a resource kind (a label change; ids stay)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: nameErrors, Examples: []op.Example{{Title: "rename a kind", CLI: "lore resource kind rename database db_server"}}}, o.kindRename),
+			Errors: nameErrors, Examples: []op.Example{{Title: "rename a kind", CLI: "lore resource kind rename --id database --new-name db_server"}}}, o.kindRename),
 		op.Define(op.Spec{Name: OpKinds, Summary: "List resource kinds with their fields and row counts", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindConflict, errs.ResourceStale), Examples: []op.Example{{Title: "every kind this repo sees", CLI: "lore resource kinds"}}}, o.kindList),
 		op.Define(op.Spec{Name: OpFieldAdd, Summary: "Add a field to a resource kind (a kind_fields settings row)", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "closed set", CLI: "lore resource field add host provider --type text --required --values hetzner,aws", Want: "fld_"}}}, o.fieldAdd),
+			Examples: []op.Example{{Title: "closed set", CLI: "lore resource field add --kind host --field provider --type text --required --values hetzner,aws", Want: "fld_"}}}, o.fieldAdd),
 		op.Define(op.Spec{Name: OpFieldEdit, Summary: "Edit a field of a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: append(slices.Clone(layerErrors), errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "label a field", CLI: "lore resource field edit database host --label Host"}}}, o.fieldEdit),
+			Errors: append(slices.Clone(layerErrors), errs.ResourceType), Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "label a field", CLI: "lore resource field edit --kind database --field host --label Host"}}}, o.fieldEdit),
 		op.Define(op.Spec{Name: OpFieldRename, Summary: "Rename a field (a label change: rows key values by fld_ id)", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "rename a field and its values", CLI: "lore resource field rename database hostname host"}}}, o.fieldRename),
+			Errors: nameErrors, Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "rename a field and its values", CLI: "lore resource field rename --kind database --field hostname --new-name host"}}}, o.fieldRename),
 		op.Define(op.Spec{Name: OpFieldRemove, Summary: "Remove a field from a resource kind", Permission: op.PermWrite, Access: op.AccessWrite,
 			Errors: append(slices.Clone(layerErrors), errs.ReasonRequired), Confirm: op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "stop using a field", CLI: "lore resource field remove database legacy_port"}, {Title: "without a terminal", CLI: "lore resource field remove database legacy_port --drop --yes"}}}, o.fieldRemove),
+			Examples: []op.Example{{Title: "stop using a field", CLI: "lore resource field remove --kind database --field legacy_port"}, {Title: "without a terminal", CLI: "lore resource field remove --kind database --field legacy_port --drop --yes"}}}, o.fieldRemove),
 	}, o.layerOps()...)
 }
 
@@ -395,7 +395,7 @@ func (o ops) fieldByName(ctx context.Context, k located, name string) (located, 
 		}
 	}
 	return located{}, errs.New(errs.NotFound, "kind "+text(k.Row, kName)+" has no field "+quote(name)).
-		WithHint("lore resource kind show " + text(k.Row, kName))
+		WithHint("lore resource kind show --id " + text(k.Row, kName))
 }
 
 // checkName is the kind and field name format: E_RESOURCE_NAME (RES 3.1,

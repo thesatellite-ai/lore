@@ -370,7 +370,7 @@ func TestJourneyAgencyClientMoves(t *testing.T) {
 		if l := agLine(who.Stdout, "repo"); !strings.Contains(l, "client repo") {
 			t.Errorf("the moved client repo lost its leak guards: %q\n%s", l, who)
 		}
-		who.Says(t, "lore org link "+agOrg+" --project "+agFolderAcme)
+		who.Says(t, "lore org link --org "+agOrg+" --project "+agFolderAcme)
 		m.LoreIn(j.acme, "memory", "list").OK(t).Says(t, agAcmeNote)
 		// Writes do not guess while the link names the old address.
 		m.LoreIn(j.acme, "memory", "add", "--body", "a note while the link is stale").Refused(t, "lore org link")

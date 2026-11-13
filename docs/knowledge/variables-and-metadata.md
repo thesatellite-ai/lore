@@ -4,7 +4,7 @@
 
 ## What they are and when you want them
 
-Use a **variable** when the same fact appears in several notes and will change: the API host, a port, the number of minutes a cache lives. The note keeps the text `${var:api_host}`; `lore show <id> --expand` fills in today's value. Renaming a variable keeps the old name as an alias, so notes written with the old name still resolve. Variables never hold secrets: for a password use the `secret_ref` type, which holds only a vault locator.
+Use a **variable** when the same fact appears in several notes and will change: the API host, a port, the number of minutes a cache lives. The note keeps the text `${var:api_host}`; `lore show --id <id> --expand` fills in today's value. Renaming a variable keeps the old name as an alias, so notes written with the old name still resolve. Variables never hold secrets: for a password use the `secret_ref` type, which holds only a vault locator.
 
 Use **metadata** when you want to sort or count rows by something lore has no field for: which client a task is for, how many hours it cost, a billing plan. Any row (task, memory, decision, resource) can carry metadata. The first time you set a key, lore adds it to the repo's key registry with the type it saw; you can also declare a key up front with a fixed list of allowed values, so a typo is refused instead of saved.
 
@@ -22,15 +22,15 @@ Use **metadata** when you want to sort or count rows by something lore has no fi
 
 ## Step 1 — Set a variable
 
-`lore vars set <name> <value>` adds a variable, or changes its value if it already exists in that place. `--type` checks the value (a `dns` value must be a host name, a `number` a number); the default type is `text`. Names are snake_case.
+`lore vars set --name <name> --value <value>` adds a variable, or changes its value if it already exists in that place. `--type` checks the value (a `dns` value must be a host name, a `number` a number); the default type is `text`. Names are snake_case.
 
 <!-- example: meta#vars-set -->
 ```console
 # alice, in website
-$ lore vars set api_host api.example.com --type dns --description 'The shop API the website reads'
+$ lore vars set --name api_host --value api.example.com --type dns --description 'The shop API the website reads'
 lore: wrote ~/work/website/.lore/data/vars/var_7a67…9504.json
 Added var_…9504 api_host = api.example.com (dns) in repo (not shareable: clients see ${var:<name>}).
-$ lore vars set cache_minutes 5 --type number
+$ lore vars set --name cache_minutes --value 5 --type number
 lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
 Added var_…f891 cache_minutes = 5 (number) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars list
@@ -46,7 +46,7 @@ Each variable is one row file under `.lore/data/vars`, so it is committed and sh
 
 ## Step 2 — Use it in a note
 
-Write `${var:<name>}` anywhere in a text field. `lore show <id>` prints the text as written; `--expand` fills in the values and lists every reference it resolved.
+Write `${var:<name>}` anywhere in a text field. `lore show --id <id>` prints the text as written; `--expand` fills in the values and lists every reference it resolved.
 
 <!-- example: meta#vars-use -->
 ```console
@@ -55,7 +55,7 @@ $ lore memory add --body 'Products come from ${var:api_host} and are cached for 
 lore: wrote ~/work/website/.lore/data/memories/mem_162d…9666.json
 ✓ mem_162d…9666
   scope: [master]
-$ lore show mem_162d…9666
+$ lore show --id mem_162d…9666
 mem_162d…9666  memories  repo
   body: Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes
   created_by_actor_id: act_54fe…28f2
@@ -65,7 +65,7 @@ mem_162d…9666  memories  repo
   trust_score: 0.5
   tx_at: 2026-11-02T10:00:00.000000001Z
 created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
-$ lore show mem_162d…9666 --expand
+$ lore show --id mem_162d…9666 --expand
 mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 5 minutes
   created_by_actor_id: act_54fe…28f2
@@ -83,23 +83,23 @@ references:
 
 ## Step 3 — Change the value once
 
-Set the variable again with `lore vars set <name> <new value>`. Every note that points at it shows the new value the next time it is expanded; no note is rewritten. The type stays what it was. [Try it](#try-it) below shows this step with real output.
+Set the variable again with `lore vars set --name <name> --value "<new value>"`. Every note that points at it shows the new value the next time it is expanded; no note is rewritten. The type stays what it was. [Try it](#try-it) below shows this step with real output.
 
 ## Step 4 — Rename a variable
 
-`lore vars rename <old> <new>` changes the name and keeps the old one as an alias, so the memory written with `${var:api_host}` still resolves. `lore vars where <name>` lists every place that defines the name (the repo, a store folder, your personal store); the nearest definition wins.
+`lore vars rename --id <old> --new-name <new>` changes the name and keeps the old one as an alias, so the memory written with `${var:api_host}` still resolves. `lore vars where --id <name>` lists every place that defines the name (the repo, a store folder, your personal store); the nearest definition wins.
 
 <!-- example: meta#vars-rename -->
 ```console
 # alice, in website
-$ lore vars rename api_host shop_api_host
+$ lore vars rename --id api_host --new-name shop_api_host
 lore: wrote ~/work/website/.lore/data/vars/var_7a67…9504.json
 ✓ renamed variable api_host → shop_api_host (old name kept as an alias) (var_…9504)
 $ lore vars list
 NAME	VALUE	TYPE	WHERE
 cache_minutes	10	number	repo
 shop_api_host	api.example.com	dns	repo
-$ lore show mem_162d…9666 --expand
+$ lore show --id mem_162d…9666 --expand
 mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
   created_by_actor_id: act_54fe…28f2
@@ -112,7 +112,7 @@ created 2026-11-02T10:00:25Z by alice · updated 2026-11-02T10:00:25Z by alice
 references:
   ${var:api_host}  api.example.com  (var_7a67…9504)
   ${var:cache_minutes}  10  (var_2ad3…f891)
-$ lore vars where shop_api_host
+$ lore vars where --id shop_api_host
 NAME	VALUE	TYPE	WHERE
 shop_api_host	api.example.com	dns	repo
 ```
@@ -120,18 +120,18 @@ shop_api_host	api.example.com	dns	repo
 
 ## Step 5 — Remove a variable
 
-`lore vars rm <name> --yes` removes it and keeps a tombstone. A note that still points at it is left as written: `--expand` prints the reference as `dangling`, so you can find and fix it.
+`lore vars rm --id <name> --yes` removes it and keeps a tombstone. A note that still points at it is left as written: `--expand` prints the reference as `dangling`, so you can find and fix it.
 
 <!-- example: meta#vars-rm -->
 ```console
 # alice, in website
-$ lore vars rm cache_minutes --yes
+$ lore vars rm --id cache_minutes --yes
 lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
 ✓ removed variable cache_minutes (var_…f891) from repo
 $ lore vars list
 NAME	VALUE	TYPE	WHERE
 shop_api_host	api.example.com	dns	repo
-$ lore show mem_162d…9666 --expand
+$ lore show --id mem_162d…9666 --expand
 mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for ${var:cache_minutes} minutes
   created_by_actor_id: act_54fe…28f2
@@ -149,30 +149,30 @@ references:
 
 ## Step 6 — Put metadata on a row
 
-`lore meta set <id> key=value` sets one field. Add a type with `key:type=value` (here `cost_hours:number=3`); without one a new key is `text`. The first use of a key adds it to the repo's registry and the output says so. `lore meta get <id>` lists a row's fields. Commands that add rows take `--meta key=value` too (`lore task add 'Fix it' --meta client=acme`).
+`lore meta set --id <id> --pair key=value` sets one field. Add a type with `key:type=value` (here `cost_hours:number=3`); without one a new key is `text`. The first use of a key adds it to the repo's registry and the output says so. `lore meta get --id <id>` lists a row's fields. Commands that add rows take `--meta key=value` too (`lore task add --title 'Fix it' --meta client=acme`).
 
 <!-- example: meta#meta-set -->
 ```console
 # alice, in website
-$ lore task add 'Fix the Safari checkout button'
+$ lore task add --title 'Fix the Safari checkout button'
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_c0f3…b5b8.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 ✓ tsk_76bd…3f10 — Fix the Safari checkout button [medium]
   created tasklist tlt_c0f3…b5b8 "default" for tasks added without --tasklist
 lore live: (live, pushed) commit 601d285 to origin refs/lore/live
-$ lore meta set tsk_76bd…3f10 client=acme
+$ lore meta set --id tsk_76bd…3f10 --pair client=acme
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_d431…313a.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: set client = acme
 new keys in repo: client (text)
 lore live: (live, pushed) commit 86dbae4 to origin refs/lore/live
-$ lore meta set tsk_76bd…3f10 cost_hours:number=3
+$ lore meta set --id tsk_76bd…3f10 --pair cost_hours:number=3
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_b4f4…a5b0.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: set cost_hours = 3
 new keys in repo: cost_hours (number)
 lore live: (live, pushed) commit 9b40ce7 to origin refs/lore/live
-$ lore meta get tsk_76bd…3f10
+$ lore meta get --id tsk_76bd…3f10
 client	acme
 cost_hours	3
 ```
@@ -192,35 +192,35 @@ cost_hours	repo	number	1
 
 ## Step 7 — Declare a key with allowed values
 
-`lore meta add <name> --type <type>` declares a key before anyone uses it. `--values` gives a closed list and `--strict` turns a wrong value into a refusal (without `--strict` it is a warning). `--description` says what the key means, `--sensitive` hides its values from agents, render and lists, and `--internal` keeps it out of client repos.
+`lore meta add --name <name> --type <type>` declares a key before anyone uses it. `--values` gives a closed list and `--strict` turns a wrong value into a refusal (without `--strict` it is a warning). `--description` says what the key means, `--sensitive` hides its values from agents, render and lists, and `--internal` keeps it out of client repos.
 
 <!-- example: meta#meta-add -->
 ```console
 # alice, in website
-$ lore meta add priority_band --type text --strict --values low,normal,urgent --description 'How fast the client needs it'
+$ lore meta add --name priority_band --type text --strict --values low,normal,urgent --description 'How fast the client needs it'
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 added mky_…7ab0 priority_band (text, strict, values low, normal, urgent) to this repo (not internal)
-$ lore meta set tsk_76bd…3f10 priority_band=urgent
+$ lore meta set --id tsk_76bd…3f10 --pair priority_band=urgent
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: set priority_band = urgent
 lore live: (live, pushed) commit 05513aa to origin refs/lore/live
-$ lore meta set tsk_76bd…3f10 priority_band=asap
+$ lore meta set --id tsk_76bd…3f10 --pair priority_band=asap
 ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
   hint: lore meta value add priority_band <value>
 (exit 20)
 ```
 <!-- /example -->
 
-The refusal names the allowed values and the command that adds a new one (`lore meta value add priority_band <value>`).
+The refusal names the allowed values and the command that adds a new one (`lore meta value add --key priority_band --value <value>`).
 
 ## Step 8 — Set a field on many rows at once
 
-`--where key=value` picks every row whose metadata matches (repeat it to AND several). Run it with `--dry-run` first to see the rows; the real run is one batch you can undo with `lore batch undo`. `lore meta export` prints the values as CSV (or JSON lines with `--format json`), ready for a spreadsheet; `lore meta import <file>` reads the same shape back as one batch.
+`--where key=value` picks every row whose metadata matches (repeat it to AND several). Run it with `--dry-run` first to see the rows; the real run is one batch you can undo with `lore batch undo`. `lore meta export` prints the values as CSV (or JSON lines with `--format json`), ready for a spreadsheet; `lore meta import --file <file>` reads the same shape back as one batch.
 
 <!-- example: meta#meta-where -->
 ```console
 # alice, in website
-$ lore task add 'Update the footer links' --meta client=acme && lore task add 'Add dark mode' --meta client=globex
+$ lore task add --title 'Update the footer links' --meta client=acme && lore task add --title 'Add dark mode' --meta client=globex
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
 ✓ tsk_28f8…03df — Update the footer links [medium]
   on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
@@ -229,10 +229,10 @@ lore: wrote ~/work/website/.lore/data/tasks/tsk_4c59…6c38.json
 ✓ tsk_4c59…6c38 — Add dark mode [medium]
   on tasklist tlt_c0f3…b5b8 "default" (the default; --tasklist picks another)
 lore live: (live, pushed) commit cf563f3 to origin refs/lore/live
-$ lore meta set --where client=acme billing=monthly --dry-run
+$ lore meta set --where client=acme --id billing=monthly --dry-run
 would set billing on 2 rows (tasks 2): tsk_76bd…3f10, tsk_28f8…03df
 dry run: nothing written
-$ lore meta set --where client=acme billing=monthly --yes
+$ lore meta set --where client=acme --id billing=monthly --yes
 lore: wrote ~/work/website/.lore/data/meta_keys/mky_3b62…e913.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 lore: wrote ~/work/website/.lore/data/tasks/tsk_28f8…03df.json
@@ -251,15 +251,15 @@ tsk_4c59…6c38,client,globex
 
 ## Step 9 — Rename a value or a key
 
-`lore meta edit <key> --rename-value old=new` renames an allowed value; its id stays, so the rows keep pointing at it. `lore meta rename <key> <new>` renames the key itself; `--rewrite-rows` also rewrites the label stored on every row now, in one batch, without changing any value or date. Without it (and for a value rename, which has no `--rewrite-rows`), each row's label catches up on that row's next write (any `meta set`, `meta unset` or edit of the row).
+`lore meta edit --id <key> --rename-value old=new` renames an allowed value; its id stays, so the rows keep pointing at it. `lore meta rename --id <key> --new-name <new>` renames the key itself; `--rewrite-rows` also rewrites the label stored on every row now, in one batch, without changing any value or date. Without it (and for a value rename, which has no `--rewrite-rows`), each row's label catches up on that row's next write (any `meta set`, `meta unset` or edit of the row).
 
 <!-- example: meta#meta-edit -->
 ```console
 # alice, in website
-$ lore meta edit priority_band --rename-value urgent=asap
+$ lore meta edit --id priority_band --rename-value urgent=asap
 lore: wrote ~/work/website/.lore/data/meta_values/val_2537…6bbb.json
 priority_band: renamed value val_…6bbb urgent → asap; row labels refresh on each row's next write; no values changed
-$ lore meta get tsk_76bd…3f10 priority_band
+$ lore meta get --id tsk_76bd…3f10 --key priority_band
 priority_band	urgent
 $ lore meta keys --key priority_band
 KEY	SCOPE	TYPE	ROWS	VALUES
@@ -270,12 +270,12 @@ priority_band	repo	text	1	asap, low, normal
 <!-- example: meta#meta-rename -->
 ```console
 # alice, in website
-$ lore meta rename client customer --rewrite-rows
+$ lore meta rename --id client --new-name customer --rewrite-rows
 lore: wrote 4 row file(s) in ~/work/website/.lore/data
 renamed client → customer in the registry; rewrote 3 row labels (batch bat_b69e…5ed7; labels only, no values or dates changed)
 lore live: (live, pushed) commit 6d00426 to origin refs/lore/live
 lore live: landed on main (34ee210); leaves live once main is fetched
-$ lore meta get tsk_76bd…3f10
+$ lore meta get --id tsk_76bd…3f10
 billing	monthly
 cost_hours	3
 customer	acme
@@ -285,17 +285,17 @@ priority_band	urgent
 
 ## Step 10 — Remove a field, check and look back
 
-`lore meta unset <id> <key>` removes one field from a row (`--where` removes it from many). `lore meta lint` lists values that do not fit their key and registry problems, and `lore meta history <id>` reads the dated changes of a row's metadata from git history.
+`lore meta unset --id <id> --key <key>` removes one field from a row (`--where` removes it from many). `lore meta lint` lists values that do not fit their key and registry problems, and `lore meta history --id <id>` reads the dated changes of a row's metadata from git history.
 
 <!-- example: meta#meta-unset -->
 ```console
 # alice, in website
-$ lore meta unset tsk_76bd…3f10 cost_hours
+$ lore meta unset --id tsk_76bd…3f10 --key cost_hours
 lore: wrote ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json
 tasks tsk_…3f10: removed cost_hours
 lore live: (live, pushed) commit 7898daa to origin refs/lore/live
 lore live: 4 row(s) left live (main holds them)
-$ lore meta get tsk_76bd…3f10
+$ lore meta get --id tsk_76bd…3f10
 billing	monthly
 customer	acme
 priority_band	asap
@@ -313,7 +313,7 @@ no metadata problems
 <!-- example: meta#meta-history -->
 ```console
 # alice, in website
-$ lore meta history tsk_76bd…3f10
+$ lore meta history --id tsk_76bd…3f10
 2026-11-02 10:01  alice           client  set acme
 2026-11-02 10:01  alice           cost_hours  set 3
 2026-11-02 10:02  alice           priority_band  set urgent
@@ -329,13 +329,13 @@ After Steps 1 and 2, change `cache_minutes` from 5 to 10 and expand the memory a
 <!-- example: meta#vars-change -->
 ```console
 # alice, in website
-$ lore vars set cache_minutes 10
+$ lore vars set --name cache_minutes --value 10
 lore: wrote ~/work/website/.lore/data/vars/var_2ad3…f891.json
 Changed var_…f891 cache_minutes = 10 (number) in repo (not shareable: clients see ${var:<name>}).
-$ lore vars show cache_minutes
+$ lore vars show --id cache_minutes
 var_2ad3…f891 cache_minutes = 10 (number) in repo
 created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:40Z by alice
-$ lore show mem_162d…9666 --expand
+$ lore show --id mem_162d…9666 --expand
 mem_162d…9666  memories  repo
   body: Products come from api.example.com and are cached for 10 minutes
   created_by_actor_id: act_54fe…28f2
@@ -358,7 +358,7 @@ references:
 <!-- example: meta#vars-type -->
 ```console
 # alice, in website
-$ lore vars set support_email not-an-email --type email
+$ lore vars set --name support_email --value not-an-email --type email
 ERROR: [E_INVALID_INPUT] vars set: "not-an-email" is not a email
 (exit 20)
 ```

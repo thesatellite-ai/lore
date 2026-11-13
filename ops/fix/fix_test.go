@@ -433,7 +433,7 @@ func TestAllTakesNamedFolders(t *testing.T) {
 	if !errs.Has(err, errs.InvalidInput) {
 		t.Fatalf("folders without --all: %v", err)
 	}
-	if !strings.Contains(LineNoRepos, "lore fix --all ~/code ~/work") {
+	if !strings.Contains(LineNoRepos, "lore fix --all --dirs ~/code --dirs ~/work") {
 		t.Fatalf("the no-repo line does not name the folder form: %s", LineNoRepos)
 	}
 }

@@ -177,7 +177,7 @@ func (a *App) ownActorRef(ctx context.Context, st *state, ref string) (ids.AnyID
 		}
 	}
 	return ids.AnyID{}, errs.New(errs.Refused, "in a repo with no org an actor's name is that person's own identity, so only they can rename it; "+ref+" is not you ("+me.String()+")").
-		WithHint("they run `lore actor edit <them> --name …` on their machine; your own: lore actor edit " + me.String() + " --name …")
+		WithHint("they run `lore actor edit --actor <them> --name …` on their machine; your own: lore actor edit --actor " + me.String() + " --name …")
 }
 
 // actorByHandleHere is the actor id of the first live actors row with

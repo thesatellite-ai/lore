@@ -184,18 +184,18 @@ store.private warn info store agency | gh is not logged in, so lore cannot check
 | `setups[].checks[]` | `check` (an id from [Every check](#every-check)), `status` (`ok`, `warn`, `fail`, `skip`, or `error` when the check could not run), `level` (`error` or `warn`), `target` (the store, tool or repo, for checks run per item), `detail`, `fix` (`text`, `command`, `runnable`, `outward`), `checked_at`, `took_ms` |
 | `machine.checks[]` | checks across setups, such as `folders.overlap` |
 | `counts` | results by status: every setup's checks, the machine checks (plain `lore doctor` counts the active setup's checks) and `findings`; `skip` counts the checks that do not apply to this setup (no store url yet, no key file recorded, …) |
-| `findings` | every warning and error of the report as a result (`check`, `status`, `level`, `detail`, `fix`, `target` `repo <key>`): a stale `.lore/LORE.md`, a gitignored `.lore/data`, unpushed store work. `status` is the worst of `setups[].checks`, `machine.checks` and `findings`, so it is never worse than what the report lists. A finding whose fix is one plain lore command runs with `lore doctor fix <key>` (it asks first; `--yes` skips the question) |
+| `findings` | every warning and error of the report as a result (`check`, `status`, `level`, `detail`, `fix`, `target` `repo <key>`): a stale `.lore/LORE.md`, a gitignored `.lore/data`, unpushed store work. `status` is the worst of `setups[].checks`, `machine.checks` and `findings`, so it is never worse than what the report lists. A finding whose fix is one plain lore command runs with `lore doctor fix --finding <key>` (it asks first; `--yes` skips the question) |
 
 `lore doctor last` prints each setup's last recorded results and when they were taken without running a check (the setup page's Doctor opens on it).
 
 ## Step 5 — List the steps to redo with `lore setup repair`
 
-`lore setup repair <name>` runs that setup's checks fresh, groups the failing ones by the setup step they belong to, and opens the setup page on only those steps (the passing steps are shown as done and not touched). Without a name it repairs the active setup. `--dry-run` only lists them, and `--json` prints the same list for a script:
+`lore setup repair --name <name>` runs that setup's checks fresh, groups the failing ones by the setup step they belong to, and opens the setup page on only those steps (the passing steps are shown as done and not touched). Without a name it repairs the active setup. `--dry-run` only lists them, and `--json` prints the same list for a script:
 
 <!-- example: doctor-all#repair only=1,2 -->
 ```console
 # tomas, in agency/site
-$ lore setup repair agency --dry-run
+$ lore setup repair --name agency --dry-run
 agency: 1 step to redo
   github
     ✗ github.ssh_user  github.com logs in as mira-dev
@@ -203,7 +203,7 @@ agency: 1 step to redo
     ✗ github.key_matches  github.com logs in as mira-dev, but this setup's account is tomas-dev
       fix: Nothing lore can use logs in as tomas-dev. Run the GitHub step again so lore finds a route (an ssh alias that logs in as tomas-dev, or https with tomas-dev's gh login: gh auth login), or add a Host block for tomas-dev's key to ~/.ssh/config
 (exit 1)
-$ lore setup repair agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); [print(s["name"], st["step"], [c["check"] for c in st["checks"]]) for s in r["setups"] for st in s["steps"]]'
+$ lore setup repair --name agency --json | python3 -c 'import json,sys; r=json.load(sys.stdin); [print(s["name"], st["step"], [c["check"] for c in st["checks"]]) for s in r["setups"] for st in s["steps"]]'
 agency github ['github.ssh_user', 'github.key_matches']
 ```
 <!-- /example -->
@@ -217,7 +217,7 @@ agency github ['github.ssh_user', 'github.key_matches']
 
 It exits 1 while any step still has a failing check, and 0 when everything passes. Only failed checks count: warnings and checks that could not run are not repaired, so a setup that doctor calls degraded can still answer "nothing to repair".
 
-To run one fix yourself, `lore setup fix <setup> --check <id> --yes` runs that check's fix command when it is marked runnable; a fix that offers a choice (a linked skill folder: `replace` or `update`) runs only the one named with `--choice <id>`; a fix lore cannot run is refused with its text, so you can do it by hand ([Fixes that lore can run](../team/guided-setup.md#step-7--run-a-fix-from-the-command-line)). In the prebuilt binaries, **Repair** on the guided setup page does the same from Home or Doctor.
+To run one fix yourself, `lore setup fix --setup <setup> --check <id> --yes` runs that check's fix command when it is marked runnable; a fix that offers a choice (a linked skill folder: `replace` or `update`) runs only the one named with `--choice <id>`; a fix lore cannot run is refused with its text, so you can do it by hand ([Fixes that lore can run](../team/guided-setup.md#step-7--run-a-fix-from-the-command-line)). In the prebuilt binaries, **Repair** on the guided setup page does the same from Home or Doctor.
 
 ## Which repos it checks
 
@@ -232,12 +232,12 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | Check | Level | What it checks | Fix it points to |
 |---|---|---|---|
 | `setup.config` | error | the setup's entry in `~/.lore/config.yaml` is valid | `lore config check` lists the problems; edit the file (shown, not run) |
-| `setup.org_entry` | error | a member or admin setup's org entry exists | `lore setup join <invite>` again, or `lore setup remove <name>` |
-| `setup.name_free` | error | no other setup has this name (setup page only) | pick another name, or `lore setup edit <name>` |
+| `setup.org_entry` | error | a member or admin setup's org entry exists | `lore setup join --invite <invite>` again, or `lore setup remove --name <name>` |
+| `setup.name_free` | error | no other setup has this name (setup page only) | pick another name, or `lore setup edit --name <name>` |
 | `identity.email_format` | error | the email is a valid address (for a member or admin setup, the org entry's identity email, `orgs[<org>].identity`) | type the address you use for this work |
 | `identity.invite_email` | error | a member's email is the invite's | use the invite's address, or ask for a new invite |
 | `identity.git_email` | warn | git commits here carry this email (for a member or admin setup, the org entry's identity email) | `git config --global user.email <email>` (shown, never run) |
-| `identity.roster` | warn | your email is on the team roster, read from the org store that holds it (the rows `lore actor show` reads); the identity line shows `roster @<handle>` | finish the join step, or `lore actor contact add …` |
+| `identity.roster` | warn | your email is on the team roster, read from the org store that holds it (the rows `lore actor show` reads); the identity line shows `roster @<handle>` | finish the join step, or `lore actor contact add --actor …` |
 | `identity.period` | warn | you are an active team member, not marked as left: the identity line shows the open period (`employee since 2025-03-01`) | ask an admin to run `lore actor rejoin` |
 | `identity.top_level` | warn | no old top-level `identity:` is left beside a solo setup's identity (the setup is the one source) | `lore identity migrate --keep setup --setup <name>` (Run it) |
 | `identity.top_level_keep` | warn | only when the top-level `identity:` and the setup's differ: the other choice | `lore identity migrate --keep top --setup <name>` (Run it) |
@@ -247,7 +247,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `github.alias_config` | warn | the ssh alias offers only this key | add `IdentitiesOnly yes` under the `Host` block |
 | `github.gh_account` | warn | `gh` has a login for the account (gh is optional) | `gh auth login --hostname github.com` |
 | `github.gh_matches` | info | which account is `gh`'s active one; informational only, never a warning: lore runs `gh` as the setup's own account, so the active account only matters for `gh` you run by hand (skipped when gh is missing or has no active account) | none needed; for `gh` by hand, `gh auth switch --user <user>` |
-| `github.key_matches` | error | the setup's route logs in as its GitHub account: for ssh the alias (and any recorded key, whose fingerprint still matches the one saved), for https a gh login for the account | an alias that does log in as that account: `lore setup edit <setup> --route ssh --host-alias <alias> --ssh-key <key>.pub` (runnable) when its key has a `.pub`, else `--route ssh --host-alias <alias> --no-ssh-key`; for https, `gh auth login` |
+| `github.key_matches` | error | the setup's route logs in as its GitHub account: for ssh the alias (and any recorded key, whose fingerprint still matches the one saved), for https a gh login for the account | an alias that does log in as that account: `lore setup edit --name <setup> --route ssh --host-alias <alias> --ssh-key <key>.pub` (runnable) when its key has a `.pub`, else `--route ssh --host-alias <alias> --no-ssh-key`; for https, `gh auth login` |
 | `github.identity_email` | warn | the setup's identity email (for a member or admin setup, its org entry's identity email) is one of the GitHub account's emails, read with that account's own gh token; skipped with "could not read" when the token lacks the `user:email` scope | pick the account whose emails include it, add the email at github.com/settings/emails, or change the identity email |
 | `store.url` | error | the store url is valid (an ssh url; a token in a url is never stored) | use a url like `git@github.com:you/lore-me.git` |
 | `store.read` | error | you can read the store | `gh repo create <owner>/<repo> --private` (runnable, asks), ask for access, or check the network |
@@ -258,25 +258,25 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `invite.found` | error | the invite row is in the team's store | ask the inviter to invite you again |
 | `invite.status` | error | the invite is still pending | ask the inviter for a new one |
 | `invite.email` | error | your email is the invite's | use that address, or ask for a new invite |
-| `invite.pending` | warn | (admin) no pending invite is waiting | `lore team invite resend <id>` (runnable) or `revoke` |
+| `invite.pending` | warn | (admin) no pending invite is waiting | `lore team invite resend --ref <id>` (runnable) or `revoke` |
 | `invite.github_access` | warn | (admin) invited people can reach the store on GitHub | `gh api -X PUT repos/…/collaborators/<user> -f permission=push` (runnable, asks) |
 | `org.free` | error | (team step) the store is new, empty or already a lore store (an existing team store is attached) | give a new or empty private repo, or your team's existing lore store |
 | `org.name_free` | error | (team step) no org entry of that name exists here | pick another name, or `lore org rename` |
 | `live.mode` | warn | with autopush on, the repo's remote accepts a dry-run push of lore's live rows | get push access, or set `live.autopush: false` on the setup |
 | `tools.skill_installed` | warn | the lore skill is installed for each tool | `lore skill install --tool <tool>` (runnable) |
-| `tools.skill_version` | warn | the installed skill matches this lore's version; with no version line, its files equal this lore's skill | `lore skill install --tool <tool>` (runnable); for a linked skill folder, two choices, each runnable: `--link replace` or `--link update` (`lore setup fix <setup> --check tools.skill_version --choice replace\|update`) |
+| `tools.skill_version` | warn | the installed skill matches this lore's version; with no version line, its files equal this lore's skill | `lore skill install --tool <tool>` (runnable); for a linked skill folder, two choices, each runnable: `--link replace` or `--link update` (`lore setup fix --setup <setup> --check tools.skill_version --choice replace\|update`) |
 | `tools.skill_modified` | warn | the installed skill was not edited by hand (read from the same compare as `tools.skill_version`, so the two never contradict) | reinstall (keeps a `SKILL.md.bak-<date>` copy) |
 | `tools.pointer_file` | warn | the tool reads `.lore/LORE.md` in this repo | `lore render --add-target <tool>` in the repo (runnable): adds the tool to `context.targets` and writes its file; a plain `lore render` wires only `context.targets` |
 | `tools.hooks` | warn | the session hooks are installed | `lore setup --agent-hooks --yes` (runnable) |
 | `secrets.backend_present` | warn | the setup's secret manager is on PATH | install it; references to it will not resolve on this machine |
-| `folders.exist` | warn | each folder glob points at a folder that exists | create it, or `lore setup edit <name> --folder …` |
+| `folders.exist` | warn | each folder glob points at a folder that exists | create it, or `lore setup edit --name <name> --folder …` |
 | `folders.overlap` | error | no other setup ties on a folder | make one glob more specific, or run with `--setup` |
 | `folders.shadow` | warn | no other setup takes part of a folder with a more specific glob | informational: that part stays with the other setup |
-| `folders.reachable` | warn | lore can pick the setup by itself: it has a folder, it is the default, or it is a team setup picked by its org | add a folder, or `lore setup edit <name> --default` (shown, never run: it takes the default from the other setup) |
+| `folders.reachable` | warn | lore can pick the setup by itself: it has a folder, it is the default, or it is a team setup picked by its org | add a folder, or `lore setup edit --name <name> --default` (shown, never run: it takes the default from the other setup) |
 | `repo.init` | warn | lore is set up in the repo | `lore init` (runnable) |
 | `repo.org` | error | the repo's org matches the setup's org | run with `--setup <a setup of that org>`, or fix where the repo's org comes from |
 | `repo.stores` | error | the stores in `.lore/stores.yaml` are readable with this setup's key | ask the store's owner for access, or check the key |
-| `duplicate_actors` | warn / info | (repo, also in plain `lore doctor`) no two human actors share a name without one merged into the other, as an email change before 0.1.18 left them; a warning when the repo has an org, a note without one (both actors stay, nothing is lost) | `lore actor contact add <keep> email <old email> --identity --merge` (asks first; no row is rewritten, reports follow `merged_into`); without an org, none until the repo has one |
+| `duplicate_actors` | warn / info | (repo, also in plain `lore doctor`) no two human actors share a name without one merged into the other, as an email change before 0.1.18 left them; a warning when the repo has an org, a note without one (both actors stay, nothing is lost) | `lore actor contact add --actor <keep> --type email --value "<old email>" --identity --merge` (asks first; no row is rewritten, reports follow `merged_into`); without an org, none until the repo has one |
 | `duplicate_repos` | warn | (repo, also in plain `lore doctor`) no two repos rows describe one repository (same project and a shared address or mount name), as two machines upgrading one 0.1.17 repo before either pushed left them before repo ids were derived from the project and the address | `lore fix` (or `lore doctor --fix`) keeps the id `_meta.json` names, adds the other rows' addresses to it, re-points the rows that name them and moves them to the trash (`merged into <keep>`) |
 
 "Runnable" fixes can be run by `lore setup fix` or `lore setup repair --yes`; the ones marked "asks" change something on GitHub and always need an explicit yes. Only `lore`, `gh` and `git` are ever run, from a fixed list, never a shell string.
@@ -288,7 +288,7 @@ Tomas points `github.com` back at his own key and asks for the repair list again
 <!-- example: doctor-all#repair only=3 -->
 ```console
 # tomas, in agency/site
-$ lore setup repair agency --dry-run
+$ lore setup repair --name agency --dry-run
 agency: nothing to repair
 ```
 <!-- /example -->

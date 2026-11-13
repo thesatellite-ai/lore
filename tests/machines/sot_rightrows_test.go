@@ -564,7 +564,7 @@ func sotRepoURLs(t *testing.T) {
 
 	sotGit(t, m, a, "remote", "set-url", "origin", sotAppTwo)
 	got := sotOut(m.Lore(t, a, "sync"))
-	for _, want := range []string{"remote changed", "lore repo set-url github.com/sotorg/sot-app-two", "--mirror", "lore repo fork"} {
+	for _, want := range []string{"remote changed", "lore repo set-url --url github.com/sotorg/sot-app-two", "--mirror", "lore repo fork"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("sync after the remote moved lacks %q: %s", want, got)
 		}

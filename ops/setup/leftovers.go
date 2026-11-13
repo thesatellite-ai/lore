@@ -115,7 +115,7 @@ func leftoverWhyNot(cfg onboard.Config, k onboard.LeftoverKind) string {
 func leftoverOps(e engine, local func(op.Spec) op.Spec) []op.Entry {
 	s := local(op.Spec{Name: OpLeftoversClear, Summary: "Clear the identity or personal.store of ~/.lore/config.yaml once no setup uses it (setup list shows them)",
 		Permission: op.PermWrite, Errors: with(errs.NotFound),
-		Examples: []op.Example{{Title: "preview clearing a leftover personal store", CLI: "lore setup leftovers clear personal_store --dry-run", Want: ""}}})
+		Examples: []op.Example{{Title: "preview clearing a leftover personal store", CLI: "lore setup leftovers clear --what personal_store --dry-run", Want: ""}}})
 	s.RESTNoun = leftoversRESTNoun
 	return []op.Entry{op.Define(s, e.LeftoversClear)}
 }

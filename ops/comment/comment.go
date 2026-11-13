@@ -277,13 +277,13 @@ func Ops(env Env) []op.Entry {
 			Name: OpSearch, Summary: "FTS5 search across comment body",
 			Permission: op.PermRead, Access: op.AccessRead,
 			Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.DBCorrupt, errs.StoreUnreachable, errs.Internal},
-			Examples: []op.Example{{Title: "comments that mention a flaky test", CLI: "lore comment search flaky"}},
+			Examples: []op.Example{{Title: "comments that mention a flaky test", CLI: "lore comment search --query flaky"}},
 		}, o.search),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a comment (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{Always: true},
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore comment delete cmt_<id> --yes", Want: "moved to the trash"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore comment delete --id cmt_<id> --yes", Want: "moved to the trash"}},
 		}, o.delete).Asks(o.deleteQuestion),
 	}
 }

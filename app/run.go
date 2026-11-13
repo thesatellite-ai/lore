@@ -128,7 +128,7 @@ func run(ctx context.Context, args []string) int {
 	defer offlineFixDryRun(args)() // fixoffline.go: lore fix --dry-run reaches no remote (owner bug 14) and writes nothing
 	capDoctorProcs(args)           // doctorprocs.go: doctor runs on at most min(4, CPUs) cores
 	cleanOldBinary()               // winold.go: an upgrade's lore.exe.old, on Windows (8.3)
-	// `lore init <path>` runs the whole command in that folder (initpath.go).
+	// `lore init --path <path>` runs the whole command in that folder (initpath.go).
 	if p, rest, ok := initPathArg(args); ok {
 		if err := enterInitDir(p); err != nil {
 			return printHostError(err)

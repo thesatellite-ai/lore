@@ -108,7 +108,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm: op.ConfirmRule{MayAsk: true},
 			Examples: []op.Example{
-				{Title: "add a memory", CLI: `lore memory add "Retry the gateway twice on 502"`, Want: "id: mem_"},
+				{Title: "add a memory", CLI: `lore memory add --body "Retry the gateway twice on 502"`, Want: "id: mem_"},
 				{Title: "to another store", CLI: `lore memory add --body="We use UTC for all timestamps" --to team_kb`, Want: "store: team_kb"},
 			},
 		}, o.add),
@@ -120,45 +120,45 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpShow, Summary: "Show one memory",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: expand.RevealErrors(readErrors), Confirm: expand.RevealConfirm,
-			Examples: []op.Example{{Title: "read the body", CLI: "lore memory show mem_<id> --json | jq -r '.data.body'", Want: ""}},
+			Examples: []op.Example{{Title: "read the body", CLI: "lore memory show --id mem_<id> --json | jq -r '.data.body'", Want: ""}},
 		}, o.showExpand),
 		op.Define(op.Spec{
 			Name: OpEdit, Summary: "Edit memory fields (only the flags given change)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 			Confirm:  op.ConfirmRule{MayAsk: true},
-			Examples: []op.Example{{Title: "change the body", CLI: `lore memory edit mem_<id> --body "Retry three times"`, Want: "id: mem_"}},
+			Examples: []op.Example{{Title: "change the body", CLI: `lore memory edit --id mem_<id> --body "Retry three times"`, Want: "id: mem_"}},
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpDelete, Summary: "Delete a memory (it goes to the trash; lore trash restore brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.HasDependents),
 			Confirm:  op.ConfirmRule{MayAsk: true}, // asked in delete: --where --dry-run never asks (BUGFIX-26; FA-LTASK-2 kept Always, which asked before --dry-run could list)
-			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore memory delete mem_<id> --yes", Want: "id: mem_"}},
+			Examples: []op.Example{{Title: "delete without a terminal", CLI: "lore memory delete --id mem_<id> --yes", Want: "id: mem_"}},
 		}, o.delete),
 		op.Define(op.Spec{
 			Name: OpSearch, Summary: "Full-text search over memories of every attached store",
 			Permission: op.PermRead, Access: op.AccessRead,
 			Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.DBCorrupt, errs.StoreUnreachable, errs.Internal},
-			Examples: []op.Example{{Title: "exact phrase", CLI: `lore memory search '"connection pool"' --json`, Want: `"results"`}},
+			Examples: []op.Example{{Title: "exact phrase", CLI: `lore memory search --query '"connection pool"' --json`, Want: `"results"`}},
 		}, o.search),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a memory (hidden from list and search; kept)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore memory archive mem_<id>", Want: "archived"}},
+			Examples:   []op.Example{{Title: "archive one", CLI: "lore memory archive --id mem_<id>", Want: "archived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.archive),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Bring an archived memory back",
-			Examples:   []op.Example{{Title: "bring it back", CLI: "lore memory unarchive mem_<id>", Want: "unarchived"}},
+			Examples:   []op.Example{{Title: "bring it back", CLI: "lore memory unarchive --id mem_<id>", Want: "unarchived"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.unarchive),
 		op.Define(op.Spec{
 			Name: OpMove, Summary: "Move a memory to another attached store (same id; the old copy is tombstoned)",
-			Examples:   []op.Example{{Title: "move it to another attached store", CLI: "lore memory move mem_<id> --to team_kb", Want: "mem_"}},
+			Examples:   []op.Example{{Title: "move it to another attached store", CLI: "lore memory move --id mem_<id> --to team_kb", Want: "mem_"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.Unsupported),
 			Confirm: op.ConfirmRule{MayAsk: true},
 		}, o.move),
 		op.Define(op.Spec{
 			Name: OpInvalidate, Summary: "Mark a memory invalid as of now (sets valid_until)",
-			Examples:   []op.Example{{Title: "it stopped being true", CLI: "lore memory invalidate mem_<id>", Want: "invalidated"}},
+			Examples:   []op.Example{{Title: "it stopped being true", CLI: "lore memory invalidate --id mem_<id>", Want: "invalidated"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.invalidate),
 	}
@@ -413,7 +413,7 @@ func (o ops) finishSupersedes(ctx context.Context, oldSrc store.Source, old ids.
 	// the rolled-back row is purged, not trashed: "nothing was kept" (later 498)
 	if _, derr := o.env.Delete(engine.WithPurge(ctx, &engine.PurgeRequest{Asked: true, Confirmed: true}), engine.Ref{Store: newSrc, Table: table, ID: newID}); derr != nil {
 		return errs.Prefix("memory add: could not mark "+old.String()+" superseded by "+newID.String(), err).
-			WithHint("the new memory " + newID.String() + " was written but could not be removed again; delete it with `lore memory delete " + newID.String() + "`")
+			WithHint("the new memory " + newID.String() + " was written but could not be removed again; delete it with `lore memory delete --id " + newID.String() + "`")
 	}
 	return errs.Prefix("memory add: could not mark "+old.String()+" superseded by "+newID.String()+"; nothing was kept", err)
 }

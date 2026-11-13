@@ -473,7 +473,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxBlocked, Text: fmt.Sprintf("%s %s: failed %d times", id, title, d.Int(vkAttempts))})
 		}
 		if open && (!cv.w.isAgent() || cv.w.who.Owner != nil) && coord.Gated(d) && approverOf[mission] {
-			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxGate, Text: fmt.Sprintf("%s %s: gate needs approval (lore gate approve %s)", id, title, id)})
+			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxGate, Text: fmt.Sprintf("%s %s: gate needs approval (lore gate approve --id %s)", id, title, id)})
 		}
 		if open && claimed && active && ownsIt && docHas(d, vkTimebox) {
 			box := time.Duration(d.Int(vkTimebox)) * time.Second
@@ -594,7 +594,7 @@ func (cv *coordView) moreItems(ctx context.Context, me string) []opscoord.InboxI
 		if p := d.Str(vkParent); p != "" && docUnfinished(d) && assigned(d) {
 			if pd, ok := byID[p]; !ok {
 				out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxParent,
-					Text: fmt.Sprintf("%s %s: its parent %s is gone (in the trash or not attached); lore task edit %s --no-parent", id, title, p, id)})
+					Text: fmt.Sprintf("%s %s: its parent %s is gone (in the trash or not attached); lore task edit --id %s --no-parent", id, title, p, id)})
 			} else if !docUnfinished(pd) {
 				out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxParent, At: pd.Time(vkCompletedAt),
 					Text: fmt.Sprintf("%s %s: its parent %s %s is %s while this is open", id, title, p, pd.Str(fieldTitle), pd.Status())})
@@ -630,7 +630,7 @@ func (cv *coordView) childItems(ctx context.Context, parent coord.Doc, ch []coor
 	}
 	if open == 0 && docUnfinished(parent) {
 		out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxChild,
-			Text: fmt.Sprintf("%s %s: no open sub-tasks left; close it (lore task done %s)", pid, parent.Str(fieldTitle), pid)})
+			Text: fmt.Sprintf("%s %s: no open sub-tasks left; close it (lore task done --id %s)", pid, parent.Str(fieldTitle), pid)})
 	}
 	return out
 }
@@ -684,7 +684,7 @@ func cycleItems(docs []coord.Doc, mine func(coord.Doc) bool) []opscoord.InboxIte
 		}
 		top := cyc[0]
 		out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxParent,
-			Text: fmt.Sprintf("parent cycle %s%s%s: %s reads as top level; lore task tree check --fix (or lore task edit %s --parent <id> | --no-parent)",
+			Text: fmt.Sprintf("parent cycle %s%s%s: %s reads as top level; lore task tree check --fix (or lore task edit --id %s --parent <id> | --no-parent)",
 				strings.Join(cyc, cycleArrow), cycleArrow, top, top, top)})
 	}
 	return out
@@ -704,7 +704,7 @@ func (cv *coordView) deletedClaimItems(byID map[string]coord.Doc, me string) []o
 			continue
 		}
 		out = append(out, opscoord.InboxItem{Kind: inboxDeleted, At: s.Since,
-			Text: fmt.Sprintf("%s: the task you claimed was deleted; stop work on it and release the claim (lore task release %s)", s.Task, s.Task)})
+			Text: fmt.Sprintf("%s: the task you claimed was deleted; stop work on it and release the claim (lore task release --id %s)", s.Task, s.Task)})
 	}
 	return out
 }

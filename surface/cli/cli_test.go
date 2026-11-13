@@ -214,7 +214,7 @@ func TestHelp(t *testing.T) {
 	t.Parallel()
 	f := newFake(t)
 	r := execute(Build(f.reg, f), "", "memory", "add", "--help")
-	for _, want := range []string{"Add a memory", "add <body>", "body  the memory text (required)", "--limit int", "--wait duration", "--tag stringArray", "# Save a lesson", `lore memory add "Retry on 502"`, "--yes", "--json"} {
+	for _, want := range []string{"Add a memory", "add --body <body>", "--body string       the memory text (required)", "--limit int", "--wait duration", "--tag stringArray", "# Save a lesson", `lore memory add --body "Retry on 502"`, "--yes", "--json"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("help lacks %q:\n%s", want, r.stdout)
 		}

@@ -278,7 +278,7 @@ func Resolve(in Inputs) (Result, error) {
 		case !ok:
 			trace(StepRepoOrgs, OutcomeMiss, fmt.Sprintf("no `lore org use` choice for %s", in.ProjectID))
 		case len(ro.Remotes) > 0 && !anyIn(in.Remotes, ro.Remotes):
-			msg := fmt.Sprintf("`lore org use %s` was recorded for %s, but this clone's remotes are %s (a fork carrying the upstream's project id?); run `lore org use` here to confirm",
+			msg := fmt.Sprintf("`lore org use --entry %s` was recorded for %s, but this clone's remotes are %s (a fork carrying the upstream's project id?); run `lore org use` here to confirm",
 				ro.Org, strings.Join(ro.Remotes, ", "), listOrNone(in.Remotes))
 			trace(StepRepoOrgs, OutcomeMiss, msg)
 			r.Warnings = append(r.Warnings, msg)
@@ -331,7 +331,7 @@ func Resolve(in Inputs) (Result, error) {
 		trace(StepLink, OutcomeMiss, fmt.Sprintf("linked by %d entries: %s", len(linkedEntries), strings.Join(linkedEntries, ", ")))
 		return r, &Error{Kind: KindAmbiguous,
 			Message:    fmt.Sprintf("this repo is linked by %d org entries at once (%s)", len(linkedEntries), strings.Join(linkedEntries, ", ")),
-			Hint:       "choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id)",
+			Hint:       "choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id)",
 			Candidates: linkedEntries}
 	default:
 		o := cfg.FindOrg(linkedEntries[0])
@@ -371,7 +371,7 @@ func Resolve(in Inputs) (Result, error) {
 			trace(StepPattern, OutcomeMiss, fmt.Sprintf("patterns of %d entries match: %s", len(names), strings.Join(names, ", ")))
 			return r, &Error{Kind: KindAmbiguous,
 				Message:    fmt.Sprintf("the patterns of %d org entries match this repo (%s)", len(names), strings.Join(names, ", ")),
-				Hint:       "choose one with `lore org use <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns",
+				Hint:       "choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns",
 				Candidates: names}
 		default:
 			o := cfg.FindOrg(names[0])
@@ -392,7 +392,7 @@ func Resolve(in Inputs) (Result, error) {
 	// guards stay on; the old link routes nothing (F11).
 	if !decided {
 		if o, l, ok := movedClientLink(cfg, staging, in.Links.Moved, in.ProjectID); ok {
-			msg := fmt.Sprintf("this project id is linked as a CLIENT repo of %s at %s, not at this repo's remote (%s); leak guards stay on. If the repo moved, run `lore org link %s --project %s` here; if it is a different project, run `lore project reid`",
+			msg := fmt.Sprintf("this project id is linked as a CLIENT repo of %s at %s, not at this repo's remote (%s); leak guards stay on. If the repo moved, run `lore org link --org %s --project %s` here; if it is a different project, run `lore project reid`",
 				o.Name, l.Remote, listOrNone(in.Remotes), o.Name, l.Folder)
 			trace(StepMovedLink, OutcomeHit, msg)
 			r.Warnings = append(r.Warnings, msg)

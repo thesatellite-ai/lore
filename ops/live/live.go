@@ -355,7 +355,7 @@ func Ops(env Env) []op.Entry {
 			Name: OpShow, Summary: "List this project's live rows, or print one live file",
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun,
 			Errors:   append(append([]errs.Code{}, readErrors...), errs.NotFound),
-			Examples: []op.Example{{Title: "every live row", CLI: "lore live show"}, {Title: "one live row's file", CLI: "lore live show tsk_31"}},
+			Examples: []op.Example{{Title: "every live row", CLI: "lore live show"}, {Title: "one live row's file", CLI: "lore live show --id tsk_31"}},
 		}, func(ctx context.Context, in ShowIn) (ShowOut, error) { return show(ctx, env, in) }),
 		op.Define(op.Spec{
 			Name: OpDiff, Summary: "Local, tracking and remote live ref, and the writes not pushed yet",
@@ -391,7 +391,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessWrite, RESTNoun: restNoun,
 			Confirm:  op.ConfirmRule{PersonOnlyEligible: true},
 			Errors:   append(append([]errs.Code{}, writeErrors...), errs.NeedsConfirm),
-			Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore live purge mem_0c3a --dry-run"}, {Title: "remove a leaked row from live for good", CLI: "lore live purge mem_0c3a --confirm"}},
+			Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore live purge --ids mem_0c3a --dry-run"}, {Title: "remove a leaked row from live for good", CLI: "lore live purge --ids mem_0c3a --confirm"}},
 		}, func(ctx context.Context, in PurgeIn) (PurgeOut, error) { return purge(ctx, env, in) }),
 	}
 }
@@ -505,7 +505,7 @@ func purge(ctx context.Context, env Env, in PurgeIn) (PurgeOut, error) {
 	}
 	if len(out) == 0 {
 		return PurgeOut{}, errs.New(errs.InvalidInput, "live purge: at least one id is required").
-			WithHint("lore live purge <id>...")
+			WithHint("lore live purge --ids <id>...")
 	}
 	r, err := env.LiveRef(ctx)
 	if err != nil {

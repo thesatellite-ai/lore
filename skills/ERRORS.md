@@ -72,7 +72,7 @@ With `--json` (and every `lore api` error body), one object:
 | `E_REASSIGNED` | 14 | a person reassigned the task while you held it; stop |
 | `E_OFFLINE` / `E_STORE_UNREACHABLE` / `E_SECRET_UNAVAILABLE` | 15 | the remote (or a store with no local copy, or a secret manager) could not be reached; nothing was queued, retry when online |
 | `E_AMBIGUOUS_ID` | 16 | the id exists in two loaded sources; pass `--from <source>` |
-| `E_ORG_AMBIGUOUS` / `E_ORG_DISAGREES` | 17 | two org entries match, or your choice disagrees with a store link; `lore org use <entry>` or `--force-org` |
+| `E_ORG_AMBIGUOUS` / `E_ORG_DISAGREES` | 17 | two org entries match, or your choice disagrees with a store link; `lore org use --entry <entry>` or `--force-org` |
 | `E_LINK_UNKNOWN` | 18 | lore cannot tell whether this is a client repo (store unreachable); pass `--to` or retry online |
 
 ---
@@ -91,7 +91,7 @@ With `--json` (and every `lore api` error body), one object:
 | `E_OLD_LORE` | 19 | this binary is below the project's `min_lore_version` or does not know one of its features (reads still work) | `lore upgrade` |
 | `E_FORMAT_OLD` | 24 | the project (or a shared store) is on the lore 0.1.17 format: this lore reads it but writes nothing there (no row, live row, landing or render) | tell the person; only they decide to run `lore migrate run` (or `lore fix --migrate`) once, after every teammate has lore 0.1.18. A write to the personal store or a migrated org store still works |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal content where the client can read it (or lore cannot check it) | write it to the internal store (`--to`), or `lore check leaks --explain` |
-| `E_META_QUARANTINED` | 23 | a move of a row whose metadata is quarantined (a value that no longer fits its key) | `lore meta show <id>` prints each problem and its fix; fix it, then move |
+| `E_META_QUARANTINED` | 23 | a move of a row whose metadata is quarantined (a value that no longer fits its key) | `lore meta show --id <id>` prints each problem and its fix; fix it, then move |
 | `E_META_STORE_UNREADABLE` | 19 | a write carrying metadata (`--meta`, `meta set|unset`) in a client repo while an org store has no local copy and cannot be reached, so lore cannot check the keys | nothing was written: go online once (or `lore sync` in the store), then write again |
 | `E_STORE_LOCKED` | 23 | the store lock stayed held past `store.lock_timeout` (another lore command is writing) | wait and run again |
 | `E_STORE_SCHEME` | 20 | a store url uses a scheme 0.1.18 has no backend for (`s3://`, `postgres://`, `lore://`) | use a git url or `file:///<absolute path>` |

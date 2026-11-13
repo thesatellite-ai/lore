@@ -66,7 +66,7 @@ func TestCheckNewPlaceSpellings(t *testing.T) {
 			if !strings.HasPrefix(e.Message, "store "+c.dup+" already attaches ") {
 				t.Fatalf("the refusal must name entry %s: %q", c.dup, e.Message)
 			}
-			if e.Hint != "use --to "+c.dup+", or remove it first: lore store remove "+c.dup {
+			if e.Hint != "use --to "+c.dup+", or remove it first: lore store remove --name "+c.dup {
 				t.Fatalf("hint %q", e.Hint)
 			}
 		})
@@ -99,7 +99,7 @@ func TestStoreAddInitRefuseDuplicatePlace(t *testing.T) {
 		_, err := run(t, a, c.op, c.body, false)
 		var e *errs.Error
 		if !errors.As(err, &e) || e.Code != errs.InvalidInput || !strings.Contains(e.Message, "store kit already attaches "+u) ||
-			!strings.Contains(e.Hint, "lore store remove kit") {
+			!strings.Contains(e.Hint, "lore store remove --name kit") {
 			t.Fatalf("%s: want the duplicate refusal, got %v", c.name, err)
 		}
 		after, rerr := os.ReadFile(storesYAMLPath(repo))

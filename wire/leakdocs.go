@@ -218,7 +218,7 @@ func leakFix(where, path string) string {
 	switch where {
 	case LeakWherePush:
 		if isRow {
-			return fmt.Sprintf("%s (a %s in this repo) is in a commit you are pushing: rewrite that commit without it (git commit --amend, or git rebase), then keep it internal: lore move %s --to <org>", id, singularKind(table), id)
+			return fmt.Sprintf("%s (a %s in this repo) is in a commit you are pushing: rewrite that commit without it (git commit --amend, or git rebase), then keep it internal: lore move --id %s --to <org>", id, singularKind(table), id)
 		}
 		return "Remove the internal text from " + path + " and rewrite the commit(s) that carry it (git commit --amend, or git rebase) before pushing"
 	case LeakWherePRBody:
@@ -226,14 +226,14 @@ func leakFix(where, path string) string {
 	case LeakWhereCommit:
 		if isRow {
 			k := singularKind(table)
-			return fmt.Sprintf("%s is a %s in this repo. Keep it internal: lore move %s --to <org>   or remove it: lore %s delete %s --confirm", id, k, id, k, id)
+			return fmt.Sprintf("%s is a %s in this repo. Keep it internal: lore move --id %s --to <org>   or remove it: lore %s delete --id %s --confirm", id, k, id, k, id)
 		}
 		return "Remove the internal text from " + path
 	}
 	if where == leakWhereMove && isRow {
 		return fmt.Sprintf("Not moved: %s carries text of an internal note named above, which stays internal. Remove that part from %s, then move it again; nothing written", id, id)
 	}
-	return "move the row to the org (`lore move <id> --to <org>`) or delete it; the rows stay on the live ref until then"
+	return "move the row to the org (`lore move --id <id> --to <org>`) or delete it; the rows stay on the live ref until then"
 }
 
 // otherProjectFix is the fix of a "row of another project" finding: the

@@ -80,7 +80,7 @@ func Ops(env Env) []op.Entry {
 	return append([]op.Entry{
 		op.Define(asking(op.Spec{Name: setup.OpTeamInvite, Summary: "Invite an outsider (a contractor on a personal email) with a one-time line to paste; for your own staff use lore member add",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
-			Examples: []op.Example{{Title: "invite a developer to one project", CLI: "lore team invite tomas@agency.example --github tomas-dev --role dev --project acme-hub", Want: "lore setup join lore-invite:v1:"}}}),
+			Examples: []op.Example{{Title: "invite a developer to one project", CLI: "lore team invite tomas@agency.example --github tomas-dev --role dev --project acme-hub", Want: "lore setup join --invite lore-invite:v1:"}}}),
 			func(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInviteOut, error) {
 				return o.invite(ctx, in)
 			}),
@@ -92,13 +92,13 @@ func Ops(env Env) []op.Entry {
 			}),
 		op.Define(asking(op.Spec{Name: setup.OpTeamInviteRevoke, Summary: "Revoke a pending invite (asks first)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: refErrs,
-			Examples: []op.Example{{Title: "revoke by email", CLI: "lore team invite revoke tomas@agency.example --yes", Want: "revoked"}}}),
+			Examples: []op.Example{{Title: "revoke by email", CLI: "lore team invite revoke --ref tomas@agency.example --yes", Want: "revoked"}}}),
 			func(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteRevokeOut, error) {
 				return o.revoke(ctx, in)
 			}),
 		op.Define(op.Spec{Name: setup.OpTeamInviteResend, Summary: "Print a pending invite's line again (changes nothing)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: resendErrs,
-			Examples: []op.Example{{Title: "resend by email", CLI: "lore team invite resend tomas@agency.example", Want: "lore-invite:v1:"}}},
+			Examples: []op.Example{{Title: "resend by email", CLI: "lore team invite resend --ref tomas@agency.example", Want: "lore-invite:v1:"}}},
 			func(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteResendOut, error) {
 				return o.resend(ctx, in)
 			}),

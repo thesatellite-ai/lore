@@ -40,7 +40,7 @@ func TestSotStoresMove(t *testing.T) {
 	ssRenameOnHost(t, tm, m, admin)
 	lsRun(t, admin, adminRepo, "store", "add", "moved", ssMovedURL, "--yes")
 	before := ssDoctor(t, admin, adminRepo, "store_address:")
-	if len(before) != 1 || !strings.Contains(before[0], lsTeamURL) || !strings.Contains(before[0], ssMovedURL) || !strings.Contains(before[0], "fix: lore store set-url sto_") {
+	if len(before) != 1 || !strings.Contains(before[0], lsTeamURL) || !strings.Contains(before[0], ssMovedURL) || !strings.Contains(before[0], "fix: lore store set-url --name sto_") {
 		t.Fatalf("doctor with the store at two addresses: want one store_address warning naming both urls and the set-url fix, got %q", before)
 	}
 	id := ssStoreID.FindStringSubmatch(before[0])

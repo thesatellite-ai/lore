@@ -76,12 +76,12 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--live` | share this row with everyone at once on the live list, before any commit | the `add` and `edit` commands of most row kinds |
 | `--no-live` | keep this row with the code: it travels with this branch's next commit | the same commands as `--live` |
 
-A note for yourself that should follow you into every repo is a plain `--to me` row. `lore store init me` makes the personal store first (here a folder store under `~/.lore/stores/_me`); the note written in `website` is listed in `landing` too:
+A note for yourself that should follow you into every repo is a plain `--to me` row. `lore store init --name me` makes the personal store first (here a folder store under `~/.lore/stores/_me`); the note written in `website` is listed in `landing` too:
 
 <!-- example: reference#personal-everywhere -->
 ```console
 # alice, in website
-$ lore store init me
+$ lore store init --name me
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@agency.example)
 lore store init: store clone ~/.lore/stores/other/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@example.com)
 ✓ created store me (sto_3b62…e913) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)

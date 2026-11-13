@@ -101,7 +101,7 @@ func TestScopeMissing(t *testing.T) {
 	if len(got) != 2 || got[gone].ID == "" || got[file].ID == "" {
 		t.Fatalf("scope_missing = %+v, want %s and %s", got, gone, file)
 	}
-	if f := got[gone]; f.Fix != "lore scope move src/gone <new-path>" || f.Store != string(store.SourceRepo) {
+	if f := got[gone]; f.Fix != "lore scope move --old src/gone --new <new-path>" || f.Store != string(store.SourceRepo) {
 		t.Fatalf("finding = %+v", f)
 	}
 	if got := missing(topEnv{err: errors.New("no repo")}); len(got) != 0 {

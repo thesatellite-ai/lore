@@ -237,7 +237,7 @@ const supersedeQuestion = "Repair %d --supersedes link(s) written by an older lo
 // lore does not choose, and the next step.
 func conflictText(c supersedeConflict) string {
 	return fmt.Sprintf("%s rows %s each claim to replace %s (--supersedes links written by lore 0.1.16 or older); one row has one successor, so lore does not choose: "+
-		"if one is a duplicate, move it to the trash (`lore %s delete <id>`), then `lore doctor --fix` links the other", c.kind, strings.Join(c.srcs, " and "), c.target, c.kind)
+		"if one is a duplicate, move it to the trash (`lore %s delete --id <id>`), then `lore doctor --fix` links the other", c.kind, strings.Join(c.srcs, " and "), c.target, c.kind)
 }
 
 // supersedeWarning is doctor's finding for the reversed links: each one

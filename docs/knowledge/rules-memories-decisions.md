@@ -39,7 +39,7 @@ $ lore rule list
 rul_7a67…9504 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_162d…9666 [should/always] Keep pull requests under 400 lines
-$ lore rule show rul_7a67…9504
+$ lore rule show --id rul_7a67…9504
 rul_7a67…9504
   severity:   must
   activation: always
@@ -84,7 +84,7 @@ lore: wrote ~/work/website/.lore/data/decisions/dec_76bd…3f10.json
 ✓ dec_76bd…3f10 — We use Stripe for payments 
 $ lore decision list
 dec_76bd…3f10 [accepted] We use Stripe for payments
-$ lore decision show dec_76bd…3f10
+$ lore decision show --id dec_76bd…3f10
 dec_76bd…3f10
   title:  We use Stripe for payments
   status: accepted
@@ -100,10 +100,10 @@ created 2026-11-02T10:00:50Z by alice · updated 2026-11-02T10:00:50Z by alice
 <!-- example: knowledge#edit -->
 ```console
 # alice, in website
-$ lore memory edit mem_54fe…28f2 --body 'The client replies faster on WhatsApp than email, even on weekends'
+$ lore memory edit --id mem_54fe…28f2 --body 'The client replies faster on WhatsApp than email, even on weekends'
 lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
 ✓ mem_54fe…28f2 updated
-$ lore memory show mem_54fe…28f2
+$ lore memory show --id mem_54fe…28f2
 mem_54fe…28f2
   kind:   retrieved
   trust:  0.50
@@ -136,15 +136,15 @@ Rows linked by older versions point the wrong way; run `lore doctor --fix` once 
 
 ## Step 6 — Mark a memory as no longer true
 
-`lore memory invalidate <id>` stamps the memory with a *valid until* time (the moment it stopped being true) without deleting it. Use it when a fact goes out of date, like an office move.
+`lore memory invalidate --id <id>` stamps the memory with a *valid until* time (the moment it stopped being true) without deleting it. Use it when a fact goes out of date, like an office move.
 
 <!-- example: knowledge#invalidate only=2,4 -->
 ```console
 # alice, in website
-$ lore memory invalidate mem_b4f4…a5b0
+$ lore memory invalidate --id mem_b4f4…a5b0
 lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
 ✓ mem_b4f4…a5b0 invalidated (valid_until=now)
-$ lore memory show mem_b4f4…a5b0
+$ lore memory show --id mem_b4f4…a5b0
 mem_b4f4…a5b0
   kind:   retrieved
   trust:  0.50
@@ -162,7 +162,7 @@ created 2026-11-02T10:01:25Z by alice · updated 2026-11-02T10:01:30Z by alice
 <!-- example: knowledge#archive only=1,2,3,4,5 -->
 ```console
 # alice, in website
-$ lore rule archive rul_7a67…9504
+$ lore rule archive --id rul_7a67…9504
 lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504 archived
 $ lore rule list
@@ -175,7 +175,7 @@ rul_2ad3…f891 [must/always] Never put passwords in the code
 rul_162d…9666 [should/always] Keep pull requests under 400 lines
 $ lore render >/dev/null && grep -c 'Run the tests before you push' .lore/LORE.md || true
 0
-$ lore rule unarchive rul_7a67…9504
+$ lore rule unarchive --id rul_7a67…9504
 lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504 unarchived
 ```
@@ -185,15 +185,15 @@ The `0` is the count of the archived rule in the rendered file: it is gone from 
 
 ## Step 8 — Delete a row for good
 
-`delete` moves a row to the trash, and it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). `lore trash restore <id>` brings it back; `delete --purge --confirm` (or `lore trash purge <id> --confirm` later) removes it for good, keeping only a small marker so an old copy never comes back. Archive is usually what you want.
+`delete` moves a row to the trash, and it asks first; `--yes` answers for you (a script or an agent has no terminal to answer on). `lore trash restore --target <id>` brings it back; `delete --purge --confirm` (or `lore trash purge --target <id> --confirm` later) removes it for good, keeping only a small marker so an old copy never comes back. Archive is usually what you want.
 
 <!-- example: knowledge#delete only=2,3 -->
 ```console
 # alice, in website
-$ lore memory delete mem_28f8…03df --yes
+$ lore memory delete --id mem_28f8…03df --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
 ✓ mem_28f8…03df moved to the trash (restore: lore trash restore mem_28f8…03df)
-$ lore memory show mem_28f8…03df || true
+$ lore memory show --id mem_28f8…03df || true
 ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by alice on 2026-11-02 10:02)
   hint: lore trash show mem_28f8…03df; bring it back with lore trash restore mem_28f8…03df
 ```
@@ -201,18 +201,18 @@ ERROR: [E_IN_TRASH] mem_28f8…03df is in the trash (deleted by alice on 2026-11
 
 ## Step 9 — Move a memory to another store
 
-A repo can have more stores attached than its own `.lore/data`: a private store for your agency's notes, say, that the client never sees. `lore memory move <id> --to <store> --yes` moves the memory there with the same id, and leaves a tombstone in the old place so a stale copy never comes back. `--to` takes a name from `.lore/stores.yaml` (or `repo` for the repo's own store). Here alice makes a folder store first with `lore store init`:
+A repo can have more stores attached than its own `.lore/data`: a private store for your agency's notes, say, that the client never sees. `lore memory move --id <id> --to <store> --yes` moves the memory there with the same id, and leaves a tombstone in the old place so a stale copy never comes back. `--to` takes a name from `.lore/stores.yaml` (or `repo` for the repo's own store). Here alice makes a folder store first with `lore store init`:
 
 <!-- example: knowledge#memory-move -->
 ```console
 # alice, in website
-$ lore store init agency file://$HOME/stores/agency
+$ lore store init --name agency --url file://$HOME/stores/agency
 ✓ created store agency (sto_c11f…3d6b) at file://~/stores/agency; recorded in .lore/stores.yaml; commit it to share
-$ lore memory move mem_54fe…28f2 --to agency --yes
+$ lore memory move --id mem_54fe…28f2 --to agency --yes
 lore: wrote 3 row file(s) in ~/stores/agency/_store (store agency)
 lore: wrote 1 row file(s) in ~/work/website/.lore/data
 ✓ mem_54fe…28f2 moved to agency
-$ lore memory show mem_54fe…28f2
+$ lore memory show --id mem_54fe…28f2
 mem_54fe…28f2
   kind:   retrieved
   trust:  0.50
@@ -222,7 +222,7 @@ created 2026-11-02T10:00:30Z by alice · updated 2026-11-02T10:07:15Z by alice
 ```
 <!-- /example -->
 
-The memory reads the same; only where its file lives changed. `lore row move <id> --to <store>` does the same for a row of any kind. Stores are explained in [Multi-repo projects](../sync/multi-repo-projects.md).
+The memory reads the same; only where its file lives changed. `lore row move --id <id> --to <store>` does the same for a row of any kind. Stores are explained in [Multi-repo projects](../sync/multi-repo-projects.md).
 
 ## Try it: a password is refused
 
@@ -242,7 +242,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
   scope: [master]
 $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
-$ lore memory delete mem_3b62…e913 --yes
+$ lore memory delete --id mem_3b62…e913 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913 moved to the trash (restore: lore trash restore mem_3b62…e913)
 ```

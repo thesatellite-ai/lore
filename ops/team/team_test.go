@@ -841,7 +841,7 @@ func TestJoinMemberRefusedFirst(t *testing.T) {
 	_, err := ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"dan@agency.example"}, Name: "Dan", Handle: "dan"})
 	wantCode(t, "non-member join by url", err, errs.NotFound)
 	var e *errs.Error
-	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add dan@agency.example") {
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add --email dan@agency.example") {
 		t.Errorf("refusal = %v, want the cause and the admin's command", err)
 	}
 	if got := count(); got != rows || x.e.Pushes != pushes {
@@ -954,7 +954,7 @@ func TestStaffAddPrintsStoreURLJoin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "lore setup join " + storeURL
+	want := "lore setup join --invite " + storeURL
 	if out.JoinWith != want || !strings.Contains(out.Text(), "joins on their machine with: "+want+" ") {
 		t.Fatalf("join line = %q\n%s", out.JoinWith, out.Text())
 	}

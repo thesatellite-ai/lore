@@ -16,7 +16,7 @@ import (
 
 // teDUnlistedLine is render's note for a wired CLAUDE.md that
 // context.targets does not name (v0.1.17 text, oldcli_p2b TestRender_UnlistedPointerFileIsNamed).
-const teDUnlistedLine = "CLAUDE.md carries lore's pointer but context.targets does not name it, so render leaves it as is; list it with: lore policy set context.targets <profiles incl. claude_code> --yes"
+const teDUnlistedLine = "CLAUDE.md carries lore's pointer but context.targets does not name it, so render leaves it as is; list it with: lore policy set --key context.targets --value \"<profiles incl. claude_code>\" --yes"
 
 func TestTeD_SetupRerunAndUnlistedPointerAcrossClones(t *testing.T) {
 	w := newTeamWorld(t, th.Cmd("setup"), th.Cmd("render"), th.Cmd("policy", "set"))

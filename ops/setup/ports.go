@@ -622,7 +622,7 @@ func (o TeamInviteOut) Text() string {
 			fmt.Fprintf(&b, "✓ %s can push to %s\n", o.GitHub, target)
 		}
 	}
-	fmt.Fprintf(&b, "Send this to %s (it holds no secret):\n  lore setup join %s\n", o.Email, o.Line)
+	fmt.Fprintf(&b, "Send this to %s (it holds no secret):\n  lore setup join --invite %s\n", o.Email, o.Line)
 	return b.String()
 }
 

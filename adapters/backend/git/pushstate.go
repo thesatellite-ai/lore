@@ -218,7 +218,7 @@ func ProbeFault(err error) gitfault.Kind {
 func ProbeHint(k gitfault.Kind, shown string) string {
 	switch k {
 	case gitfault.Missing:
-		return "check the store's address (" + shown + "): `lore store set-url <store> <url>` fixes a wrong one; local commits stay in the clone meanwhile"
+		return "check the store's address (" + shown + "): `lore store set-url --name <store> --url <url>` fixes a wrong one; local commits stay in the clone meanwhile"
 	case gitfault.Unreadable:
 		return "the address is right; check the permissions of the folder it names (`ls -ld`); local commits stay in the clone meanwhile"
 	case gitfault.Denied:
