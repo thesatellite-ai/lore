@@ -8,6 +8,7 @@ package setup
 // The line holds no secret and grants nothing, so parsing it is safe.
 
 import (
+	"cmp"
 	"context"
 	"strings"
 
@@ -83,8 +84,8 @@ func (e engine) Join(ctx context.Context, in JoinIn) (JoinOut, error) {
 		return JoinOut{}, err
 	}
 	name := op.SetupOf(ctx)
-	if name == "" && onboard.ValidSetupName(inv.Org) {
-		name = inv.Org
+	if name == "" {
+		name = joinSetupName(inv.Org, inv.Store)
 	}
 	plan, err := e.Plan(ctx, PlanIn{Kind: string(onboard.KindMember), Setup: name})
 	if err != nil {
@@ -94,26 +95,32 @@ func (e engine) Join(ctx context.Context, in JoinIn) (JoinOut, error) {
 		text = text[i:] // drop a pasted "lore setup join " in front
 	}
 	return JoinOut{
-		Web:    WebStart{Setup: name, NoOpen: in.NoOpen, Invite: text},
-		Invite: Invite(inv),
-		Plan:   plan,
+		Web:      WebStart{Setup: name, NoOpen: in.NoOpen, Invite: text},
+		Invite:   Invite(inv),
+		Plan:     plan,
+		Commands: joinCommands(cmp.Or(name, joinFallbackName), text, e.joinEmail(ctx, inv.Email), plan),
+		Org:      inv.Org,
 	}, nil
 }
 
 // joinMember is setup.join for a member: the page opens on the join step
 // with the org (or store url) as its answer.
 func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOut, error) {
+	inv := Invite{Store: org}
+	if !storeURLish(org) {
+		inv = Invite{Org: org}
+	}
 	name := op.SetupOf(ctx)
-	if name == "" && onboard.ValidSetupName(org) {
-		name = org
+	if name == "" {
+		// the org's name, else the store url's owner: never "" here, so
+		// the page and the "This folder" line offer this member setup
+		// (B-10: they offered "solo setup personal")
+		name = joinSetupName(inv.Org, inv.Store)
 	}
 	plan, err := e.Plan(ctx, PlanIn{Kind: string(onboard.KindMember), Setup: name})
 	if err != nil {
 		return JoinOut{}, err
 	}
-	inv := Invite{Store: org}
-	if !storeURLish(org) {
-		inv = Invite{Org: org}
-	}
-	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan}, nil
+	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan,
+		Commands: joinCommands(cmp.Or(name, joinFallbackName), org, e.joinEmail(ctx, ""), plan), Org: inv.Org}, nil
 }

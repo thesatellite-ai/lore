@@ -26,8 +26,11 @@ package leakcheck
 import (
 	"fmt"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
@@ -458,49 +461,80 @@ func actorExtraKeys(doc canonjson.Object) []string {
 // Check runs the id, text and secret rules over items against idx. idx may
 // be nil only when the caller decided there is nothing internal loaded
 // (then only the secret and project-id rules run).
+//
+// Items are checked in parallel, one worker per CPU (C-9: `lore check
+// leaks --as-client` scanned a 10 000-file repo's 74 MB of tracked text
+// for secrets on one core, 70 s). idx is only read once built and
+// o.SecretScan must be safe for concurrent use (the shared gitleaks
+// scanner is: P3-PERF-1). The findings are gathered in item order, then
+// sorted, so the result is the same as one item at a time.
 func Check(items []Item, idx *Index, o Options) []Finding {
-	var out []Finding
 	secrets := o.SecretScan
 	if !o.Secrets {
 		secrets = nil
 	}
-	for _, it := range items {
-		start := len(out)
-		content := string(it.Content)
-		if table, id, ok := profileRowFile(it.Path); ok && o.ClientRepo {
-			// TP-7 (TEAM_PROFILES 7 layer 4): a profile row file in a
-			// client repo blocks, whatever it holds.
-			out = append(out, profileHit(it, table, id))
-		}
-		if m := rowPathRe.FindStringSubmatch(it.Path); m != nil {
-			out = append(out, checkRowFile(it, m[1], m[2], idx, o)...)
-		} else if idx != nil {
-			out = append(out, idHits(it, content, idx)...)
-		}
-		if idx != nil {
-			allowed := allowedRows(it, idx)
-			out = append(out, textHits(it, content, idx, allowed)...)
-			out = append(out, metaHits(it, content, idx, allowed)...) // METADATA 3.15 steps 1, 6
-		}
-		out = append(out, sessionHits(it, content, o.SessionIDs)...)
-		if secrets != nil {
-			for _, h := range secrets(it) {
-				detail := "credential pattern " + h.Rule + " (" + h.Preview + ")"
-				if h.Field != "" {
-					detail = "credential pattern " + h.Rule + " in field " + h.Field + " (" + h.Preview + ")"
+	per := make([][]Finding, len(items))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(items)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(items) {
+					return
 				}
-				f := Finding{Rule: RuleSecret, Where: it.Where, Line: h.Line, Detail: detail}
-				if h.Field != "" {
-					f.Secret = h
-				}
-				out = append(out, f)
+				per[i] = checkItem(items[i], idx, o, secrets)
 			}
-		}
-		for i := start; i < len(out); i++ {
-			out[i].Path = it.Path
-		}
+		}()
+	}
+	wg.Wait()
+	var out []Finding
+	for _, f := range per {
+		out = append(out, f...)
 	}
 	sortFindings(out)
+	return out
+}
+
+// checkItem is Check's rules over one item; secrets is nil when the
+// secret rule is off.
+func checkItem(it Item, idx *Index, o Options, secrets SecretScan) []Finding {
+	var out []Finding
+	content := string(it.Content)
+	if table, id, ok := profileRowFile(it.Path); ok && o.ClientRepo {
+		// TP-7 (TEAM_PROFILES 7 layer 4): a profile row file in a
+		// client repo blocks, whatever it holds.
+		out = append(out, profileHit(it, table, id))
+	}
+	if m := rowPathRe.FindStringSubmatch(it.Path); m != nil {
+		out = append(out, checkRowFile(it, m[1], m[2], idx, o)...)
+	} else if idx != nil {
+		out = append(out, idHits(it, content, idx)...)
+	}
+	if idx != nil {
+		allowed := allowedRows(it, idx)
+		out = append(out, textHits(it, content, idx, allowed)...)
+		out = append(out, metaHits(it, content, idx, allowed)...) // METADATA 3.15 steps 1, 6
+	}
+	out = append(out, sessionHits(it, content, o.SessionIDs)...)
+	if secrets != nil {
+		for _, h := range secrets(it) {
+			detail := "credential pattern " + h.Rule + " (" + h.Preview + ")"
+			if h.Field != "" {
+				detail = "credential pattern " + h.Rule + " in field " + h.Field + " (" + h.Preview + ")"
+			}
+			f := Finding{Rule: RuleSecret, Where: it.Where, Line: h.Line, Detail: detail}
+			if h.Field != "" {
+				f.Secret = h
+			}
+			out = append(out, f)
+		}
+	}
+	for i := range out {
+		out[i].Path = it.Path
+	}
 	return out
 }
 

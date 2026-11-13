@@ -5,10 +5,11 @@ package wire
 // .gitignore lacks (wire/host GitignoreHook → EnsureGitignore); a read
 // never edits that tracked file (owner report 2026-11-11: `lore task list`
 // in a v0.1.17 repo rewrote .gitignore): it keeps the files out of git
-// status through the clone's own .git/info/exclude (EnsureLocalExclude;
-// a read adds only lines for files that exist, EnsureLocalExcludeExisting,
-// and creates none itself: the repo cache lives under the lore home) and
-// `lore doctor` names what is missing and the command that adds it.
+// status through the clone's own .git/info/exclude (EnsureLocalExclude,
+// on a write that may touch no tracked file); a read writes nothing in
+// .git at all (C-8: a CI clone's read-only checks left info/exclude
+// changed) and creates no file itself (the repo cache lives under the lore
+// home): `lore doctor` names what is missing and the command that adds it.
 //
 //	MissingGitignoreLines: a line counts as listed when .gitignore holds
 //	   it or a rule git shares with the team ignores it; this clone's
@@ -137,17 +138,7 @@ func sharedIgnores(ctx context.Context, root, path string) bool {
 // keeps lore's cache and lock out of git status without editing the
 // tracked .gitignore. Nothing missing: the file is not touched.
 func EnsureLocalExclude(ctx context.Context, root string) ([]string, error) {
-	return ensureLocalExclude(ctx, root, false)
-}
-
-// EnsureLocalExcludeExisting is EnsureLocalExclude for a read: only the
-// lines naming a path that exists in root's work tree now (an older
-// build's .lore/lore-cache.db, a lock or state/ a write left) are added.
-// A read creates no file in the repo (the repo cache lives under the lore
-// home, owner item 16), so a read in a repo whose .gitignore lacks lore's
-// lines leaves .git/info/exclude as it was when nothing is there to hide.
-func EnsureLocalExcludeExisting(ctx context.Context, root string) ([]string, error) {
-	return ensureLocalExclude(ctx, root, true)
+	return ensureLocalExclude(ctx, root)
 }
 
 // localPathExists reports whether a GitignoreLines entry names something
@@ -162,14 +153,10 @@ func localPathExists(root, line string) bool {
 	return err == nil
 }
 
-// ensureLocalExclude is EnsureLocalExclude; onlyExisting skips the lines
-// naming nothing on disk.
-func ensureLocalExclude(ctx context.Context, root string, onlyExisting bool) ([]string, error) {
+// ensureLocalExclude is EnsureLocalExclude.
+func ensureLocalExclude(ctx context.Context, root string) ([]string, error) {
 	var add []string
 	for _, line := range MissingGitignoreLines(ctx, root) {
-		if onlyExisting && !localPathExists(root, line) {
-			continue
-		}
 		probe := strings.TrimSuffix(line, "/")
 		if strings.HasSuffix(line, "/") {
 			probe += "/x"

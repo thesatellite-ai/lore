@@ -617,7 +617,7 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{url, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
-		res, err = team.ApplyJoinMember(ctx, team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
+		res, err = team.ApplyJoinMember(withApplyingSetup(ctx, e.Name, org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.MemberJoinRequest{Org: org, Store: url, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	} else if req.Apply == onboard.ApplyJoin {
 		inv, derr := onboard.DecodeInvite(answerText(ans, onboard.QIDInvite))
@@ -629,7 +629,7 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{inv.Store, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
-		res, err = team.ApplyJoin(ctx, team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
+		res, err = team.ApplyJoin(withApplyingSetup(ctx, e.Name, inv.Org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
 			team.JoinRequest{Invite: inv, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	} else {
 		org := pick(ans, onboard.QIDOrg, e.Org)
@@ -652,7 +652,7 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		// rows, so agents.may_manage_people has its default, true, at the
 		// roster write (profileWriter). A store that already holds the
 		// team's false still refuses there.
-		res, err = team.ApplyAdmin(ctx, team.AdminDeps{Stores: ap.a, Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
+		res, err = team.ApplyAdmin(withApplyingSetup(ctx, e.Name, org), team.AdminDeps{Stores: ap.a, Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.AdminRequest{Org: org, StoreURL: url, OrgFolder: answerText(ans, onboard.QIDOrgFolder), Own: slices.Clone(ans[onboard.QIDOwn].List),
 				Repos: slices.Clone(ans[onboard.QIDRepos].List), Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	}

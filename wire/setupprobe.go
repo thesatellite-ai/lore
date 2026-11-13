@@ -192,6 +192,10 @@ func (sp setupProber) storeURL(ctx context.Context, r opssetup.ProbeRequest) str
 	if name, ok := strings.CutPrefix(r.Target, targetStorePrefix); ok {
 		return sp.namedStoreURL(ctx, r.Setup, strings.TrimSpace(name))
 	}
+	// The join step: its one answer names the store (B-10).
+	if a := joinAnswer(r); a != "" {
+		return sp.joinStoreURL(ctx, r.Setup, a)
+	}
 	// The personal_store step: the store the choice names, not the url
 	// field, which the page fills for every choice (B1-27: inherit showed
 	// personal.store's v0.1.17 value "local" there, and the checks ran git
@@ -418,6 +422,9 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		return sp.secretsBackend(ctx, r)
 	case onboard.CheckFoldersExist:
 		return sp.foldersExist(r)
+	}
+	if res, ok := joinInviteCheck(r); ok {
+		return res // setupprobe_joinanswer.go
 	}
 	// Invite and live checks read org store rows: the ops that own those
 	// reads answer them (A7/A9), not this prober.

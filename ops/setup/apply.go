@@ -47,7 +47,7 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 	}
 	if missing := s.missingNeeds(step); len(missing) > 0 {
 		return ApplyOut{}, errs.New(errs.SetupStepOrder, "step "+string(step.ID)+" needs "+joinSteps(missing)+" first").
-			WithNext("lore", "setup", "apply", name, "--step", string(missing[0]))
+			WithNext("lore", "setup", "apply", "--setup", name, "--step", string(missing[0]))
 	}
 	answers := in.Answers
 	if answers == nil {
@@ -86,7 +86,7 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 			msgs = append(msgs, f.Question+": "+f.Message)
 		}
 		return ApplyOut{}, errs.New(errs.InvalidInput, "step "+string(step.ID)+" has "+itoa(len(fe))+" invalid answer(s): "+strings.Join(msgs, "; ")).
-			WithNext("lore", "setup", "check", name, "--step", string(step.ID))
+			WithNext("lore", "setup", "check", "--setup", name, "--step", string(step.ID))
 	}
 	// The save gate reuses what a check (or a fix's re-check) found for
 	// these same answers in the last onboard.CheckFreshTTL; only missing,
@@ -111,7 +111,7 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 			ids = append(ids, failingWithDetail(checks, id))
 		}
 		return ApplyOut{}, errs.New(errs.SetupStepFailed, "step "+string(step.ID)+" has "+itoa(len(bad))+" failing check(s): "+strings.Join(ids, ", ")+"; fix them (lore setup check …) before saving").
-			WithNext("lore", "setup", "check", name, "--step", string(step.ID))
+			WithNext("lore", "setup", "check", "--setup", name, "--step", string(step.ID))
 	}
 	if step.ID == onboard.StepKind {
 		if s, err = e.renameOnKind(ctx, st, s, answers); err != nil {

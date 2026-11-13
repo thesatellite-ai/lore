@@ -222,12 +222,13 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	for _, r := range res.Stores {
 		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
 			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held})
-		line := fmt.Sprintf("store %s: sent %d, received %d, merged %d, refused %d", r.Store, r.Sent, r.Received, r.Merged, r.Refused)
+		shown := s.app.shownStoreName(ctx, r.Store) // B-9: the store's own name (storeshown.go)
+		line := fmt.Sprintf("store %s: sent %d, received %d, merged %d, refused %d", shown, r.Sent, r.Received, r.Merged, r.Refused)
 		if r.Unattached {
 			line += syncUnattachedFolder
 		}
 		if r.Held != "" {
-			line = "store " + r.Store + ": " + r.Held // its push did not run; the refusal is the other folder's line
+			line = "store " + shown + ": " + r.Held // its push did not run; the refusal is the other folder's line
 		}
 		if r.Offline {
 			line += syncStoreOffline

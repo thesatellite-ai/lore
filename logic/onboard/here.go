@@ -329,3 +329,16 @@ func HereStates() []HereState { return []HereState{HereNotGit, HereNotLore, Here
 
 // EnumValues lists every state (op.Enumerated).
 func (HereState) EnumValues() []string { return enumStrings(HereStates()) }
+
+// ForJoin is h for the folder `lore setup join` started in: a no_match
+// folder is offered the member setup setup of org (org "" until the
+// org's store is read) instead of the solo or other setup ResolveHere
+// guessed, since the person asked to join that org. The folders and
+// identity facts stay; any other state is returned as is.
+func (h Here) ForJoin(setup, org string) Here {
+	if h.State != HereNoMatch || setup == "" {
+		return h
+	}
+	h.Proposal.Kind, h.Proposal.Name, h.Proposal.Org = KindMember, setup, org
+	return h
+}

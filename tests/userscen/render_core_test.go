@@ -15,7 +15,7 @@ package userscen
 //   - the read-only modes (--dry-run, --check, --report, --trend) write
 //     nothing; --no-pointer and --out; --scopes without --report refused;
 //   - a very large rule set stays inside the budget (line forms) and
-//     `--check` refuses over the warn level with E_REFUSED and its hint;
+//     `--check` warns over the warn level and refuses over the budget with E_REFUSED and its hint;
 //   - unicode bodies survive byte for byte and the budget counts bytes.
 
 import (
@@ -314,9 +314,13 @@ func TestRenderLargeRuleSetStaysInBudget(t *testing.T) {
 	if rep.Data.MustFull+rep.Data.MustLine != rules || rep.Data.MustLine == 0 || len(rep.Data.Lines) != rep.Data.MustLine {
 		t.Errorf("report: %d must rules split into full and line forms, one line_forms entry per line: %+v", rules, rep.Data)
 	}
-	// Over the warn level (80%): --check refuses, CI fails.
+	// Over the warn level (80%) but within the budget: --check warns and
+	// passes (C-8); over the budget it refuses, CI fails.
 	if len(md)*100 > 16000*80 {
-		c.Lore("render", "--check").Fails(t, th.ExitRefused, "[E_REFUSED]", "over the warn level (80% of 16000, profile codex)", "lore render --report")
+		c.MustLore("render", "--check").Says(t, "over the warn level (80% of 16000, profile codex)", "lore render --report")
+		c.MustLore("policy", "set", "context.budget.codex", "1000", "--yes")
+		c.Lore("render", "--check").Fails(t, th.ExitRefused, "[E_REFUSED]", "over the budget (1000, profile codex)", "lore render --report")
+		c.MustLore("policy", "set", "context.budget.codex", "16000", "--yes")
 	} else {
 		t.Fatalf("fixture: %d bytes should be over the 80%% warn level", len(md))
 	}

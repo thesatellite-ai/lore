@@ -25971,6 +25971,43 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "handover": {
+                      "type": "object",
+                      "properties": {
+                        "command": {
+                          "type": "string"
+                        },
+                        "open_tasks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "store"
+                            ]
+                          }
+                        },
+                        "tasks_note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "open_tasks",
+                        "command"
+                      ]
+                    },
                     "member": {
                       "type": "object",
                       "properties": {
@@ -26313,6 +26350,43 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "handover": {
+                      "type": "object",
+                      "properties": {
+                        "command": {
+                          "type": "string"
+                        },
+                        "open_tasks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "store": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "store"
+                            ]
+                          }
+                        },
+                        "tasks_note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "open_tasks",
+                        "command"
+                      ]
+                    },
                     "member": {
                       "type": "object",
                       "properties": {
@@ -50285,7 +50359,7 @@
                   },
                   "check": {
                     "type": "boolean",
-                    "description": "CI check: write nothing, fail when LORE.md would be over the warn level or the budget"
+                    "description": "CI check: write nothing, fail when LORE.md would be over the budget or a rendered file is stale (over the warn level: a warning)"
                   },
                   "dry_run": {
                     "type": "boolean",
@@ -70961,7 +71035,7 @@
     "/v1/setup/join": {
       "post": {
         "operationId": "setup.join",
-        "summary": "Join your org: by its name or store url when an admin added you (lore member add; matched by your email), or from an invite line; opens the setup page on the join step",
+        "summary": "Join your org: by its name or store url when an admin added you (lore member add; matched by your email), or from an invite line; prints the lore setup apply lines that join, and on a terminal (or --web) opens the setup page on the join step",
         "tags": [
           "setup"
         ],
@@ -70979,6 +71053,10 @@
                   "no_open": {
                     "type": "boolean",
                     "description": "print the page address instead of opening a browser"
+                  },
+                  "web": {
+                    "type": "boolean",
+                    "description": "open the setup page even when not run in a terminal (default: a terminal opens it, a script gets the lore setup apply lines)"
                   }
                 },
                 "required": [
@@ -70997,6 +71075,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "commands": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "invite": {
                       "type": "object",
                       "properties": {
@@ -71035,6 +71119,9 @@
                         "by",
                         "expires"
                       ]
+                    },
+                    "org": {
+                      "type": "string"
                     },
                     "plan": {
                       "type": "object",
@@ -71346,7 +71433,8 @@
                   "required": [
                     "web",
                     "invite",
-                    "plan"
+                    "plan",
+                    "commands"
                   ]
                 }
               }

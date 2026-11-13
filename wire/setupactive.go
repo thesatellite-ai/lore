@@ -464,14 +464,29 @@ func setupIdentity(ctx context.Context, home, dir string) *identity.SetupIdentit
 // folder) whose org another, stronger source contradicts
 // (E_SETUP_ORG_MISMATCH) refuse the write; reads never ask. A default
 // setup is a fallback, not a claim about this folder, so it never refuses.
+//
+// The writes of `lore setup apply --setup <name>` (the join and team steps'
+// org entry and roster rows) answer to the setup being applied
+// (withApplyingSetup), not to the setup of the folder they run in: the
+// named setup is explicit, flag first as in 3.3, and it is not in setups[]
+// until its org exists, so the folder's setup would win and refuse a
+// second org's first write half-way (B-13).
 func (a *App) setupWriteGate(ctx context.Context) error {
 	home, dir := a.opts.Home, a.projectDir()
-	res, err := ResolveSetup(ctx, setupQueryFor(ctx, home, dir, nil))
-	if err != nil {
-		return err
+	var hint orgresolve.SetupHint
+	if s, ok := applyingSetupOf(ctx); ok {
+		hint = orgresolve.SetupHint{Name: s.name, Org: s.org, Why: opssetup.WhyFlag}
+	} else {
+		res, err := ResolveSetup(ctx, setupQueryFor(ctx, home, dir, nil))
+		if err != nil {
+			return err
+		}
+		if res.Active.Why == opssetup.WhyDefault {
+			return nil
+		}
+		hint = setupHint(res)
 	}
-	hint := setupHint(res)
-	if hint.Org == "" || res.Active.Why == opssetup.WhyDefault || a.opts.Org == nil {
+	if hint.Org == "" || a.opts.Org == nil {
 		return nil
 	}
 	org, err := a.opts.Org(ctx)
@@ -479,6 +494,27 @@ func (a *App) setupWriteGate(ctx context.Context) error {
 		return nil // an org refusal is the org hooks' to report; no org: the hint applied
 	}
 	return setupMismatchErr(ctx, home, dir, hint, org.Name)
+}
+
+// applyingSetupKey is the context key of withApplyingSetup.
+type applyingSetupKey struct{}
+
+// applyingSetup is the setup a `lore setup apply` step writes for, and
+// the org that step makes or joins.
+type applyingSetup struct {
+	name, org string
+}
+
+// withApplyingSetup marks ctx as the writes of setup name's step for org
+// (setupWriteGate answers them as setup name's).
+func withApplyingSetup(ctx context.Context, name, org string) context.Context {
+	return context.WithValue(ctx, applyingSetupKey{}, applyingSetup{name: name, org: org})
+}
+
+// applyingSetupOf is the setup ctx's writes are applied for, if any.
+func applyingSetupOf(ctx context.Context) (applyingSetup, bool) {
+	s, ok := ctx.Value(applyingSetupKey{}).(applyingSetup)
+	return s, ok && s.name != "" && s.org != ""
 }
 
 // setupExplicitGate refuses every repo operation, reads included, when the

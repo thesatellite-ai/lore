@@ -20,6 +20,7 @@ import (
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opswhycontext "github.com/thesatellite-ai/lore/ops/whycontext"
+	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 	"github.com/thesatellite-ai/lore/wire/renderhost"
 )
 
@@ -100,7 +101,10 @@ func (l *lateSetup) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 // post-rewrite): git just changed the rows, so .lore/LORE.md is
 // re-rendered quietly, as v0.1.17's rerenderLoreMD did. Only a project that
 // already renders (the file exists; tool pointer files are `lore render`'s
-// explicit job, so none is touched), and it never fails git: a problem is
+// explicit job, so none is touched); after a checkout or a fast-forward
+// (hosthooks.Refresh's committed), only when its render
+// files are not tracked and clean (renderhost.RenderHeld: the pre-commit
+// hook keeps a committed render current). It never fails git: a problem is
 // one stderr line.
 // commitScopeHook is the post-commit hook's folder scope notice (B3-5):
 // a commit that moved or deleted a scoped folder prints one line per scope
@@ -115,14 +119,34 @@ func commitScopeHook(h *renderhost.Host, wd string) func(context.Context) {
 	}
 }
 
-func refreshHook(h *renderhost.Host, wd string) func(context.Context) {
-	return func(ctx context.Context) {
+// commitRenderHook is the pre-commit hook's render refresh (A-12): the
+// commit that carries row files also carries their LORE.md
+// (renderhost.Host.CommitRender). nil-safe on h.
+func commitRenderHook(h *renderhost.Host) hosthooks.CommitRender {
+	return func(ctx context.Context, root string) []string {
+		if h == nil {
+			return nil
+		}
+		return h.CommitRender(ctx, root)
+	}
+}
+
+func refreshHook(h *renderhost.Host, wd string) hosthooks.Refresh {
+	return func(ctx context.Context, committed bool) {
 		out := filepath.Join(wd, filepath.FromSlash(renderhost.LoreMDRel))
 		if _, err := os.Stat(out); err != nil || h == nil {
 			return
 		}
 		// B3-32: the committed render files change under the person's feet
 		// after a pull; say so in one line, and only when bytes changed
+		// A-12: after a checkout or a fast-forward, a tracked render that
+		// matches the index is the commit's own; re-rendering it would
+		// leave it dirty mid flow (the next git merge aborts, and `git
+		// checkout -- .lore/LORE.md` would be undone at once). A merge
+		// commit or a rebase combined rows, so its render is written.
+		if committed && h.RenderHeld(ctx, wd) {
+			return
+		}
 		files := []string{out, filepath.Join(filepath.Dir(out), refreshFullName)}
 		before := readAll(files)
 		if _, err := h.Run(ctx, renderhost.Flags{OutPath: out, NoPointer: true, Quiet: true}); err != nil {

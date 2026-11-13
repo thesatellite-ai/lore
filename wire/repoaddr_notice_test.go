@@ -3,7 +3,9 @@ package wire_test
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -52,7 +54,7 @@ func TestAddressNoticeCaseOnlyOffersNoFork(t *testing.T) {
 // (PROVENANCE_DESIGN 10.3, PROV2, Q2).
 func TestSyncRepoAddressesAsksOnceInTerminal(t *testing.T) {
 	t.Parallel()
-	h := opstest.New(t)
+	h := opstest.New(t, ownRepo)
 	ctx := context.Background()
 	git := func(cmd *exec.Cmd) {
 		t.Helper()
@@ -111,7 +113,7 @@ func TestSyncRepoAddressesAsksOnceInTerminal(t *testing.T) {
 // nothing changed, so there is no "remote changed" notice and no fork offer.
 func TestSyncRepoAddressesFirstAddressIsRecorded(t *testing.T) {
 	t.Parallel()
-	h := opstest.New(t)
+	h := opstest.New(t, ownRepo)
 	ctx := context.Background()
 	git := func(args ...string) {
 		t.Helper()
@@ -156,5 +158,53 @@ func TestSyncRepoAddressesFirstAddressIsRecorded(t *testing.T) {
 	h.App.SyncRepoAddresses(ctx, &moved, strings.NewReader(""), false)
 	if !strings.Contains(moved.String(), "! remote changed: this clone uses git.example.test/other/site, the repo record says git.example.test/pat/site") {
 		t.Fatalf("a later move:\n%s", moved.String())
+	}
+}
+
+// ownRepo makes the harness repo an own repo (no RepoIsClient hook fails
+// closed to a client repo, where SyncRepoAddresses writes nothing).
+func ownRepo(o *wire.Options) {
+	o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+}
+
+// TestSyncRepoAddressesClientRepoWritesNothing (B-8, B-11): in a client
+// repo the sync's address pass mints no repo id and writes no repos row,
+// so the client's checkout keeps its _meta.json as committed.
+func TestSyncRepoAddressesClientRepoWritesNothing(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t, func(o *wire.Options) {
+		o.RepoIsClient = func(context.Context) (bool, error) { return true, nil }
+	})
+	ctx := context.Background()
+	cmd := exec.Command("git", "remote", "add", "origin", "git@git.example.test:client/site.git")
+	cmd.Dir = h.Repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %v %s", cmd.Args, err, out)
+	}
+	pid, err := h.App.Project(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.App.SeedRepoMeta(ctx, pid); err != nil {
+		t.Fatal(err)
+	}
+	before, _, err := h.App.ReadRepoMeta(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	h.App.SyncRepoAddresses(ctx, &out, strings.NewReader(""), false)
+	after, _, err := h.App.ReadRepoMeta(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.RepoID != before.RepoID || len(after.URLs) != len(before.URLs) || out.String() != "" {
+		t.Fatalf("a client repo's sync changed _meta.json: before %+v, after %+v, said %q", before, after, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(h.Repo, ".lore", "data", "repos")); err == nil {
+		entries, _ := os.ReadDir(filepath.Join(h.Repo, ".lore", "data", "repos"))
+		if len(entries) > 0 {
+			t.Fatalf("a client repo's sync wrote %d repos row file(s)", len(entries))
+		}
 	}
 }

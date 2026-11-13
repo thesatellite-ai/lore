@@ -16,7 +16,7 @@
 | Only the "use lore" instructions | `lore directive install --target AGENTS.md` | the directive block at the top of `AGENTS.md`, no pointer |
 | A look before writing anything | `lore render --dry-run` | nothing; prints the file instead |
 | Notes from private stores (company, personal) | `lore render` (nothing extra) | one file per store under `~/.lore/render/<repo id>/`, outside the repo, and an import of each in the tool's private file (`CLAUDE.local.md` for `claude_code`, a Cursor rule for `cursor`), hidden from git |
-| To check the size in CI | `lore render --check` | nothing; fails when `.lore/LORE.md` would be over its budget |
+| To check the size in CI | `lore render --check` | nothing, not even inside `.git` (no hook, config key or `info/exclude` line); fails when `.lore/LORE.md` would be over its budget or a rendered file is stale; over the warn level (80% of the budget) it prints a warning and passes; a repo that never rendered passes with a note, as `lore doctor` lists it |
 | A tool that cannot follow an import line | `lore context --internal` | nothing; prints the private notes for this repo as text |
 | One short skill file from a folder of markdown | `lore skill compile` | a draft, `SKILL-<target>-draft.md`, for you to review |
 

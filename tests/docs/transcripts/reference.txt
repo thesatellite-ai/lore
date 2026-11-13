@@ -154,7 +154,7 @@ ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row f
 (exit 23)
 alice$ lore rule list
 ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+  hint: cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)
 (exit 19)
 alice$ cd work/website && lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
@@ -240,7 +240,7 @@ repo_orgs:
     remotes:
       - github.com/client/website
 alice (work/website)$ lore org link --org agency --project client --yes
-lore: pushed store github.com/agency/notes: commit 9b40ce7 to branch main
+lore: pushed store agency: commit 9b40ce7 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_d4314eba822f1bf5908b2b8ded5f313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)

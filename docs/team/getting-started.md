@@ -50,13 +50,14 @@ $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 
 ## Step 3 — See who lore thinks you are
 
-With no config at all, there is no org. Your identity comes from your git email:
+With no config at all, there is no org. Your identity comes from your git email. In a repo with a hosted remote, the `join` line says how to join an org on this machine (a new laptop of someone who already joined needs only the store url from their admin):
 
 <!-- example: getting-started#whoami-without-config -->
 ```console
 # alice, in notes-app
 $ lore whoami
 org        none  (matched by: nothing matched)
+join       if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 identity   alice <human:alice@example.com>   act_162d…9666  (from: git config user.email)
 repo       no org  (fallback identity)
 machine    mch_98c3dece

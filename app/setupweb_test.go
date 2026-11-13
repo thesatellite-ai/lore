@@ -30,7 +30,8 @@ func TestPageOpsExist(t *testing.T) {
 }
 
 // TestPageOpens: which results open the page (Q1, contracts): setup.run
-// only on a terminal or with --web; never with --json; setup.join always;
+// only on a terminal or with --web; never with --json; setup.join as
+// setup.run (TestJoinPageNeedsTerminal);
 // --schema-only and --agent-hooks (the op leaves Web.Open false) never.
 func TestPageOpens(t *testing.T) {
 	web := opssetup.WebStart{Open: true, Port: 0, NoOpen: true}

@@ -64,7 +64,7 @@ lore org link: set up git for lore's row files in this clone: merge drivers lore
 lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 Continue? [y/N] y
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: pushed store github.com/agency/notes: commit 601d285 to branch main
+lore: pushed store agency: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
@@ -113,7 +113,7 @@ Notes go to the internal project by default. A project rule goes into the repo w
 ```console
 # alice, in website
 $ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
-lore: pushed store agency: commit dfd8dc8 to branch main
+lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
 ✓ mem_c0f3…b5b8 [agency/client]
@@ -138,7 +138,7 @@ Alice adds an internal task for Bob, from any branch. Bob sees it in his list an
 ```console
 # alice, in website
 $ git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob
-lore: pushed store agency: commit cf563f3 to branch main
+lore: pushed store agency/client (here: agency): commit cf563f3 to branch main
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
@@ -150,7 +150,7 @@ $ lore sync >/dev/null; git switch -q -c feat/login && lore task list
 $ lore inbox
 -  assigned              tsk_b4f4…a5b0  send invoice reminder before demo (lead)
 $ lore task done --id tsk_b4f4…a5b0
-lore: pushed store agency: commit df3a55c to branch main
+lore: pushed store agency/client (here: agency): commit df3a55c to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
 ✓ tsk_b4f4…a5b0 done
@@ -202,6 +202,8 @@ A row written to the client repo (`--to repo`, or a kind whose default is the re
 
 `git commit --no-verify` and `git push --no-verify` skip every local check. So the client's CI should run `lore check leaks --ci` as the backstop. It needs no store, so it catches internal rows by their ids and structure, not pasted sentences. Each finding names its file; an actor copy holding more than {id, display name, kind} (a `stable_key` left by lore 0.1.17) names `lore migrate run`, which trims every actor copy in `.lore/data` (it is safe to run again on a migrated repo): commit and push the rewritten files.
 
+Before you hand one of your own repos over to a client, `lore check leaks --as-client` reads it as the client would: every tracked file (for secrets and internal notes), the `.lore/data` rows, resource values and their git history. It scans the files on every CPU; a repo with more than 8 MB of tracked text (generated code, say) first prints one line with the file count and size (`reading 10448 tracked files (70 MB) as the client would…`), since each file the client receives is checked and that takes seconds. Like every read and check, it writes nothing into the repo or its `.git`.
+
 Agents check a pull request body or comment before posting it. The same text is refused there. An unrelated text passes:
 
 <!-- example: agency#leak-blocked only=4,5,6 -->
@@ -249,6 +251,7 @@ $ lore task list
 (no tasks)
 $ lore whoami
 org        none  (matched by: nothing matched)
+join       if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 identity   carol <human:carol@client.example>   act_2537…6bbb  (from: git config user.email)
 repo       no org  (fallback identity)
 machine    mch_98c3dece

@@ -34,6 +34,8 @@ Tasks, missions, handoffs and comments are live by default (`live.defaults` chan
 
 Sometimes lore cannot tell whether the repo is a client repo: the store cannot be read and there is no saved list of links. Then a write without `--to` is refused with `E_LINK_UNKNOWN`. Lore does not guess.
 
+In a client repo, `lore sync` and reads write nothing into the checkout: the repo gets no repo id in `.lore/data/_meta.json` and no repos row file (they would carry the client's remote into the client's history), and a committed `.lore/LORE.md` is not rendered again behind your back. Your private context goes to `~/.lore/render`, imported through the ignored `CLAUDE.local.md`; `lore render` still writes `.lore/LORE.md` when you ask for it.
+
 ## Lookup: which copy of a row wins
 
 A command that takes an id (`lore task done --id tsk_…`) has to find exactly one copy. A **tombstone** below is a marker on live that says "this row was deleted".

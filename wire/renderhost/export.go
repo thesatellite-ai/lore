@@ -138,8 +138,8 @@ func (h *Host) RerenderPrivateQuiet(ctx context.Context, root string) {
 
 // RerenderStaleQuiet re-renders LORE.md after a sync when its stamp no
 // longer matches its rows (render_stamp.go).
-func (h *Host) RerenderStaleQuiet(ctx context.Context, root string) {
-	h.rerenderStaleQuiet(ctx, root)
+func (h *Host) RerenderStaleQuiet(ctx context.Context, root string, brought bool) {
+	h.rerenderStaleQuiet(ctx, root, brought)
 }
 
 // RenderedCopies implements opsrender.CopyChecker: the rendered files and

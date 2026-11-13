@@ -161,7 +161,7 @@ repo_orgs:
 
 # alice, in website
 $ lore org link --org agency --project client --yes
-lore: pushed store github.com/agency/notes: commit 9b40ce7 to branch main
+lore: pushed store agency: commit 9b40ce7 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)

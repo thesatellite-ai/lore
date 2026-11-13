@@ -6,7 +6,7 @@
 //	render.run ─▶ flag checks (--scopes needs --report; one read mode at a time)
 //	           ─▶ --report [--scopes] | --trend: read only; the text, and the
 //	              --json data (the v0.1.17 report / trend object as it is)
-//	           ─▶ --check: read only; E_REFUSED over the warn level or the budget
+//	           ─▶ --check: read only; E_REFUSED over the budget, a warning over the warn level
 //	           ─▶ --dry-run: the generated body, nothing written
 //	           └▶ default: LORE.md, LORE.full.md, the pointer blocks, path rule
 //	              files, folder files, the private render; one line per file
@@ -51,7 +51,7 @@ type RunIn struct {
 	Out       string   `json:"out,omitempty" flag:"out" desc:"generated knowledge file path (default .lore/LORE.md)"`
 	NoPointer bool     `json:"no_pointer,omitempty" flag:"no-pointer" desc:"do not stitch the pointer into the agent file"`
 	DryRun    bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"print the generated body instead of writing it"`
-	Check     bool     `json:"check,omitempty" flag:"check" desc:"CI check: write nothing, fail when LORE.md would be over the warn level or the budget"`
+	Check     bool     `json:"check,omitempty" flag:"check" desc:"CI check: write nothing, fail when LORE.md would be over the budget or a rendered file is stale (over the warn level: a warning)"`
 	Report    bool     `json:"report,omitempty" flag:"report" desc:"print the budget report (what is full, what is a line, what moved out) and write nothing"`
 	Scopes    bool     `json:"scopes,omitempty" flag:"scopes" desc:"with --report: one row per generated file per tool, plus the Codex and Claude Code chain sums"`
 	Trend     bool     `json:"trend,omitempty" flag:"trend" desc:"bytes per render over the last 14 days, growth per day and when LORE.md reaches its budget; writes nothing"`

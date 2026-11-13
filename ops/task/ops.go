@@ -117,6 +117,15 @@ type Actorer interface {
 	Actor(ctx context.Context) (ids.ID[ids.Actor], error)
 }
 
+// RosterRefer is the optional upgrade of the env that resolves an @handle
+// or an email on the org roster, people who left included (B-12), so
+// `task list --assignee @ruth` works as `--assign @ruth` does and still
+// after Ruth left. found false (no roster, no match) falls back to the
+// row lookup.
+type RosterRefer interface {
+	RosterActorRef(ctx context.Context, ref string) (id string, found bool, err error)
+}
+
 // ContactActorer is the optional upgrade of the env that resolves an
 // actor reference in contact form (github:mirap, email:…, a bare email)
 // through the identity contacts (TEAM_PROFILES 6.3). found is false when
@@ -1843,6 +1852,15 @@ func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
 		return "", errs.New(errs.NotFound, "current identity has no actor yet").
 			WithHint("an actor row is created on its first write, e.g. `lore task add`")
 	}
+	// B-12: @handle or email on the org roster, people who left included
+	// (`--assignee @ruth` after `lore member remove`)
+	if rr, ok := o.env.(RosterRefer); ok {
+		if id, found, rerr := rr.RosterActorRef(ctx, ref); rerr != nil {
+			return "", rerr
+		} else if found {
+			return id, nil
+		}
+	}
 	var byKey, byName []string
 	for _, s := range all {
 		id, key := s.Row.ID.String(), work.Field(s.Row, fieldStableKey)
@@ -1894,7 +1912,7 @@ func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
 			WithHint("pass the actor id")
 	}
 	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).
-		WithHint("pass an actor id (act_*), " + actorMe + ", a stable_key or a display name")
+		WithHint("pass an actor id (act_*), " + actorMe + ", an @handle or email on the roster, a stable_key or a display name")
 }
 
 // repoByName prefixes a search's wanted repo when --repo names no repo of

@@ -33,8 +33,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -94,11 +97,18 @@ func (a *App) CheckAsClient(ctx context.Context, root string, explain bool) erro
 	if err != nil {
 		return err
 	}
-	idx, err := a.asClientIndex(ctx)
+	asClientSay(items)
+	secrets, err := a.asClientSecrets(ctx, root)
 	if err != nil {
 		return err
 	}
-	secrets, err := a.asClientSecrets(ctx, root)
+	// C-9: the secret scan of every tracked file (the bulk of the work)
+	// runs while the leak index is built (a fresh clone's cache fill);
+	// neither reads the other.
+	scanned := make(chan leakcheck.SecretScan, 1)
+	go func() { scanned <- presetSecrets(items, secrets) }()
+	idx, err := a.asClientIndex(ctx)
+	secrets = <-scanned
 	if err != nil {
 		return err
 	}
@@ -200,9 +210,67 @@ func (a *App) asClientSecrets(ctx context.Context, root string) (leakcheck.Secre
 	if err != nil {
 		return nil, err
 	}
+	_ = sc.Scan("", "") // build a lazy scanner once, before leakcheck.Check's workers share it
 	return func(it leakcheck.Item) []leakcheck.SecretHit {
 		return scanDoc(sc, allows, it.Path, it.Content, false)
 	}, nil
+}
+
+// asClientProgressBytes is the size of tracked text above which
+// --as-client says what it reads before it starts: every file the client
+// would receive is scanned for secrets and internal notes, and a repo with
+// tens of MB of tracked text (generated code) takes seconds even on every
+// core (C-9: 74 MB, about 110 CPU-seconds).
+const asClientProgressBytes = 8 << 20
+
+// asClientProgress is where that line goes (a test swaps it).
+var asClientProgress io.Writer = os.Stderr
+
+// asClientSay prints the progress line for a big checkout: counts only,
+// never a path or a value (a CI log is the client's to read).
+func asClientSay(items []leakcheck.Item) {
+	total := 0
+	for _, it := range items {
+		total += len(it.Content)
+	}
+	if total < asClientProgressBytes {
+		return
+	}
+	_, _ = fmt.Fprintf(asClientProgress, "lore check leaks --as-client: reading %d tracked files (%d MB) as the client would, for secrets and internal notes; every file the client receives is checked, so a big repo takes a while\n",
+		len(items), total>>20)
+}
+
+// presetSecrets runs scan over every item, one worker per CPU, and returns
+// a SecretScan that answers from those results (by item path; an item it
+// was not given is scanned then). scan must be safe for concurrent use.
+func presetSecrets(items []leakcheck.Item, scan leakcheck.SecretScan) leakcheck.SecretScan {
+	hits := make([][]leakcheck.SecretHit, len(items))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(items)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1)) - 1
+				if i >= len(items) {
+					return
+				}
+				hits[i] = scan(items[i])
+			}
+		}()
+	}
+	wg.Wait()
+	byPath := make(map[string][]leakcheck.SecretHit, len(items))
+	for i, it := range items {
+		byPath[it.Path] = hits[i]
+	}
+	return func(it leakcheck.Item) []leakcheck.SecretHit {
+		if h, ok := byPath[it.Path]; ok {
+			return h
+		}
+		return scan(it)
+	}
 }
 
 // asClientDataPrefix is this project's .lore/data folder relative to the

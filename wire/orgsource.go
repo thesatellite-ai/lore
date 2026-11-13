@@ -178,8 +178,14 @@ const DoctorCheckOrgSource DoctorCheck = "org_source"
 // older than (or, unstamped, differ from) the store's lore-org.yaml.
 func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
-	if err != nil || cfg == nil {
+	if err != nil {
 		return nil, nil // lore config check reports a broken config
+	}
+	if j := a.orgJoinFinding(ctx, cfg); j != nil {
+		return []DoctorFinding{*j}, nil
+	}
+	if cfg == nil {
+		return nil, nil
 	}
 	var out []DoctorFinding
 	for i := range cfg.Orgs {
@@ -276,3 +282,19 @@ func urlAt(stores []orgconf.Store, i int) string {
 
 // compile-time check: the org host offers org.refresh.
 var _ opsorgcmd.Refresher = (*standaloneOrg)(nil)
+
+// orgJoinFinding is doctor's note in a git repo with a hosted remote on a
+// machine that has no org to switch to (a new laptop with only git access,
+// B-14): the join command whoami's "join" line names. nil otherwise.
+func (a *App) orgJoinFinding(ctx context.Context, cfg *orgconf.Config) *DoctorFinding {
+	if !insideWorkTree(ctx, a.opts.RepoDir) {
+		return nil
+	}
+	remotes, _ := orgcfg.Remotes(ctx, a.opts.RepoDir)
+	committed, _ := orgcfg.LoadOrgFile(orgcfg.ProjectDir(ctx, a.opts.RepoDir, a.opts.Home))
+	h := orgJoinHint(&orgcfg.Situation{Config: cfg, Remotes: remotes, Committed: committed})
+	if h == "" {
+		return nil
+	}
+	return &DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorNote, Message: h}
+}

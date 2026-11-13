@@ -259,21 +259,72 @@ type StaffWriteOut struct {
 	Verb   string   `json:"verb"`
 	Where  string   `json:"where"`
 	Note   string   `json:"note,omitempty"`
+	// Handover is member remove's hand-over of the leaver's open tasks
+	// (B-12): zero (no Command) on every other member write.
+	Handover Handover `json:"handover,omitzero"`
 }
 
-// Text is one success line (and the note, when there is one).
+// Handover is what a removed member still holds: the open tasks lore read
+// here and the command that moves them to someone else. Tasks in repos
+// this command does not read are not listed, so the command is always
+// printed, to run in each repo that holds their tasks.
+type Handover struct {
+	OpenTasks []HandoverTask `json:"open_tasks"`
+	// TasksNote says why open tasks could not be listed ("" when they were).
+	TasksNote string `json:"tasks_note,omitempty"`
+	Command   string `json:"command"`
+}
+
+// HandoverTask is one open task of the leaver: id, title and the store
+// it is in.
+type HandoverTask struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Store string `json:"store"`
+}
+
+// handoverAssign is the placeholder for the person the tasks go to.
+const handoverAssign = "@<someone>"
+
+// handoverCommand is the `lore task reassign` line that hands every open
+// task of m over: by handle, else by email (both resolve after they left).
+func handoverCommand(m StaffRow) string {
+	who := m.Email
+	if m.Handle != "" {
+		who = "@" + strings.TrimPrefix(m.Handle, "@")
+	}
+	return "lore task reassign --from " + who + " --assign " + handoverAssign + " --yes"
+}
+
+// Text is one success line (and the note, when there is one), then member
+// remove's hand-over.
 func (o StaffWriteOut) Text() string {
 	t := work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on " + o.Where + "'s roster\n"
 	if o.Note != "" {
 		t += "  note: " + o.Note + "\n"
 	}
+	if h := o.Handover; h.Command != "" {
+		switch {
+		case h.TasksNote != "":
+			t += "  open tasks: " + h.TasksNote + "\n"
+		case len(h.OpenTasks) == 0:
+			t += "  open tasks: none in the stores read here\n"
+		default:
+			t += fmt.Sprintf("  open tasks (%d) still assigned to them:\n", len(h.OpenTasks))
+		}
+		for _, x := range h.OpenTasks {
+			t += fmt.Sprintf("    %s  %q  %s\n", x.ID, x.Title, x.Store)
+		}
+		t += "  hand them over (in each repo or store folder that holds their tasks): " + h.Command + "\n"
+	}
 	return t
 }
 
 // Remover is the optional Env upgrade member.remove runs (ops/period's
-// actor offboard: the stint and memberships end, the status is left).
+// actor offboard: the stint and memberships end, the status is left). It
+// returns the leaver's open tasks offboard read (no command line yet).
 type Remover interface {
-	OffboardPerson(ctx context.Context, who, reason string) error
+	OffboardPerson(ctx context.Context, who, reason string) (Handover, error)
 }
 
 func orDash(s string) string {
@@ -1051,11 +1102,16 @@ func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, 
 	if reason == "" {
 		reason = "member remove"
 	}
-	if err := rm.OffboardPerson(ctx, a.ID.String(), reason); err != nil {
+	h, err := rm.OffboardPerson(ctx, a.ID.String(), reason)
+	if err != nil {
 		return StaffWriteOut{}, err
 	}
 	m.Status = schema.ActorStatusLeft
-	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where()}, nil
+	if h.OpenTasks == nil {
+		h.OpenTasks = []HandoverTask{}
+	}
+	h.Command = handoverCommand(m)
+	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where(), Handover: h}, nil
 }
 
 // personHandle is raw as a person's roster handle: without its @,

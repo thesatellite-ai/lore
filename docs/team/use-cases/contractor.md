@@ -55,7 +55,7 @@ lore store init: store clone ~/.lore/stores/agency/notes-client2: git user set t
 # alice, in website
 $ lore org link --org agency --project client --store git@github.com:agency/notes-client --yes
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: pushed store github.com/agency/notes-client: commit 601d285 to branch main
+lore: pushed store notes-client: commit 601d285 to branch main
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
@@ -68,7 +68,7 @@ lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e9…4603.json (st
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_c0f3…b5b8.json (store agency/.)
 ✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency ./
 $ lore memory add --body 'the client staging database is restored every Sunday night'
-lore: pushed store agency: commit 05513aa to branch main
+lore: pushed store notes-client/client (here: agency): commit 05513aa to branch main
 lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
 lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes-client/client (store agency)
 ✓ mem_76bd…3f10 [agency/client]
@@ -136,7 +136,7 @@ notes-client
 
 - **GitHub permissions are the access control.** Leaving a store out of Bob's config is only a convenience. Removing Bob's access to that repo is what actually keeps it out of reach.
 - **Folder names are unique across an org's stores**, and exactly one store sets `org_folder`.
-- **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore task revoke` / `lore task reassign` for his open work and `lore actor deactivate --handle @bob`. The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone.
+- **Offboarding** (when Bob leaves) means removing two repo permissions. Then run `lore member remove --who @bob --reason 'contract ended' --yes`: it lists his open tasks and prints `lore task reassign --from @bob --assign @<someone> --yes` to run in each repo that holds them ([Members](../members.md)). The roster row stays, marked inactive, because old rows point at it. Copies Bob already fetched stay on Bob's machine, like any git clone.
 - The three layouts (one store for everything, one per client, or a mix) are all plain config. The commands do not change. One store per client is the recommended layout once you have contractors or NDAs (secrecy agreements).
 
 ## Related

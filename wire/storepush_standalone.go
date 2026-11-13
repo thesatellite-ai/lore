@@ -82,13 +82,16 @@ const (
 
 // storePushWrap is the WrapBackend of cmd/lore for org store clones.
 func storePushWrap(res *OrgResolution) func(context.Context, store.Source, string, store.Backend) store.Backend {
-	return func(_ context.Context, name store.Source, _ string, b store.Backend) store.Backend {
+	return func(_ context.Context, name store.Source, folder string, b store.Backend) store.Backend {
 		if name == store.SourceRepo || !b.Capabilities().Remote {
 			return b
 		}
 		sp := &storePush{inner: b, name: name, res: res, notes: os.Stderr}
 		if d, ok := b.(interface{ Dir() string }); ok {
 			sp.stateDir = gitbackend.StateDirOf(d.Dir()) // the clone's .git/lore, never in its files
+			if res != nil {
+				sp.own = storeOwnName(res.home, gitbackend.OriginAt(d.Dir()), folder) // B-9 (storeshown.go)
+			}
 		}
 		return sp
 	}
@@ -98,6 +101,10 @@ func storePushWrap(res *OrgResolution) func(context.Context, store.Source, strin
 type storePush struct {
 	inner store.Backend
 	name  store.Source
+	// own is the store's own name ("client-store/bigco_hub"), which push
+	// lines print beside name when the repo calls it otherwise (B-9); ""
+	// for a store of no configured org.
+	own   string
 	res   *OrgResolution
 	notes io.Writer
 	// stateDir holds the clone's fetch stamp ("" = fetch every command).

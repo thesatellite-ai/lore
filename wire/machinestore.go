@@ -3,7 +3,7 @@ package wire
 // machinestore.go — attaching this machine's machine store (PASS3 phase C,
 // P3-LOCAL-1/2).
 //
-//	open / openStoreOnly
+//	open / storeOnlyApp
 //	   └─ openMachine(home, reg)
 //	        no MachineLocal table in reg ──▶ nothing opened (zero cost)
 //	        else <home>/state/machine.db (sqlite.MachineStore, never synced)

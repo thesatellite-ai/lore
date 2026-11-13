@@ -356,6 +356,25 @@ func orgUseHint(cfg *orgconf.Config) string {
 	}
 }
 
+// orgJoinHint is whoami's "join" line in a git repo with a hosted remote
+// that no org of this machine claims, when no org entry could be switched
+// to either (orgUseHint): typically a new laptop with only git access
+// (B-14). The org's store url is not readable offline with no setup, so
+// the command carries a placeholder and says where the url comes from;
+// a committed .lore/org.yaml names the org. "" when it does not apply.
+func orgJoinHint(s *orgcfg.Situation) string {
+	if s.NotGitRepo || len(s.Remotes) == 0 || orgUseHint(s.Config) != "" {
+		return ""
+	}
+	url := "<your org's store url>"
+	lead := "if this repo is your org's, join the org on this machine"
+	if s.Committed != nil && s.Committed.Org != "" {
+		url = "<" + s.Committed.Org + "'s store url>"
+		lead = "this repo names org " + s.Committed.Org + " (.lore/org.yaml); join it on this machine"
+	}
+	return lead + ": lore setup join --invite " + url + " (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)"
+}
+
 // whoamiRepoRow is the value of whoami's "repo" line: where the command
 // ran and the guards that apply there.
 //
@@ -409,6 +428,9 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, idErr error, explain
 			v += "   hint: " + h
 		}
 		row("org", v)
+		if h := orgJoinHint(s); h != "" {
+			row("join", h)
+		}
 	default:
 		row("org", r.Org.Name+"  (matched by: "+red.str(r.MatchedBy)+")")
 	}

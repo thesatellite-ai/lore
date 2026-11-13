@@ -56,7 +56,7 @@ func TestCampaignRender_SyncTwoClones(t *testing.T) {
 	if len(got.Data) != 1 || got.Data[0].Value != "1" || got.Data[0].Level != "repo" {
 		t.Fatalf("bob sees alice's repo policy after pull: %+v", got)
 	}
-	bob.Lore("render", "--check").Fails(t, campExitRefused, "[E_REFUSED]")
+	bob.MustLore("render", "--check").Says(t, "over the warn level") // a warning, not a failure (C-8)
 	// alice removes it again; after the next pull bob is back to the default.
 	alice.MustLore("policy", "unset", "context.warn_at", "--yes")
 	alice.CommitAll("policy unset")

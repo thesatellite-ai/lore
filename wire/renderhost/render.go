@@ -151,11 +151,13 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		return nil
 	}
 	if f.check {
-		// 6.11: CI dry run; fails above warn_at or on budget_exceeded.
+		// 6.11: CI dry run; fails on budget_exceeded only. Over the warn
+		// level is a warning on stdout with exit 0 (C-8: a LORE.md that
+		// fits its budget failed a CI check), as lore doctor counts it.
 		// DECISION OV18-1: the failure is E_REFUSED (no new code).
-		if report.Over || report.WarnExceeded {
-			return errs.New(errs.Refused, fmt.Sprintf("%s would be %d bytes: over the warn level (%d%% of %d, profile %s)",
-				f.outPath, report.After, report.WarnPct, report.Budget, report.Profile)).WithHint("run `lore render --report` to see what is in the core, and `lore lint --context` for clean-up")
+		if report.Over {
+			return errs.New(errs.Refused, fmt.Sprintf("%s would be %d bytes: over the budget (%d, profile %s)",
+				f.outPath, report.After, report.Budget, report.Profile)).WithHint("run `lore render --report` to see what is in the core, and `lore lint --context` for clean-up")
 		}
 		// SOURCE_OF_TRUTH rows 10, 11: a rendered file whose stamp no
 		// longer matches its rows fails the check too.
@@ -180,6 +182,10 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		}
 		fmt.Fprintf(f.out(), "%s %s would be %d of %d bytes (%d%%; warn at %d%%)\n", h.decor.check(), f.outPath,
 			report.After, report.Budget, report.After*percent/max(report.Budget, 1), report.WarnPct)
+		if report.WarnExceeded {
+			fmt.Fprintf(f.out(), "%s %s is over the warn level (%d%% of %d, profile %s): `lore render --report` shows what is in the core, `lore lint --context` what to clean up\n",
+				h.decor.warn("!"), f.outPath, report.WarnPct, report.Budget, report.Profile)
+		}
 		switch {
 		case formatOld:
 			fmt.Fprintf(f.out(), "%s rendered files not compared: %s\n", h.decor.muted("·"), formatLine)

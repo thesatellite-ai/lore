@@ -29,7 +29,7 @@ func TestStoreOnlyRosterOutsideARepo(t *testing.T) {
 	}
 	plain := t.TempDir()
 	// Wall is set as every host sets it; StoreOnlyRoster without one is
-	// PATCH g-orgmig -> g-core (it hands openStoreOnly the raw opts).
+	// PATCH g-orgmig -> g-core (it hands storeOnlyApp the raw opts).
 	opts := Options{RepoDir: plain, Home: t.TempDir(), FlagActor: testEmail, OrgStores: hook, Wall: time.Now}
 
 	if _, ok, err := StoreOnlyRoster(ctx, Options{RepoDir: gitRepo(t), Home: t.TempDir(), FlagActor: testEmail, OrgStores: hook}, rosterStore); err != nil || ok {

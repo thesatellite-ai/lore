@@ -883,6 +883,11 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if a.setupOnlyHere(ctx, e.Spec().Name) {
 		return a.runSetupOnly(ctx, e, d, c)
 	}
+	// a write naming its store (--to acme/org) outside any repo runs on
+	// that store alone (targetoutside.go)
+	if res, handled, err := a.runOutsideRepo(ctx, e, d, c); handled {
+		return res, err
+	}
 	// `lore sync` with no code repo here syncs every store of the setup,
 	// or the store checkout it runs in, each on its own App (syncsetup.go)
 	if e.Spec().Name == opssync.OpRun && a.opts.Sync != nil && a.setupSyncHere(ctx) {

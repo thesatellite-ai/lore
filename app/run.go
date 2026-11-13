@@ -251,7 +251,7 @@ func run(ctx context.Context, args []string) int {
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
 	// The git hook blocks call `lore sync hook <name>` (F6 ride-along).
 	if sync := find(root, opssync.Noun); sync != nil {
-		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, refreshHook(rend.h, wd), commitScopeHook(rend.h, wd)))
+		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, refreshHook(rend.h, wd), commitScopeHook(rend.h, wd), commitRenderHook(rend.h)))
 	}
 	mountSessionEnd(root, app) // sessionend.go: the tools' session-end hook, `lore agent end`
 	// After the last AddCommand: every command is in the tree now. cobra
