@@ -33,7 +33,7 @@ type AddIn struct {
 	engine.MetaFlags
 
 	// Name is set with --title, as v0.1.17 add did.
-	Name    string `json:"name" flag:"title" desc:"title (required)"`
+	Name    string `json:"name" flag:"title" alias:"name" desc:"title (required)"`
 	Body    string `json:"body,omitempty" flag:"body" desc:"body (or give it as the first argument)" ui:"widget=markdown"`
 	Text    string `json:"text,omitempty" arg:"0" desc:"the body, instead of --body"`
 	Project string `json:"project,omitempty" flag:"project" desc:"the project (prj_ id or name; default the repo's one project)"`
@@ -139,10 +139,12 @@ type EditIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
 
-	ID   string `json:"id" arg:"0" desc:"the behaviour id (bhv_…)"`
-	Name string `json:"name,omitempty" flag:"name" desc:"new name"`
-	// Title is --name under the spelling add takes (INTEG-KNOWLEDGE-4).
-	Title string `json:"title,omitempty" flag:"title" desc:"new name (same as --name; add takes --title)"`
+	ID string `json:"id" arg:"0" desc:"the behaviour id (bhv_…)"`
+	// Name is the REST/--json spelling of the new name; the CLI
+	// spells it --title (alias --name) like add (S-3: one flag per field).
+	Name string `json:"name,omitempty" desc:"new name (same as title)"`
+	// Title is the new name under the spelling add takes (INTEG-KNOWLEDGE-4).
+	Title string `json:"title,omitempty" flag:"title" alias:"name" desc:"new name"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"new body" ui:"widget=markdown"`
 }
 

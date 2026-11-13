@@ -7692,11 +7692,11 @@
                   },
                   "name": {
                     "type": "string",
-                    "description": "new name"
+                    "description": "new name (same as title)"
                   },
                   "title": {
                     "type": "string",
-                    "description": "new name (same as --name; add takes --title)"
+                    "description": "new name"
                   },
                   "yes": {
                     "type": "boolean",
@@ -43915,11 +43915,11 @@
                   },
                   "name": {
                     "type": "string",
-                    "description": "new name"
+                    "description": "new name (same as title)"
                   },
                   "title": {
                     "type": "string",
-                    "description": "new name (same as --name; add takes --title)"
+                    "description": "new name"
                   },
                   "yes": {
                     "type": "boolean",
@@ -48247,11 +48247,11 @@
                   },
                   "name": {
                     "type": "string",
-                    "description": "new name"
+                    "description": "new name (same as title)"
                   },
                   "title": {
                     "type": "string",
-                    "description": "new name (same as --name; add takes --title)"
+                    "description": "new name"
                   },
                   "yes": {
                     "type": "boolean",
@@ -109503,11 +109503,11 @@
                   },
                   "name": {
                     "type": "string",
-                    "description": "new name"
+                    "description": "new name (same as title)"
                   },
                   "title": {
                     "type": "string",
-                    "description": "new name (same as --name; add takes --title)"
+                    "description": "new name"
                   },
                   "yes": {
                     "type": "boolean",
@@ -110882,11 +110882,11 @@
                   },
                   "name": {
                     "type": "string",
-                    "description": "new name"
+                    "description": "new name (same as title)"
                   },
                   "title": {
                     "type": "string",
-                    "description": "new name (same as --name; add takes --title)"
+                    "description": "new name"
                   },
                   "yes": {
                     "type": "boolean",

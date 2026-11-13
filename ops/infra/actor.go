@@ -331,7 +331,7 @@ func (o ops) actorList(ctx context.Context, in ActorListIn) (ActorListOut, error
 type ActorShowIn struct {
 	ID string `json:"id" arg:"0" desc:"the actor: act_ id, @handle or stable key (human:mira@acme.com)"`
 	// Store picks one store's copy of the actor row.
-	Store string `json:"store,omitempty" flag:"store" desc:"show this store's copy of the actor (default: the first attached store that has it, the repo first)"`
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"show this store's copy of the actor (default: the first attached store that has it, the repo first)"`
 }
 
 // actorShow shows one actor (E_NOT_FOUND "actor "<ref>" not found"). An
