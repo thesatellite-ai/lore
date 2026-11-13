@@ -40,6 +40,7 @@ Binary: dev
   merge driver:     true
   data gitignored:  false
   uncommitted:      0
+  format:           the lore 0.1.18 format (format 2)
 [identity]
   resolved: human:alice@agency.example
   source:   git config user.email
@@ -134,7 +135,7 @@ When you report a problem, attach a support bundle: one JSON file with the docto
 ```console
 # alice, in website
 $ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (1699 bytes)
+✓ wrote support bundle to bundle.json (1752 bytes)
 $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "dev",
     "binary_version": "dev",

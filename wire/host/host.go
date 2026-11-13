@@ -28,6 +28,7 @@ import (
 	"context"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -35,6 +36,8 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
+	opsfix "github.com/thesatellite-ai/lore/ops/fix"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -139,6 +142,9 @@ func (r *Runner) App() *wire.App { return r.app }
 
 var _ op.Runner = (*Runner)(nil)
 
+// migratePrefix starts every migrate operation's name ("migrate.").
+var migratePrefix = opsmigrate.OpRun[:strings.Index(opsmigrate.OpRun, ".")+1]
+
 // Run implements op.Runner.
 func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
 	if r.State.Pending != nil {
@@ -162,8 +168,11 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		}
 		return op.Result{}, err
 	}
-	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
-		ctx = wire.WithNoCreate(ctx) // a read never sets a repo up (wire/doctor_nocreate.go), hooks included
+	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun || e.Spec().Name == opsfix.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
+		// a read never sets a repo up (wire/doctor_nocreate.go), hooks
+		// included; nor does lore fix (FP-7): it repairs a project, and a
+		// repo with no .lore/ has none, so it is left as it is
+		ctx = wire.WithNoCreate(ctx)
 	}
 	run0 := &Run{Entry: e, Decoder: d, Cmd: r.State.Cmd, Args: r.State.Args}
 	if fixDryRun(run0) {
@@ -174,10 +183,17 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	// D7 (B2-20): `lore sync` in a repo lore 0.1.17 wrote and nobody
 	// migrated yet runs as a read: it changes no tracked file, so the
 	// admin's lore fix commit pulls cleanly here (wire/oldrowsread.go)
-	if e.Spec().Name == opssync.OpRun {
+	// D13 (wire/formatold.go): in such a project no command sets the clone
+	// up either (no .gitignore line, no hook, no render): nothing of the
+	// project changes until lore migrate run, which is left to do its own
+	// (D15: and lore fix --migrate, which runs it; plain lore fix there
+	// refuses with the one line and sets nothing up first)
+	if name := e.Spec().Name; !strings.HasPrefix(name, migratePrefix) && !(name == opsfix.OpRun && fixMigrate(run0)) && name != opsdoctor.OpRun {
 		if wd, werr := os.Getwd(); werr == nil && wire.HasV017RowsAt(ctx, wd) {
-			ctx = wire.WithOldRowsRead(ctx)
 			run.OldRows = true
+			if name == opssync.OpRun {
+				ctx = wire.WithOldRowsRead(ctx)
+			}
 		}
 	}
 	ctx = wire.WithCommandName(ctx, runCommandName(run)) // the prefix of what lore prints it set up (wire/cmdname.go)

@@ -148,14 +148,15 @@ vars:
     tidy              1   check:tidy
     docsync           1   check:docs
   # Lines lore:check:fast puts in front of GATE_STEPS (same format; a name listed twice keeps
-  # its first line): the race detector on just the race-set packages the change touches
-  # (lore:test:race:changed, a step only the fast tier has).
-  FAST_EXTRA_STEPS: |
-    race-changed      6   test:race:changed
+  # its first line). Empty: the fast tier's race step (race-changed, lore:test:race:changed) was
+  # dropped to keep it to 2-3 minutes; the full gate's race steps cover it.
+  FAST_EXTRA_STEPS: ""
   # The steps lore:check:fast always runs, whatever the change (names from GATE_STEPS and
   # FAST_EXTRA_STEPS); FAST_MAP adds the end-to-end ones. No docs step (docs-examples, docsync)
   # and no Windows/macOS test compile (cross-tests, ~27 CPU minutes): the full gate runs them.
-  FAST_UNIT_STEPS: "test-all race-changed cross-builds staticcheck vet gofmt tidy"
+  # The race detector (race-changed, race-wire, race) is the full gate's: with it the fast tier
+  # took over 5 minutes on a loaded shared server.
+  FAST_UNIT_STEPS: "test-all cross-builds staticcheck vet gofmt tidy"
   # The fast tier's mapping (lore:check:fast): which end-to-end steps of GATE_STEPS a change
   # needs, by the paths it changes. One rule per line, "<bash glob> <step>..." ("-" = no e2e
   # step); the first rule that matches a changed file wins (tests/lib/fast-plan.sh).
@@ -404,14 +405,15 @@ tasks:
       - echo "✓ task check — every gate passed (logs in {{.GATE_LOG_DIR}})"
 
   check:fast:
-    desc: "FAST tier for landing a small fix, a quick sanity check of about 5 min: build, vet, gofmt, staticcheck, cross-builds, tidy, every unit test (go test ./..., cached) and the race detector on the touched race-set packages; no end-to-end suite and no docs step (FAST_MAP names none; the full gate after landing runs them all). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
+    desc: "FAST tier for landing a small fix, a 2-3 minute sanity check that takes no machine-wide test lock: build, vet, gofmt, staticcheck, cross-builds, tidy and every unit test (go test ./..., cached); no race detector, no end-to-end suite and no docs step (FAST_MAP names none; the full gate after landing runs them all). Writes its own stamp (lore-check-fast-passed), which the pre-push hook accepts; the full gate then runs on the landed main (lore:check:after-land). docs/DEVELOPMENT.md \"Landing\""
     cmds:
-      # SKIP_DOCS reaches the inner task as an argument: a CLI variable of this call is not
-      # passed to the task process testlock starts
-      - testlock task --taskfile "{{.TASKFILE}}" check:fast:run SKIP_DOCS='{{.SKIP_DOCS}}'
+      # Not behind testlock: the fast tier is a 2-3 minute sanity check and must never queue
+      # behind another session's full gate; only the full gate (lore:check) takes the lock.
+      # SKIP_DOCS reaches the inner task as an argument.
+      - task --taskfile "{{.TASKFILE}}" check:fast:run SKIP_DOCS='{{.SKIP_DOCS}}'
 
   check:fast:run:
-    desc: "Body of lore:check:fast WITHOUT the machine-wide test lock; call lore:check:fast instead"
+    desc: "Body of lore:check:fast (no machine-wide test lock, like lore:check:fast itself); call lore:check:fast instead"
     env:
       GATE_LOG_DIR: "{{.GATE_LOG_DIR}}"
       GATE_STEPS: "{{.FAST_EXTRA_STEPS}}{{.GATE_STEPS}}"
@@ -421,7 +423,8 @@ tasks:
       SKIP_DOCS: "{{.SKIP_DOCS}}"
     cmds:
       - task: check:begin
-      - tests/lib/gate-parallel.sh cache 'gocache={{.SELF}} check:gocache'
+      # No cache stage: trimming the shared Go build cache is safe only under the full gate's
+      # testlock, and the fast tier takes no lock.
       - tests/lib/gate-parallel.sh warm 'warm={{.SELF}} build:warm'
       - tests/lib/gate-parallel.sh build 'build={{.SELF}} build:test'
       - |

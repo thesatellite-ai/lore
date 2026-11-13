@@ -64,7 +64,7 @@ func TestJourneyCommitAfterFix(t *testing.T) {
 	})
 
 	w.Step("day1/lore-fix-warns-once-by-id-and-fingerprint", func() {
-		r := lap.LoreIn(c, "fix").OK(t)
+		r := lap.LoreIn(c, "fix", "--migrate").OK(t)
 		r.Says(t, "Upgraded", "secret-looking value(s) in the rewritten rows", fixWarnMemory, "sha256:", "lore secrets allow").Never(t, old)
 		if n := strings.Count(r.Out(), "secret-looking value(s) in the rewritten rows"); n != 1 {
 			t.Fatalf("the warning appears %d times:\n%s", n, r.Out())

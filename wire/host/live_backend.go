@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
@@ -84,6 +85,9 @@ type liveBackend struct {
 	// then has no live overlay at all, but still checks F16 on every
 	// branch write (noSessionLeakCheck).
 	off bool
+	// project is set once the repo store's folder holds .lore/ (see
+	// hasProject); it never goes back, so the stat runs until then only.
+	project atomic.Bool
 }
 
 var (
@@ -94,7 +98,7 @@ var (
 
 // session is the run's prepared session (nil: no live overlay).
 func (b *liveBackend) session(ctx context.Context) *liveSession {
-	if b.off {
+	if b.off || !b.hasProject() {
 		return nil
 	}
 	r := runFrom(ctx)
@@ -102,6 +106,26 @@ func (b *liveBackend) session(ctx context.Context) *liveSession {
 		return nil
 	}
 	return r.session(ctx, b.top)
+}
+
+// hasProject reports whether the repo store's folder is a lore project
+// (.lore/ at or above it, below the git top: liveProjectRoot). FP-7: a
+// repo with no lore data that a store links by its remote opens its repo
+// store read-only; a read there must not open a live session, which takes
+// the live lock, adds the tracking refspec to .git/config and fetches
+// (.git/lore/fetch-stamp), all in a repo lore was never set up in. A
+// write's implicit setup creates .lore/ during the open, before any
+// session is asked for, so it keeps its overlay.
+func (b *liveBackend) hasProject() bool {
+	if b.project.Load() {
+		return true
+	}
+	d, ok := b.inner.(dirBackend)
+	if !ok || liveProjectRoot(d.Dir()) != "" {
+		b.project.Store(true)
+		return true
+	}
+	return false
 }
 
 // isLiveKind: a live kind by default, or one config turned off (an existing

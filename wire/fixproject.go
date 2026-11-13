@@ -63,11 +63,7 @@ import (
 // Lines of the v0.1.17 gate (owner item 11: exactly "run lore fix").
 const (
 	// OldRowsReadLine is what a read prints in a project with v0.1.17 rows.
-	OldRowsReadLine = "lore: this project has rows written by lore 0.1.17; run lore fix"
-	// oldRowsWriteLine is what the first write prints after fixing it.
-	oldRowsWriteLine = "lore: this project had rows written by lore 0.1.17, so this write first ran lore fix's safe steps (%s); lore fix does the rest"
-	// oldRowsWriteHint is the hint when that fix failed.
-	oldRowsWriteHint = "run lore fix and read what it says"
+	OldRowsReadLine = "lore: this project is on the lore 0.1.17 format; run lore migrate run to upgrade it (teammates need lore 0.1.18)"
 )
 
 // migrateNounPrefix starts every migrate operation's name.
@@ -83,6 +79,13 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 	top := gitTopLevel(ctx, a.projectDir())
 	if top == "" {
 		return []opsdoctor.FixStep{{Step: opsdoctor.StepMigrate, Result: "skipped: not inside a git repo"}}
+	}
+	if !opsdoctor.MigrateAsked(ctx) {
+		// D15: only --migrate raises a project's format (lore doctor --fix
+		// reaches here without the fix gate: it says so and never migrates)
+		if old, err := projectFormatOld(top); err == nil && old {
+			return a.fixFormatOldSteps(ctx, top, dry)
+		}
 	}
 	mig := a.fixMigrate(ctx, top, dry, true)
 	scopes := a.fixScopes(ctx, top, dry, mig.Failed)
@@ -631,7 +634,7 @@ func (a *App) FixPrepare(ctx context.Context, dry bool, jobs int) opsfix.Prep {
 
 // FixIn runs lore fix in root in its own process (opsfix.Env).
 func (a *App) FixIn(ctx context.Context, root string, dry bool, p opsfix.Prep) opsfix.RepoResult {
-	return runFixIn(ctx, root, fixChild{dry: dry, noStoreFetch: p.NoFetch, yes: p.Yes})
+	return runFixIn(ctx, root, fixChild{dry: dry, noStoreFetch: p.NoFetch, yes: p.Yes, migrate: p.Migrate})
 }
 
 // fixChild is how one repo's lore fix process of --all runs.
@@ -646,6 +649,8 @@ type fixChild struct {
 	// yes: the caller confirmed (lore fix --all --yes), so the child's
 	// repairs that ask first run (owner item 24).
 	yes bool
+	// migrate: lore fix --all --migrate (D15), so the child migrates too.
+	migrate bool
 	// exe, timeout and grace replace this binary, fixRepoTimeout and
 	// fixChildGrace (tests: a fake child, a short limit).
 	exe            string
@@ -660,6 +665,9 @@ func (c fixChild) args() []string {
 	}
 	if c.yes {
 		args = append(args, "--"+clibuild.FlagYes)
+	}
+	if c.migrate {
+		args = append(args, "--"+fixMigrateFlag)
 	}
 	return args
 }
@@ -730,6 +738,13 @@ func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 		return res
 	}
 	var out opsfix.Out
+	if line, ok := envelopeFormatOld(raw); ok {
+		// D15: a repo on an older format is listed with its command, never
+		// migrated by --all without --migrate and never a failure
+		res.FormatOld, res.Exit = true, 0
+		res.Text = "  " + line + "\n  " + formatOldMigrateHint(root) + "\n"
+		return res
+	}
 	if jerr := json.Unmarshal(raw, &out); jerr != nil || out.Repo == "" {
 		// a child that crashed, was killed or answered with an error
 		// envelope: the repo's block says exactly what it printed
@@ -796,6 +811,24 @@ func crashDumpCut(s string) string {
 	return s
 }
 
+// fixMigrateFlag is lore fix's --migrate (opsfix.RunIn.Migrate).
+const fixMigrateFlag = "migrate"
+
+// envelopeFormatOld is the message of a child's E_FORMAT_OLD envelope
+// (ok false for any other answer).
+func envelopeFormatOld(raw []byte) (string, bool) {
+	var env struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &env) != nil || env.Error.Code != string(errs.FormatOld) {
+		return "", false
+	}
+	return env.Error.Message, true
+}
+
 // envelopeMessage is the message of a JSON error envelope a child printed
 // ("" when raw is not one).
 func envelopeMessage(raw []byte) string {
@@ -830,6 +863,9 @@ func (a *App) FixAfterUpgrade(ctx context.Context) ([]string, error) {
 		return []string{"lore fix: skipped, " + top + " is not a lore project"}, nil
 	}
 	r := runFixIn(ctx, top, fixChild{})
+	if r.FormatOld {
+		return strings.Split(strings.TrimRight(r.Text, "\n"), "\n"), nil // D15: said, never migrated
+	}
 	if r.Error != "" {
 		return nil, errs.New(errs.Internal, r.Error)
 	}
@@ -901,19 +937,6 @@ func isV1RowFile(p string) bool {
 	return slices.ContainsFunc(v1Markers, func(m []byte) bool { return bytes.Contains(head, m) })
 }
 
-// hasPendingV017Live reports whether the open state found lore 0.1.17
-// live rows its stores do not hold yet (state.pendingV017Live): a linked
-// client repo has no .lore/data of its own, so hasV017Rows never sees
-// them, and the write must still bring them in first (B4-5). Opening the
-// state costs a write nothing: it opens it anyway.
-func (a *App) hasPendingV017Live(ctx context.Context) bool {
-	if a.opts.Notice == nil {
-		return false // liveNote (which counts them) only runs with a notice writer
-	}
-	st, err := a.state(ctx)
-	return err == nil && st.pendingV017Live > 0
-}
-
 // oldRowsGate is the v0.1.17 gate of a command (owner item 11): a read in
 // a project with v0.1.17 rows prints OldRowsReadLine and changes nothing;
 // the first write runs the safe steps of lore fix (migrate, render), says
@@ -926,37 +949,15 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 		return nil
 	}
 	top := gitTopLevel(ctx, a.projectDir())
-	if !hasV017Rows(top) {
-		if e.Spec().Access != op.AccessWrite || !a.hasPendingV017Live(ctx) {
-			return nil
-		}
-	} else if e.Spec().Access != op.AccessWrite || OldRowsRead(ctx) {
-		// a read, or a sync run as one (D7, oldrowsread.go)
-		if a.opts.Notice != nil {
-			a.opts.Notice(OldRowsReadLine)
-		}
+	if !ProjectFormatOld(top) {
 		return nil
 	}
-	ctx = context.WithValue(ctx, fixSafeStepsKey{}, true)
-	mig := a.fixMigrate(ctx, top, false, false)
-	if mig.Failed {
-		return errs.New(errs.MigrationIncomplete, "this project has rows written by lore 0.1.17 and lore could not migrate them before this write: "+mig.Result).
-			WithHint(oldRowsWriteHint)
-	}
-	rend := a.fixRender(ctx, top, false, mig.Changed)
-	did := []string{"migrate: " + mig.Result}
-	if rend.Changed {
-		did = append(did, "render: "+rend.Result)
-	}
-	if a.opts.Notice != nil {
-		a.opts.Notice(fmt.Sprintf(oldRowsWriteLine, strings.Join(did, "; ")))
-		// the layout commits the migration made (FlattenAfterMigrate) are
-		// shared-store commits: named one per line, as lore fix names them
-		for _, l := range mig.Detail {
-			if strings.Contains(l, "layout commit") || strings.HasPrefix(l, "pushed store ") {
-				a.opts.Notice("lore: " + l)
-			}
-		}
+	// D13: no write migrates by itself any more. A read says what to do; a
+	// write runs, and the repo backend refuses it if it reaches this
+	// project's rows (formatold.go), while a write to a store already on
+	// the new format goes through.
+	if (e.Spec().Access != op.AccessWrite || OldRowsRead(ctx)) && a.opts.Notice != nil {
+		a.opts.Notice(OldRowsReadLine)
 	}
 	return nil
 }

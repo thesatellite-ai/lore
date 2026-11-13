@@ -28,8 +28,8 @@ func TestFormatQuestionOnlyForRepoWrites(t *testing.T) {
 	writeV1(t, repo, v1Memory(project, otherActor))
 	a := newTestApp(t, repo)
 	ctx := context.Background()
-	if _, err := a.writeState(ctx); !errs.Has(err, errs.NeedsConfirm) {
-		t.Fatalf("a repo write is not asked: %v", err)
+	if _, err := a.writeState(ctx); !errs.Has(err, errs.FormatOld) {
+		t.Fatalf("a repo write is not refused for the 0.1.17 format (D13): %v", err)
 	}
 	if _, err := a.writeStateFor(ctx, store.Source("acme/org")); err != nil {
 		t.Fatalf("a write into an org store was refused for the repo's format: %v", err)

@@ -31,6 +31,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/canon"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -318,8 +319,9 @@ func TestFixturesCoverEveryTable(t *testing.T) {
 
 // TestUntouchedRowsStayByteIdentical (rule 3, Example 2): with every v1
 // fixture in place, reading each row, listing each table, writing an
-// unrelated row and rebuilding the caches leave every fixture file
-// byte-identical; the only new file is the written row.
+// unrelated row (refused: the project is on the v1 format, D13) and
+// rebuilding the caches leave every fixture file byte-identical, with no
+// new file.
 func TestUntouchedRowsStayByteIdentical(t *testing.T) {
 	t.Parallel()
 	repo, before := fixtureRepo(t)
@@ -360,8 +362,10 @@ func TestUntouchedRowsStayByteIdentical(t *testing.T) {
 		}
 		fields[f.Name] = v
 	}
-	if _, err := eng.Create(background(), "repo", schema.TableMemories, fields); err != nil {
-		t.Fatal(err)
+	// D13: the project is on the v1 format, so the write is refused and
+	// nothing is written (only lore migrate run raises the format)
+	if _, err := eng.Create(background(), "repo", schema.TableMemories, fields); !errs.Has(err, errs.FormatOld) {
+		t.Fatalf("a write in a v1 project: %v, want E_FORMAT_OLD", err)
 	}
 	for range 2 { // a second pass over warm caches must not differ
 		if _, err := eng.Refresh(background(), "repo"); err != nil {
@@ -383,8 +387,8 @@ func TestUntouchedRowsStayByteIdentical(t *testing.T) {
 			t.Errorf("%s rewritten although nobody edited it:\n%s", rel, now)
 		}
 	}
-	if added != 1 {
-		t.Errorf("%d new files, want the one written memory", added)
+	if added != 0 {
+		t.Errorf("%d new files, want none (the write is refused)", added)
 	}
 }
 

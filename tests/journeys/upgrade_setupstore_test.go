@@ -60,6 +60,7 @@ func TestJourneyUpgraderSetupPersonalStore(t *testing.T) {
 		gold.Old(work, "memory", "add", "--body", ssGitNote, "--to", "me").OK(t)
 		m := gold.Upgrade()
 		m.LoreIn(work, "memory", "list").OK(t) // the first command moves the 0.1.17 clone
+		m.LoreIn(work, "migrate", "run").OK(t) // D16: the store's 0.1.17 layout (everywhere/) moves only here
 		ssSetup(t, m, "Pia Git", "pia@example.test")
 		m.Lore(m.Home, "setup", "apply", "side", "--step", "personal_store", "--answers", `{"personal_store":"local"}`).OK(t).
 			Says(t, "holds 1 note(s)", "me-before", "lore move <id> --to me --yes")

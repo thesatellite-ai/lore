@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/dataignore"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -131,6 +132,13 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	s := &opsdoctor.Sync{NoLoreDB: true}
 	dir, dataRel := d.Dir(), d.DataPath()
 	s.DataDirPresent = dataDirPresent(d)
+	if s.DataDirPresent {
+		if pf, ferr := ProjectFormatAt(gitTopLevel(ctx, dir)); ferr != nil {
+			s.Format = "unreadable: " + errLine(ferr)
+		} else if pf.Format != rowfs.ProjectFormatUnknown {
+			s.Format = ProjectFormatLine(pf)
+		}
+	}
 	if s.DataDirPresent {
 		a.doctorSyncFiles(ctx, d, s)
 	}

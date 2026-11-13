@@ -83,7 +83,7 @@ func TestJourneyUpgraderFixBigRepo(t *testing.T) {
 
 	w.Step("day1/lore-fix-takes-over-and-finishes", func() {
 		start := time.Now()
-		r := lap.LoreIn(c, "fix", "--yes")
+		r := lap.LoreIn(c, "fix", "--migrate", "--yes")
 		r.Says(t, "resuming the interrupted migration").Never(t, "E_MIGRATE_LOCKED", "picked up a hand edit")
 		t.Logf("lore fix on %d rows took %s", 2*bigTasks, time.Since(start).Round(time.Millisecond))
 		for i := range bigTasks {

@@ -5,9 +5,14 @@ package wire
 //
 //	known_repos rows ─┐
 //	setup folders ────┼─▶ walkFixRepos: every git repo (a folder holding
-//	                  │   .git) that has .lore/ OR whose remote a store
-//	                  │   link names; not descended into once found
+//	                  │   .git) that has .lore/; not descended into once
+//	                  │   found
 //	store clones ─────┘   (~/.lore/stores): their link rows' remotes
+//	                  ─▶ a git repo with no .lore/ whose remote a store
+//	                     link names: noted as skipped (no lore data),
+//	                     never run in, so nothing is created there (FP-7:
+//	                     fix --all left an empty .lore/ in ~96 repos a
+//	                     store folder only named)
 //	                  ─▶ a folder with .lore/ that is no git repo (the
 //	                     home holding ~/.lore, a setup folder root):
 //	                     noted as skipped, never a failure
@@ -48,6 +53,10 @@ var fixWalkSkip = map[string]bool{"node_modules": true, "vendor": true, "bower_c
 // Why lines of the folders --all passes over.
 const (
 	skipNotRepo = "has a .lore folder but is not a git repo (lore fix works on git repos)"
+	// skipNoLoreData is a repo a store link names that holds no .lore/:
+	// its notes live in the store folder, and lore fix creates nothing in
+	// a repo lore was never set up in.
+	skipNoLoreData = "no lore data (a store link names it, but it has no .lore folder; lore fix leaves it as it is, lore init sets it up)"
 )
 
 // FixRepos are the repo roots of --all and the folders passed over
@@ -191,9 +200,13 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 			return
 		}
 		switch {
-		case isGitTop(root) && (hasLoreDir(root) || w.isLinked(ctx, root)):
+		case isGitTop(root) && hasLoreDir(root):
 			seen[root] = true
 			out.Roots = append(out.Roots, root)
+		case isGitTop(root) && w.isLinked(ctx, root):
+			// FP-7: listed, never run in (a run would set the repo up)
+			skipped[root] = true
+			out.Skipped = append(out.Skipped, opsfix.Skip{Path: root, Why: skipNoLoreData})
 		case !isGitTop(root) && hasLoreDir(root):
 			skipped[root] = true
 			out.Skipped = append(out.Skipped, opsfix.Skip{Path: root, Why: skipNotRepo})

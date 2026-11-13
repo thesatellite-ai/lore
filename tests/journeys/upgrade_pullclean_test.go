@@ -35,13 +35,13 @@ func TestJourneyUpgraderTeammatePullsTheFix(t *testing.T) {
 	w.AdvanceDays(1)
 	w.Step("day2/admin-fixes-and-pushes", func() {
 		am := old.Upgrade()
-		am.LoreIn(adaClone, "fix", "--yes")
+		am.LoreIn(adaClone, "fix", "--migrate", "--yes")
 		upCommitPush(t, adaClone, "lore fix")
 	})
 
 	w.Step("day2/mate-syncs-then-pulls", func() {
 		r := bm.LoreIn(benClone, "sync")
-		r.Says(t, "run lore fix", "nothing synced in this repo")
+		r.Says(t, "run lore migrate run", "nothing synced in this repo")
 		bm.LoreIn(benClone, "memory", "list").OK(t)
 		if st := strings.TrimSpace(benClone.Git("status", "--porcelain")); st != "" {
 			t.Fatalf("lore sync and a read changed tracked files in an unmigrated 0.1.17 repo:\n%s", st)

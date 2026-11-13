@@ -141,6 +141,12 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	} else {
 		repoBackend = liveCursorKeeper{repo} // livecursor.go: a hook's read keeps a live run's cursor
 	}
+	// D13 (formatold.go): a project on lore 0.1.17's format is read, never
+	// written in the newer format; the guard sits outside every wrapper
+	// (the live overlay included), so no path reaches its rows
+	if ProjectFormatOld(st.repoTop) {
+		repoBackend = formatGuard{Backend: repoBackend, top: st.repoTop}
+	}
 
 	var attached []attach.Opened
 	if !repoOnly {
@@ -165,6 +171,13 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			if attached[i].Backend, err = wrapBackend(ctx, opts, attached[i].Name, attached[i].Folder, attached[i].Backend); err != nil {
 				return fail(err)
 			}
+		}
+	}
+	// D16 (formatold.go): a shared store still on lore 0.1.17's layout is
+	// read, never written in the new format, until lore migrate run
+	for i := range attached {
+		if storeOnOldLayout(attached[i].Backend) {
+			attached[i].Backend = storeFormatGuard{Backend: attached[i].Backend, name: string(attached[i].Name)}
 		}
 	}
 
@@ -520,6 +533,12 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		// notes (personal_previous.go)
 		if pb, ok := previousPersonalStore(home, setupPersonalValue(ctx, home, optsProjectDir(opts))); ok && !slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == pb.Name }) {
 			cfg.Stores = append(cfg.Stores, pb)
+		}
+		// D16: lore 0.1.17's everywhere/ notes, read-only, while the
+		// personal store is on the 0.1.17 layout (lore migrate run moves
+		// them to _store/)
+		if ev, ok := personalEverywhereStore(home, p); ok && !slices.ContainsFunc(cfg.Stores, func(s attach.Store) bool { return s.Name == ev.Name }) {
+			cfg.Stores = append(cfg.Stores, ev)
 		}
 		// D5: lore 0.1.17's notes for this repo's org keep their folder
 		// (personal_orgs.go)

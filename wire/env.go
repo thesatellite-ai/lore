@@ -535,6 +535,12 @@ func (a *App) writeStateFor(ctx context.Context, target store.Source) (*state, e
 	// machine store) changes none of them, so the repo's format never
 	// blocks it (an attached v0.1.17 store asks its own, checkTarget).
 	repoTarget := target == "" || target == store.SourceRepo
+	// D13: a project on the 0.1.17 format is never written by this lore,
+	// so the old "has everyone upgraded?" question is not asked; the write
+	// is refused (formatold.go)
+	if repoTarget && !opsmigrate.InRun(ctx) && ProjectFormatOld(st.repoTop) {
+		return nil, FormatOldErr(st.repoTop)
+	}
 	if err := st.format.check(); err != nil && repoTarget && !opsmigrate.InRun(ctx) {
 		return nil, err
 	}

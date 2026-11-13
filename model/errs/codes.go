@@ -179,6 +179,10 @@ const (
 	MetaForeignKey      Code = "E_META_FOREIGN_KEY"
 	MetaStoreUnreadable Code = "E_META_STORE_UNREADABLE"
 	MigrateLocked       Code = "E_MIGRATE_LOCKED"
+	// FormatOld refuses a write that would put a newer-format row into a
+	// project still on an older format (decision D13: only lore migrate
+	// run raises a project's format).
+	FormatOld Code = "E_FORMAT_OLD"
 	// FORMAT_EVOLUTION rule 4, FQ5.
 	MigrateRollbackLoses Code = "E_MIGRATE_ROLLBACK_LOSES"
 	URLUserinfo          Code = "E_URL_CREDENTIALS"
@@ -423,6 +427,7 @@ var table = map[Code]entry{
 	MetaForeignKey:        {class: ClassGuard, desc: "a client-repo row carries a key id or scope label from outside its registry"},
 	MetaStoreUnreadable:   {class: ClassGuard, desc: "a client-repo key registration while the store's key rows cannot be read"},
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
+	FormatOld:             {class: ClassMigrate, desc: "the project is on an older lore format; only lore migrate run upgrades it, and this lore writes nothing there until then"},
 	MigrateRollbackLoses:  {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
 	URLUserinfo:           {class: ClassBadInput, desc: "a URL value holds credentials"},
 	RepoURL:               {class: ClassBadInput, desc: "a repo address the normaliser refuses"},

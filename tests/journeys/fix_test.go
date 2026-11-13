@@ -69,22 +69,36 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		}
 	})
 
-	w.Step("day1/a-read-says-run-lore-fix-and-changes-nothing", func() {
+	w.Step("day1/a-read-says-run-lore-migrate-and-changes-nothing", func() {
 		before := one.Git("status", "--porcelain")
-		lap.LoreIn(one, "memory", "list").OK(t).Says(t, "run lore fix", "the widget cache warms at boot")
+		lap.LoreIn(one, "memory", "list").OK(t).Says(t, "run lore migrate run", "the widget cache warms at boot")
 		if after := one.Git("status", "--porcelain"); after != before || !fixV1Left(t, one) {
 			t.Fatalf("a read changed the repo: before %q after %q", before, after)
+		}
+	})
+
+	w.Step("day1/lore-fix-never-migrates-unasked", func() {
+		// D15: the project's format is the rule; plain lore fix (and its dry
+		// run) refuses a 0.1.17-format project with one line naming the
+		// command, and changes nothing
+		before := one.Git("status", "--porcelain")
+		for _, args := range [][]string{{"fix"}, {"fix", "--dry-run"}} {
+			r := lap.LoreIn(one, args...).Fails(t, 24, "E_FORMAT_OLD", "is on the lore 0.1.17 format; run lore migrate run to upgrade it (teammates need lore 0.1.18)")
+			r.Never(t, "Upgraded")
+		}
+		if after := one.Git("status", "--porcelain"); after != before || !fixV1Left(t, one) {
+			t.Fatalf("lore fix without --migrate changed the repo: before %q after %q", before, after)
 		}
 	})
 
 	w.Step("day1/lore-fix-prints-each-step-and-healthy", func() {
 		// a dry run changes nothing, so the status is today's (degraded: the
 		// ride-along hook blocks a read never installs) and it exits as doctor does
-		lap.LoreIn(one, "fix", "--dry-run").Fails(t, 1, "migrate", "Would upgrade 1 row", "Nothing changed (dry run).", "run `lore fix` (or `lore sync`) to install it", "Status: DEGRADED")
+		lap.LoreIn(one, "fix", "--migrate", "--dry-run").Fails(t, 1, "migrate", "Would upgrade 1 row", "Nothing changed (dry run).", "run `lore fix` (or `lore sync`) to install it", "Status: DEGRADED")
 		if !fixV1Left(t, one) {
 			t.Fatal("lore fix --dry-run migrated the rows")
 		}
-		r := lap.LoreIn(one, "fix").OK(t)
+		r := lap.LoreIn(one, "fix", "--migrate").OK(t)
 		r.Says(t, "lore fix: "+one.Dir, "migrate", "Upgraded 1 row", "render", "agent hooks", "old clones", "doctor fixes", "Status: HEALTHY")
 		if !strings.HasSuffix(strings.TrimSpace(r.Stdout), "Status: HEALTHY") {
 			t.Fatalf("the status is not the last line:\n%s", r.Stdout)
@@ -99,16 +113,15 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		lap.LoreIn(one, "doctor", "--fix").Says(t, "lore doctor --fix runs the same steps as lore fix")
 	})
 
-	w.Step("day1/first-write-fixes-another-old-repo", func() {
-		r := lap.LoreIn(two, "memory", "add", "--body", "the widget queue drains at noon").OK(t)
-		r.Says(t, "this write first ran lore fix's safe steps", "Upgraded 1 row")
-		if n := strings.Count(r.Stderr, "lore fix's safe steps"); n != 1 {
-			t.Fatalf("the fix line appears %d times:\n%s", n, r.Stderr)
+	w.Step("day1/a-write-in-another-old-repo-is-refused", func() {
+		// D13: no write migrates by itself; it is refused with one line and
+		// changes nothing until lore migrate run
+		before := two.Git("status", "--porcelain")
+		r := lap.LoreIn(two, "memory", "add", "--body", "the widget queue drains at noon")
+		r.Fails(t, 24, "E_FORMAT_OLD", "run lore migrate run to upgrade it")
+		if after := two.Git("status", "--porcelain"); after != before || !fixV1Left(t, two) {
+			t.Fatalf("a refused write changed the repo: before %q after %q", before, after)
 		}
-		if fixV1Left(t, two) {
-			t.Fatal("the first write left v1 rows")
-		}
-		lap.LoreIn(two, "memory", "list").OK(t).Says(t, "the widget queue drains at noon").Never(t, "run lore fix")
 	})
 
 	var four *teamharness.Clone
@@ -141,7 +154,12 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		if !fixV1Left(t, five) {
 			t.Fatal("setup: the repo outside home was fixed without being named")
 		}
-		lap.Lore("", "fix", "--all", code).OK(t).Says(t, "== "+five.Dir, "Upgraded 1 row")
+		// D15: --all lists it with its command and leaves it as it is
+		lap.Lore("", "fix", "--all", code).OK(t).Says(t, "== "+five.Dir, "is on the lore 0.1.17 format", "cd "+five.Dir+" && lore fix --migrate", "on the lore 0.1.17 format, not migrated").Never(t, "Upgraded")
+		if !fixV1Left(t, five) {
+			t.Fatal("lore fix --all migrated without --migrate")
+		}
+		lap.Lore("", "fix", "--all", "--migrate", code).OK(t).Says(t, "== "+five.Dir, "Upgraded 1 row")
 		if fixV1Left(t, five) {
 			t.Fatal("lore fix --all <folder> left v1 rows in the repo under it")
 		}
@@ -154,7 +172,7 @@ func TestJourneyUpgraderFixOldProjects(t *testing.T) {
 		if err := os.WriteFile(cfg, []byte("setups:\n  - name: widgets\n    kind: solo\n    folders: [\""+folder+"/**\"]\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		r := lap.Lore("", "fix", "--all").OK(t)
+		r := lap.Lore("", "fix", "--all", "--migrate").OK(t)
 		r.Says(t, "== "+three.Dir, "== "+two.Dir, "== "+one.Dir, "none failed")
 		if fixV1Left(t, three) {
 			t.Fatal("lore fix --all left v1 rows in the third repo")

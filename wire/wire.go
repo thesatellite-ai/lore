@@ -419,12 +419,6 @@ type App struct {
 // state is everything Open built; nil until the first use.
 type state struct {
 	eng *engine.Engine
-	// pendingV017Live counts the lore 0.1.17 live rows (repo or attached
-	// store live refs) the stores do not hold yet, as liveNote found them
-	// at open: the first write's safe steps (oldRowsGate) run migrate for
-	// them, also in a repo with no 0.1.17 row files of its own (a client
-	// repo whose notes live in the org store).
-	pendingV017Live int
 	// linkedByRemote is the remote a store link names this repo by when it
 	// holds no lore data (Options.RepoLinkedByRemote): the repo store is
 	// read-only and the repo cache lives under ~/.lore; "" otherwise.
@@ -905,7 +899,8 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 	}
 	// owner item 11: a read in a project with v0.1.17 rows says "run lore
-	// fix"; the first write runs its safe steps first (fixproject.go)
+	// fix"; a write there is refused where it reaches the project's rows
+	// (D13, formatold.go)
 	if err := a.oldRowsGate(ctx, e); err != nil {
 		return op.Result{}, err
 	}

@@ -224,8 +224,16 @@ func TestV1RowReads(t *testing.T) {
 	if !strings.Contains(opstest.Text(h.Must("pattern.list", `{"archived":true}`)), "PA  "+id) {
 		t.Error("list --archived misses the v1 row")
 	}
-	h.Must("pattern.edit", `{"id":"`+id+`","title":"edited"}`)
-	if got := contenttest.Str(t, h.JSON(h.Must("pattern.show", `{"id":"`+id+`"}`)), "data", "title"); got != "edited" {
-		t.Errorf("edit of a v1 row: title %q", got)
+	// The project is on the lore 0.1.17 format (no format key): an edit is
+	// refused with the one line naming lore migrate run, and the row file
+	// stays as 0.1.17 wrote it (D13: never a newer-format row here).
+	path := filepath.Join(dir, id+".json")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Fails("pattern.edit", `{"id":"`+id+`","title":"edited"}`, errs.FormatOld)
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Error("a refused edit changed the v1 row file")
 	}
 }

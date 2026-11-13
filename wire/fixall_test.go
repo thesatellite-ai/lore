@@ -48,12 +48,13 @@ func TestFixChildEnvKeepsRepoRemote(t *testing.T) {
 }
 
 // TestFixRepoWalk (owner item 26): --all walks every setup folder for git
-// repos holding .lore/ or named by a store link (by remote url), at any
-// depth up to the bound; it does not enter a found repo, a hidden folder
-// or a dependency tree; a nested repo comes from the known repos; a
-// folder with .lore/ that is no git repo (a setup folder root, the home
-// holding ~/.lore) is noted as skipped, never a repo to fix; a known repo
-// that is gone is dropped.
+// repos holding .lore/, at any depth up to the bound; it does not enter a
+// found repo, a hidden folder or a dependency tree; a nested repo comes
+// from the known repos; a folder with .lore/ that is no git repo (a setup
+// folder root, the home holding ~/.lore) is noted as skipped, never a
+// repo to fix; a known repo that is gone is dropped. FP-7: a repo a store
+// link names (by remote url) that holds no .lore/ is noted as having no
+// lore data, never a repo to fix (a run in it created .lore/).
 func TestFixRepoWalk(t *testing.T) {
 	base := t.TempDir()
 	mk := func(rel string, parts ...string) string {
@@ -98,7 +99,7 @@ func TestFixRepoWalk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{a, nested, deep, linked, worktree}
+	want := []string{a, nested, deep, worktree}
 	for i := range want {
 		want[i] = resolvedPath(want[i])
 	}
@@ -108,12 +109,16 @@ func TestFixRepoWalk(t *testing.T) {
 	}
 	var skipped []string
 	for _, s := range got.Skipped {
-		if s.Why != skipNotRepo {
+		wantWhy := skipNotRepo
+		if s.Path == resolvedPath(linked) {
+			wantWhy = skipNoLoreData
+		}
+		if s.Why != wantWhy {
 			t.Fatalf("skip %s: why %q", s.Path, s.Why)
 		}
 		skipped = append(skipped, s.Path)
 	}
-	if wantSkip := []string{resolvedPath(base), resolvedPath(notRepo)}; !slices.Equal(skipped, wantSkip) {
+	if wantSkip := []string{resolvedPath(base), resolvedPath(linked), resolvedPath(notRepo)}; !slices.Equal(skipped, wantSkip) {
 		t.Fatalf("skipped %v, want %v", skipped, wantSkip)
 	}
 	// the depth bound: one level below the base finds only "a" and the

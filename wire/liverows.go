@@ -571,9 +571,6 @@ func liveNote(ctx context.Context, st *state) string {
 		// misses them for itself. Not "not visible yet": no note.
 		p = slices.DeleteFunc(p, func(x pendingLive) bool { return x.source == store.SourceRepo })
 	}
-	if err == nil {
-		st.pendingV017Live = len(p)
-	}
 	if err != nil || len(p) == 0 {
 		return warn
 	}

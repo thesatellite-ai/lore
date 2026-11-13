@@ -105,7 +105,12 @@ type StatusIn struct{}
 // StatusOut is the output of migrate.status.
 type StatusOut struct {
 	// Writes is the newest row format this lore writes.
-	Writes         int64         `json:"writes"`
+	Writes int64 `json:"writes"`
+	// Format names the project's format (D12): what its committed
+	// .lore/data/_meta.json records, or the rows'; who migrated it and
+	// when when recorded. ProjectFormat is the number (0: no project).
+	Format         string        `json:"format,omitempty"`
+	ProjectFormat  int           `json:"project_format,omitempty"`
 	Places         []PlaceStatus `json:"places"`
 	Features       []string      `json:"features"`
 	MinLoreVersion string        `json:"min_lore_version,omitempty"`
@@ -141,6 +146,7 @@ func (o StatusOut) Text() string {
 			b.WriteString(k + ": " + v + "\n")
 		}
 	}
+	line("format", o.Format)
 	line("writes", strconv.FormatInt(o.Writes, 10))
 	if len(o.Places) > 0 {
 		b.WriteString("places:\n")
