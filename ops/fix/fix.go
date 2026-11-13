@@ -69,7 +69,7 @@ const (
 	// clean repo); the failed steps follow.
 	// LineNoRepos is --all's line when it found no repo: how it chooses
 	// them and what to do.
-	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`); run `lore fix` inside each repo, or add the folder holding your repos to a setup"
+	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`) and in the folders you name; name the folders holding your repos (lore fix --all ~/code ~/work), run `lore fix` inside each repo, or add the folder to a setup"
 	LineStepsFailed = "Not everything is current: these steps failed, see their lines above: "
 )
 
@@ -81,7 +81,7 @@ type Env interface {
 	RepoTop(ctx context.Context) (string, error)
 	// FixRepos are the repo roots of --all, sorted, each once, and the
 	// folders it passed over (not git repos), each with why.
-	FixRepos(ctx context.Context) (Found, error)
+	FixRepos(ctx context.Context, dirs []string) (Found, error)
 	// FixPrepare runs once before the repos of --all: not dry, it fetches
 	// every store clone once (jobs at a time) so the children need not.
 	FixPrepare(ctx context.Context, dry bool, jobs int) Prep
@@ -142,6 +142,10 @@ type RunIn struct {
 	All    bool `json:"all,omitempty" flag:"all" desc:"fix every repo the setups know (their folders and the known repos), one block each; keeps going past a failure and exits 1 naming the failed repos"`
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what each step would do; change nothing and reach no remote (no fetch, push or clone)"`
 	Jobs   int  `json:"jobs,omitempty" flag:"jobs" desc:"with --all: how many repos run at once (default 8; 1 runs them one after another)"`
+	// Dirs (L-6): folders --all also looks through for repos, as it does a
+	// setup's folders: a lore 0.1.17 repo outside the home folder that no
+	// lore command ran in yet is found no other way.
+	Dirs []string `json:"dirs,omitempty" arg:"0" rest:"true" desc:"with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all ~/code ~/work)"`
 }
 
 // RepoResult is one repo's block of --all.
@@ -411,12 +415,13 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 			// a doctor repair may ask first (reversed --supersedes links)
 			Confirm: op.ConfirmRule{MayAsk: true},
-			Errors:  []errs.Code{errs.NotAStore, errs.NeedsConfirm, errs.Internal},
+			Errors:  []errs.Code{errs.NotAStore, errs.InvalidInput, errs.NeedsConfirm, errs.Internal},
 			Examples: []op.Example{
 				{Title: "fix this project", CLI: "lore fix", Want: "Status:"},
 				{Title: "see what it would do", CLI: "lore fix --dry-run", Want: ""},
 				{Title: "every repo on this machine", CLI: "lore fix --all", Want: ""},
 				{Title: "every repo, one at a time", CLI: "lore fix --all --jobs 1", Want: ""},
+				{Title: "also the repos under these folders", CLI: "lore fix --all ~/code ~/work", Want: ""},
 			},
 		}, func(ctx context.Context, in RunIn) (Out, error) {
 			return Run(ctx, env, in)
@@ -428,6 +433,10 @@ func Ops(env Env) []op.Entry {
 func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if in.All {
 		return runAll(ctx, env, in)
+	}
+	if len(in.Dirs) > 0 {
+		return Out{}, errs.New(errs.InvalidInput, "lore fix takes folders only with --all").
+			WithHint("lore fix --all " + strings.Join(in.Dirs, " "))
 	}
 	top, err := env.RepoTop(ctx)
 	if err != nil || top == "" {
@@ -475,7 +484,7 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if jobs <= 0 {
 		jobs = DefaultJobs
 	}
-	found, err := env.FixRepos(ctx)
+	found, err := env.FixRepos(ctx, in.Dirs)
 	if err != nil {
 		return Out{}, err
 	}

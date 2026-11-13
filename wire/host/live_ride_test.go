@@ -160,3 +160,28 @@ func TestRefreshBlocksNameTheirHook(t *testing.T) {
 		}
 	}
 }
+
+// stagedLine (L-3, B1-20): the pre-commit hook names the lore row files it
+// staged into the person's commit (up to five, then "and N more"); a file
+// the person had staged as it is, or no change, says nothing.
+func TestStagedLine(t *testing.T) {
+	before := map[string]string{".lore/data/rules/a.json": "100644 aaa 0"}
+	if got := stagedLine(before, map[string]string{".lore/data/rules/a.json": "100644 aaa 0"}); got != "" {
+		t.Fatalf("nothing staged by lore, got %q", got)
+	}
+	after := map[string]string{".lore/data/rules/a.json": "100644 bbb 0", ".lore/data/rules/b.json": "100644 ccc 0"}
+	got := stagedLine(before, after)
+	if !strings.HasPrefix(got, "lore: added 2 lore row file(s) to this commit: .lore/data/rules/a.json, .lore/data/rules/b.json") || !strings.Contains(got, "travel with your commits") {
+		t.Fatalf("line = %q", got)
+	}
+	many := map[string]string{}
+	for _, n := range []string{"1", "2", "3", "4", "5", "6", "7"} {
+		many[".lore/data/memories/m"+n+".json"] = "100644 x 0"
+	}
+	if got := stagedLine(map[string]string{}, many); !strings.Contains(got, "added 7 ") || !strings.Contains(got, " and 2 more") {
+		t.Fatalf("seven files: %q", got)
+	}
+	if stagedLine(nil, many) != "" {
+		t.Fatal("an unreadable index before must say nothing")
+	}
+}

@@ -237,15 +237,26 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 			res.Offline = offline
 			return res, nil
 		}
-		if gitbackend.RemoteResetAt(dir) {
-			// B2-28: a sync found this store's remote deleted and made
-			// again; nothing is pushed into it until the person picks
-			// `lore store push --restore` or forget + init.
-			return res, fmt.Errorf("%w: %s %s: the store was reset (deleted and made again); the commit stays in the clone until you run lore store push --restore %s, or lore store forget %s", ErrStoreRefused, target, branch, target, target)
+		// B2-28 / L-2: every org push (links, lore-org.yaml, the source
+		// stamp) passes the backend's reset check: nothing goes into a
+		// store repo that was deleted and made again.
+		gerr := gitbackend.GuardPushAt(ctx, dir, branch, oid)
+		if gerr == nil && attempt == 0 {
+			// The first attempt fetched nothing, so the tracking ref may
+			// be stale: ask the remote itself, one call (an unreachable
+			// remote is left to the push, which reports it).
+			gerr = guardFromRemote(ctx, c.Route, dir, branch, oid)
+		}
+		if gerr != nil {
+			if errors.Is(gerr, gitbackend.ErrRemoteReset) {
+				return res, fmt.Errorf("%w: %s %s: %w", ErrStoreRefused, target, branch, gerr)
+			}
+			return res, gerr
 		}
 		out, perr := netGit(ctx, c.Route, dir, "push", "--quiet", "--porcelain", remoteName, oid+":"+localRef(branch))
 		if perr == nil {
 			res.Pushed = true
+			gitbackend.NoteRemoteTipAt(ctx, dir, branch, oid)
 			reportPush(ctx, StorePush{Store: target, Branch: branch, Commit: oid})
 			_ = moveRef(ctx, repo, trackingRef(branch), oid) // the next fetch sets it anyway
 			return res, nil
@@ -499,4 +510,31 @@ func classifyPush(out string) (pushOutcome, string) {
 		return pushRefused, summary
 	}
 	return pushUnreachable, ""
+}
+
+// guardFromRemote asks the remote for its branches (`git ls-remote
+// --heads`, one network call) and, when the store branch is not there,
+// runs the backend's reset rule as a sync would: an org write must not
+// push the whole store into a repo that was deleted and made again,
+// although this clone's tracking ref still shows the old branch.
+func guardFromRemote(ctx context.Context, r Router, dir, branch, h string) error {
+	out, err := netGit(ctx, r, dir, "ls-remote", "--heads", "--", remoteName)
+	if err != nil {
+		return nil // unreachable: the push says so
+	}
+	noHeads, found := true, false
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		_, ref, ok := strings.Cut(line, "\t")
+		if !ok {
+			continue
+		}
+		noHeads = false
+		if strings.TrimSpace(ref) == localRef(branch) {
+			found = true
+		}
+	}
+	if found {
+		return nil
+	}
+	return gitbackend.GuardPushGone(ctx, dir, branch, h, noHeads)
 }

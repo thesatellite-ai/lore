@@ -37,6 +37,7 @@ func fixOldRepoWarned(t testing.TB, c *teamharness.Clone, key string) {
 	}
 	c.Git("add", "-A")
 	c.Git("commit", "-q", "--no-verify", "-m", "lore 0.1.17 rows") // the old history, as it is
+	c.Git("push", "-q", "origin", "HEAD")                          // … and pushed long ago: history (bug L-1 counts only what was pushed)
 }
 
 // fixCheckoutMode gives a file the 0644 a checkout gives committed files

@@ -227,11 +227,11 @@ func (b *Backend) headBases(ctx context.Context, head string, changed []HandChan
 const lsTreeFields = 3
 
 // lorePath reports whether a checkout path is one lore keeps for itself
-// (its marker and README are store files, never strays; a folder store's
+// (its marker, README and signpost are store files, never strays; a folder store's
 // state folder; a repo's .lore files outside .lore/data).
 func lorePath(p string) bool {
 	switch {
-	case p == rowfs.MarkerFile, p == rowfs.ReadmeFile, p == ".gitignore", p == ".gitattributes":
+	case p == rowfs.MarkerFile, p == rowfs.ReadmeFile, p == rowfs.SignpostFile, p == ".gitignore", p == ".gitattributes":
 		return true
 	case strings.HasPrefix(p, rowfs.StoreStateDir+"/"):
 		return true

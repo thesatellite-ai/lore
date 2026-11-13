@@ -384,6 +384,7 @@ The commands and their output are written to `tests/docs/transcripts/tasks.txt`.
 ```console
 # alice, in website
 $ git commit -qm 'Fix the Pro plan price on the pricing page'
+lore: added 5 lore row file(s) to this commit: .lore/data/_meta.json, .lore/data/memories/mem_05e9…4603.json, .lore/data/reminders/rmd_b69e…5ed7.json, .lore/data/reminders/rmd_0aae…a61f.json, .lore/data/task_views/tvw_4c59…6c38.json (lore's rows travel with your commits)
 $ git push -q origin main
 To /srv/git/github.com/client/website
  ! [rejected]        main -> main (non-fast-forward)

@@ -47,6 +47,7 @@ $ find ~/.lore/stores -maxdepth 3 -not -path '*/.git/*' | sort
 ~/.lore/stores
 ~/.lore/stores/acme
 ~/.lore/stores/acme/notes
+~/.lore/stores/acme/notes/.0-needs-lore-0.1.18-or-newer
 ~/.lore/stores/acme/notes/.git
 ~/.lore/stores/acme/notes/README.md
 ~/.lore/stores/acme/notes/_store
@@ -56,6 +57,7 @@ $ find ~/.lore/stores -maxdepth 3 -not -path '*/.git/*' | sort
 $ ls -a; cat lore-store.yaml
 .
 ..
+.0-needs-lore-0.1.18-or-newer
 .git
 README.md
 _store

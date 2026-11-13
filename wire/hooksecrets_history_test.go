@@ -146,3 +146,57 @@ func TestSecretsAllowTakesTheFingerprint(t *testing.T) {
 	h.Fails("secrets.allow", `{"row_id":"`+memID+`","rule":"aws_access_key","field":"body","match_hash":"sha256:0123456789ab","reason":"x"}`, errs.NotFound)
 	h.Fails("secrets.allow", `{"row_id":"`+memID+`","rule":"aws_access_key","field":"body","match_hash":"sha256:zz","reason":"x"}`, errs.InvalidInput)
 }
+
+// TestCommitCheckHistoryIsWhatWasPushed (bug L-1): when HEAD is not pushed
+// the commit check compares with the pushed commit under it, not HEAD: a
+// key committed with --no-verify and not pushed is still new to the next
+// commit, so `git commit --amend` (whose HEAD is that commit) is blocked;
+// once that commit is pushed the same value is history and passes.
+// Break-verified: with historyBases returning HEAD always, the unpushed
+// cases pass.
+func TestCommitCheckHistoryIsWhatWasPushed(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	ctx := context.Background()
+	key := "AKIA" + strings.Repeat("Q", 16)
+	memID := h.ID(h.Must("memory.add", `{"body":"target"}`))
+	memFile := allowRowFile(t, h.Repo, "memories", memID)
+	histCommit(t, h.Repo, "clean start")
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	allowGit(t, h.Repo, "init", "-q", "--bare", remote)
+	allowGit(t, h.Repo, "remote", "add", "origin", remote)
+	allowGit(t, h.Repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+
+	b, err := os.ReadFile(filepath.Clean(memFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	committed := strings.Replace(string(b), `"target"`, `"rotate `+key+`"`, 1)
+	if err := os.WriteFile(memFile, []byte(committed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.Repo, "notes.md"), []byte("old line "+key+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	histCommit(t, h.Repo, "a key, hook skipped") // not pushed
+
+	rel, err := filepath.Rel(h.Repo, memFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	docs := map[string]map[string][]byte{
+		"same row, new format":  {filepath.ToSlash(rel): []byte(strings.ReplaceAll(committed, `": `, `":  `))},
+		"same file, a new line": {"notes.md": []byte("old line " + key + "\nnew line\n")},
+	}
+	for name, d := range docs {
+		if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, d); !errs.Has(err, errs.LeakBlocked) {
+			t.Errorf("unpushed, %s: err = %v, want E_LEAK_BLOCKED (the key never reached a remote)", name, err)
+		}
+	}
+	allowGit(t, h.Repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+	for name, d := range docs {
+		if err := h.App.HookSecrets(ctx, h.Repo, commitWhere, d); err != nil {
+			t.Errorf("pushed, %s: err = %v, want pass (the value is in pushed history)", name, err)
+		}
+	}
+}

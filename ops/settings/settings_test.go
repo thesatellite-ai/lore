@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/settings"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -635,5 +636,50 @@ func TestReadBackFromDisk(t *testing.T) {
 	rules := showRules(t, next, "")
 	if rules["agents.person_only"].Value != "task.delete, rule.add" || rules["meta.max_bytes"].Value != "99" || rules["secrets.use_repo_gitleaks"].Value != "false" {
 		t.Errorf("policy after reopen %+v", rules)
+	}
+}
+
+// TestSecretAllowPrechecks (bug L-1): secrets allow's input checks that
+// need no row run as op.Prechecker, which the Runner calls before it opens
+// the app, so a typo is answered at once; a well-formed input passes it,
+// the --file form (no row id) included.
+func TestSecretAllowPrechecks(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	e, ok := h.App.Registry().Lookup(settings.OpSecretAllow)
+	if !ok {
+		t.Fatal("secrets.allow is not registered")
+	}
+	pc, ok := e.(op.Prechecker)
+	if !ok {
+		t.Fatal("secrets.allow has no input check")
+	}
+	mem := h.ID(h.Must("memory.add", `{"body":"target"}`))
+	for body, want := range map[string]errs.Code{
+		`{"row_id":"nope","rule":"r","reason":"x","match":"m"}`:                                     errs.InvalidID,
+		`{"row_id":"` + mem + `","rule":"r","reason":" ","match":"m"}`:                              errs.InvalidInput,
+		`{"row_id":"` + mem + `","rule":"r","reason":"x","match":"m","match_hash":7}`:               errs.InvalidInput,
+		`{"row_id":"` + mem + `","rule":"r","reason":"x","match_hash":"sha256:zz"}`:                 errs.InvalidInput,
+		`{"row_id":"` + mem + `","rule":"r","reason":"x","match_hash":"sha256:0123456789ab"}`:       "",
+		`{"file":"config/schema.go","rule":"r","reason":"x","match_hash":"sha256:0123456789ab"}`:    "",
+		`{"file":"config/schema.go","row_id":"` + mem + `","rule":"r","reason":"x","match_hash":7}`: errs.InvalidInput,
+		`{"file":"config/schema.go","rule":"r","reason":" ","match_hash":7}`:                        errs.InvalidInput,
+		`{"file":"config/schema.go","rule":"r","reason":"x","match_hash":"sha256:zz"}`:              errs.InvalidInput,
+		`{"rule":"r","reason":"x","match_hash":7}`:                                                  errs.InvalidID,
+	} {
+		in, err := e.Decode(op.JSONDecoder{Body: []byte(body)})
+		if err != nil {
+			t.Fatalf("%s: decode: %v", body, err)
+		}
+		err = pc.Precheck(in)
+		if want == "" {
+			if err != nil {
+				t.Errorf("%s: %v, want pass", body, err)
+			}
+			continue
+		}
+		if !errs.Has(err, want) {
+			t.Errorf("%s: err = %v, want %s", body, err, want)
+		}
 	}
 }

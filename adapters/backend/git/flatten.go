@@ -12,6 +12,9 @@ package git
 //	                                       an older lore refuses it), and
 //	                                       org_folder only where that folder
 //	                                       holds lore-org.yaml
+//	.0-needs-lore-0.1.18-or-newer          written when the store has none:
+//	                                       the name lore 0.1.17 lists first
+//	                                       when it refuses the store
 //	README.md                              written when the store has none,
 //	                                       or replaced when it is an earlier
 //	                                       lore's text (rowfs.ReadmeOutdated)
@@ -231,6 +234,13 @@ func (b *Backend) FlattenLayout(ctx context.Context) (FlattenResult, error) {
 		if hadReadme {
 			res.Change.Readme = rowfs.ReadmeRefreshed
 		}
+	}
+	// the signpost lore 0.1.17 names first in its refusal (rowfs/signpost.go):
+	// this commit is the one 0.1.17 cannot read
+	if wrote, serr := rowfs.EnsureSignpost(b.work); serr != nil {
+		return res, serr
+	} else if wrote {
+		stage = append(stage, rowfs.SignpostFile)
 	}
 	if len(stage) > 0 {
 		if _, err := b.git.run(ctx, call{dir: b.work, args: append([]string{"add", "--"}, stage...)}); err != nil {

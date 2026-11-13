@@ -15,9 +15,17 @@ package wire
 //	preview every refusal prints) the HEAD row already held is "in
 //	history": counted, not blocked; anything else still blocks
 //
+// "HEAD" above is the commit the check compares with, historyBases: HEAD
+// itself when it is pushed (or the repo has no remote at all), else the
+// pushed commits HEAD's unpushed ones sit on (bug L-1). An amend replaces
+// HEAD, so comparing with it let a secret already in the commit being
+// amended (one committed with --no-verify) through as "not new"; nothing
+// that never reached a remote counts as history now.
+//
 // Fails closed: when HEAD cannot be read (no commit yet, a git error),
 // nothing is in history and every finding blocks as before. Only rows with
-// findings cost anything: their HEAD blobs are read in one git process.
+// findings cost anything: their old blobs are read in one git process per
+// compared commit.
 
 import (
 	"context"
@@ -81,21 +89,25 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 	if top == "" {
 		return hits, 0
 	}
-	var oldRows map[ids.AnyID]map[string]bool
-	if len(want) > 0 {
-		var specs []string // none (a store clone): its whole tree
-		if !inStore {
-			for d := range dirs {
-				specs = append(specs, d)
+	var specs []string // none (a store clone): its whole tree
+	if !inStore {
+		for d := range dirs {
+			specs = append(specs, d)
+		}
+	}
+	oldRows := map[ids.AnyID]map[string]bool{}
+	oldFiles := map[string]map[string]bool{}
+	for _, base := range historyBases(ctx, top) { // none: fail closed
+		if len(want) > 0 {
+			for id, set := range historyFingerprints(ctx, sc, top, inStore, want, specs, base) {
+				oldRows[id] = union(oldRows[id], set)
 			}
 		}
-		oldRows = historyFingerprints(ctx, sc, top, inStore, want, specs)
-	}
-	oldFiles := map[string]map[string]bool{}
-	if len(plain) > 0 {
-		if blobs, err := revBlobs(ctx, top, nil, "HEAD", plain); err == nil { // no HEAD: none, fail closed
-			for p, b := range blobs {
-				oldFiles[p] = previewsOf(scanDoc(sc, nil, p, b, inStore))
+		if len(plain) > 0 {
+			if blobs, err := revBlobs(ctx, top, nil, base, plain); err == nil {
+				for p, b := range blobs {
+					oldFiles[p] = union(oldFiles[p], previewsOf(scanDoc(sc, nil, p, b, inStore)))
+				}
 			}
 		}
 	}
@@ -117,6 +129,55 @@ func dropHistoryHits(ctx context.Context, sc scan.Scanner, root string, inStore 
 	return out, dropped
 }
 
+// union adds every key of b to a (a new map when a is nil) and returns it.
+func union(a, b map[string]bool) map[string]bool {
+	if a == nil {
+		a = make(map[string]bool, len(b))
+	}
+	for k := range b {
+		a[k] = true
+	}
+	return a
+}
+
+// maxHistoryBases caps the pushed commits a commit check compares with (a
+// branch merged from many pushed branches has one per merge).
+const maxHistoryBases = 8
+
+// historyBases returns the commits a commit check counts as history (see
+// the file comment): the pushed commits under HEAD's unpushed ones
+// (`rev-list --boundary HEAD --not --remotes`), so the commit an amend
+// replaces is never its own history; HEAD itself when HEAD is pushed, or
+// when none of its history ever was (no remote, or remote refs of another
+// history only: nothing to compare with, and the push check scans every
+// pushed blob whole). Nil when HEAD cannot be read: every finding is new.
+func historyBases(ctx context.Context, top string) []string {
+	if _, err := (gitRun{dir: top, args: []string{"rev-parse", "-q", "--verify", "HEAD^{commit}"}}).output(ctx); err != nil {
+		return nil
+	}
+	head := []string{"HEAD"}
+	remotes, err := gitRun{dir: top, args: []string{"for-each-ref", "--count=1", "--format=%(refname)", "refs/remotes/"}}.output(ctx)
+	if err != nil || strings.TrimSpace(string(remotes)) == "" {
+		return head
+	}
+	unpushed, err := gitRun{dir: top, args: []string{"rev-list", "-1", "HEAD", "--not", "--remotes"}}.output(ctx)
+	if err != nil || strings.TrimSpace(string(unpushed)) == "" {
+		return head // pushed (or unknown: as before)
+	}
+	var bases []string
+	if out, lerr := (gitRun{dir: top, args: []string{"rev-list", "--boundary", "HEAD", "--not", "--remotes"}}).output(ctx); lerr == nil {
+		for _, l := range strings.Split(string(out), "\n") {
+			if c, ok := strings.CutPrefix(strings.TrimSpace(l), "-"); ok && c != "" && len(bases) < maxHistoryBases {
+				bases = append(bases, c)
+			}
+		}
+	}
+	if len(bases) > 0 {
+		return bases
+	}
+	return head // nothing under HEAD was ever pushed (the remote refs are another history): as a repo with no remote
+}
+
 // previewsOf is the set of fingerprints of hs.
 func previewsOf(hs []leakcheck.SecretHit) map[string]bool {
 	set := make(map[string]bool, len(hs))
@@ -131,14 +192,14 @@ func isRowDocPath(p string, inStore bool) bool {
 	return strings.Contains("/"+p, "/"+loreDataMark) || (inStore && isStoreRowPath(p))
 }
 
-// historyFingerprints returns, for each wanted row id found at HEAD in the
-// repo at top, the fingerprints of every finding the HEAD version of that
-// row holds (an empty map when HEAD cannot be read: fail closed).
+// historyFingerprints returns, for each wanted row id found at commit rev
+// in the repo at top, the fingerprints of every finding that version of the
+// row holds (an empty map when rev cannot be read: fail closed).
 // specs are top-relative folders to list (a row moved within them is still
 // found); none lists the whole tree.
-func historyFingerprints(ctx context.Context, sc scan.Scanner, top string, inStore bool, want map[ids.AnyID]bool, specs []string) map[ids.AnyID]map[string]bool {
-	// One listing of HEAD's files there (no HEAD yet: an error, nothing old).
-	args := append([]string{"-c", "core.quotePath=false", "ls-tree", "-r", "-z", "--name-only", "--full-tree", "HEAD", "--"}, specs...)
+func historyFingerprints(ctx context.Context, sc scan.Scanner, top string, inStore bool, want map[ids.AnyID]bool, specs []string, rev string) map[ids.AnyID]map[string]bool {
+	// One listing of rev's files there (no such commit: an error, nothing old).
+	args := append([]string{"-c", "core.quotePath=false", "ls-tree", "-r", "-z", "--name-only", "--full-tree", rev, "--"}, specs...)
 	out, err := gitRun{dir: top, args: args}.output(ctx)
 	if err != nil {
 		return nil
@@ -156,7 +217,7 @@ func historyFingerprints(ctx context.Context, sc scan.Scanner, top string, inSto
 	if len(cands) == 0 {
 		return nil
 	}
-	blobs, err := revBlobs(ctx, top, nil, "HEAD", cands)
+	blobs, err := revBlobs(ctx, top, nil, rev, cands)
 	if err != nil {
 		return nil
 	}

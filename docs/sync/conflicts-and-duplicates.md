@@ -42,6 +42,7 @@ $ lore rule edit rul_b4f4…a5b0 --body 'Buttons are blue, links are green.' && 
 lore: wrote ~/work/website/.lore/data/actors/act_28f8…03df.json
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
+lore: added 1 lore row file(s) to this commit: .lore/data/actors/act_28f8…03df.json (lore's rows travel with your commits)
 $ git pull --no-rebase origin main
 From /srv/git/github.com/client/website
  * branch            main       -> FETCH_HEAD

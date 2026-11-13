@@ -16200,6 +16200,13 @@
                     "type": "boolean",
                     "description": "fix every repo the setups know (their folders and the known repos), one block each; keeps going past a failure and exits 1 naming the failed repos"
                   },
+                  "dirs": {
+                    "type": "array",
+                    "description": "with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all ~/code ~/work)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "dry_run": {
                     "type": "boolean",
                     "description": "show what each step would do; change nothing and reach no remote (no fetch, push or clone)"

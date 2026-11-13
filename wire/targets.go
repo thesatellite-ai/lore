@@ -11,6 +11,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -142,6 +144,15 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 	}
 	if !exists && !c.Yes && !createAsked(in) {
 		return "", "", newFolder{}, a.missingFolder(ctx, src, base, folderName)
+	}
+	if !exists {
+		// L-7: the folder this repo's remote was linked to lives in a store
+		// the org entry no longer lists; creating it here would put the
+		// row in a different store than the link named
+		if sl, ok := a.findStaleLink(ctx); ok && sl.Folder == folderName && !sameStoreURL(src.URL, sl.origin) {
+			return "", "", newFolder{}, errs.New(errs.Refused, "--to "+to+" would create folder "+folderName+" in "+repourl.Mask(src.URL)+", but this repo's remote was linked to folder "+folderName+" of store "+sl.StoreURL+", which the org entry no longer lists").
+				WithHint("re-add " + sl.StoreURL + " to the org's lore-org.yaml and run `lore org refresh`, then write again; to create a new folder here anyway, give it another name")
+		}
 	}
 	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly, Branch: src.Branch}
 	// `me/<folder>` and an org store's folder are not recorded: the

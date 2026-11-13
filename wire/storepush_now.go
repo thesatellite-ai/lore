@@ -64,7 +64,11 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 		}
 		out.Restored = true
 	}
-	rep, err := b.Sync(ctx)
+	sctx := ctx
+	if out.Restored {
+		sctx = gitbackend.WithFirstPush(ctx) // the person put the old store back (remotereset.go)
+	}
+	rep, err := b.Sync(sctx)
 	if err != nil {
 		return opsstores.PushOut{}, err
 	}

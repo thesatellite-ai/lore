@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -115,6 +116,7 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	if len(changed) > 0 {
 		before := wire.HookIndexBegin(ctx, root) // the index as the person staged it
+		staged := indexEntries(ctx, repo, root)  // L-3: what the person staged themselves
 		inv := gitref.Invocation{Dir: root, Args: []string{"add", "-A", "--", loreDataPathspec}, Env: hookIndexEnv(ctx, repo, root)}
 		if shadowed || junk || len(pending) > 0 {
 			// stage the rest one by one, leaving the shadowed files, OS
@@ -128,6 +130,9 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 			return errs.Wrap(errs.Internal, "pre-commit: stage "+loreDataPathspec, err)
 		}
 		wire.HookIndexStaged(ctx, root, before)
+		if line := stagedLine(staged, indexEntries(ctx, repo, root)); line != "" {
+			h.line(line)
+		}
 	} else {
 		wire.HookIndexBegin(ctx, root) // nothing staged: no old snapshot may be restored later
 	}
@@ -318,4 +323,56 @@ func hookIndexEnv(ctx context.Context, repo *gitref.Repo, root string) []string 
 		}
 	}
 	return []string{"GIT_INDEX_FILE=" + idx}
+}
+
+// indexEntries maps each index path under .lore/data to its staged entry
+// ("<mode> <oid> <stage>"), read through the hook's index (nil when git
+// cannot be read: then nothing is reported).
+func indexEntries(ctx context.Context, repo *gitref.Repo, root string) map[string]string {
+	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"-c", "core.quotePath=false", "ls-files", "-s", "-z", "--", loreDataPathspec}, Env: hookIndexEnv(ctx, repo, root)})
+	if err != nil {
+		return nil
+	}
+	m := map[string]string{}
+	for _, e := range strings.Split(string(out), "\x00") {
+		meta, p, ok := strings.Cut(e, "\t")
+		if ok {
+			m[p] = meta
+		}
+	}
+	return m
+}
+
+// stagedListMax is how many paths the staged line names before "and N more".
+const stagedListMax = 5
+
+// stagedLine is the pre-commit hook's one line naming the lore row files it
+// staged into the person's commit (L-3, B1-20): every path whose index
+// entry the staging added, changed or removed. "" when it changed none, or
+// when the index could not be read before or after.
+func stagedLine(before, after map[string]string) string {
+	if before == nil || after == nil {
+		return ""
+	}
+	var paths []string
+	for p, e := range after {
+		if before[p] != e {
+			paths = append(paths, p)
+		}
+	}
+	for p := range before {
+		if _, ok := after[p]; !ok {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		return ""
+	}
+	sort.Strings(paths)
+	shown := paths
+	more := ""
+	if len(shown) > stagedListMax {
+		shown, more = shown[:stagedListMax], fmt.Sprintf(" and %d more", len(paths)-stagedListMax)
+	}
+	return fmt.Sprintf("lore: added %d lore row file(s) to this commit: %s%s (lore's rows travel with your commits)", len(paths), strings.Join(shown, ", "), more)
 }

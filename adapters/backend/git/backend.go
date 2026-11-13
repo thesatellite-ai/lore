@@ -76,6 +76,9 @@ type Backend struct {
 	pushes pushLog
 	// cameBack: a sync cleared the remote-reset mark (remotereset.go).
 	cameBack atomic.Bool
+	// headsKnown / noHeads: GuardPushGone's answer from the remote itself
+	// (remotereset.go remoteHasNoHeads), instead of the tracking refs.
+	headsKnown, noHeads bool
 
 	// handSetUp lists what this open set up in the clone for plain git
 	// (handgit.go), for wire to say once.
@@ -304,6 +307,9 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 		var undo func()
 		if undo, err = b.addMissingMarker(applied); err == nil {
 			if err = b.addMissingReadme(ctx, applied); err == nil {
+				err = b.addMissingSignpost(ctx, applied)
+			}
+			if err == nil {
 				err = b.commitBatch(ctx, batch, changes, applied)
 			}
 			if err != nil {
@@ -377,6 +383,26 @@ func (b *Backend) addMissingReadme(ctx context.Context, applied *rowfs.Applied) 
 	return nil
 }
 
+// addMissingSignpost gives a store clone without the signpost lore 0.1.17
+// names (rowfs.SignpostFile) the file, in the same commit as this write,
+// as addMissingReadme does README.md: a store moved by an earlier build
+// gets it with lore's next commit there. A signpost removed from the files
+// only (still in the last commit) is the person's change, kept.
+func (b *Backend) addMissingSignpost(ctx context.Context, applied *rowfs.Applied) error {
+	if applied == nil || len(applied.Paths) == 0 || rowfs.HasSignpost(b.work) {
+		return nil
+	}
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "-e", "HEAD:" + rowfs.SignpostFile}}); err == nil {
+		return nil
+	}
+	wrote, err := rowfs.EnsureSignpost(b.work)
+	if err != nil || !wrote {
+		return err
+	}
+	applied.AddCreated(filepath.Join(b.work, rowfs.SignpostFile), rowfs.SignpostFile)
+	return nil
+}
+
 // WritePurge writes changes like Write and, in the same batch and the same
 // commit, adds purged to the folder's _purged.json (rowfs.Folder.ApplyPurge;
 // engine.Purger). Repo mode writes files only, as Write does.
@@ -417,7 +443,9 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 	undo := func() {}
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {
 		if undo, err = b.addMissingMarker(applied); err == nil {
-			err = b.addMissingReadme(ctx, applied)
+			if err = b.addMissingReadme(ctx, applied); err == nil {
+				err = b.addMissingSignpost(ctx, applied)
+			}
 		}
 	}
 	if err == nil && b.mode == modeClone && len(applied.Paths) > 0 {

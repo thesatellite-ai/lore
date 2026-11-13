@@ -337,7 +337,7 @@ func whereClone(ctx context.Context, c gitbackend.CloneFound, label string) []op
 	case c.Origin == "":
 		what = "a store clone with no origin"
 	}
-	what += "; rows are JSON files at " + whereRowPattern(c.Paths.Dir) + "; " + rowfs.ReadmeFile + " at its top says how to browse and edit it"
+	what += "; rows are JSON files at " + whereRowPattern(c.Paths.Dir) + "; " + rowfs.ReadmeFile + " at its top says how to browse and edit it; " + rowfs.SignpostFile + " there is for lore 0.1.17, which names it when it refuses the store (it says to upgrade)"
 	if c.State != gitbackend.CloneWhole {
 		what += "; state: " + string(c.State) + " (`lore doctor` says what to do)"
 	}

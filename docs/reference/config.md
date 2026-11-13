@@ -458,7 +458,7 @@ A committed file in a repo the org owns. It names the org so everyone who clones
 ## `lore-store.yaml`
 
 <!-- ds:block id=team-store-allowed-a7qb5uuj lines=1-30 -->
-The marker at the top of a store repo. Its presence is what makes a repo a store; `lore store init` writes it. Besides this marker, a store may hold only `README*`, `LICENSE*`, `.gitattributes`, `.github/workflows/lore-*.yml`, row files (`<folder>/<table>/<id>.json`, the store's own in `_store/<table>/<id>.json`), each folder's `_meta.json` and `_purged.json`, `lore-org.yaml` (at the top or in a folder), and the `.lore/` folders of the layout before 0.1.18's plain folders (at the top or in any folder). lore refuses a store that holds anything else, with `E_NOT_A_STORE`; a file you add by hand to your clone and do not commit is only reported by `lore doctor` (`store_files`).
+The marker at the top of a store repo. Its presence is what makes a repo a store; `lore store init` writes it. Besides this marker, a store may hold only the signpost `.0-needs-lore-0.1.18-or-newer` (one line telling a lore 0.1.17 user to upgrade; 0.1.17 names it first when it refuses the store), `README*`, `LICENSE*`, `.gitattributes`, `.github/workflows/lore-*.yml`, row files (`<folder>/<table>/<id>.json`, the store's own in `_store/<table>/<id>.json`), each folder's `_meta.json` and `_purged.json`, `lore-org.yaml` (at the top or in a folder), and the `.lore/` folders of the layout before 0.1.18's plain folders (at the top or in any folder). lore refuses a store that holds anything else, with `E_NOT_A_STORE`; a file you add by hand to your clone and do not commit is only reported by `lore doctor` (`store_files`).
 
 | Key | Default | What it means |
 |---|---|---|

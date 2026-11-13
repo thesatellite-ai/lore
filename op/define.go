@@ -36,6 +36,8 @@ type Op[In, Out any] struct {
 	// ask builds the operation's own confirm question (Asks); nil = the
 	// Runner's generic question.
 	ask func(context.Context, In) (string, error)
+	// check refuses a bad input before anything opens (Checks); nil = none.
+	check func(In) error
 }
 
 var _ Entry = (*Op[struct{}, struct{}])(nil)
@@ -133,6 +135,45 @@ func (o *Op[In, Out]) Question(ctx context.Context, in Input) (string, error) {
 		return "", errs.New(errs.Internal, "op: input type mismatch for "+o.spec.Name)
 	}
 	return o.ask(ctx, typed)
+}
+
+// Prechecker is the optional Entry upgrade an operation uses to refuse a
+// bad input (an id that cannot be one, two flags that exclude each other)
+// before the Runner opens the app, syncs or runs any hook: opening the app
+// can take seconds in a big repo or an org store, and a typo deserves an
+// answer at once (bug L-1). The check must need nothing but the input; the
+// operation still runs it itself, so every surface refuses the same way.
+type Prechecker interface {
+	// Prechecks reports whether the operation set a check (Checks): only
+	// then does the Runner decode the input early.
+	Prechecks() bool
+	Precheck(in Input) error
+}
+
+// Checks sets the operation's input check (Prechecker) and returns the
+// operation, so a definition reads op.Define(spec, run).Checks(c).
+func (o *Op[In, Out]) Checks(c func(In) error) *Op[In, Out] {
+	o.check = c
+	return o
+}
+
+// Prechecks implements Prechecker.
+func (o *Op[In, Out]) Prechecks() bool { return o.check != nil }
+
+// Precheck implements Prechecker: nil when the operation set no check.
+func (o *Op[In, Out]) Precheck(in Input) error {
+	if o.check == nil {
+		return nil
+	}
+	if in.op != o.spec.Name || in.v.Type() != reflect.TypeFor[In]() {
+		return errs.New(errs.Internal, "op: input of "+in.op+" passed to "+o.spec.Name)
+	}
+	// the type check above makes this assertion total (as in Invoke)
+	typed, ok := in.v.Interface().(In)
+	if !ok {
+		return errs.New(errs.Internal, "op: input type mismatch for "+o.spec.Name)
+	}
+	return o.check(typed)
 }
 
 // IDArgs returns the input's positional argument values that are row ids

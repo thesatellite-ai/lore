@@ -143,6 +143,24 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	if r.State.Pending != nil {
 		return op.Result{}, r.State.Pending
 	}
+	// Bug L-1: an operation with its own input check (op.Prechecker, set
+	// with .Checks) refuses a flag or argument that is wrong on its face
+	// before anything opens, syncs or runs a hook (opening the app can take
+	// seconds). Only that check runs early: every other refusal keeps its
+	// place (read-only first, R-10), and an input that does not decode is
+	// left to the normal path, which reports it as before. Nothing reads
+	// stdin here (an op's prompt comes later, as before). The OnError hooks
+	// still see the refusal (the compat hook's hints).
+	readOnly := r.State.ReadOnly || os.Getenv(EnvReadOnly) == envOn
+	if err := precheck(e, d, readOnly); err != nil {
+		run := &Run{Entry: e, Decoder: d, Caller: c, Cmd: r.State.Cmd, Args: r.State.Args}
+		for _, h := range r.hooks {
+			if h.OnError != nil {
+				err = h.OnError(ctx, run, err)
+			}
+		}
+		return op.Result{}, err
+	}
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		ctx = wire.WithNoCreate(ctx) // a read never sets a repo up (wire/doctor_nocreate.go), hooks included
 	}
@@ -151,7 +169,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		ctx = wire.WithNoCreate(ctx)      // lore fix --dry-run changes nothing
 		ctx = gitbackend.WithNoClone(ctx) // … not even a store clone (B4-14)
 	}
-	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: r.State.ReadOnly || os.Getenv(EnvReadOnly) == envOn, Cmd: r.State.Cmd, Args: r.State.Args}
+	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: readOnly, Cmd: r.State.Cmd, Args: r.State.Args}
 	// D7 (B2-20): `lore sync` in a repo lore 0.1.17 wrote and nobody
 	// migrated yet runs as a read: it changes no tracked file, so the
 	// admin's lore fix commit pulls cleanly here (wire/oldrowsread.go)
@@ -199,6 +217,22 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		}
 	}
 	return res, undo(err)
+}
+
+// precheck runs the operation's own input check when it has one (nil
+// otherwise, and for a write in read-only mode, which is refused first by
+// the normal path). The input is decoded for it; a decode error is not
+// returned here: the normal path reports it in its usual place.
+func precheck(e op.Entry, d op.Decoder, readOnly bool) error {
+	pc, ok := e.(op.Prechecker)
+	if !ok || !pc.Prechecks() || (readOnly && e.Spec().Access == op.AccessWrite) {
+		return nil
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return nil
+	}
+	return pc.Precheck(in)
 }
 
 // around runs the Around hooks from index i inward, then the app.

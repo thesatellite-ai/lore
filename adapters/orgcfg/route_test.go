@@ -97,14 +97,15 @@ func TestNetworkCallsUseTheStoreRoute(t *testing.T) {
 			if len(info.Problems) != 0 {
 				t.Fatalf("doctor problems: %v", info.Problems)
 			}
-			// push (commitStore, the link and org-file write path)
+			// ls-remote --heads + push (commitStore, the link and org-file
+			// write path: it asks the remote before its first push, L-2)
 			sc := putCommit(cl.Dir(norm), func(int) {})
 			sc.Route = r
 			res, err := commitStore(ctx, sc)
 			if err != nil || !res.Pushed {
 				t.Fatalf("push: res=%+v err=%v", res, err)
 			}
-			want := []string{c.wantHost + " git-upload-pack", c.wantHost + " git-upload-pack", c.wantHost + " git-receive-pack"}
+			want := []string{c.wantHost + " git-upload-pack", c.wantHost + " git-upload-pack", c.wantHost + " git-upload-pack", c.wantHost + " git-receive-pack"}
 			got := readLog(t, log)
 			if strings.Join(got, "\n") != strings.Join(want, "\n") {
 				t.Errorf("ssh calls\n got %q\nwant %q", got, want)
@@ -114,13 +115,13 @@ func TestNetworkCallsUseTheStoreRoute(t *testing.T) {
 					t.Errorf("the router was asked for %q, want the clone's origin %q", u, url)
 				}
 			}
-			if len(asked) != 3 {
-				t.Errorf("router asked %d times, want once per network call (3)", len(asked))
+			if len(asked) != 4 {
+				t.Errorf("router asked %d times, want once per network call (4)", len(asked))
 			}
-			if len(traced) != 3 {
-				t.Fatalf("trace lines %q, want one per network call (3)", traced)
+			if len(traced) != 4 {
+				t.Fatalf("trace lines %q, want one per network call (4)", traced)
 			}
-			for i, sub := range []string{" fetch ", " ls-remote ", " push "} {
+			for i, sub := range []string{" fetch ", " ls-remote ", " ls-remote --heads ", " push "} {
 				if !strings.Contains(traced[i], sub) || !strings.HasSuffix(traced[i], ", remote "+c.wantHost+")") {
 					t.Errorf("trace line %d = %q, want a%sline naming remote %s", i, traced[i], sub, c.wantHost)
 				}

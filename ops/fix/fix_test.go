@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/doctor"
 )
@@ -155,10 +156,12 @@ type fakeEnv struct {
 	skipped  []Skip
 	sweep    []string
 	sweeps   int
+	gotDirs  []string
 }
 
 func (f *fakeEnv) RepoTop(context.Context) (string, error) { return "", nil }
-func (f *fakeEnv) FixRepos(context.Context) (Found, error) {
+func (f *fakeEnv) FixRepos(_ context.Context, dirs []string) (Found, error) {
+	f.gotDirs = dirs
 	return Found{Roots: f.roots, Skipped: f.skipped}, nil
 }
 func (f *fakeEnv) FixProgress() io.Writer { return writerFunc(f.write) }
@@ -400,5 +403,25 @@ func TestAllRetriesEveryLostRaceAlone(t *testing.T) {
 	}
 	if !slices.Equal(out.Failed, []string{"/w/slow"}) || out.OK != 5 {
 		t.Fatalf("failed %v ok %d; want only the timed-out repo failed", out.Failed, out.OK)
+	}
+}
+
+// TestAllTakesNamedFolders pins L-6: the folders of `lore fix --all
+// <dir>…` reach FixRepos; without --all they are refused with the --all
+// form as the hint; the no-repo line names that form.
+func TestAllTakesNamedFolders(t *testing.T) {
+	env := &fakeEnv{}
+	if _, err := Run(context.Background(), env, RunIn{All: true, Jobs: 1, Dirs: []string{"/w/code", "/w/work"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(env.gotDirs, []string{"/w/code", "/w/work"}) {
+		t.Fatalf("FixRepos got %v", env.gotDirs)
+	}
+	_, err := Run(context.Background(), env, RunIn{Dirs: []string{"/w/code"}})
+	if !errs.Has(err, errs.InvalidInput) {
+		t.Fatalf("folders without --all: %v", err)
+	}
+	if !strings.Contains(LineNoRepos, "lore fix --all ~/code ~/work") {
+		t.Fatalf("the no-repo line does not name the folder form: %s", LineNoRepos)
 	}
 }

@@ -2,12 +2,15 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -64,5 +67,33 @@ func TestDefaultTargetLinkedByRemote(t *testing.T) {
 	r2 := NewOrgResolution(home2, dir2, links)
 	if got, err := r2.DefaultTarget(ctx, q); err != nil || got != "" {
 		t.Fatalf("a repo with its own lore files: DefaultTarget = %q, %v; want the repo store", got, err)
+	}
+}
+
+// TestDefaultTargetLinkedFolderNotAttached (L-4): the link names a folder of
+// a store that is not one of the org entry's stores here, so nothing is
+// attached for it: a plain write is refused with the exact --to to use,
+// not left to fail read-only on the repo cache.
+func TestDefaultTargetLinkedFolderNotAttached(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const remote = "github.com/acme/svc"
+	config := "orgs:\n  - name: acme\n    identity: {key: human:a@acme.com, name: A, handle: a}\n    own: [\"github.com/acme/*\"]\n    stores:\n      - url: https://github.com/acme/notes\n"
+	home, dir := orgTestRepo(t, "https://"+remote, config)
+	if err := os.RemoveAll(dir + "/.lore"); err != nil {
+		t.Fatal(err)
+	}
+	pid, err := orgresolve.RemoteProjectID(remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	links := remoteLinks{orgresolve.StaticLinks{Status: orgresolve.LinkStatusKnown, All: map[string][]orgresolve.Link{
+		pid: {{Entry: "acme", StoreURL: "github.com/acme/other-notes", Folder: "svc", Remote: remote, Own: true}},
+	}}}
+	r := NewOrgResolution(home, dir, links)
+	_, err = r.DefaultTarget(ctx, WriteQuery{Table: schema.TableMemories, Text: "a note"})
+	var e *errs.Error
+	if !errors.As(err, &e) || e.Code != errs.ReadOnly || !strings.Contains(e.Hint, "--to acme/svc") {
+		t.Fatalf("DefaultTarget err = %v, want the refusal naming --to acme/svc", err)
 	}
 }

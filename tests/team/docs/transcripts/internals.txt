@@ -89,6 +89,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_b4f4765e593d51fd1352
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
 alice$ git -C ~/.lore/stores/agency/notes ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20
+.0-needs-lore-0.1.18-or-newer
 README.md
 client/actors/act_28f8d32584b2db54ffb146bede5b03df.json
 client/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json

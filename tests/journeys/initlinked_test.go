@@ -12,6 +12,7 @@ package journeys
 import (
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -111,5 +112,73 @@ func TestJourneyInitLinkedRepo(t *testing.T) {
 		lee.MoveClone(t, other, filepath.Join(parent, "client-web-two"))
 		lee.LoreIn(other, "init", "--non-interactive", "--name=client-web").OK(t).Never(t, "E_LEAK_BLOCKED")
 		lee.LoreIn(other, "memory", "list").OK(t).Says(t, ilClientNote)
+	})
+}
+
+// TestJourneyLinkedFolderOfAnotherStore (L-4): a repo with no lore files is
+// linked by its remote to a folder of the org's second store. A plain write
+// lands in that store's folder, and so does a write with the --to that the
+// L-4 refusal names (--to <org>/<folder>), so the hint leads to the right
+// place. (Once the org entry stops listing that store, the link itself is
+// no longer read on this machine: the repo then reads as not set up, and
+// the refusal is not reached; it guards a link read from a store that is
+// then not attached.)
+func TestJourneyLinkedFolderOfAnotherStore(t *testing.T) {
+	t.Parallel()
+	tt := newTLTeam(t)
+	w := tt.w
+	lee := tt.person(tlLee)
+	parent := filepath.Join(lee.Home, "code")
+	two := w.Remote("github.com/acme-co/lore-extra")
+	var repo *teamharness.Clone
+
+	w.Step("day1/link-to-a-folder-of-a-second-store", func() {
+		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
+		s := lee.Clone(tt.store, "team-store")
+		jWrite(t, filepath.Join(s.Dir, filepath.FromSlash(jManyOrgFile)), "name: "+tlOrg+"\nstores:\n"+
+			"    - url: "+tt.store.SSHURL()+"\n      org_folder: org\n    - url: "+two.SSHURL()+"\nown:\n    - github.com/acme-co/*\n")
+		s.CommitAll("org file: a second store")
+		s.Git("push", "-q", "origin", "HEAD:main")
+		lee.Lore(parent, "org", "refresh", tlOrg).OK(t)
+		lee.Lore(parent, "store", "folder", "add", two.SSHURL(), "extra").OK(t)
+		repo = jPlainRepo(t, lee, w.Remote("github.com/acme-co/svc-extra"), filepath.Join(parent, "svc-extra"))
+		lee.LoreIn(repo, "org", "link", tlOrg, "--project", "extra", "--store", two.SSHURL(), "--own", "--yes").OK(t)
+	})
+
+	w.Step("day2/plain-and-hinted-writes-land-in-the-second-store", func() {
+		w.AdvanceDays(1)
+		lee.LoreIn(repo, "memory", "add", "--body", "plain write to extra").OK(t)
+		lee.LoreIn(repo, "memory", "add", "--body", "hinted write to extra", "--to", tlOrg+"/extra").OK(t)
+		if f := two.FilesMatching("refs/heads/main", "extra/memories/"); len(f) != 2 {
+			t.Fatalf("both writes must land in the second store's extra/ folder: %v", f)
+		}
+		if f := tt.store.FilesMatching("refs/heads/main", "extra/"); len(f) != 0 {
+			t.Fatalf("a write went to the first store: %v", f)
+		}
+	})
+
+	w.Step("day3/the-org-file-drops-the-second-store", func() {
+		// L-7: the org's lore-org.yaml no longer lists the second store
+		w.AdvanceDays(1)
+		s := lee.Clone(tt.store, "team-store-again")
+		jWrite(t, filepath.Join(s.Dir, filepath.FromSlash(jManyOrgFile)), "name: "+tlOrg+"\nstores:\n"+
+			"    - url: "+tt.store.SSHURL()+"\n      org_folder: org\nown:\n    - github.com/acme-co/*\n")
+		s.CommitAll("org file: drop the second store")
+		s.Git("push", "-q", "origin", "HEAD:main")
+		lee.Lore(parent, "org", "refresh", tlOrg).OK(t)
+		// (1) the "no lore project" answer says why
+		r := lee.LoreIn(repo, "memory", "add", "--body", "after the drop")
+		if r.Code == 0 || !strings.Contains(r.Out(), "was linked in store") || !strings.Contains(r.Out(), "no longer lists it") || !strings.Contains(r.Out(), "lore-extra") {
+			t.Fatalf("the refusal does not say the link's store was dropped: %s", r)
+		}
+		// (2) --to <org>/<folder> --yes must not make the folder in the
+		// first store
+		r = lee.LoreIn(repo, "memory", "add", "--body", "after the drop", "--to", tlOrg+"/extra", "--yes")
+		if r.Code == 0 || !strings.Contains(r.Out(), "would create folder extra") || !strings.Contains(r.Out(), "lore-extra") {
+			t.Fatalf("--to %s/extra --yes was not refused naming the linked store: %s", tlOrg, r)
+		}
+		if f := tt.store.FilesMatching("refs/heads/main", "extra/"); len(f) != 0 {
+			t.Fatalf("the folder was created in the first store: %v", f)
+		}
 	})
 }
