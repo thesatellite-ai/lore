@@ -6,7 +6,9 @@ package journeys
 // person writes on a train, reads, commits, syncs; later the repo's
 // origin points at a path with no repository.
 //
-//	day 1  online: init, a task, commit and push
+//	day 1  online: init, a task (live.autopush is off by default: the
+//	       write says it is kept here), Oli turns live.autopush on, commit
+//	       and push
 //	day 2  offline: a write says once what waits and what happens next;
 //	       reads and the git hooks stay quiet; sync says it once, its way
 //	day 3  origin points nowhere: lore names the remote and the fix, not
@@ -32,7 +34,12 @@ func TestJourneyOfflineCalm(t *testing.T) {
 
 	w.Step("day1/online-start", func() {
 		lap.LoreIn(repo, "init").OK(t)
-		lap.LoreIn(repo, "task", "add", "set up the site").OK(t).Never(t, offlineWaiting)
+		lap.LoreIn(repo, "task", "add", "set up the site").OK(t).Never(t, offlineWaiting).
+			Says(t, "(live, kept here: `lore sync` or your next `git push` sends live writes")
+		// The rest of this journey is about writes lore pushes by itself
+		// while offline, so Oli opts in (U-2: pushes are opt-in; with them
+		// off an offline write tries no push and has nothing to wait on).
+		lap.LoreIn(repo, "config", "set", "--key", "live.autopush", "--value", "true").OK(t)
 		repo.CommitAll("add lore")
 		repo.Git("push", "-q", "origin", "HEAD")
 	})
