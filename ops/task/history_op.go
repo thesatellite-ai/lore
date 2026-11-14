@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
@@ -222,20 +223,62 @@ func (o ops) historyHuman(ctx context.Context, l HistoryLine) string {
 	case histKindClaim:
 		what = "claim " + l.Field
 	default:
-		what = l.Field + " " + orNone(l.From) + " → " + orNone(l.To)
+		field, from, to := l.Field, l.From, l.To
+		if actorField(field) {
+			// N-11: people by name, as the who column, never act_ ids
+			// (the JSON keeps the ids).
+			from, to = o.actorNames(ctx, from), o.actorNames(ctx, to)
+			if field == fieldAssigned {
+				field = histLeadWord
+			}
+		}
+		what = field + " " + orNone(from) + " → " + orNone(to)
 		if l.Commit != "" {
 			what += " (git " + l.Commit + ")"
 		}
 	}
 	if l.Note != "" {
-		what += " (" + l.Note + ")"
+		what += " (" + o.namesInNote(ctx, l.Note) + ")"
 	}
 	return at + "  " + padRight(who, 18) + "  " + what + "\n"
 }
 
-func padRight(s string, n int) string {
-	if len(s) >= n {
-		return s
+// padRight pads the who column to n terminal cells ("Björn" or "李小龙"
+// counted in bytes came out short, devco:N-2).
+func padRight(s string, n int) string { return textwidth.PadRight(s, n) }
+
+// histLeadWord is how a human history line names assigned_to_actor_id.
+const histLeadWord = "lead"
+
+// actorField: the history field holds actor ids (one, or a comma-joined
+// list as histText writes assignees and watchers).
+func actorField(f string) bool {
+	return f == fieldAssigned || f == schema.FieldTaskAssignees || f == schema.FieldTaskWatchers
+}
+
+// actorNames is a comma-joined list of actor ids as names ("" stays "").
+func (o ops) actorNames(ctx context.Context, list string) string {
+	if list == "" {
+		return ""
 	}
-	return s + strings.Repeat(" ", n-len(s))
+	parts := strings.Split(list, ",")
+	for i, p := range parts {
+		parts[i] = o.actorName(ctx, strings.TrimSpace(p))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// namesInNote swaps each act_ word of a history note ("from act_…") for
+// the person's name (N-11: claim revoke named the holder by id).
+func (o ops) namesInNote(ctx context.Context, note string) string {
+	if !strings.Contains(note, "act_") {
+		return note
+	}
+	words := strings.Fields(note)
+	for i, w := range words {
+		if strings.HasPrefix(w, "act_") {
+			words[i] = o.actorName(ctx, w)
+		}
+	}
+	return strings.Join(words, " ")
 }

@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,5 +164,25 @@ func TestAdoptAcceptsOnlyStoreFiles(t *testing.T) {
 		if !rowfs.StoreFileAllowed(p) {
 			t.Errorf("adopt accepts %q but the store check refuses it", p)
 		}
+	}
+}
+
+// TestMarkReadOnlyBecause (devco N-8): a repo store marked read-only with
+// a reason answers that reason on a write, still errors.Is
+// store.ErrReadOnly, instead of the bare "store: attached read-only".
+func TestMarkReadOnlyBecause(t *testing.T) {
+	t.Parallel()
+	dir := newRepo(t)
+	b, err := OpenRepo(context.Background(), dir, rowfs.FolderRoot, store.OpenOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = b.Close() }()
+	reason := fmt.Errorf("this repository is a client repo: %w", store.ErrReadOnly)
+	b.MarkReadOnlyBecause(reason)
+	g := newGen(t)
+	err = b.Write(context.Background(), []store.Change{{Row: g.row(newID(t), "x", hlc.HLC{})}})
+	if !errors.Is(err, store.ErrReadOnly) || err.Error() != reason.Error() {
+		t.Fatalf("write after MarkReadOnlyBecause: %v, want %v", err, reason)
 	}
 }

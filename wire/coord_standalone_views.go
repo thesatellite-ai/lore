@@ -228,6 +228,19 @@ func (cv *coordView) label(ctx context.Context, id string) string {
 	return l
 }
 
+// labelList is a comma-joined list of actor ids (as history writes
+// assignees) as labels: N-11, a watcher's inbox named people by act_ id.
+func (cv *coordView) labelList(ctx context.Context, list string) string {
+	if list == "" {
+		return ""
+	}
+	parts := strings.Split(list, ",")
+	for i, p := range parts {
+		parts[i] = cv.label(ctx, strings.TrimSpace(p))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // syncRoster syncs the org roster's store once per view, so an agent
 // registered since this clone last fetched is named by its label (v0.1.17
 // opened the roster fresh); false when there is nothing (more) to sync.
@@ -587,8 +600,12 @@ func (cv *coordView) watchedItems(ctx context.Context, me string) []opscoord.Inb
 			if err != nil {
 				continue
 			}
+			from, to := e.From, e.To
+			if e.Field == schema.FieldTaskAssignees {
+				from, to = cv.labelList(ctx, from), cv.labelList(ctx, to)
+			}
 			out = append(out, opscoord.InboxItem{Mission: w.Mission, Kind: inboxWatched, Who: cv.label(ctx, e.By),
-				Text: fmt.Sprintf("%s %s: %s %s → %s", w.ID, w.Title, e.Field, orNone(e.From), orNone(e.To)), At: at})
+				Text: fmt.Sprintf("%s %s: %s %s → %s", w.ID, w.Title, e.Field, orNone(from), orNone(to)), At: at})
 		}
 	}
 	return out

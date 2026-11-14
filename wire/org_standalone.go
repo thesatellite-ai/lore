@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/yamlfmt"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -215,6 +216,9 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if err != nil {
 		return opsorgcmd.Report{}, planLinkError(err)
 	}
+	org := s.Config.FindOrg(plan.Entry)
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
+	plan = followFolderStore(ctx, g, org, plan)
 	lines := linkPlanLines(plan)
 	if in.DryRun {
 		return opsorgcmd.Report{Lines: append(lines, "  --dry-run: nothing written")}, nil
@@ -222,8 +226,6 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if !yes {
 		return opsorgcmd.Report{Lines: lines, Ask: "Continue?"}, nil
 	}
-	org := s.Config.FindOrg(plan.Entry)
-	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
 	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID,
 		NewMarker: func() ([]byte, error) {
 			m, merr := rowfs.NewMarker(h.wall()())
@@ -250,6 +252,28 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	}
 	lines = append(lines, linkDoneLine(plan, res.StoreURL, created+state), "  nothing was written to this repo")
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// followFolderStore points a plan made without --store at the store that
+// already holds its folder, as the write does (pickLinkStore), so every
+// line names the store the link goes to (devco:N-9: a client repo linked
+// to the client store read "internal notes default to <org store>").
+// When the stores cannot be read the plan stays; the write then says.
+func followFolderStore(ctx context.Context, g *orgcfg.GitLinks, org *orgconf.Org, plan orgresolve.LinkPlan) orgresolve.LinkPlan {
+	if plan.StoreExplicit || org == nil {
+		return plan
+	}
+	holder, err := g.LinkStore(ctx, plan)
+	if err != nil || holder == plan.StoreURL {
+		return plan
+	}
+	for _, sc := range org.Stores {
+		if n, nerr := repourl.NormalizeStore(sc.URL); nerr == nil && n == holder {
+			plan.StoreURL, plan.Branch = holder, sc.EffectiveBranch()
+			return plan
+		}
+	}
+	return plan
 }
 
 // linkPlanLines are the plan lines `lore org link` prints before it asks

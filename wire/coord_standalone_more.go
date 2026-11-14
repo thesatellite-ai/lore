@@ -59,15 +59,61 @@ func (h standaloneCoord) TaskReassign(ctx context.Context, in opscoord.ReassignI
 		return opscoord.Report{}, err
 	}
 	by := w.actorID
+	gone := h.goneActors(ctx)
 	if _, err = coord.OverrideChecked(ctx, w.env(ctx), in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
 		prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
 		d.SetStr(fieldTaskLead, to)
 		d[schema.FieldTaskAssignees] = canonjson.Array(canonjson.String(to))
+		dropGoneWatchers(d, gone)
 		return appendReassignHistory(d, by, now, prevLead, prevAll, to)
 	}); err != nil {
 		return opscoord.Report{}, coordErr(err)
 	}
 	return opscoord.Report{Lines: []string{markOK + " " + in.ID + " reassigned to " + in.Assign}}, nil
+}
+
+// goneActors are the actor ids of the org roster that are no longer active
+// (left, archived, deactivated); none when there is no roster to read
+// (the reassign itself does not depend on it).
+func (h standaloneCoord) goneActors(ctx context.Context) map[string]bool {
+	r, err := h.a.coordRoster(ctx)
+	if err != nil {
+		return nil
+	}
+	actors, err := h.a.RosterActors(ctx, r.src)
+	if err != nil {
+		return nil
+	}
+	gone := map[string]bool{}
+	for _, x := range actors {
+		if !x.Active {
+			gone[x.ID] = true
+		}
+	}
+	return gone
+}
+
+// dropGoneWatchers takes people who left off d's watchers (N-11: after
+// `task reassign --from @leaver` the leaver still watched the task and
+// was told of every change); null when no watcher is left.
+func dropGoneWatchers(d coord.Doc, gone map[string]bool) {
+	if len(gone) == 0 {
+		return
+	}
+	cur := d.Strs(schema.FieldTaskWatchers)
+	keep := slices.DeleteFunc(slices.Clone(cur), func(id string) bool { return gone[id] })
+	if len(keep) == len(cur) {
+		return
+	}
+	if len(keep) == 0 {
+		d[schema.FieldTaskWatchers] = canonjson.Null()
+		return
+	}
+	vals := make([]canonjson.Value, len(keep))
+	for i, id := range keep {
+		vals[i] = canonjson.String(id)
+	}
+	d[schema.FieldTaskWatchers] = canonjson.Array(vals...)
 }
 
 // TaskReassignPlan implements opscoord.Host: the open tasks (todo or in

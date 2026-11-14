@@ -232,14 +232,20 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if !ok {
 			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
-		if !claimable(mission, doc.Status()) {
-			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
-		}
 		// G-10: finished elsewhere, and this row has not seen the done yet.
+		// devco:M-9: checked before the status, and a done row gives the
+		// same AlreadyDoneError, so a claim of a done task gets one refusal
+		// whether the done reached the signals ref, the row, or both.
 		if !mission {
 			if err := AlreadyDone(v, env.Folder, id, doc); err != nil {
 				return signals.Change{}, nil, err
 			}
+			if doc.Status() == statusDone {
+				return signals.Change{}, nil, doneRowError(id, doc)
+			}
+		}
+		if !claimable(mission, doc.Status()) {
+			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
 		}
 		// 6.9: a parent with open children is coordinated, never worked.
 		lease := false

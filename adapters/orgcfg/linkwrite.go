@@ -387,6 +387,14 @@ func addLink(links []linkRecord, l linkRecord) ([]linkRecord, bool) {
 	return links, changed
 }
 
+// LinkStore is the store a link of plan is written to (pickLinkStore),
+// for the plan lines `lore org link` prints before it asks: without
+// --store they named the entry's first store while the write followed
+// the folder into the store holding it (devco:N-9).
+func (g *GitLinks) LinkStore(ctx context.Context, plan orgresolve.LinkPlan) (string, error) {
+	return g.pickLinkStore(ctx, plan)
+}
+
 // pickLinkStore is F11 step 1 + F13: the store already holding the folder;
 // else --store (or the entry's first store). A folder that exists in
 // another store than an explicit --store names is refused. Every store is

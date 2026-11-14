@@ -155,7 +155,7 @@ func (b *Backend) FlattenLayout(ctx context.Context) (FlattenResult, error) {
 		return res, err // B2-9
 	}
 	if b.readOnly {
-		return res, store.ErrReadOnly
+		return res, b.refusedWrite()
 	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {

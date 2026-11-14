@@ -124,6 +124,7 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh Refresh, afterCommit fun
 			}
 			switch name {
 			case hookPostCommit:
+				l.h.afterRevert(cmd.Context()) // M-6: a revert never deletes a note by itself
 				if !liveDisabled() {
 					l.h.postCommit(cmd.Context())
 				}
@@ -285,6 +286,9 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 			lerr := h.prePushLeakCheck(ctx, repo, remote, updates)
 			if lerr == nil {
 				lerr = prePushDropCheck(ctx, repo, updates) // H-7: a forced push that takes rows away
+			}
+			if lerr == nil {
+				lerr = prePushRevertCheck(ctx, repo, updates) // M-6: a revert that deletes rows nobody deleted
 			}
 			if lerr != nil {
 				if r != nil {

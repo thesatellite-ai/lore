@@ -1362,3 +1362,16 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 func builtinRegistry() (*schema.Registry, error) {
 	return schema.NewRegistry(schema.Builtin()...)
 }
+
+var _ opstask.CommitRefResolver = (*App)(nil)
+
+// ResolveCommitRef implements opstask.CommitRefResolver (devco:M-5): the
+// full sha --commit names in the folder the command runs in, peeled to a
+// commit, so task done records a sha and never HEAD or a branch name.
+func (a *App) ResolveCommitRef(ctx context.Context, ref string) (string, error) {
+	sha, err := gitcommit.Resolver{}.RevParse(ctx, a.projectDir(), ref+"^{commit}")
+	if err != nil {
+		return "", errs.Wrap(errs.InvalidInput, "resolve commit "+ref, err)
+	}
+	return sha, nil
+}

@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/logic/metaquery"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
@@ -406,8 +406,8 @@ func (o RunOut) Text() string {
 		types, plural(types, "entity type", "entity types"))
 	typeW, idW := 0, 0
 	for _, h := range o.Data.Hits {
-		typeW = max(typeW, utf8.RuneCountInString(h.Entity))
-		idW = max(idW, utf8.RuneCountInString(hitID(h)))
+		typeW = max(typeW, textwidth.Width(h.Entity))
+		idW = max(idW, textwidth.Width(hitID(h)))
 	}
 	for _, h := range o.Data.Hits {
 		pretty := hitID(h)
@@ -438,14 +438,9 @@ func hitID(h Hit) string {
 	return h.ID
 }
 
-// padRight pads s with spaces to w characters; the short ids hold "…", so
-// the width counts characters, not bytes.
-func padRight(s string, w int) string {
-	if n := utf8.RuneCountInString(s); n < w {
-		return s + strings.Repeat(" ", w-n)
-	}
-	return s
-}
+// padRight pads s with spaces to w terminal cells (the short ids hold "…";
+// devco:N-2: cells, not bytes or runes).
+func padRight(s string, w int) string { return textwidth.PadRight(s, w) }
 
 // StoreLabel is the bracketed store label of a store hit ("[agency]",
 // "[agency/acme-hub]").

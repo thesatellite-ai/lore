@@ -21,10 +21,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
@@ -212,7 +212,7 @@ func writeTable(b *strings.Builder, head []string, rows [][]string) {
 	width := make([]int, len(head))
 	for _, r := range append([][]string{head}, rows...) {
 		for i, c := range r {
-			width[i] = max(width[i], utf8.RuneCountInString(c))
+			width[i] = max(width[i], textwidth.Width(c))
 		}
 	}
 	for _, r := range append([][]string{head}, rows...) {
@@ -220,7 +220,7 @@ func writeTable(b *strings.Builder, head []string, rows [][]string) {
 		for i, c := range r {
 			b.WriteString(" " + c)
 			if i < len(r)-1 {
-				b.WriteString(strings.Repeat(" ", width[i]-utf8.RuneCountInString(c)+1))
+				b.WriteString(strings.Repeat(" ", width[i]-textwidth.Width(c)+1))
 			}
 		}
 		b.WriteString("\n")

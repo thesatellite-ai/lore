@@ -40,7 +40,21 @@ type AlreadyDoneError struct {
 }
 
 func (e *AlreadyDoneError) Error() string {
+	if e.At.IsZero() {
+		return fmt.Sprintf("%s was already done by %s", e.Task, e.By)
+	}
 	return fmt.Sprintf("%s was already done by %s at %s", e.Task, e.By, e.At.UTC().Format(time.RFC3339))
+}
+
+// doneRowError is the AlreadyDoneError of a task whose row says done
+// (devco:M-9): the refusal a done marker gives, with who and when taken
+// from the row ("someone" when the row does not name the finisher).
+func doneRowError(id string, doc Doc) *AlreadyDoneError {
+	by := doc.Str(keyDoneBy)
+	if by == "" {
+		by = "someone"
+	}
+	return &AlreadyDoneError{Task: id, By: by, At: doc.Time(keyCompletedAt)}
 }
 
 // Unwrap makes an already-done task a task that is not open.

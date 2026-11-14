@@ -55,6 +55,23 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 // without the lock, as the open set it.
 func (b *Backend) MarkReadOnly() { b.readOnly = true }
 
+// MarkReadOnlyBecause is MarkReadOnly whose refused writes answer err
+// instead of the bare store.ErrReadOnly ("store: attached read-only",
+// which names no store, no cause and no next step: devco N-8). err should
+// wrap store.ErrReadOnly so errors.Is still finds it; nil is MarkReadOnly.
+// Same calling rule as MarkReadOnly.
+func (b *Backend) MarkReadOnlyBecause(err error) {
+	b.readOnly, b.readOnlyErr = true, err
+}
+
+// refusedWrite is the error a write to a read-only handle answers.
+func (b *Backend) refusedWrite() error {
+	if b.readOnlyErr != nil {
+		return b.readOnlyErr
+	}
+	return store.ErrReadOnly
+}
+
 // RepoRoot is the folder OpenRepo would make the repo store's root for dir
 // (projectRoot: the nearest folder holding .lore up to the work tree top,
 // symlinks resolved), found without opening anything: no rowfs root, no

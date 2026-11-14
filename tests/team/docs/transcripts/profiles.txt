@@ -241,7 +241,8 @@ ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a670ae8548ed05bf57ad2
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aaebe6aca5bb46cc521869f5ba2a61f (lead) ends 2026-09-30
-  open tasks tsk_b4d3d8fc9a019dca1371ad55c6a611aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3d8fc9a019dca1371ad55c6a611aa --assign @<someone>
+  open tasks tsk_b4d3d8fc9a019dca1371ad55c6a611aa  "move the invoice export to the new API"  agency  lead
+             hand the tasks they lead over (in each repo that holds them): lore task reassign --from @mira --assign @<someone> --yes
   agents     (none)
   status     active → left
   hint: ask the person, then rerun with --yes
@@ -253,7 +254,8 @@ offboard Mira Patel (@mira) (act_7a670ae8548ed05bf57ad29ad0759504) on 2026-09-30
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aaebe6aca5bb46cc521869f5ba2a61f (lead) ends 2026-09-30
-  open tasks tsk_b4d3d8fc9a019dca1371ad55c6a611aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3d8fc9a019dca1371ad55c6a611aa --assign @<someone>
+  open tasks tsk_b4d3d8fc9a019dca1371ad55c6a611aa  "move the invoice export to the new API"  agency  lead
+             hand the tasks they lead over (in each repo that holds them): lore task reassign --from @mira --assign @<someone> --yes
   agents     (none)
   status     active → left
 ✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)

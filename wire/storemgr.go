@@ -218,7 +218,14 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 				return rowfs.Marker{}, false, rerr
 			}
 		}
-		return m, false, folder.Init(dir, m, a.opts.rowfsOptions()...)
+		if err = folder.Init(dir, m, a.opts.rowfsOptions()...); err != nil {
+			return rowfs.Marker{}, false, err
+		}
+		if sameFolder(dir, personalFolderDir(a.opts.Home)) {
+			// N-13: the personal folder is the one a person may later put in git by hand
+			err = folder.IgnoreState(dir)
+		}
+		return m, false, err
 	}
 	b, err := a.openStore(ctx, canon, raw)
 	if err != nil {

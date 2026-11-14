@@ -99,7 +99,7 @@ func (a *App) v017Edits(ctx context.Context) ([]v017Edit, error) {
 		if err != nil {
 			return nil, err
 		}
-		q = strings.Replace(q, "SELECT json_object(", `SELECT json_object('`+v017UpdatedAt+`', "`+v017UpdatedAt+`", `, 1)
+		q = strings.Replace(q, "SELECT json_object(", `SELECT json_object('`+v017UpdatedAt+`', `+v017CellText(v017UpdatedAt)+`, `, 1)
 		moved := func(err error, t row.Table, id ids.AnyID) bool { return isAmbiguousMoved(ctx, st, err, t, id) }
 		cands, err := v017Candidates(ctx, st.eng, db, def.Name)
 		if err != nil {
@@ -158,14 +158,14 @@ func v017Candidates(ctx context.Context, eng *engine.Engine, db *sql.DB, table r
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+v017IDColumn+`, `+v017UpdatedAt+` FROM "`+string(table)+`"`)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return nil, v017ReadError(string(table), err)
 	}
 	defer func() { _ = rows.Close() }() // read-only cursor
 	var out []ids.AnyID
 	for rows.Next() {
 		var id, raw sql.NullString
 		if err := rows.Scan(&id, &raw); err != nil {
-			return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+			return nil, v017ReadError(string(table), err)
 		}
 		if !id.Valid || !raw.Valid {
 			continue // no id or no update time: v017TableEdits skips it too
@@ -185,7 +185,7 @@ func v017Candidates(ctx context.Context, eng *engine.Engine, db *sql.DB, table r
 		out = append(out, parsed)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return nil, v017ReadError(string(table), err)
 	}
 	return out, nil
 }
@@ -200,18 +200,18 @@ func v017Candidates(ctx context.Context, eng *engine.Engine, db *sql.DB, table r
 func v017TableEdits(ctx context.Context, eng *engine.Engine, db *sql.DB, q string, table row.Table, fields []schema.FieldDef, moved func(error, row.Table, ids.AnyID) bool) ([]v017Edit, error) {
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return nil, v017ReadError(string(table), err)
 	}
 	defer func() { _ = rows.Close() }() // read-only cursor
 	var out []v017Edit
 	for rows.Next() {
 		var doc string
 		if err := rows.Scan(&doc); err != nil {
-			return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+			return nil, v017ReadError(string(table), err)
 		}
 		var cells map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(doc), &cells); err != nil {
-			return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+			return nil, v017ReadError(string(table), err)
 		}
 		var rawID, rawAt string
 		if json.Unmarshal(cells[v017IDColumn], &rawID) != nil || json.Unmarshal(cells[v017UpdatedAt], &rawAt) != nil {
@@ -257,7 +257,7 @@ func v017TableEdits(ctx context.Context, eng *engine.Engine, db *sql.DB, q strin
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return nil, v017ReadError(string(table), err)
 	}
 	return out, nil
 }

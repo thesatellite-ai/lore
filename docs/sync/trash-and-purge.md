@@ -23,7 +23,7 @@ Archiving (`lore memory archive --id <id>`, `lore rule archive --id <id>`, ...) 
 
 ## Step 1 — Get back a note whose file disappeared
 
-Alice deletes a memory's file (here with `git rm`, as a teammate's commit or a revert would). The file is the note, so the memory is gone from `lore memory list` at once. It is not in lore's trash, which only holds notes deleted with a lore command; git has the file, so `git checkout` brings it back and the note is there again:
+Alice deletes a memory's file (here with `git rm`, as a teammate's commit would; a `git revert` that deletes a note's file gets it back in your work tree and a refused push until you commit it, see [Hooks](hooks-and-merge-driver.md)). The file is the note, so the memory is gone from `lore memory list` at once. It is not in lore's trash, which only holds notes deleted with a lore command; git has the file, so `git checkout` brings it back and the note is there again:
 
 <!-- example: sync#trash -->
 ```console

@@ -569,7 +569,7 @@ func choosesLocalPersonal(line string) bool {
 // every member's join lines picked it and nothing said that personal
 // notes then live on one machine only), and how to keep them in a
 // private git repo instead. The personal_store step prints it too.
-const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: push the folder ~/.lore/stores/" + onboard.LocalStoreFolder + " to a private git repo, then lore store set-url --name me --url <private-repo-url>)."
+const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: make an empty private git repo; lore store set-url --name me --url <private-repo-url> copies the folder ~/.lore/stores/" + onboard.LocalStoreFolder + " into its clone, then lore sync pushes it)."
 
 // RepairIn is setup.repair's input.
 type RepairIn struct {

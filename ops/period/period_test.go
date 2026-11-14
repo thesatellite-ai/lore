@@ -901,3 +901,28 @@ func TestRejoinSameDayReopens(t *testing.T) {
 		t.Fatalf("actor: %v", m.Fields)
 	}
 }
+
+// TestOffboardPreviewHandsLedTasksOverInOneLine pins devco:N-11: tasks the
+// person leads are handed over by one `lore task reassign --from @handle`
+// line (named flags), not a task edit per task; a task they are only an
+// assignee of keeps its own line.
+func TestOffboardPreviewHandsLedTasksOverInOneLine(t *testing.T) {
+	w := newWorld(t)
+	w.tasks = []OpenTask{
+		{ID: "tsk_01aa", Title: "Rotate staging keys", Store: "repo", How: TaskOnLead},
+		{ID: "tsk_01bb", Title: "Fix login", Store: "repo", How: TaskOnLead},
+		{ID: "tsk_01cc", Title: "Review billing", Store: "repo", How: TaskOnAssignee},
+	}
+	_, err := w.ops().offboard(context.Background(), OffboardIn{Actor: "@mira", Reason: "moved abroad"})
+	wantCode(t, err, errs.NeedsConfirm)
+	q := err.(*errs.Error).Question
+	const line = "lore task reassign --from @mira --assign @<someone> --yes"
+	if strings.Count(q, line) != 1 || strings.Contains(q, "task edit --id tsk_01aa") || strings.Contains(q, "task edit --id tsk_01bb") ||
+		!strings.Contains(q, "reassign: lore task edit --id tsk_01cc --assign @<someone>") {
+		t.Fatalf("preview:\n%s", q)
+	}
+	out, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira"})
+	if err != nil || out.Handover != line {
+		t.Fatalf("handover %q, err %v", out.Handover, err)
+	}
+}

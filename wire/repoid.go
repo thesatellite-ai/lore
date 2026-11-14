@@ -156,6 +156,20 @@ func (a *App) EnsureRepoIdentity(ctx context.Context) (repoID string, minted boo
 	return id.Meta.RepoID, minted, err
 }
 
+// EnsureOwnRepoIdentity implements ops/scope.RepoIdentityEnsurer: a repo
+// or dir scope write in a checkout without a repo id mints it (the derived
+// id every clone agrees on) instead of refusing (devco:M-4). A client repo
+// is refused: minting there writes the client's tracked _meta.json and a
+// repos row into its checkout (B-8), and its rows live in a store folder.
+func (a *App) EnsureOwnRepoIdentity(ctx context.Context) (string, error) {
+	if client, cerr := a.ClientRepo(ctx); cerr == nil && client {
+		return "", errs.New(errs.InvalidInput, "this is a client repo: lore writes nothing into its checkout, so it has no repo identity for a repo or folder scope").
+			WithHint("give --scope project, or leave --scope out")
+	}
+	id, _, err := a.EnsureRepoIdentity(ctx)
+	return id, err
+}
+
 // CheckRepoAddresses is the sync pass of PROVENANCE_DESIGN 10.3 (PROV2,
 // PROV3): new remotes of this clone are recorded `unconfirmed`, and every
 // unconfirmed address the clone uses is reported for the notice.

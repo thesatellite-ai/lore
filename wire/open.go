@@ -127,7 +127,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	remote := ""
 	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) && !settingUpHere(ctx, repo.Dir()) {
 		if remote = opts.RepoLinkedByRemote(ctx); remote != "" {
-			repo.MarkReadOnly()
+			repo.MarkReadOnlyBecause(clientRepoWriteRefusal(remote, orgAliases(ctx, opts, repo.Dir())[attach.ReservedTeam]))
 		}
 	}
 	st.linkedByRemote = remote

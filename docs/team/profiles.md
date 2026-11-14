@@ -487,7 +487,8 @@ ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a67…9504) on 2026-0
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aae…a61f (lead) ends 2026-09-30
-  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3…11aa --assign @<someone>
+  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead
+             hand the tasks they lead over (in each repo that holds them): lore task reassign --from @mira --assign @<someone> --yes
   agents     (none)
   status     active → left
   hint: ask the person, then rerun with --yes
@@ -499,7 +500,8 @@ offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aae…a61f (lead) ends 2026-09-30
-  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3…11aa --assign @<someone>
+  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead
+             hand the tasks they lead over (in each repo that holds them): lore task reassign --from @mira --assign @<someone> --yes
   agents     (none)
   status     active → left
 ✓ act_7a67…9504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)

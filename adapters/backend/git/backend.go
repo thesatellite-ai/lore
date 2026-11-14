@@ -54,11 +54,15 @@ type Backend struct {
 	git      runner
 	mode     mode
 	readOnly bool
-	root     *rowfs.Root   // the worktree (clone mode) or the repo top (repo mode)
-	folder   *rowfs.Folder // the data folder this Backend reads and writes
-	work     string        // absolute worktree path (= root.Dir())
-	branch   string        // clone mode: the store branch
-	marker   rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
+	// readOnlyErr, when set (MarkReadOnlyBecause), is what a refused write
+	// answers instead of the bare store.ErrReadOnly, so the refusal names the
+	// store, why it takes no writes and what to do instead (devco N-8).
+	readOnlyErr error
+	root        *rowfs.Root   // the worktree (clone mode) or the repo top (repo mode)
+	folder      *rowfs.Folder // the data folder this Backend reads and writes
+	work        string        // absolute worktree path (= root.Dir())
+	branch      string        // clone mode: the store branch
+	marker      rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
 
 	// beforePush, when set (tests only), runs before each push attempt so a
 	// test can push from another clone and make this one lose the race.
@@ -348,7 +352,7 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 		return err
 	}
 	if b.readOnly {
-		return store.ErrReadOnly
+		return b.refusedWrite()
 	}
 	if len(changes) == 0 {
 		return nil
@@ -503,7 +507,7 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 		return err
 	}
 	if b.readOnly {
-		return store.ErrReadOnly
+		return b.refusedWrite()
 	}
 	if b.mode == modeClone {
 		if err := b.refusePersonGitOp(ctx, b.work); err != nil {

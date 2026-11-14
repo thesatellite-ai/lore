@@ -237,17 +237,25 @@ func missingRideHooks(dir string) []string {
 // merge.lore.driver in its config and no lore block (gitBlockMarker, the
 // ride-along blocks included) in any hook of dir. A fresh clone is like
 // that until its first lore write; a clone whose blocks were removed after
-// lore wired it keeps its driver config and is not.
+// lore wired it keeps its driver config and is not. The commit-msg block
+// `lore org link` puts into a client repo (clientguard.go, with
+// lore.clientrepo set) is not a set-up of the clone: the first lore init
+// there said "leak guard off … restored now (commits made meanwhile were
+// not checked)" for hooks lore had never installed (devco:N-10).
 func (s *liveSession) neverWired(ctx context.Context, dir string) bool {
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "merge." + mergeDriverLore + ".driver"}}); err == nil && strings.TrimSpace(string(out)) != "" {
 		return false
+	}
+	onlyGuard := false
+	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", wire.ClientRepoGitKey}}); err == nil && strings.TrimSpace(string(out)) == "true" {
+		onlyGuard = true // the link's commit guard alone is no wiring
 	}
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return true // no hook folder yet: nothing was ever installed
 	}
 	for _, e := range ents {
-		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") {
+		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") || (onlyGuard && e.Name() == hookCommitMsg) {
 			continue
 		}
 		if b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, e.Name()))); rerr == nil && strings.Contains(string(b), gitBlockMarker) {

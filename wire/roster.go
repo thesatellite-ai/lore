@@ -83,6 +83,15 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 		return nil, err
 	}
 	if !slices.Contains(st.eng.Stores(), target) {
+		// devco N-1: a long-lived App (the setup page, `lore api`) opened
+		// its state before this same request wrote the org entry that
+		// attaches target (the admin setup's team step): open it again
+		// from the files as they are now, once, before refusing.
+		if st, err = a.reopenForStore(ctx, target, write); err != nil {
+			return nil, err
+		}
+	}
+	if !slices.Contains(st.eng.Stores(), target) {
 		return nil, errs.New(errs.NotFound, "roster: no store named "+string(target)+" is attached").
 			WithHint("the org's store is attached from ~/.lore/config.yaml in a repo of that org")
 	}

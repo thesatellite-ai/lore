@@ -665,23 +665,60 @@ func defaultListLine(id string) string {
 	return "  on tasklist " + id + " \"" + DefaultTasklistTitle + "\" (the default; --tasklist picks another)\n"
 }
 
+// defaultTasklistKey is the key part of the default list's natural id
+// (with the project id and the store): ids.Natural(tlt, key, project, store).
+const defaultTasklistKey = "default-tasklist"
+
+// DefaultTasklistID is the natural id of a project's default task list
+// in store src (devco:M-2): every clone that creates the list writes this
+// same id, so two people's first `task add` made before either synced
+// converge on one row at sync instead of leaving one "default" list per
+// person. Each store keeps its own default list (a ref never crosses
+// stores), so the store is part of the key.
+func DefaultTasklistID(project ids.ID[ids.Project], src store.Source) (ids.AnyID, error) {
+	id, err := ids.Natural(ids.PrefixTaskList, defaultTasklistKey, project.String(), string(src))
+	if err != nil {
+		return ids.AnyID{}, errs.Wrap(errs.Internal, "task: default tasklist id", err)
+	}
+	return id, nil
+}
+
 // defaultTasklist returns the project's "default" task list in the target
 // store, creating it on demand (v0.1.17 defaultTasklist); created says it
-// was made now.
+// was made now. When several exist (lists made by older builds, one per
+// person) every clone picks the same one: the natural-id list, else the
+// one with the lowest id (devco:M-2).
 func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[ids.Project]) (id string, created bool, err error) {
 	src := store.Source(target)
 	if src == "" {
 		src = store.SourceRepo
+	}
+	natural, err := DefaultTasklistID(project, src)
+	if err != nil {
+		return "", false, err
 	}
 	rows, err := o.env.List(ctx, src, schema.TableTasklists)
 	if err != nil {
 		return "", false, err
 	}
 	slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+	first, naturalTaken := "", false
 	for _, r := range rows {
-		if !r.Deleted && work.Field(r, work.FieldProject) == project.String() && work.Field(r, work.FieldTitle) == DefaultTasklistTitle {
+		if r.ID.String() == natural.String() {
+			naturalTaken = true // a deleted natural list cannot be created again
+		}
+		if r.Deleted || work.Field(r, work.FieldProject) != project.String() || work.Field(r, work.FieldTitle) != DefaultTasklistTitle {
+			continue
+		}
+		if r.ID.String() == natural.String() {
 			return r.ID.String(), false, nil
 		}
+		if first == "" {
+			first = r.ID.String()
+		}
+	}
+	if first != "" {
+		return first, false, nil
 	}
 	fields, err := work.Texts(Noun, map[string]string{work.FieldTitle: DefaultTasklistTitle, fieldStatusStr: DefaultTasklistStatus})
 	if err != nil {
@@ -689,6 +726,17 @@ func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[
 	}
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return "", false, err
+	}
+	if c, ok := o.env.(IDCreator); ok && !naturalTaken {
+		w, err := c.CreateWithID(ctx, store.Source(target), schema.TableTasklists, natural, fields)
+		if err == nil {
+			return w.Row.ID.String(), true, nil
+		}
+		// E_STALE: a row with the natural id exists but is not listed (in
+		// the trash): a list with a fresh id takes its place.
+		if errs.CodeOf(err) != errs.Stale {
+			return "", false, err
+		}
 	}
 	w, err := o.env.Create(ctx, store.Source(target), schema.TableTasklists, fields)
 	if err != nil {
@@ -1521,6 +1569,9 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	}
 	id, err := taskID(in.ID)
 	if err != nil {
+		return DoneOut{}, err
+	}
+	if in.Commit, err = o.resolveDoneCommit(ctx, id.String(), in.Commit); err != nil {
 		return DoneOut{}, err
 	}
 	// G-10: a task is finished once. A second done (no --commit / --pr to
