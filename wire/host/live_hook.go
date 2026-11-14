@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
@@ -994,7 +995,7 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 				if s.fetchMissing() {
 					// G-18: the address answers "no repository": the repo
 					// most likely moved; say how to follow it
-					line += "; if the repo moved: git remote set-url " + s.ref.RemoteName + " <new-url>, then lore repo set-url --url <new-url>"
+					line += movedRemoteHint(s.ref.RemoteName, s.remoteURL)
 				}
 				h.line(line)
 			}
@@ -1018,4 +1019,16 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 			WithHint("run `lore upgrade`; reading still works")
 	}
 	return nil
+}
+
+// movedRemoteHint is the "the repo moved" step of a live fetch that found
+// no repository at the remote. A hosted remote also needs lore repo
+// set-url (the repo's recorded address follows the move); a path on this
+// machine is no recorded address, so git remote set-url is the whole move
+// (O-13: lore repo set-url was named for one, and refused it).
+func movedRemoteHint(remote, url string) string {
+	if repourl.IsLocalRemote(url) {
+		return "; if the repo moved: git remote set-url " + remote + " <new-path>, then lore sync"
+	}
+	return "; if the repo moved: git remote set-url " + remote + " <new-url>, then lore repo set-url --url <new-url>"
 }

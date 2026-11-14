@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -239,11 +240,34 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 			if cerr := ctx.Err(); cerr != nil {
 				return cerr
 			}
-			if werr != nil || !d.IsDir() {
-				return nil // unreadable or a file
+			if werr != nil {
+				return nil // unreadable
 			}
 			if p != base && (strings.HasPrefix(d.Name(), ".") || fixWalkSkip[d.Name()]) {
-				return filepath.SkipDir
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if linkedDir(p, d) {
+				// O-1: a symlink to a repo in a setup folder is one of its
+				// repos (WalkDir reports the link as a non-folder, so it
+				// was dropped with no word); consider resolves it, so a
+				// repo reached twice counts once, and the link is never
+				// walked through (a link can loop)
+				consider(p)
+				if root := resolvedPath(p); root != p && seen[root] {
+					if out.Links == nil {
+						out.Links = map[string]string{}
+					}
+					if _, ok := out.Links[root]; !ok {
+						out.Links[root] = p
+					}
+				}
+				return nil
+			}
+			if !d.IsDir() {
+				return nil // a file
 			}
 			consider(p)
 			if isGitTop(p) || levels(base, p) >= depth {
@@ -259,6 +283,16 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 	slices.Sort(out.NoLore)
 	slices.SortFunc(out.Skipped, func(x, y opsfix.Skip) int { return strings.Compare(x.Path, y.Path) })
 	return out, nil
+}
+
+// linkedDir reports whether the walk entry d at p is a symlink whose
+// target is a folder (O-1: the repos a setup folder links to).
+func linkedDir(p string, d fs.DirEntry) bool {
+	if d.Type()&fs.ModeSymlink == 0 {
+		return false
+	}
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }
 
 // inLoreStore reports whether dir is a lore store's checkout (a store
@@ -312,14 +346,45 @@ func (a *App) DoctorFleet(ctx context.Context) (opsdoctor.Fleet, error) {
 		return opsdoctor.Fleet{}, err
 	}
 	out := opsdoctor.Fleet{Repos: make([]opsdoctor.FleetRepo, 0, len(found.Roots)), NoLore: found.NoLore}
+	home := userHome(SetupQuery{})
 	for _, root := range found.Roots {
-		r := opsdoctor.FleetRepo{Path: root}
-		if old, ferr := projectFormatOld(root); ferr == nil && old {
+		r := opsdoctor.FleetRepo{Path: root, Link: found.Links[root], Problem: originFault(ctx, root, net.DefaultResolver.LookupHost)}
+		switch old, ferr := projectFormatOld(root); {
+		case ferr == nil && old:
 			r.FormatOld, r.Next = true, formatOldMigrateHint(ctx, root)
+		case r.Link != "":
+			r.Next = linkedRepoNext(cfg, home, r.Link, root)
 		}
 		out.Repos = append(out.Repos, r)
 	}
 	return out, nil
+}
+
+// linkedRepoNext is the step of a repo a setup folder holds only as a
+// symlink (O-1) when the setup checks do not cover it: lore runs in the
+// repo at its real folder (git resolves the link), which no setup's
+// folders hold, so the line names the link, the real folder and the
+// command that adds that folder to the setup holding the link. "" when a
+// setup's folders hold the real folder (the checks cover it there).
+func linkedRepoNext(cfg onboard.Config, home, link, root string) string {
+	if onboard.MatchFolder(cfg.Enabled(), root, home, filepath.EvalSymlinks).Found {
+		return ""
+	}
+	why := "not checked: reached through the link " + link + "; the repo itself is at " + root + ", outside the setups' folders, so the setup checks above do not cover it (lore fix --all still fixes it)"
+	for _, e := range cfg.Enabled() {
+		for _, g := range e.Folders {
+			base := GlobBase(onboard.ExpandHome(g, home))
+			if !strings.HasPrefix(link, base+string(filepath.Separator)) {
+				continue
+			}
+			cmd := "lore setup edit --name " + e.Name
+			for _, f := range e.Folders {
+				cmd += " --folder '" + f + "'"
+			}
+			return why + "; to check it with setup " + e.Name + ": " + cmd + " --folder '" + root + "'"
+		}
+	}
+	return why
 }
 
 // setupsHaveFolders reports whether an enabled setup names a folder.

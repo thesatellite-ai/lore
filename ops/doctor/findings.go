@@ -134,6 +134,13 @@ func (r *Report) finalize() {
 	for _, w := range r.Warnings {
 		add(w, onboard.StatusWarn, CheckWarning)
 	}
+	// O-19: a repo of the setups' folders whose origin is gone is a
+	// warning too; the fleet block names it (not "This repo")
+	for _, fr := range r.Found.Repos {
+		if fr.Problem != "" {
+			add(fr.Path+": "+fr.Problem, onboard.StatusWarn, CheckWarning)
+		}
+	}
 	r.Status = r.visibleStatus()
 }
 

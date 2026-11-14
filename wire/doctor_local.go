@@ -47,7 +47,10 @@ func (a *App) DoctorTimeOutbox(ctx context.Context) ([]DoctorFinding, error) {
 	warn := func(msg string) []DoctorFinding {
 		return []DoctorFinding{{Check: DoctorCheckTimeOutbox, Level: DoctorWarning, Plain: true, Message: msg}}
 	}
-	ls, err := a.LocalState(ctx)
+	// writableHome: on a lore home lore cannot write (a CI runner's
+	// read-only HOME, devco O-18) the open reads the scratch copy of the
+	// machine store, since sqlite cannot open the real file read-write
+	ls, err := openLocalState(ctx, writableHome(a.opts.Home))
 	if err != nil {
 		return warn("time_outbox: this machine's local state could not be opened: " + err.Error()), nil
 	}

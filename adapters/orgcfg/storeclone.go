@@ -86,7 +86,7 @@ func fetchLocked(ctx context.Context, r Router, dir string, now time.Time, branc
 	// right now: the link index then reads the clone as it is (the stale
 	// rule, live.fetch_ttl / link_index.max_age) instead of waiting.
 	if gitbackend.NoClone(ctx) && gitbackend.OriginAt(dir) == "" {
-		return errs.New(errs.StoreUnreachable, "orgcfg: the store at "+dir+" has no clone on this machine yet, and this run makes none (dry run)")
+		return errs.New(errs.StoreUnreachable, "orgcfg: the store at "+dir+" has no clone on this machine yet, and this run makes none (a dry run or a CI read)")
 	}
 	lctx, unlock, err := gitbackend.TryLockClone(ctx, dir, fetchLockWait)
 	if err != nil {

@@ -186,6 +186,14 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		ctx = wire.WithNoCreate(ctx)      // lore fix --dry-run changes nothing
 		ctx = gitbackend.WithNoClone(ctx) // … not even a store clone (B4-14)
 	}
+	if ciRun(run0) {
+		// devco O-7, O-18: a CI-form run reads the checkout only. An
+		// attached store with no clone here is left out (unreachable)
+		// instead of being cloned into the runner's HOME, and no store is
+		// fetched: the job has no store credentials, and a HOME it cannot
+		// write must not fail the check (docs/operations/ci.md).
+		ctx = gitbackend.WithNoFetch(gitbackend.WithNoClone(ctx))
+	}
 	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: readOnly, Cmd: r.State.Cmd, Args: r.State.Args}
 	// D7 (B2-20): `lore sync` in a repo lore 0.1.17 wrote and nobody
 	// migrated yet runs as a read: it changes no tracked file, so the

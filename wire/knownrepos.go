@@ -222,11 +222,21 @@ func ScanLoreRepos(ctx context.Context, bases []string, depth int) ([]onboard.Kn
 			if cerr := ctx.Err(); cerr != nil {
 				return cerr
 			}
-			if werr != nil || !d.IsDir() {
-				return nil // unreadable or a file: nothing to find here
+			if werr != nil {
+				return nil // unreadable: nothing to find here
+			}
+			link := linkedDir(p, d) // O-1: a linked repo is looked at, never walked through
+			if !d.IsDir() && !link {
+				return nil // a file
+			}
+			stop := func() error { // not below p: SkipDir on a link would skip its parent
+				if link {
+					return nil
+				}
+				return filepath.SkipDir
 			}
 			if p != base && strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
+				return stop()
 			}
 			if fi, serr := os.Stat(filepath.Join(p, rowfs.LoreDir)); serr == nil && fi.IsDir() {
 				root := resolvedPath(p)
@@ -235,10 +245,10 @@ func ScanLoreRepos(ctx context.Context, bases []string, depth int) ([]onboard.Kn
 					m, _, _ := rowfs.ReadRepoMeta(p) // no id yet still lists the folder
 					out = append(out, onboard.KnownRepo{RepoID: m.RepoID, Root: root})
 				}
-				return filepath.SkipDir
+				return stop()
 			}
-			if levels(base, p) >= depth {
-				return filepath.SkipDir
+			if link || levels(base, p) >= depth {
+				return stop()
 			}
 			return nil
 		})

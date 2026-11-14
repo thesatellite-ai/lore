@@ -41,6 +41,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -348,14 +349,29 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 			lines = append(lines, formatLine)
 		}
 		line := placeLabel(*p) + ": " + strconv.Itoa(len(diff)) + " files upgraded"
-		if n := metaFilesIn(diff); n > 0 {
+		n, actors := metaFilesIn(diff), newActorFiles(diff)
+		if n > 0 || len(actors) > 0 {
 			// B1-9: "Upgraded 16 rows" then "17 files upgraded" read as a
 			// row gone missing; the extra file is the format file
-			extra := rowfs.MetaFileName
-			if n > 1 {
-				extra += " and " + rowfs.SignpostFile
+			line += " (" + strconv.Itoa(len(diff)-n) + " row files"
+			if len(actors) > 0 {
+				// devco O-3/O-17: an actor row the run's own writes added
+				// (the engine registers its writer) is no upgraded row and
+				// no dry run can count it; named, the files add up
+				line += ", " + plural(len(actors), "new actor row") + " among them (" + strings.Join(actors, ", ") + ") that the run's own writes added"
 			}
-			line += " (" + strconv.Itoa(len(diff)-n) + " row files and " + extra + ")"
+			if n > 0 {
+				extra := rowfs.MetaFileName
+				if n > 1 {
+					extra += " and " + rowfs.SignpostFile
+				}
+				sep := " and "
+				if len(actors) > 0 {
+					sep = "; plus "
+				}
+				line += sep + extra
+			}
+			line += ")"
 		}
 		switch {
 		case p.Entry == repoEntry && !p.Clone:
@@ -994,6 +1010,19 @@ func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error
 
 // metaFilesIn counts the format files (_meta.json) among a migration's
 // changed paths.
+// newActorFiles lists the ids of the actor row files diff adds (no file
+// before the run): rows the run's writes registered for their writer,
+// not rows it upgraded.
+func newActorFiles(diff []git.TreeChange) []string {
+	var out []string
+	for _, d := range diff {
+		if d.OldBlob == "" && d.NewBlob != "" && path.Dir(d.Path) == string(schema.TableActors) {
+			out = append(out, strings.TrimSuffix(path.Base(d.Path), ".json"))
+		}
+	}
+	return out
+}
+
 func metaFilesIn(diff []git.TreeChange) int {
 	n := 0
 	for _, d := range diff {

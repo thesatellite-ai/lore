@@ -146,6 +146,10 @@ type Found struct {
 	// Note says how the repos were chosen when no setup has folders
 	// (B4-8: a machine upgraded from lore 0.1.17), "" otherwise.
 	Note string
+	// Links maps a root the folder walk reached through a symlink to the
+	// first link path (O-1): the root lies elsewhere, so lore doctor --all
+	// can say why the setup checks do not cover it.
+	Links map[string]string
 }
 
 // NoLoreLine is the --verbose line of a repo --all found with no lore

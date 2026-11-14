@@ -13,7 +13,11 @@ package doctor
 //	  8 repo(s) without lore data, left as they are (lore doctor --all --verbose lists them)
 //
 // The block is a note: it never changes the status (lore fix --all counts
-// a 0.1.17-format repo apart, never as a failure).
+// a 0.1.17-format repo apart, never as a failure). A repo's Problem (O-19:
+// its origin is gone) is the exception: it is a finding (Report.finalize),
+// so the report is DEGRADED, and the block names the repo with its step:
+//
+//	  <repo>  origin: no git repository at <url> (moved or deleted); …
 
 import (
 	"context"
@@ -45,6 +49,14 @@ type FleetRepo struct {
 	FormatOld bool `json:"format_old,omitempty"`
 	// Next is what the person runs next ("" when checked and current).
 	Next string `json:"next,omitempty"`
+	// Problem is what stops lore working in the repo that doctor --all
+	// can tell without running in it (O-19: an origin that is gone or
+	// names no host), with the next step; "" when none. Each one is also
+	// a warning of the report (DEGRADED).
+	Problem string `json:"problem,omitempty"`
+	// Link is the symlink in a setup folder the repo was reached through
+	// (O-1), "" when the folder holds the repo itself.
+	Link string `json:"link,omitempty"`
 }
 
 // fleetNotChecked is the step of a repo with lore data the setup checks
@@ -57,7 +69,10 @@ func fleetOf(f Fleet, checked map[string]bool) Fleet {
 	for i := range f.Repos {
 		r := &f.Repos[i]
 		r.Checked = checked[r.Path] && !r.FormatOld
-		if !r.Checked && !r.FormatOld && r.Next == "" {
+		switch {
+		case r.Checked:
+			r.Next = "" // a linked repo another setup's folders hold
+		case !r.FormatOld && r.Next == "":
 			r.Next = fleetNotChecked
 		}
 	}
@@ -85,11 +100,16 @@ func fleetText(f Fleet, verbose bool) string {
 	}
 	fmt.Fprintf(&b, ", %d without lore data\n", len(f.NoLore))
 	for _, r := range f.Repos {
+		if r.Problem != "" {
+			fmt.Fprintf(&b, "  %s  %s\n", r.Path, r.Problem)
+		}
 		switch {
 		case r.FormatOld:
 			fmt.Fprintf(&b, "  %s  on the lore 0.1.17 format; %s\n", r.Path, r.Next)
 		case !r.Checked:
 			fmt.Fprintf(&b, "  %s  %s\n", r.Path, r.Next)
+		case verbose && r.Link != "":
+			fmt.Fprintf(&b, "  %s  checked (through the link %s)\n", r.Path, r.Link)
 		case verbose:
 			fmt.Fprintf(&b, "  %s  checked\n", r.Path)
 		}

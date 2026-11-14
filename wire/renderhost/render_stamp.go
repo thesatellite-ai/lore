@@ -205,7 +205,18 @@ func (h *Host) copiesOf(ctx context.Context, root, out string, p *committedPlan)
 			if fk == opsrender.CopyEdited {
 				fk = opsrender.CopyStale
 			}
-			add(fk, filepath.ToSlash(filepath.Join(filepath.Dir(out), fullFileName)), "the full fallback file")
+			fullRel := filepath.ToSlash(filepath.Join(filepath.Dir(out), fullFileName))
+			if fk == opsrender.CopyMissing {
+				if rel, rerr := filepath.Rel(root, fullPath); rerr == nil && !tracked(ctx, root, filepath.ToSlash(rel)) {
+					// devco O-8: the repo never carried it (a migrated
+					// repo, or one whose LORE.full.md was never added), so
+					// a fresh clone has nothing to compare: a note, not a
+					// failure, naming how to share it
+					found = append(found, untrackedFullFinding(fullRel))
+					fk = ""
+				}
+			}
+			add(fk, fullRel, "the full fallback file")
 		}
 	}
 	priv, err := h.privateCopies(ctx, root)
@@ -213,6 +224,20 @@ func (h *Host) copiesOf(ctx context.Context, root, out string, p *committedPlan)
 		return nil, err
 	}
 	return append(found, priv...), nil
+}
+
+// untrackedFullFinding is the note for a LORE.full.md that is not on
+// disk and that git does not track (devco O-8): the clone never carried
+// it, so lore render --check and doctor do not fail on it (Local); the
+// fix renders it and adds it to git so later clones carry it.
+func untrackedFullFinding(rel string) opsrender.CopyFinding {
+	return opsrender.CopyFinding{
+		Kind:    opsrender.CopyMissing,
+		File:    rel,
+		Message: rel + " is not in this checkout and git does not track it (the full fallback file was never committed)",
+		Fix:     renderFixCommand + " && git add " + rel,
+		Local:   true,
+	}
 }
 
 // fixIDsCommand is the fix of a private render that waits for its

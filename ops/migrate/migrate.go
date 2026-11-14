@@ -320,15 +320,24 @@ var _ op.Texter = RunOut{}
 // indented, then the run's own journal lines.
 func (o RunOut) Text() string {
 	var b strings.Builder
-	verb := "Upgraded"
+	verb, stepsVerb := "Upgraded", "the steps below wrote, copied or moved"
 	if o.DryRun {
-		verb = "Would upgrade"
+		verb, stepsVerb = "Would upgrade", "the steps below would write, copy or move"
 	}
 	switch {
 	case o.Count == 0 && len(o.Rows) == 0 && len(o.Steps) == 0:
 		b.WriteString("Nothing to migrate: every row is already in the current format.\n")
-	default:
+	case len(o.Rows) == 0: // settings steps only: their rows are the count
 		b.WriteString(verb + " " + plural.Count(o.Count, "row") + "\n")
+	default:
+		// devco O-3: the headline counts the rows upgraded in place (the
+		// table lines below, the "N row files" of the branch line); rows a
+		// step only copied, moved or wrote elsewhere (machine-local copies,
+		// a Mode B move) get their own line instead of inflating it
+		b.WriteString(verb + " " + plural.Count(len(o.Rows), "row") + "\n")
+		if extra := o.Count - len(o.Rows); extra > 0 {
+			b.WriteString("  plus " + plural.Count(extra, "row") + " " + stepsVerb + " (not upgraded in place)\n")
+		}
 	}
 	for _, r := range RowLines(o.Rows, o.Verbose) {
 		b.WriteString("  " + r + "\n")

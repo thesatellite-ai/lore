@@ -27,7 +27,14 @@ func TestRunOutText(t *testing.T) {
 		{"one row, verbose", RunOut{Count: 1, Rows: []string{"memories/mem_1"}, Verbose: true}, "Upgraded 1 row\n  memories/mem_1\n"},
 		{"one row, dry run", RunOut{DryRun: true, Count: 1, Rows: []string{"memories/mem_1"}}, "Would upgrade 1 row\n  memories: 1 row (mem_1)\nNothing written (dry run).\n"},
 		{"many, order rows steps journal", RunOut{Count: 3, Rows: []string{"tasks/tsk_1", "tasks/tsk_2"}, Steps: []string{"tags_snake_case: 1 tag"}, Journal: []string{"backup: refs/lore-backup/migrate/x", "undo: lore migrate rollback"}, BackupRef: "refs/lore-backup/migrate/x"},
-			"Upgraded 3 rows\n  tasks: 2 rows (tsk_1, tsk_2)\n  tags_snake_case: 1 tag\nbackup: refs/lore-backup/migrate/x\nundo: lore migrate rollback\n"},
+			"Upgraded 2 rows\n  plus 1 row the steps below wrote, copied or moved (not upgraded in place)\n  tasks: 2 rows (tsk_1, tsk_2)\n  tags_snake_case: 1 tag\nbackup: refs/lore-backup/migrate/x\nundo: lore migrate rollback\n"},
+		// devco O-3: 3 rows upgraded and 2 machine-local rows copied read
+		// "Upgraded 5 rows" beside "3 files upgraded"; the headline is the
+		// upgraded rows, the copies their own line (dry run alike)
+		{"upgraded and copied", RunOut{Count: 5, Rows: []string{"memories/mem_1", "memories/mem_2", "actors/act_1"}, Steps: []string{"machine_local: copied 2 render_histories rows"}},
+			"Upgraded 3 rows\n  plus 2 rows the steps below wrote, copied or moved (not upgraded in place)\n  memories: 2 rows (mem_1, mem_2)\n  actors: 1 row (act_1)\n  machine_local: copied 2 render_histories rows\n"},
+		{"upgraded and copied, dry run", RunOut{DryRun: true, Count: 5, Rows: []string{"memories/mem_1", "memories/mem_2", "actors/act_1"}, Steps: []string{"machine_local: would copy 2 render_histories rows"}},
+			"Would upgrade 3 rows\n  plus 2 rows the steps below would write, copy or move (not upgraded in place)\n  memories: 2 rows (mem_1, mem_2)\n  actors: 1 row (act_1)\n  machine_local: would copy 2 render_histories rows\nNothing written (dry run).\n"},
 		// owner item C2: files left in the code repo end the run with one commit line
 		{"uncommitted", RunOut{Count: 2, Rows: []string{"rules/rul_1", "rules/rul_2"}, Uncommitted: 3, Journal: []string{"undo: lore migrate rollback"}},
 			"Upgraded 2 rows\n  rules: 2 rows (rul_1, rul_2)\nundo: lore migrate rollback\n3 upgraded files in .lore/data wait for your commit: " + CommitCommand + "\n"},

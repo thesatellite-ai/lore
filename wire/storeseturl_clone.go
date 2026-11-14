@@ -16,9 +16,12 @@ package wire
 //	                      → carry: that clone becomes the store's clone
 //	        otherwise     → E_REFUSED naming the commits, nothing written
 //	applyCloneCarry (after the places moved)
-//	   └─ under the old clone's lock: origin → the new address; the clone
-//	      record names it for the new address; the new address's own
-//	      clone (fully pushed: everything in it is on the remote) is removed
+//	   └─ under the old clone's lock: origin → the new address; the new
+//	      address's own clone (fully pushed: everything in it is on the
+//	      remote) is removed and the old clone moves into its folder (O-14:
+//	      the folder serving the store carries the new address's name; a
+//	      person's own clone keeps its folder); the clone record names it
+//	      for the new address
 //
 // The next `lore sync` then pushes the waiting commits to the new address,
 // as the write that made them promised. `lore doctor` (doctor_clones.go)
@@ -46,6 +49,7 @@ type cloneCarry struct {
 	own     bool     // a person's own clone (`lore store use`): stays own
 	oldKeys []string // record keys naming the stranded folder (dropped)
 	drop    string   // the new address's own clone ("" when none or the same folder)
+	dest    string   // the new address's clone folder: from moves there (O-14; "" to stay)
 	pending []string // what the stranded clone holds (for the line set-url prints)
 }
 
@@ -107,6 +111,13 @@ func (a *App) planCloneCarry(ctx context.Context, id, raw, branch string) (clone
 	}
 	s := stranded[0]
 	carry := cloneCarry{from: s.found.Paths.Dir, key: gitbackend.CloneKey(r, branch), own: s.found.Own, pending: s.pending}
+	if !carry.own && !newOwn && newDir != carry.from {
+		// O-14: the carried clone moves to the new address's folder, so
+		// the folder serving the store carries its name (before, the old
+		// name served forever, and the git user line named a folder set-url
+		// then removed)
+		carry.dest = newDir
+	}
 	for k, e := range gitbackend.ReadCloneRecord(home).Clones {
 		if e.Path == carry.from && k != carry.key {
 			carry.oldKeys = append(carry.oldKeys, k)
@@ -154,11 +165,26 @@ func (a *App) applyCloneCarry(ctx context.Context, c cloneCarry, raw string) (st
 	if err != nil {
 		return "", errs.Wrap(errs.Internal, verb+": point the clone "+c.from+" at "+raw, err)
 	}
+	line := ""
+	if c.drop != "" {
+		// The new address's clone was fully pushed when planned; check
+		// again under its lock (a writer may have committed since) before
+		// removing it.
+		line = dropReplacedClone(ctx, c.drop)
+	}
+	at := c.from
+	if c.dest != "" && line == "" && !exists(c.dest) {
+		if merr := moveClone(ctx, c.from, c.dest); merr != nil {
+			line = "; it keeps its folder name (moving it to " + c.dest + " failed: " + merr.Error() + ")"
+		} else {
+			at = c.dest
+		}
+	}
 	why := gitbackend.WhyMoved
 	if c.own {
 		why = gitbackend.WhyOwn
 	}
-	if err := gitbackend.RecordClone(home, c.key, gitbackend.CloneEntry{Path: c.from, Why: why}, time.Now()); err != nil {
+	if err := gitbackend.RecordClone(home, c.key, gitbackend.CloneEntry{Path: at, Why: why}, time.Now()); err != nil {
 		return "", err
 	}
 	for _, k := range c.oldKeys {
@@ -166,25 +192,46 @@ func (a *App) applyCloneCarry(ctx context.Context, c cloneCarry, raw string) (st
 			return "", err
 		}
 	}
-	line := "the clone " + c.from + " (" + strings.Join(c.pending, ", ") + ") now fetches from and pushes to " + raw + "; `lore sync` sends its waiting commits"
-	if c.drop == "" {
-		return line, nil
+	head := "the clone " + c.from + " (" + strings.Join(c.pending, ", ") + ")"
+	if at != c.from {
+		head = "the clone " + c.from + " moved to " + at + " (" + strings.Join(c.pending, ", ") + "); it"
 	}
-	// The new address's clone was fully pushed when planned; check again
-	// under its lock (a writer may have committed since) before removing it.
-	dctx, dunlock, err := gitbackend.LockClone(ctx, c.drop)
+	return head + " now fetches from and pushes to " + raw + "; `lore sync` sends its waiting commits" + line, nil
+}
+
+// dropReplacedClone removes the new address's own clone (fully pushed when
+// planned) so the carried clone can take its folder; "" when removed,
+// else the "; …" tail saying why it was left.
+func dropReplacedClone(ctx context.Context, drop string) string {
+	dctx, dunlock, err := gitbackend.LockClone(ctx, drop)
 	if err != nil {
-		return line + "; the clone " + c.drop + " was left (" + err.Error() + "): remove it once nothing uses it", nil
+		return "; the clone " + drop + " was left (" + err.Error() + "): remove it once nothing uses it"
 	}
-	mine := unpushedIn(dctx, cloneDirs{git: c.drop, work: c.drop})
+	mine := unpushedIn(dctx, cloneDirs{git: drop, work: drop})
 	dunlock()
 	if len(mine) > 0 {
-		return line + "; the clone " + c.drop + " was left: it now holds " + strings.Join(mine, ", "), nil
+		return "; the clone " + drop + " was left: it now holds " + strings.Join(mine, ", ")
 	}
-	if err := os.RemoveAll(c.drop); err != nil {
-		return line + "; the unused clone " + c.drop + " could not be removed (" + err.Error() + ")", nil
+	if err := os.RemoveAll(drop); err != nil {
+		return "; the unused clone " + drop + " could not be removed (" + err.Error() + ")"
 	}
-	return line, nil
+	return ""
+}
+
+// moveClone renames the clone folder from to dest (its parent created).
+// The clone lock lives inside the folder, so it is taken and released
+// first (no lore writer is inside it now) rather than held across the
+// rename, which would carry a held lock file to dest.
+func moveClone(ctx context.Context, from, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+		return err
+	}
+	_, unlock, err := gitbackend.LockClone(ctx, from)
+	if err != nil {
+		return err
+	}
+	unlock()
+	return os.Rename(from, dest)
 }
 
 // strandedList names each stranded clone and what it holds.

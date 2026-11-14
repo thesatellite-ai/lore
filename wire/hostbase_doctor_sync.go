@@ -34,6 +34,7 @@ package wire
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -164,6 +165,9 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 		return s // not a git checkout: the git fields do not apply
 	}
 	s.InGitRepo = true
+	if line := originFault(ctx, gitTopLevel(ctx, dir), net.DefaultResolver.LookupHost); line != "" {
+		warn(line) // O-19: a dead origin is named here, not only by lore sync
+	}
 	switch out, gerr := git("config", "--get", mergeDriverConfigKey); {
 	case gerr != nil || strings.TrimSpace(string(out)) == "":
 		if remote := linkedByRemote(ctx, a.opts); remote != "" {

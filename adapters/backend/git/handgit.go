@@ -304,6 +304,24 @@ func NoClone(ctx context.Context) bool {
 	return v || clonesForbidden.Load()
 }
 
+// noFetchKey marks a run that must not fetch a store clone.
+type noFetchKey struct{}
+
+// WithNoFetch returns ctx for a run that reads only what is on disk (a CI
+// read, devco O-7): every store fetch is skipped, as LORE_NO_STORE_FETCH
+// skips it, so a CI job needs no store credentials and goes to no remote.
+// Why a ctx and not the env: `lore api` serves many requests from one
+// process, and only the CI-form one must stay still.
+func WithNoFetch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noFetchKey{}, true)
+}
+
+// NoFetch reports whether ctx forbids fetching a store (WithNoFetch).
+func NoFetch(ctx context.Context) bool {
+	v, _ := ctx.Value(noFetchKey{}).(bool)
+	return v
+}
+
 // clonesForbidden is ForbidClones' process-wide switch.
 var clonesForbidden atomic.Bool
 

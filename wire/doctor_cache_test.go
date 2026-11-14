@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -199,4 +200,32 @@ func TestDoctorCacheOneHandlePerApp(t *testing.T) {
 	if got, ok := other.Get(k); !ok || got.Detail != "read ok" {
 		t.Fatalf("after the opening request was cancelled, Put did not reach machine.db: %+v %v", got, ok)
 	}
+}
+
+// TestDoctorCacheReadCreatesNoMachineStore (devco O-9): a read (lore
+// doctor on a fresh CI runner) caches its checks in memory and creates no
+// machine.db; once machine.db exists, the read shares it.
+func TestDoctorCacheReadCreatesNoMachineStore(t *testing.T) {
+	t.Parallel()
+	home := filepath.Join(t.TempDir(), ".lore")
+	now := func() time.Time { return time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC) }
+	read := WithNoCreate(context.Background())
+	c := cacheApp(home, now).DoctorCache(read)
+	if _, ok := c.(*machineDoctorCache); ok {
+		closeCache(t, c)
+		t.Fatal("a read opened the machine.db cache in a home that has none")
+	}
+	if _, err := os.Stat(home); err == nil {
+		t.Fatalf("a read created %s", home)
+	}
+	w := cacheApp(home, now).DoctorCache(context.Background()) // a write (lore setup) makes it
+	if _, ok := w.(*machineDoctorCache); !ok {
+		t.Fatalf("DoctorCache outside a read is %T, want the machine.db cache", w)
+	}
+	defer closeCache(t, w)
+	r := cacheApp(home, now).DoctorCache(read)
+	if _, ok := r.(*machineDoctorCache); !ok {
+		t.Fatalf("a read with machine.db present got %T, want the shared cache", r)
+	}
+	closeCache(t, r)
 }
