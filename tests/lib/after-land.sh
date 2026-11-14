@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# after-land.sh: the full gate (`task check`) on what landed: origin/dev as it is now, in a
+# after-land.sh: the full gate (`task check`) on what landed: origin/main as it is now, in a
 # fresh worktree, never the work tree you are in. Used by `task lore:check:after-land`.
 #
 # The landing rule (docs/DEVELOPMENT.md "Landing"): a small fix may land after `task check:fast`;
@@ -8,10 +8,10 @@
 # Writes LORE_GATE_REPORT (default ${XDG_STATE_HOME:-~/.local/state}/lore-gate/last.md): first
 # line "PASS <commit> <subject>" or "FAIL <commit> <subject>", then the gate's timing table; the
 # step logs go to a folder beside it (<report>.logs/). The worktree is removed afterwards. Exit
-# status is the gate's. LORE_AFTER_LAND_REF names another ref to test (default origin/dev, the branch fixes land on).
+# status is the gate's. LORE_AFTER_LAND_REF names another ref to test (default origin/main).
 set -uo pipefail
 
-ref="${LORE_AFTER_LAND_REF:-origin/dev}"
+ref="${LORE_AFTER_LAND_REF:-origin/main}"
 remote="${ref%%/*}"
 branch="${ref#*/}"
 report="${LORE_GATE_REPORT:-${XDG_STATE_HOME:-$HOME/.local/state}/lore-gate/last.md}"

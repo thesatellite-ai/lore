@@ -79,7 +79,7 @@ Nothing else bounds the cache (Go drops entries unused for 5 days, which does no
 |---|---|---|---|
 | quick | `task lore:test:quick` | all the time while building: after every edit, before asking for review | `go test ./...`: every unit test of the root module with Go's test cache, no `-race`, no end-to-end suite except the fast machine shapes (`tests/machines` `TestForeign|Env|Links|Shapes`, about 45 s, skipped when arguments narrow the run). Narrow it with `task lore:test:quick -- ./ops/task/...`. Not behind `testlock`, so it never queues behind someone's full gate |
 | fast | `task check:fast` (= `task lore:check:fast`) | landing a small fix (see "Landing" below) | a quick sanity check: build, vet, gofmt, staticcheck, cross-builds, tidy and every unit test (the layer and no-any guards are unit tests); no race detector, no end-to-end suite and no docs step (the full gate after landing runs them); about 2-3 minutes. Not behind `testlock`: it never queues behind someone's full gate |
-| full | `task check` (= `task lore:check`) | once, before a commit is pushed (the pre-push hook enforces it; a small fix may land on `check:fast` instead, then the full gate runs on dev) | everything below, scheduled under a load budget |
+| full | `task check` (= `task lore:check`) | once, before a commit is pushed (the pre-push hook enforces it; a small fix may land on `check:fast` instead, then the full gate runs on main) | everything below, scheduled under a load budget |
 
 Measured on a 48-core Linux machine: the quick tier takes about 48 s with an empty test cache (slowest packages wire 38 s, ops/settings 29 s, app 26 s, ops/task 21 s; 2026-11-07) and less when most packages are cached. The full gate took 1526 s on 2026-11-11 with every end-to-end suite started at once (a load average of 161, peaks above 300, 42 % of the CPU spent in the kernel switching between processes); the same steps scheduled under the load budget, with the docs, scenario and chaos runners in parallel and `wire`'s race tests in shards, take about 15 minutes (below).
 
@@ -134,12 +134,12 @@ task lore:hooks:install  # once per clone: use the committed .githooks
 
 `task lore:hooks:install` points git at `.githooks/`, whose `pre-push` hook enforces the gate. A passing `task check` records the tree of the tracked files it tested (`.git/lore-check-passed`). On `git push`, if every pushed commit has exactly that tree, the push goes through at once; otherwise the hook runs `task check` first and blocks the push if it fails, or if the code it tested is not the code being pushed (uncommitted changes while checking). `git push --no-verify` skips it, for emergencies only. The hook itself is tested in `internal/repoguard/prepush_hook_test.go`.
 
-### Landing: on `dev`, `check:fast` for a small fix, the full gate on dev
+### Landing: `check:fast` for a small fix, the full gate on main
 
-Every change lands on the branch `dev`, never on `main`: `main` stays untouched until the maintainer squash-merges `dev` into it, and releases are cut from `dev` ("Releases" below). A small fix (a policy tweak, a message, one function and its test) need not wait for the full gate. The rule:
+A small fix (a policy tweak, a message, one function and its test) need not wait for the full gate. The rule:
 
 1. Run `task check:fast` on the fix. It is a quick sanity check, not the real gate: build, vet, gofmt, staticcheck, cross-builds, `go mod tidy -diff` and every unit test, about 2-3 minutes. It takes no machine-wide `testlock` (only the full gate does) and so runs no Go build cache trim, and it runs no race detector (the full gate's race steps do). It runs no end-to-end suite (userscen, the team suite, the setup page suite, the machine suites and their sweeps and life parts, the journeys, scenarios, chaos) and no docs step (the docs examples, docsync) and not the Windows and macOS test compile (`build:cross:tests`): with them it took 22 minutes on the shared server. `FAST_MAP` in `Taskfile.lore.yml` (`tests/lib/fast-plan.sh` reads it) maps changed paths to end-to-end steps and names none today; a narrow step a path really needs can be named there again if the tier still fits. It writes its own stamp, `.git/lore-check-fast-passed`, and the pre-push hook accepts either stamp for the exact tree being pushed. Its summary prints every step's wall and CPU time and the total. `SKIP_DOCS=1` is still accepted and changes nothing; setting `FAST_MAP` or `FAST_UNIT_STEPS` on the command line has no effect, they are vars of the included `Taskfile.lore.yml`.
-2. Push. Then run the full gate on what landed: `task check:after-land` fetches origin, makes a fresh worktree of `origin/dev` in a temp folder (`LORE_AFTER_LAND_REF` names another ref), runs `task check` there and writes the result to `LORE_GATE_REPORT` (default `~/.local/state/lore-gate/last.md`): first line `PASS <commit> <subject>` or `FAIL …`, then the step timings, with the step logs beside it.
+2. Push. Then run the full gate on what landed: `task check:after-land` fetches origin, makes a fresh worktree of `origin/main` in a temp folder, runs `task check` there and writes the result to `LORE_GATE_REPORT` (default `~/.local/state/lore-gate/last.md`): first line `PASS <commit> <subject>` or `FAIL …`, then the step timings, with the step logs beside it.
 3. The full gate after landing is the real gate: every end-to-end suite and the docs steps run there. A `FAIL` there is fixed in the next change, before anything else lands.
 
 A release is never cut on `check:fast`: the release commit itself passes the full `task check` ("Releases" below; the binary release has the same rule).
@@ -187,10 +187,8 @@ Changing this module and an importing build together: keep both clones side by s
 
 This repository publishes no binaries. A release of the core is a version tag, made by `.github/workflows/release.yml`:
 
-1. Run the workflow by hand (workflow_dispatch) on the branch `dev`. With `tag` empty it creates and pushes the next patch tag (`vX.Y.Z`) on the `dev` commit; with `tag=` it uses that tag (use for minor/major bumps).
-2. A run on any other branch is refused: the branch is named once, in the workflow's `RELEASE_BRANCH` env line. Pushes, to `main` or anywhere else, never tag; nothing releases until someone runs it.
-
-Then the binary release: the private build's `go.mod` is bumped to the new tag on its own `dev` branch and its release is run there. The install lines in `README.md` and the release notes name the tag (`…/lore/vX.Y.Z/install.sh`), so the installer people run is the released one: bump them with each release.
+1. **push to `main`** → the next patch tag (`vX.Y.Z`) is created and pushed. Add `[skip release]` to the commit **subject** to opt out.
+2. **workflow_dispatch with `tag=`** → that tag on the current ref (use for minor/major bumps).
 
 The commit a release tags passes the full `task check` first, never only `task check:fast` ("Landing" above).
 

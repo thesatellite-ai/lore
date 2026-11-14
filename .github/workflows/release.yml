@@ -7,16 +7,19 @@ name: Release tag
 # archives to this repository's GitHub Release for the same tag
 # (docs/DEVELOPMENT.md "Releases").
 #
-# It fires only by hand (workflow_dispatch), and only on RELEASE_BRANCH:
-# releases are cut from `dev`, and `main` stays untouched until the
-# maintainer squash-merges dev into it, so no push (to main or any other
-# branch) ever tags. A run on another branch is refused.
+# Two ways this fires:
 #
-#   tag empty → the next patch after the latest v* tag, on the dev commit.
-#   tag=X     → tag X on the dev commit (use for a minor or major bump).
+#   1. push to main             → auto-bump patch and push the tag.
+#                                 Put `[skip release]` in the commit
+#                                 SUBJECT to opt out (most commits do).
+#
+#   2. workflow_dispatch, tag=X → create and push tag X on the current ref
+#                                 (use for a minor or major bump).
 #
 # No binary is built here and no GitHub Release is created.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -27,15 +30,6 @@ on:
 permissions:
   contents: write
 
-# The one branch a release may be cut from. Change it here only.
-env:
-  RELEASE_BRANCH: dev
-
-# Two runs at once would both pick the same next patch tag.
-concurrency:
-  group: release-tag
-  cancel-in-progress: false
-
 jobs:
   tag:
     runs-on: ubuntu-latest
@@ -45,20 +39,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Releases come from RELEASE_BRANCH only; a run on any other
-      # ref (another branch, or a tag) is refused before anything is tagged.
-      - name: Refuse a ref other than the release branch
-        env:
-          REF: ${{ github.ref }}
+      # Opt-out check looks ONLY at the commit subject line so the
+      # marker described in this file's header can't self-trigger.
+      - name: Evaluate skip marker
+        id: skip
         run: |
-          if [ "$REF" != "refs/heads/$RELEASE_BRANCH" ]; then
-            echo "::error::releases are cut from $RELEASE_BRANCH only; this run is on $REF"
-            exit 1
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          subject="$(git log -1 --format=%s)"
+          echo "subject: $subject"
+          case "$subject" in
+            *"[skip release]"*)
+              echo "::notice::commit subject contains opt-out marker — no tag"
+              echo "skip=true"  >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
 
       # tag: the input tag, else the next patch after the latest v* tag.
       - name: Resolve release tag
         id: v
+        if: steps.skip.outputs.skip != 'true'
         env:
           INPUT_TAG: ${{ inputs.tag }}
         run: |
@@ -86,6 +91,7 @@ jobs:
           echo "tag=$next" >> "$GITHUB_OUTPUT"
 
       - name: Create + push tag
+        if: steps.skip.outputs.skip != 'true'
         env:
           TAG: ${{ steps.v.outputs.tag }}
         run: |
@@ -98,4 +104,4 @@ jobs:
           fi
           git tag -a "$TAG" -m "$TAG"
           git push origin "$TAG"
-          echo "::notice::tagged $TAG on $RELEASE_BRANCH ($(git rev-parse --short HEAD)); the binary release for it is built and uploaded separately"
+          echo "::notice::tagged $TAG; the binary release for it is built and uploaded separately"
