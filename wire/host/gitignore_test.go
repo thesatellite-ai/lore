@@ -80,9 +80,21 @@ func TestGitignoreHook(t *testing.T) {
 		t.Fatal(".gitignore written outside a lore project")
 	}
 	sub := filepath.Join(root, "a", "b")
-	// .lore/ with no rows of its own (a client repo): a write leaves the
-	// tracked .gitignore alone and uses .git/info/exclude (sweep 3.8)
+	// an empty .lore/ (left by an earlier lore run, D-20) is no project:
+	// nothing is written, .git/info/exclude included
 	if err := os.MkdirAll(filepath.Join(root, ".lore"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := GitignoreHook(root).Before(ctx, &Run{}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, ".git", "info", "exclude")); strings.Contains(string(b), ".lore/") {
+		t.Fatalf("an empty .lore/ counted as a lore project: %q", b)
+	}
+	// .lore/ with no rows of its own (a client repo, its stores.yaml): a
+	// write leaves the tracked .gitignore alone and uses .git/info/exclude
+	// (sweep 3.8)
+	if err := os.WriteFile(filepath.Join(root, ".lore", "stores.yaml"), []byte("stores: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := GitignoreHook(root).Before(ctx, &Run{}); err != nil {

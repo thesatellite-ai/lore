@@ -211,24 +211,84 @@ func hookBlocks(rel string) map[string]struct {
 	}
 }
 
+// hookBlocksFor is hookBlocks(rel), each block guarded by sharedHookLines
+// when the hooks folder is shared by every repo (hooksFolder).
+func hookBlocksFor(rel string, shared bool) map[string]struct {
+	marker string
+	lines  []string
+} {
+	blocks := hookBlocks(rel)
+	if !shared {
+		return blocks
+	}
+	for n, b := range blocks {
+		blockRel := rel
+		if b.marker == rideHookMarker {
+			blockRel = "" // post-commit and pre-push are repo-wide
+		}
+		b.lines = sharedHookLines(blockRel, b.lines)
+		blocks[n] = b
+	}
+	return blocks
+}
+
 // hooksDir is the folder git runs hooks from (core.hooksPath when set),
 // in this system's own spelling: git prints C:/Users/... on Windows, and
 // the folder is shown to the person and joined with file names.
 func (s *liveSession) hooksDir(ctx context.Context) (string, error) {
+	dir, _, err := s.hooksFolder(ctx)
+	return dir, err
+}
+
+// hooksFolder is hooksDir plus whether the folder is shared by every repo
+// of the machine: core.hooksPath set in the global or system git config
+// (a hook manager's folder), not in this clone's own config.
+func (s *liveSession) hooksFolder(ctx context.Context) (dir string, shared bool, err error) {
 	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-path", "hooks"}})
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	dir := filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(out))))
-	if hp, herr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); herr == nil {
-		if p := filepath.FromSlash(strings.TrimSpace(string(hp))); p != "" {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(s.top, p)
-			}
-			dir = p
+	dir = filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(out))))
+	hp, herr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--show-scope", "--get", "core.hooksPath"}})
+	if herr != nil {
+		return dir, false, nil
+	}
+	scope, val, _ := strings.Cut(strings.TrimSpace(string(hp)), "\t")
+	if p := filepath.FromSlash(strings.TrimSpace(val)); p != "" {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(s.top, p)
 		}
+		dir = p
+		shared = scope == gitScopeGlobal || scope == gitScopeSystem
 	}
-	return dir, nil
+	return dir, shared, nil
+}
+
+// git config scopes (`git config --show-scope`) whose core.hooksPath names
+// a folder every repo of the machine runs its hooks from.
+const (
+	gitScopeGlobal = "global"
+	gitScopeSystem = "system"
+)
+
+// sharedHookLines guards lines for a hook folder every repo shares (D-21):
+// git runs them in repos lore was never set up in too, so each line runs
+// lore only where this clone's own hooks folder would have held it: a
+// project block at rel only when rel holds .lore/, a top-level or
+// repo-wide block only when the top holds .lore/ or lore wired this clone
+// (its .git/lore/git-wiring stamp). Anywhere else the line is a no-op: lore
+// is not started, so a repo with no lore data gets no config key, no
+// fetched ref and no file from a commit.
+func sharedHookLines(rel string, lines []string) []string {
+	guard := `[ -d .lore ] || [ -f "$(git rev-parse --git-common-dir 2>/dev/null)/` + liveStateDirName + `/` + gitWiringStamp + `" ]`
+	if rel != "" && rel != "." {
+		guard = `[ -d "` + filepath.ToSlash(rel) + `/.lore" ]`
+	}
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = "if " + guard + "; then " + l + "; fi"
+	}
+	return out
 }
 
 // ensureGitWiring wires the clone for the project at root (see the file
@@ -237,7 +297,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if os.Getenv(EnvSyncGit) == envOff {
 		return
 	}
-	dir, err := s.hooksDir(ctx)
+	dir, shared, err := s.hooksFolder(ctx)
 	if err != nil {
 		s.warn("git wiring: " + err.Error())
 		return
@@ -252,7 +312,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		rel = ""
 	}
 	bin := mergeDriverBinary()
-	blocks := hookBlocks(rel)
+	blocks := hookBlocksFor(rel, shared)
 	paths := []string{strings.TrimSpace(string(cfgPath)), filepath.Join(root, gitAttributesFile), filepath.Join(root, gitignoreName)}
 	names := make([]string, 0, len(blocks))
 	for n := range blocks {
@@ -268,7 +328,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if mode == wireRead {
 		// A read wires nothing (owner bug 6): it looks, and says once
 		// what is missing and which command sets it up.
-		s.readWiring(ctx, root, dir, strings.TrimSpace(string(cfgPath)), bin, rel, stamp+gitWiringReadSuffix, fp)
+		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, stamp+gitWiringReadSuffix, fp)
 		return
 	}
 	// The config, attributes and hook files (not .gitignore, which has its
@@ -313,7 +373,11 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if changed := changedWiring(wired, before, dir); len(changed) > 0 {
 		// no hidden magic: each file lore changed in the clone, named the
 		// first time (later runs find it wired and change nothing)
-		s.cmdNotice(ctx, "set up git for lore's row files in this clone: "+strings.Join(changed, "; ")+" (`lore where` lists everything lore keeps here)")
+		note := ""
+		if shared {
+			note = "; " + dir + " is the hooks folder of every repo (core.hooksPath in your global git config): lore's blocks there run lore only in repos lore is set up in"
+		}
+		s.cmdNotice(ctx, "set up git for lore's row files in this clone: "+strings.Join(changed, "; ")+note+" (`lore where` lists everything lore keeps here)")
 	}
 	// Row files git would not commit (OWNERQ-9): re-include them, once
 	// per state of .gitignore; `lore sync` refuses while some stay hidden.
@@ -346,7 +410,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 // plus the warning when git ignores row files. What it said is
 // remembered in the lore home per state of the wired files (readKey,
 // fp), so later reads of the same state are quiet and spawn no git.
-func (s *liveSession) readWiring(ctx context.Context, root, hooks, cfgPath, bin, rel, readKey, fp string) {
+func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, readKey, fp string) {
 	if wire.ReadNoticeSaid(s.h.cfg.Home, readKey, fp) {
 		return
 	}
@@ -367,7 +431,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks, cfgPath, bin,
 		}
 	}
 	var stale []string
-	blocks := hookBlocks(rel)
+	blocks := hookBlocksFor(rel, shared)
 	for n, b := range blocks {
 		if hookBlockStale(filepath.Join(hooks, n), b.marker, b.lines) {
 			stale = append(stale, n)

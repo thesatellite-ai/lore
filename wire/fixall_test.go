@@ -127,6 +127,17 @@ func TestFixRepoWalk(t *testing.T) {
 	if got, _ = w.run(context.Background()); len(got.Roots) != 3 {
 		t.Fatalf("depth 1 roots %v", got.Roots)
 	}
+	// E-16: when the base's .lore is lore's own home (~/.lore), the base
+	// is not listed as a skipped folder; the other skips stay
+	w.depth, w.loreHome = 0, resolvedPath(filepath.Join(base, ".lore"))
+	got, _ = w.run(context.Background())
+	var homeSkips []string
+	for _, s := range got.Skipped {
+		homeSkips = append(homeSkips, s.Path)
+	}
+	if want := []string{resolvedPath(linked), resolvedPath(notRepo)}; !slices.Equal(homeSkips, want) {
+		t.Fatalf("skipped with the lore home %v, want %v", homeSkips, want)
+	}
 	if s := (opsfix.Skip{Path: "/p", Why: "w"}).Line(); s != "skipped /p: w" {
 		t.Fatalf("skip line %q", s)
 	}

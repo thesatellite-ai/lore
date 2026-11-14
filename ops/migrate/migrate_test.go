@@ -102,7 +102,7 @@ func runOp(t *testing.T, f *fakeRewriter, input string) (RunOut, error) {
 
 // TestRunOrderAndOutput: the run takes the lock, converts settings, brings
 // live rows, then rewrites each migrated table in the Rewriter's order; the
-// output lists live rows then table/id rows, the steps, and the count. The
+// output lists the rows by the run's table order, the steps, and the count. The
 // dry-run flag reaches every step; the lock is released once. Empty input
 // gives empty (never null) lists.
 func TestRunOrderAndOutput(t *testing.T) {
@@ -137,7 +137,8 @@ func TestRunOrderAndOutput(t *testing.T) {
 		if f.unlocked != 1 {
 			t.Fatalf("unlocked %d times", f.unlocked)
 		}
-		wantRows := []string{"tasks/tsk_x", "memories/" + fixedMem}
+		// by the run's table order, a table it does not rewrite last (E-2)
+		wantRows := []string{"memories/" + fixedMem, "tasks/tsk_x"}
 		if out.DryRun != dry || out.Count != 2 || !slices.Equal(out.Rows, wantRows) || !slices.Equal(out.Steps, f.steps) {
 			t.Fatalf("out %+v", out)
 		}

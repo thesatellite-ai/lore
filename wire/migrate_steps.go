@@ -34,6 +34,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opstag "github.com/thesatellite-ai/lore/ops/tag"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -51,30 +52,37 @@ const tagFieldName = "name"
 
 // migrateTagsSnakeCase is step 7 over every attached store. It returns the
 // step lines and the rows written (renamed tags, rebound rows, deleted
-// duplicates). Deterministic: the keeper is the byte-wise smallest id, so
-// two offline runs choose the same tag.
-func (a *App) migrateTagsSnakeCase(ctx context.Context, dryRun bool) ([]string, int, error) {
+// duplicates); a renamed tag of the repo store is also named in Upgraded,
+// so the run counts it once (E-2). Deterministic: the keeper is the
+// byte-wise smallest id, so two offline runs choose the same tag.
+func (a *App) migrateTagsSnakeCase(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	var steps []string
-	n := 0
+	var out opsmigrate.Settings
 	for i, name := range st.eng.Stores() {
-		s, c, err := a.snakeTagsIn(ctx, st, name, st.backends[i], dryRun)
+		s, c, renamed, err := a.snakeTagsIn(ctx, st, name, st.backends[i], dryRun)
 		if err != nil {
-			return nil, 0, errs.Prefix("migrate: "+StepTagsSnakeCase+" in store "+string(name), err)
+			return opsmigrate.Settings{}, errs.Prefix("migrate: "+StepTagsSnakeCase+" in store "+string(name), err)
 		}
-		steps, n = append(steps, s...), n+c
+		out.Steps, out.Rows = append(out.Steps, s...), out.Rows+c
+		if name == store.SourceRepo {
+			for _, id := range renamed {
+				out.Upgraded = append(out.Upgraded, string(schema.TableTags)+"/"+id.String())
+			}
+		}
 	}
-	return steps, n, nil
+	return out, nil
 }
 
-// snakeTagsIn runs step 7 in one store.
-func (a *App) snakeTagsIn(ctx context.Context, st *state, src store.Source, b store.Backend, dryRun bool) ([]string, int, error) {
+// snakeTagsIn runs step 7 in one store; renamed are the keeper tags it
+// renames (each counted once in the int).
+func (a *App) snakeTagsIn(ctx context.Context, st *state, src store.Source, b store.Backend, dryRun bool) ([]string, int, []ids.AnyID, error) {
+	var renamed []ids.AnyID
 	tags, err := st.eng.List(ctx, src, schema.TableTags)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	groups := map[string][]row.Row{}
 	for _, t := range tags {
@@ -110,31 +118,32 @@ func (a *App) snakeTagsIn(ctx context.Context, st *state, src store.Source, b st
 			old, _ := dup.Fields[tagFieldName].(value.Text)
 			c, err := a.rebindTag(ctx, st, src, b, dup.ID, keeper.ID, dryRun)
 			if err != nil {
-				return nil, 0, err
+				return nil, 0, nil, err
 			}
 			steps = append(steps, StepTagsSnakeCase+": "+label+"tag "+dup.ID.String()+" "+old.String()+" merged into "+keeper.ID.String()+" ("+strconv.Itoa(c)+" rows rebound)")
 			n += c + 1
 			if !dryRun {
 				if _, err := st.eng.Delete(ctx, engine.Ref{Store: src, Table: schema.TableTags, ID: dup.ID}); err != nil {
-					return nil, 0, err
+					return nil, 0, nil, err
 				}
 			}
 		}
 		if cur.String() != snake {
 			steps = append(steps, StepTagsSnakeCase+": "+label+"tag "+keeper.ID.String()+" "+cur.String()+" → "+snake)
 			n++
+			renamed = append(renamed, keeper.ID)
 			if !dryRun {
 				t, err := value.TextOf(snake)
 				if err != nil {
-					return nil, 0, err
+					return nil, 0, nil, err
 				}
 				if _, err := st.eng.Update(ctx, engine.Ref{Store: src, Table: schema.TableTags, ID: keeper.ID}, map[string]value.Value{tagFieldName: t}); err != nil {
-					return nil, 0, err
+					return nil, 0, nil, err
 				}
 			}
 		}
 	}
-	return steps, n, nil
+	return steps, n, renamed, nil
 }
 
 // rebindTag moves every tag_ids binding of from to to in store src and

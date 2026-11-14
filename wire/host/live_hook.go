@@ -416,8 +416,8 @@ func liveProjectRoot(dir string) string {
 		return ""
 	}
 	for d := abs; ; d = filepath.Dir(d) {
-		if fi, err := os.Stat(filepath.Join(d, ".lore")); err == nil && fi.IsDir() {
-			return d
+		if entries, err := os.ReadDir(filepath.Join(d, ".lore")); err == nil && len(entries) > 0 {
+			return d // an empty .lore/ is no project: only an earlier lore run left it (D-20)
 		}
 		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
 			return ""

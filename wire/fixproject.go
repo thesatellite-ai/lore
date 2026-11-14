@@ -99,9 +99,12 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		hooks := opsdoctor.FixStep{Step: opsdoctor.StepAgentHooks, Where: top, Result: skippedNoLoreProject}
 		return []opsdoctor.FixStep{mig, scopes, rend, hooks, a.fixOldClones(ctx, dry)}
 	}
-	rend := a.fixRender(ctx, top, dry, mig.Changed && !mig.Failed)
-	if mig.Failed {
-		rend = renderAfterFailedMigrate(top)
+	// E-6: a failed migrate never reaches fixRender, which writes LORE.md,
+	// LORE.full.md and the pointer file; replacing its result afterwards
+	// reported "skipped" for a render that had run
+	rend := renderAfterFailedMigrate(top)
+	if !mig.Failed {
+		rend = a.fixRender(ctx, top, dry, mig.Changed)
 	}
 	steps := []opsdoctor.FixStep{mig, scopes, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
 	if !mig.Failed && !(dry && mig.Changed) {

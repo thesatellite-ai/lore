@@ -57,7 +57,15 @@ func TestLiveSessionNeedsProject(t *testing.T) {
 		t.Fatalf("a repo with no .lore had .git/config changed:\n%s", cfg)
 	}
 
+	// an empty .lore/ (an earlier lore run left it, D-20) is no project
 	if err := os.MkdirAll(filepath.Join(dir, ".lore"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if s := b.session(ctx); s != nil {
+		s.release()
+		t.Fatal("a repo with an empty .lore got a live session")
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".lore", "data"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	s := b.session(ctx)

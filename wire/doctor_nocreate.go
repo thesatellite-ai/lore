@@ -124,12 +124,16 @@ func noCreateOf(ctx context.Context) *noCreateRun {
 // and local state live in it; the cache is under the lore home).
 const loreFolderName = ".lore"
 
-// loreFolderAt reports whether top already holds a .lore/ folder. Any
-// .lore/ counts (an older lore's layout, a half-run init): doctor then
-// checks it, and only a repo with none at all is left alone.
+// loreFolderAt reports whether top already holds a .lore/ folder with
+// something in it. Any such .lore/ counts (an older lore's layout, a
+// half-run init): doctor then checks it, and only a repo with none at all
+// is left alone. An empty .lore/ does not count: git never carries an
+// empty folder, so only a lore run made it, and nobody set the repo up
+// (D-20: `lore setup --agent-hooks` used to leave one, and every later
+// command then treated the repo as set up and wired git into it).
 func loreFolderAt(top string) bool {
-	fi, err := os.Stat(filepath.Join(top, loreFolderName))
-	return err == nil && fi.IsDir()
+	entries, err := os.ReadDir(filepath.Join(top, loreFolderName))
+	return err == nil && len(entries) > 0
 }
 
 // noProjectErr is open's refusal under noCreate: top is a git repo with no

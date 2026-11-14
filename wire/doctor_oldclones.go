@@ -100,6 +100,18 @@ func (a *App) DoctorOldClones(ctx context.Context) ([]DoctorFinding, error) {
 	return append(out, a.personalUnplacedFindings()...), nil
 }
 
+// personalMoveFix is the next step that moves a personal store clone's
+// everywhere/ notes. While the store is on lore 0.1.17's layout only
+// `lore migrate run` moves them (E-12: doctor said "run any lore command",
+// and no command did or said why); after the layout commit the next
+// command's first-run step does.
+func personalMoveFix(dir string) string {
+	if m, err := rowfs.ReadMarker(dir); err == nil && m.Version != 0 && m.Version < rowfs.MarkerFirstStores {
+		return "lore migrate run (the store is on the lore 0.1.17 layout; the run moves them and pushes the move)"
+	}
+	return "run any lore command so lore moves them (it prints why when it cannot)"
+}
+
 // personalV017Findings names personal notes lore 0.1.17 filed per org
 // that this lore does not read yet: a git personal store clone that still
 // has 0.1.17 folders (the first-run step moves them; it says why when it
@@ -110,8 +122,8 @@ func (a *App) personalV017Findings(ctx context.Context) []DoctorFinding {
 	var out []DoctorFinding
 	for _, p := range personalV017Candidates(home) {
 		out = append(out, DoctorFinding{Check: DoctorCheckOldClones, Level: DoctorWarning,
-			Message: "personal store clone " + p.dir + " still holds lore 0.1.17's everywhere/ notes, which this lore does not read until they move to " + rowfs.StoreDataDir + "/",
-			Fix:     "run any lore command so lore moves them (it prints why when it cannot)"})
+			Message: "personal store clone " + p.dir + " still holds the notes lore 0.1.17 filed under everywhere/ (listed as me/everywhere) until they move to " + rowfs.StoreDataDir + "/",
+			Fix:     personalMoveFix(p.dir)})
 	}
 	mc, err := readMachineConfig(home)
 	if err != nil {

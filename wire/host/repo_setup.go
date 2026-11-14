@@ -21,6 +21,7 @@ import (
 	opslink "github.com/thesatellite-ai/lore/ops/link"
 	opsorg "github.com/thesatellite-ai/lore/ops/orgcmd"
 	opsrepoinit "github.com/thesatellite-ai/lore/ops/repoinit"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 )
@@ -53,8 +54,19 @@ var repoSetUpOps = map[string]bool{
 }
 
 // setsUpRepo reports whether the operation named name may set the repo it
-// runs in up (repoSetUpOps, or any setup operation).
+// runs in up (repoSetUpOps, or any setup operation but setup.run).
+//
+// setup.run (`lore setup` itself: --agent-hooks, --dry-run, --schema-only,
+// the page) sets no repo up: its This folder step runs repo.init through
+// the page, and its own work is the tool settings files and the search
+// index. Counted as a set-up command, its policy read (--agent-hooks) and
+// index rebuild (--schema-only) opened the repo it was started in and made
+// .lore/ there, so a repo nobody ran lore init in looked set up from then
+// on (D-20: `lore sync` wired git into it).
 func setsUpRepo(name string) bool {
+	if name == opssetup.OpRun {
+		return false
+	}
 	return repoSetUpOps[name] || strings.HasPrefix(name, setUpPrefix)
 }
 

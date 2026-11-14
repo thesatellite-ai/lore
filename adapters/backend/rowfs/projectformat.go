@@ -141,7 +141,7 @@ func WriteProjectFormat(top string, f int, m ProjectMigration) (string, error) {
 	}
 	o, err := decodeObject(doc)
 	if err != nil {
-		return "", unreadableMeta("not a JSON object")
+		return "", unreadableDoc(RepoMetaPath, doc)
 	}
 	o[MetaKeyFormat] = json.RawMessage(strconv.Itoa(f))
 	for key, v := range map[string]string{MetaKeyMigratedBy: m.By, MetaKeyMigratedVia: m.Via, MetaKeyMigratedAt: m.At} {

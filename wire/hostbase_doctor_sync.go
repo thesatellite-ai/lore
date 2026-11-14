@@ -141,6 +141,13 @@ func (a *App) doctorSync(ctx context.Context, warn, note func(string)) *opsdocto
 	}
 	if s.DataDirPresent {
 		a.doctorSyncFiles(ctx, d, s)
+		// E-8: modify/delete conflicts carry no markers; count every
+		// unmerged lore file and name the stopped git operation's way out
+		if files := unmergedLoreFiles(ctx, dir, dataRel); len(files) > 0 {
+			s.OpenConflicts = max(s.OpenConflicts, len(files))
+			_, derr := gitRun{dir: dir, args: []string{"config", "--get", mergeDriverConfigKey}}.output(ctx)
+			warn(unmergedLine(gitOpInProgress(ctx, dir), files, derr == nil))
+		}
 	}
 	if eng, eerr := a.Engine(ctx); eerr == nil {
 		if rows, lerr := eng.List(ctx, store.SourceRepo, schema.TableProjects); lerr == nil {

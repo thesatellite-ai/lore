@@ -33787,6 +33787,12 @@
                     "count": {
                       "type": "integer"
                     },
+                    "details": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "dry_run": {
                       "type": "boolean"
                     },
