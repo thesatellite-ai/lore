@@ -603,12 +603,14 @@ func sotRepoURLs(t *testing.T) {
 	sotGit(t, m, a, "commit", "-q", "-m", "confirm the new address")
 	sotGit(t, m, a, "push", "-q", "origin", "main")
 
-	// The second clone's sync recorded what it saw (an "unconfirmed"
-	// urls[] entry, a local change of the repo row); committed and merged
-	// with the confirmed row from the remote (lore's merge driver, field
-	// level, newest wins), the copy follows the source and the flag clears.
-	sotGit(t, m, b, "add", "-A")
-	sotGit(t, m, b, "commit", "-q", "-m", "the address this clone saw")
+	// The second clone's sync only read (I-7: with nothing in .lore/data
+	// waiting for a commit, a sync records no address, so the next git pull
+	// never aborts over the clone's own copy of the repo row); it flagged the
+	// move without writing a file. Pulled, the confirmed row from the remote
+	// is the copy, and the flag clears.
+	if st := sotGit(t, m, b, "status", "--porcelain", "--", ".lore"); st != "" {
+		t.Fatalf("second clone: a sync with nothing waiting wrote tracked files:\n%s", st)
+	}
 	sotGit(t, m, b, "pull", "--no-rebase", "-q", "origin", "main")
 	if got := sotOut(m.Lore(t, b, "sync")); strings.Contains(got, "remote changed") {
 		t.Errorf("second clone after merging the confirmed row: sync still flags it: %s", got)
