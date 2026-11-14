@@ -4,27 +4,27 @@ Dev-company round 3, track G. Replayed by `TestStoryGMonthsOfUse` (volume, lifec
 
 ## Who
 
-- A CTO, a lead and three developers, display names with accents on purpose (Chloé, Zoë).
-- Ten coding-agent sessions (`LORE_ACTOR=agent:<label>`) in the same repo and store.
-- Repos, generated: a Go API (about 100 rows, format 1, migrated by the CTO in week 1), a Go library (about 35 rows, format 1) and a docs-only repo (markdown only, about 380 rows, format 1, no code).
+- A CTO and two developers, display names with accents on purpose (Chloé, Zoë); five people in the round-3 run.
+- Coding-agent sessions (`LORE_ACTOR=agent:<label>`) in the same clone: four at once in the replay (ten in the round-3 run).
+- Repos, generated: a code repo the CTO adopts lore in on day 1, a library in the lore 0.1.17 format 1 (it must stay format 1: nobody migrates it), a docs-only repo (markdown only, no code) and a site with no lore data (byte-identical throughout).
 
 ## Steps
 
-1. Volume over "three months" (the test clock moves; due dates and reminders spread over the months): 500 tasks, 200 memories, 50 decisions, 30 plans and missions written by five people in parallel, plus 80 must rules. No write is lost: every count matches in every clone after sync.
-2. Search quality: an exact title, a word inside a body, accents both ways (`Chloé`/`Chloe`, `naïve`/`NAÏVE`), an emoji. A search with no hits says so; rows read through from the fetched default branch are found too. List paging past the end says so.
-3. LORE.md after months stays readable and inside its budget; when the rules outgrow it, must rules still render with their text, not as bare ids. `lore doctor` does not list a LORE.md at 8% of budget as a warning.
-4. Every `git pull --rebase` that brings rows leaves the tree clean, so the next pull works.
-5. Lifecycle: reminders come due and pass due; overdue reminders show in `lore inbox` and render, not only in `lore reminder list`. A mission is completed with its tasks archived; 50 old memories are archived in bulk with one command; trash and purge after months finish in a few seconds; `lore task stale --days 0` means zero days, not the default.
-6. Renames: a developer changes email and display name (whoami shows one actor); a team is renamed and team-assigned tasks reach members' inbox; the org store moves to a new url (`lore store set-url`) and sync names set-url instead of "offline"; the repo's remote url changes (a GitHub rename) and writes keep working; the old store clone folder is named by `store doctor`. Every note is still found by id and by search after each rename; nobody loses access.
-7. Ten agent sessions write for two minutes at once in one clone and one store: `task next` with `--push`, comments, `task done`, `lore sync`. No task is finished twice, `task next` never hands out a done task, no conflict markers are written into a row, sync never fails, and every command stays under the 5 s budget. `task add --help` matches what agents must pass.
-8. The docs-only repo: `lore migrate run`, render, the pointer file kept, markdown-only commits stay fast with the hooks on.
+1. Volume over "three months" (the test clock moves a week per writer; due dates spread over the months): each of three people writes 12 tasks, 6 memories, 3 decisions and 2 plans (plus Chloé's accent and emoji notes), commits, `git pull --rebase` and pushes. The round-3 run wrote 500 tasks, 200 memories, 50 decisions and 30 plans by five people; the replay keeps the shapes and scales the counts down for the gate. No write is lost: every clone counts every task and memory.
+2. Search quality: an exact phrase, accents both ways (`Chloe`, `NAÏVE`, `naive` all find "naïve"), an emoji. `lore memory search` with no hits prints `(no matches)`. A task list page past the end prints something, never nothing.
+3. Rows read through from the fetched default branch: Zoë pushes a note; Ines has fetched but not pulled; the list shows it and search finds it too.
+4. Every `git pull --rebase` that brings rows leaves the tree clean, so the next pull works (checked on every pull of the story).
+5. Lifecycle: a reminder past its due date is listed by `lore reminder list`. As they should behave once fixed (skipped until then): overdue reminders also show in `lore inbox` and LORE.md; old memories archive in bulk with one command; trash purge finishes in seconds; `lore task stale --days 0` means zero days; doctor does not warn about a LORE.md at 8% of its budget; must rules over the render budget keep their text.
+6. The docs-only repo: its own `CLAUDE.md` comes first, then `lore init`, a rule and `lore render`; the file keeps its own text; a markdown-only commit with lore's hooks takes under 3 s and leaves the tree clean.
+7. Renames (`TestStoryGRenames`): Chloé changes email and display name; her note is still shown by id and found by search, and she keeps writing. As they should behave once fixed (skipped until then): whoami shows one actor; the repo moves to a new address and writes and sync keep working; team renames reach members' inboxes; a moved org store makes sync name `lore store set-url`; the old store clone is named by `store doctor`. After every rename every note is still found by id on every clone.
+8. Many agents (`TestStoryGManyAgents`): four agent sessions add a task each and comment on one task at the same instant: every task and every comment is there, nothing is pushed without `--push`. As they should behave once fixed (skipped until then): `task next --push` never hands one task to two agents or a done task out again; concurrent `task done` writes no conflict markers and sync works; every command stays under 5 s; `task add --help` matches what agents must pass.
 
 ## What must hold
 
 - No lost writes: totals equal in every clone and the store after sync.
 - Standing rule 1: pushes only on `lore sync`, `git push`, claims with `--push` and `migrate run` followed by a person's push.
 - Standing rule 2: the untouched generated repos stay byte-identical.
-- Standing rule 3: the Go library stays format 1 until migrated.
+- Standing rule 3: the 0.1.17 library stays format 1 (nobody migrates it).
 - Standing rules 4, 5, 6, 7; no fake secret value printed.
 
 ## Findings this story guards
@@ -34,8 +34,8 @@ Steps for findings still being fixed are written as they should behave and skipp
 | Finding | Round-3 id | What | Guarded by |
 |---|---|---|---|
 | D-123 | r3 G-1 | repo moved: writes blocked as live ref rewritten | `TestStoryGRenames` (skipped until D-123) |
-| D-132 | r3 G-2 | pull --rebase leaves LORE.md modified | `TestStoryGMonthsOfUse` step 4; `TestJourneyPullRebase` |
-| D-134 | r3 G-3 | read-through rows never found by search | `TestStoryGMonthsOfUse` step 2 |
+| D-132 | r3 G-2 | pull --rebase leaves LORE.md modified | `TestStoryGMonthsOfUse` steps 1, 3, 4; `TestJourneyPullRebase` |
+| D-134 | r3 G-3 | read-through rows never found by search | `TestStoryGMonthsOfUse` step 3 |
 | D-135 | r3 G-4 | search with no hits prints nothing | `TestStoryGMonthsOfUse` step 2 |
 | D-148 | r3 G-5 | overdue reminders only in reminder list | `TestStoryGMonthsOfUse` (skipped until D-148) |
 | D-151 | r3 G-6 | over-budget LORE.md renders must rules as ids | `TestStoryGMonthsOfUse` (skipped until D-151) |

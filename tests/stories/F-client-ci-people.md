@@ -1,6 +1,6 @@
 # Story F — a client repo, a contractor, CI variants and people changes
 
-Dev-company round 2, track F (plus the client-repo findings of track D). Replayed by `TestStoryFClientCIPeople` in `F_client_ci_people_test.go` (build tag `stories`).
+Dev-company round 2, track F (plus the client-repo findings of track D). Replayed by `TestStoryFClientRepo` (steps 1-4 and 11), `TestStoryFCI` (step 5) and `TestStoryFPeople` (steps 6-10) in `F_client_ci_people_test.go` (build tag `stories`); the three parts run in parallel. The contractor whose only store is the client store, over months, is the agency persona's journey (`TestJourneyAgencyFirstWeeks`, `TestJourneyAgencyClientMoves`, `TestJourneyAgencyLeaves`); this story replays the client-repo work an org member does there.
 
 ## Who
 
@@ -8,21 +8,21 @@ Dev-company round 2, track F (plus the client-repo findings of track D). Replaye
 - A contractor who works only in the client's repo and sees only the client store.
 - CI: a fresh clone every run.
 - A second org on the CTO's laptop.
-- Repos, generated: a client's TypeScript monorepo with no lore data (the client repo), a PHP app with no lore data, and an internal Go repo in format 2.
+- Repos, generated: a client's monorepo with no lore data (the client repo), a PHP-style app with no lore data, an internal repo the CTO adopts lore in, and for CI the same internal repo still in the lore 0.1.17 format 1.
 
 ## Steps
 
-1. The CTO adds a client store on an empty bare remote (`lore org store add`), then links the client repo (`lore org link`); the link works on the empty remote (no "no branch main").
-2. The contractor clones the client repo and writes there: tasks, comments on internal tasks, plans, decisions, reminders, all from inside the client repo. Each write lands in the linked internal project or the client store, never in the client repo's tree; the first write after the link works the first time; a package folder inside the linked repo is linked too.
-3. `lore render` and `lore check leaks --ci` in the linked client repo work (no `E_NOT_A_STORE`, no "run from the project root"). Refused writes leave no `.lore/state/audit-v2.jsonl`, no hooks, no `.lore/` in the client tree; a refusal never hints `lore init` there.
-4. Every commit the contractor makes passes `lore check leaks --as-client`: no actor ids, no org emails, no internal row ids reach the client repo's tree or history. `lore setup apply --step team` run in the client repo writes no internal store url into it.
-5. CI variants of the internal repo: `git clone --depth 1`, a read-only HOME (`chmod a-w`), no git identity, a detached HEAD on a merge ref, `CI=true` and `GITHUB_ACTIONS=true`. `lore check leaks --ci`, `lore doctor`, `lore render --check`, list and search change nothing (no `.lore/lore.db-wal` in the tree), push nothing and exit 0 when clean; doctor is not DEGRADED on a shallow clone.
-6. Week 2: the newhire runs the printed join line and sees the team's notes.
-7. Week 3: the leaver has open tasks. `lore member remove` names them; `lore task reassign --from @leaver --assign @lead` hands them over; `--assign @leaver` after the removal is refused with a hint that names a real next step. A write the leaver made before removal but never synced is not pushed by the leaver's next `lore sync`.
-8. The contractor's access to the client store is revoked: their next write says it could not reach the store (not "committed, check the address"), doctor names the lost access.
-9. A write with `--to <org>/<folder>` inside the PHP app (no lore data) goes to the org store without asking for `lore init`.
-10. The CTO sets up a second org: its first store commit is authored with the second org's email.
-11. Fake secrets built at run time (an `AKIA…` key and a `ghp_…` token) pasted into a task comment, a decision, a plan, a reminder, a commit message and a code file are refused or masked everywhere; the allow command the refusal prints works.
+1. The CTO adds a client store on an empty bare remote (`lore org store add`), then links the client repo (`lore org link --store`); both work on the empty remote (no "no branch main").
+2. The CTO works in the client repo: a task (the first write after the link works the first time), a plan, a decision, a reminder, a comment on the task, and a task from a package folder (`libs/ui`) of the linked repo. Each lands in the linked client folder, never in the client repo's tree, and wires no hooks there.
+3. `lore render` and `lore check leaks --ci` in the linked client repo work (no `E_NOT_A_STORE`, no "run from the project root"). A write refused for a fake secret and a comment with `--secret-unstored` leave no `.lore/state/audit-v2.jsonl`, no hooks, no merge driver, no `.lore/` in the client tree, and the secret is never printed.
+4. Staged code that carries the CTO's actor id is refused by `lore check leaks`; a clean commit passes `lore check leaks --as-client` and is pushed; the client remote's whole history holds no actor id, no teammate's email, no org name and no store address. `lore setup apply --step team` run in the client repo writes nothing into it.
+5. CI on the 0.1.17-format internal repo: a `git clone --depth 1`, a detached HEAD on a pull request's merge ref (`refs/pull/1/merge`), a read-only HOME (`chmod a-w`, the workspace stays writable), no git identity, `CI=true` and `GITHUB_ACTIONS=true`. `lore check leaks`, list and search exit 0, `lore doctor` is not DEGRADED; nothing changes in the clone (tree and `git status --ignored`, so no `.lore/lore.db-wal`), the format stays 1, nothing is pushed. (`render --check` of a fresh clone and `check leaks --ci` are `TestJourneyCIShallowReadOnlyHome`'s; this generated 0.1.17 project is over the render budget and holds 0.1.17 actor copies, which those checks rightly report.)
+6. Week 2: the newhire and the leaver join with the line `lore team invite` printed; the newhire sees the org's rule. The newhire starts an agent session (`lore agent start`); the CTO's doctor never says an actor is missing from the roster.
+7. Week 3: the leaver has two open tasks. `lore member remove` names them and prints the reassign line; `--assign` naming the leaver says they left (never "register"); `lore task reassign --from <leaver> --assign @nia` hands both over. A write the leaver makes before learning of the removal is not pushed by their next `lore sync`, which says they are marked as left and the work is kept on their machine.
+8. The team store stops answering the newhire (its remote is gone, as a host answers once access is removed): a write is committed locally and never sends them to "check the store's address"; `lore doctor` says access was most likely removed and not to run `lore store init` over it.
+9. A write with `--to <org>/org` inside the PHP app (no lore data) goes to the org store without asking for `lore init`; the app stays byte-identical.
+10. The CTO sets up a second org on the same laptop: no commit in its store is authored with the first org's email.
+11. (In step 3.) Fake secrets are built at run time (`FakeSecret`) and never appear in any output.
 
 ## What must hold
 
@@ -35,24 +35,24 @@ Dev-company round 2, track F (plus the client-repo findings of track D). Replaye
 
 | Finding | Round id | What | Guarded by |
 |---|---|---|---|
-| D-63 | r2 D-6 | setup team step writes the internal url into the client repo | `TestStoryFClientCIPeople` step 4 |
-| D-64 | r2 F-4 | check leaks lets actor ids and org emails into a client commit | `TestStoryFClientCIPeople` step 4 |
-| D-65 | r2 F-2 | render in a linked client repo fails `E_NOT_A_STORE` | `TestStoryFClientCIPeople` step 3; `TestJourneyClientRepoStaysQuiet` |
-| D-66 | r2 F-3 | check leaks --ci in a linked client repo fails | `TestStoryFClientCIPeople` step 3 |
-| D-67 | r2 F-1 | org link on an empty remote fails "no branch main" | `TestStoryFClientCIPeople` step 1 |
-| D-68 | r2 D-7 | first write after org link fails | `TestStoryFClientCIPeople` step 2 |
-| D-76 | r2 F-5 | comment on a client-repo row refused | `TestStoryFClientCIPeople` step 2 |
-| D-77 | r2 D-12 | plan add writes into the client's `.lore/data` | `TestStoryFClientCIPeople` step 2 |
-| D-78 | r2 D-13 | package inside a linked client repo unlinked | `TestStoryFClientCIPeople` step 2 |
-| D-79 | r2 F-6 | read-only HOME in CI: every read fails | `TestStoryFClientCIPeople` step 5; `TestJourneyCIShallowReadOnlyHome` |
-| D-80 | r2 F-7 | doctor DEGRADED on a depth-1 clone | `TestStoryFClientCIPeople` step 5; `TestJourneyCIShallowReadOnlyHome` |
-| D-81 | r2 F-8 | reads create `.lore/lore.db-wal` in a CI clone | `TestStoryFClientCIPeople` step 5 |
-| D-85 | r2 F-9 | removed member's unsynced write pushed by their sync | `TestStoryFClientCIPeople` step 7 |
-| D-86 | r2 F-10 | reassign to a person who left: wrong hint | `TestStoryFClientCIPeople` step 7; `TestJourneyTeamHandover` |
-| D-87 | r2 F-11 | revoked access: "committed, check the address" | `TestStoryFClientCIPeople` step 8 |
-| D-92 | r2 F-12 | refused client write leaves an audit file | `TestStoryFClientCIPeople` step 3; `TestJourneyClientRepoStaysQuiet` |
-| D-93 | r2 F-13 | decision/reminder add in a client repo wires hooks | `TestStoryFClientCIPeople` step 2 |
-| D-95 | r2 F-14 | comment `--secret-unstored` installs hooks in a client repo | `TestStoryFClientCIPeople` step 11 |
-| D-96 | r2 D-17 | doctor DEGRADED forever after agent start | `TestStoryFClientCIPeople` step 6 |
-| D-98 | r2 F-15 | `--to <org>/<folder>` in a no-lore repo refused | `TestStoryFClientCIPeople` step 9; `TestJourneyTeamHandover` |
-| D-99 | r2 F-16 | second org's first commit has the first org's email | `TestStoryFClientCIPeople` step 10 |
+| D-63 | r2 D-6 | setup team step writes the internal url into the client repo | `TestStoryFClientRepo` step 4 |
+| D-64 | r2 F-4 | check leaks lets actor ids and org emails into a client commit | `TestStoryFClientRepo` step 4 |
+| D-65 | r2 F-2 | render in a linked client repo fails `E_NOT_A_STORE` | `TestStoryFClientRepo` step 3; `TestJourneyClientRepoStaysQuiet` |
+| D-66 | r2 F-3 | check leaks --ci in a linked client repo fails | `TestStoryFClientRepo` step 3 |
+| D-67 | r2 F-1 | org link on an empty remote fails "no branch main" | `TestStoryFClientRepo` step 1 |
+| D-68 | r2 D-7 | first write after org link fails | `TestStoryFClientRepo` step 2 |
+| D-76 | r2 F-5 | comment on a client-repo row refused | `TestStoryFClientRepo` step 2 |
+| D-77 | r2 D-12 | plan add writes into the client's `.lore/data` | `TestStoryFClientRepo` step 2 |
+| D-78 | r2 D-13 | package inside a linked client repo unlinked | `TestStoryFClientRepo` step 2 |
+| D-79 | r2 F-6 | read-only HOME in CI: every read fails | `TestStoryFCI` step 5; `TestJourneyCIShallowReadOnlyHome` |
+| D-80 | r2 F-7 | doctor DEGRADED on a depth-1 clone | `TestStoryFCI` step 5; `TestJourneyCIShallowReadOnlyHome` |
+| D-81 | r2 F-8 | reads create `.lore/lore.db-wal` in a CI clone | `TestStoryFCI` step 5 |
+| D-85 | r2 F-9 | removed member's unsynced write pushed by their sync | `TestStoryFPeople` step 7 |
+| D-86 | r2 F-10 | reassign to a person who left: wrong hint | `TestStoryFPeople` step 7; `TestJourneyTeamHandover` |
+| D-87 | r2 F-11 | revoked access: "committed, check the address" | `TestStoryFPeople` step 8 |
+| D-92 | r2 F-12 | refused client write leaves an audit file | `TestStoryFClientRepo` step 3; `TestJourneyClientRepoStaysQuiet` |
+| D-93 | r2 F-13 | decision/reminder add in a client repo wires hooks | `TestStoryFClientRepo` step 2 |
+| D-95 | r2 F-14 | comment `--secret-unstored` installs hooks in a client repo | `TestStoryFClientRepo` step 3; `TestJourneyClientRepoStaysQuiet` |
+| D-96 | r2 D-17 | doctor DEGRADED forever after agent start | `TestStoryFPeople` step 6 |
+| D-98 | r2 F-15 | `--to <org>/<folder>` in a no-lore repo refused | `TestStoryFPeople` step 9; `TestJourneyTeamHandover` |
+| D-99 | r2 F-16 | second org's first commit has the first org's email | `TestStoryFPeople` step 10 |
