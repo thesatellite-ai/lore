@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1450 |
+| fixed | 1449 |
 | open | 8 |
 | on-hold | 14 |
 | owner | 6 |
@@ -410,7 +410,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:fix23-docs | finding | docs/sync/store-clones.md gave `lore store folder add` a placeholder with a space (`<org store>`), which the docs drift check reads as a positional value | fixed | TestDocsMatchCLI | placeholder `<store>` as other pages write it |
 | devco:fix23-subproject-read | finding | a project in a sub-folder of the repo (lore init in web/) listed no rows of its own: the warm read took untracked row files from git status, whose porcelain paths are from the repo's top, not the project's folder | fixed | TestSubfolderProjectIndexViewSeesItsRows, TestMonorepoProjectPerSubfolder | pkg adapters/backend/git: repoStatus paths made relative to the project folder (also fixes hand-edit pick-up there); break-verified |
 | devco:fix23-githooks | finding | TestReadsNeverWireGit expected a write to add lore's block to a committed .githooks; per the hooks docs a folder committed with the repo is left alone until `lore fix` asks | fixed | TestReadsNeverWireGit | test now checks the "lore did not create …" line and an unchanged .githooks; docs name a committed .githooks |
-| devco:reldev | finding | the 0.1.18 release is cut from dev: release.yml tagged the next patch on every push to main (the later squash-merge of dev would have released from main) | fixed | TestReleaseWorkflowDispatchOnly, TestReleaseWorkflowRefusesOtherRefs | release.yml is workflow_dispatch only and refuses a ref other than RELEASE_BRANCH (dev); gate defaults (after-land, fast-plan) and docs moved to dev; install lines name the tag |
 | devco:gate7b-team-outside-repo | finding | the setup page's team step started outside a git checkout answered E_NOT_A_STORE: the new machine-policy check for an agent's team step resolved the caller through the folder's store (setupe2e team-push-batch on dfd49189) | fixed | TestAgentMayCreateTeamOutsideARepo, TestAPIMatrix | pkg wire: machine policy read first, caller resolved without a repo; break-verified |
 | devco:gate7b-left-orgstore-push | finding | a removed member's lore sync pushed their after-removal write: the new org-store pass of lore sync (and lore store push) went through PushStoreNow, which never armed the left hold (D-85; TestStoryFPeople on dfd49189) | fixed | TestURLPushHoldOfARemovedMember, TestStoryFPeople | pkg wire: PushStoreNow holds with the roster of every org listing the url; break-verified; docs/team/members.md |
 | devco:gate7a-team-outside-repo | finding | the admin setup's team step saved from a folder that is no git checkout (a new machine's home) failed with E_NOT_A_STORE: the agent check added before the step writes (agentpol 4) read the caller from the repo's row state | fixed | TestSetupTeamStepOutsideAGitCheckout, TestJourneyTeamLeadNewMachine, TestJourneySetupSecondOrgInFirstOrgsFolder, TestRestLifecycle | pkg wire: profileAgent resolves the caller without a repo; break-verified |

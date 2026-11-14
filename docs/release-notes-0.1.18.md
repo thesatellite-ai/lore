@@ -42,13 +42,13 @@ brew install thesatellite-ai/tap/lore
 or
 
 ```sh
-curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/v0.1.18/install.sh | sh
+curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
 ```
 
 On Windows:
 
 ```powershell
-irm https://raw.githubusercontent.com/thesatellite-ai/lore/v0.1.18/install.ps1 | iex
+irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
 ```
 
 Or download an archive from [GitHub Releases](https://github.com/thesatellite-ai/lore/releases) and check it against `checksums.txt`. To build from source instead: `go install github.com/thesatellite-ai/lore/cmd/lore@v0.1.18`.
