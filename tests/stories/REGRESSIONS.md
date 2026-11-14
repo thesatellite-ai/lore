@@ -10,32 +10,32 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 730 |
-| open | 50 |
-| not-reproduced | 100 |
-| not-a-bug | 29 |
-| docs-only | 15 |
-| process | 41 |
-| needs a test | 28 |
+| fixed | 1347 |
+| open | 118 |
+| not-reproduced | 109 |
+| not-a-bug | 65 |
+| docs-only | 69 |
+| process | 176 |
+| needs a test | 47 |
 
 ## bughunt
 
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
-| bughunt:J1 | scenario | admin on 11 copies of real repos (one 5.5k-row 0.1.17 repo): fix --all, doctor, members, links | fixed | NONE | story pending (tests/stories) |
-| bughunt:J2 | scenario | teammate on a second machine: join, sync, conflicts, removal and restore, store wiped and restored | fixed | NONE | story pending (tests/stories) |
-| bughunt:J3 | scenario | new user from zero: every documented command, personal store, local and Windows-style store paths | fixed | NONE | story pending (tests/stories) |
-| bughunt:J4 | scenario | upgrade from lore 0.1.17: personal notes, store clones, layout move, mixed-version team | fixed | TestJourneyUpgraderFixOldProjects, TestJourneyUpgraderPersonalNotes, TestJourneyMixedVersionsOneStore | pkg tests/journeys; story pending (tests/stories) |
+| bughunt:J1 | scenario | admin on 11 copies of real repos (one 5.5k-row 0.1.17 repo): fix --all, doctor, members, links | fixed | TestStoryJ1AdminManyRepos | story tests/stories (J1) |
+| bughunt:J2 | scenario | teammate on a second machine: join, sync, conflicts, removal and restore, store wiped and restored | fixed | TestStoryJ2TeammateSecondMachine | story tests/stories (J2) |
+| bughunt:J3 | scenario | new user from zero: every documented command, personal store, local and Windows-style store paths | fixed | TestStoryJ3NewUser | story tests/stories (J3) |
+| bughunt:J4 | scenario | upgrade from lore 0.1.17: personal notes, store clones, layout move, mixed-version team | fixed | TestStoryJ4Upgrade, TestJourneyUpgraderFixOldProjects, TestJourneyUpgraderPersonalNotes, TestJourneyMixedVersionsOneStore | story tests/stories (J4) |
 | bughunt:J5 | scenario | cross-build for linux, darwin and windows on amd64 and arm64 | process | - | gate step cross-builds (Taskfile build:cross) |
 | bughunt:C-1 | finding | leak check flags a placeholder url (https://user:<redacted>@host) in docs/team/troubleshooting.md; every commit touching that file is blocked | not-a-bug | - | the refusal came from an old hook binary on PATH; the new build passes |
 | bughunt:D-1 | finding | E_LOST_CLAIM, E_IN_TRASH errors and the TUI still print actor ids, not names | fixed | TestNameActors, TestRowScreenNamesActors | pkg surface/cli, surface/tui |
-| bughunt:FP-1 | finding | project format recorded in _meta.json, shown by doctor/where/migrate status | fixed | TestProjectFormatAt | pkg wire |
-| bughunt:FP-2 | finding | 0.1.18 never raises an old-format project by itself: refuse with one line on every write/live landing/hook/render/fix; no first-write auto-migrate; live-landing test | fixed | TestJourneyUpgraderFixOldProjects, TestFormatQuestionOnlyForRepoWrites, TestJourneyFormatPinLanding | pkg tests/journeys, wire |
-| bughunt:FP-3 | finding | lore migrate run records who/when, bumps the format, leaves the signpost, one change set | fixed | TestJourneyUpgraderFormatPin, TestMigrateRecordsFormat | pkg tests/journeys, wire |
-| bughunt:FP-4 | finding | lore fix migrates only with --migrate; fix --all lists old-format projects | fixed | TestFormatOldNeverMigratedUnasked, TestJourneyUpgraderFixOldProjects, TestAllTakesNamedFolders | pkg ops/fix, tests/journeys |
+| bughunt:FP-1 | finding | project format recorded in _meta.json, shown by doctor/where/migrate status | fixed | TestProjectFormatAt, TestStoryJ4Upgrade | pkg wire |
+| bughunt:FP-2 | finding | 0.1.18 never raises an old-format project by itself: refuse with one line on every write/live landing/hook/render/fix; no first-write auto-migrate; live-landing test | fixed | TestJourneyUpgraderFixOldProjects, TestFormatQuestionOnlyForRepoWrites, TestJourneyFormatPinLanding, TestStoryJ4Upgrade, TestStoryJ1AdminManyRepos | pkg tests/journeys, wire |
+| bughunt:FP-3 | finding | lore migrate run records who/when, bumps the format, leaves the signpost, one change set | fixed | TestJourneyUpgraderFormatPin, TestStoryJ4Upgrade, TestMigrateRecordsFormat | pkg tests/journeys, tests/stories, wire |
+| bughunt:FP-4 | finding | lore fix migrates only with --migrate; fix --all lists old-format projects | fixed | TestStoryJ4Upgrade, TestFormatOldNeverMigratedUnasked, TestJourneyUpgraderFixOldProjects, TestStoryJ1AdminManyRepos | pkg tests/stories, ops/fix, tests/journeys |
 | bughunt:FP-5 | finding | journey: mixed 0.1.18/0.1.17 team for a week on an unmigrated repo, then one migrate run | fixed | TestJourneyUpgraderFormatPin | pkg tests/journeys |
 | bughunt:FP-6 | finding | D16: the first 0.1.18 command (even a read) pushes a shared store layout commit, locking out 0.1.17 teammates; gate it like projects: only lore migrate run moves a shared store | fixed | TestJourneyUpgraderSetupPersonalStore | pkg tests/journeys |
-| bughunt:FP-7 | finding | owner: lore fix --all created an empty .lore folder in ~96 repos with no notes (only named by a store link); nothing may mkdir .lore in a repo with no lore data (reads, doctor, fix, fix --all, link resolution) | fixed | TestFixChildEnvKeepsRepoRemote, TestFixLeavesRepoWithoutLoreAlone, TestFixRepoWalk | pkg wire |
+| bughunt:FP-7 | finding | owner: lore fix --all created an empty .lore folder in ~96 repos with no notes (only named by a store link); nothing may mkdir .lore in a repo with no lore data (reads, doctor, fix, fix --all, link resolution) | fixed | TestFixChildEnvKeepsRepoRemote, TestStoryJ4Upgrade, TestFixLeavesRepoWithoutLoreAlone, TestStoryJ1AdminManyRepos | pkg wire, tests/stories |
 | bughunt:G-1 | finding | 16 journey tests (tonight's and older) are in no gate step: neither check:fast nor check runs them | fixed | TestGateRunsEveryJourneyOnce | pkg tests/journeys |
 | bughunt:G-2 | finding | after-land full gate on c6ad8b7a FAILED: TestSweepCoversEveryCommand — new command store push (batch 3) not in the machine sweep table (check:fast does not run that sweep for those paths) | fixed | TestSweepCoversEveryCommand | pkg tests/machines |
 | bughunt:G-3 | finding | docs runner answers a prompt only once it is on screen | process | - | test harness: the team docs runner waits for the prompt before answering (tests/team/docs) |
@@ -78,19 +78,19 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:R-11 | finding | batch 10 gate: userscen why-context (W-8), life-rest plan vs results (W-6), journey-solo commit title (W-11), journey-folders sync in a linked repo refused (W-15?), journey-rest StoreCommands (W-4?) | fixed | TestCampaignKnowledge_LintPiiWhyContext, TestJourneySoloLocalPathStore, TestCarryKeepsOtherFolders | pkg tests/userscen, tests/journeys, wire |
 | bughunt:R-12 | finding | the web page build pagelife: member open again / re-add lose the the 5.5k-row repo setup (config.yaml [hubadmin], want [the 5.5k-row repo, hubadmin]) on core 41ab94e7; passed on 3a5ff3f3; suspect S-2 | fixed | TestRosterWriteInRepoWithNoLore | pkg wire |
 | bughunt:R-13 | finding | the web page build page journeys (pagelife, agency, joiner): setupworld finds no invite line since U-4 prints lore setup join --invite (regex wanted the positional form) | process | - | fixed in the web page build's own page tests (invite line regex); no core code |
-| bughunt:S-1 | finding | sweep: no command except explicit push/sync moves a remote ref (registry-wide test) | fixed | TestNoPushWithoutAsking, TestNoPushWithoutAskingExamples, TestReadsNeverWriteOrPush | pkg tests/machines, app |
-| bughunt:S-2 | finding | sweep: a repo with no lore data stays byte-identical after every read/command except init/setup/link | fixed | TestUntouchedRepoEveryCommand, TestJourneyNoLoreRepoUntouched | pkg app, tests/journeys |
+| bughunt:S-1 | finding | sweep: no command except explicit push/sync moves a remote ref (registry-wide test) | fixed | TestNoPushWithoutAsking, TestNoPushWithoutAskingExamples, TestReadsNeverWriteOrPush, TestStoryJ1AdminManyRepos | pkg tests/machines, app |
+| bughunt:S-2 | finding | sweep: a repo with no lore data stays byte-identical after every read/command except init/setup/link | fixed | TestUntouchedRepoEveryCommand, TestJourneyNoLoreRepoUntouched, TestStoryJ1AdminManyRepos | pkg app, tests/journeys |
 | bughunt:S-3 | finding | sweep: sibling commands take the same named flags; help/docs/skill show only named flags | fixed | TestSiblingCommandsShareFlags | pkg wire |
 | bughunt:S-4 | finding | sweep: real non-secret fixtures pass the leak rules, real secret shapes are caught, refusals print no part of a value | fixed | TestRefusalsNeverPrintTheValue, TestFixtureCorpus | pkg wire, adapters/scanner/gitleaks |
 | bughunt:S-5 | finding | sweep: every command in a 0.1.17-format repo leaves .lore/data format 1 on disk and every branch, except lore migrate run | fixed | TestEveryCommandKeepsOldFormat, TestEveryCLICommandKeepsOldFormat | pkg wire, app |
 | bughunt:T-1 | finding | migrate run records migrated_by as '<person> via <agent>': record the person (name+email), agent only in a trailer/audit | fixed | TestMigrateRunRecordsThePersonNotTheAgent, TestMigratedBy | pkg wire |
 | bughunt:T-2 | finding | migrate run --offline --no-push leaves 12 rows format 1 (actors 8, projects 1, repos 1, entity_tags 1, a root file) silently | fixed | TestMigrateRunLeavesNoV1Silently | pkg wire |
-| bughunt:T-3 | finding | reads slow on 5.5k rows: migrate status 26 s, memory list 25 s, doctor 28 s, task list 13 s, fix --dry-run 17 s (target 2-3 s) | fixed | TestLiveBackend_ListKeepsLocalOnlyChanges, TestLiveBackend_ListOfLocallyRewrittenRepoIsQuick, TestDryRunCacheStartsFromTheRealOne | pkg wire/host, wire |
+| bughunt:T-3 | finding | reads slow on 5.5k rows: migrate status 26 s, memory list 25 s, doctor 28 s, task list 13 s, fix --dry-run 17 s (target 2-3 s) | fixed | TestLiveBackend_ListKeepsLocalOnlyChanges, TestLiveBackend_ListOfLocallyRewrittenRepoIsQuick, TestStoryJ4Upgrade | pkg wire/host, tests/stories |
 | bughunt:T-4 | finding | task list / memory list refuse --limit (search takes it) | fixed | TestFieldTakesOneFlagEverywhere, TestListLimitAndPage, TestEveryListPages | pkg wire |
 | bughunt:U-1 | finding | owner (user report): leak hook flags placeholders (${...}, $VAR, {{...}}, <...>, ***) as passwords; ignores repo .gitleaksignore; refusal does not name the exact secrets allow --file line | fixed | TestRefusalNamesAllowLine, TestCommitCheckHonoursGitleaksIgnore, TestCommitCheckPlaceholderPasses | pkg wire |
-| bughunt:U-2 | finding | owner (user report): live rows/landing push by themselves; must be opt-in (live.autopush default false, land only on lore sync / sync land / folded into the person's git push); first run in a new repo with no remote main errors fetch: remote ref not found | fixed | TestJourneyLivePushOptIn, TestNoPushWithoutAsking | pkg tests/journeys, tests/machines |
+| bughunt:U-2 | finding | owner (user report): live rows/landing push by themselves; must be opt-in (live.autopush default false, land only on lore sync / sync land / folded into the person's git push); first run in a new repo with no remote main errors fetch: remote ref not found | fixed | TestJourneyLivePushOptIn, TestNoPushWithoutAsking, TestStoryJ1AdminManyRepos | pkg tests/journeys, tests/machines |
 | bughunt:U-3 | finding | owner (user report): lore tasklist add takes no positional title; empty --tasklist= silently attaches to an auto-created Default list | fixed | TestAddNamesDefaultList, TestTasklistLifecycle, TestTextMatchesV017 | pkg ops/task, ops/tasklist, ops/decision, ops/hotfix, ops/memory, ops/rule |
-| bughunt:U-4 | finding | owner decision: named args everywhere; positional only a quiet hidden alias; revert U-3 positional tasklist title | fixed | TestPrintedCommandsNamed, TestBareCallHintsNamedForm, TestSiblingCommandsShareFlags | pkg app, wire |
+| bughunt:U-4 | finding | owner decision: named args everywhere; positional only a quiet hidden alias; revert U-3 positional tasklist title | fixed | TestPrintedCommandsNamed, TestBareCallHintsNamedForm, TestSiblingCommandsShareFlags, TestStoryJ1AdminManyRepos | pkg app, wire |
 | bughunt:W-1 | finding | B3-27/28 were only built and vetted for Windows, never tested: add a gate check that compiles every package's tests for GOOS=windows and GOOS=darwin (`go test -c`/`go vet` per target, no run) so OS-specific code is checked in check:fast/check | fixed | TestGateCompilesTestsForWindowsAndMacOS | pkg internal/repoguard |
 | bughunt:W-2 | finding | B2-21 was not reproduced: rebuild J2's exact layout from (bug hunt notes) (findings B2-21 block + log; copy, never modify) and confirm show/edit by id from the repo works there, or fix what still fails | fixed | TestJourneyShowByIDInAnOrgFolder, TestIDSearchSaysWhereItLooked | pkg tests/journeys, wire |
 | bughunt:W-3 | finding | B3-15 follow-up: a long-running `lore api` server keeps a stale store handle after `lore store set-url` moves the clone; the API must see the new clone (reopen on clone change) | fixed | TestServingAppFollowsAStoreSetURL | pkg wire |
@@ -108,13 +108,13 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:W-15 | finding | an offline task show of a store row right after the clock advances fails E_NOT_FOUND (seen since round 1) | fixed | TestJourneyTeamLeadHeldConflict, TestJourneyTeamLeadStoreConflict | pkg tests/journeys |
 | bughunt:B1-1 | finding | refused org-store write in a 0.1.17 repo still edits .gitignore and hooks first | fixed | TestNoCloneMakesNothing, TestSetupSnapshotRestore | pkg adapters/backend/git, wire/host |
 | bughunt:B1-10 | finding | lore fix on the biggest repo (5399 rows) does not finish in 10 min; killed half-migrated, lock left | fixed | TestPrescanFillsTheScanMemo, TestReadKeepingLive | pkg engine, wire |
-| bughunt:B1-11 | finding | second fix --all not clean: clones sharing a project id keep private render stale; doctor current then changed rows | fixed | TestJourneyUpgraderFixOldProjects, TestDoctorSyncOSJunkNotDataIgnored, TestDoctorSyncSection | pkg tests/journeys, wire |
+| bughunt:B1-11 | finding | second fix --all not clean: clones sharing a project id keep private render stale; doctor current then changed rows | fixed | TestJourneyUpgraderFixOldProjects, TestDoctorSyncOSJunkNotDataIgnored, TestDoctorSyncSection, TestStoryJ1AdminManyRepos | pkg tests/journeys, wire |
 | bughunt:B1-12 | finding | stale migrate.lock of a dead pid blocks every later lore fix (no unlock hint); doctor rewrites 275 rows of half-migrated repo | fixed | TestMigrateLockLiveHolderBlocksFast, TestDoctorFix_ReversedSupersedesLink, TestFixAllStopKeepsOthersLock | pkg wire, tests/userscen |
 | bughunt:B1-13 | finding | lore doctor DEGRADED rc=1 everywhere only because gh is not logged in (fix says HEALTHY) | fixed | TestAreaMarksSayWhatWasChecked, TestStorePrivateGHFails | pkg ops/doctor, wire |
 | bughunt:B1-14 | finding | commit lore fix asks for is blocked by leak hook on rows already in history (format rewrite only); 29 s | fixed | TestCommitCheckBlocksOnlyAddedSecrets, TestCommitCheckNoHeadBlocksAll, TestJourneyCommitAfterFix | pkg wire, tests/journeys |
 | bughunt:B1-15 | finding | leak hook hint says --match-hash sha256:… but the flag wants a uint; refusal took 70 s | fixed | TestCommitCheckNoHeadBlocksAll, TestHookIndexRestore | pkg wire |
-| bughunt:B1-16 | finding | every command in the biggest repo takes 42-56 s (reads too); 44 MB cache rewritten each run | fixed | TestOpenRefusals, TestJourneyUpgraderFixBigRepo, TestPickUpSkipsTheMigrationsRewrite | pkg adapters/backend/rowfs, adapters/cache/sqlite, tests/journeys, wire |
-| bughunt:B1-17 | finding | refused task add in a fresh repo leaves an empty .lore/ | fixed | TestFormatQuestionOnlyForRepoWrites, TestRefusedWriteLeavesNoLoreFolder | pkg wire |
+| bughunt:B1-16 | finding | every command in the biggest repo takes 42-56 s (reads too); 44 MB cache rewritten each run | fixed | TestOpenRefusals, TestStoryJ1AdminManyRepos, TestJourneyUpgraderFixBigRepo | pkg adapters/backend/rowfs, adapters/cache/sqlite, tests/stories, tests/journeys |
+| bughunt:B1-17 | finding | refused task add in a fresh repo leaves an empty .lore/ | fixed | TestFormatQuestionOnlyForRepoWrites, TestRefusedWriteLeavesNoLoreFolder, TestStoryJ1AdminManyRepos | pkg wire |
 | bughunt:B1-18 | finding | lore init ignores the org store's existing link for the repo's remote; new project id, link lost | fixed | TestJourneyInitLinkedRepo, TestRunTakesTheLinkedProjectID | pkg tests/journeys, ops/repoinit |
 | bughunt:B1-19 | finding | doctor --all shows a github check mark on a machine with no GitHub login | fixed | TestAreaMarksSayWhatWasChecked | pkg ops/doctor |
 | bughunt:B1-2 | finding | dup of B2-1 (setup join <org> refused on new machine) | fixed | TestJoinInviteRefusedFirst, TestJourneyStaffJoinLine, TestRealCatalogPlanAndJoin | pkg ops/team, tests/journeys, ops/setup |
@@ -122,14 +122,14 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:B1-21 | finding | member remove makes three store commits/pushes for one removal | fixed | TestJourneyStaffRemove | pkg tests/journeys |
 | bughunt:B1-22 | finding | new admin machine: lore fix --all fails every migrate E_LINK_UNKNOWN; org's other store clones never fetched | fixed | TestFixPrepareFetchesEveryOrgStore, TestOrgCreateOnExistingOrgFileMatchesImport | pkg wire |
 | bughunt:B1-23 | finding | big repo still slow: doctor 12 s, commit 9.8 s, check leaks --rows 15.8 s; fix inside fix --all 256 s vs 40 s alone | fixed | TestPrescanFillsTheScanMemo, TestReadKeepingLive | pkg engine, wire |
-| bughunt:B1-24 | finding | guided setup has no path for an admin of an existing org (join not in admin plan; team step wants a new/empty store) | fixed | TestJourneyTeamLeadNewMachine | pkg tests/journeys |
+| bughunt:B1-24 | finding | guided setup has no path for an admin of an existing org (join not in admin plan; team step wants a new/empty store) | fixed | TestJourneyTeamLeadNewMachine, TestStoryJ1AdminManyRepos | pkg tests/journeys |
 | bughunt:B1-25 | finding | setup list shows health ⚠ 2 for a finished admin setup but setup check/show name no warning | fixed | TestHealthCountsEachCheckOnce | pkg ops/setup |
 | bughunt:B1-26 | finding | setup show prints an empty problems: table header when a setup has no problems | fixed | TestHealthCountsEachCheckOnce | pkg ops/setup |
 | bughunt:B1-3 | finding | setup apply/import-scan human output prints raw JSON cells | fixed | TestNestedCellsReadable, TestWideCellsCutAndEmptyListsLeftOut | pkg surface/cli |
-| bughunt:B1-4 | finding | whoami outside a repo says client repo (guards on) | fixed | TestWhoamiRepoRowNamesThePlace, TestGatherNotGitRepo | pkg wire, adapters/orgcfg |
+| bughunt:B1-4 | finding | whoami outside a repo says client repo (guards on) | fixed | TestWhoamiRepoRowNamesThePlace, TestGatherNotGitRepo, TestStoryJ1AdminManyRepos | pkg wire, adapters/orgcfg |
 | bughunt:B1-5 | finding | fix --all: migrate fails E_AMBIGUOUS_ID (row in repo and org store), then says Everything is current | fixed | TestJourneyUpgraderFixOldProjects | pkg tests/journeys |
 | bughunt:B1-6 | finding | lore fix agent hooks lists each settings file twice | fixed | TestJourneyUpgraderFixOldProjects, TestSourceBuildRunsNoFix | pkg tests/journeys, ops/selfupgrade |
-| bughunt:B1-7 | finding | fix --all writes lore hooks into committed .claude/settings.json of non-lore repos | fixed | TestJourneyUpgraderFixOldProjects, TestHasOtherWriter, TestSourceBuildRunsNoFix | pkg tests/journeys, engine, ops/selfupgrade |
+| bughunt:B1-7 | finding | fix --all writes lore hooks into committed .claude/settings.json of non-lore repos | fixed | TestJourneyUpgraderFixOldProjects, TestHasOtherWriter, TestSourceBuildRunsNoFix, TestStoryJ1AdminManyRepos | pkg tests/journeys, engine, ops/selfupgrade |
 | bughunt:B1-8 | finding | lore fix false warning .lore/data is gitignored | fixed | TestDataIgnoredLineNamesRule, TestDoctorSyncOSJunkNotDataIgnored | pkg wire |
 | bughunt:B1-9 | finding | lore fix prints pre-render problems after ok render | fixed | TestJourneyUpgraderFixOldProjects, TestSourceBuildRunsNoFix | pkg tests/journeys, ops/selfupgrade |
 | bughunt:B2-1 | finding | member add prints 'lore setup join <org>' but org name is refused on a fresh machine | fixed | TestJoinInviteRefusedFirst, TestRealCatalogPlanAndJoin, TestStaffAddPrintsStoreURLJoin | pkg ops/team, ops/setup |
@@ -146,7 +146,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:B2-2 | finding | refused store conflict cannot be inspected (sync conflicts empty, explain not found) | fixed | TestJourneyTeamLeadStoreConflict, TestSyncTeam_LiveTitleClashIsReportedBySync | pkg tests/journeys, tests/userscen |
 | bughunt:B2-20 | finding | teammate's lore sync in an unmigrated clone rewrites tracked files; next git pull of the admin's lore fix commit is refused | fixed | TestJourneyUpgraderTeammatePullsTheFix | pkg tests/journeys |
 | bughunt:B2-21 | finding | row written with --to <org>/<folder> cannot be shown/edited by id from its repo; hint says 'landed on main' | fixed | TestJourneyShowByIDInAnOrgFolder, TestIDSearchSaysWhereItLooked | pkg tests/journeys, wire |
-| bughunt:B2-22 | finding | settling a store conflict by editing the row drops the other side's non-conflicting field change (silent data loss) | fixed | TestJourneyTeamLeadStoreConflict, TestSettleKeepsOtherFields | pkg tests/journeys, adapters/backend/git |
+| bughunt:B2-22 | finding | settling a store conflict by editing the row drops the other side's non-conflicting field change (silent data loss) | fixed | TestJourneyTeamLeadStoreConflict, TestStoryJ2TeammateSecondMachine, TestSettleKeepsOtherFields | pkg tests/journeys, tests/stories, adapters/backend/git |
 | bughunt:B2-23 | finding | live repo row conflict: lore sync conflicts does not show both versions though hints say it does | fixed | TestSyncTeam_LiveTitleClashIsReportedBySync, TestJourneyTeamLeadStoreConflict | pkg tests/userscen, tests/journeys |
 | bughunt:B2-24 | finding | after same-day restore the member's doctor still says left and names actor rejoin, which is refused the same day | fixed | TestJourneyStaffRemove, TestOffboardTakesThemOffTeams, TestOrgOffboardThenRejoin | pkg tests/journeys, ops/period, tests/userscen |
 | bughunt:B2-25 | finding | removed member's writes refused in a repo but still pushed from inside the store clone folder | fixed | TestJourneyStaffRemove | pkg tests/journeys |
@@ -160,41 +160,41 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:B2-32 | finding | plain lore doctor on a reset store says lore sync will push the waiting commits though sync refuses | fixed | TestJourneyTeamLeadStoreWipedEmpty, TestResetMarkClearsWhenTheStoreIsBack, TestResetFoundAfterAnotherFetchPruned | pkg tests/journeys, adapters/backend/git |
 | bughunt:B2-33 | finding | start fresh inside a repo writes the store into .lore/stores.yaml; org member list empty afterwards with no word on rebuilding | fixed | TestJourneySoloStoreRemadeEmpty, TestJourneyTeamLeadStoreWipedEmpty, TestResetFoundAfterAnotherFetchPruned | pkg tests/journeys, adapters/backend/git |
 | bughunt:B2-34 | finding | after the admin starts fresh on a store, the teammate's sync hint offers --restore first, which refuses with the same hint (loop) | fixed | TestJourneySoloStoreRemadeEmpty, TestSyncRefusesAResetRemote | pkg tests/journeys, adapters/backend/git |
-| bughunt:B2-4 | finding | store commit for task add titled 'write act_… (+N more)' | fixed | TestWriteIsOneCommitPerBatch | pkg adapters/backend/git |
+| bughunt:B2-4 | finding | store commit for task add titled 'write act_… (+N more)' | fixed | TestStoryJ2TeammateSecondMachine, TestWriteIsOneCommitPerBatch | pkg tests/stories, adapters/backend/git |
 | bughunt:B2-5 | finding | org store and its org folder both report the same unpushed commits | fixed | TestWaitingNamedOncePerClone, TestSyncStatusCountsAFolderCloneOnce | pkg wire |
-| bughunt:B2-6 | finding | ~/.lore/cache has both repo/ and repos/ | fixed | TestStoreCachesAndRemove | pkg adapters/cache/sqlite |
+| bughunt:B2-6 | finding | ~/.lore/cache has both repo/ and repos/ | fixed | TestStoreCachesAndRemove, TestStoryJ2TeammateSecondMachine | pkg adapters/cache/sqlite, tests/stories |
 | bughunt:B2-7 | finding | two machines each mint their own repo_id on sync for an upgraded repo: duplicate repos rows, doctor silent | fixed | TestJourneyTwoMachinesMintOneRepoID, TestDoctorDuplicateReposFolds, TestMintRepoIDAgreesAcrossClones | pkg tests/journeys, wire, ops/infra |
 | bughunt:B2-8 | finding | lore sync exits 0 'sent 0, received 0' when it pulls an edit that creates a conflict | fixed | TestJourneyTeamLeadStoreConflict, TestSettleByEdit, TestSyncTeam_LiveTitleClashIsReportedBySync | pkg tests/journeys, adapters/backend/git, tests/userscen |
 | bughunt:B2-9 | finding | any lore command silently aborts a git pull merge in progress in a store clone (reset); person's merge lost | fixed | TestPersonMergeLeftAlone | pkg adapters/backend/git |
 | bughunt:B3-1 | finding | Docs name repo cache .lore/lore-cache.db; it lives in ~/.lore/cache/repo | docs-only | - | docs fix; the docs runner checks the commands it shows |
 | bughunt:B3-10 | finding | rule list calls a dir-scoped rule 'scoped to a repo' | fixed | TestListLine, TestRuleOutsideItsFolderNamesIt | pkg ops/content, wire/renderhost |
 | bughunt:B3-11 | finding | trash restore --help says tl_ ids (they are tlt_); trash list shows actor ids not names | fixed | TestHiddenNamesFolders, TestIDHintsAreRealPrefixes, TestListLine | pkg ops/internal/metalist, internal/layers, ops/content |
-| bughunt:B3-12 | finding | store doctor offline prints a fragment of git stderr with E_INVALID_INPUT | fixed | TestCheckStores, TestClassifyAndReason, TestStoreDoctorChecksUsedStores | pkg wire, logic/gitfault, ops/stores |
+| bughunt:B3-12 | finding | store doctor offline prints a fragment of git stderr with E_INVALID_INPUT | fixed | TestCheckStores, TestClassifyAndReason, TestStoreDoctorChecksUsedStores, TestStoryJ3NewUser | pkg wire, logic/gitfault, ops/stores, tests/stories |
 | bughunt:B3-13 | finding | offline: every command incl. reads and git commit repeats 'not pushed yet' | fixed | TestSyncStore_OfflineWriteIsPushedByTheNextWrite, TestSyncStore_OfflineWriteIsSentByTheNextSync, TestJourneyOfflineCalm | pkg tests/userscen, tests/journeys |
 | bughunt:B3-14 | finding | wrong/missing origin path reported as 'offline' forever; never names bad remote | fixed | TestLiveOfflineLineSaidOnce, TestLiveMissingRemoteNamed, TestJourneyOfflineCalm | pkg wire/host, tests/journeys |
 | bughunt:B3-15 | finding | store set-url strands unpushed writes in old clone; row vanishes; doctor green | fixed | TestSetStoreURLCarriesUnpushedClone, TestJourneySoloStoreRenamedWithWaitingNote, TestStoreTextLines | pkg wire, tests/journeys, ops/stores |
 | bughunt:B3-16 | finding | fresh clone on new laptop: sync warns remote changed, no confirmed address, offers fork | fixed | TestSyncRepoAddressesAsksOnceInTerminal, TestJourneySoloNewLaptopFirstAddress, TestSyncRepoAddressesFirstAddressIsRecorded | pkg wire, tests/journeys |
-| bughunt:B3-17 | finding | help: --to omits 'me'; example calls current --to 'v0.1.17 spelling'; init --non-interactive docs vs help | fixed | TestCampaignSync_StoreInitBareRepoAsFolder, TestHelpHidesFlagsThatNeverApply, TestHelpTextHasNoSpecIDs | pkg tests/userscen, surface/cli, wire |
+| bughunt:B3-17 | finding | help: --to omits 'me'; example calls current --to 'v0.1.17 spelling'; init --non-interactive docs vs help | fixed | TestStoryJ3NewUser, TestCampaignSync_StoreInitBareRepoAsFolder, TestHelpHidesFlagsThatNeverApply | pkg tests/stories, tests/userscen, surface/cli |
 | bughunt:B3-18 | finding | LORE.md lists a dir-scoped rule among project-wide must rules without its folder | fixed | TestRuleOutsideItsFolderNamesIt, TestHiddenNamesFolders, TestJourneyNewcomerLists | pkg wire/renderhost, ops/internal/metalist, tests/journeys |
 | bughunt:B3-19 | finding | docs never show how to attach the personal store on a new machine | docs-only | - | docs fix; the docs runner checks the commands it shows |
 | bughunt:B3-2 | finding | store init with local bare path: no-scheme error, no hint; file:// refused | fixed | TestParseGitURLLocalPath, TestCampaignSync_StoreInitBareRepoAsFolder | pkg logic/onboard, tests/userscen |
 | bughunt:B3-20 | finding | git pull --rebase stops half-way: post-checkout hook re-renders LORE.md mid-rebase | fixed | TestEnsureHookBlockRunningScript, TestJourneyPullRebase, TestRefreshBlocksNameTheirHook | pkg wire/host, tests/journeys |
-| bughunt:B3-21 | finding | store at a local repo path is cloned under ~/.lore/stores/<whole absolute path> | fixed | TestJourneySoloLocalPathStore, TestLocalStoreCloneLayout | pkg tests/journeys, adapters/backend/git |
-| bughunt:B3-22 | finding | unreadable (chmod 000) local remote reported as 'no git repository … fix the address' | fixed | TestDescribe, TestLiveOfflineSyncQuiet, TestOfWordsAlikeOnEveryOS | pkg logic/gitfault, wire/host, adapters/fsreason |
-| bughunt:B3-23 | finding | store commit subjects carry the row body; deleted/purged note text stays in git log (B2-4 regression, privacy) | fixed | TestSubjectNamesWhatThePersonDid, TestSubjectNeverCarriesFreeText, TestWriteIsOneCommitPerBatch | pkg adapters/backend/git |
-| bughunt:B3-24 | finding | spec ids left in lore move --help (MQ11, BATCH 7, TQ3); lore show prints actor ids; task import --dry-run lists source ids | fixed | TestJourneyNewcomerLists, TestNameActors | pkg tests/journeys, surface/cli |
+| bughunt:B3-21 | finding | store at a local repo path is cloned under ~/.lore/stores/<whole absolute path> | fixed | TestJourneySoloLocalPathStore, TestStoryJ3NewUser, TestLocalStoreCloneLayout | pkg tests/journeys, tests/stories, adapters/backend/git |
+| bughunt:B3-22 | finding | unreadable (chmod 000) local remote reported as 'no git repository … fix the address' | fixed | TestDescribe, TestLiveOfflineSyncQuiet, TestOfWordsAlikeOnEveryOS, TestStoryJ3NewUser | pkg logic/gitfault, wire/host, adapters/fsreason, tests/stories |
+| bughunt:B3-23 | finding | store commit subjects carry the row body; deleted/purged note text stays in git log (B2-4 regression, privacy) | fixed | TestStoryJ3NewUser, TestSubjectNamesWhatThePersonDid, TestSubjectNeverCarriesFreeText | pkg tests/stories, adapters/backend/git |
+| bughunt:B3-24 | finding | spec ids left in lore move --help (MQ11, BATCH 7, TQ3); lore show prints actor ids; task import --dry-run lists source ids | fixed | TestJourneyNewcomerLists, TestNameActors, TestStoryJ3NewUser | pkg tests/journeys, surface/cli |
 | bughunt:B3-25 | finding | fresh clone on a new laptop is DEGRADED until lore render (missing private render files lore makes itself) | fixed | TestPointerCopies, TestJourneySoloNewLaptopRender, TestRenderedCopyLocalMissingIsANote | pkg wire/renderhost, tests/journeys, wire |
-| bughunt:B3-26 | finding | lore tui table descriptions carry spec ids (TP-14, spec 4.3, TASK 11) | fixed | TestHelpTextHasNoSpecIDs, TestSchemaTextHasNoSpecIDs | pkg wire |
+| bughunt:B3-26 | finding | lore tui table descriptions carry spec ids (TP-14, spec 4.3, TASK 11) | fixed | TestHelpTextHasNoSpecIDs, TestSchemaTextHasNoSpecIDs, TestStoryJ3NewUser | pkg wire |
 | bughunt:B3-27 | finding | Windows path as store url (C:...) read as url scheme 'c' | fixed | TestFromRowAndDecode, TestDrivePathStoreURL, TestNormalizeStoreDrivePath | pkg store, adapters/backend/git, logic/repourl |
 | bughunt:B3-28 | finding | store init file:///C:/... fails E_INTERNAL 'folder: create the store folder' with no reason | fixed | TestCleanFileURLDrivePathElsewhere, TestDrivePathStoreURL, TestFileIOReasonAndCode | pkg wire, adapters/backend/git, model/errs |
 | bughunt:B3-29 | finding | recreating a store at the same address pushes the old store back into the new empty repo; store forget refuses --yes | fixed | TestJourneySoloNewLaptopFirstAddress, TestJourneySoloStoreRemadeEmpty, TestSyncRefusesAResetRemote | pkg tests/journeys, adapters/backend/git |
-| bughunt:B3-3 | finding | store init --help shows internal spec id and irrelevant secret flags | fixed | TestCampaignSync_StoreInitBareRepoAsFolder, TestHelpHidesFlagsThatNeverApply, TestHelpTextHasNoSpecIDs | pkg tests/userscen, surface/cli, wire |
-| bughunt:B3-30 | finding | lore store forget names a local store by an internal key (_local/<abs path>) instead of the url typed | fixed | TestNormalizeStoreDrivePath, TestShownStore, TestStoreTextLines | pkg logic/repourl, ops/stores |
-| bughunt:B3-31 | finding | rule list --help says archived only with --archived, but --archived lists all plus archived | fixed | TestListHelpSaysArchivedAreAdded, TestTextMatchesV017 | pkg ops/rule, ops/decision, ops/hotfix, ops/memory, ops/task |
+| bughunt:B3-3 | finding | store init --help shows internal spec id and irrelevant secret flags | fixed | TestCampaignSync_StoreInitBareRepoAsFolder, TestHelpHidesFlagsThatNeverApply, TestHelpTextHasNoSpecIDs, TestStoryJ3NewUser | pkg tests/userscen, surface/cli, wire |
+| bughunt:B3-30 | finding | lore store forget names a local store by an internal key (_local/<abs path>) instead of the url typed | fixed | TestNormalizeStoreDrivePath, TestStoryJ3NewUser, TestShownStore | pkg logic/repourl, tests/stories |
+| bughunt:B3-31 | finding | rule list --help says archived only with --archived, but --archived lists all plus archived | fixed | TestListHelpSaysArchivedAreAdded, TestTextMatchesV017, TestStoryJ3NewUser | pkg ops/rule, ops/decision, ops/hotfix, ops/memory, ops/task |
 | bughunt:B3-32 | finding | after a clean git pull --rebase the hooks re-render LORE.md/LORE.full.md without saying so | fixed | TestChangedFiles | pkg app |
 | bughunt:B3-4 | finding | personal-notes docs contradict on where --to me rows land | docs-only | - | docs fix; the docs runner checks the commands it shows |
 | bughunt:B3-5 | finding | git mv of a folder silently orphans its dir-scoped rules | fixed | TestGoneScopes, TestJourneyMovesFolderAndRepo | pkg wire, tests/journeys |
-| bughunt:B3-6 | finding | --help lists refused legacy flags and spec ids | fixed | TestHelpTextHasNoSpecIDs, TestHelpHidesFlagsThatNeverApply | pkg wire, surface/cli |
+| bughunt:B3-6 | finding | --help lists refused legacy flags and spec ids | fixed | TestHelpTextHasNoSpecIDs, TestHelpHidesFlagsThatNeverApply, TestStoryJ3NewUser | pkg wire, surface/cli |
 | bughunt:B3-7 | finding | memory list mixes two row formats (repo vs personal) | fixed | TestExternalRowLines, TestListLine | pkg ops/task, ops/content |
 | bughunt:B3-8 | finding | tasklist list prints only TA <id>; first task add silently creates a tasklist | fixed | TestTextMatchesV017, TestListLine, TestTasklistLifecycle | pkg ops/decision, ops/hotfix, ops/memory, ops/rule, ops/task, ops/content, ops/tasklist |
 | bughunt:B3-9 | finding | cache prune never removes old checkout's repo cache after folder move | fixed | TestPruneMovedCheckoutRepoCache, TestDoctorCachePrune_OrphanProjectCache | pkg ops/cache, tests/userscen |
@@ -203,7 +203,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:B4-11 | finding | first git commit after upgrade: hook says 'a read changes nothing' then writes .git/config; no hint lore fix is pending | fixed | TestFreshCloneWiringNotice | pkg app; asserts the corrected note word for word |
 | bughunt:B4-12 | finding | local personal store move leaves duplicate/orphan rows in everywhere/.lore/data; doctor/fix silent | fixed | TestV017LocalPersonalStore, TestDoctorOldClones, TestFlattenPersonal | pkg wire, adapters/backend/git |
 | bughunt:B4-13 | finding | row saved by a 0.1.17 machine after the layout commit is lost on its upgrade (stays in ignored 0.1.17 bare clone) | fixed | TestDoctorOldClones, TestJourneyUpgraderPersonalNotes, TestMoveOldCloneV017 | pkg wire, tests/journeys, adapters/backend/git |
-| bughunt:B4-14 | finding | lore fix --dry-run after upgrade: FAILED migrate E_LINK_UNKNOWN, own repo treated as client, and it changes things | fixed | TestDryOnlyWouldDo | pkg ops/fix |
+| bughunt:B4-14 | finding | lore fix --dry-run after upgrade: FAILED migrate E_LINK_UNKNOWN, own repo treated as client, and it changes things | fixed | TestStoryJ4Upgrade, TestDryOnlyWouldDo | pkg tests/stories, ops/fix |
 | bughunt:B4-15 | finding | lore migrate run --help makes and pushes the store layout commit | fixed | TestJourneyMixedVersionsOneStore, TestMigrateOrgMarker, TestRunsOldLayoutMove | pkg tests/journeys, wire, app |
 | bughunt:B4-16 | finding | upgrade docs vs behaviour (read changes nothing, dry-run, upgrade on source build, release notes, diagram) | docs-only | - | upgrade page rewritten to match behaviour; the docs runner checks its commands |
 | bughunt:B4-17 | finding | upgrade noise: store identity lines on reads; name-* then sto_* render/audit files | fixed | TestLocalCopyMessage, TestCloneIdentityLineShort, TestJourneyStoreCommands | pkg wire/renderhost, wire, tests/journeys |
@@ -219,7 +219,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bughunt:B4-5 | finding | client repo: first write does not auto-fix; 0.1.17 live task invisible until lore fix | fixed | TestFormatQuestionOnlyForRepoWrites, TestRefusedWriteLeavesNoLoreFolder | pkg wire |
 | bughunt:B4-6 | finding | lore fix render step says rendered then lists same files stale/missing | fixed | TestPrivateFilesSameForEveryCheckout, TestJourneyUpgraderFixOldProjects, TestSourceBuildRunsNoFix | pkg wire/renderhost, tests/journeys, ops/selfupgrade |
 | bughunt:B4-7 | finding | 0.1.17 leftovers (repo .lore/lore.db, backups, cache tree) unexplained; cache prune skips them | fixed | TestEnsureGitignoreAppendsOnlyMissingLines, TestPruneMovedCheckoutRepoCache, TestPruneRemovesV017StoreTree | pkg wire/host, ops/cache |
-| bughunt:B4-8 | finding | fix --all --yes finds 0 repos for a 0.1.17 user (even inside a 0.1.17 repo), exit 0 | fixed | TestJourneyUpgraderFixOldProjects, TestPruneMovedCheckoutRepoCache, TestSourceBuildRunsNoFix | pkg tests/journeys, ops/cache, ops/selfupgrade |
+| bughunt:B4-8 | finding | fix --all --yes finds 0 repos for a 0.1.17 user (even inside a 0.1.17 repo), exit 0 | fixed | TestStoryJ4Upgrade, TestJourneyUpgraderFixOldProjects, TestPruneMovedCheckoutRepoCache | pkg tests/stories, tests/journeys, ops/cache |
 | bughunt:B4-9 | finding | 0.1.17 teammate locked out after one machine upgrades: writes and git commits fail E_NOT_A_STORE, reads drop store rows | fixed | TestJourneyMixedVersionsOneStore | pkg tests/journeys |
 | bughunt:U-4b | finding | U-4 follow-ups: meta unset --key refused (first key had no flag; blocks docs runner meta + reference); help examples use --x=value; contact remove hint lacks --id; 644 positional calls in docs runner scripts (w-docs) | fixed | TestPrintedCommandsNamed, TestMetaUnsetKeyFlagNamesAll, TestHelpExamplesNamed | pkg app, ops/settings |
 | bughunt:mac-M-1 | finding | join-table rows (entity_tags) left at format 1 after migrate run | fixed | TestMigrateRunLeavesNoV1Silently | pkg wire |
@@ -280,7 +280,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-36 | finding | mission done with open tasks, no warning (A-17) | fixed | TestMissionLifecycle, TestMissionDoneWarnsOpenTasks, TestCampaignTasks_RemindersRunsSessions | pkg ops/mission, tests/userscen |
 | devco:D-37 | finding | trash flags differ (--id/--target), purge --yes refused (A-18) | fixed | TestProjectListTrashFlags, TestPurgeYesSaysConfirm, TestB11_CompatFlagsCoreNouns | pkg ops/infra, ops/trash, tests/teame2e |
 | devco:D-38 | finding | second org setup inside another setup's folder half-writes then E_SETUP_ORG_MISMATCH (B-13) | fixed | TestJourneySetupSecondOrgInFirstOrgsFolder, TestSetupWriteGateAppliedSetupWins, TestCIReadsWriteNothingInGit | pkg tests/journeys, wire, app |
-| devco:D-39 | finding | new laptop restore: no join hint, personal store url forgotten (B-14) | fixed | TestJourneyNewLaptopJoinHint, TestWhoamiJoinHintOnANewLaptop, TestHereForJoin | pkg tests/journeys, wire, ops/setup |
+| devco:D-39 | finding | new laptop restore: no join hint, personal store url forgotten (B-14) | fixed | TestJourneyNewLaptopJoinHint, TestWhoamiJoinHintOnANewLaptop, TestHereForJoin, TestStoryJ2TeammateSecondMachine | pkg tests/journeys, wire, ops/setup |
 | devco:D-40 | finding | 6 concurrent writers: avg 2-9 s, max 17.6 s per write (A-19) | fixed | TestReadTableHintReadsOnlyThoseTables, TestJourneyWhoamiBuildsNoCache | pkg adapters/backend/rowfs, tests/journeys |
 | devco:D-41 | finding | offline: writes refused E_LINK_UNKNOWN when an org store was never fetched (B-15) | fixed | TestLeakRowsNamesANeverReadStore | pkg wire |
 | devco:D-42 | finding | reads in a repo with no lore data fail E_NOT_A_STORE with no next step (A-20) | fixed | TestNoProjectReadNamesNextStep, TestAppendOrgFileStore, TestCampaignConfig_RepoLifecycle | pkg wire, adapters/orgcfg, tests/userscen |
@@ -395,7 +395,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | agentpol:3a | scenario | Sweep: agents.person_only is empty by default and only refuses ops a level lists, so it never blocks creating an org, team or setup | not-a-bug | TestJourneyAgentsAdminSetup | kept as decided |
 | agentpol:3b | finding | Sweep verdict that the roster "an agent cannot register actors" check applied only to explicit agent actors was wrong: it blocked the person's coding agent on the team step | fixed | TestJourneyAgentsAdminSetup | reopened and fixed in round 2 (agentpol2:0) |
 | agentpol:3c | scenario | Sweep: coordination human-override refusal and kind review judged unrelated to setup | fixed | TestCoordRuleRefusalsAreRefused, TestKindsUnreviewed | revisited in round 2: both now pass for a person's coding agent |
-| agentpol:5 | finding | Pre-existing staticcheck SA1019 on main: the fake-exec shim build used the deprecated runtime.GOROOT fallback and failed the gate | fixed | NONE | go found on PATH; guarded by the staticcheck gate step, not a Go test |
+| agentpol:5 | finding | Pre-existing staticcheck SA1019 on main: the fake-exec shim build used the deprecated runtime.GOROOT fallback and failed the gate | process | - | gate tooling: the staticcheck gate step is the guard (no Go test) |
 | agentpol:7 | finding | Docs stated the old default (team profiles, troubleshooting, commands, errors reference, skill error tables, CHANGELOG) | docs-only | - | no settings reference page lists the key's default |
 
 ## lore-agentpol2
@@ -440,7 +440,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | fastgate:C4 | finding | Docs examples ran 41 sections serially (1276 s in the gate) | process | - | sections in parallel, both runners at once; 153-181 s after |
 | fastgate:C5 | finding | Scenarios and chaos scripts ran in a serial loop; the chaos seeding script (200 rows) is the long pole | process | - | run in parallel, slowest first; chaos seeding still ~80 s |
 | fastgate:C6 | finding | The wire package race run was a 200 s single process (123 of 569 tests serial via t.Setenv) | process | - | 6 shards of one test binary; shard runner fails unless every listed test reports a result |
-| fastgate:C7 | finding | First version of the shard runner ran nothing (awk NR==FNR bug) | fixed | NONE | caught by break-verify; shell script, no Go test |
+| fastgate:C7 | finding | First version of the shard runner ran nothing (awk NR==FNR bug) | process | - | gate shell script (shard runner); caught by break-verify when written |
 | fastgate:C8 | finding | Suites relied on implicit parallelism; explicit -parallel per suite and `go test -p 8` for test:all/race | process | - | no test needed: process |
 | fastgate:C9 | finding | The downstream module got its own check:fast, path map, after-land and either-stamp pre-push; its gate 7.0 min | process | - | no test needed: process |
 | fastgate:D1 | finding | Docs: tiers table, gate stages, load budget, where the time goes, Landing section (DEVELOPMENT.md, CONTRIBUTING.md, AGENTS.md) | docs-only | - | no test needed: docs-only |
@@ -486,7 +486,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | folders:1a | finding | A .lore/stores.yaml store name used outside a repo gave a generic error instead of naming the cause and the names that work there | fixed | TestStoreFoldersWithoutRepo | E_NOT_FOUND, hint lists team, org names, me, org store urls |
 | folders:1b | finding | An org store url of no configured org could be written to | fixed | TestStoreFoldersNoSetup | unknown url refused, never written |
 | folders:1c | finding | `store init/add/remove/set-url` outside a repo asked the misleading "this is a client repo" question or gave a generic git error | fixed | TestStoreFoldersWithoutRepo | now E_NOT_A_STORE saying they edit a repo's .lore/stores.yaml |
-| folders:1d | finding | `org link/unlink/set/use` outside a repo said "no project id" / "this repo has no remote" / E_NOT_PROJECT_ROOT instead of "needs a repo" | fixed | NONE | no test asserts the new outside-repo wording for the org verbs |
+| folders:1d | finding | `org link/unlink/set/use` outside a repo said "no project id" / "this repo has no remote" / E_NOT_PROJECT_ROOT instead of "needs a repo" | fixed | TestOrgRepoVerbsOutsideARepoNeedARepo | no test asserts the new outside-repo wording for the org verbs |
 | folders:1e | finding | agents.person_only must still refuse an agent for a store op run outside a repo (agent detection used to open the repo) | fixed | TestStoreFolderAddOutsideRepoPolicy | a person passes |
 | folders:2a | finding | Store-only commands wired the cwd repo's git (merge driver, .gitattributes, hooks): the live-session skip listed the noun "stores", which no op has | fixed | TestSkipLive, TestStoreFolderAddLeavesRepo, TestJourneyFoldersNoRepo | break-verified (host guard off fails the journey's fresh-clone check) |
 | folders:2b | finding | lore's .gitignore lines were appended to the cwd project for every non-read-only op, including store-only ops and team invite | fixed | TestNeedsGitignore, TestStoreFolderAddLeavesRepo | stores.yaml writers stay wired |
@@ -541,7 +541,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | migfix:4 | finding | a read command (`task list`) in a v0.1.17 repo rewrote the tracked .gitignore ("re-included .lore/data ... commit it") | fixed | TestReadsLeaveAV017RepoAlone | 17 read commands leave git status and every file byte-identical; doctor reports the fix; doctor --fix rewrites keeping the person's lines; break-verified |
 | migfix:5 | finding | `store init` with a local bare repo as file:// was refused and the hint redacted the middle of a plain local path (session-id-shaped folder), so the suggested command was unusable | fixed | TestMaskMatrix, TestCampaignSync_StoreInitBareRepoAsFolder | still refused with the exact reason; hint gives a working insteadOf spelling; plain local paths never masked |
 | migfix:n1 | finding | `store adopt` also copies the repo's policy rows (e.g. context targets) into the folder | not-a-bug | TestStoreAdopt | per brief "all of .lore/data"; projects, repos, folded entity_tags, machine-local and unknown tables skipped and listed |
-| migfix:g1 | finding | check:fast run 1: docs examples showed the new .gitattributes notice in converted shared-database repos | fixed | NONE | notice limited to repos where .lore/data exists; guarded by the docs-examples gate step (shell, not a Go test) |
+| migfix:g1 | finding | check:fast run 1: docs examples showed the new .gitattributes notice in converted shared-database repos | process | - | docs transcript drift; the docs-examples gate step compares them |
 | migfix:g2 | finding | after-land run 1 failed: `store adopt` neither swept nor listed as not user-run in the command sweep | fixed | TestSweepCoversEveryCommand | listed with its reason; re-landed; after-land PASS |
 | migfix:al | scenario | full after-land gate on the landed commit | process | - | task check:after-land PASS after the sweep fix |
 
@@ -551,14 +551,14 @@ Every new scenario or finding lands with its test and its row here in the same c
 |---|---|---|---|---|---|
 | outfix:1 | finding | doctor printed every item of a finding (84 supersedes links) on one line several thousand characters long | fixed | TestTextCapsA50ItemFinding, TestTextKeepsShortLists, TestTextShapes, TestJoin, TestListsCappedInTextOnly, TestSupersedeWarningOf50Links | logic/listcap applied at the CLI text surface: first 5 ids then "… and N more (`<command> --json` lists all)"; --json keeps every item; break-verified |
 | outfix:1-err | finding | error lines and hints joining many ids (e.g. E_HAS_DEPENDENTS in a docs transcript) were uncapped too | fixed | TestListsCappedInTextOnly | same cap covers error message and hint; test asserts the error line capped in text and whole in --json |
-| outfix:1-sla | finding | the doctor SLA note cut its own id list lossily, so --json did not hold every id | fixed | NONE | own cap removed; TestDoctorSLA checks the SLA note with one task only, not a long list in --json |
+| outfix:1-sla | finding | the doctor SLA note cut its own id list lossily, so --json did not hold every id | fixed | TestDoctorSLAKeepsEveryID, TestDoctorSLA | own cap removed; TestDoctorSLA checks the SLA note with one task only, not a long list in --json |
 | outfix:2 | finding | store list showed `<redacted>` for plain store URLs (NAME and URL) when output was not a terminal or in CI | fixed | TestMask, TestMaskText, TestListOrgRows | only a userinfo password, token-shaped user name or credential query value is masked, and only that part; break-verified |
 | outfix:2-whoami | finding | whoami said "matched by: link in `<redacted>`" and hid store url/folder off a terminal | fixed | TestWhoamiRedactor, TestLeak_StoreAddressShownWithoutATTY, TestJourneyAgencyFirstWeeks | teame2e test loops every CI marker; the agency journey asserts the store slug and never `<redacted>` |
 | outfix:2-roster | finding | roster refusals said "registered in `<redacted>`" instead of naming the org folder | fixed | TestRosterRefusalsNameOrgFolder |  |
 | outfix:2-orgerr | finding | org-resolution errors and hints masked the store url | fixed | TestMaskOrgErr |  |
 | outfix:2-note | finding | org folder names (roster, whoami "org folder", internal line) are now printed too, hidden before by the same quiet rule | not-a-bug | TestRosterRefusalsNameOrgFolder | intended: an org folder name is not a secret; owner note only |
 | outfix:3 | finding | audit chain append/import failed with SQLITE_BUSY under load (busy handler gave up at 5 s and the audit record was lost) | fixed | TestAuditChainAppendOutwaitsBusyTimeout, TestAuditChainConcurrentAppendersNeverFork | found by after-land run 2 (race step); beginWrite retries up to 60 s or ctx end; break-verified |
-| outfix:hook-scanner | finding | an older lore binary on PATH flagged masked-url doc examples (`user:<redacted>@host`) as url_with_password in the commit hook | fixed | NONE | the new scanner does not flag it; TestPlaceholderNotASecret covers `<password>`/`***` placeholders but not `<redacted>` specifically |
+| outfix:hook-scanner | finding | an older lore binary on PATH flagged masked-url doc examples (`user:<redacted>@host`) as url_with_password in the commit hook | fixed | TestMaskedURLExampleNotASecret, TestPlaceholderNotASecret | the new scanner does not flag it; TestPlaceholderNotASecret covers `<password>`/`***` placeholders but not `<redacted>` specifically |
 
 ## lore-pagewalk
 
@@ -642,9 +642,843 @@ Every new scenario or finding lands with its test and its row here in the same c
 | pagewalk:admin/start-team | scenario | Start-a-team (admin) setup wizard: Start your team step | not-reproduced | TestLifeTeams, TestAPIMatrix | Go guards walk the start-a-team setup (TestAPIMatrix case team-push-batch, TestLifeTeams admin kind); the visual walk is the web e2e page walk |
 | pagewalk:admin/team-store | scenario | Start-a-team (admin) setup wizard: Start or attach your team store step | not-reproduced | TestLifeTeams, TestAPIMatrix | Go guards walk the start-a-team setup (TestAPIMatrix case team-push-batch, TestLifeTeams admin kind); the visual walk is the web e2e page walk |
 | pagewalk:admin/team | scenario | Team invites page after starting a team (empty list, Invite button) | not-reproduced | - | page rendering is guarded only by the web e2e page walk (JS), not a Go test; invites themselves are covered by TestStartATeamOutsideARepo at CLI level |
-| pagewalk:home-budget | finding | Home load budget failed only under full gate load (1137/1206 ms vs a 1000 ms budget) | fixed | NONE | walker now judges Home against a measured stub baseline (ratio 8, 1000 ms floor, 2500 ms ceiling); JS e2e, no Go test |
-| pagewalk:fresh/home-details | finding | fresh/home "Details" click timed out because a late re-render replaced the marked node | fixed | NONE | walker waits for idle and re-marks the label; test-harness fix, JS e2e |
+| pagewalk:home-budget | finding | Home load budget failed only under full gate load (1137/1206 ms vs a 1000 ms budget) | process | - | page e2e timing in the web page build's own walker |
+| pagewalk:fresh/home-details | finding | fresh/home "Details" click timed out because a late re-render replaced the marked node | process | - | page e2e harness fix in the web page build's own walker |
 | pagewalk:doctor-run-all | finding | walker assumed the Doctor page runs on open; Doctor now opens with no run started | process | - | walker's doctor check presses Run all first |
+
+## lore-run-reports
+
+| id | kind | title | state | guarding test(s) | notes |
+|---|---|---|---|---|---|
+| run:core:p0-layer-guard | scenario | Import-layer guard and no-`any` guard fail when a lower layer imports a higher one or an `any` appears (break-verified in phase 0) | fixed | TestImportLayers, TestNoAny | phase 0; guard also caught 5 new `any` sites at the finalize gate (a30935e) and a map[string]any in rowfs (d248b5e) |
+| run:core:p0-backend-contract | scenario | Every store backend passes one shared contract suite (lost-update refusal, tombstones on Get, batch naming a row twice refused) | fixed | TestContract, TestContractRepo, TestContractClone, TestContractOrgFolder, TestContractJournaled | phase 0 break-verified by breaking the memstore Expect check |
+| run:core:p2-verify-memory-crud | scenario | Fresh repo: memory add/list/show/search/edit/delete on the new core; delete asks (exit 26) then tombstones; key-shaped body refused; 6 parallel adds all land | fixed | TestMemoryEndToEnd | phase 2 verify + final smoke step 1 |
+| run:core:p2-verify-rest | scenario | Local REST API: no token 401, POST 201 with token, CLI lists the REST-added row | fixed | TestClosedByDefault, TestRestAuth_ClosedByDefault | phase 2 verify + final smoke step 2; also BUGFIX-25 token re-read |
+| run:core:p2-verify-git-two-clones | scenario | Git store over two clones: add on A, sync, B lists; disjoint field edits merge; same-field edits give E_STALE on B with no lost edit | fixed | TestTwoClonesConverge, TestTwoClonesFirstWriteSameMeta | phase 2 verify + final smoke step 3 |
+| run:core:p2-verify-folder-store | scenario | Folder (file://) store: second checkout sees rows without sync; deleting cache files rebuilds all rows | fixed | TestContract, TestContractOrgFolder | phase 2 verify + final smoke step 4 |
+| run:core:p2-verify-v017-migrate | scenario | Repo made by the 0.1.17 binary: lists v1 rows, `migrate run --dry-run` changes nothing, `migrate run` rewrites only `_v` 1->2 + `_hlc` | fixed | TestFinCompat_V017FreshCloneRefusesTreeRows, TestFinCompat_V017ExistingCloneSkipsTreeRows | phase 2 verify + final smoke step 6 |
+| run:core:final-smoke-org-client | scenario | Org + client repo: client-repo store url needs confirm (CFG7), internal rows refused/kept back, store url never lands in the client repo | fixed | TestOrgLinkClientLeakSmoke | final smoke step 5; found the three smoke findings below |
+| run:core:r2-smoke | scenario | Round-2 user smoke: tool-neutral init (no warnings), exit 20 on bad args, org+client repo json `_source`, exact refusals, actor minimal rows, cache prune | fixed | TestCampaignRender_InitToolFileMatrix, TestSideEffect40_CachePruneRemovesOldProjects, TestF15_PointersOnlyFlowInward | smoke-r2.sh sections A-C |
+| run:core:fin-compat-v017 | scenario | Real 0.1.17 binary built from its tag against 0.1.18 repos and live refs (compat e2e) | fixed | TestFinCompat_V017FreshCloneRefusesTreeRows, TestFinCompat_V017ExistingCloneSkipsTreeRows, TestFinCompat_V017LiveReadOnlyAfterTreeRow, TestFinCompat_V017LiveReadOnlyAfterLead | c09ded06; found F-COMPAT-LIVE-1 |
+| run:core:gate-d | scenario | Full release gate (build, vet, guard, lint, cross-OS builds, goreleaser, gitleaks, race, team e2e 175/175, docs examples, docs drift) green before and after old-module deletion | process | - | gate-d.sh pre-E and --post-e; not re-run after the last two FINALIZE commits |
+| run:core:F-COMPAT-LIVE-1 | finding | A 0.1.17 binary could overwrite a 0.1.18 live row and drop parent/lead/assignees because live writes never raised the live meta feature/min-version | fixed | TestFinCompat_V017LiveReadOnlyAfterTreeRow, TestFinCompat_V017LiveReadOnlyAfterLead | 16f5630a; DATA LOSS class, break-verified; effect: first 0.1.18 live write makes 0.1.17 read-only there |
+| run:core:F-ADDADD | finding | A carried live row already committed locally but not on origin/main gave add/add on `git pull --rebase` | fixed | TestCarriedCommittedRowNoAddAdd, TestCarriedRowLeavesWorkTree | F-ADDADD-1 open half closed by F-ADDADD-2 (8be135e7), break-verified |
+| run:core:F-MOVE-1 | finding | Task moved to a store project kept its own repo tasklist/mission/plan ids; the next move answered E_NOT_FOUND | fixed | TestMoveLeavesContainersBehind | te-a finding |
+| run:core:F-MOVE-2 | finding | The on-demand default task list of a live task add did not ride live with the task, so a teammate could not split it | fixed | TestDefaultTasklistReachesTeammate | b-errs2 finding; F-MOVE-2b exception later (BUGFIX-04) |
+| run:core:BUG-MOVE-CLIENT-LEAK | finding | Suspected leak when moving a task with time entries into a client repo | not-a-bug | TestTeA_TimeStory_ThreeClones | 12a955d8: move is no leak; docs line closed |
+| run:core:BUG-D1 | finding | `lore move` of an internal memory into a client repo must keep its id with no origin field and leave only a tombstone in the store | fixed | TestLeak_MoveInternalMemoryToClientRepoKeepsIdNoOrigin, TestLeak_MoveToRepoKeepsTheIdAndPassesTheHook | pin flipped Open:false in round 2 (0d628a0) |
+| run:core:BUG-D2 | finding | Actor file exported beside a client-repo row carried stable_key/email (client CI leak check failed) | fixed | TestF18_ClientRepoActorCopyIsTheProjection, TestLeak_ClientActorCopyIsTheProjection | pin flipped Open:false in round 2 |
+| run:core:BUG-D4 | finding | A lease holder with zero recorded time (no heartbeat) vanished from or was capped in task time views | fixed | TestF01_TaskShowWalksEverySource | P3-TASK-LEASE-1 |
+| run:core:BUG-T1 | finding | No-org `actor register` did not reach a second clone, so the handle did not resolve there | fixed | TestTeD_NoOrgRegisterReachesSecondClone | TE-D-2 expectation (lands like a finished row) |
+| run:core:BUG-T2 | finding | Store name validation refused real org names (dashes, dots) | fixed | TestValidStoreName | b514f64 |
+| run:core:BUG-T3 | finding | `actor register` / `org import` register step failed E_NOT_A_STORE outside a repo and org import still exited 0 | fixed | TestTeD_OrgImportRegisterFailureAndRename, TestActorRegisterOutsideARepoWithoutHost, TestStoreOnlyRosterOutsideARepo | 36d3f18 exit non-zero, store-only roster built later |
+| run:core:BUG-T6 | finding | Roster miss on a cached fetch never refetched (@handle and agent roster checks refused a fresh teammate) | fixed | TestTeD_RosterMissOnCachedFetchSyncsOnce, TestTeD_AgentRosterMissOnCachedFetchSyncsOnce, TestTeD_AgentOwnerMissOnCachedFetchSyncsOnce | merged BUG-T6-AGENT and requireRosterAgent gap; B-ERRS2-6 sweep |
+| run:core:BUG-T7 | finding | Session-id secret rule fired on lore's own record fields (claim_log, time_open) | fixed | TestSessionIDRuleSkipsLoreRecords | 3f7b587; break-verify of the skip not done |
+| run:core:BUG-T8 | finding | `mission apply` with `to: <store>/<folder>` failed for a new folder and for a client repo's linked folder alias | fixed | TestMissionApplyFolderTarget | 9a7f747 |
+| run:core:BUG-T9 | finding | `finding add` on a store mission did not land in that store | not-a-bug | - | command retired (finding add no longer exists); later line dropped |
+| run:core:BUG-LAND-SESSION | finding | Coordination wrote the caller's raw tool/agent session id into the synced claim_log field (session id left the machine) | fixed | TestClaimLogSessionKeepsOnlyLoreRefs | P3-SEC-LAND-1 |
+| run:core:BUG-LIVE-LOCK-WHOLE-COMMAND | finding | Migrate took the migrate lock while holding the live lock for the whole command; sync->live and store-clone->live lock orders inverted | fixed | TestLockOrderRanks, TestMigrateRaceLiveWritesAndClaims | lock order ranks harness under LORE_TEAM_LOCK_RANKS=1 |
+| run:core:BUG-LIVE-PURGE-LIST | finding | `trash purge` in a repo with a live ref did not list purged ids on the live ref; not-found answered E_NOT_FOUND instead of E_PURGED | fixed | TestTrashPurgeReachesTeammatesAsPurged | B-ERRS2-5 |
+| run:core:BUG-TIME-BENCH | finding | Time/lint/leak-check over huge histories too slow (scanner serialised by a mutex, task-tree rebuilt per write ~1.6 s) | fixed | TestScanConcurrent, TestTime_Bench_OQ6_HugeHistories | P3-PERF-1, incremental task tree 526ec43, 44a1410 |
+| run:core:BUG-R1 | finding | Config fix cherry-picked from another branch onto the core branch (owner request) | process | - | a config fix cherry-picked from another branch; the source records no behaviour to pin |
+| run:core:trashed-claim | finding | A claim on a task later moved to the trash could not be released and kept counting toward max claims until expiry | fixed | TestF07_TrashedClaimReleasesAcrossClones | a723062 |
+| run:core:P2B-OLD-2 | finding | Agent id reached a client repo through done_by / assigned / approved_by fields | fixed | TestStampAsMapsActorFields, TestClientWriteProjectsAgentIDs, TestClientProjection | tg-leak 4973e00 + 3853e23; P2-LEAK-1 |
+| run:core:P2B-OLD-3 | finding | `lore sync` deadlock: audit sink re-read session ids on the writer handle inside an open write transaction | fixed | NONE | 96b4d44; would-deadlock test dropped with the old module (P3-E-DEL) |
+| run:core:session-audit-deadlock | finding | Writing a session row from inside the audit sink re-entered its once-guard (deadlock) | fixed | TestSessionWriteFromInsideTheAuditSink | p3-local, break-verified |
+| run:core:meta-mask-leak | finding | Sensitive metadata values echoed by meta get/show/export/set, lore show, ${meta:} and search (METADATA 3.20 masking class) | fixed | TestMetaShowSensitive | Phase B, six commits |
+| run:core:secret-show-masking | finding | Sensitive resource fields shown unmasked by resource show, trash show, --from-history, E_STALE text and the TUI | fixed | TestFromHistoryMatrix | 07d0a606, cab4aa4c, 5c160845, fbd36f6b, 9ee7010e |
+| run:core:F20-audit-leak | finding | Attached-store row ids landed in the client checkout's audit chain (core audit sink chained every write) | fixed | TestF20_RenderKeepsInternalContextOutsideTheCheckout, TestAttachedStoreAuditMachineLocal, TestStoreAuditStem | 54a6669, 9370fa0 machine-local per-store audit |
+| run:core:Recipe04-misroute | finding | Company store (org folder root) never attached, so `--to <org>/.` wrote company data into the client's store | fixed | TestRecipe04_ContractorSeesOnlyTheirClient | tg-route 4765d15 |
+| run:core:SideEffect04-first-link | finding | `--to <org>` with two links and no default silently used the first link | fixed | TestSideEffect04_TwoLinksNeedADefault | tg-route |
+| run:core:F10-order | finding | Org disagreement must be checked before store reachability (exit 17) | fixed | TestF10_LoreOrgDisagreeingWithALinkIsRefused | tg-route |
+| run:core:Recipe05-personal | finding | Migrated personal store shows across orgs (raised as a cross-org leak) | not-a-bug | TestRecipe05_PersonalNotesSyncBetweenMachines | decided: `me` is one place; a per-org personal store attempt was reverted (b8d0444) |
+| run:core:F15-notes | finding | `task show` lacked the notes section for repo-held tasks | fixed | TestF01_TaskShowWalksEverySource | tg-misc f012686 |
+| run:core:WE75-reclaim | finding | Expired claim not reclaimed in the four-agent worked example | fixed | TestWorkedExample75_FourAgentsOneMission | tg-coord |
+| run:core:dup-attach | finding | Same store+folder attached twice gave E_AMBIGUOUS_ID, rewritten to "no such task" for --after | fixed | TestAfterInOrgLinkedFolder, TestLocateDedupesOneLocation | t2d 153d867 |
+| run:core:locate-tombstone | finding | Locate counted a tombstone as a copy (E_AMBIGUOUS_ID after move) | fixed | TestLocateCopiesMatrix, TestLocatePurgedCopies | 0a9698d |
+| run:core:rest-run-path | finding | REST used the engine directly, skipping alias, attach, Mode B and CFG7 steps; wrote a store url into a client repo with 200 | fixed | TestAPIParity_SameRunPathAsCLI | 5976569, break-verified |
+| run:core:api-holds-live-lock | finding | A running local API held the live process lock; a CLI write beside it waited ~30 s | fixed | TestAPIParity_CLIBesideRunningAPI | later 28.5 s rerun not reproducible alone (timing under load) |
+| run:core:meta-json-adopt | finding | First store write did not adopt the remote folder meta; diverging project ids across clones | fixed | TestTwoClonesFirstWriteSameMeta | 5730cd7, 1593310 |
+| run:core:update-json-retype | finding | engine.Update re-validated stored json columns holding strings, failing unrelated updates (vars, policies) | fixed | NONE | integrator4, engine/write.go |
+| run:core:policy-step | finding | No separate policy step on the write path (only secret on_detect); agents.person_only etc. unenforced | fixed | TestPersonOnlyNeedsPerson, TestAPIAgentPersonOnly | d09215e |
+| run:core:lens-sql | finding | Lens had no production caller and `lore sql` did not exist | fixed | TestCLI_SQLFormatsAndInput, TestCampaignQuery_SQL | d9bea75 |
+| run:core:sql-panic | finding | `sql.run` panicked on result rows | fixed | NONE | lensql |
+| run:core:resource-field-shape | finding | Resource add wrote fields in the wrong shape, so every resource cache column was NULL | fixed | NONE | lensql, 8b0aad0 |
+| run:core:Recipe12-label | finding | Store label printed store only instead of store/folder; `--to <org>` did not resolve to the linked folder | fixed | TestRecipe12_InternalTasksNeverReachClient, TestStoreLabel | 87dfbcf, 8b0aad0 |
+| run:core:leak-index-blind | finding | Leak guard's internal index read only the old external cache, so internal rows of new stores were invisible to hooks and write checks | fixed | TestLeakIndexRows, TestLeak_TrialF7_PrePushFailsClosedWhenStoreUnreadable | SECURITY 0d7f035, cf1d682 fail closed |
+| run:core:client-actor-envelope | finding | Client-repo actor row with new envelope keys blocked every commit; origin naming another store must block | fixed | TestLeak_ClientOwnActorProjectedAndFreshCloneWorks | a7085ed |
+| run:core:move-refs | finding | Move checked no refs, so a row pointing at an internal row could move into a client repo; secret refs in file-form json missed | fixed | TestF15ThroughTheWritePaths, TestScreenScansEveryForm | SECURITY e335a02, c27ec8e |
+| run:core:actor-email-noorg | finding | Repo actor row leaked an email in no-org repos | fixed | NONE | dfe8add |
+| run:core:init-no-user | finding | `lore init` failed with no USER and no git email | fixed | TestActorKindOf | afca1ff |
+| run:core:rest-shutdown-hang | finding | REST shutdown hung with an idle connection (flaky test) | fixed | TestServeShutdownWithFreshConnection | 3055e52 |
+| run:core:gitcommit-option | finding | An option-shaped --commit value could write any file through git log --output | fixed | TestResolverRefusesOptions | SECURITY 7874366 |
+| run:core:git-branch-leak | finding | Git backend ?branch leaked into later opens; branch-name rules missing | fixed | TestBranchOf | 712ea0c |
+| run:core:f15-unknown-class | finding | F15 direction rule let an unknown class through | fixed | TestCheckTable | fail closed, 2196251 |
+| run:core:value-assert-class | finding | Type assertions on json/list values missed rows read back from files, so the task --after cycle check never fired (~20 sites) | fixed | TestEditAfterCycleMatrix | 1ed65b7, 551f6e2, 15b29fc; shared helper |
+| run:core:task-after-cycle | finding | Task --after cycles never checked; mission apply half-applied before refusing | fixed | TestParentCycleItems | t3-ops |
+| run:core:search-score | finding | Search score sign differed from 0.1.17 ranking | fixed | TestSearchHitsWeights | dd50ba4 |
+| run:core:agent-stamp-client | finding | Agent writes in a client repo must be stamped as the owner person | fixed | TestAgentDetailsSwitch | SECURITY f31ae31, agent_details switch e4e9a33 |
+| run:core:live-merge-markers | finding | Live-row merge produced conflict markers | fixed | TestMergeRowNewerWins | 30a5523 |
+| run:core:corrupt-cache | finding | A damaged cache file broke every command with E_INTERNAL instead of being rebuilt | fixed | TestCacheDamagedIsMovedAsideAndRebuilt, TestDoctorBreak_CacheHeaderDamagedIsMovedAsideAndRebuilt | 7f3e43f |
+| run:core:doctor-resurrect-twice | finding | Doctor warned twice per resurrected purged row | fixed | TestDoctorNamesResurrectedRows | c32d7fe, 72b2d35 |
+| run:core:flag-error-twice | finding | Bad flag on a core command printed the error twice; E_INTERNAL printed twice | fixed | TestUsageErrorBytes | t4b, gfix-f 0d2f08b single ERROR line |
+| run:core:merge-driver-fresh-clone | finding | Cross-branch merge of core rows conflicted: merge driver not wired in fresh clones | fixed | TestF18_FreshCloneCoreWriteWiresTheMergeDriver | 285f4b0 |
+| run:core:not-a-secret-hook | finding | `--yes` "not a secret" answer was not honoured by the commit hook (no allow row written) | fixed | TestConfirmedFindingBecomesAnAllowEntry | e133fee secret_allows row |
+| run:core:group-repo | finding | `task add --to <store>/<folder> --repo X` answered E_NOT_FOUND (repos row no longer found-or-created) | fixed | TestGroupRepoID | regression of removed dead code, App.GroupRepoID |
+| run:core:landed-rows-vanish | finding | Live backend read skipped rows landed on origin/main, so finished tasks vanished from task list | fixed | TestF01_LandedRowStaysListedUntilPulled | d18fc9a |
+| run:core:store-init-insteadof | finding | Store init answered E_STORE_UNREACHABLE: origin rewritten as ssh:// so url rewrite rules never matched | fixed | TestStoreRoute, TestRemotesIgnoreInsteadOf | GDOCS-1, 9dfd0fd, 01daf38 |
+| run:core:audit-tamper | finding | Audit chain tamper not detected; adopt / fix-projects broke the audit chain | fixed | TestAuditChainHeadAnchor, TestAuditChainImportAppendVerify | a4842e1, 8f3e69b, 96ccf70 |
+| run:core:monorepo-subfolder | finding | Monorepo: project rows written at git top instead of per sub-folder project; init reused one repo id | fixed | TestRecipe16_MonorepoOneLiveRefFolderPerProject, TestSideEffect34_MonorepoOneRideCommitForAllProjects | ad1f308, G-MONO-1 2f0fc4e |
+| run:core:guard-test-deleted | finding | Old tests deleted or weakened while code moved (plan deps suffixes, legacy table assertions, rune-safe body cut) | fixed | TestPlanDepsSuffixes, TestLegacyTables, TestItemBodyIsCutOnRunes | owner guard rule; restored 125eca4 |
+| run:core:smoke-committer-identity | finding | Store push failed "Committer identity unknown" when git has no global identity; error printed twice | fixed | TestNoGitIdentityUsesFallback | final smoke; FLAG4 |
+| run:core:smoke-ref-not-leak-code | finding | Client-repo `--ref` to an internal-store row answered E_NOT_FOUND instead of E_LEAK_BLOCKED (failed closed) | fixed | TestF15_PointersOnlyFlowInward | final smoke; FLAG5, af867e7 |
+| run:core:smoke-unheld-notes | finding | Unheld notes on client vs store tasks landed on different refs of the same store | fixed | TestClientTaskUnheldNoteGoesToTheStore, TestRecipe15_NoteOnATaskNotHeldGoesToTheStore | 0c2dd38 |
+| run:core:FLAG1 | finding | `--json` `_source` shape for rows from attached stores (store/folder names and ids) | fixed | TestSearchAttachedStoreHits, TestSourceOf | owner flag: differs from 0.1.17 `store:<org>/<folder>` |
+| run:core:FLAG2 | finding | Missing/invalid argument exit code inconsistent (0.1.17 exited 1) | fixed | TestCLITree_UnknownFlag, TestCampaignData_UnknownFlagRefused | exit 20 E_INVALID_INPUT |
+| run:core:FLAG3 | finding | Cache prune on the new cache layout (failing side-effect test) | fixed | TestSideEffect40_CachePruneRemovesOldProjects, TestPrunePlanKeepsAttachedCaches | 0d628a0 |
+| run:core:FLAG6 | finding | Actor companion rows did not reach the client repo with a client-visible row (agent shown as raw id) | fixed | TestRecipe15_AgentDetailsClientSharesAgentWork, TestRecipe15_AgentOnAClientTask | e863053..6a84f03 |
+| run:core:r2-flag6-regression | finding | FLAG6 fix made fresh init write the actor twice (E_STALE line); its fix broke init in org homes | fixed | TestE08_TwoOrgHomeWhoamiInEachRepo, TestE10_CodeRepoListedAsAStoreIsRefused | 105d6f8, 6a84f03 |
+| run:core:Q-R2-1 | finding | Personal git email landed in an org store's history (git identity won over the org identity) | fixed | TestLeak_LoreCommitsAreAuthoredByTheOrgIdentity, TestStoreSignerOwnerMatchesOrgStores | r3-sign 6a0fb00 |
+| run:core:Q-R2-5 | finding | Old commands exited 1 for not-found / refused / needs-confirm classes | process | - | the code it was in (the old module or binary) was deleted in phase E |
+| run:core:subfolder-audit | finding | `memory add` from a repo subfolder stored the row but exited 1 "audit record failed" (retry duplicated) | fixed | TestMemoryAddFromSubfolder | 3500e59, e83f5be |
+| run:core:memory-retry-dup | finding | `memory add` retry after an audit failure duplicated the row (no idempotency) | fixed | TestKnowledgeMemoryIdempotencyKey | audit in the same batch + --key (p2-audit) |
+| run:core:Q-R3-11 | finding | `project delete` refused E_HAS_DEPENDENTS because of the checkout's own repos row | fixed | TestProjectDeleteTakesOwnRepoRow | r3-projdel |
+| run:core:overnight-failing-7 | finding | Seven tests left failing by the overnight build (audit trash action, memory e2e, personal store count, task status, reference docs) | fixed | TestMemoryEndToEnd, TestV017LocalPersonalStore | 8c4d777, 16e2ced, 6b6c447; real migrate-rerun bug fixed |
+| run:core:DEL-TOMB2 | finding | Both sides tombstoned: merge kept the newer tombstone; design says keep the earlier | fixed | TestRowsBothTombstonesKeepEarlier | 427929f |
+| run:core:DEL-ARCH | finding | `trash purge --archived-before` still ran on the old database path, not on row-file tombstones | fixed | TestTrashPurgeArchivedBefore, TestPurgeArchived | cb9ca69 |
+| run:core:TASK68 | finding | Sub-task moved alone had no detach note | fixed | TestMoveChildAloneKeepsParentWithNote | d3abf6c W_MOVED_FROM_PARENT |
+| run:core:SENSCOND | finding | field:value search on a sensitive field never matched (design: match, print masked) | fixed | TestSearchSensitiveConditionsMatchAndMask, TestFilterSensitiveComparesStored | 7b5e6cf |
+| run:core:git-history-cap | finding | Git backend reported no History capability in repo mode | fixed | NONE | 427929f |
+| run:core:Q-OV45 | finding | Team stores disagreeing on a secret rule: design nearest layer wins vs code off-anywhere is off | not-a-bug | - | kept as built (writes follow rules, hooks keep rule on) |
+| run:core:tool-names-commits | finding | Commit messages name tool profiles (coding-agent product names) | not-a-bug | - | treated as feature names, not attribution |
+| run:core:G101-names | finding | gosec G101 false positives on identifiers containing "secret" (no suppression allowed) | process | - | lint or gate tooling; the lint/docsync gate steps are the guard |
+| run:core:tests-write-checkout | finding | Tests wrote into the checkout's own .lore | process | - | test-harness fix; the suites themselves are the check |
+| run:core:FB-SEC-1 | finding | Under on_detect ask, a bare `--yes` stored a detected secret as "not a secret" | fixed | TestSecretMenu, TestMetaSecretAskFlow | SECURITY a9f6329; FB-SEC-2..4 terminal menu, findings[] |
+| run:core:PC-LEAK-1 | finding | Internal fields (time entries, claim log) not stripped on every client-repo write | fixed | TestClientWriteKeepsClaimEpoch | FB-TEAM-1 keeps claim_epoch/approved_hash |
+| run:core:PC-LEAK-1-plan | finding | Trash/restore of an unmigrated 0.1.17 plan in a client repo dropped its status | fixed | TestPlanLegacyStatusClientWrites | 39edc87 |
+| run:core:P3-TTY-1 | finding | Terminal check used char-device test, so `</dev/null` showed the secret menu and docs examples hung | fixed | TestIsTerminalNonTTY | 57f9c24; docs examples hung 17 min |
+| run:core:F15-blocked-by | finding | blocked_by / relation edge from a client repo to an org row was not leak-checked | fixed | TestRelateLeakGuardF15 | 292a6cd |
+| run:core:store-url-userinfo | finding | Store url user part (token) written into committed stores.yaml; store url shown in client errors | fixed | TestCleanFileURLCredentials | SECURITY G-CORE-6, 5c31342, e1e4803c, ddc72130 |
+| run:core:G-ENGINE-6 | finding | First client row by an agent kept the agent's own id (actor row staged in the same batch not visible) | fixed | TestAgentOwnerSeesStagedActorRow | SECURITY |
+| run:core:api-host-runner-leak | finding | Local API bypassed the host runner (client-repo leak) | fixed | TestF16_EveryRepoWritePathIsChecked | 7db4050 |
+| run:core:live-off-leak | finding | Leak check skipped when live mode is off | fixed | TestF16_EveryRepoWritePathIsChecked | a21b984 |
+| run:core:agent-next-deadlock | finding | `agent task next` deadlocked | fixed | NONE | c56cbc00 |
+| run:core:client-own-task-claim | finding | Task claim/done in a client repo answered E_UNSUPPORTED; ride-along push failed | fixed | TestRecipe15_AgentOnAClientTask, TestLeak_TrialF7_RideAlongStillPushesInClientRepo | 4ce9dd5 |
+| run:core:F9-merged | finding | Merged check (squash / merge commit) failed on the release binary | fixed | TestF09_MergeCommitFoundByAncestryAndCheckWritesNothing, TestF09_SquashWithoutTrailerNeedsManualMark, TestE07_SquashMergeWithTrailerRecordsMerged | mergewatch move |
+| run:core:F18-old-binary | finding | Old binary F18 actor-row regression (E_INTERNAL writing the actor row); actor register in fresh clone E_NOT_PROJECT_ROOT | fixed | TestF18_SamePersonOnSeveralMachinesKeepsOneRepoActor, TestF18_ClientRepoActorCopyIsTheProjection | 620c242; old binary deleted in phase E |
+| run:core:F07-regression | finding | Claim renew / expired-signal tests failed after an audit patch | fixed | TestF07_ClaimRenewReleaseNeverMakeHistory, TestF07_NextWriterDropsExpiredSignals | p3-g-coord |
+| run:core:store-task-claim | finding | Claiming a store task (`--to <org>`) on the release binary answered E_NOT_FOUND | fixed | NONE | p3-sigcoord |
+| run:core:cmdlore-parity | finding | Release binary missed 174 command paths (org create/import/rename, explain, render, coord verbs, sync verbs) | fixed | TestOrgCreateImportRenameOnCmdLore | phase B parity, a9e001e; b-cliscan found none left |
+| run:core:conflict-markers-sync | finding | sync status/conflicts/resolve blind to a row file with git conflict markers | fixed | TestTeC_NestedConflictBlocksCommit, TestBrokenRowFileIsReported | g-sync; INTEG-SYNC-2/3 |
+| run:core:agent-init-no-actor | finding | Init by a detected agent wrote repos and targets rows with no actor | fixed | NONE | g-orgmig |
+| run:core:false-live-note | finding | Commands skipping live rows printed a false "live rows not visible" note | fixed | NONE | g-content |
+| run:core:move-preview-noterm | finding | `lore move` without a terminal showed a generic question instead of the move preview | fixed | NONE | g-engine |
+| run:core:upgrade-dev-binary | finding | Bare `lore upgrade` replaced a plain `go build` dev binary | fixed | NONE | c0ee1b00 |
+| run:core:scope-master | finding | `memory add` printed `scope: [master]` in a repo on branch main | not-reproduced | - | owner unclear; not recorded as fixed |
+| run:core:name-unique-flake | finding | ops/prompt name-uniqueness test flaked once with E_STALE | not-reproduced | - | g-engine check |
+| run:core:F11-flake | finding | Concurrent link merge race test flaky under load (passes alone) | not-reproduced | TestF11_Race_ConcurrentLinksMergeAsUnion | 4/4 alone |
+| run:core:task-tree-perf | finding | Task-tree rebuild per task write ~1.6 s | fixed | TestTaskTreeIncrementalMatchesFull, TestTaskTreeReadsNodesNotDocs | incremental task tree 526ec43 |
+| run:core:settings-refresh-api | finding | Settings rows not refreshed in a running local API (scanner not rebuilt on secret-rule change) | fixed | TestSettingsAddedWhileTheAppRunsApplyToTheNextWrite, TestScannerRefreshedBeforeEachWrite | e4e9a33 |
+| run:core:cache-locked | finding | Cross-process "database is locked (517)" on the cache | fixed | NONE | `_txlock=immediate` |
+| run:core:F17-personal-local | finding | 0.1.17 `personal: local` not attached as `me`; personal store must flatten on migrate | fixed | TestV017LocalPersonalStore, TestV017LocalPersonalPlacement | 47ede2c |
+| run:core:E-purged-hide | finding | Purged ids must be refused on every write and hidden on reads | fixed | TestPurgeNeverComesBack | b6445ae, b82cdc9 |
+| run:core:me-folder-refused | finding | `me/<folder>` (any form) in stores.yaml must be refused | fixed | TestParseMatrix | 174e35d |
+| run:core:task-export-import | finding | Exported tasks carried source-repo list/mission/plan ids; import into another repo answered E_NOT_FOUND | fixed | TestExportImportAcrossRepos | G-DECIDE-5, 20dd325 |
+| run:core:resource-import-cycle | finding | Two rows of one resource import file referencing each other were refused | fixed | TestResourceImportYAMLAndCycle | PC-RES-1 two-pass import, 3741f56 |
+| run:core:fence-board | finding | Subtree / mission / --where delete on a team board must raise claim epoch so the holder's next fenced write fails | fixed | TestDeleteFencesHolderOnTeamBoard | 44051a22 |
+| run:core:phase2-memory-gaps | finding | Phase 2 memory gaps vs 0.1.17: dropped flags, json wrapper, supersede/move refused, store init/add, --to me/org, lens >10 sources | fixed | NONE | phase 3 + PENDING-60; flags restored or dropped by decision |
+| run:core:old-writers-v1 | finding | Old restore/repair/merge driver could still write memory files as `_v 1` | process | - | the code it was in (the old module or binary) was deleted in phase E |
+| run:core:search-limit-scope | finding | Search applied --limit before the scope filter | fixed | NONE | phase 2 gap; not traced to a commit here |
+| run:core:old-cli-legacy-bugs | finding | Old-module bugs: merge driver dropped newer-edit report, bridge copy lost creator, TUI refusal named missing commands | process | - | the code it was in (the old module or binary) was deleted in phase E |
+| run:core:tasklist-store-coord-estale | finding | Docs example showed a coordination "could not be recorded" E_STALE line | not-reproduced | - | pre-existing, later.md; no closure recorded here |
+| run:core:F-ERR-B-ERRS-1 | finding | Malformed id looked up an existing row with an inconsistent code (E_NOT_FOUND vs E_INVALID_ID) | fixed | TestShowErrors, TestAddRefusals | B-ERRS-1 malformed id -> E_INVALID_ID |
+| run:core:OWNERQ-13 | finding | Secret scanner ~3.5x over per-row time budgets | fixed | TestScanBudgets | detection kept; budgets set to measured numbers, pre-push budget asserted |
+| run:core:docs-history-paths | finding | Code comments and historical specs cite deleted old-module paths | docs-only | - | left as provenance pointers |
+| run:core:docs-fates-count | finding | Old-test fates summary counts stale (rows correct) | docs-only | - | recounted in FINALIZE |
+| run:core:docs-delete-confirm | finding | Docs vs code: single delete still always asks; `--confirm` on delete refused vs accept-and-ignore | docs-only | - | docs follow code |
+| run:core:docs-backend-get | finding | Backend.Get comment said ErrNotFound while the contract returns tombstones | docs-only | - | spec drift note |
+| run:core:docs-config-stale | finding | Generated config reference stale (personal store default, identity file, policies keys) | docs-only | - | regenerated in docs pass |
+| run:core:team-docs-v017 | finding | Team docs example scripts still used 0.1.17 spellings (store init <url>, --live) | process | - | scenario, chaos or docs scripts ported; those scripts run in the gate |
+| run:core:spec-deltas | finding | Implementation differs from spec (123 deltas: registry value, typed rows, exit classes, folded not-found codes, m2m as list field, etc.) | docs-only | - | spec-deltas.md applied by the docs session |
+| run:core:BUGFIX-01 | finding | `store remove <store>/<folder>` vs `<store>` detach scope unclear | fixed | TestRemoveStoreFolderEntries | lore-bugs round |
+| run:core:BUGFIX-04 | finding | Live write carried the project and actor rows out of the work tree | fixed | TestUncommittedInitStaysInDataAfterLiveTask | lore-bugs round |
+| run:core:BUGFIX-05 | finding | LORE_SYNC=0 meaning in 0.1.18 (live off, rows still written) | fixed | TestTeE_SyncGitOffLeavesGitAlone | lore-bugs round |
+| run:core:BUGFIX-07 | finding | `migrate rollback` of a Mode B conversion must refuse and change nothing | fixed | TestModeBRollbackRefused | lore-bugs round |
+| run:core:BUGFIX-08 | finding | `batch list/show` row count wrong after a restore under the same batch | fixed | TestRowsCountsDistinctRowsAfterRestore | lore-bugs round |
+| run:core:BUGFIX-10 | finding | Resource qualified place for a store root undefined | fixed | TestParseResourceQualified | lore-bugs round |
+| run:core:BUGFIX-11 | finding | Bare resource name matching two levels picked nearest instead of E_RESOURCE_AMBIGUOUS | fixed | TestResourceAmbiguousAcrossLevels | lore-bugs round |
+| run:core:BUGFIX-12 | finding | Secret redact on a json resource value refused instead of replacing with a secret reference | fixed | TestResourceSecretAnswers, TestRedactJSONLeaves | lore-bugs round |
+| run:core:BUGFIX-13 | finding | Metadata key/value labels not refreshed on row update | fixed | TestMetaRenameRefreshOnNextWrite | lore-bugs round |
+| run:core:BUGFIX-18 | finding | Explicit unknown or disabled setup name not refused on every repo operation | fixed | TestSetupExplicitGate | lore-bugs round |
+| run:core:BUGFIX-19 | finding | Task add with no --to created its default task list in the wrong store | fixed | TestAddRoutedDefaultTasklist | lore-bugs round |
+| run:core:BUGFIX-20 | finding | Agent `task add` without --commitment accepted | fixed | TestAgentAddNeedsCommitment | lore-bugs round |
+| run:core:BUGFIX-21 | finding | Setup doctor skipped identity email checks when the org identity key had the address | fixed | TestOrgEntryIdentityEmailChecked | lore-bugs round |
+| run:core:BUGFIX-25 | finding | Local API read the token file once at start (rotation ignored; missing file kept last token) | fixed | TestTokenFileAuthRotate | lore-bugs round |
+| run:core:BUGFIX-26 | finding | `memory delete --where --dry-run` asked up front | fixed | TestDryRunNeverAsksUpFront | lore-bugs round |
+| run:core:INTEG-ORG-1 | finding | A left/archived person could come back through actor register / agent start / setup join | fixed | TestOrgOffboardThenRejoin | E_STATUS_CHANGE |
+| run:core:INTEG-KNOWLEDGE-1 | finding | `comment add --on-table` accepted a wrong table for a core id | fixed | TestKnowledgeComments | integrate round |
+| run:core:INTEG-KNOWLEDGE-2 | finding | Tag `--color` accepted any value | fixed | TestKnowledgeTagCatalogue | must be #RRGGBB |
+| run:core:INTEG-KNOWLEDGE-3to6 | finding | show without --json missed title/body; --title vs --name; unknown memory kind; rule glob activation without --globs | fixed | TestCampaignKnowledge_ListTextNamesEveryRow, TestKnowledgeLevels_SettledQuestions, TestEditAndShowErrors | integrate round, four small fixes |
+| run:core:INTEG-KNOWLEDGE-7 | finding | Write to an unattached store folder hint named a command that commits an org store url | fixed | TestKnowledgeLevels_OrgStoreFolders | resolved by INTEG-CFG7-1 confirm |
+| run:core:INTEG-RENDER-1-2 | finding | Render target typo written as a file; profile missing on this machine half-wrote a render | fixed | TestRenderTargetTypoRefused, TestRefuseTypo | integrate round |
+| run:core:INTEG-RENDER-3 | finding | Global-scope write with no personal store wrote actor rows before refusing | fixed | TestRenderGlobalRuleNeedsPersonalStore | E_NOT_FOUND hint `store init me` |
+| run:core:INTEG-QUESTIONS-1 | finding | Create or restore onto a natural key held by a live row lacked a clear code | fixed | TestTrash_RestoreAfterRecreateSameKey | E_NAME_TAKEN |
+| run:core:INTEG-QUESTIONS-2 | finding | Wrapped errors hid inner message and hint | fixed | TestNoHiddenReason | guard internal/layers nohiddenreason test |
+| run:core:INTEG-QUESTIONS-3 | finding | Add commands reading stdin implicitly could hang an agent harness | fixed | NONE | no implicit stdin |
+| run:core:INTEG-QUESTIONS-4 | finding | Commit hook and write scanner seemed to disagree on a placeholder | not-a-bug | - | an old 0.1.17 binary on PATH was run by the hook |
+| run:core:INTEG-QUESTIONS-5-6 | finding | Archived-resource hints suggested unarchive; task decline on an accepted task | fixed | TestResourcesArchiveRefusesNewRefs | E_REFUSED hint task cancel |
+| run:core:INTEG-QUESTIONS-10 | finding | Secrets/vars refusals did not name the way forward | fixed | TestSecretsCustomRuleLifecycle, TestSecretsVarsNameAndTypeMatrix | integrate round |
+| run:core:INTEG-SYNC-1-6 | finding | store doctor scope, sync --json conflicts, store open ?branch, live purge non-full id | fixed | TestCampaignSync_LivePurgeDryRunAndConfirm, TestSyncStores_BranchesAndOpen | integrate round |
+| run:core:INTEG-MIGREST-1 | finding | `migrate run` on a store needing a newer lore not refused before locks | fixed | TestMigrateGateDeclaredMatrix | E_OLD_LORE |
+| run:core:INTEG-MIGREST-2-5 | finding | Missing next-step hints; optional-id ops lacked bulk routes; unknown setup header not refused | fixed | TestRestOpenAPI_ServedEqualsWrittenAndRegistry, TestSetupNotFoundNamesSetups | integrate round |
+| run:core:INTEG-TRASH-1-6 | finding | Comments/links on trashed rows, --reason on every trash verb, show of deleted row codes, purge takes comments | fixed | TestTrash_CommentsStayLiveOnTrashedRow, TestEveryTrashMoveTakesReason, TestPurgeTakesComments | integrate round |
+| run:core:INTEG-TRASH-5 | finding | Recurring reminder done late did not skip past dates | fixed | TestTasksReminder_DoneLateSkipsPast | integrate round |
+| run:core:INTEG-CFG7-1 | finding | store init/add/set-url committed an org store url without asking | fixed | TestCFG7OrgStoreURLAsks, TestCFG7SetURLAsks | asks with the CFG7 confirm |
+| run:core:INTEG-AUDIT | finding | created_by/updated_by not recorded on every table; callers could set creator by hand | fixed | TestAuditOnEveryList | engine envelope writers; INTEG-WF-1 |
+| run:core:LEAK-DIST | finding | Leak check flagged a generated web build table as a password pair | not-a-bug | - | narrow allowlist for that generated output only |
+| run:integrate:merge | scenario | Merge the tests branch and the docs branch into the onboarding branch, then one full gate (quick tier + full check incl. docs, userscen, team e2e, setup e2e, drift) | process | - | status: INTEGRATE DONE, full check 1021 s green after a userscen fix |
+| run:integrate:gate-tparallel | finding | Merged leftover userscen tests called t.Parallel twice (own call + world helper), failing the userscen step | process | - | test-harness fix; the suites themselves are the check |
+| run:integrate:gate-expect-clash | finding | Two userscen expectations written in parallel disagreed (duplicate prompt now E_NAME_TAKEN exit 23; workspace edit hint) | fixed | TestKnowledgeDuplicateAdds | expectations aligned with INTEG-QUESTIONS-1 and INTEG-KNOWLEDGE-4 |
+| run:integrate:cl-status-change | finding | actor register / agent start by a person who left or was archived reactivated them or gave a wrong hint; now E_STATUS_CHANGE naming status and actor rejoin | fixed | TestOrgOffboardThenRejoin | INTEG-ORG-1 |
+| run:integrate:cl-global-hint | finding | --scope global with no personal store gave a bare not-found instead of the store init me hint | fixed | TestRenderGlobalRuleNeedsPersonalStore |  |
+| run:integrate:cl-comment-table | finding | comment add --on-table with a misspelt table for a core row id was accepted; now refused naming the right table | fixed | TestCommentTargets | INTEG-KNOWLEDGE-1 |
+| run:integrate:cl-tag-color | finding | tag add / tag edit --color accepted values other than #RRGGBB | fixed | TestTagAddMatchesV017, TestTagEdit | INTEG-KNOWLEDGE-2 |
+| run:integrate:cl-docs-norepo | finding | Docs did not say a list or search without --repo shows project-wide rows only, even inside a repo | docs-only | - | no test needed: docs-only |
+| run:integrate:cl-render-target-typo | finding | render --target with a bare name that is no tool profile created a file of that name; now E_INVALID_INPUT naming known profiles (also directive install) | fixed | TestRenderTargetTypoRefused, TestRefuseTypo | INTEG-RENDER-1 |
+| run:integrate:cl-render-missing-profile | finding | render in a repo whose context.targets names a profile this machine lacks wrote files then exited 20; now refuses before writing | fixed | TestRenderTargetWithTeammateProfileInRowRefusesWhole | INTEG-RENDER-3 |
+| run:integrate:cl-rule-memory-me | finding | rule/memory --scope global or --to me without a personal store not refused before writing | fixed | TestRenderGlobalRuleNeedsPersonalStore |  |
+| run:integrate:cl-name-taken | finding | Create or restore onto a name a live row holds gave E_INVALID_INPUT exit 20 with internal names; now E_NAME_TAKEN exit 23 naming field, value, row | fixed | TestKnowledgeDuplicateAdds, TestTrash_RestoreAfterRecreateSameKey | INTEG-QUESTIONS-1 |
+| run:integrate:cl-wrapped-reason | finding | Refusals wrapped with extra context lost their reason and hint on CLI and REST | fixed | TestNoHiddenReason | INTEG-QUESTIONS-2 (AST walk) |
+| run:integrate:cl-resource-archived-hint | finding | E_RESOURCE_ARCHIVED hints suggested an unarchive verb that does not exist | fixed | TestResourceRefusalCodes | INTEG-QUESTIONS-5 |
+| run:integrate:cl-task-decline | finding | task decline on an accepted or someday task cancelled it; now E_REFUSED with a task cancel hint | fixed | TestTasksStatus_CancelReasons | INTEG-QUESTIONS-6 |
+| run:integrate:cl-docs-body | finding | Docs implied a piped body works for add commands; body comes only from --body | docs-only | - | no test needed: docs-only |
+| run:integrate:cl-show-text | finding | show without --json printed only a badge for pattern, playbook, prompt and other kinds; now prints title/name and body | fixed | TestKnowledgeLifecycleEveryKind, TestCampaignKnowledge_ListTextNamesEveryRow | INTEG-KNOWLEDGE-3 |
+| run:integrate:cl-edit-title | finding | playbook, prompt, behaviour, workflow, workspace edit lacked --title as alias of --name | fixed | TestKnowledgeLevels_SettledQuestions | INTEG-KNOWLEDGE-4 |
+| run:integrate:cl-memory-kind | finding | Unknown memory --kind not reported as E_INVALID_INPUT naming the allowed kinds | fixed | TestEditAndShowErrors | INTEG-KNOWLEDGE-5 |
+| run:integrate:cl-rule-glob | finding | rule add --activation glob without --globs accepted | fixed | TestAddRefusals, TestEditMatrix | INTEG-KNOWLEDGE-6 (ops/rule) |
+| run:integrate:cl-unattached-folder-note | finding | A write to a store folder this repo does not attach gave no note that lists here will not show it | fixed | TestKnowledgeLevels_OrgStoreFolders | INTEG-KNOWLEDGE-7 |
+| run:integrate:cl-pii-positional | finding | pii-pattern add with a positional name failed with too many arguments instead of pointing to secrets rule add | fixed | TestSecretsCustomRuleLifecycle | INTEG-QUESTIONS-10 |
+| run:integrate:cl-missing-field-hint | finding | A command missing a required field did not say how to give it; init/outside-git/migrate enable lacked next-step hints | fixed | TestMigrateEnable | INTEG-MIGREST-2 |
+| run:integrate:cl-vars-snake | finding | vars set / rename refusal did not suggest a snake_case name | fixed | TestSecretsVarsNameAndTypeMatrix | INTEG-QUESTIONS-10 |
+| run:integrate:cl-docs-not-a-secret | finding | Docs did not say --not-a-secret commits the value with its allow entry and the hook refuses only unallowed credentials | docs-only | - | INTEG-QUESTIONS-4 |
+| run:integrate:cl-sync-status-json | finding | sync status --json data_dir_present and tracked_files were always false/0 | fixed | TestSyncStatus_DataFolderFacts |  |
+| run:integrate:cl-sync-conflict-markers | finding | sync --json did not list row files left with git conflict markers; the warning did not say the row is left out of lists and show prints both sides | fixed | TestSyncMarkers_MergeMarkersInARowFile |  |
+| run:integrate:cl-store-doctor-scope | finding | store doctor did not say what it checks and gave no pointer when no org stores were configured | fixed | TestSyncStatus_StoreDoctorChecksAttachedStores | behaviour later widened to every attached store |
+| run:integrate:cl-store-open-branch | finding | store open of a store attached as url?branch= failed with E_OFFLINE | fixed | TestSyncStores_BranchesAndOpen | INTEG-SYNC-5 |
+| run:integrate:cl-live-purge-id | finding | live purge of a shortened or mistyped id reported purged while the row stayed | fixed | TestRefusals, TestSyncLive_CompactPurgeRestore | INTEG-SYNC-6 (ops/live) |
+| run:integrate:cl-migrate-old-lore | finding | migrate run in a project needing a newer lore was not refused with E_OLD_LORE before changing anything | fixed | TestRunFormatGate, TestMigrateRunGated | INTEG-MIGREST-1 |
+| run:integrate:cl-rest-idless | finding | lore api did not serve operations whose id is optional without /{id} (policy, live, lands/run, heartbeat, metas, pii_patterns, resources/check) | fixed | TestRestIDLessTwins | INTEG-MIGREST-4 |
+| run:integrate:cl-unknown-setup | finding | Unknown --setup / X-Lore-Setup did not name the setups on the machine or point to lore setup | fixed | TestSetupNotFoundNamesSetups, TestRestInput_Headers | INTEG-MIGREST-5 |
+| run:integrate:cl-trash-reason | finding | Several trash-move verbs (task view/template delete, link remove, vars rm, project delete, secrets allow rm) had no --reason so could not delete under delete.require_reason | fixed | TestEveryTrashMoveTakesReason, TestTrash_ReasonOnEveryDelete | INTEG-TRASH-3 |
+| run:integrate:cl-with-dependents-help | finding | trash list --with-dependents help called comments and links dependents | fixed | TestRemoveHelpSaysTrash | help text only; no test found asserting the wording |
+| run:integrate:cl-show-purged | finding | show of a purged id exited 0 with empty fields; now E_PURGED, trashed E_IN_TRASH, other tombstone E_NOT_FOUND | fixed | TestTrash_BulkDeleteWhere | INTEG-TRASH-4 via the purged-show helper |
+| run:integrate:cl-reminder-recurring | finding | A recurring reminder done after its date landed in the past; month-end dates drifted | fixed | TestNextOccurrence, TestTasksReminder_DoneLateSkipsPast | INTEG-TRASH-5 |
+| run:integrate:trash-6 | finding | Purging a row left its comments orphaned; owner decided purge takes the row's comments (live or trashed) with tombstones | fixed | TestPurgeTakesComments, TestPurgeLiveRowTakesComments | INTEG-TRASH-6; trash move still leaves comments live (INTEG-TRASH-1) |
+| run:integrate:cfg7-1 | finding | store init/add/set-url with an org store url wrote it into committed stores.yaml without asking; now E_NEEDS_CONFIRM / --yes / REST yes | fixed | TestCFG7OrgStoreURLAsks, TestCFG7SetURLAsks, TestKnowledgeLevels_OrgStoreFolders | INTEG-CFG7-1 |
+| run:integrate:wf-1 | finding | Workflows recorded no creator; new created_by_actor_id, old rows backfilled to unknown by migrate | fixed | TestWorkflowCreatedBy, TestWorkflowOldRowWithoutCreator | INTEG-WF-1 |
+| run:integrate:audit-1 | finding | Every table must record created_by/updated_by/at stamped by the engine, shown in show/--json and filterable in list | fixed | TestAuditEveryTable, TestAuditOnEveryList, TestAuditFilters | INTEG-AUDIT-1 (59 tables) |
+| run:integrate:audit-1-flags | finding | 17 add commands let callers set --created-by by hand; flag removed, creator always the calling actor | fixed | TestAddCreatorFromCaller | INTEG-AUDIT-1 addendum |
+| run:integrate:audit-2 | finding | Plain-text show gains a writers line (owner yes) | fixed | TestTextMatchesV017, TestAuditOnEveryList | INTEG-AUDIT-2; many per-noun tests assert it |
+| run:integrate:open-purge-links | finding | Purge left knowledge and commit links pointing at the purged id (open for owner) | fixed | TestPurgeTakesLinks | resolved later (schema PurgeWithTarget) |
+| run:integrate:open-cfg7-noidentity | finding | An org configured without an identity that is not this repo's org was not recognised as an org store by the CFG7 confirm | fixed | TestOrgStoreURLsListsEveryOrg, TestCFG7OrgStoreURLAsks | resolved later |
+| run:integrate:open-trailing-slash | finding | Canonical store url trailing-slash mismatch let an org url slip past the confirm | fixed | TestCFG7OrgStoreURLAsks | case "spelled with a trailing slash" |
+| run:integrate:open-seturl-test | finding | store set-url had no test of its own for the confirm | fixed | TestCFG7SetURLAsks |  |
+| run:integrate:open-audit-seed | finding | contact_type, role and scope lists were not seeded in the audit walk | fixed | TestAuditOnEveryList | seed-skip list now empty; org lists seeded via org harness |
+| run:integrate:sync2-observations | finding | Small sync observations: duplicate listing for two entries on one branch, store list branch column empty for ?branch= form, compact epoch bump | fixed | TestSyncStores_ListBranchColumn, TestSyncLive_CompactPurgeRestore | epoch bump asserted as intended (1 to 2) |
+| run:land2:land | scenario | Land store push modes plus history compaction and the source-of-truth work as two fast-forward commits after a full gate | process | - | LAND2 DONE |
+| run:land2:conflict-begin | finding | Rebase conflict: per-request REST state reset (begin) had to also reset new store-push per-command state | process | - | a rebase conflict resolved while merging; no behaviour of its own |
+| run:land2:push-stamp | finding | store set on an org store committed and pushed its settings but never wrote push_stamp, so store show showed an old push (docs transcript drift) | fixed | TestWithStoreDirWritesPushStamp | unit test added in land3 |
+| run:land2:pagematrix-flake | finding | Setup e2e page matrix second-account cell flaked: identity email not one of the selected account's emails | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land2:hook-bundle-fp | finding | Old 0.1.17 commit hook false-positive on the built web bundle (password pair in minified JS) | process | - | worked around with an older binary on PATH |
+| run:land3:setup-identity | finding | When a GitHub profile can't be read in time, the setup page filled name/email from a global git identity of another account, mixing accounts on save | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land3:walker-esc | finding | Page walker: an open suggestion list hid the rest of the page from the a11y tree | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land3:hook-deadline | finding | SessionStart hook tests asserted under the real 2 s hook deadline, so gate load emptied the answer (unexpected end of JSON input) | fixed | TestHookDeadlineReleaseIgnoresEnv, TestRenderSessionStartHook, TestRenderContextInternalAndHook | test-build-only LORE_HOOK_TIMEOUT |
+| run:land3:public-port | scenario | Port core parts of landed work onto the open-core branch, EE paths left out, full check on the public tree | process | - | private branch only |
+| run:land3:set-url-origin | finding | repo set-url did not move the copied origin | fixed | TestJourneySolo | step month1/folder-renamed |
+| run:land3:doctor-all-gone | finding | doctor --all failed on a clone whose folder is gone | fixed | TestJourneySolo | step month1/folder-renamed asserts doctor --all |
+| run:land3:folder-add-project | finding | store folder add / --create folders got no project row | fixed | NONE | no test verified for the project row |
+| run:land3:api-as-person | finding | lore api served as the tool that started it instead of the machine's person | fixed | TestJourneyAgents | step day5/api-started-from-a-claude-session |
+| run:land3:purger-named | finding | A purged row's refusal did not name who purged it | fixed | TestJourneyAgents | step day6/purge-then-regret asserts "purged by" |
+| run:land3:from-history-uncommitted | finding | trash show --from-history did not read a purge not yet committed | fixed | NONE | history matrix test exists but uncommitted case not verified |
+| run:land3:org-unlink | finding | lore org unlink missing (design had dropped it); re-added and kept by owner | fixed | TestJourneyAgencyClientMoves | step month2/acme-project-ends |
+| run:land3:hook-fail-closed | finding | In a client repo the commit hook let a commit through when no lore on PATH could check it | fixed | TestJourneyAgencyFirstWeeks | uninstalled step (lore gone from PATH) |
+| run:land3:fork-guards | finding | A fork of a client repo keeps the client's leak guards (lore cannot tell a fork from a moved repo) | fixed | TestE09_LinkSeenByTeammateNotByFork | owner confirmed in land6 |
+| run:land3:test-env-creds | finding | Test worlds inherited the developer's SSH agent and GitHub tokens | fixed | TestBaseEnvDropsDeveloperCredentials |  |
+| run:land3:git-fallback-name | finding | Git-fallback display name change made every actor copy look stale; reverted then re-done in land6 | fixed | TestJourneyAgentsSetup | see run:land6:own6-2 |
+| run:land3:per-setup-me | finding | Per-setup local personal folder broke store init me (setup's own folder still won, store show me refused) | fixed | TestStorePushBatch | resolved in land4 by one me per person |
+| run:land3:refresh-created-by | finding | An actor copy rewritten from a 0.1.17 row kept no created_by | fixed | TestUpdateKeepsAWholeCreator | fixed in land6 |
+| run:land3:pagewalk-budget | finding | Page walker Home 1000 ms budget failed under full gate load | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land4:one-me | finding | One personal store me per person shared by all setups; per-setup folder dropped; purge wording says me untouched | fixed | TestJourneyJoiner | owner confirmed land6 |
+| run:land4:store-show-me-folder | finding | store show me refused for a folder store; now names location and sharing setups | fixed | TestJourneyJoiner | step asserts store show me from both repos |
+| run:land4:store-init-me-inherit | finding | store init me <url> left setups on the local me folder behind; now moves them to inherit and names them | fixed | TestStorePushBatch | wording "now use it too" in ops/stores text; no test asserts the wording |
+| run:land4:team-setup-early | finding | Team setups lost the GitHub account and personal store chosen before the join step; half-made team setup not named; finished/removed setups left step rows in trash | fixed | TestJourneyJoiner |  |
+| run:land4:forget-caches | finding | store forget left caches and private renders; ~/.lore and local personal store not owner-only | fixed | NONE | no specific test verified |
+| run:land4:migrate-dbonly | finding | Migration from 0.1.17 missed edits kept only in the old db; rollback issues | fixed | TestJourneyUpgraderTwoMachines, TestJourneyUpgraderUndo |  |
+| run:land4:pagewalk-budget2 | finding | Page walker Home budget failed again under gate load (1206 ms vs 1000) | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land5:home-budget | finding | Page walker Home budget made load-aware: clamp(8 x stub baseline, 1000 ms, 2500 ms), break-verified with a 3 s stall | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land5:cmd-timeout | finding | Harness per-command deadline with SIGQUIT goroutine dump naming the command | fixed | TestRunWithDeadlineDumps, TestRunWithDeadlineQuick |  |
+| run:land6:own6-1 | finding | Keep org unlink; design pages updated | fixed | TestJourneyAgencyClientMoves |  |
+| run:land6:own6-2 | finding | A git-only identity shows git user.name, not the email local part; copies refreshed, not flagged stale | fixed | TestJourneyAgentsSetup, TestJourneyLand7DGitNameUpgrade |  |
+| run:land6:own6-3 | finding | Docs: a fork of a client repo keeps the client's leak guards | docs-only | TestE09_LinkSeenByTeammateNotByFork | no test needed: docs-only |
+| run:land6:own6-6 | finding | Doctor top-level counts said all ok while a setup check warned | fixed | TestPlainCountsSetupChecks |  |
+| run:land6:own6-7 | finding | A row edited on both sides at once was reported under every folder of a store; now once, other folders "held: waiting on" and no push stamp | fixed | TestSyncAllReportsRefusalOnce, TestStorePushRefusalHeld, TestJourneyTeamLeadTeam |  |
+| run:land6:own6-8 | finding | Email change made a second actor; now same id, stable_key moves, old key kept as alias, one row in actor list, old email never committed | fixed | TestJourneySolo, TestEmailChangePatch | solo step month1/change-email |
+| run:land6:creator-fill | finding | Editing a pre-0.1.18 row left it without created_by; old db actor identity fields read as unsaved edits | fixed | TestUpdateKeepsAWholeCreator |  |
+| run:land6:store-read-email | finding | A --store read of a projected actor copy showed the source's email | fixed | TestOrgActorShowIsTheRosterProfile |  |
+| run:land6:e51-fixture | finding | Team e2e fixture gave one person two different git names | process | - | test-harness fix; the suites themselves are the check |
+| run:land6:web-aliases | finding | Web contract types lacked identity.aliases | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land6:limits | finding | Limits noted: stale copies under git name until next write on no-identity 0.1.17 machines; pre-existing double actors; held folder named only first holder | process | - | tracked and fixed as run:land7:own7-7a..c |
+| run:land7:own7-1 | finding | Push modes and compaction for lore-only stores attached via stores.yaml; org store stays admin-only, code repo refused | fixed | TestJourneySoloKBStoreSessionEnd |  |
+| run:land7:own7-2 | finding | Session-end hook (agent end --tool) for three coding-agent tools pushes waiting batches, silent, exit 0, bounded | fixed | TestSessionEndHookPlannedInstalledRemoved, TestJourneySoloKBStoreSessionEnd |  |
+| run:land7:own7-3 | finding | Version-stamped test builds grew the Go build cache to over 1 TB and filled the disk; test builds unstamped and check trims the cache | fixed | TestGocacheTrimDeletesOnlyIdleEntries | trim logic later refined to idle entries |
+| run:land7:own7-4 | finding | doctor --all used 12 cores and ~100 child processes; capped at min(4, CPUs), per-run memo of repo opens/top levels, one ssh test per route | fixed | TestMaxParallel, TestParallelCaps, TestCapDoctorProcs |  |
+| run:land7:own7-5 | finding | First unchanged GitHub save did not fill route and key_fingerprint; same key again cleared a recorded fingerprint | fixed | TestFirstUnchangedGitHubSaveFillsRouteAndFingerprint, TestSameSSHKeyAgainKeepsTheRecordedFingerprint, TestUnchangedGitHubSaveKeepsARecordedFingerprint |  |
+| run:land7:own7-6 | finding | No "Run it" fix for doctor's config_style warning; setup.list reports config_style and config.fmt joins the page allowlist | fixed | TestDoctorConfigStyle, TestConfigStyleRunIt | page box itself is EE |
+| run:land7:own7-7a | finding | Stale actor copies after upgrade from 0.1.17 with no identity; migrate step actor_copies refreshes them | fixed | TestMigrateActorCopies, TestJourneyLand7DGitNameUpgrade |  |
+| run:land7:own7-7b | finding | One person with two actors from an earlier email change: doctor duplicate_actors offers the merge; coding agents keep ids on a new-email-only machine | fixed | TestDoctorDuplicateActorsOrg, TestDoctorDuplicateActorsNoOrg, TestJourneyLand7DTwoActors, TestAgentKeepsIDAfterOwnerEmailChange |  |
+| run:land7:own7-7c | finding | A held push named only the first holding folder; now names every folder and row | fixed | TestStorePushRefusalHeldByTwo, TestSyncAllHeldByTwoFolders |  |
+| run:land7:hook-rewire | finding | Hook re-wire after upgrade from 0.1.17 broke the first commit; now replaces the file atomically | fixed | NONE | status says it fixed the 0.1.17 compat team tests; specific guard not verified |
+| run:land7:pagewalk-retry | finding | Page walker Home over budget under load (1082 ms); re-measure baseline and retry once before failing | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:land7:transcript-drift | finding | Docs-examples run rewrote store-push and people transcripts in the worktree; needed checking before commit | process | - | no test needed: process |
+| run:land7:inodes | finding | Gate tmp filesystem ran out of inodes; cache open gave bare E_INTERNAL "sqlite cache: open"; now names file and SQLite error, no free inodes counts as E_DISK_FULL with df -i hint | fixed | TestOpenErrorNamesTheCause, TestOpenMachineStoreErrorNamesTheCause, TestRoomForCountsInodes, TestOpenWithNoRoomNamesInodes |  |
+| run:land7:cleanup | scenario | Remove finished worktrees and branches only after proving each is in main or an archive tag; list unmerged ones | process | - | two unmerged work trees left for owner |
+| run:land7:public-port | scenario | Port round 7 core parts to the open-core branch, full check on it | process | - | LAND7P DONE |
+| run:life:campaign | scenario | Real-machine shapes (25) x every user command, plus setup/team/object lifecycles via binary and REST, plus page self-consistency invariants | process | TestSweepCoversEveryCommand, TestLifeSetups, TestLifeTeams, TestLifeObjects, TestRestLifecycle | LIFE DONE |
+| run:life:rest-team-url | finding | Team step store url passed check for file:// then Save failed | fixed | TestRestTeamStoreURL |  |
+| run:life:archive-tag-version | finding | A source build stamped from an archive tag (or v0.1.17-N-g...) called its own saves read-only | fixed | TestVersionBelowDevBuilds |  |
+| run:life:scenario-skips | finding | Scenarios hid broken checks behind SKIP (missing sqlite3) and touched the real HOME | process | - | scenario, chaos or docs scripts ported; those scripts run in the gate |
+| run:life:unknown-key | finding | A hand-written unknown key in config.yaml made every config set refuse | fixed | TestSetKeepsHandWrittenUnknownKey |  |
+| run:life:config-layout | finding | Editing setups lost comments / CRLF; end comment trashed with the last setup | fixed | TestForeignHandcfg, TestDecodeKeepsHandWrittenLayout |  |
+| run:life:tab-indent | finding | Tab-indented config.yaml gave a cryptic error; doctor --all failed | fixed | TestForeignHandcfgTabs |  |
+| run:life:stray-marker | finding | A lore block with a deleted end marker was silently half-written | fixed | TestForeignTools, TestStrayMarker |  |
+| run:life:noop-rewrite | finding | A refused or no-op setup command rewrote config.yaml | fixed | TestCampaignSetup_BadInput |  |
+| run:life:linked-config | finding | A linked config.yaml was replaced by a plain file; a read-only one silently rewritten | fixed | TestMachineConfigWrite, TestLinksFiles, TestLinksReadonly |  |
+| run:life:readonly-e-internal | finding | Read-only CLAUDE.md or repo folder gave E_INTERNAL | fixed | TestWriteError, TestLinksReadonly |  |
+| run:life:doctor-cache | finding | Doctor served local-file checks from a 60 s cache (stale results) | fixed | TestLinksReadonly |  |
+| run:life:linked-claude-md | finding | Pointer file linked out of the repo: doctor offered a fix that render refuses | fixed | TestLinksFiles, TestLinksSkillDangling |  |
+| run:life:repo-kinds | finding | lore in a repo subfolder lost org/role/guards; bare repo / .git folder said "git init here" and wrong doctor rows | fixed | TestReposKinds |  |
+| run:life:overlap-glob | finding | setup edit --folder saved a tying duplicate glob | fixed | TestReposOverlap | docs example updated to show the refusal |
+| run:life:not-found-hints | finding | setup command naming no such setup said "shows the 0 setups" with no hint; errors with only a next command printed no hint; task next E_NO_WORK no hint | fixed | TestNotFoundHasHint, TestHintFromNext, TestCoordErrExitCodes |  |
+| run:life:cancel-example | finding | task cancel help example used a reason lore refuses | fixed | TestExampleReasonsAreCloseReasons |  |
+| run:life:empty-store-name | finding | task watch/unwatch, meta set/unset, rule/decision/hotfix archive/delete answered store "" | fixed | NONE | no test verified for the store name in these answers |
+| run:life:tmpdir-gone | finding | TMPDIR gone: every live write and cache templates, sql --include-deleted, migrate snapshots, ci-merge, import-scan failed with E_INTERNAL | fixed | TestWriteRefWithTMPDIRGone |  |
+| run:life:two-first-setups | finding | Two first setups saved at once both became default (E_CONFIG_INVALID) | fixed | TestPutSetupsOneDefaultAgainstTheFile, TestCampaignSetup_ConcurrentFirstUse |  |
+| run:life:cause-twice | finding | Errors printed their cause twice (14 sites) | fixed | TestErrorNamesCauseOnce |  |
+| run:life:fixture-token-url | finding | A placeholder token URL literal in a test blocked the commit hook | process | - | test-harness fix; the suites themselves are the check |
+| run:life:reads-create | finding | Reads in a never-set-up repo created .lore/, cache and hooks | fixed | TestReposReadsCreateNothing |  |
+| run:life:failed-init | finding | Failed lore init left cache db and audit behind | fixed | TestReposFailedInitUndoes, TestRootInitAt |  |
+| run:life:session-path-secret | finding | A session id as folder name in a local path was refused as a secret | fixed | TestLocalPathSegment |  |
+| run:life:health-empty | finding | setup list showed empty health; saved-answers step check did not record health | fixed | TestReposHealthNotCheckedYet |  |
+| run:life:heartbeat-stop | finding | Heartbeat daemon stopped mid-renewal returned a git deadline error | fixed | TestHeartbeatDaemon |  |
+| run:life:clock-tests | finding | Several tests used wall-clock windows and flaked under load (key match, lock order, CLI beside API, save rerun) | fixed | TestLockOrderRanks, TestAPIParity_CLIBesideRunningAPI, TestRegress_SaveDoesNotRerunFreshChecks | now order/trace based |
+| run:life:move-deadlock | finding | move --yes deadlocked (actor lock re-taken by session audit), hanging agent-run gates | fixed | TestFirstMoveIntoAStoreFinishes |  |
+| run:life:broken-lore-home | finding | ~/.lore as a file or read-only, broken ~/.lore: doctor and many commands gave E_INTERNAL or wrong row | fixed | TestEnvBrokenLoreHome, TestLoadConfigBrokenLoreHome, TestFileIOOr |  |
+| run:life:two-lores | finding | Two lore binaries on PATH: doctor did not name which runs and its version | fixed | TestEnvTwoLores |  |
+| run:life:spaces-store | finding | A local store folder with spaces was refused; personal store on a file:// bare repo wrote into its git folder | fixed | TestParseGitURLLocalSpaces, TestEnvSpacedStore |  |
+| run:life:disk-full | finding | EDQUOT/EFBIG (incl. in sqlite cache commit) gave a bare E_INTERNAL instead of E_DISK_FULL | fixed | TestExplainDiskFull, TestExplainWrite |  |
+| run:life:chaos-skips | finding | Chaos CH-1/2/3 skipped; ported with zero SKIP | process | - | scenario, chaos or docs scripts ported; those scripts run in the gate |
+| run:life:full-read | finding | Store clone re-read the whole store per list (~700 git processes under the live lock) | fixed | TestFullReadAtOneCommitListsTheTreeOnce |  |
+| run:life:rest-queue-eof | finding | A REST request queued behind slow ones got EOF (write timeout counted queue time) | fixed | TestSlowOperationStillGetsItsReply |  |
+| run:life:team-email-change | finding | Team setup email change made a second roster actor then E_CONTACT_TAKEN on re-save | fixed | TestLifeTeams |  |
+| run:life:hand-values-leftovers | finding | Values set by hand were offered as leftovers to clear | fixed | TestLifeObjects |  |
+| run:life:bulk-store | finding | --where bulk writes named no store | fixed | TestBulkWritesNameTheirStore |  |
+| run:life:reason-clash | finding | task cancel/decline --reason clashed with the not-a-secret reason flag | fixed | TestSecretFlags | new --not-a-secret-why |
+| run:life:team-identity | finding | setup plan / page showed the git-config email for team setups | fixed | TestLifeTeams |  |
+| run:life:missing-store-folder | finding | Create on a missing local store folder failed its checks | fixed | TestEnvCreateMissingStoreFolder |  |
+| run:life:where-spaces | finding | --where value with spaces split into two clauses; search cut quoted field values | fixed | TestValueWithSpaces, TestQuotedFields |  |
+| run:life:write-errors | finding | Machine store, audit, local state and doctor cache write errors were unexplained | fixed | TestEveryFileExplainsItsWrites |  |
+| run:life:sweep-guard | finding | Sweep coverage guard caught setup rename unswept | fixed | TestSweepCoversEveryCommand |  |
+| run:life:page-bugs | finding | Setup page: doctor mid-run cancel cached, Summary not checked after save/edit, clipped text, file-manager no toast, team name rule, edit lost other steps' checks, invite email, make default | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:life:team-step-names | finding | Team step accepted unsavable names; re-saving team/join step said admin needs identity email | fixed | NONE | no test verified |
+| run:life:start-team-outside-repo | finding | Start a team outside a repo must work | fixed | TestStartATeamOutsideARepo |  |
+| run:life:trashed-team-name | finding | Re-adding an admin setup with a trashed setup's team name; purge frees the team | fixed | TestTeamNameOfATrashedSetup, TestPurgeAdminFreesItsTeam |  |
+| run:life:identity-resave | finding | Identity re-save dropped emails / unchanged identity save rewrote config | fixed | TestUnchangedResaveWritesNothing |  |
+| run:life:team-step-store | finding | Team step showed another store; joined member join-step re-save failed | fixed | TestPlanTeamStepShowsItsOwnStore, TestJoinedMemberJoinStepResave |  |
+| run:life:readd-admin-repo | finding | Admin re-add after purge inside a git repo refused by a stale stores.yaml entry | fixed | TestReAddAdminAfterPurgeInARepo |  |
+| run:life:ssh-probe-timeout | finding | SSH auth probe test timed out under load | fixed | TestSSHAuth |  |
+| run:life:setupe2e-fake-git | finding | Setup e2e fake git re-linked on every call, racing concurrent checks (not a git repository) | process | - | test-harness fix; the suites themselves are the check |
+| run:life:teame2e-timeout | finding | Team e2e package hit go test's default 10-minute timeout | process | - | test-harness fix; the suites themselves are the check |
+| run:life:pagewalk-remark | finding | Page walker click timed out after a late re-render replaced the marked node | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:life:docs-tie | finding | Guided-setup docs example built a tie with setup edit, which is now refused | docs-only | - | example now hand-edits config |
+| run:onboarding:build | scenario | Guided setup build: setups[] with folder choice, E_SETUP_AMBIGUOUS / E_SETUP_ORG_MISMATCH, step catalog, probes, invites, local setup page (token, cookie, CSRF, Origin/Host, CSP, allowlist), doctor --all, setup repair | fixed | TestResolveSetupMatrix, TestSetupMismatchErr, TestDecideInvite, TestTokenSingleUse, TestCSRF, TestOriginWrong, TestHostWrong, TestAllowlistMatchesSetupPageOps | contracts.md and catalog-api.md are the shared Go-name contracts of the build (no findings); break-verified list in status |
+| run:onboarding:ui-overlap | finding | Setup page step list: long step titles wrapped and overlapped in a narrow column | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:onboarding:a0-docs-onboard | finding | Docs named `lore onboard` before the command existed (docs drift gate failed) | fixed | TestDocsMatchCLI | `onboard` is now a cmd alias of `lore setup` (app/setupweb.go) |
+| run:onboarding:a0-relhome | scenario | A relative HOME (../x, x, ./home/me) is refused E_INVALID_INPUT naming HOME and "absolute" | fixed | TestRelativeHomeRefused | lines in a0-cmdlore.txt are that test's expected stderr |
+| run:onboarding:open-1 | finding | Host-alias routing missing on store link reads and the generic git remote adapter | fixed | TestNetworkCallsUseTheStoreRoute, TestRouteReachesEveryNetworkCall | later fixed as issue 15 |
+| run:onboarding:open-3 | finding | No Go end-to-end test of team create -> invite -> join (only proven in a throwaway world with fake ssh/gh) | fixed | TestOrgTeamInvitesFromAnAdminSetup, TestStartATeamOutsideARepo, TestJourneyJoiner |  |
+| run:onboarding:open-6 | finding | Decisions to confirm: setup org ranks below org rules, default setup never raises org mismatch, unresolvable setup = reads ok / shared writes refused, public personal store = warn, exit classes 20/21/23/27 | process | - | owner confirmations |
+| run:onboarding:open-7 | finding | Team docs example runner had no section for the new setup pages; profile seam had a latent second-app audit-log issue | docs-only | - | run-examples.sh now has s_guided_setup; audit-log note not verified |
+| run:plat:ci | scenario | Core quick tier and e2e suites (userscen, teame2e, machines) on Windows, macOS and Ubuntu CI, manual trigger only, squashed and landed | process | - | CI workflow (manual trigger); the jobs are the check |
+| run:plat:mac-case | finding | macOS: setup folder in a different case did not match the repo's on-disk path | fixed | TestRealCaseSpellsNamesAsOnDisk |  |
+| run:plat:mac-symlink-roots | finding | macOS: harness roots under /var vs /private/var mismatched; slow parts exceeded job limits | process | - | test-harness fix; the suites themselves are the check |
+| run:plat:win-file-url | finding | Windows: file:///C:/x and file://C:/x not read as drive paths | fixed | TestFoldDriveHost, TestLocalPath, TestCleanFileURLDrivePathElsewhere |  |
+| run:plat:win-autocrlf | finding | Windows: CRLF conversion changed row bytes in store clones | fixed | TestRowsKeepTheirBytesUnderAutocrlf | store clones core.autocrlf=false, repo-wide LF |
+| run:plat:win-home | finding | Windows: USERPROFILE is home; a file at ~/.lore is a broken home there too | fixed | NONE | decided, owner may change |
+| run:plat:win-hook-rewrite | finding | Windows: hook rewrite renamed over an open file | fixed | NONE | writes in place |
+| run:plat:win-sqlite-temp | finding | SQLite failed when the temp folder is gone | fixed | NONE | temp_store(MEMORY) in the cache adapter |
+| run:plat:win-slashes | finding | Windows: doctor fix commands, GIT_SSH_COMMAND, setup folder suggestions and render paths written with backslashes | fixed | TestWriteFullFileNamesItWithSlashes | other paths not individually guarded |
+| run:plat:win-rest-field | finding | REST error field names carried Go embedded type names (Go 1.26 UnmarshalTypeError.Field) | fixed | TestJSONFieldPathDropsGoTypeNames |  |
+| run:plat:win-tzdata | finding | Windows without Go: `actor edit --timezone <zone>` failed (no zone database) | fixed | TestTimezoneNeedsNoSystemZoneData | time/tzdata embedded |
+| run:plat:win-processalive | finding | Windows: every openable pid read as alive, so a stale migration lock looked held | fixed | TestProcessAliveEndsWithTheProcess |  |
+| run:plat:fsreason | finding | File error reasons differed per OS; now POSIX words everywhere | fixed | TestOfWordsAlikeOnEveryOS |  |
+| run:plat:win-config-read | finding | Windows: config.yaml read refused while another lore renames over it | fixed | TestReadFileReadsAndPassesNotExist, TestRetry |  |
+| run:plat:win-object-write | finding | Windows: concurrent git object writes to one store failed (Permission denied) | fixed | TestObjectWriteRetriesSharingRefusal, TestObjectWriteRefusedOnlyThatError | retries on Windows only |
+| run:plat:win-harness | finding | Windows harness: fake programs glob-expanded args, MSYS setting broke GIT_SSH_COMMAND, running image could not be deleted, upload-pack off PATH, narrow PATH | process | - | test-harness fix; the suites themselves are the check |
+| run:plat:win-caps | finding | Windows test size caps: long folder name 103 chars, knowledge body 8 KiB | not-a-bug | - | OS limits (MAX_PATH, command line length) |
+| run:plat:actions-runs | finding | Completed CI runs could not be deleted (host gh login lacks admin) | process | - | owner to delete |
+| run:plat:ee-hook-gosum | finding | Old binary's commit secret scan flagged an unchanged go.sum hash line | process | - | the code it was in (the old module or binary) was deleted in phase E |
+| run:polish:1 | finding | Setup page rail marks (check / cross / dot) and "N of M" did not match saved progress (#9b, #11, m5) | fixed | TestPlanFinishedCarriesCachedChecks | web logic.test.ts covers rail rules |
+| run:polish:1b | finding | setup.check on an unfinished setup overwrote a saved progress row with draft answers; saved setup with no folders got the start folder prefilled | fixed | TestCheckKeepsSavedRows, TestApplyWithoutAnswersAfterCheck, TestPlanFoldersPrefillOnlyUnsaved |  |
+| run:polish:2 | finding | Home health shown before Doctor ran (stale or invented) instead of "not checked yet" (#10) | fixed | TestSetupHealthAcrossProcesses, TestSetupHealthFollowsTheSavedEntry |  |
+| run:polish:3 | finding | Import proposed duplicates / a just-removed setup; name collision without a free name (#20-22) | fixed | TestRegress_ImportDoesNotReproposeRemovedSetup, TestRegress_CoveredLineNamesStateOnce |  |
+| run:polish:4 | finding | Invalid ~/.lore/config.yaml on Home: needed a panel with file, line, problem and fix, page read-only (#23) | fixed | TestConfigProblems |  |
+| run:polish:5 | finding | Details toggle inconsistent and not keyboard reachable (#18, m6) | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:polish:6 | finding | Setup identity email not among the chosen GitHub account's emails: no hint (N3) | fixed | TestIdentityEmailMatch | new check github.identity_email |
+| run:polish:7 | finding | Setup with no folders that is not the default can never be chosen automatically: no warning (NEW-4) | fixed | TestFoldersReachable | new check folders.reachable |
+| run:polish:8 | finding | Five rows per ticked tool on Summary and Doctor (m4) | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:polish:9 | finding | gh fixes and store.private probe ran as gh's active account, not the setup's account; empty Repo URL not filled after Run | fixed | TestRegress_GhFixRunsAsSetupAccount, TestRegress_EmptyRepoURLFilledAfterRun, TestRunFixGHAsAccount, TestFixRunsAsSetupGHAccount |  |
+| run:polish:10 | finding | Lookup test matrices failing for roster-only actor_contacts | fixed | TestLookupInTrashMatrix, TestConfirmAfterLookupMatrix, TestLookupIDMatrix | stale test expectations, not code |
+| run:polish:regress | scenario | Named regressions for every owner-hit setup bug: key without .pub, autofill rejected by own validator, Save re-running checks, other account's saved key, five-tool wall, folders suggestions, blank page while plan loads | fixed | TestRegress_PrivateKeyWithoutPubAccepted, TestRegress_AutofilledValuePassesOwnValidator, TestRegress_SaveDoesNotRerunFreshChecks, TestRegress_SavedKeyFromOtherAccountFlagged, TestRegress_FiveToolsNoWallOfWarnings, TestRegress_FoldersSuggestStartFolderNotOtherIdentity, TestRegress_PlanLoadsWithoutBlankPage |  |
+| run:polish:matrix | scenario | Machine-shape matrix through the real binary and page (gh accounts, ssh aliases, keys, includeIf, lore home states, start folder), wired into the gate | fixed | TestAPIMatrix, TestPairwiseCoversEveryPair, TestShapeValidate | 1764 API shapes + 28 pairwise page shapes |
+| run:polish:key-matches | finding | github.key_matches Run it pinned the alias .pub instead of dropping a wrong recorded key when the own alias logs in correctly | fixed | TestRegress_SavedKeyFromOtherAccountFlagged |  |
+| run:polish:final2-1 | finding | Walk: Create-new-repo with an empty URL branch not exercised (field refilled) | fixed | TestRegress_EmptyRepoURLFilledAfterRun | covered by item 9b |
+| run:polish:final2-2 | finding | Import banner said "your setups already cover it" when coverage came only from the trash | fixed | TestRegress_CoveredLineNamesStateOnce |  |
+| run:polish:M1 | finding | Identity step prefilled a mix of two accounts' email and handle and Save kept it | fixed | TestAPIMatrix | judgeIdentity in tests/setupe2e/flow.go |
+| run:polish:m1-m6 | finding | Setup page minors: Repair shown before any check, error wording on a warn, trash subtitle vs restore banner, raw ISO time in purge dialog, "could not read emails" despite a known email | fixed | TestRegressM6_IdentityEmailNamesTheCardsGitconfigEmail | m1/m3/m4/m5 web-only, unguarded |
+| run:polish:m2 | finding | Folders step suggested a broad Downloads catch-all for a work setup | fixed | TestStartFolderMatrix, TestRegress_FoldersOwnIncludeIfNotStartFolder | fixed in polish2 item 4 |
+| run:polish:contact-trash | finding | A removed actor contact answered E_NOT_FOUND, not E_IN_TRASH | fixed | TestContactLookupTrashMatrix, TestProfileRosterContactInTrash | fixed in polish2 item 1 |
+| run:polish2:2 | finding | github.gh_matches warned about gh's active account although lore runs gh as the setup account | fixed | TestGHMatchesInfoOnly | made info-only |
+| run:polish2:3 | finding | First clone of an old-version store whose remote refuses this machine's key said "cannot be reached / go online once" | fixed | TestAccessRefusedClassifier, TestFirstOpenAccessRefused, TestUnreachableHint, TestAPIMatrix | v0117 shapes in setupe2e |
+| run:polish2:4 | finding | Folders suggested the start folder when under another identity's includeIf or claimed by another setup | fixed | TestStartFolderMatrix, TestSuggestFolders, TestRegress_FoldersSuggestStartFolderNotOtherIdentity |  |
+| run:polish2:leak-dist | finding | Commit hook leak check flagged a credential-like pattern in the bundled web dist | process | - | committed with explicit approval; gitleaks clean |
+| run:polish3:1 | finding | First open of an old store made 4 ssh round trips (fetch, ls-remote, fetch, live ref) | fixed | TestFirstOpenFetchesOnce, TestFetchScopeReusesTheOpenFetch, TestFetchScopeKeepsARefusedOpen |  |
+| run:polish3:2 | finding | A github:<login> contact reference whose only contact is trashed answered E_NOT_FOUND | fixed | TestProfileRosterContactRefInTrash |  |
+| run:polish3:3 | finding | A start folder claimed by another setup was not offered at all; should be dimmed, labelled, pickable with a warning, never prefilled | fixed | TestRegress_FoldersClaimedStartFolderOfferedNotPrefilled |  |
+| run:profiles:build | scenario | Team profiles: contacts, contact types, roles, company periods, project members, status/offboard/rejoin, identity matching, client-repo refusal, TUI view | fixed | TestContactTaken, TestContactPrimaryOnePerType, TestResolveMatrix, TestIdentmatchCheckAdd, TestOffboardWithoutYesWritesNothing, TestOffboardApplies, TestRejoin, TestNeverClientCreateAndMoveRefused, TestProfileRowFilesBlockInClientRepo, TestProfileResolveSyncsOnMiss | smoke of every docs example: 0 failures |
+| run:profiles:1 | finding | rejoin/offboard refuse a future --on | not-a-bug | TestOffboardRefusals, TestRejoin | kept as a refusal (no scheduling in this version) |
+| run:profiles:2 | finding | offboard/rejoin --json preview had no applied:false detail | fixed | NONE | Applied field exists; not verified by a test |
+| run:profiles:3 | finding | Claim holders not listed in offboard open tasks | fixed | TestOffboardClaimsUnread |  |
+| run:profiles:4 | finding | actor status had no --note; actor deactivate lacked the offboard hint | fixed | TestStatusNote, TestActorDeactivateHintsOffboard |  |
+| run:profiles:5 | finding | TP-13 warning counts org-wide teams for every project (may be noisy) | not-a-bug | TestMemberTeamWarning | text now says "the org team" |
+| run:profiles:7 | finding | --merge preview lacked per-table row counts; profile writes dropped engine warnings | fixed | TestContactMergePreviewRowCounts, TestWritesCarryEngineWarnings |  |
+| run:pub8:port | scenario | Port of doctor last/fix, findings[] invariant, OS-junk fixes and macOS machine shape to the open-core branch, no private names | process | - | full check green |
+| run:pub8:doctor-last-fix | finding | `lore doctor last` reads last results; `lore doctor fix <key>` runs a finding's fix after confirm | fixed | TestFixRunsTheFindingsCommand, TestFindingFixes, TestRunnableFix |  |
+| run:pub8:findings | finding | Doctor status said degraded with nothing shown; status now the worst listed finding | fixed | TestStatusMatchesVisibleFindings |  |
+| run:pub8:os-junk | finding | OS clutter (.DS_Store, ._*) made doctor say data is gitignored, broke the pre-commit row check, counted as uncommitted work in store forget | fixed | TestDoctorSyncOSJunkNotDataIgnored, TestPreCommitSkipsOSJunk, TestRealChangesSkipsOSJunk |  |
+| run:pub8:env-macos | scenario | macOS-like machine shape (global excludesFile, Finder files, case-folded repo path) runs the whole command sweep | fixed | TestEnvMacOS |  |
+| run:realmac:2 | finding | Key combobox lists a private key first and picking it is refused | fixed | TestRegress_PrivateKeyWithoutPubAccepted | Fixed wave 1, confirmed findings-2/3 |
+| run:realmac:3 | finding | Field error banner stays after the key field is cleared | not-reproduced | - | Key moved into collapsed details; no refusal left to reproduce (findings-2/3 CHANGED) |
+| run:realmac:4 | finding | Checks header says "checked 1s ago" while the body says "Not checked yet" after a refused Save | not-reproduced | - | Not seen after wave 1 (CHANGED) |
+| run:realmac:5 | finding | Test all keys shows a deploy key as "no answer"; refused keys worded two different ways | fixed | TestSSHAuth | Still open at REALMAC DONE (m7); TestSSHAuth deploy case asserts "deploy key for <repo>" (comment cites realmac m7) |
+| run:realmac:6 | finding | Repair banner highlighted github.ssh_auth with wrong advice instead of the key_matches fix | fixed | TestRegress_SavedKeyFromOtherAccountFlagged | Fixed wave 2 (banner points at key_matches) |
+| run:realmac:7 | finding | Fix texts and Doctor lines had empty "…" placeholder gaps | fixed | TestEveryFixPlaceholderFillable | Fixed wave 2 |
+| run:realmac:8 | finding | ssh_auth / ssh_user / key_matches contradicted each other; ssh_user blamed the default host instead of the recorded key (incl. NEW-2) | fixed | TestRegress_SavedKeyFromOtherAccountFlagged, TestRecordedKeyFixNamesTheRunnableFix | ssh_auth probes the private key; ssh_user names the recorded key (wave 7) |
+| run:realmac:9 | finding | After repair, alias_config said "no host alias" while the alias field showed the default host | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:realmac:9b | finding | Rail step count and dots differ from saved state (8 vs 9 of 9 after re-check/repair; green dot on unsaved step) (#9b, #11, m5) | fixed | TestCheckKeepsSavedRows, TestPlanFinishedCarriesCachedChecks | Open at REALMAC DONE; later fix, test comments cite realmac #9b/#11 |
+| run:realmac:10 | finding | Home shows health "–" for a broken setup until Doctor all runs | fixed | TestSetupHealthFollowsTheSavedEntry | Open at REALMAC DONE; later fix (polish item 2, comment cites realmac #10) |
+| run:realmac:12 | finding | Stores step default refused by its own validator: "same as my other setups" preselected with no shared store, then no radio preselected ("Personal store is required") (#12, NEW-1 blocker) | fixed | TestEveryStepPrefillValidates, TestRegress_AutofilledValuePassesOwnValidator | Fixed wave 4; brief item 5 regression test (auto-filled values always validate) |
+| run:realmac:13 | finding | "Save will run lore store init" never ran; remote stayed empty after Save | fixed | TestSetupApplierOwnPersonalStoreInit | Fixed wave 3/4 (each store gets its marker) |
+| run:realmac:14 | finding | Folders prefill overlapped another setup's glob and Save refused it (folders.overlap) | fixed | TestEveryStepPrefillValidates | Fixed wave 2 |
+| run:realmac:15 | finding | A skipped step shows as failed in rail and Summary | fixed | TestCheckKeepsSavedRows | Fixed wave 2; test keeps a skipped row skipped for same answers |
+| run:realmac:16 | finding | Tools step shows raw profile ids instead of display names | fixed | TestDisplayName | Fixed wave 2 |
+| run:realmac:19 | finding | Home suggests a new setup for a GitHub account that a setup already uses | fixed | TestMergeDiscoveryUsedBy | Fixed wave 2 |
+| run:realmac:20 | finding | Import panel hidden when its only proposal's name exists; two banners propose the same setup name (#20, #21) | fixed | TestImportBannerCoveredAndRenamed, TestSoloProposalAgainstExisting | Open at REALMAC DONE; later fix (comments cite realmac #20-22) |
+| run:realmac:22 | finding | An imported setup has no GitHub block and no health hint | fixed | TestUnfinishedSteps | Open at REALMAC DONE; later fix (comment cites realmac #22) |
+| run:realmac:23 | finding | Invalid config.yaml: Home looks fine but every setup fails to open with E_CONFIG_INVALID | fixed | TestConfigProblems, TestListConfigProblems | Open at REALMAC DONE; later fix (comments cite realmac #23) |
+| run:realmac:24 | scenario | Join and Team screens render in both themes without an invite | not-a-bug | - | Nothing to test without an invite |
+| run:realmac:N1 | finding | Repair route line claimed a working route ("chosen in details") while the saved key logs in as another account | fixed | TestRegress_SavedKeyFromOtherAccountFlagged | Wave 3: route line judged by key_matches |
+| run:realmac:N2 | finding | "Use an existing repo" in one setup wrote the machine-wide personal store, silently retargeting other setups | fixed | TestSetupApplierOwnPersonalStoreInit | Wave 3: setup store never writes personal.store |
+| run:realmac:N3 | finding | No warning when the setup identity and its GitHub account disagree | fixed | TestIdentityEmailMatch | Open at REALMAC DONE; later identity-email-vs-account hint warns |
+| run:realmac:N4 | finding | Key file options mix private key paths and .pub paths | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:realmac:NEW-3 | finding | After saving a new setup, Home offered to import a duplicate "-2" setup from state lore had just written | fixed | TestInheritSetupCoversPersonalStore, TestRegress_ImportDoesNotReproposeRemovedSetup | Fixed wave 4 + polish item 3 |
+| run:realmac:NEW-4 | finding | A setup with no folders and not default can be saved though lore never picks it | fixed | TestFoldersReachable | Open at REALMAC DONE; later reachability warning |
+| run:realmac:NEW-5 | finding | Summary after Save shows "not checked" on every row | fixed | TestFinishKeepsStepResults | Fixed wave 4; regressed for finished setups and re-fixed 2026-11-08 |
+| run:realmac:M1 | finding | Folders prefill took the parent of the start folder (e.g. all of a downloads folder) | fixed | TestFoldersPrefillIsTheStartFolder, TestRegress_FoldersSuggestStartFolderNotOtherIdentity, TestStartFolderMatrix | Wave 7 a27fd932 |
+| run:realmac:m1 | finding | Repair offered three remedies for one key mismatch | fixed | TestRecordedKeyFixNamesTheRunnableFix | Wave 7: ssh_user text points at key_matches' Run it |
+| run:realmac:m2 | finding | Folders heading "Saved for this setup" above a value not yet saved | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:realmac:m3 | finding | With all setups trashed, Home suggested creating a name that sits in the trash | fixed | TestSoloProposalAgainstExisting | Wave 7 Restore <name>; test comment cites m3 |
+| run:realmac:simplify | scenario | GitHub step asks only the account; lore picks the route (ssh alias logging in as the account, else https via per-call gh token helper, else a fix); doctor uses the same rule | fixed | TestChooseRoute, TestHTTPSRouteThroughGit, TestKeyMatch | Owner decision 2026-11-07; token never written to git config |
+| run:realmac:stores-perf | scenario | Store checks re-ran on Save & next (~5 s each); reuse fresh results per answers hash, one shared fetch + one dry-run push | fixed | TestFreshChecks, TestRegress_SaveDoesNotRerunFreshChecks, TestRemoteMemoOneFetchOnePush | Wave 4 + perf agent; final walk Stores Save 679 ms |
+| run:realmac:repo-url | finding | Repo URL field empty after the create-repo fix ran; checks ran against an empty URL | fixed | TestRegress_EmptyRepoURLFilledAfterRun, TestStoreURLMissing | "Filled after Run" not exercised headless at REALMAC DONE; later regress test |
+| run:realmac:tools | scenario | Tools checks: only picked tools, one row per tool, pointer-file tools never warn about a skill, older lore on PATH explained as info | fixed | TestRegress_FiveToolsNoWallOfWarnings, TestSetupProberPointerFileTools, TestPathLoreOlder | Owner test msg-tools |
+| run:realmac:folders | scenario | Folders step suggests start folder/git root, hides or dims another identity's includeIf folders, labels claimed folders, server-side home-rooted folder browser | fixed | TestRegress_FoldersSuggestStartFolderNotOtherIdentity, TestRegress_FoldersClaimedStartFolderOfferedNotPrefilled, TestBrowseFolder | Wave 6; browser refuses ../ and symlink escape |
+| run:realmac:import-banner | scenario | After removing the only setup, import banner said "existing lore install" for values lore wrote; banner must name what/where, Dismiss, never repropose removed setups | fixed | TestImportBannerWording, TestImportDismissed, TestRegress_ImportDoesNotReproposeRemovedSetup | Owner test msg-import2 |
+| run:realmac:lifecycle | scenario | Setup lifecycle: disable/enable, remove to trash, restore [--as], purge only from trash with confirm (--yes never purges), per-setup note | fixed | TestMatchingSkipsDisabled, TestTrashRestorePurge, TestDisableNoteRoundTrip, TestEveryPurgePathRefusesYes | Owner decision msg-lifecycle; headless walk 22/22 |
+| run:realmac:world | scenario | Real-machine test world shaped like the owner's ~/.ssh (key names, missing .pub pattern, broken alias path, two gh logins) clicked through every step headless | process | - | ssh-files.txt and ssh-config-github.txt are the owner's key file names and GitHub Host blocks used to shape the world (not copied here) |
+| run:rollout:spec | scenario | Company-wide rollout spec and plan for a 239-repo org (22 pages, decisions D1-D17, 38 questions filed as lore tasks) | process | - | Spec-only job; nothing pushed |
+| run:rollout:own-repo-notes | finding | lore keeps an own repo's notes inside that repo by design, so "no lore rows in code repos" cannot hold for own repos | not-a-bug | - | D3 revised: own repos decided after a test |
+| run:rollout:D18 | scenario | Typed user-defined resources (kinds.yaml, one JSON per resource, generated per-kind cache tables, read-only SQL) | fixed | TestResourcesLifecycleAddToPurge, TestResourcesNameTaken | Proposed in this run; resource nouns exist on main now |
+| run:rollout:D19 | scenario | Free-form metadata on every row with an auto-kept key registry, filters and rename | fixed | TestCampaignData_MetaLifecycle, TestCampaignData_MetaExportAfterRename | Proposed in this run; meta nouns exist on main now |
+| run:split:seam | scenario | Core exposes an importable app package (Run with WithVersion/WithSetupUI); a core build serves the plain page, the enterprise build its own page | fixed | TestRunAppliesOptions, TestRunWithoutOptionsKeepsDefaults, TestBinaryServesDefaultUI | Break-verified by crossing binaries; enterprise-side test lives outside this tree |
+| run:split:layers | scenario | Layer guard: app at layer 70 and only cmd may import app; core imports no enterprise code | fixed | TestImportLayers, TestGuardCatchesViolations, TestOpenCoreImportsNoEnterprise | SPLIT-C1 |
+| run:split:release | scenario | Public release workflow only tags versions (no binaries); enterprise release dispatch-only, refuses unless go.mod requires exactly that tag | process | - | SPLIT-C2/C3; never run |
+| run:split:standalone-build | scenario | Enterprise module builds from the module proxy in a clean clone with an empty module cache and no local core folder | process | - | Verified once during landing |
+| run:split:licence | scenario | Proprietary licence, binary licence and the core's NOTICE (Apache-2.0 4(d)) shipped in every archive; Homebrew license :cannot_represent; sole-owner wording | process | - | goreleaser check + snapshot green; public core stays Apache-2.0 |
+| run:split:land | scenario | Squash-landing both sides, archive tags for every squashed branch, then branch and worktree cleanup after containment checks | process | - | No force-push |
+| run:split:design-docs | finding | Private design notes said "pending landing" after landing; local main diverged and was rebased before push | process | - | Fixed in final items |
+| run:ui8:doctor-no-autorun | finding | Opening Doctor ran every check of every setup at once; now shows last results, Run per setup, Run all, per-row progress and Cancel | fixed | TestLastRunsNoCheck, TestLastAfterOneSetupRun, TestLastStatusOfRecorded | New op doctor.last; page test is web/e2e (break-verified) |
+| run:ui8:join-label | finding | Bare "Join" toolbar link unclear; now "Join a team" with hint and an intro sentence on the Join page | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:ui8:A | finding | Doctor said "degraded" beside "ok N warn 0 fail 0": status worse than anything listed | fixed | TestStatusMatchesVisibleFindings, TestEnvMacOS | findings[] counted; sweep CheckDoctorNames asserts status invariant on every shape |
+| run:ui8:doctor-fix | scenario | doctor fix <key> runs only a single plain lore command from a finding after confirm; anything else stays copy-only | fixed | TestFixRunsTheFindingsCommand, TestFixRefuses, TestFixStillThere, TestRunnableFix | Confirm and plain-command guards break-verified |
+| run:ui8:B | finding | A .DS_Store under .lore/data made doctor report ".lore/data is gitignored" | fixed | TestDoctorSyncOSJunkNotDataIgnored, TestIsOSJunk, TestIsRowFile | Decided only from lore's own files |
+| run:ui8:B-precommit | finding | OS junk under .lore/data made every commit refuse with "invalid JSON" and the hook could stage the junk | fixed | TestPreCommitSkipsOSJunk | Found in the same sweep |
+| run:ui8:B-storeforget | finding | Store forget counted an untracked .DS_Store as uncommitted work | fixed | TestRealChangesSkipsOSJunk | Found in the same sweep |
+| run:ui8:C | scenario | macOS machine shape: global excludesFile, junk files everywhere, a case-folded repo path; whole sweep clean | fixed | TestEnvMacOS | Case fold is a symlink on Linux; real APFS case lookups not exercised |
+| run:ui8:labels | finding | Labels that assumed lore knowledge (leftovers, raw check id heading, Go to Join, Doctor all) | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:ui8:gate | finding | Full gate needed three runs (sweep counted only setup/machine checks; gofmt) | process | - | Fixed at cause |
+| run:webui:rebuild | scenario | Setup page rebuilt as an embedded React app behind an open-core/enterprise seam: nil UI serves a plain page listing `lore setup plan/check/apply` and `lore doctor --all`; open packages never import the enterprise package (layer guard) | fixed | TestDefaultUI, TestOpenCoreImportsNoEnterprise, TestOpenCoreGuardCatches | Checkpoint 547ed7cc; the React source and its dist drift test (TestDistMatchesSource) and vitest suite live in the private module, not the open tree |
+| run:webui:serving | scenario | Setup server: assets by extension only, SPA fallback for client routes, CSP without unsafe-inline, no inline script/style, same token/cookie/CSRF/Origin/Host checks | fixed | TestAssetTypes, TestAssetRefusals, TestAssetPathValidated, TestSPAFallback, TestCSPOnEveryUIResponse, TestPageUsesNoInlineCode, TestCSRF, TestOriginWrong, TestHostWrong |  |
+| run:webui:blank-page | finding | Old hand-written setup page went blank for seconds while setup.plan ran (ssh, gh and version probes, ~8 s); no loaders, Back went to the setups list, footer keys did nothing | fixed | TestRegress_PlanLoadsWithoutBlankPage | Server side d08387a2: plan makes no network/version probes (8.2 s to 0.19 s); loader checklist (frame at once, per-check running rows, busy buttons, stale-answer guard, cached doctor age) is UI-only, tested in the private module |
+| run:webui:slow-call-log | finding | Setup page calls slower than 500 ms were invisible; terminal now logs each slow /v1 call with its duration | fixed | NONE | Folded from the backend agent's patch into the setup server; no test pins the log line |
+| run:webui:github-step | finding | GitHub step on a machine with 2 gh logins, 3 ssh aliases, 6 keys: nothing preselected, alias and key were two separate required picks, and save failed with `E_INVALID_INPUT host_alias: ssh host alias is required` and no hint; redesigned as account first, alias that logs in as it preselected, key derived, actionable field errors | fixed | TestValidateStepAliasMessages, TestAliasesOp | setup.aliases op added (ssh -T per alias, cached) |
+| run:webui:missing-keyfile | finding | An ssh alias whose IdentityFile path does not exist (config copied from a different home folder) was refused with no explanation; step now says "key file missing: <path>" and shows the exact config lines, never edits ~/.ssh/config; fingerprint "—" for keys with no .pub explained | fixed | TestKeyNearby | Fingerprint/no-.pub popover is UI-only (NONE for that part) |
+| run:webui:test-all-keys | scenario | Advanced "Test all keys": each private key tested alone (BatchMode, IdentitiesOnly, no agent, parallel, cached, 5 s) shows which GitHub account it logs in as | fixed | TestAliasesOp, TestAliasCacheTimeoutTTL |  |
+| run:webui:keymatch-slow | finding | A failing key_matches took ~6 s in Doctor because it waited on timed-out aliases | fixed | TestKeyMatchesDoesNotWaitOnSlowAlias, TestAliasCacheTimeoutTTL | Fixed in the follow-up run (webui2) |
+| run:webui:repair-button | finding | Home "Repair" opened the summary with every step "done / not checked" instead of the failing check; only Doctor's Run it repaired | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui:fix-empty-target | finding | setup.fix with no target used the first step owning the check, so the team step's store.private fix was refused ("check is skip now") | fixed | TestFixPicksTheStepWhereTheCheckFails | Fixed in webui2 |
+| run:webui:own-org-namefree | finding | Re-check of a finished admin setup's team step failed org.name_free against its own org; `lore setup list` showed a failure while doctor --all was healthy | fixed | TestTeamCreateOnlyChecksOnOwnOrg, TestOwnOrgOnlyOrgChecks | Fixed in webui2 |
+| run:webui:team-half-write | finding | Team step save failing midway (E_POLICY_DENIED) left an orgs entry, a stores.yaml entry and a store init commit; retries then failed org.name_free / "name already used" | fixed | TestTeamCreateOnlyChecksOnOwnOrg | Fixed in webui2 (no half-writes + resume); the test pins the retry over a half-written entry, not the rollback itself |
+| run:webui:folder-personal-store | finding | Personal store as a local folder: doctor store.read failed (not a git repo) and the store.write fix showed the raw `[E_FIX_REFUSED] … repo has no value` | fixed | TestFixRefusedIsPlain, TestStoreWriteFixTextForNonGitHubStore | Fixed in webui2; no test found for the store.read-on-a-folder part |
+| run:webui:invite-email | finding | Member identity email prefill from the invite cannot be filled server-side before the invite is saved | not-a-bug | - | Invite text is decoded only on apply/check; the page fills it client-side |
+| run:webui:rest-id-routes | finding | setup.show, setup.edit, whoami.show, identity.show had `{id}` REST routes but no id input field, so the decoder rejected path calls | fixed | TestRESTPathIDBindsToAField | Fixed in webui2 for 21 routes |
+| run:webui:untraced | finding | Run-it fixes ran through their own exec and were not traced; doctor probes not labelled with check ids; prefill-cache hits showed no calls in Details | fixed | TestRunFixIsTraced, TestAllCacheHitsTraced, TestPrefillCacheHitTraced | Fixed in webui2 |
+| run:webui:toast-keys | finding | Page key dispatcher treated toasts (role=dialog, aria-modal=false) as open dialogs, so every page key (j/k, ?, g d, r) was dead while a toast showed | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui:verify-fixes | finding | Headless click-through found the fix-result toast missing and the join invite handoff broken | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui:popovers | scenario | Popover help (not hover tooltips) on every label, option, check, status, step and error code; help texts checked against the Go catalog and error codes | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui:debug | scenario | Per-step and per-check Details, global debug drawer, GET /setup/debug ring and a redacted rotated setup-debug.log; fake-token redaction test | fixed | TestDebugLogRedactsFakeToken, TestDebugLogRotates |  |
+| run:webui:discovery | scenario | Account discovery in the background: gh accounts, per-account API user/emails with the token kept in memory, git identities incl. includeIf, alias/key logins → one-click account cards and a "create setups" suggestion | fixed | TestDiscoverFacts, TestDiscoverNeverLeaksToken, TestDiscoverTraceNeverLeaksToken, TestMergeDiscoveryCards |  |
+| run:webui:branding | scenario | Branding: favicon, light/dark lockup, footer with version and links, About popover with build commit, Go version, OS/arch | fixed | TestSessionCarriesBuildFacts | .ico media type has no test |
+| run:webui:licence | finding | About popover licence disagreed with the brief (repo LICENSE file vs open-core Apache-2.0) | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui:staticcheck-embed | finding | staticcheck read a code comment as a //go:embed directive in the setup server's UI file | process | - | lint or gate tooling; the lint/docsync gate steps are the guard |
+| run:webui:carried | scenario | Owner requests not finished in this run (import from existing lore, current-folder context, discovery comboboxes) | process | - | Carried to and done in webui2; see run:webui2 rows |
+| run:webui2:import | scenario | Import from existing lore: read-only scan of the lore config, identity files and older-version leftovers, known repos, repos' stores.yaml and optional picked folders (depth/size limits, node_modules/vendor/hidden skipped); preview + one-click import with per-field provenance | fixed | TestScanWritesNothing, TestFullConfigProposals, TestFolderScanKnownRepos | Hash-before/after test break-verified |
+| run:webui2:here | scenario | Current-folder context: `lore setup`, `lore setup list`, `lore setup web` print one line about this folder; Home banner shows the matching setup or offers to create one from this repo | fixed | TestResolveHere, TestHereLine, TestHereProposalEntry |  |
+| run:webui2:combobox | scenario | GitHub account/alias/key and store URL are discovery comboboxes with sources and "found N"; store URLs from the account's repos and stores on disk; token never logged | fixed | TestMergeDiscoveryStoreURLs, TestMergeDiscoveryFields, TestDiscoverTraceNeverLeaksToken | Combobox UI itself is in the private module |
+| run:webui2:repair | scenario | Home/Doctor Repair opens the failing step with the check red and Run it ready; re-check after the fix turns green | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui2:keymatch-speed | finding | key_matches ~6 s → ~1 s and cold step check ~4 s → ~1 s; on a cold page straight to a step every alias reported "did not answer in 3s" so the fix was not runnable | fixed | TestKeyMatchesDoesNotWaitOnSlowAlias, TestKeyMatchesWaitsWhenNoFixKnown, TestKeyMatchesNamesSilentAliases, TestAliasCacheTimeoutTTL | Cold-page regression fixed in 04d04373 |
+| run:webui2:fix-step | finding | setup.fix picks the step where the check fails, not the first step owning it | fixed | TestFixPicksTheStepWhereTheCheckFails |  |
+| run:webui2:team-step | finding | Team step: no half-writes on a failed save, resume works, own org passes org.name_free | fixed | TestTeamCreateOnlyChecksOnOwnOrg, TestOwnOrgOnlyOrgChecks |  |
+| run:webui2:trace | finding | Run-it fixes traced; doctor and prefill cache hits recorded as "cache" calls labelled with the check id | fixed | TestRunFixIsTraced, TestAllCacheHitsTraced, TestPrefillCacheHitTraced |  |
+| run:webui2:fix-texts | finding | store.write on a non-GitHub store (folder or other host) could not fill {repo}; refused fixes now read as plain advice, never the raw E_FIX_REFUSED text | fixed | TestFixRefusedIsPlain, TestStoreWriteFixTextForNonGitHubStore | Polish later made the store fix text follow the failure cause |
+| run:webui2:offline-store | finding | Bare `lore setup` (and setup.plan) failed with E_STORE_UNREACHABLE / E_NOT_A_STORE when the current repo attached an offline or non-lore store; now one warning line and the page opens | fixed | TestPageRunOpensWithAnOfflineStore | `--schema-only` still fails |
+| run:webui2:machineonly | finding | Steps page showed only E_NOT_A_STORE for a member setup active in a repo with a broken attached store; setup bookkeeping now falls back to the machine-only app | fixed | TestSetupStoreWithABrokenAttachedStore | Break-verified |
+| run:webui2:rest-id | finding | REST `{id}` binding for 21 routes: path id now binds to the op's id field or first positional arg, ops without one get /<verb>; the page client built "/v1/setup/" and got 404 for setup.show/edit | fixed | TestRESTPathIDBindsToAField | Client fix in the private module |
+| run:webui2:false-dirty | finding | Identity step opened as "unsaved changes" with no input, so moving away raised the leave-without-saving dialog | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui2:folder-line | finding | Home's old "This folder:" line duplicated (and in the no-match case contradicted) the new current-folder banner | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:webui2:gh-matches | finding | github.gh_matches showed an empty account name when gh had no active account | fixed | TestGHMatchesInfoOnly | Relayed combo → doctor; now info-level, plain skip |
+| run:webui2:store-private-gh | finding | store.private when gh cannot answer was reported as public with a Run-it fix | fixed | TestStorePrivateGHFails | Relayed combo → doctor; outcome not recorded in status, fixed per guard |
+| run:webui2:invite-email | finding | invite.email cannot be filled server-side before the invite is saved | not-a-bug | - | Page fill kept |
+| run:webui2:omitzero | finding | OpenAPI document marked `omitzero` output fields as required | fixed | TestOmitZeroIsNotRequired | Open at run end (local omitempty+omitzero workaround); fixed later per guard |
+| run:webui2:saved-fix-text | finding | Saved step check rows kept their old fix text until re-check, and the step page shows saved rows on open | fixed | TestPlanRefreshesSavedFixes | Open at run end; fixed later (issue 13) |
+| run:webui2:store-url-known | finding | Store URL suggestions only saw repos lore already knew (after lore init in them) | fixed | TestFolderStores | Open at run end; fixed later (issue 14) |
+| run:webui2:polish | finding | Home health follows the newest doctor run from any process (cached doctor-health file); singular counts ("1 setups"); import scan counts known repos | fixed | TestSotRightRows, TestFolderScanKnownRepos | TestSotRightRows subtest row14_setup_health; singular wording UI-only |
+| run:webui2:licence | finding | Licence merge: About popover names Apache-2.0 for the open core after merging the core licence branch | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:final-p1:empty | scenario | Run folder holds no files (no brief, status or findings recorded) | process | - | folder empty on disk; nothing to inventory |
+| run:final-trial:empty | scenario | Run folder holds no files (no brief, status or findings recorded) | process | - | folder empty on disk; nothing to inventory |
+| run:pagewalk:empty | scenario | Run folder holds no files (no brief, status or findings recorded) | process | - | folder empty on disk; page-walk findings, if any, live in another source |
+| run:ui-activity:empty | scenario | Run folder holds no files (no brief, status or findings recorded) | process | - | folder empty on disk; nothing to inventory |
+| run:yaml-home:empty | scenario | Run folder holds no files (no brief, status or findings recorded) | process | - | folder empty on disk; nothing to inventory |
+| run:yaml-home2:empty | scenario | Run folder holds no files (no brief, status or findings recorded) | process | - | folder empty on disk; nothing to inventory |
+| run:batch:1 | finding | Two stores.yaml entries attaching the same store branch listed every row twice (four times in search) | fixed | TestReadStoresRowOnce, TestReadStoresOf, TestLocateDedupesOneLocation | store list itself never duplicated; read side deduped (Engine.ReadStores); store add/init now refuse a second entry on the same url+branch |
+| run:batch:1-sql | finding | `lore sql` showed each row of a shared place four times | fixed | TestSyncStores_DupLocationSQLKeepsBothNames | once per name, both source names kept (decision) |
+| run:batch:2 | finding | `store list` BRANCH column empty for a store attached as `<url>?branch=<b>` | fixed | TestListBranchColumn, TestSyncStores_ListBranchColumn | unpinned store shows the branch its clone follows; never-cloned shows empty |
+| run:batch:3 | finding | `lore live compact` on an already-compact ref rewrote it and raised the epoch | fixed | TestCompactEpochRaisesByOneOnlyWhenHistoryIsRewritten, TestF08_CompactKeepsRowsAndRaisesEpoch | no-op compact exits 0 "nothing to compact" |
+| run:batch:4 | finding | `task split` / `task add --parent` in a second clone could not find the first clone's not-yet-pushed default task list | fixed | TestTaskSplitSecondCloneDefaultList | E_NOT_FOUND now names the list and the next step |
+| run:batch:5 | finding | A row became unreadable in the checkout that wrote it after `lore live` landed it on main | fixed | TestLiveLand_RowsStayReadableInTheWritingCheckout | was already fixed on main; repro test added; trash matrix re-enabled live |
+| run:batch:6 | finding | Home kept suggesting a setup for an account whose setup was purged | fixed | TestSuggestAgain, TestPurgedSetupNeverReoffered | "Covered by purged setup X" + Suggest again; page part is enterprise-only (not in core tree) |
+| run:batch:7 | finding | Hand-written web API types drifted from openapi.json | fixed | TestEnumValuesMatchConstants | exhaustive contract test lives in the enterprise web tree (not in core); enum value sets from Go constants pinned in core |
+| run:batch:8 | finding | Setup page modal dialogs lacked aria-modal; content behind a modal was readable | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:batch:9 | scenario | Pairwise setup walk merged into the page walker (`pagewalk --flow`) | process | - | enterprise web e2e only |
+| run:batch:10 | finding | Commit hook password_pair false positive on the minified page bundle | fixed | TestPasswordPairMinifiedBundle, TestPasswordPairStrict | real `password = "…"` in minified code still caught; no folder exclusion |
+| run:batch:11 | scenario | Review and archive 13 stale dirty worktrees on the dev server | process | - | patches archived, branches kept |
+| run:batch:11-kindmarked | finding | Fail-open snapshotHoldsMarked: a conflicted field row on a cold machine showed the kind without that field | fixed | TestKindMarkedFieldColdCache | now refuses E_KIND_CONFLICT; ported from a stale worktree idea |
+| run:batch:12 | scenario | Open-core split: guard that nothing outside ee/ imports ee/ | process | TestOpenCoreImportsNoEnterprise, TestOpenCoreGuardCatches | package list doc kept private; nothing published |
+| run:batch:13 | finding | Saved setup step check rows showed an old fix text | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:batch:14 | finding | setup discover could not suggest stores from repos lore had not initialised; no `--folder` | fixed | TestDiscoverPassesFolders | reads committed .lore/stores.yaml under includeIf/setup folders, depth 4 |
+| run:batch:15 | finding | A setup's ssh host alias was not applied to store link reads/clones; trace did not name the host reached | fixed | TestCloneRouteOwnedInheritUnowned, TestStoreRoute, TestTraceGit | alias only for stores a setup owns (personal_store inherit counts) |
+| run:batch:16 | finding | `doctor --all` did not check every store in known repos' stores.yaml (and skipped stores outside every setup) | fixed | TestAllAttachedStoresOutsideEverySetup | one probe per distinct store; outside-folder stores probed with the default setup |
+| run:batch:17 | finding | Doctor check cache lived in process memory; a new machine.db handle leaked per doctor run | fixed | TestDoctorCacheAcrossApps, TestDoctorCacheOneHandlePerApp, TestDoctorCacheConcurrentApps | 60 s cache in machine.db, one handle per App |
+| run:batch:19 | finding | Real-machine setup walk minors m1..m7 | process | - | web setup page; guarded by the web page build's own page tests, not in this tree |
+| run:batch:19-m7b | finding | Primary email missing from the emails list (walk minor m7b) | not-reproduced | - | does not reproduce on a fake machine; needs a real account |
+| run:batch:20 | finding | Eight team-profile deviations from the design (offboard claims, deactivate hint, merge row counts, engine warnings, status note, rejoin, same-day re-add, TP-13 text) | fixed | TestOffboardClaimsUnread, TestActorDeactivateHintsOffboard, TestContactMergePreviewRowCounts, TestWritesCarryEngineWarnings, TestStatusNote, TestRejoinListsTrashedUnstarted, TestOffboardNotStarted, TestMemberAddOverlapMatrix | one code E_PERIOD_OVERLAP for boundary clashes |
+| run:batch:21 | scenario | Team e2e for read-only gates on branch rows, signals gate with a remote, tree check after a real merge | fixed | TestGateReadOnlyEveryPath, TestTeC_SignalsGateSmokeWithARemote, TestTreeCheckAfterGitMergeTwoClones | no product bug found |
+| run:batch:22a | finding | `resource graph --json` via[].to named the node the walk came from | fixed | TestResourceGraphViaDirection | via[].from added, via[].to deprecated |
+| run:batch:22b | finding | Resource duration fields refused `30d`; a day bound in --min/--max was silently ignored | fixed | TestResourcesValueTypeMatrix | text output trimmed; JSON unchanged |
+| run:batch:22c | finding | `migrate status` printed empty pending/notes/features lines | fixed | TestStatusTextOmitsEmptyLists |  |
+| run:batch:22d | finding | `migrate run` in an org created by 0.1.18 wrote a company period for 0.1.18's own roster row | fixed | TestCampaignTeam_PeriodReplacesTheRosterGuess |  |
+| run:batch:23 | finding | Org store links were not re-pointed after a detected repo move | fixed | TestSetURLFollowsStoreLinks, TestE2ERepoSetURLFollowsStoreLinks, TestFollowMovedLinksYesAndNonInteractive | sync asks first, mirror/fork never; `lore sync --yes` added |
+| run:batch:26 | scenario | Owner real-Mac check of the setup page | process | - | owner-only |
+| run:batch:27 | scenario | Answer the remaining open design questions | process | - | answered in the private design log (OD-1..OD-27) |
+| run:batch:scen-render | scenario | Every render command driven through the binary (9 commands, 8 bugs: read-only init E_INTERNAL, context --json null, policy unset under require_reason, render --check --report exit 0 over budget) | fixed | TestCampaignRender_RunJSONShapes, TestCampaignRender_ContextEmptyIsAList, TestCampaignRender_PolicyReversePath, TestCampaignRender_CheckLeaksModes | follow-up fr: --target inside repo, pr-body secret scan, negative --max-bytes, control chars |
+| run:batch:scen-render-fr | finding | Render follow-ups: --target/out inside repo, LORE.full.md never clobbers a foreign file, pr-body secret scan, negative --max-bytes refused | fixed | TestRenderPaths_TargetStaysInRepo, TestCampaignRender_CheckPRBodyBodies, TestCampaignRender_RunTargetsThatCannotBeFiles |  |
+| run:batch:scen-config | scenario | Help example on every leaf command (267 had none); missing args and unknown flags exit 20 typed for all commands | fixed | TestCampaignConfig_HelpExamples, TestCampaignConfig_MissingArgument, TestCampaignConfig_UnknownFlagInRepo, TestCampaignConfig_ConfigRefusals |  |
+| run:batch:scen-team | scenario | Team commands campaign (49 commands); deactivate of a left person said "no one is @x" | fixed | TestCampaignTeam_DeactivateSomeoneWhoLeft, TestCampaignTeam_BadInputMatrix, TestCampaignTeam_HelpHasExamples | now E_STATUS_CHANGE + rejoin hint |
+| run:batch:scen-team-fct1 | finding | Batch undo answered E_STALE after later commands; a 0.1.17 row move test failed on the batch branch | fixed | TestBatchUndoAfterLaterCommands, TestMove_V017RowTakesAnAgentsYes |  |
+| run:batch:scen-team-fct2 | finding | Repo mount names `-x`/`.`/`..` accepted; project ops did not accept a name; stint end before start had no hint | fixed | TestProjectVerbsTakeAName, TestOrgPeriodsAddEditAndOverlaps | mount-name refusal guard not located |
+| run:batch:scen-knowledge | scenario | Knowledge commands campaign (121 commands, 10 bugs: no help examples, bad id without hint, internal `engine:` prefix in question, directive install E_INTERNAL, explain junk exit 0, blank names stored, list lines with ids only) | fixed | TestCampaignKnowledge_HelpEveryCommand, TestCampaignKnowledge_BadIDsEveryVerb, TestCampaignKnowledge_ListTextNamesEveryRow, TestCampaignKnowledge_EditBlankRefused, TestCampaignKnowledge_Directive |  |
+| run:batch:scen-knowledge-fk | finding | explain --json lacked structured copies; editing a landed-not-pulled row broke git pull | fixed | TestCampaignKnowledge_ExplainJSONCopies, TestCampaignKnowledge_EditLandedNotPulled |  |
+| run:batch:scen-sync | scenario | Sync commands campaign (46 commands, 9 bugs: land run bad id exit 0, trash restore code, migrate unlock text, store forget of folder store, ci-merge typo E_INTERNAL) | fixed | TestCampaignSync_BadInputMatrix, TestCampaignSync_MigrateUnlockText, TestCampaignSync_StoreForget, TestCampaignSync_CIMergeAndAction |  |
+| run:batch:migrate-live-bypass | finding | `migrate run` copied open live rows into .lore/data, bypassing land | fixed | TestCampaignSync_MigrateOldFilesBesideLiveRows |  |
+| run:batch:promote-path | finding | `sync promote ../../x` built a path outside the repo | fixed | TestCampaignSync_PromoteAndPeek |  |
+| run:batch:scen-sync-fsy | finding | Sync follow-ups: commit show short sha, honest ci-merge --dry-run, live purge --dry-run asks first, store init refuses a bare git repo as a folder store, row move into its own store | fixed | TestCampaignSync_CommitShowResolves, TestCampaignSync_CIMergeDryRunWording, TestCampaignSync_LivePurgeDryRunAndConfirm, TestCampaignSync_StoreInitBareRepoAsFolder, TestCampaignSync_RowMoveIntoItsOwnStore |  |
+| run:batch:scen-setup | scenario | Setup commands campaign (38 commands, 9 bugs) | fixed | TestCampaignSetup_BadInput, TestCampaignSetup_Lifecycle, TestCampaignSetup_UsePin, TestCampaignSetup_TextOutputs |  |
+| run:batch:setup-edit-default | finding | A refused `setup edit --default` had cleared the other default | fixed | TestCampaignSetup_EditRefusedWritesNothing |  |
+| run:batch:config-lost-edit | finding | Two processes editing config.yaml lost an edit | fixed | TestMiscFollowups_ConfigSetConcurrentNoLostEdit, TestCampaignSetup_ConcurrentMixed | OS lock + E_STALE |
+| run:batch:first-run-locked | finding | Parallel first runs failed "database is locked" | fixed | TestCampaignSetup_ConcurrentFirstUse, TestCampaignSetup_ConcurrentMixed | WAL switch retries busy |
+| run:batch:scen-tasks | scenario | Task commands campaign (104 commands, 9 bugs: E_INVALID_ID without hint, deletes asked before checking ids, coordination offline answer for a typo, null lists in task next --json) | fixed | TestCampaignTasks_BadIDs, TestCampaignTasks_TaskVerbs, TestCampaignTasks_CoordinationVerbs, TestMiscFollowups_DeleteChecksIDFirst |  |
+| run:batch:plan-behind-live | finding | A plan/tasklist/mission behind a live task could never be edited | fixed | TestCampaignTasks_EditParentOfLiveTask |  |
+| run:batch:scen-data | scenario | Data commands campaign (90 commands, 11 bugs) | fixed | TestCampaignData_ResourceLifecycle, TestCampaignData_VarsLifecycle, TestCampaignData_MetaLifecycle |  |
+| run:batch:secrets-move-dataloss | finding | DATA LOSS: secrets rename-entry/move/relabel wiped a resource's other fields | fixed | TestCampaignData_SecretsMove, TestSecretsRelabelHolders |  |
+| run:batch:meta-unset-dryrun | finding | `meta unset --dry-run` removed the key | fixed | TestCampaignData_MetaUnsetDryRun |  |
+| run:batch:scen-data-fz1 | finding | Data follow-ups: ${var} in resource fields with --expand, external-source names unique, one confirm rule for deletes, size error explains history, flag ids get the peek hint, `resource kind add --to me` refused, plurals | fixed | TestCampaignDataFollowups_ResourceExpand, TestCampaignDataFollowups_ExternalSourceNames, TestCampaignDataFollowups_DeletesAsk, TestCampaignDataFollowups_ResourceSizeNamesHistory, TestCampaignDataFollowups_FlagIDNotFoundHint, TestCampaignDataFollowups_KindToMeRefused, TestCampaignDataFollowups_OneIsSingular |  |
+| run:batch:scen-misc-fz2 | finding | Usage errors not JSON under --json; 20 kinds asked before checking ids; plan/tasklist show text; tasklist delete --where status; coordination not-found hint; refused live write left an actor row | fixed | TestUsageErrorJSON, TestMiscFollowups_DeleteChecksIDFirst, TestMiscFollowups_PlanTasklistShow, TestMiscFollowups_CoordUnknownHasHint, TestMiscFollowups_RefusedWriteLeavesNoActorRow |  |
+| run:batch:scen-query | scenario | Query commands + all 500 REST routes (UTF-8 cut in search snippets, refusals without next step, REST bad-shape 400s without hint) | fixed | TestCampaignQuery_SearchRankingAndLimits, TestCampaignQuery_SearchRefusals, TestCampaignQuery_RESTMalformedBodies, TestCampaignQuery_RESTEveryRouteRefusesStrangers |  |
+| run:batch:scen-query-fq | finding | Leading `-word` not a NOT in every search path; time_spent.task_deleted_at empty; CLI --json not indented | fixed | TestCampaignQueryFollowups_SearchNegation, TestCampaignQueryFollowups_TimeSpentTaskDeletedAt, TestCampaignQueryFollowups_ShowJSONIndented | `-key:value` exclusion not built (grammar change) |
+| run:batch:gate-help-json | finding | Bare-noun `--help` had lost `--json` (found by gate run 2) | fixed | NONE | no dedicated test located |
+| run:batch:gate-date-pin | finding | Date-pinned org test failed once the real clock passed the pinned day | fixed | TestOrgStatusMoves | joinOn pins the join in every date-pinned org test |
+| run:batch:gate-cache-hit | finding | Gate userscen step can be a Go test-cache hit (binary built in TestMain) | process | - | recommend -count=1 or keying on the binary |
+| run:batch:fix-projects | finding | Natural-key edit check refused the merge's own re-point and stopped `sync fix-projects` half way | fixed | TestSyncFixProjects_TwoBootstrapsSameMount | merge re-points exempt |
+| run:batch:flakyssh | finding | setupe2e "2 ssh connections" flake: harness picked a port, released it, lore retried and re-fetched | process | - | test-harness fix; the suites themselves are the check |
+| run:batch:leftover-4 | finding | `handoff add --task` / `task tree check --project` wrong-noun messages had no dedicated test | fixed | TestTaskWrongNoun, TestTreeCheckWrongNoun |  |
+| run:batch:leftover-6 | finding | An old (0.1.17) lore on PATH made the commit hook flag the built bundle | process | - | upgrade the server binary |
+| run:batch:leftover-7 | finding | Duplicate --folder values are dropped silently | not-a-bug | - | decision |
+| run:batch:live-feature-branch | finding | Landed rows vanish from lists on a feature branch until main is merged | not-a-bug | - | kept and documented (decision) |
+| run:batch:size-history | finding | Resource size limit counts history | not-a-bug | TestCampaignDataFollowups_ResourceSizeNamesHistory | error now explains it |
+| run:batch:help-tombstone | finding | `link remove` / `vars rm` help said "a tombstone is kept" but both move the row to the trash | fixed | TestRemoveHelpSaysTrash | help text only |
+| run:bugs:set-url-folders | finding | `store set-url` left folder attachment entries on the old url | fixed | TestSetStoreURLFolderEntries |  |
+| run:bugs:folder-detach | finding | A folder attachment could not be detached by command | fixed | TestRemoveStoreFolderEntries | BUGFIX-01 |
+| run:bugs:meta-labels | finding | `meta rename` / `--rename-value` labels not refreshed on the row's next write | fixed | TestMetaRenameRefreshOnNextWrite, TestValueNames | BUGFIX-13 |
+| run:bugs:two-store-batch | finding | Client-repo `task add` without --to failed "one batch cannot write to two stores" | fixed | TestAddRoutedDefaultTasklist | BUGFIX-19 |
+| run:bugs:api-rotate | finding | `api token rotate` did not reach a running `lore api` (old token kept working) | fixed | TestTokenFileAuthRotate, TestCampaignQuery_TokenRotate | BUGFIX-25 |
+| run:bugs:config-parens | finding | `config check` with no org entries printed an empty "()" | fixed | TestCheck |  |
+| run:bugs:setup-list-default | finding | `setup list` doubled "default:" in the active-setup reason | fixed | TestDefaultSetupReasonOnce |  |
+| run:bugs:delete-dryrun-asks | finding | `memory delete --where … --dry-run` asked to confirm; bulk question leaked row text | fixed | TestDryRunNeverAsksUpFront, TestDeleteWhereMatrix, TestGenericQuestionNamesIDsOnly | BUGFIX-26 |
+| run:bugs:setup-remove-clock | finding | `setup remove` stamped removed_at (and disabled_at, checked_at) from the wall clock | fixed | TestRemoveStampsEngineClock |  |
+| run:bugs:resource-qualified | finding | Resource qualified names `<place>:<kind>/<name>` not parsed (lookups, --ref, import) | fixed | TestResourceQualifiedNames, TestParseResourceQualified, TestResourceImportQualifiedRefs | BUGFIX-10 |
+| run:bugs:resource-ambiguous | finding | Same-name resource at two levels resolved silently instead of E_RESOURCE_AMBIGUOUS | fixed | TestResourceAmbiguousAcrossLevels | BUGFIX-11 |
+| run:bugs:resource-secret-hint | finding | Secret refusal on a resource value offered --secret-ref/--secret-unstored which then failed | fixed | TestResourceSecretAnswers, TestRedactJSONLeaves | BUGFIX-12 |
+| run:bugs:setup-reads | finding | Unknown/disabled `--setup` on reads printed output and exit 0 | fixed | TestSetupExplicitGate | BUGFIX-18 |
+| run:bugs:batch-count | finding | `batch list` counted 2 rows for a one-row delete after restore | fixed | TestRowsCountsDistinctRowsAfterRestore | BUGFIX-08 |
+| run:bugs:secrets-check-clock | finding | `secrets check` stamped the wall clock | fixed | TestSecretsLastCheck |  |
+| run:bugs:secrets-show-ref | finding | `secrets show <ref>` printed a blank USED IN column | fixed | TestSecretsShowByRef |  |
+| run:bugs:skill-backup-clock | finding | Skill backup name used the wall clock | fixed | TestNewInstallerUsesEngineClock |  |
+| run:bugs:import-scan-order | finding | `setup import-scan` listed repos in a different order each run | fixed | TestReposSortedByRoot |  |
+| run:bugs:modeb-rollback | finding | `migrate rollback` after a Mode B conversion half-undid it; migrate ops doubled machine/actor rows | fixed | TestModeBRollbackRefused, TestMigrateRollbackAndUnlockWriteNoMachineRows | BUGFIX-07: rollback refused E_UNSUPPORTED |
+| run:bugs:reason-lost | finding | `actor edit --timezone` refusal had no reason (class: wrapped reason dropped at ~13 sites) | fixed | TestActorEditRefusalSaysWhy, TestPrefixKeepsReason, TestFieldRefusalKeepsReason, TestMetaRetypeRulesMisfitSaysWhy, TestStaleCloseErrKeepsReason | errs.Prefix helper |
+| run:bugs:doctor-outside-repo | finding | `doctor --all` outside a repo printed 12 "could not run" repo checks | fixed | TestAllOutsideRepoSkipsRepoChecks |  |
+| run:bugs:store-marker-text | finding | store.marker fix text always said `store init me` | fixed | TestStoreMarkerFixNamesTheStore |  |
+| run:bugs:probe-skip-wording | finding | Internal prober skip wording shown to users in doctor --all --json | fixed | TestNotHereSkipIsUserWording |  |
+| run:bugs:org-entry-email | finding | Admin setup skipped identity email checks for the org entry's identity | fixed | TestOrgEntryIdentityEmailChecked, TestOrgEntryIdentityEmailGitHub | BUGFIX-21 |
+| run:bugs:docs-drift-global-flag | finding | TestDocsMatchCLI misread a global flag placed before the subcommand | fixed | TestGlobalFlagBeforeSubcommand | test tooling |
+| run:bugs:project-row-live | finding | Uncommitted project row rode to the live ref with the first live task; live-off commands then found no project | fixed | TestUncommittedInitStaysInDataAfterLiveTask | BUGFIX-04 |
+| run:bugs:agent-commitment | finding | Agents were no longer forced to pass --commitment on task add | fixed | TestAgentAddNeedsCommitment | BUGFIX-20 |
+| run:bugs:housekeeping | scenario | Reference regen and CHANGELOG after the fix round | process | TestReferenceIsCurrent | no test needed: process |
+| run:cfgorg:whoami-match | scenario | whoami resolves the org by client repo pattern, by own pattern, and falls back to a no-org identity | fixed | TestResolveMatrix, TestE08_TwoOrgHomeWhoamiInEachRepo, TestF10_NoOrgMatchedFallbackIdentity | transcript of the older team build; passed |
+| run:cfgorg:ambiguous | scenario | Two org entries' patterns match one repo: whoami, init and writes refused E_ORG_AMBIGUOUS until `org use` | fixed | TestF10_TwoEntriesAtTheSameStepAreAmbiguous, TestWhoamiLinesFailMatrix | passed |
+| run:cfgorg:org-use-unrooted | scenario | `org use` in a repo with no project id refused E_NOT_PROJECT_ROOT; works after init; `org use --clear` | fixed | NONE | no current test located for this refusal |
+| run:cfgorg:lore-org-env | scenario | LORE_ORG selects an entry (staging) and an unknown LORE_ORG is refused naming candidates | fixed | TestF10_StagingIsSelectedOnlyOnPurpose, TestErrorNamesCandidates | passed |
+| run:cfgorg:actor-env | scenario | LORE_ACTOR agent label accepted in an org; a human key from elsewhere ignored with a warning | fixed | TestF18_HumanKeyInLoreActorIsIgnored, TestF18_AgentStartRegistersAnAgentWithItsOwner | old build warned "no roster check" |
+| run:cfgorg:org-set-own-only | scenario | Committed org.yaml refused in a client repo, written in an own repo | fixed | TestF10_CommittedOrgYAMLOnlyInOwnRepos | passed |
+| run:cfgorg:link-own | scenario | `org link --own` refused for a repo not matching own: patterns | fixed | TestPlanLinkRefusalTexts | passed |
+| run:cfgorg:fork | scenario | `org use` recorded for upstream is skipped with a warning in a fork carrying the upstream's project id | fixed | TestF10_OrgUseIsSkippedInAForkWithTheUpstreamsID | passed |
+| run:cfgorg:config-invalid | scenario | Unknown config key warned with line; invalid config refused E_CONFIG_INVALID | fixed | TestConfigCheckUnknownKeyNamesLineAndKey, TestStandaloneConfigCheck | passed |
+| run:cfgorg:sync-export-all | scenario | `sync export` without --all refused | not-a-bug | - | old build command; not checked against current |
+| run:docs:release-sweep | scenario | Docs sweep after the open-core split and release setup (release runbook, licence wording, tag-only release workflow) | process | - | three repos committed; docs checks green |
+| run:docs:bugs-md | finding | Docs run found 29 library bugs (bugs.md) | process | - | each entry is its own run:bugs:* row |
+| run:docs:gap-brief | finding | 78 features whose guide was only a mention | docs-only | - | 57 still brief after B4 |
+| run:docs:gap-noguide | finding | 34 features with no guide at all (vars, meta, resource, task tools, store commands, batch, api, spec…) | docs-only | - | 0 left after Batch 3 |
+| run:docs:gap-noexample | finding | 95 features with no runnable example | docs-only | - | 16 left, each says why (skill compile needs a model service, upgrade needs a release, setup join needs ssh/GitHub, some error groups, test-only env vars, enterprise pages) |
+| run:docs:thin-pages | finding | 19 thin guide pages failing the guide shape | docs-only | - | 0 after B4 |
+| run:docs:broken-links | finding | Broken links/anchors in README and docs (README backup anchor, commands.md directive anchor, getting-started step anchors) | docs-only | - | 0 broken after B3-finish |
+| run:docs:features-index | finding | features.md lacked rows for 261 command paths, error codes, env vars and config keys | docs-only | - | 194 to 275 rows; every error code in a row |
+| run:docs:hold-claim-claim | finding | Docs said `hold claim` is unsupported in a linked client repo, contradicting the code | docs-only | - | corrected on main |
+| run:docs:personal-local-claim | finding | config.md said the v0.1.17 `local` personal store is not attached as me, contradicting the code | docs-only | - | corrected on main |
+| run:docs:cache-name-claim | finding | Sync docs called the cache `.lore/lore.db` instead of the 0.1.18 cache file | docs-only | - | corrected on main |
+| run:docs:dsfix | finding | 60 docsync errors: citations pointed at deleted v0.1.17 code; several claims false (lock timeout, merge order, pre-commit secret scan) | docs-only | - | repointed to current code, 0 errors |
+| run:docs:secret-examples | scenario | Secret-shaped example values built at run time, never stored as literals | process | - | gitleaks clean |
+| run:docs:gates | scenario | Docs batch gates (runners, paste checks, lint, full race test, team e2e, link and hard-wrap scans) | process | TestDocsMatchCLI, TestReferenceIsCurrent | all green |
+| run:docs-update:apply | scenario | Write every recorded owner decision into 14 private design docs (deletion, time tracking, task system, context budget, secrets, plugins, provenance, CLI reference, index) | process | - | private design docs only |
+| run:docs-update:XQ1 | finding | Batch id prefix: one `bat_` vs per kind | docs-only | - | answered: one `bat_` |
+| run:docs-update:XQ2 | finding | One bulk preview key vs four | docs-only | - | answered: batch.preview_rows |
+| run:docs-update:XQ3 | finding | `--show-sensitive` without a terminal | docs-only | - | answered: requires --yes |
+| run:docs-update:XQ4 | finding | Machine id length | docs-only | - | answered: full keyed fingerprint |
+| run:docs-update:XQ5 | finding | Non-resource rows keep their id on move | docs-only | - | answered: keep id for every row |
+| run:docs-update:XQ6 | finding | `--scope` had three meanings | docs-only | - | answered: context scope only |
+| run:docs-update:XQ7 | finding | Two `--where` grammars | docs-only | - | answered: one grammar, repeated ANDed |
+| run:docs-update:XQ8 | finding | `--by` actor vs grouping | docs-only | - | answered: `--group-by` |
+| run:docs-update:XQ10 | finding | Two `--sort` grammars | docs-only | - | answered: key:asc/desc documented |
+| run:docs-update:RES-2-8 | finding | Resources open questions 2,3,4,5,7,8 (referrers opt-in, render false, sensitive values on CLI, E_NOT_FOUND exit, move ids) | docs-only | - | answered/confirmed |
+| run:docs-update:PROV1-10 | finding | Provenance questions PROV1..PROV10 | docs-only | - | all answered |
+| run:docs-update:SQ1-12 | finding | Secrets questions SQ1..SQ12 | docs-only | - | answered except SQ9 |
+| run:docs-update:D1-27 | finding | Secrets draft decisions D1..D27 | docs-only | - | confirmed with changes |
+| run:docs-update:MD1-MD3 | finding | Metadata MD1 (soft-deleted key) and MD3 (agents new keys) | docs-only | - | answered |
+| run:docs-update:DEL-1-5 | finding | Deletion open questions 1,3,4,5 | docs-only | - | answered |
+| run:docs-update:TIME-1-2 | finding | Time tracking open questions 1,2 | docs-only | - | answered |
+| run:docs-update:TASK-1-5 | finding | Task system open questions 1,3,4,5 | docs-only | - | answered; 5 parked with plugins |
+| run:docs-update:F1-F4 | finding | Format evolution questions F1..F4 | docs-only | - | answered |
+| run:docs-update:readings | finding | Agent readings: restore from history refused E_PURGED; no time-entry prune; referrers left alone | docs-only | TestPurgedErrorShape, TestFromHistoryMatrix | confirmed |
+| run:docs-update:tree-mismatch | finding | Brief named a working tree that was on an unrelated branch; citations checked against origin/main | process | - | no test needed: process |
+| run:fasttests:tiers | scenario | Make the Go suite fast: quick tier under 60 s, full check parallel (80-85 min to ~13 min) without weakening tests | process | - | wire 215 s to 38 s; userscen 3162 s to ~316 s |
+| run:fasttests:git-exec-storm | finding | Every command ran 100+ git subprocesses; resource import ~150 git execs per row (minutes for 200 rows) | fixed | NONE | per-session git read cache; no dedicated exec-count test located |
+| run:fasttests:stale-read-cache | finding | sync promote/ci-merge kept a stale session read cache after their own git writes | fixed | NONE | break-verified in its commit; plus a structural write observer that drops caches |
+| run:fasttests:etxtbsy | finding | Fake git binary written while parallel tests fork: "text file busy" flake | fixed | TestFetchScopeReusesTheOpenFetch, TestWriteThenExecUnderConcurrentForks | fakes written once in TestMain |
+| run:fasttests:lockorder-flake | finding | Lock order test flaked under load | fixed | TestLockOrderRanks |  |
+| run:fasttests:serialise | finding | Concurrent lore commands in one repo serialise | not-a-bug | - | by design |
+| run:fasttests:shared-state | finding | Tests swapping globals (time.Local, stdin var, os.Stdout, cwd, env) blocked t.Parallel | process | - | kept serial or seams added |
+| run:fasttests:gate-red | finding | Full check red on docsync ids in deleted code and stale docs transcripts | process | - | lint or gate tooling; the lint/docsync gate steps are the guard |
+| run:team:scrub | scenario | Public-repo scrub of every real company, client, person and infrastructure name | process | - | denylist grep, fictional names |
+| run:team:plain-language | scenario | Owner rule: easy language and "In short" on every docs page | process | - | no test needed: process |
+| run:team:role-names | scenario | Owner rule: role words instead of company names in all examples | process | - | no test needed: process |
+| run:team:commit | scenario | Code-standards and docs commits for the team build | process | - | no test needed: process |
+| run:team:purged-failopen | finding | A corrupt purge list read as "nothing purged", so purged rows could be re-imported | fixed | TestMainPurgedRefusesAnUnreadableList, TestWhyMissingOnLiveReportsAnUnreadablePurgeList |  |
+| run:team:repo-id-unscoped | finding | A repo id lookup error became unscoped rows | not-a-bug | - | downgraded: unregistered mount is unscoped on purpose |
+| run:team:commaok | finding | Comma-ok reads with discarded ok in store meta and live file flags | not-a-bug | - | downgraded after reading the code |
+| run:team:errorlint | finding | Deliberate `%v` error flattening kept for exit-code classification | not-a-bug | - | documented |
+| run:team:standards | finding | Code-standards gaps: ~70 untested functions, repeated literals, doc comment form, one big cli package | process | - | partly fixed in the pass |
+| run:team:client-actor-leak | finding | Actor rows in a client repo held a stable key; leak check now fails closed on such files | fixed | TestClientActorEnvelopeMatrix |  |
+| run:team:share-copy | finding | share --to repo wrote copies with inward pointers and other actors' columns | not-a-bug | - | `lore share` removed in 0.1.18 |
+| run:team:task-show-client | finding | task show could not find store tasks in a linked client repo without --from; mission status showed ids not labels | process | - | old team build, replaced by the 0.1.18 code; not re-checked |
+| run:team:docs-drift | finding | Docs drift test failures (completion, learn promote, decision edit, rule list --colour, project show, sync purge, prose read as commands) | docs-only | TestDocsMatchCLI | no test needed: docs-only |
+| run:team:fact-fetch | finding | Docs wording of fetch frequency differs from the decided "once per command, cached 60 s" | docs-only | - | no test needed: docs-only |
+| run:team:fact-maxage | finding | Docs say "max age" without the 7-day value | docs-only | - | no test needed: docs-only |
+| run:team:fact-finished | finding | Docs lists of rows finished on write disagree (comments, cancelled tasks, superseded decisions) | docs-only | - | no test needed: docs-only |
+| run:team:fact-gate | finding | Gate approval docs: any roster human by default vs per-mission approvers | docs-only | - | no test needed: docs-only |
+| run:team:fact-identity-key | finding | Docs never say the identity key is the email | docs-only | - | no test needed: docs-only |
+| run:team:fact-client-assign | finding | Team assignment refused in a client repo is stated only in the spec | docs-only | - | no test needed: docs-only |
+| run:team:readme-anchor | finding | README install-the-skill link anchor broken | docs-only | - | no test needed: docs-only |
+| run:team:errors-count | finding | Error registry heading count stale; registry comment named a missing errors doc | docs-only | - | no test needed: docs-only |
+| run:team:help-stale | finding | Root help referred to a missing PLAN.md; help texts used an old product name and a vendor tool name | docs-only | - | old build |
+| run:team:scenario-binary | finding | Scenario scripts defaulted to the old binary name | process | - | scenario, chaos or docs scripts ported; those scripts run in the gate |
+| run:team:test-env | finding | Test-only env vars left out of features.md | not-a-bug | - | no test needed: not-a-bug |
+| run:team:docs-coverage | scenario | Docs world batches: real guides 108 to 140, runnable examples 58 to 171 | process | - | non-team docs runner built |
+| run:tests:knowledge | scenario | User-scenario tests, knowledge area (0 to 55 of 62) | fixed | TestKnowledgeLifecycleEveryKind, TestKnowledgeComments, TestKnowledgeDuplicateAdds |  |
+| run:tests:tasks | scenario | User-scenario tests, tasks area (58 of 58) | fixed | TestTasksStatus_ReopenClearsCloseFields, TestTasksTree_BigSplit, TestTasksStatus_CancelReasons |  |
+| run:tests:sync | scenario | User-scenario tests, sync area (32 of 34) | fixed | TestSyncStores_BranchesAndOpen, TestSyncStatus_DataFolderFacts |  |
+| run:tests:org | scenario | User-scenario tests, org area (68 of 72) | fixed | TestOrgActorShowIsTheRosterProfile, TestOrgOffboardThenRejoin |  |
+| run:tests:secrets | scenario | User-scenario tests, secrets area (46 e2e) | fixed | TestSecretsRuleOnAfterOffScansAgain, TestSecretsVarsSecretsAndPlaces |  |
+| run:tests:resources | scenario | User-scenario tests, resources area (30 e2e) | fixed | TestResourcesImportHundredsOfRows, TestResourcesNameTaken |  |
+| run:tests:render | scenario | User-scenario tests, render area (36 of 38) | fixed | TestRenderHandWrittenFolderFileNeverDeleted, TestRenderLargeRuleSetStaysInBudget |  |
+| run:tests:rest | scenario | User-scenario tests, REST area (61) | fixed | TestRestParity_PeopleOps, TestOmitZeroIsNotRequired |  |
+| run:tests:migrate | scenario | User-scenario tests, migrate area (34 of 34) | fixed | TestMigrateScenStatusCountsNewerRows, TestMigrateRunGated |  |
+| run:tests:trash | scenario | User-scenario tests, trash area (~60, kind lifecycle matrix) | fixed | TestTrash_KindLifecycleMatrix, TestTrash_ReasonOnEveryDelete |  |
+| run:tests:doctor | scenario | User-scenario tests, doctor area (26 funcs) | fixed | TestDoctorBreak_LoreBinariesOnPath, TestDoctorStoreLocks |  |
+| run:tests:cli | scenario | User-scenario tests, CLI tree walk of every command | fixed | TestCLITree_JSON, TestCLITree_UnknownSubcommand |  |
+| run:tests:reopen-close-fields | finding | Reopening a done/cancelled task kept completed_at and close_reason | fixed | TestTasksStatus_ReopenClearsCloseFields, TestTasksCloseFieldsMatrix |  |
+| run:tests:api-rotate | finding | Running `lore api` kept accepting the old token after rotate | fixed | TestTokenFileAuthRotate | same as run:bugs:api-rotate |
+| run:tests:host-subcmd-exit | finding | Host command groups printed help with exit 0 for a mistyped subcommand | fixed | TestCLITree_UnknownSubcommand |  |
+| run:tests:cancel-reason | finding | `task cancel --reason completed/skipped` accepted (a cancelled task read as completed) | fixed | TestTasksStatus_CancelReasons |  |
+| run:tests:actor-show-roster | finding | actor show/list in an org repo showed the repo's stale actor copy, not the roster profile | fixed | TestOrgActorShowIsTheRosterProfile |  |
+| run:tests:resource-qualified | finding | Resource qualified names in help not resolved | fixed | TestResourceQualifiedNames | same as run:bugs:resource-qualified |
+| run:tests:import-reason | finding | Resource import all-or-nothing refusal dropped the row error | fixed | TestResourcesImportRefusalNamesRowAndReason |  |
+| run:tests:pin-help | finding | pin help/hint named `pin <id> --context` (fails); real form is `pin set` | fixed | TestCampaignData_Pins, TestKnowledgePins |  |
+| run:tests:doctor-no-repo | finding | `lore doctor` outside a git repo reported 12 warnings and DEGRADED | fixed | TestDoctorHealthy_OutsideAProject |  |
+| run:tests:lock-holder | finding | Doctor never named the holder of a held store lock | fixed | TestDoctorStoreLocks, TestStoreLockFinding |  |
+| run:tests:restore-unique | finding | Trash restore brought back a row whose unique name a re-created row holds | fixed | TestTrash_RestoreAfterRecreateSameKey |  |
+| run:tests:sync-pending | finding | `lore sync` said "already in sync" while live writes waited unpushed | fixed | NONE | sync report gained live_pending; no test located by name |
+| run:tests:migrate-newer | finding | migrate status never counted rows written by a newer lore | fixed | TestMigrateScenStatusCountsNewerRows |  |
+| run:tests:teamlock-text | finding | migrate run printed "team lock released" after "none taken" | fixed | TestRunWithoutTeamLockSaysLocal | docs transcripts regenerated |
+| run:tests:empty-store-hint | finding | Render's empty-store hint glued onto the last bullet | fixed | TestBuildBudgetedFileMatrix, TestRenderEmptyStoreWiresAgentsMD |  |
+| run:tests:move-same-store | finding | Row move to its own store said "is deleted" with a misleading hint | fixed | TestCampaignSync_RowMoveIntoItsOwnStore |  |
+| run:tests:color-twice | finding | Bad --color printed the error code twice | fixed | TestParseColorMode, TestCLI_ColourMatrix |  |
+| run:tests:path-dup | finding | Doctor warned "multiple lore binaries" for one binary reached twice | fixed | TestDoctorBreak_LoreBinariesOnPath, TestCoreDoctorBaseIdentityAndPath |  |
+| run:tests:rule-on-after-off | finding | Secret rule on after off stayed off (raw key stored with no question) | fixed | TestSecretsRuleOnAfterOffScansAgain |  |
+| run:tests:omitzero | finding | omitzero output fields documented as required in openapi.json | fixed | TestOmitZeroIsNotRequired |  |
+| run:tests:sql-with-delete | finding | `lore sql "WITH … DELETE"` answered a view error instead of E_SQL_REFUSED | fixed | TestSQLRefusesWrites, TestCLI_SQLReadOnly |  |
+| run:tests:targets-cause | finding | A context.targets row naming an unknown profile failed render without naming the profile | fixed | TestRenderTargetWithTeammateProfileInRowRefusesWhole |  |
+| run:tests:vars-secret | finding | vars set with a detected secret offered answers that failed and echoed the secret | fixed | TestSecretsVarsSecretsAndPlaces, TestScreenScansEveryForm | redact only a JSON string value |
+| run:tests:rest-body-field | finding | REST bad body did not name the field | fixed | TestCampaignQuery_RESTMalformedBodies |  |
+| run:tests:modeb-status | finding | migrate status refused E_UNSUPPORTED in a v0.1.17 Mode B repo | fixed | NONE | no test located by name |
+| run:tests:render-overwrite | finding | DATA LOSS: render overwrote a person's hand-written folder LORE.md | fixed | TestRenderHandWrittenFolderFileNeverDeleted |  |
+| run:tests:context-two-modes | finding | `lore context` with two modes silently answered one | fixed | TestRenderScenContextTwoModesRefused |  |
+| run:tests:landed-project | finding | After a landing the project vanished from the writing checkout and task add failed | fixed | TestLiveLand_RowsStayReadableInTheWritingCheckout | same as run:batch:5 |
+| run:tests:rest-purged | finding | Over REST a missing/purged id got E_NOT_FOUND and no hint where the CLI says E_PURGED | fixed | NONE | no test located by name |
+| run:tests:resource-trashed-name | finding | Resource add/rename to a name held by a trashed row succeeded; restore then made two rows with one name | fixed | TestResourcesNameTaken |  |
+| run:tests:monthly-reminder | finding | Monthly reminder done on the 31st skipped a whole month | fixed | TestTasksReminderBumpMatrix, TestNextOccurrence |  |
+| run:tests:tag-rename-filter | finding | After a tag rename the old name still filtered | fixed | TestTagEdit |  |
+| run:tests:meta-echo | finding | meta set with the row id left out echoed the value in the error | fixed | TestSecretsMetaMissingIDNeverEchoesValue, TestMetaSetEcho |  |
+| run:tests:lint-untagged | finding | lint untagged fix named `tag add <tag> <id>` (fails) | fixed | NONE | no test located |
+| run:tests:mission-completed | finding | A done mission paused/resumed kept completed_at; edit --status done did not stamp it | fixed | TestTasksMission_LifecycleKeepsCompletionTrue, TestMissionLifecycle |  |
+| run:tests:run-end-twice | finding | run end twice re-ended the run and doubled its time | fixed | TestTasksRun_SpanOnTaskTime |  |
+| run:tests:purge-team-store | finding | trash purge in a team git store refused E_UNSUPPORTED | fixed | TestTrashPurgeReachesTeammatesAsPurged |  |
+| run:tests:orphan-ssh | finding | Alias probes outlived App.Close as orphan ssh processes | fixed | TestKeyMatchesBackgroundProbesEndWithApp |  |
+| run:tests:lint-unused | finding | An unused helper failed staticcheck after a merge | process | - | no test needed: process |
+| run:tests:scenario-scripts | finding | 10 SC scenario scripts failed on old lore.db assumptions | process | - | scenario, chaos or docs scripts ported; those scripts run in the gate |
+| run:tests:q-decline | finding | `task decline` on an accepted (not proposed) task cancelled it | fixed | TestTasksStatus_CancelReasons |  |
+| run:tests:q-dup-natural-key | finding | Duplicate natural-key add gave E_INVALID_INPUT with internal table/column names | fixed | TestKnowledgeDuplicateAdds | now E_NAME_TAKEN exit 23 |
+| run:tests:q-show-text | finding | show/list of ten kinds printed only the id without --json | fixed | TestCampaignKnowledge_ListTextNamesEveryRow |  |
+| run:tests:q-render-target-typo | finding | render --target with a profile-name typo silently created a file | fixed | TestRenderTargetTypoRefused, TestRefuseTypo |  |
+| run:tests:q-kind-reserved-code | finding | Kind named like a verb refused E_INVALID_INPUT while docs say E_RESOURCE_NAME | not-a-bug | TestKindNameRouteCollision | same exit; kept |
+| run:tests:q-envelope-cause | finding | Error envelope printed only the message and dropped the wrapped cause | fixed | TestPrefixKeepsReason, TestNoHiddenReason |  |
+| run:tests:q-graph-via | finding | graph via[].to reads backwards | fixed | TestResourceGraphViaDirection | same as run:batch:22a |
+| run:tests:q-duration | finding | Resource duration refused 30d; datetimes with 9 fractional digits | fixed | TestResourcesValueTypeMatrix | same as run:batch:22b |
+| run:tests:q-piped-body | finding | Docs promised a piped body for add commands; stdin ignored | docs-only | - | docs no longer promise it |
+| run:tests:q-delete-dryrun | finding | memory delete --where --dry-run asked for --yes | fixed | TestDryRunNeverAsksUpFront | same as run:bugs:delete-dryrun-asks |
+| run:tests:q-offboarded-register | finding | An offboarded person running actor register became active again; agent start told them to register | fixed | TestJourneyAgencyLeaves | register now E_STATUS_CHANGE |
+| run:tests:q-store-doctor | finding | store doctor --json empty with stores.yaml stores attached | fixed | TestCampaignSync_StoreDoctorShowJSON |  |
+| run:tests:q-sync-status-facts | finding | sync status --json reported no data folder in a committed clone | fixed | TestSyncStatus_DataFolderFacts |  |
+| run:tests:q-migrate-floor | finding | migrate run ignored a newer-lore format floor | fixed | TestMigrateRunGated |  |
+| run:tests:q-init-twice | finding | init twice gave E_ALREADY_INITIALIZED with no hint | fixed | TestMigrateInitTwice |  |
+| run:tests:q-not-a-store-hint | finding | E_NOT_A_STORE outside git had no hint | fixed | TestCampaignRender_InitFolderShapes |  |
+| run:tests:q-migrate-enable | finding | migrate enable with no feature: decoder refused before the op's hint | fixed | TestMigrateEnable |  |
+| run:tests:q-migrate-status-lines | finding | migrate status printed empty lines | fixed | TestStatusTextOmitsEmptyLists | same as run:batch:22c |
+| run:tests:q-migrate-period | finding | migrate wrote a period for a fresh 0.1.18 roster row | fixed | TestCampaignTeam_PeriodReplacesTheRosterGuess | same as run:batch:22d |
+| run:tests:q-reason-flag | finding | task view delete, template delete, link remove took no --reason; vars rm dropped the delete reason | fixed | TestTrash_ReasonOnEveryDelete |  |
+| run:tests:q-reminder-late | finding | Recurring reminder done late moved one period and stayed overdue | fixed | TestTasksReminder_DoneLateSkipsPast |  |
+| run:tests:q-openapi-stale | finding | openapi.json stale after the omitzero fix | process | TestReferenceIsCurrent | regenerated |
+| run:tests:q-rest-optional-id | finding | Ops with an optional id had no REST route for the no-id form | fixed | TestBulkCollectionTwin, TestOpenAPIBulkTwins |  |
+| run:tests:q-setup-unknown | finding | Unknown --setup accepted when config has no setups | fixed | TestSetupExplicitGate |  |
+| run:tests:q-tag-color | finding | tag add --color accepted a named colour though help says hex | fixed | TestTagAddMatchesV017, TestTagEdit |  |
+| run:tests:q-not-a-secret-docs | finding | Docs said the commit hook refuses after --not-a-secret; the allow entry lets the commit pass | docs-only | - | no test needed: docs-only |
+| run:tests:q-vars-name-hint | finding | vars set Bad-Name had no suggested name; secrets rule off without --reason had no hint | fixed | TestSecretsVarsNameAndTypeMatrix | rule off hint not checked |
+| run:tests:q-plural | finding | secrets list said "1 references in 1 rows" | fixed | TestCampaignDataFollowups_OneIsSingular |  |
+| run:tests:q-flags-doc | finding | flags.md said --json errors print as text and listed a missing `errors list` | docs-only | - | no test needed: docs-only |
+| run:tests:q-batch-undo-count | finding | batch list counted restore events into a delete batch | fixed | TestRowsCountsDistinctRowsAfterRestore |  |
+| run:tests:q-plan-handoff-show | finding | plan/handoff show printed only the id | fixed | TestMiscFollowups_PlanTasklistShow | handoff show not checked |
+| run:tests:q-import-perf | finding | Resource import slow (~0.15-0.4 s per row) | process | - | same fix as run:fasttests:git-exec-storm |
+| run:tests:q-comments-trashed | finding | Comments on a trashed row stay live and are not dependents | not-a-bug | TestTrash_CommentsStayLiveOnTrashedRow | behaviour pinned |
+| run:tests:q-comments-purge | finding | Purge left the row's comment thread behind | fixed | TestPurgeTakesComments, TestPurgeLiveRowTakesComments |  |
+| run:journeys:frame | scenario | Journey harness: worlds, machines, fake git server, clock; shared invariants after every step | process | TestFrameJourney, TestFrameInvariantsBite, TestFramePending, TestGateRunsEveryJourneyOnce | no test needed: process |
+| run:journeys:solo | scenario | Solo dev over six months (install, offline, sleep mid-push, rename, email and account switch, repo move, new laptop, 3000 rows) | fixed | TestJourneySolo, TestJourneySoloMonth6 |  |
+| run:journeys:agency | scenario | Agency dev with clients (no leak into client repos, client repo moves, project ends, leaves and rejoins) | fixed | TestJourneyAgencyFirstWeeks, TestJourneyAgencyClientMoves, TestJourneyAgencyLeaves |  |
+| run:journeys:teamlead | scenario | Team lead (invites, leave, rename, admin change, offline week, concurrent edit, compact with unpushed work, undo paths) | fixed | TestJourneyTeamLeadTeam, TestJourneyTeamLeadUndo |  |
+| run:journeys:joiner | scenario | New joiner with two setups and overlapping folders, later leaves job A | fixed | TestJourneyJoiner | page part in enterprise web |
+| run:journeys:agents | scenario | Coding-agent sessions writing beside the person, killed mid-write, detection on/off, API beside CLI | fixed | TestJourneyAgents, TestJourneyAgentsKilled, TestJourneyAgentsSetup |  |
+| run:journeys:upgrader | scenario | Upgrader from 0.1.17 using old and new binaries on two machines | fixed | TestJourneyUpgraderTwoMachines, TestJourneyUpgraderUndo | details not in these notes |
+| run:journeys:early-steps | finding | Member setup lost the GitHub account and personal store chosen before join | fixed | TestJourneySetupEarlySteps, TestJourneyJoiner |  |
+| run:journeys:half-setup | finding | A team setup left halfway was invisible the next day (setup list and Home) | fixed | TestJourneyJoiner |  |
+| run:journeys:forget-caches | finding | store forget left row caches and private renders readable after leaving | fixed | TestJourneyAgencyLeaves, TestJourneyJoiner |  |
+| run:journeys:purge-text | finding | Purge never said team notes stay in the clone or how to drop them; called a local store a GitHub repo | fixed | TestJourneyJoiner, TestPurgeKeepsAlwaysKeepsRepos |  |
+| run:journeys:local-store-shared | finding | Two setups choosing "a local folder" shared one personal store | fixed | TestJourneyJoiner | each later setup gets its own folder |
+| run:journeys:push-rule-blame | finding | A push held back by a concurrent edit was blamed on a "push rule" | fixed | TestJourneyTeamLeadTeam, TestJourneyTeamLeadHeldConflict |  |
+| run:journeys:folder-project-row | finding | A store folder made by `--to <store>/<folder> --create` or `store folder add` got no project row | fixed | TestJourneyTeamLeadTeam, TestJourneyTeamLeadUndo |  |
+| run:journeys:refusal-per-attachment | finding | One row conflict was recorded once per folder attachment of a clone | fixed | TestJourneyTeamLeadHeldConflict | was pending on another round |
+| run:journeys:hang-load | finding | Journey run hung over 8 min in a lore subprocess under very heavy load | not-reproduced | - | not seen at normal load |
+| run:journeys:home-perms | finding | A hand-made ~/.lore left personal notes readable by other users | fixed | TestJourneyAgencyFirstWeeks | lore tightens to owner-only |
+| run:journeys:moved-client | finding | A client repo moved off the client patterns lost its leak guards | fixed | TestJourneyAgencyClientMoves, TestResolveMatrix |  |
+| run:journeys:org-unlink | finding | No `lore org unlink` existed | fixed | TestJourneyAgencyClientMoves, TestOrgLinkUnlinkTexts |  |
+| run:journeys:hook-no-lore | finding | commit-msg hook passed silently in a client repo when lore was gone | fixed | TestJourneyAgencyFirstWeeks | marked clone now refuses |
+| run:journeys:api-as-agent | finding | `lore api` started from an agent session stamped every REST write as the agent | fixed | TestJourneyAgents, TestAPIAgentPersonOnly |  |
+| run:journeys:purged-msg | finding | Restore of a purged row named an actor id and no way to read the text | fixed | TestJourneyAgents, TestPurgedErrorShape |  |
+| run:journeys:history-uncommitted | finding | `trash show --from-history` found nothing for a not-yet-committed purge | fixed | TestJourneyAgents, TestFromHistoryMatrix |  |
+| run:journeys:git-name | finding | Git fallback identity showed the email local part instead of git user.name | fixed | TestJourneyAgentsSetup, TestJourneyLand7DGitNameUpgrade |  |
+| run:journeys:whoami-personal | finding | whoami said "personal not set" while the setup held its own store | fixed | TestJourneySolo, TestWhoamiPersonalLine |  |
+| run:journeys:progress-trash | finding | A finished setup left setup_progress rows in the trash | fixed | TestJourneySolo, TestProgressPersistedAndCleared |  |
+| run:journeys:gh-create-offer | finding | Doctor offered "gh repo create" for a store read before (offline or after a key switch) | fixed | TestStoreReadReachedBefore, TestJourneySolo |  |
+| run:journeys:origin-after-seturl | finding | After repo set-url the project list named the old origin | fixed | TestJourneySolo |  |
+| run:journeys:gone-folder | finding | doctor --all warned about a known clone whose folder was gone | fixed | TestJourneySolo |  |
+| run:journeys:email-two-humans | finding | An email change left two human actors | fixed | TestJourneyLand7DTwoActors | doctor names both and the merge |
+| run:journeys:harness-path | finding | Test machines saw the developer PATH; offline looked like a missing repo | process | - | test-harness fix; the suites themselves are the check |
+| run:journeys:flaky-format-question | finding | A wire test failed once opening the machine store under load | not-reproduced | - | rerun passed |
+| run:journeys:rest-agent-header | finding | REST X-Lore-Agent keeps rows stamped as the person | not-a-bug | - | as designed |
+| run:journeys:killed-audit-line | finding | A write killed between its row file and audit line loses the session line | not-a-bug | - | local history only |
+| run:journeys:decided-client-link | finding | A client link naming this project at another remote keeps the repo a client repo until re-linked | not-a-bug | TestJourneyAgencyClientMoves | decided, owner may change |
+| run:journeys:decided-forget-scope | finding | store forget deletes row caches and private renders, not combined caches | not-a-bug | TestJourneyAgencyLeaves | decided |
+| run:journeys:decided-hidden-personal | finding | Personal notes written in an org repo stay hidden after the org entry is removed and return on rejoin | not-a-bug | TestJourneyAgencyLeaves | decided |
+| run:journeys:decided-unlink-all | finding | `org unlink` removes every link of the project unless --project narrows it | not-a-bug | TestOrgLinkUnlinkTexts | decided |
+| run:journeys:decided-seturl-origin | finding | repo set-url moves the project origin only when it equals the previous address | not-a-bug | TestJourneySolo | decided |
+| run:journeys:decided-progress-purge | finding | setup_progress rows are purged, not trashed | not-a-bug | TestProgressPersistedAndCleared | decided |
+| run:journeys:decided-local-purge | finding | Purge never deletes a local personal store; it names it | not-a-bug | TestJourneyJoiner | decided |
+| run:journeys:decided-trashed-member | finding | While a member setup is trashed, writes in the org repo keep the org identity | not-a-bug | - | decided |
 
 ## lore-teamfix
 
@@ -726,7 +1560,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | plainfiles:D-k | finding | Store short name is the repo name, overridable by stores[].name; two same-named stores in one org refused at load | fixed | TestStoreShortName, TestShortNameDuplicateRefused | decision; logic/orgconf |
 | plainfiles:D-l | finding | Shared config holds canonical URLs; each machine maps access in its own config, applied per git call; alias URLs canonicalised on write | fixed | TestAccessArgs, TestAliasURLStoredCanonical, TestAccess_CanonicalOrgStoreThroughMachineMapping | decision; lore never edits global git config |
 | plainfiles:D-m | finding | A new clone sits on a placeholder branch until its first fetch; a clone left on it is finished on the next open | fixed | TestDoctorStoreClones, TestStandaloneStoreShowOpenDoctor | decision; wire |
-| plainfiles:D-n | finding | Lore no longer writes remote.origin.fetch into a store clone | fixed | NONE | decision; no test asserts the store clone's refspec stays git's default |
+| plainfiles:D-n | finding | Lore no longer writes remote.origin.fetch into a store clone | fixed | TestStoreCloneKeepsGitsFetchRefspec | decision; no test asserts the store clone's refspec stays git's default |
 | plainfiles:D-o | finding | A failed push keeps the fetch stamp; the next command retries while commits wait | fixed | TestStorePushFailureKeepsStamp | decision; wire |
 | plainfiles:D-p | finding | Short name rules: lowercase single segment, not team/me/repo; the org-folder store keeps the org name | fixed | TestShortNameRules | decision; logic/orgconf |
 | plainfiles:D-q | finding | Access rule shape in machine config; ssh aliases found by parsing the ssh config (Includes followed, Match skipped) | fixed | TestAccessValidate, TestCanonicalSSH | decision; host-wide rule part replaced by D-ah (owner/org-scoped prefixes) |
@@ -747,11 +1581,11 @@ Every new scenario or finding lands with its test and its row here in the same c
 | plainfiles:D-af | finding | When lore clones a store it sets that clone's user.name/user.email from the owning identity and says so; doctor flags a mismatch | fixed | TestEnsureCloneIdentity, TestJourneyStoreCommands | decision; identity follows the owning setup (TestStoreIdentityFollowsOwningSetup) |
 | plainfiles:D-ag | finding | A root-level lore-org.yaml (org_folder ".") stays at the store top | fixed | TestOrgFilePath | decision |
 | plainfiles:D-ah | finding | Access rules lore suggests or records are per owner/org prefix, never host-wide; failures through a rule name it | fixed | TestAccessRuleOwnerScoped, TestDoctorHostWideAccess, TestHostWide | decision; replaces part of D-q; break-verified |
-| plainfiles:D-ai | finding | org create/import/rename/set keep requiring the org name | fixed | NONE | decision; keeps existing behaviour, no test pins the refusal without a name |
+| plainfiles:D-ai | finding | org create/import/rename/set keep requiring the org name | fixed | TestNamingVerbsNeverTakeTheDefaultOrg | decision; keeps existing behaviour, no test pins the refusal without a name |
 | plainfiles:D-aj | finding | Lore only updates a clone's user.email while it still equals what lore wrote, so a person's own email is kept | fixed | TestEnsureCloneIdentity | decision; adapters/backend/git |
 | plainfiles:D-ak | finding | First naming of the one-command project fixer | not-a-bug | - | decision; replaced by D-al |
 | plainfiles:D-al | finding | lore fix is the project fixer (doctor --fix runs the same steps); lore upgrade updates the binary then runs lore fix | fixed | TestJourneyUpgraderFixOldProjects, TestReadsLeaveAV017RepoAlone, TestSourceBuildRunsNoFix | decision; first-write auto-fix step break-verified |
-| plainfiles:D-am | finding | The first-write auto-fix takes no team lock; lore fix does, like migrate run | fixed | NONE | decision; no test asserts the auto-fix skips the team lock |
+| plainfiles:D-am | finding | The first-write auto-fix takes no team lock; lore fix does, like migrate run | process | - | superseded: the first-write auto-fix was removed by the format pin (bughunt FP-2); only lore migrate run / fix --migrate raise the format |
 | plainfiles:D-an | finding | The local personal folder store moves to stores/_me so it cannot clash with an owner named "me" | fixed | TestScanClonesOwnerMe | decision |
 | plainfiles:D-ao | finding | A setup folder root that is neither a repo nor holds .lore/ is walked silently by fix --all | fixed | TestFixRepoWalk | decision; wire |
 | plainfiles:D-ap | finding | A host's "Repository not found" (also for a private repo the key cannot see) skips the team lock and migrates locally | fixed | TestMigrateTeamLockRemoteGone | decision; wire |
@@ -887,7 +1721,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | team:SC-25 | scenario | init auto-ignores local cache files | fixed | TestInitGitignoreHidesLocalFiles | bash SC-25.sh via tests/run-all.sh |
 | team:SC-26 | scenario | A tampered cache is rebuilt from the row files, never trusted | fixed | TestSchemaChangeRefillsOnOpen, TestLayoutReset | bash SC-26.sh via tests/run-all.sh |
 | team:SC-27 | scenario | Worktree detection: .git as a file; a worktree uses its own checkout's rows | fixed | TestNoSetUpWriteSaysWhyThereIsNoProject, TestB11Sync_WorktreeAndStash | bash SC-27.sh via tests/run-all.sh |
-| team:SC-28 | scenario | Reproducible build: sha256 stable | fixed | NONE | bash SC-28.sh via tests/run-all.sh; no Go test |
+| team:SC-28 | scenario | Reproducible build: sha256 stable | fixed | tests/scenarios/SC-28.sh | bash SC-28.sh via tests/run-all.sh; no Go test |
 | team:SC-29 | scenario | lore version --json schema | fixed | TestCLI_Version | bash SC-29.sh via tests/run-all.sh |
 | team:SC-30 | scenario | Error catalog: every code lore can print is listed with its exit | fixed | TestEveryConstantRegistered, TestPinnedNumbers | bash SC-30.sh via tests/run-all.sh |
 | team:SC-34 | scenario | A missing row is E_NOT_FOUND with its own exit, a message and a hint | fixed | TestNotFoundHintForEveryCoreNoun | bash SC-34.sh via tests/run-all.sh |
@@ -921,6 +1755,28 @@ Every new scenario or finding lands with its test and its row here in the same c
 | mergefix:push-f | incident | a private branch push used -f by mistake (it was a fast-forward, nothing overwritten) | process | - | no test needed: process |
 | outfix:gate-fast1 | incident | first fast gate failed: unused helper (staticcheck) and a stale core docs transcript | process | - | fixed in the branch before landing |
 | outfix:gate-al1 | incident | after-land run 1 failed: the agency journey still asserted the old store-url redaction | fixed | TestJourneyAgencyFirstWeeks | expectation updated in a follow-up commit; three commits landed instead of one (no force-push) |
+| run:core:smoke-token-echo | incident | First final smoke printed a scratch local API token in its output | process | - | throwaway 127.0.0.1 token, file deleted, output masked, script uses 0600 curl config |
+| run:core:history-secret-fixture | incident | Generic-api-key fixture string in a pushed-range history commit blocked the push | process | - | history fold in the unpushed range (GL-FIXTURE), owner call |
+| run:core:broken-head-pushed | incident | A commit was pushed while HEAD did not build | process | - | fixed within minutes; push script added (clean-HEAD build, guard, gitleaks, attribution) |
+| run:core:rm-home | incident | An agent command ran `rm -rf $HOME` (refused; home intact) | process | - | rule: rm only literal scratch paths |
+| run:core:rm-empty-var | incident | Gate script `rm -f "$G"/*.progress` could run with an empty variable | process | - | rewritten with ${G:?} |
+| run:integrate:docsgate-tty | incident | Docs transcript regen run hung on a confirm prompt because stdin was a terminal | process | - | rerun with stdin from /dev/null |
+| run:land3:hang | incident | Two lore commands hung over 8 minutes at very high load in a journey run; harness could not name them | fixed | TestRunWithDeadlineDumps, TestRunWithDeadlineQuick | per-command deadline and goroutine dump added (land4/5) |
+| run:life:public-push-blocked | incident | Open-core branch push blocked by a local secret-scan hook on placeholder user:password@example fixtures | process | - | needed owner OK; gitleaks clean |
+| run:life:token-printed | incident | An agent helper printed the session's messaging token into tool output (not in any file or commit) | process | - | owner told to rotate |
+| run:life:issue-comment-identity | incident | Tracking-issue comment not posted: the server's gh login was the wrong identity | process | - | no test needed: process |
+| run:realmac:owner-bug | incident | Setup page GitHub step auto-filled a private key path (key with no .pub beside it) and then refused it ("must be a .pub path"), so the correct setup could not be saved (findings #1) | fixed | TestGitHubStepOnRealSSHShape, TestRegress_PrivateKeyWithoutPubAccepted, TestKeyFileFingerprint | Wave 1 4cf415be: fingerprint via ssh-keygen -lf, .pub never required; root cause: every test world had a .pub for every key |
+| run:realmac:stray-commit | incident | A worker rsynced the worktree incl. its .git file elsewhere and committed a WIP "base" commit onto the feature branch | process | - | Soft-reset; backup branch kept, never pushed; agents told never to commit |
+| run:webui:key-mismatch | incident | Real machine saved an inconsistent setup: GitHub user of one account, alias github.com, but ssh key of a second account; new blocking check github.key_matches on the step and in doctor --all names which account each logs in as and offers the right pair (Run it → green) | fixed | TestKeyMatch, TestKeyMatchesDoesNotWaitOnSlowAlias |  |
+| run:webui:leak-hook-react | incident | Installed older lore's commit hook flagged a React password input-type table in the built dist (old rule, ignores repo gitleaks config); owner approved --no-verify for that exact hit only | process | - | Newer scanner does not flag it; upgrading the installed binary removes the need |
+| run:webui:devbuild-in-repo | incident | Running a dev lore build with cwd inside the repo rewrote the merge driver paths in the shared .git/config | process | - | Rule: run dev builds only from a temp folder |
+| run:webui:fixture-names | incident | Test fixtures and help examples held the owner's real names/emails; scrubbed to placeholders; older checkpoint history and some pre-existing tests still hold them | process | - | History rewrite left to the owner (not done) |
+| run:webui2:leak-hook-react | incident | Built-dist commits used --no-verify only for the approved React password-table hit of the installed older hook | process | - | Upgrade of the installed binary removes it |
+| run:batch:mergedriver | incident | A scratch/old lore binary rewrote merge.lore.driver to its own absolute path (three times) | fixed | TestDriverConfigAction | non-repair commands never replace a working driver |
+| run:batch:conflict-marker | incident | Merge commit pushed with a conflict marker in a Go file (chained commit -a) | process | - | fixed forward, no force push |
+| run:batch:skipdirs | incident | Two guard tests declared the same package symbol after merge (build failure) | process | - | renamed |
+| run:docs:overlap | incident | A docs check and the ds fix scanned at the same moment; stray blocks removed mid-run | process | - | rescan confirmed clean |
+| run:journeys:tmp-inodes | incident | /tmp ran out of inodes from leaked test temp dirs; journeys failed | process | - | old temp dirs removed |
 | mac:setup-parent-not-repo | incident | org admin works from a parent folder that is not a git repo: store folder add and store list outside a repo | fixed | TestStoreFolderAddOutsideRepoPolicy, TestSetupStoreOutsideRepo, TestJourneyStoreCommands | plainfiles m3/m4 (sync and org refresh outside a repo) and D-22 (rule add --to org/folder outside a repo); wire/, tests/journeys |
 | mac:setup-member-csv | incident | an org with 38 members added by member add --from csv | fixed | TestJourneyStaff, TestStaffFromFileListsEveryBadLine, TestStaffFromFileBrokenQuote | devco D-7: csv errors named "person N" not the file line, stopped at the first bad row; ops/team |
 | mac:setup-invites-converted | incident | pending invites converted to members when each person joins | not-a-bug | TestJoinInviteRefusedFirst, TestInviteRoundTrip | no failure recorded; story step; plainfiles:19 (non-member registered before refusal) is the nearest fix; no end-to-end guard of the invite→member conversion over many people |
@@ -974,7 +1830,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | mac:trial-slow-reads | incident | trial: reads on 5.5k rows took 13–28 s | fixed | TestLiveBackend_ListOfLocallyRewrittenRepoIsQuick, TestDryRunCacheStartsFromTheRealOne | bughunt T-3 (55fa9df6); devco D-110 (warm task list 5–6 s on macOS) has no fix time in devco status: check it |
 | mac:trial-limit | incident | trial: task list and memory list refused --limit | fixed | TestEveryListPages, TestListLimitAndPage | bughunt T-4 (5eaead9e) |
 | mac:named-args | incident | named args everywhere: help, docs, skill and hints show only named flags | fixed | TestPrintedCommandsNamed, TestHelpExamplesNamed, TestSiblingCommandsShareFlags, TestFieldTakesOneFlagEverywhere | bughunt U-4 (c4524fca), S-3 (b9f559a5) |
-| mac:named-yes-false | incident | `--yes false` was taken as a stray positional word, so the switch stayed on | fixed | NONE | straySwitchWord in surface/cli/build.go refuses a bool word after a switch (U-4); no test found asserting it |
+| mac:named-yes-false | incident | `--yes false` was taken as a stray positional word, so the switch stayed on | fixed | TestSwitchWordRefused | straySwitchWord in surface/cli/build.go refuses a bool word after a switch (U-4); no test found asserting it |
 | plainfiles:m3 | incident | `lore sync` outside a repo failed with E_NOT_A_STORE instead of syncing every store | fixed | TestJourneyStoreCommands, TestSyncSetupHelpers | tests/journeys + wire; 1dc30829: sync outside a repo walks every store `lore store list` shows, one line each, failures don't stop others (D-ae) |
 | plainfiles:m4 | incident | `lore org refresh` without an argument said the org was missing | fixed | TestWithDefaultOrg, TestJourneyStoreCommands | ops/orgcmd; 1dc30829: refresh/link/unlink default to the only org, else the active setup's org, else name the choices (D-ae, D-ai) |
 | plainfiles:m5 | incident | A store clone got the global git identity instead of the org's | fixed | TestEnsureCloneIdentity, TestStoreIdentityFix | adapters/backend/git + wire; 1dc30829: clone gets user.name/email from setup/org identity with .git/lore/identity record; doctor store_identity + --fix (D-af, D-aj) |
@@ -1023,34 +1879,34 @@ Every new scenario or finding lands with its test and its row here in the same c
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
 | devco:D-110 | finding | owner Mac: warm task list 5-6 s (2.9 s system time), doctor 22 s, commit hook 31 s on 5.5k rows: every command touches all row files | open | - |  |
-| devco:D-120 | finding | doctor HEALTHY with two open store sync conflicts; wrong next step (r3 I-1) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
-| devco:D-121 | finding | sync received/sent counts wrong (r3 I-2) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
-| devco:D-122 | finding | doctor Team versions names an actor id show cannot find (r3 I-3) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
+| devco:D-120 | finding | doctor HEALTHY with two open store sync conflicts; wrong next step (r3 I-1) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
+| devco:D-121 | finding | sync received/sent counts wrong (r3 I-2) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
+| devco:D-122 | finding | doctor Team versions names an actor id show cannot find (r3 I-3) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
 | devco:D-123 | finding | repo moved to a new remote: writes blocked as live ref deleted or rewritten (r3 G-1) | open | - |  |
-| devco:D-124 | finding | force-push dropping a notes commit: pre-push silent, no recovery route (r3 H-7) | open | - | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-125 | finding | rebase + force-push leaves commit links on old shas (r3 H-8) | open | - | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-126 | finding | store remote rewound by force-push: next sync silently re-pushes dropped commits (r3 H-9) | open | - | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-127 | finding | trash restore of an org-store row refused E_FORMAT_OLD in a format-1 repo (r3 H-13) | open | - | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-128 | finding | git rm'd row: trash says 'purged by ?', no git restore line (r3 H-14) | open | - | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-129 | finding | lore sync status outside a repo fails (r3 H-10) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-130 | finding | deleted/moved store remote reported as offline; nobody names set-url (r3 H-11) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-131 | finding | store set-url: wrong refusal outside a repo; a member rewrites the org url; old clone left (r3 H-12) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-136 | finding | reminder/task lists show UTC dates, not the viewer's (r3 I-8) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-137 | finding | search case folding not Turkish-aware (r3 I-9) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-138 | finding | member add --handle chloé stores @chlo; @chloe does not resolve (r3 I-10) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-139 | finding | umask: 0600 rows / 2700 folders under 077; group never readable under 002 (r3 I-11) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-140 | finding | git commit -a with a new row: 'added 1 file' then 'nothing added' (r3 H-15) | open | - | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-141 | finding | hooks removed or taken over by husky/pre-commit: doctor never says the leak guard is off (r3 H-18) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-142 | finding | with husky, lore adds 5 hook files to tracked .husky without asking (r3 H-19) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-143 | finding | store doctor: unsent org commits as an error ×3 with a false 'next command pushes' (r3 H-16) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-144 | finding | new laptop: a local personal store lost silently; join picks 'local' without saying machine-only (r3 H-17) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-145 | finding | lore where labels a live client repo's caches 'gone' (r3 I-12) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-146 | finding | client repo: refused write hints lore init, which writes .lore/hooks/pointer files there (r3 I-13) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-147 | finding | init writes its pointer into CLAUDE.md and AGENTS.md although CLAUDE.md imports @AGENTS.md (r3 I-14) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-124 | finding | force-push dropping a notes commit: pre-push silent, no recovery route (r3 H-7) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-125 | finding | rebase + force-push leaves commit links on old shas (r3 H-8) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-126 | finding | store remote rewound by force-push: next sync silently re-pushes dropped commits (r3 H-9) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-127 | finding | trash restore of an org-store row refused E_FORMAT_OLD in a format-1 repo (r3 H-13) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-128 | finding | git rm'd row: trash says 'purged by ?', no git restore line (r3 H-14) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-129 | finding | lore sync status outside a repo fails (r3 H-10) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-130 | finding | deleted/moved store remote reported as offline; nobody names set-url (r3 H-11) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-131 | finding | store set-url: wrong refusal outside a repo; a member rewrites the org url; old clone left (r3 H-12) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-136 | finding | reminder/task lists show UTC dates, not the viewer's (r3 I-8) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-137 | finding | search case folding not Turkish-aware (r3 I-9) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-138 | finding | member add --handle chloé stores @chlo; @chloe does not resolve (r3 I-10) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-139 | finding | umask: 0600 rows / 2700 folders under 077; group never readable under 002 (r3 I-11) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-140 | finding | git commit -a with a new row: 'added 1 file' then 'nothing added' (r3 H-15) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-141 | finding | hooks removed or taken over by husky/pre-commit: doctor never says the leak guard is off (r3 H-18) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-142 | finding | with husky, lore adds 5 hook files to tracked .husky without asking (r3 H-19) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-143 | finding | store doctor: unsent org commits as an error ×3 with a false 'next command pushes' (r3 H-16) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-144 | finding | new laptop: a local personal store lost silently; join picks 'local' without saying machine-only (r3 H-17) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-145 | finding | lore where labels a live client repo's caches 'gone' (r3 I-12) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-146 | finding | client repo: refused write hints lore init, which writes .lore/hooks/pointer files there (r3 I-13) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-147 | finding | init writes its pointer into CLAUDE.md and AGENTS.md although CLAUDE.md imports @AGENTS.md (r3 I-14) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
 | devco:D-148 | finding | overdue reminders only in reminder list; inbox/render/doctor silent (r3 G-5) | open | - |  |
 | devco:D-151 | finding | LORE.md over budget renders must rules as bare ids (r3 G-6) | open | - |  |
 | devco:D-152 | finding | no bulk archive (archive takes only --id) (r3 G-7) | open | - |  |
-| devco:D-153 | finding | the org admin's second laptop can only join as a member (r3 I-17) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
+| devco:D-153 | finding | the org admin's second laptop can only join as a member (r3 I-17) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
 | devco:D-154 | finding | URGENT: pre-commit refuses every migration commit: the .0-needs-lore-0.1.18-or-newer signpost is checked as a row file (found by perf3) | open | - |  |
 | devco:D-155 | finding | trash purge slow: 50 rows 12 s, dry-run 4.6 s (r3 G-8) | open | - |  |
 | devco:D-156 | finding | doctor lists an 8%-of-budget LORE.md under Warnings (r3 G-9) | open | - |  |
@@ -1065,6 +1921,74 @@ Every new scenario or finding lands with its test and its row here in the same c
 | migfix:n2 | finding | a full cache refresh of 5,000 rows still takes ~3–4 s, mostly per-row statement preparation | open | - | bounded; a per-transaction statement cache would cut it; not required by the brief |
 | pagewalk:trashed/home-dup-restore | finding | Home on a machine with one trashed setup suggests "restore personal and personal from the trash?" with two identical Restore buttons while the trash holds one item | open | - | seen in the latest trashed/home screenshot only; not confirmed or filed; the web unit test for the suggestion text has no duplicate case |
 | pagewalk:home-budget-2 | finding | trashed/home went over budget again under gate load (1082 ms vs 1000 ms) after the baseline fix | open | - | a re-measure-and-retry-once draft was not landed: the current walker has the baseline ratio but no retry |
+| run:core:GR-1 | finding | Release tool pinned to an older version because newer deprecates the brew tap config | open | - | revisit when the shared tap moves |
+| run:core:format-confirm-live | finding | Format confirm prompt (E_NEEDS_CONFIRM) not tested on the live path | open | - | FINALIZE nice-to-have |
+| run:core:fmt-open-qs | finding | FORMAT_EVOLUTION F1/F4, lessons, plugins, skill version pin still open questions | open | - | PASS4 on hold |
+| run:integrate:open-writers-line | finding | Writers line not printed on link, comment, tag and why-context shows | open | - | no test found asserting a writers line for these nouns |
+| run:life:rest-kinds-open | finding | REST lifecycle covers only solo; join/start-team kinds need a git-serving fake; start team from home with hosted url | open | - | no later resolution in this folder |
+| run:onboarding:open-2 | finding | doctor --all store checks cover only personal + org roster stores; doctor cache per process, Home health counts only cached results | open | TestSetupHealthAcrossProcesses | cache-across-processes part fixed in polish item 2 (fingerprinted health file); coverage of every stores.yaml store not verified |
+| run:onboarding:open-4 | finding | A member's identity answers cannot change their org identity before join, so a "handle taken" join refusal cannot be fixed from the setup flow | open | - |  |
+| run:onboarding:open-5 | finding | E_STORE_NO_ACCESS / E_STORE_NO_WRITE defined but never returned (checks report store.read/store.write fails instead) | open | - | still only in the code registry; class_test only lists the codes |
+| run:plat:split-perf | finding | `task split` of 150 tasks makes ~4260 git calls (~38 s Linux, over 5 min Windows) | open | - | batching left for owner |
+| run:polish3:docsync | finding | Docs check failed with 60 docsync errors (ids whose definition was removed with deleted old-version code) | open | - | pre-existing at the round's start; current state not verified here |
+| run:profiles:6 | finding | Member re-add may start on the old stint's end day; company periods may not | open | - | inconsistent by design choice |
+| run:realmac:17 | finding | Saved identity emails list leaves out the primary email (intent question) | open | - | Intent never answered; STILL in wave 3, not rechecked |
+| run:realmac:18 | finding | An extra "Details" toggle under every Checks list (#18, m6) | open | - | Web-only; open at REALMAC DONE |
+| run:realmac:m4 | finding | One ticked tool yields five check rows with no grouping or Run all | open | - | Open at REALMAC DONE; per-tool fan-out exists (TestPerToolChecksFanOut) but grouping not verified |
+| run:realmac:lookup-tests | finding | ops/internal/lookup actor_contacts matrix tests failing on the base commit, unrelated to setup | open | - | Pre-existing at REALMAC DONE; not re-checked here |
+| run:rollout:credential | incident | A task row in a client project store matching the built-in password_pair pattern had been committed into a client code repo by an older lore or with the check bypassed | open | - | Metadata-only record; current lore refuses to export it; needs a human review on a trusted machine; scratch copies shredded |
+| run:rollout:old-lore-path | finding | An older lore first on PATH silently turns the leak guards off; the installer cannot pin a version | open | - | Rollout decision D8 (pin one version everywhere) |
+| run:split:secrets | finding | Release token secrets must be added by the owner before the first binary release | open | - | Names only; none created |
+| run:ui8:summary-recheck | finding | Setup Summary re-checked every step on open (ssh on the GitHub step) | open | - | Fixed for setups mid-way (vitest only); a finished setup still checks on open (proposed: feed from doctor.last) |
+| run:ui8:discover-on-load | finding | Home still starts account discovery on load | open | - | Proposed: only with no setups, on Add setup, or a Find accounts button |
+| run:webui2:realmac | scenario | Owner check on a real machine: account cards, key_matches red → Repair → green, import against the real lore home | open | - | Owner-run; not recorded as done |
+| run:batch:18 | scenario | Setup kinds end to end against real throwaway GitHub repos | open | - | needs owner's throwaway accounts/keys; manual-only |
+| run:batch:24 | finding | Release config pinned to an old goreleaser version | open | - | waits on the shared tap; outward-facing |
+| run:batch:25 | finding | row_meta does not scale past 100k rows | open | - | scheduled after 0.1.18 |
+| run:batch:28 | finding | Messaging and orchestration design on hold | open | - | later release |
+| run:batch:29 | finding | Plugin system | open | - | later release |
+| run:batch:30 | finding | Later-feature branches on hold (server access, encryption, vector search, lessons, skill pin, setup phase 2) | open | - | later releases |
+| run:batch:leftover-3 | finding | A refused write with live OFF can still leave the writer's actor file | open | - | live-on case guarded by TestMiscFollowups_RefusedWriteLeavesNoActorRow |
+| run:batch:leftover-5 | finding | `resource field add/edit --to me` and `resource adopt --to me` not refused; `resource delete <name>` asks before checking the name | open | - |  |
+| run:batch:not-built | finding | Not built: dedicated E_PORT_IN_USE; dropping secret flags from ops that never ask about secrets | open | - | recorded, not built |
+| run:bugs:lore-sync-0 | finding | LORE_SYNC=0 no longer means "cache only" | open | - | BUGFIX-05: description aligned to 0.1.18 meaning; keep-or-retire is an owner question |
+| run:docs:normalize-machine-id | finding | Team docs normaliser leaves raw machine ids, so team paste --check goes stale on another host | open | - | docs tooling |
+| run:docs:ds-stray-blocks | finding | `ds scan` leaves untracked block files that the docs check does not clean | open | - | removed by hand each run |
+| run:docs-update:XQ9 | finding | `task import` vs top-level `import <plugin>` | open | - | parked with plugins |
+| run:docs-update:PQ2-22 | finding | Plugin questions PQ2..PQ22 | open | - | parked until the plugin design |
+| run:docs-update:RQ8 | finding | How resource last_checked stays current (needed by verifiers) | open | - | tied to plugins |
+| run:docs-update:RES-6 | finding | Encryption at rest for sensitive resource values | open | - | parked until encryption design |
+| run:docs-update:RES-9 | finding | Resources question 9 (plugin-related) | open | - | parked |
+| run:docs-update:SQ9 | finding | Default holder for shared secrets | open | - | parked until plugins |
+| run:docs-update:AI1-2 | finding | Agent identity plugin detector order and shape | open | - | parked with plugins |
+| run:docs-update:cli-naming | finding | CLI reference naming items: rename E_NAME_TAKEN, E_PARENT_CYCLE to a warning, soft delete as breaking change, two meanings of "migration" | open | - | owner naming calls, not decided in the run |
+| run:team:matrix | scenario | Older team build scenario matrix | open | - | not present in these run reports; source folder absent |
+| run:team:live-drop | finding | Live import dropped rows when the live-state read failed (old team build) | open | - | code since rewritten; current path not verified |
+| run:team:merged-without-row | finding | A staging failure still wrote the signal and printed "merged" (old team build) | open | - | code since rewritten |
+| run:team:override-markdone | finding | task done override ignored a MarkDone refusal (old team build) | open | - | needed an API change |
+| run:team:rowhome-failopen | finding | A broken org config routed internal rows home to the client repo (fail-open, old team build) | open | - | code since rewritten |
+| run:team:mine-failopen | finding | task list --mine silently empty / unfiltered when a team or signals read failed (old team build) | open | - | code since rewritten |
+| run:team:note-rollback | finding | Failed rollback delete of a note left a row a later sync exports (old team build) | open | - | code since rewritten |
+| run:team:store-remove-worktrees | finding | store remove reported success while worktrees stayed (old team build) | open | - | code since rewritten |
+| run:team:hosted-model-env | finding | Hosted-model API key env var is user-facing but cannot be named in public docs | open | - | owner decision |
+| run:tests:q-edit-title | finding | Some kinds take --title on add but only --name on edit | open | - |  |
+| run:tests:q-kind-code | finding | memory --kind bad value gives E_RESOURCE_INVALID while similar flags give E_INVALID_INPUT | open | - |  |
+| run:tests:q-comment-table-typo | finding | comment add --on-table with a typo of a core table name accepted | open | - | non-core tables allowed on purpose |
+| run:tests:q-glob-no-globs | finding | rule add --activation glob with no --globs accepted | open | - |  |
+| run:tests:q-workflow-actor | finding | Workflow rows have no created_by actor | open | - |  |
+| run:tests:q-global-rule-personal | finding | rule add --scope global with only a v0.1.17 local personal store failed with an internal-sounding message | open | - |  |
+| run:tests:q-resource-unarchive | finding | E_RESOURCE_ARCHIVED hints "unarchive it" but no resource unarchive exists | open | - |  |
+| run:tests:q-sync-json-conflicts | finding | sync --json had empty conflicts after markers; show printed marker body | open | - |  |
+| run:tests:q-show-purged | finding | `lore show <purged id> --json` exits 0 with empty fields | open | - |  |
+| run:tests:q-var-url-leak | finding | Leak check flags a URL with a ${var:…} placeholder password that the write scanner allows | open | - | later user report has the same class |
+| run:tests:q-pii-positional | finding | pii-pattern add with a positional name gave "too many arguments" instead of the replacement hint | open | - |  |
+| run:tests:q-config-allowed | finding | config set with a bad value did not list allowed values | open | - |  |
+| run:tests:q-session-outside | finding | session list outside a git repo exit 1 E_INTERNAL | open | - |  |
+| run:tests:q-help-topic | finding | `lore help <unknown>` printed root help exit 0 | open | - |  |
+| run:tests:q-val-ids | finding | Closed-set refusal listed internal value ids beside names | open | - |  |
+| run:journeys:harness-ssh | finding | Harness kept SSH_AUTH_SOCK and real ssh, so an unfaked GitHub check could reach the real host | open | - | test safety |
+| run:journeys:store-push-batch | finding | Per-setup local personal folder vs `store init me <url>` broke a store push batch test | open | TestStorePushBatch | owner decision at landing |
+| run:journeys:doctor-cache-stale | finding | Doctor's 60 s cache can show a store failure from before a successful sync; purged org store rows linger in the cache | open | - |  |
 | teamfix:n3 | finding | doctor identity.period fix text still says "You are marked as left" also when the person has no period yet (detail line names the real cause) | open | - | logic/onboard/fix.go still carries the single text on origin/main |
 | ux:inv5-fail | finding | inventory Roles kind with filter "Login: yes" shows "Something went wrong" instead of the filtered rows | open | - | inv5-fail screenshot; no record whether it was fixed later |
 | mac:firstcommit-staged-binary | incident | first commit staged a compiled binary | open | - | no cause, fix or test found in any round's log; needs a story showing what the commit hook does with a staged binary (TestSizeGate covers only the scanner's size gate) |
@@ -1075,4 +1999,10 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 ## Needs a test
 
-Fixed items with no guarding test yet (the backfill adds one each): bughunt:J1, bughunt:J2, bughunt:J3, devco:track-A, devco:track-B, devco:track-C, devco:track-D, devco:track-E, devco:track-F, devco:track-G, agentpol:5, agentpol2:6, agentpol2:7, agentpol2:8, fastgate:C7, folders:1d, mergefix:2-perf, migfix:g1, outfix:1-sla, outfix:hook-scanner, pagewalk:home-budget, pagewalk:fresh/home-details, plainfiles:D-n, plainfiles:D-ai, plainfiles:D-am, plainfiles:D-aq, team:SC-28, mac:named-yes-false.
+Fixed items with no guarding test yet, by source (the backfill adds one each):
+
+- run (35): run:core:P2B-OLD-3, run:core:update-json-retype, run:core:sql-panic, run:core:resource-field-shape, run:core:actor-email-noorg, run:core:git-history-cap, run:core:agent-next-deadlock, run:core:store-task-claim, run:core:agent-init-no-actor, run:core:false-live-note, run:core:move-preview-noterm, run:core:upgrade-dev-binary, run:core:cache-locked, run:core:phase2-memory-gaps, run:core:search-limit-scope, run:core:INTEG-QUESTIONS-3, run:land3:folder-add-project, run:land3:from-history-uncommitted, run:land4:forget-caches, run:land7:hook-rewire, run:life:empty-store-name, run:life:team-step-names, run:plat:win-home, run:plat:win-hook-rewrite, run:plat:win-sqlite-temp, run:profiles:2, run:webui:slow-call-log, run:batch:gate-help-json, run:cfgorg:org-use-unrooted, run:fasttests:git-exec-storm, run:fasttests:stale-read-cache, run:tests:sync-pending, run:tests:modeb-status, run:tests:rest-purged, run:tests:lint-untagged.
+- devco (7): devco:track-A, devco:track-B, devco:track-C, devco:track-D, devco:track-E, devco:track-F, devco:track-G.
+- agentpol2 (3): agentpol2:6, agentpol2:7, agentpol2:8.
+- mergefix (1): mergefix:2-perf.
+- plainfiles (1): plainfiles:D-aq.

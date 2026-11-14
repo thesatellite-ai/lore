@@ -71,7 +71,7 @@ const (
 const sectionOpen = "Open"
 
 var (
-	idRe       = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$`)
+	idRe       = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._/:-]*$`)
 	testNameRe = regexp.MustCompile(`^Test[A-Za-z0-9_]*$`)
 	testFuncRe = regexp.MustCompile(`(?m)^func (Test[A-Za-z0-9_]*)\(`)
 )
