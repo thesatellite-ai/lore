@@ -402,7 +402,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: in.Title, Severity: severity, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	// The reply echoes the stored title (after the write path's text
+	// cleanup), so --json shows what show and the row file hold (I-4).
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Severity: severity, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the hotfixes in scope (archived included, as v0.1.17).

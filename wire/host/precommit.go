@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -46,16 +47,23 @@ import (
 // Reasons a changed lore file is refused (printed after its path).
 const (
 	brokenConflictMarkers = "conflict markers"
-	brokenInvalidJSON     = "invalid JSON"
-	brokenMetaConflict    = "unsettled metadata conflict in "
+	// brokenConflictNext follows the markers reason (H-4): they are an
+	// unresolved git merge, not a typo in the JSON
+	brokenConflictNext = ": an unresolved git merge conflict; lore sync conflicts lists it, keep one side and delete the marker lines"
+	brokenInvalidJSON  = "invalid JSON"
+	brokenMetaConflict = "unsettled metadata conflict in "
+	brokenMetaDeleted  = "deleted; it holds the project's id and format, put it back: git checkout HEAD -- "
 )
+
+// metaFilePath is the project marker, relative to the project root.
+var metaFilePath = loreDataPathspec + "/" + rowfs.MetaFileName
 
 // migrationLeftOut is the line of a commit made while a `lore fix` format
 // migration is still uncommitted: its files are not staged with it.
 const migrationLeftOut = "lore: %d row files rewritten by lore fix (format migration) are not added to this commit; commit them on their own: git add .lore/data && git commit -m \"lore: migrate format\""
 
 // brokenFilesHint is the next step of a refused pre-commit.
-const brokenFilesHint = "fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again"
+const brokenFilesHint = "fix the file by hand (a row file is one JSON object named after its own id; settle a conflict with the row's edit command), or restore it with `git checkout HEAD -- <path>`; then commit again"
 
 // loreDataPathspec is the project's row folder, relative to its root.
 var loreDataPathspec = filepath.ToSlash(filepath.Join(rowfs.LoreDir, rowfs.DataDir))
@@ -67,7 +75,10 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	root := liveProjectRoot(h.cfg.WorkDir)
 	if root == "" {
-		return nil // not a lore project: never block git over it
+		// not a lore project here, never block git over it, except for a
+		// commit that deletes the project itself (H-6: rm -rf .lore and
+		// git commit -a dropped every row file without a word)
+		return h.deletedProject(ctx)
 	}
 	repo, err := gitref.Open(ctx, root, h.cfg.Git)
 	if err != nil {
@@ -109,21 +120,41 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	var bad []string
 	for _, p := range changed {
-		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(p)))) // p is a path git listed under .lore/data
+		full := filepath.Clean(filepath.Join(root, filepath.FromSlash(p))) // p is a path git listed under .lore/data
+		b, rerr := os.ReadFile(full)
 		if errors.Is(rerr, os.ErrNotExist) {
-			continue // a deletion: staging records it
+			if p == metaFilePath {
+				// H-3: the project marker (format and project id) is
+				// tracked and only ever rewritten, never deleted
+				bad = append(bad, p+" ("+brokenMetaDeleted+p+")")
+			}
+			continue // a deletion of a row file: staging records it
 		}
 		if rerr != nil {
-			return errs.Wrap(errs.Internal, "pre-commit: read "+p, rerr)
+			bad = append(bad, p+" ("+unreadableWhy(full, rerr)+")") // H-2: was E_INTERNAL "pre-commit: read <path>"
+			continue
+		}
+		if row.HasBOM(b) {
+			// I-15: an editor's byte order mark; strip it so the committed
+			// file is plain UTF-8 every lore (and every older one) reads
+			b = row.TrimBOM(b)
+			if werr := os.WriteFile(full, b, 0o644); werr != nil { // a tracked row file
+				bad = append(bad, p+" (starts with a UTF-8 byte order mark that could not be removed: "+werr.Error()+")")
+				continue
+			}
+			h.line("lore: removed the UTF-8 byte order mark from " + p + " (lore row files are plain UTF-8)")
 		}
 		if why := brokenLoreFile(b); why != "" {
 			bad = append(bad, p+" ("+why+")")
+		} else if why := wrongRowID(root, p, b); why != "" {
+			bad = append(bad, p+" ("+why+")") // H-6: reads leave such a file out on every clone
 		} else if line, why := invalidRepoRow(reg, p, b, headVersion(ctx, repo, root, p)); why != "" {
 			bad = append(bad, p+":"+strconv.Itoa(line)+" ("+why+")") // D-18: what the hand-edit pick-up refused
 		}
 	}
 	if len(bad) > 0 {
-		return errs.New(errs.InvalidInput, "refusing to commit broken lore files: "+strings.Join(bad, ", ")).WithHint(brokenFilesHint)
+		// one line per file (H-6), so a long list stays readable
+		return errs.New(errs.InvalidInput, "refusing to commit broken lore files:\n  "+strings.Join(bad, "\n  ")).WithHint(brokenFilesHint)
 	}
 	if len(changed) > 0 {
 		before := wire.HookIndexBegin(ctx, root) // the index as the person staged it
@@ -265,6 +296,72 @@ func brokenLoreFile(b []byte) string {
 	return ""
 }
 
+// unreadableWhy is why the changed file full cannot be committed when
+// reading it failed: permission denied names the chmod that fixes it.
+func unreadableWhy(full string, err error) string {
+	if errors.Is(err, fs.ErrPermission) {
+		return "cannot be read: permission denied; make it readable again: chmod u+rw " + full
+	}
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		return "cannot be read: " + pe.Err.Error()
+	}
+	return "cannot be read: " + err.Error()
+}
+
+// wrongRowID is why the row file p (relative to root, under .lore/data)
+// cannot be committed although it is one JSON object: the row it holds is
+// not the one its file name says, so every read on every clone leaves it
+// out; when the file named after the id it holds exists too, two files
+// claim one id. "" = fine, or not a row file.
+func wrongRowID(root, p string, b []byte) string {
+	rel, ok := strings.CutPrefix(p, loreDataPathspec+"/")
+	if !ok {
+		return ""
+	}
+	table, id, isRow := rowfs.ParseRowPath(rel)
+	if !isRow {
+		return ""
+	}
+	r, err := row.Decode(b)
+	if err != nil || (r.Table == table && r.ID == id) {
+		return ""
+	}
+	why := "holds the row " + r.ID.String() + " of table " + string(r.Table) + ", but its file name says " + id.String() + " of table " + string(table)
+	other := loreDataPathspec + "/" + rowfs.RowPath(r.Table, r.ID)
+	if _, serr := os.Lstat(filepath.Join(root, filepath.FromSlash(other))); serr == nil {
+		why += "; " + other + " holds that id too (a duplicate id)"
+	}
+	return why
+}
+
+// deletedProject refuses a commit that deletes a project's .lore folder
+// (its _meta.json marker is staged as deleted against HEAD) from the hook
+// of a checkout where .lore is gone: one line naming the folder and how
+// to put it back. Anything git cannot answer here never blocks the commit.
+func (h *liveHost) deletedProject(ctx context.Context) error {
+	repo, err := gitref.Open(ctx, h.cfg.WorkDir, h.cfg.Git)
+	if err != nil {
+		return nil
+	}
+	out, err := repo.Run(ctx, gitref.Invocation{Dir: h.cfg.WorkDir, Env: hookIndexEnv(ctx, repo, h.cfg.WorkDir),
+		Args: []string{"-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--diff-filter=D", "-z", "--relative", "HEAD", "--"}})
+	if err != nil {
+		return nil // no HEAD yet: nothing committed to delete
+	}
+	var gone []string
+	for _, p := range strings.Split(string(out), "\x00") {
+		if dir, ok := strings.CutSuffix(p, metaFilePath); ok && (dir == "" || strings.HasSuffix(dir, "/")) {
+			gone = append(gone, dir+rowfs.LoreDir)
+		}
+	}
+	if len(gone) == 0 {
+		return nil
+	}
+	return errs.New(errs.InvalidInput, "refusing to commit the deletion of the lore project folder "+strings.Join(gone, ", ")+" (every rule, memory and task in it)").
+		WithHint("put it back: git checkout HEAD -- " + strings.Join(gone, " ") + "; to take lore out of this repo on purpose, commit with git commit --no-verify")
+}
+
 // headVersion is HEAD's copy of the file p (relative to root), nil when
 // HEAD has none (a new file, a first commit).
 func headVersion(ctx context.Context, repo *gitref.Repo, root, p string) []byte {
@@ -331,7 +428,7 @@ func invalidRepoRow(reg *schema.Registry, p string, b, head []byte) (int, string
 // brokenLoreText is brokenLoreFile's byte-level half: markers or not JSON.
 func brokenLoreText(b []byte) string {
 	if merge3.ContainsConflictMarkers(string(b)) {
-		return brokenConflictMarkers
+		return brokenConflictMarkers + brokenConflictNext
 	}
 	if !json.Valid(b) {
 		return brokenInvalidJSON
@@ -346,7 +443,7 @@ func brokenLoreText(b []byte) string {
 			return brokenInvalidJSON
 		}
 		if s, ok := t.(string); ok && merge3.ContainsConflictMarkers(s) {
-			return brokenConflictMarkers + " in a value"
+			return brokenConflictMarkers + " in a value" + brokenConflictNext
 		}
 	}
 }

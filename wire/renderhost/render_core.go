@@ -49,6 +49,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/direction"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/refs"
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -206,7 +207,10 @@ func renderField(r row.Row, name string) string {
 	if !ok || v == nil {
 		return ""
 	}
-	return v.String()
+	// I-16: a control character in a row (ESC[8m conceals text in a
+	// terminal) is written escaped into every rendered file; the row
+	// keeps its bytes.
+	return textnorm.EscapeControls(v.String())
 }
 
 // renderTrust is trust_score as a float (the ent default when absent or

@@ -122,6 +122,17 @@ type Problem struct {
 	// entry holds unresolved conflict markers. Lists and search leave it
 	// out; Get (show) still reads it as it is, so it can be settled.
 	FieldMarkers bool
+	// Cause classifies a file that is no row (badfile.go); "" for others.
+	Cause FileCause
+	// Hint is the next step for the file ("" when there is none to give).
+	Hint string
+}
+
+// problem is the Problem of the row file rel whose read or decode failed
+// with err, its next step added (explain).
+func (f *Folder) problem(rel string, err error) Problem {
+	err = f.explain(rel, err)
+	return Problem{Path: rel, Reason: err.Error(), Code: errs.CodeOf(err), FieldMarkers: isFieldMarkers(err), Cause: CauseOf(err), Hint: HintOf(err)}
 }
 
 // DecodeRowFile turns the bytes of the row file at rel (relative to a data
@@ -133,12 +144,13 @@ func DecodeRowFile(rel string, doc []byte) (store.Row, error) {
 	if !ok {
 		return store.Row{}, errs.New(errs.BadPath, "rowfs: "+quote(rel)+" is not <table>/<id>.json")
 	}
+	doc = row.TrimBOM(doc) // I-15: Notepad's BOM; the next write drops it, doctor --fix and the pre-commit strip it
 	r, err := row.Decode(doc)
 	if err != nil {
-		return store.Row{}, err
+		return store.Row{}, undecodable(rel, doc, err)
 	}
 	if r.Table != table || r.ID != id {
-		return store.Row{}, errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+" holds the row "+quote(r.Table.String()+"/"+r.ID.String()))
+		return store.Row{}, wrongID(rel, RowPath(r.Table, r.ID))
 	}
 	return store.Row{Table: r.Table, ID: r.ID, HLC: r.HLC, Deleted: r.Deleted, Doc: doc}, nil
 }
@@ -174,11 +186,11 @@ func (f *Folder) currentIn(rel string, chains chainMemo) (store.Row, bool, error
 		return store.Row{}, false, nil
 	}
 	if err != nil {
-		return store.Row{}, false, err
+		return store.Row{}, false, f.explain(rel, err)
 	}
 	r, err := DecodeRowFile(rel, b)
 	if err != nil {
-		return store.Row{}, false, err
+		return store.Row{}, false, f.explain(rel, err)
 	}
 	return r, true, nil
 }
@@ -316,7 +328,7 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 	var bad []Problem
 	for i, c := range results {
 		if c.bad != nil {
-			bad = append(bad, Problem{Path: rels[i], Reason: c.bad.Error(), Code: errs.CodeOf(c.bad), FieldMarkers: isFieldMarkers(c.bad)})
+			bad = append(bad, f.problem(rels[i], c.bad))
 		}
 		if !c.ok {
 			continue
@@ -467,7 +479,7 @@ func (f *Folder) Problems(ctx context.Context) ([]Problem, error) {
 			_, err = decodeImportable(rel, b)
 		}
 		if err != nil {
-			problems = append(problems, Problem{Path: rel, Reason: err.Error(), Code: errs.CodeOf(err), FieldMarkers: isFieldMarkers(err)})
+			problems = append(problems, f.problem(rel, err))
 		}
 	}
 	return problems, nil

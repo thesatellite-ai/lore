@@ -115,6 +115,14 @@ type LoreDataGate interface {
 	FixNoLoreData(ctx context.Context) (none bool)
 }
 
+// LoreGoneGate is the optional upgrade of Env that tells a repo whose
+// .lore folder was deleted (from the work tree or by a commit) from one
+// that never had lore: its error names the deletion and the git command
+// that brings the folder back (nil when it was not deleted).
+type LoreGoneGate interface {
+	FixLoreGone(ctx context.Context) error
+}
+
 // noLoreDataErr is lore fix's answer in a repo with no lore data.
 func noLoreDataErr(top string) error {
 	return errs.New(errs.NotAStore, "lore fix: no lore data in "+top+" (no .lore folder), so there is nothing to fix and lore fix creates nothing there").
@@ -506,6 +514,11 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	// FP-7: a repo with no lore data is never set up by lore fix (its
 	// open would create .lore/); refused before any step runs
 	if g, ok := env.(LoreDataGate); ok && g.FixNoLoreData(ctx) {
+		if lg, ok := env.(LoreGoneGate); ok {
+			if err := lg.FixLoreGone(ctx); err != nil {
+				return Out{}, err // H-6: deleted, not "lore init sets this repo up"
+			}
+		}
 		return Out{}, noLoreDataErr(top)
 	}
 	// D13, D15: a project on an older format is never written, and lore

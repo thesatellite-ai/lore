@@ -277,30 +277,38 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 // from the commit (changed or new), with the commit to run; "" when there
 // are none, outside a code repo, or when git cannot say.
 func (a *App) uncommittedDataLine(ctx context.Context) string {
-	top, err := a.repoTop(ctx)
-	if err != nil || !loreFolderAt(top) {
+	paths, ok := a.uncommittedData(ctx)
+	if !ok || len(paths) == 0 {
 		return ""
 	}
 	data := rowfs.LoreDir + "/" + rowfs.DataDir
-	st, err := gitRun{dir: top, args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "--untracked-files=all", "--", data}}.output(ctx)
-	if err != nil {
-		return ""
-	}
-	var paths []string
-	for _, l := range strings.Split(string(st), "\n") {
-		if len(l) > 3 {
-			paths = append(paths, l[3:])
-		}
-	}
-	if len(paths) == 0 {
-		return ""
-	}
 	shown := paths
 	more := ""
 	if len(shown) > uncommittedShown {
 		shown, more = shown[:uncommittedShown], fmt.Sprintf(" and %d more", len(paths)-uncommittedShown)
 	}
 	return fmt.Sprintf("· in sync; %d file(s) in %s wait for your commit (%s%s): git add %s && git commit", len(paths), data, strings.Join(shown, ", "), more, data)
+}
+
+// uncommittedData is the files (slash paths from the repo top) of the
+// repo's .lore/data that differ from the commit, changed or new. ok is
+// false outside a code repo with a lore folder or when git cannot say.
+func (a *App) uncommittedData(ctx context.Context) (paths []string, ok bool) {
+	top, err := a.repoTop(ctx)
+	if err != nil || !loreFolderAt(top) {
+		return nil, false
+	}
+	data := rowfs.LoreDir + "/" + rowfs.DataDir
+	st, err := gitRun{dir: top, args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "--untracked-files=all", "--", data}}.output(ctx)
+	if err != nil {
+		return nil, false
+	}
+	for _, l := range strings.Split(string(st), "\n") {
+		if len(l) > 3 {
+			paths = append(paths, l[3:])
+		}
+	}
+	return paths, true
 }
 
 // uncommittedShown is how many uncommitted .lore/data files the sync line

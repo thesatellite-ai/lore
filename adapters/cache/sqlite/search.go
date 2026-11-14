@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"unicode/utf8"
 
@@ -75,36 +76,138 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 
 // ftsHits is the FTS5 MATCH of p.
 func (c *Cache) ftsHits(ctx context.Context, p plan, match string, limit int) ([]SearchHit, error) {
-	rs, err := c.db.QueryContext(ctx, p.sql.search, match, limit)
+	q := ftsQueryText(match)
+	out, big, err := c.ftsRank(ctx, p, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	// The rows too large for snippet() (I-6), after the ranked query is
+	// closed: the cache holds one connection.
+	for i, rowid := range big {
+		snip, err := c.bigRowSnippet(ctx, p, q, rowid)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Snippet = snip
+	}
+	return out, nil
+}
+
+// ftsRank runs p's ranked MATCH of the segmented query q. big maps the
+// index of each hit that got no snippet (a row over snippetMaxChars) to
+// its FTS rowid.
+func (c *Cache) ftsRank(ctx context.Context, p plan, q string, limit int) ([]SearchHit, map[int]int64, error) {
+	rs, err := c.db.QueryContext(ctx, p.sql.search, q, limit)
 	if err != nil {
 		if reason, ok := ftsQueryReason(err); ok {
-			return nil, errs.Wrap(errs.InvalidInput, "search "+quoteText(match)+": not a valid search query ("+reason+")", err).
+			return nil, nil, errs.Wrap(errs.InvalidInput, "search "+quoteText(ftsSnippetText(q))+": not a valid search query ("+reason+")", err).
 				WithHint(ftsQueryHint)
 		}
-		return nil, errs.Wrap(errs.InvalidInput, "sqlite cache: search", err)
+		return nil, nil, errs.Wrap(errs.InvalidInput, "sqlite cache: search", err)
 	}
 	defer func() { _ = rs.Close() }()
 	var out []SearchHit
+	big := map[int]int64{}
 	for rs.Next() {
 		var s string
 		var h SearchHit
 		var snip sql.NullString
-		if err := rs.Scan(&s, &h.Score, &snip); err != nil {
-			return nil, dbErr("search", err)
+		var rowid int64
+		if err := rs.Scan(&s, &h.Score, &snip, &rowid); err != nil {
+			return nil, nil, dbErr("search", err)
 		}
 		id, err := ids.ParseAny(s)
 		if err != nil {
-			return nil, errs.Wrap(errs.DBCorrupt, "sqlite cache: bad id in search index", err)
+			return nil, nil, errs.Wrap(errs.DBCorrupt, "sqlite cache: bad id in search index", err)
+		}
+		if !snip.Valid {
+			big[len(out)] = rowid
 		}
 		// SQLite's bm25 is lower-is-better (negative for a match); flip it
 		// to v0.1.17's higher-is-better score.
-		h.ID, h.Snippet, h.Score = id, snip.String, -h.Score
+		h.ID, h.Snippet, h.Score = id, ftsSnippetText(snip.String), -h.Score
 		out = append(out, h)
 	}
 	if err := rs.Err(); err != nil {
-		return nil, dbErr("search", err)
+		return nil, nil, dbErr("search", err)
 	}
-	return out, nil
+	return out, big, nil
+}
+
+// bigRowSnippet is the snippet of a row too large for snippet() over
+// the whole row (I-6): each full-text field is cut into chunks of about
+// snippetChunk bytes at whitespace, the chunks go into the connection's
+// temp FTS table (same columns and tokenizer, so stemming, folding and
+// column filters match exactly as in the index), and the snippet is the
+// first matching chunk's. Linear in the row's size. A match no single
+// chunk holds (words far apart) gets the start of the first non-empty
+// field instead.
+func (c *Cache) bigRowSnippet(ctx context.Context, p plan, q string, rowid int64) (string, error) {
+	texts := make([]string, len(p.sql.bigText))
+	for i, q := range p.sql.bigText {
+		var t sql.NullString
+		if err := c.db.QueryRowContext(ctx, q, rowid).Scan(&t); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", nil
+			}
+			return "", dbErr("search snippet", err)
+		}
+		texts[i] = t.String
+	}
+	for _, stmt := range []string{p.sql.snipCreate, p.sql.snipClear} {
+		if _, err := c.db.ExecContext(ctx, stmt); err != nil {
+			return "", dbErr("search snippet", err)
+		}
+	}
+	defer func() { _, _ = c.db.ExecContext(context.WithoutCancel(ctx), p.sql.snipClear) }()
+	var n int64
+	first := ""
+	for i, t := range texts {
+		for _, chunk := range textChunks(t, snippetChunk) {
+			if first == "" {
+				first = chunk
+			}
+			n++
+			if _, err := c.db.ExecContext(ctx, p.sql.snipInsert[i], n, chunk); err != nil {
+				return "", dbErr("search snippet", err)
+			}
+		}
+	}
+	var snip sql.NullString
+	err := c.db.QueryRowContext(ctx, p.sql.snipSearch, q).Scan(&snip)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return ftsSnippetText(first[:runeFloor(first, min(len(first), snippetSide))]) + snippetEllipsis, nil
+	case err != nil:
+		return "", dbErr("search snippet", err)
+	}
+	return ftsSnippetText(snip.String), nil
+}
+
+// snippetSide is how much of a big row's text stands in for a snippet
+// when no chunk holds the match.
+const snippetSide = 200
+
+// textChunks cuts s into pieces of about size bytes, each cut after a
+// space or line break when one is in the last quarter of the piece (so a
+// word is not split), else at a character boundary.
+func textChunks(s string, size int) []string {
+	var out []string
+	for len(s) > size {
+		cut := runeFloor(s, size)
+		if sp := strings.LastIndexAny(s[size*3/4:cut], " \n\t"); sp >= 0 {
+			cut = size*3/4 + sp + 1
+		}
+		if cut == 0 {
+			cut = len(s) // a single character longer than size cannot happen; never loop
+		}
+		out = append(out, s[:cut])
+		s = s[cut:]
+	}
+	if s != "" {
+		out = append(out, s)
+	}
+	return out
 }
 
 // expandedHits finds rows of table whose row_expanded text holds every

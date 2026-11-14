@@ -36,6 +36,8 @@ Sometimes lore cannot tell whether the repo is a client repo: the store cannot b
 
 In a client repo, `lore sync` and reads write nothing into the checkout: the repo gets no repo id in `.lore/data/_meta.json` and no repos row file (they would carry the client's remote into the client's history), and a committed `.lore/LORE.md` is not rendered again behind your back. Your private context goes to `~/.lore/render`, imported through the ignored `CLAUDE.local.md`; `lore render` still writes `.lore/LORE.md` when you ask for it.
 
+In your own repo, reads never write into `.lore/data`, and neither does a `lore sync` while `.lore/data` has nothing waiting for your commit: a repo without a repo id yet (one upgraded from lore 0.1.17) gets it, with its repos row and your actor row, from the first sync that finds rows of yours waiting for a commit, and that commit carries them. So a teammate committing the repo id never makes `git pull` in your clone stop over copies lore left there.
+
 ## Lookup: which copy of a row wins
 
 A command that takes an id (`lore task done --id tsk_…`) has to find exactly one copy. A **tombstone** below is a marker on live that says "this row was deleted".

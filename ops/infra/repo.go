@@ -789,10 +789,11 @@ func notices(h repourl.History, clean []Remote, fresh map[string]bool) []Address
 
 // AddressStatus is the read-only view `lore doctor` prints (Repo
 // addresses): every open unconfirmed address of the repo (whichever clone
-// recorded it), and Q5's mismatch: this clone's remote is a confirmed
-// address of another repos row while not one of its own. It writes
-// nothing and mints nothing (a checkout without an identity reports
-// RepoID "").
+// recorded it) and every remote of this clone the history does not hold
+// yet, and Q5's mismatch: this clone's remote is a confirmed address of
+// another repos row while not one of its own. It writes nothing and mints
+// nothing (a checkout without an identity reports RepoID ""); `lore sync`
+// uses it while .lore/data has nothing waiting for a commit (I-7).
 func AddressStatus(ctx context.Context, env Env, files RepoFiles) (AddressReport, error) {
 	meta, exists, err := files.ReadRepoMeta(ctx)
 	if err != nil || !exists || meta.RepoID == "" {
@@ -852,6 +853,19 @@ func AddressStatus(ctx context.Context, env Env, files RepoFiles) (AddressReport
 		k := e.Key()
 		_, caseOnly := own.CaseVariant(k)
 		rep.Notices = append(rep.Notices, AddressNotice{URL: e.URL, Key: k, Remote: byKey[k], Recorded: recorded, CaseOnly: caseOnly})
+	}
+	// I-7: a remote of this clone the history does not hold yet is
+	// reported as CheckAddresses would after recording it, so a read-only
+	// sync still says the remote changed. With no primary yet it is the
+	// first address (recorded silently by a writing pass), and another
+	// repo's confirmed address is the Mismatch above.
+	for _, r := range clean {
+		k, nerr := repourl.Normalize(r.URL)
+		if nerr != nil || recorded == "" || own.Find(k) >= 0 || slices.Contains(meta.URLs, k) || others[k] != "" {
+			continue
+		}
+		_, caseOnly := own.CaseVariant(k)
+		rep.Notices = append(rep.Notices, AddressNotice{URL: r.URL, Key: k, Remote: r.Name, Recorded: recorded, CaseOnly: caseOnly})
 	}
 	return rep, nil
 }

@@ -97,15 +97,6 @@ func (l *lateSetup) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 	return s.WriteAgentHooks(ctx, plans, remove)
 }
 
-// refreshHook is `lore sync hook refresh` (post-checkout, post-merge,
-// post-rewrite): git just changed the rows, so .lore/LORE.md is
-// re-rendered quietly, as v0.1.17's rerenderLoreMD did. Only a project that
-// already renders (the file exists; tool pointer files are `lore render`'s
-// explicit job, so none is touched); after a checkout or a fast-forward
-// (hosthooks.Refresh's committed), only when its render
-// files are not tracked and clean (renderhost.RenderHeld: the pre-commit
-// hook keeps a committed render current). It never fails git: a problem is
-// one stderr line.
 // commitScopeHook is the post-commit hook's folder scope notice (B3-5):
 // a commit that moved or deleted a scoped folder prints one line per scope
 // with the `lore scope move` that keeps its rules on the folder. nil-safe
@@ -131,20 +122,28 @@ func commitRenderHook(h *renderhost.Host) hosthooks.CommitRender {
 	}
 }
 
+// refreshHook is `lore sync hook refresh` (post-checkout, post-merge,
+// post-rewrite): git just changed the rows, so .lore/LORE.md is
+// re-rendered quietly, as v0.1.17's rerenderLoreMD did. Only a project that
+// already renders (the file exists; tool pointer files are `lore render`'s
+// explicit job, so none is touched), and only when its render files are
+// not tracked and clean (renderhost.RenderHeld). It never fails git: a
+// problem is one stderr line.
 func refreshHook(h *renderhost.Host, wd string) hosthooks.Refresh {
-	return func(ctx context.Context, committed bool) {
+	return func(ctx context.Context) {
 		out := filepath.Join(wd, filepath.FromSlash(renderhost.LoreMDRel))
 		if _, err := os.Stat(out); err != nil || h == nil {
 			return
 		}
-		// B3-32: the committed render files change under the person's feet
-		// after a pull; say so in one line, and only when bytes changed
-		// A-12: after a checkout or a fast-forward, a tracked render that
-		// matches the index is the commit's own; re-rendering it would
-		// leave it dirty mid flow (the next git merge aborts, and `git
-		// checkout -- .lore/LORE.md` would be undone at once). A merge
-		// commit or a rebase combined rows, so its render is written.
-		if committed && h.RenderHeld(ctx, wd) {
+		// A-12, G-2: a tracked render that matches the index is never
+		// rewritten by a hook, whatever git just did. A merge commit or a
+		// rebase does combine rows from two sides, but rendering them here
+		// left ` M .lore/LORE.md` after every `git pull --rebase` that
+		// brought rows, and the next pull refused ("You have unstaged
+		// changes"). The committed render catches up in the next commit
+		// that carries row files (the pre-commit hook's CommitRender) or on
+		// `lore render`.
+		if h.RenderHeld(ctx, wd) {
 			return
 		}
 		files := []string{out, filepath.Join(filepath.Dir(out), refreshFullName)}

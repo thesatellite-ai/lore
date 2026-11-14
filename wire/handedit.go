@@ -615,10 +615,11 @@ func repoEditCandidateOf(reg *schema.Registry, c gitbackend.HandChange) repoEdit
 		return repoEditCandidate{}
 	}
 	if herr != nil {
-		if merge3.ContainsConflictMarkers(string(hand)) {
-			return repoEditCandidate{} // a merge left for the person: lore sync and the hooks say so
-		}
-		return repoEditCandidate{hand: hand, refused: herr}
+		// H-5: a file that is no row of its name (markers, not JSON, a
+		// wrong id) is the read's to report: its invalid-file line names
+		// the file, the cause and the next step once per command. A second
+		// "hand edit refused" line on every read refused nothing.
+		return repoEditCandidate{}
 	}
 	if h.HLC != base.HLC {
 		return repoEditCandidate{} // written by lore (or another branch), not by hand

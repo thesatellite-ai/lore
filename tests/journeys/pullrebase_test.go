@@ -8,8 +8,10 @@ package journeys
 // the rebase finishes: lore's post-checkout hook leaves .lore/LORE.md alone
 // while the rebase runs (it used to re-render it at the rebase's first
 // checkout, and git stopped with "cannot rebase: You have unstaged
-// changes" on a detached HEAD); the post-rewrite that ends the rebase
-// renders it with both rules.
+// changes" on a detached HEAD). The post-rewrite that ends the rebase
+// leaves the committed render alone too (G-2: rendering it there left the
+// tree dirty and the next pull refused); the next commit that carries rows
+// renders it with every rule.
 
 import (
 	"os"
@@ -75,19 +77,29 @@ func TestJourneyPullRebase(t *testing.T) {
 		if br := a.Git("symbolic-ref", "--short", "HEAD"); br != "main" {
 			t.Fatalf("HEAD after the pull is %q, want main", br)
 		}
-		// only the rendered files may differ (rendered at the rebase's end); no row file
-		for _, l := range strings.Split(a.Status(), "\n") {
-			if l != "" && !strings.HasSuffix(l, ".lore/LORE.md") && !strings.HasSuffix(l, ".lore/LORE.full.md") {
-				t.Errorf("the pull left a changed file: %q", l)
-			}
+		// G-2: the pull leaves nothing changed, so the next pull works
+		if st := a.Status(); st != "" {
+			t.Fatalf("the pull left changed files:\n%s", st)
 		}
-		// the post-rewrite that ended the rebase rendered the pulled rows
-		md, _ := a.ReadFile(".lore/LORE.md")
-		pia.Laptop().LoreIn(a, "render").OK(t)
-		if again, _ := a.ReadFile(".lore/LORE.md"); again != md {
-			t.Errorf(".lore/LORE.md was not rendered after the rebase:\n%s\n--- lore render writes ---\n%s", md, again)
+		if r := a.TryGit("pull", "--rebase", "origin", "main"); r.Code != 0 {
+			t.Fatalf("a second git pull --rebase: exit %d\n%s%s", r.Code, r.Stdout, r.Stderr)
 		}
 		pia.Laptop().LoreIn(a, "rule", "list").OK(t).Says(t, "Rule one from pia", "Rule two from ned", "Rule three from pia")
 		a.Git("push", "-q", "origin", "HEAD:main")
+	})
+
+	w.Step("day3/the-next-row-commit-renders-every-rule", func() {
+		pia.Laptop().LoreIn(a, "rule", "add", "--body", "Rule four from pia").OK(t)
+		a.CommitAll("pia's fourth rule")
+		md, _ := a.ReadFile(".lore/LORE.md")
+		// ned's should rule is search-only: the index counts it
+		for _, want := range []string{"Rule one from pia", "Rule three from pia", "Rule four from pia", "4 rules"} {
+			if !strings.Contains(md, want) {
+				t.Errorf("the committed .lore/LORE.md lacks %q:\n%s", want, md)
+			}
+		}
+		if st := a.Status(); st != "" {
+			t.Fatalf("the commit left changed files:\n%s", st)
+		}
 	})
 }

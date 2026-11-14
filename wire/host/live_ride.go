@@ -139,7 +139,7 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh Refresh, afterCommit fun
 				l.h.stageCommitRender(cmd.Context(), commitRender)
 			case hookRefresh:
 				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(cmd.Context(), l.h.git(), cwd, args[1:]) {
-					refresh(cmd.Context(), renderIsCommitted(cmd.Context(), l.h.git(), cwd, args[1:]))
+					refresh(cmd.Context())
 				}
 			}
 			return nil
@@ -147,35 +147,11 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh Refresh, afterCommit fun
 	}
 }
 
-// Refresh is the post-checkout, post-merge and post-rewrite re-render;
-// committed is true when git only put a commit's own files in place (see
-// renderIsCommitted), so a committed render is left alone (A-12). cmd/lore
-// passes its refreshHook.
-type Refresh func(ctx context.Context, committed bool)
-
-// renderIsCommitted reports whether the hook named in args (git's own
-// arguments after it) only put committed files in place: post-checkout
-// (a branch switch, `git checkout -- <path>`) and post-merge of a pull
-// that fast-forwarded or a merge that made no merge commit. A merge
-// commit or a rebase (post-rewrite) combined rows from two sides, so the
-// render it carries is old and is written again.
-func renderIsCommitted(ctx context.Context, git gitref.Git, dir string, args []string) bool {
-	if len(args) == 0 {
-		return false
-	}
-	switch args[0] {
-	case hookPostCheckout:
-		return true
-	case hookPostMerge:
-		repo, err := gitref.Open(ctx, dir, git)
-		if err != nil {
-			return false
-		}
-		out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-list", "--parents", "-n", "1", "HEAD"}})
-		return err == nil && len(strings.Fields(string(out))) < 3 // the commit and fewer than two parents
-	}
-	return false
-}
+// Refresh is the post-checkout, post-merge and post-rewrite re-render.
+// cmd/lore passes its refreshHook, which leaves a tracked render that
+// matches the index alone after any of them (A-12, G-2): a hook that
+// dirties a tracked file makes the person's next `git pull` refuse.
+type Refresh func(ctx context.Context)
 
 // syncHookList are the names `lore sync hook` takes, in help order.
 var syncHookList = []string{hookPreCommit, hookRefresh, hookPostCommit, hookPrePush}

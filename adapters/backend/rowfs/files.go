@@ -58,8 +58,11 @@ func checkChain(root, rel string) error {
 // file is returned as fs.ErrNotExist (wrapped) so callers branch on it.
 func readCapped(full, rel string) ([]byte, error) {
 	info, err := os.Lstat(full)
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, err
+	}
+	if err != nil {
+		return nil, unreadable(full, rel, err)
 	}
 	if info.Mode()&fs.ModeSymlink != 0 {
 		return nil, refuseSymlink(rel)
@@ -71,8 +74,11 @@ func readCapped(full, rel string) ([]byte, error) {
 		return nil, tooLarge(rel, info.Size())
 	}
 	b, err := os.ReadFile(filepath.Clean(full))
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, err
+	}
+	if err != nil {
+		return nil, unreadable(full, rel, err)
 	}
 	if len(b) > MaxFileSize { // grew between Lstat and read
 		return nil, tooLarge(rel, int64(len(b)))

@@ -208,3 +208,64 @@ func TestSyncRepoAddressesClientRepoWritesNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestSyncRepoAddressesCleanCloneWritesNothing (I-7): a fresh clone of a
+// repo committed without a repo id (as a migrated repo) whose .lore/data
+// matches the commit: the sync's address pass writes no _meta.json change,
+// no repos row and no actor row, so a teammate committing the same files
+// never makes this clone's `git pull` abort. With a row waiting for a
+// commit, the same pass mints the id, which that commit then carries.
+func TestSyncRepoAddressesCleanCloneWritesNothing(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t, ownRepo)
+	ctx := context.Background()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-c", "user.name=T", "-c", "user.email=t@example.test"}, args...)...)
+		cmd.Dir = h.Repo
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %v %s", cmd.Args, err, out)
+		}
+		return string(out)
+	}
+	git("remote", "add", "origin", "git@git.example.test:team/site.git")
+	pid, err := h.App.Project(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.App.SeedRepoMeta(ctx, pid); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "-A", ".lore")
+	git("commit", "-q", "--no-verify", "-m", "lore without a repo id")
+	var out bytes.Buffer
+	h.App.SyncRepoAddresses(ctx, &out, strings.NewReader(""), false)
+	if st := git("status", "--porcelain", "--untracked-files=all", "--", ".lore"); st != "" || out.String() != "" {
+		t.Fatalf("a sync of a clean clone wrote files:\n%ssaid %q", st, out.String())
+	}
+	if m, _, err := h.App.ReadRepoMeta(ctx); err != nil || m.RepoID != "" {
+		t.Fatalf("repo id after a clean sync = %q (%v), want none", m.RepoID, err)
+	}
+	// a row waiting for a commit: the pass mints, and that commit carries it
+	if err := os.WriteFile(filepath.Join(h.Repo, ".lore", "data", "pending.json"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.App.SyncRepoAddresses(ctx, &out, strings.NewReader(""), false)
+	if m, _, err := h.App.ReadRepoMeta(ctx); err != nil || m.RepoID == "" {
+		t.Fatalf("with rows waiting for a commit the sync minted no repo id (%v)", err)
+	}
+	// committed, then the remote moves: a clean sync still says so, and
+	// records nothing
+	git("add", "-A", ".lore")
+	git("commit", "-q", "--no-verify", "-m", "repo id")
+	git("remote", "set-url", "origin", "git@git.example.test:other/site.git")
+	var moved bytes.Buffer
+	h.App.SyncRepoAddresses(ctx, &moved, strings.NewReader(""), false)
+	if !strings.Contains(moved.String(), "! remote changed: this clone uses git.example.test/other/site, the repo record says git.example.test/team/site") {
+		t.Fatalf("a clean sync after the remote moved:\n%s", moved.String())
+	}
+	if st := git("status", "--porcelain", "--untracked-files=all", "--", ".lore"); st != "" {
+		t.Fatalf("a clean sync after the remote moved wrote files:\n%s", st)
+	}
+}

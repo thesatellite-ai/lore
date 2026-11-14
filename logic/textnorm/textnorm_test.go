@@ -23,7 +23,7 @@ func codeOf(err error) errs.Code {
 
 // bidiAndZW is every character Clean must strip.
 var bidiAndZW = []rune{
-	'\u200b', '\u200c', '\u200d', '\ufeff',
+	'\u200b', '\ufeff',
 	'\u202a', '\u202b', '\u202c', '\u202d', '\u202e',
 	'\u2066', '\u2067', '\u2068', '\u2069',
 }
@@ -65,6 +65,28 @@ func TestStripAllBidiAndZW(t *testing.T) {
 				if err != nil || got != "ab" {
 					t.Errorf("%s(%U in %q) = %q, %v; want \"ab\"", name, r, in, got, err)
 				}
+			}
+		}
+	}
+}
+
+// TestJoinersKept is I-4: ZWJ and ZWNJ are part of what was written
+// (joined emoji, Persian and Indic spelling), so Clean and Normalize keep
+// every byte of these strings. v0.1.17 dropped them, splitting
+// 👩‍💻 into 👩💻 and changing می‌خواهم to میخواهم.
+func TestJoinersKept(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{
+		"Deploy \U0001F680 \U0001F469\u200d\U0001F4BB \U0001F468\u200d\U0001F469\u200d\U0001F467\u200d\U0001F466", // 👩‍💻 👨‍👩‍👧‍👦
+		"\u0645\u06cc\u200c\u062e\u0648\u0627\u0647\u0645",                                                        // Persian می‌خواهم (ZWNJ)
+		"\u0915\u094d\u200d\u0937",         // Devanagari half form (ZWJ)
+		"\u0d28\u0d4d\u200d",               // Malayalam chillu (ZWJ)
+		"\U0001F3F3\ufe0f\u200d\U0001F308", // 🏳️‍🌈
+	} {
+		for name, f := range map[string]func(string) (string, error){"Clean": Clean, "Normalize": Normalize} {
+			got, err := f(in)
+			if err != nil || got != in {
+				t.Errorf("%s(%+q) = %+q, %v; want it unchanged", name, in, got, err)
 			}
 		}
 	}
@@ -165,6 +187,25 @@ func TestValidatePath(t *testing.T) {
 	for _, c := range []string{"with\nnewline", "with\rCR", "with\x00null", "with\x07bell"} {
 		if err := ValidatePath(c); codeOf(err) != errs.InvalidInput {
 			t.Errorf("ValidatePath(%q) = %v, want E_INVALID_INPUT", c, err)
+		}
+	}
+}
+
+// TestEscapeControls is I-16: ESC, BEL, CR, DEL and C1 controls print as
+// escapes, tab, newline and every other character (accents, CJK, emoji,
+// ZWJ) pass through unchanged.
+func TestEscapeControls(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ in, want string }{
+		{"probe \x1b[31mRED\x1b[0m end", `probe \x1b[31mRED\x1b[0m end`},
+		{"clear\x1b[2J\x1b[H", `clear\x1b[2J\x1b[H`},
+		{"\x1b]8;;https://evil.example\x07click\x1b]8;;\x07", `\x1b]8;;https://evil.example\x07click\x1b]8;;\x07`},
+		{"a\x01b\rc\x7fd", `a\x01b\x0dc\x7fd`},
+		{"csi\u009b31m", `csi\u009b31m`},
+		{"tab\tnew\nline naïve 数据 👩\u200d💻", "tab\tnew\nline naïve 数据 👩\u200d💻"},
+	} {
+		if got := EscapeControls(tc.in); got != tc.want {
+			t.Errorf("EscapeControls(%+q) = %+q, want %+q", tc.in, got, tc.want)
 		}
 	}
 }

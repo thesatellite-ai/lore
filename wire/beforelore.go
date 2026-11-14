@@ -62,14 +62,15 @@ func loreInOtherCommit(ctx context.Context, top string) (beforeLore, bool) {
 // without .lore/ (code: the refusal it replaces), nil when the repo at top
 // is no lore project in any other commit either.
 func beforeLoreErr(ctx context.Context, top string, code errs.Code) error {
-	if sparseHidesLore(ctx, top) {
-		// D-10: the commit holds .lore/, a sparse cone left it out.
-		return errs.New(code, "lore is set up in "+top+", but this sparse checkout leaves .lore/ out of the work tree; lore reads and writes nothing here").
-			WithHint("add it to the sparse set: git sparse-checkout add " + loreFolderName + " (`lore init` would make a second project)")
+	if e := loreGoneErr(ctx, top, code); e != nil {
+		return e
 	}
 	b, ok := loreInOtherCommit(ctx, top)
 	if !ok {
 		return nil
+	}
+	if e := loreDeletedErr(ctx, top, code); e != nil {
+		return e // asked only of a repo with lore elsewhere: it walks the history
 	}
 	where := "its live rows are in " + b.LiveRef
 	hint := "switch to a commit that has .lore/ (for example the default branch) to use lore here; `lore init` would make a second project"
@@ -81,14 +82,65 @@ func beforeLoreErr(ctx context.Context, top string, code errs.Code) error {
 		WithHint(hint)
 }
 
-// sparseHidesLore reports whether HEAD's tree holds .lore/ while the work
-// tree at top does not have it: a sparse checkout whose set excludes it.
-func sparseHidesLore(ctx context.Context, top string) bool {
+// loreGoneErr is the refusal for a repo whose .lore/ is gone from the work
+// tree although HEAD has it (nil when that is not the case): left out by a
+// sparse cone (D-10), or deleted from the work tree (H-1: every command
+// blamed a sparse checkout that was not there and hinted git
+// sparse-checkout add, the wrong fix).
+func loreGoneErr(ctx context.Context, top string, code errs.Code) error {
+	if loreFolderAt(top) {
+		return nil
+	}
+	if _, err := (gitRun{dir: top, args: []string{"cat-file", "-e", "HEAD:" + loreFolderName}}).output(ctx); err == nil {
+		if sparseCheckoutOn(ctx, top) {
+			return errs.New(code, "lore is set up in "+top+", but this sparse checkout leaves .lore/ out of the work tree; lore reads and writes nothing here").
+				WithHint("add it to the sparse set: git sparse-checkout add " + loreFolderName + " (`lore init` would make a second project)")
+		}
+		n := "its files are"
+		// against HEAD: a deletion already staged (git add -A) counts too
+		if out, lerr := (gitRun{dir: top, args: []string{"diff", "--name-only", "--diff-filter=D", "HEAD", "--", loreFolderName}}).output(ctx); lerr == nil {
+			n = strconv.Itoa(len(strings.Fields(string(out)))) + " tracked files are"
+		}
+		return errs.New(code, "the .lore folder of "+top+" is deleted from the work tree ("+n+" deleted, git status lists them); lore reads and writes nothing here until it is back").
+			WithHint("put it back: git -C " + top + " checkout HEAD -- " + loreFolderName + " (`lore init` would make a second project)")
+	}
+	return nil
+}
+
+// loreDeletedErr is the refusal for a branch where a commit deleted the
+// project's .lore/ (H-6: lore fix then offered lore init, a second
+// project), nil when no commit on HEAD's history did.
+func loreDeletedErr(ctx context.Context, top string, code errs.Code) error {
+	out, err := (gitRun{dir: top, args: []string{"log", "-1", "--format=%h", "--diff-filter=D", "HEAD", "--", loreFolderName + "/data/_meta.json"}}).output(ctx)
+	sha := strings.TrimSpace(string(out))
+	if err != nil || sha == "" {
+		return nil
+	}
+	return errs.New(code, "commit "+sha+" on this branch deleted the .lore folder of "+top+" (every rule, memory and task in it); lore reads and writes nothing here").
+		WithHint("bring it back in a new commit: git -C " + top + " checkout " + sha + "~1 -- " + loreFolderName + " && git -C " + top + " commit -m \"Restore lore notes\" (`lore init` would make a second project)")
+}
+
+// loreDeletedHere reports whether the project's .lore/ at top was deleted
+// (from the work tree, or by a commit on this branch), not left out by a
+// sparse cone or never there: doctor counts it as an error.
+func loreDeletedHere(ctx context.Context, top string) bool {
 	if loreFolderAt(top) {
 		return false
 	}
-	_, err := (gitRun{dir: top, args: []string{"cat-file", "-e", "HEAD:" + loreFolderName}}).output(ctx)
-	return err == nil
+	if _, err := (gitRun{dir: top, args: []string{"cat-file", "-e", "HEAD:" + loreFolderName}}).output(ctx); err == nil {
+		return !sparseCheckoutOn(ctx, top)
+	}
+	if _, ok := loreInOtherCommit(ctx, top); !ok {
+		return false
+	}
+	return loreDeletedErr(ctx, top, errs.NotAStore) != nil
+}
+
+// sparseCheckoutOn reports whether the checkout at top is sparse
+// (core.sparseCheckout): only then can a sparse set leave .lore/ out.
+func sparseCheckoutOn(ctx context.Context, top string) bool {
+	out, err := (gitRun{dir: top, args: []string{"config", "--bool", "core.sparseCheckout"}}).output(ctx)
+	return err == nil && strings.TrimSpace(string(out)) == "true"
 }
 
 // orBeforeLore is beforeLoreErr for top when it applies, else err.

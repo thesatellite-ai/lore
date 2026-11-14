@@ -102,6 +102,30 @@ func (s *liveSession) onDefaultBranch(ctx context.Context) (string, bool) {
 	return branch, !off && head != ""
 }
 
+// landedMarkSep joins the fetched default branch's commit to the live
+// ref's commit in a Read cursor (landedCursorPart).
+const landedMarkSep = "@"
+
+// landedCursorPart is what a Read cursor records of the fetched default
+// branch: landedMarkSep and origin/<default>'s commit when this checkout is
+// on the default branch, else "". Why (G-3): the read-through rows are
+// added only by a full Read, and the cache reads with its cursor, which
+// named only the live ref's commit; a `git fetch` that brought teammates'
+// rows moved neither, so `memory list` (a full read) showed the new rows
+// while `lore search` (the cache) never found them. With the fetched
+// commit in the cursor a fetch makes the next cache read a full one.
+func (s *liveSession) landedCursorPart(ctx context.Context) string {
+	branch, ok := s.onDefaultBranch(ctx)
+	if !ok {
+		return ""
+	}
+	oid, found, err := s.repo.ResolveCommit(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch)
+	if err != nil || !found {
+		return ""
+	}
+	return landedMarkSep + oid
+}
+
 // mergeBase is the merge base of HEAD and rev ("" when git cannot say:
 // no common history, an unborn HEAD).
 func (s *liveSession) mergeBase(ctx context.Context, rev string) string {
