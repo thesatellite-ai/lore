@@ -18,6 +18,12 @@ const tblMirror = "_mirror"
 // mirrorDDL creates tblMirror (idempotent; part of internalDDL).
 var mirrorDDL = `CREATE TABLE IF NOT EXISTS "` + tblMirror + `" (source TEXT NOT NULL, path TEXT NOT NULL, blob TEXT NOT NULL, tbl TEXT NOT NULL, id TEXT NOT NULL, hlc TEXT NOT NULL, deleted INTEGER NOT NULL, doc BLOB NOT NULL, PRIMARY KEY (source, path))`
 
+// mirrorTableIndexDDL indexes tblMirror by table: Lookup reads one
+// table's entries, and on the (source, path) key alone each lookup read
+// every entry of the source with its document (8 MB in a 5,500-row repo,
+// every command: owner's Mac warm task list 4 s, D-110).
+var mirrorTableIndexDDL = `CREATE INDEX IF NOT EXISTS "` + tblMirror + `_tbl" ON "` + tblMirror + `" (source, tbl)`
+
 // errMirrorBusy is the mirror's answer while the cache is in use.
 var errMirrorBusy = errs.New(errs.Internal, "sqlite cache: busy, the row mirror is skipped")
 

@@ -557,7 +557,25 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		s.warn("ride-along hooks: " + err.Error())
 		return
 	}
-	for _, hook := range []string{hookPostCommit, hookPrePush} {
+	hooks := []string{hookPostCommit, hookPrePush}
+	writes := make([]hookWrite, 0, len(hooks))
+	for _, hook := range hooks {
+		writes = append(writes, hookWrite{name: hook, marker: rideHookMarker, lines: rideBlockLines(hook, shared)})
+	}
+	// stories H-1: never a new or changed file in a hooks folder the repo
+	// commits (husky's .husky) without asking; `lore fix` writes those
+	created, changed := s.teamHookWrites(ctx, dir, writes)
+	team := map[string]bool{}
+	for _, n := range append(append([]string{}, created...), changed...) {
+		team[n] = true
+	}
+	if len(team) > 0 {
+		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, teamHookNames(created, changed), dir))
+	}
+	for _, hook := range hooks {
+		if team[hook] {
+			continue
+		}
 		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared)); err != nil {
 			s.warn("ride-along hooks: " + err.Error())
 			return

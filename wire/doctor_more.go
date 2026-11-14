@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
@@ -172,11 +173,31 @@ func (a *App) repoCacheFiles(top string) []string {
 	return files
 }
 
+// cacheCheckSlots bounds the quick_checks cacheFindings runs at once.
+const cacheCheckSlots = 4
+
 // cacheFindings is cacheFinding over files, one error per bad file.
+//
+// The files are checked at once (D-110): quick_check reads every page of a
+// file, and a repo with sibling checkouts has several 50 MB caches, so the
+// sum was a large part of doctor on a laptop. Findings keep files' order.
 func cacheFindings(ctx context.Context, files []string) []DoctorFinding {
+	msgs := make([]string, len(files))
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, cacheCheckSlots) // the machine-wide sweep may list a hundred files
+	for i, f := range files {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			msgs[i] = cacheFinding(ctx, f)
+		}()
+	}
+	wg.Wait()
 	var out []DoctorFinding
-	for _, f := range files {
-		if msg := cacheFinding(ctx, f); msg != "" {
+	for _, msg := range msgs {
+		if msg != "" {
 			out = append(out, DoctorFinding{Check: DoctorCheckCache, Level: DoctorError, Plain: true, Message: msg})
 		}
 	}

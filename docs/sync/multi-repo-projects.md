@@ -69,7 +69,7 @@ Without `--repo`, a rule applies to the whole project. With `--repo shop` it app
 $ lore rule add --body 'Run the tests before you push.'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
 ✓ rul_05e9…4603
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore rule add --repo shop --body 'Buttons are blue.'
 lore: wrote ~/work/website/.lore/data/rules/rul_c0f3…b5b8.json
 ✓ rul_c0f3…b5b8

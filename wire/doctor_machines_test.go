@@ -44,6 +44,9 @@ func TestTeamVersionFindings(t *testing.T) {
 	t.Parallel()
 	tvs := []sqlite.TeamVersion{
 		{Actor: "act_ana", Machine: "mch_0123456789abcdef", Version: "0.1.18", LastSeen: "2026-11-01T23:59:59.123456789Z"},
+		// plainfiles:4: ana's code-repo save with the same lore as her
+		// machine line is not a second line (bob's, with no machine line, is)
+		{Actor: "act_ana", Machine: "", Version: "0.1.18", LastSeen: "2026-11-01T20:00:00Z"},
 		{Actor: "bob", Machine: "", Version: "0.1.17", LastSeen: "2026-10-01T00:00:00Z"},
 		{Actor: "cy", Machine: "mch_ff", Version: "0.1.17-dev", LastSeen: "2026-11-02T00:00:00Z"},
 	}

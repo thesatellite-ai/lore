@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/tmpworld"
 )
 
 // envLore is a prebuilt lore binary (Taskfile lore:test:machines sets it);
@@ -27,6 +29,9 @@ func TestMain(m *testing.M) {
 
 func runMain(m *testing.M) int {
 	syscall.Umask(userUmask)
+	if n := tmpworld.SweepStale(worldPrefix, worldMaxAge); n > 0 {
+		fmt.Fprintf(os.Stderr, "machines: removed %d machine folders a killed run left in %s\n", n, os.TempDir())
+	}
 	loreBin = os.Getenv(envLore)
 	if loreBin == "" {
 		dir, err := os.MkdirTemp("", "machines-bin-")

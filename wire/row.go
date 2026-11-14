@@ -21,10 +21,13 @@ func (a *App) MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt
 	if ferr := a.checkTarget(to); ferr != nil {
 		return engine.Written{}, ferr
 	}
-	if aerr := a.ensureActor(ctx, st, to); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	w, err := st.eng.MoveWith(ctx, ref, to, opt)
-	a.wroteTo(to, err)
-	return w, err
+	// batch leftover-3: staged with the copy, as App.Move
+	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActor(ctx, st, to); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.MoveWith(ctx, ref, to, opt)
+		a.wroteTo(to, err)
+		return w, err
+	})
 }

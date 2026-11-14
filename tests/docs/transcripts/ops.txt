@@ -28,7 +28,6 @@ Notes:
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 
@@ -48,7 +47,7 @@ alice (work/website)$ lore doctor --json | head -8
 alice (work/website)$ lore rule add --body 'Never put passwords in the code'
 lore: wrote ~/work/website/.lore/data/rules/rul_7a670ae8548ed05bf57ad29ad0759504.json
 ✓ rul_7a670ae8548ed05bf57ad29ad0759504
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_7a670ae8548ed05bf57ad29ad0759504  by alice
 2026-11-02T10:00:00Z  memories.write               memories/mem_2ad3618e878ebbf527d34d446ef4f891  by alice
@@ -107,7 +106,7 @@ alice (work/website)$ lore sync conflicts | head -3
 
 ### support bundle
 alice (work/website)$ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (2010 bytes)
+✓ wrote support bundle to bundle.json (1930 bytes)
 alice (work/website)$ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "dev",
     "binary_version": "dev",
@@ -199,7 +198,6 @@ Notes:
   - live: last fetch 5s ago
   - live: git hook block missing in post-commit, pre-push (rows cannot ride along on a protected main); this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it
   - Team versions (newest save per writer and machine):
-  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 
@@ -227,7 +225,7 @@ alice (work/website)$ lore memory add --not-a-secret --reason 'AWS documentation
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 ✓ mem_3b6283bc4392c556bbae5f094246e913
-  scope: [master]
+  scope: [project]
 alice (work/website)$ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 .lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 alice (work/website)$ lore memory delete --id mem_3b6283bc4392c556bbae5f094246e913 --yes
@@ -262,7 +260,6 @@ Notes:
   - live: post-commit and pre-push hook blocks installed
   - trash: 1 row in the trash, 0 tombstones (kept forever); lore trash stats
   - Team versions (newest save per writer and machine):
-  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 

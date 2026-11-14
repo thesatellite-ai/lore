@@ -122,7 +122,7 @@ jobs:
               # the raw -json stream is kept for the artifact below: the
               # matrix shows one line per failure
               LORE_TEAM_BIN="$bin" go test -tags teame2e -count=1 -timeout 150m -json \
-                -run "$(part tests/teame2e '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)')" ./tests/teame2e/ \
+                -run "$(part tests/teame2e '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$)')" ./tests/teame2e/ \
                 | tee "$RUNNER_TEMP/teame2e.json" | go run ./tests/teame2e/teamharness/matrix
               ;;
             machines)

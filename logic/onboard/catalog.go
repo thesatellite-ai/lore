@@ -61,6 +61,12 @@ const (
 // SecretsNone is the "no secret manager" choice of the secrets step (4.8).
 const SecretsNone = "none"
 
+// EmailsHelp is the identity step's "Other addresses" help. The main Email
+// is saved as the identity key (identity.key human:<email>), so the saved
+// emails list holds only the others; the help says where the main one is,
+// so a person reading config.yaml does not think it was lost (realmac #17).
+const EmailsHelp = "Optional. Your Email above is saved as your identity key (identity.key, human:<email>), so it is not repeated in this list. Each address here is recorded as yours too, so commits and mail from it match you."
+
 // Limits on free-text answers. The person's name and handle show in doctor
 // lines and roster rows; a GitHub login is at most 39 characters.
 const (
@@ -126,7 +132,7 @@ func Catalog() []Step {
 					Prefill: PrefillInviteEmail, Rules: []Rule{R(RuleEmail)},
 					Kinds: []Kind{KindMember}},
 				{ID: QIDEmails, Label: "Other addresses you use", Type: QEmailList,
-					Help: "Optional. Each one is recorded as yours, so commits and mail from it match you.", Rules: []Rule{R(RuleEmail)}},
+					Help: EmailsHelp, Rules: []Rule{R(RuleEmail)}},
 				{ID: QIDHandle, Label: "Handle", Type: QText,
 					Help: "Optional short name, e.g. your GitHub user.", Rules: []Rule{MaxLen(maxHandle)}},
 			},

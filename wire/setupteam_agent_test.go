@@ -101,3 +101,56 @@ func TestSetupTeamStepByAnAgent(t *testing.T) {
 		t.Fatalf("the person saves the same step: %v", err)
 	}
 }
+
+// TestSetupTeamStepMachinePolicyRefusesFirst (agentpol 4): this machine's
+// own agents.may_manage_people false (config.yaml policies:) used to refuse
+// an agent's team step only at the new org's roster write, after the step
+// had written the org's store and its config.yaml entry (a half-write the
+// next save tripped over). It now refuses before anything is written: no
+// commit in the team store, no org entry, config.yaml as it was. The
+// person saving the same step is not refused (the flag is about agents).
+func TestSetupTeamStepMachinePolicyRefusesFirst(t *testing.T) {
+	ctx := context.Background()
+	w := newOrgWorld(t)
+	w.bareAt(t, "agency/team")
+	home := w.home(t, "ana")
+	cfg := configPath(home)
+	before, err := os.ReadFile(cfg)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
+	before = append(before, []byte("policies:\n  agents.may_manage_people: false\n")...)
+	if err = os.MkdirAll(filepath.Dir(cfg), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(cfg, before, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := teamStepApp(t, w, home)
+	ap, err := app.SetupApplier(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ans := onboard.Answers{onboard.QIDOrg: {Text: "northwind"}, onboard.QIDStoreURL: {Text: "https://github.com/agency/team"},
+		onboard.QIDEmail: {Text: "ana@agency.example"}, onboard.QIDName: {Text: "Ana"},
+		onboard.QIDOwn: {List: []string{"github.com/acme/*"}, IsList: true}}
+	req := opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "northwind", Kind: onboard.KindAdmin}, Step: onboard.StepTeam, Apply: onboard.ApplyTeam, Answers: ans}
+
+	_, err = ap.Apply(agentCtx(ctx), req)
+	if !errs.Has(err, errs.PolicyDenied) || !strings.Contains(err.Error(), "agents.may_manage_people is false") {
+		t.Fatalf("an agent's team step under this machine's false = %v, want E_POLICY_DENIED", err)
+	}
+	if refs := orgGit(t, filepath.Join(w.hosts, "agency/team.git"), "for-each-ref"); refs != "" {
+		t.Fatalf("the refused team step wrote the team store:\n%s", refs)
+	}
+	if after, _ := os.ReadFile(cfg); string(after) != string(before) || isOrgAdmin(home, "northwind") {
+		t.Fatalf("the refused team step changed config.yaml:\n%s", after)
+	}
+
+	if _, err = ap.Apply(ctx, req); err != nil {
+		t.Fatalf("the person saves the same step: %v", err)
+	}
+	if !isOrgAdmin(home, "northwind") {
+		t.Fatal("the person's team step made no org entry")
+	}
+}

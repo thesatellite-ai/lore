@@ -258,7 +258,7 @@ lore: committed locally to store freelance; lore sync sends it
 lore: wrote ~/.lore/stores/other/notes/_store/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store freelance)
 lore: wrote ~/.lore/stores/other/notes/_store/memories/mem_28f8d32584b2db54ffb146bede5b03df.json (store freelance)
 ✓ mem_28f8d32584b2db54ffb146bede5b03df [freelance]
-  scope: [master]
+  scope: [project]
 
 ### project id
 alice (work/website)$ LORE_DB=.lore/lore.db lore rule list
@@ -354,7 +354,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 alice (work/website)$ lore rule add --body 'Keep the footer links in one list'
 lore: wrote ~/work/website/.lore/data/rules/rul_3b6283bc4392c556bbae5f094246e913.json
 ✓ rul_3b6283bc4392c556bbae5f094246e913
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ lore meta unset --id rul_3b6283bc4392c556bbae5f094246e913 --key client_tier
 ERROR: [E_META_UNKNOWN] rul_3b6283bc4392c556bbae5f094246e913 has no metadata key "client_tier"; it has no metadata
   hint: lore meta show --id rul_3b6283bc4392c556bbae5f094246e913 lists its keys
@@ -373,6 +373,6 @@ alice (work/website)$ lore memory add --to me --body 'I write short commit messa
 lore: wrote ~/.lore/stores/_me/_store/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store me)
 lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json (store me)
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb [me]
-  scope: [master]
+  scope: [project]
 alice (work/landing)$ lore memory list
 mem_2537f9b2f7de77bfe5ca958860216bbb [retrieved] I write short commit messages [me]

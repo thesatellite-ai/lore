@@ -140,7 +140,10 @@ func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, t
 		return opscoord.Report{}, false, nil
 	}
 	w, err := h.openWorld(ctx)
-	if err != nil || w.sit.Role != orgresolve.RoleClient || len(w.sit.Links) == 0 {
+	if err != nil {
+		return h.clientNoteOpenFailed(ctx, err)
+	}
+	if w.sit.Role != orgresolve.RoleClient || len(w.sit.Links) == 0 {
 		return opscoord.Report{}, false, nil // closeWorld decides the other cases
 	}
 	if !clientRowsFor(w).internal {
@@ -167,6 +170,30 @@ func (h standaloneCoord) clientTaskNote(ctx context.Context, src store.Source, t
 		return opscoord.Report{}, true, err
 	}
 	return opscoord.Report{Lines: []string{"✓ note " + wr.Row.ID.String() + " on " + tid.String()}}, true, nil
+}
+
+// clientNoteOpenFailed decides a note whose coordination world did not
+// open (run:team:rowhome-failopen). No git repository: there is no client
+// repo, the usual note applies. An actor that is neither a person nor an
+// agent (a cron job, a hook, a machine with no identity) cannot open the
+// world, and closeWorld lets it through, so its note would be written into
+// the repo: in a client repo (or one that cannot be checked; repoIsClient
+// fails closed) that puts an internal note in the customer's repository,
+// so it is refused with the open's own error. Any other failure (an
+// unreadable org config, an unknown link) is returned as is.
+func (h standaloneCoord) clientNoteOpenFailed(ctx context.Context, err error) (opscoord.Report, bool, error) {
+	switch {
+	case errs.Has(err, errs.Unsupported):
+		return opscoord.Report{}, false, nil
+	case errs.Has(err, errs.IdentityFailed):
+		if client, _ := repoIsClient(ctx, h.a.opts); !client {
+			return opscoord.Report{}, false, nil
+		}
+		return opscoord.Report{}, true, errs.Wrap(errs.IdentityFailed,
+			"a note on this client repo's task is internal: it goes to the org's store, and only a person on the roster or an agent writes there", err).
+			WithHint("run it as yourself (git config user.email <your roster email>), or start an agent session with `lore agent start --label <name>`")
+	}
+	return opscoord.Report{}, true, err
 }
 
 // sharedNote is `task note --to repo`: a comment row in the repo store
@@ -416,7 +443,11 @@ func (a *App) localClaims(ctx context.Context) (localBoard, error) {
 	}
 	repo, err := gitref.Open(ctx, top, nil)
 	if err != nil {
-		return b, nil // no git: no signals ref
+		// A repo lore found but git cannot open (a broken .git, no git
+		// binary) has a signals ref nobody can read: an empty board would
+		// make --mine show held tasks as free and --claimed-by show none
+		// (run:team:mine-failopen), so the read fails instead.
+		return localBoard{}, errs.Wrap(errs.Internal, "claims: open the git repository "+top, err)
 	}
 	gitDir, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--absolute-git-dir"}})
 	if err != nil {

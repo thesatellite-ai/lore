@@ -112,12 +112,12 @@ lore: wrote ~/.lore/stores/agency/notes/client/actors/act_2ad3…f891.json (stor
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
-  scope: [master]
+  scope: [project]
 $ lore rule add --body 'run the tests before you push' --to repo
 lore: wrote ~/work/website/.lore/data/actors/act_2ad3…f891.json
 lore: wrote ~/work/website/.lore/data/rules/rul_76bd…3f10.json
 ✓ rul_76bd…3f10
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ git status --short
 ?? .lore/data/actors/act_2ad3…f891.json
 ?? .lore/data/rules/

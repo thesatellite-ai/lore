@@ -366,11 +366,16 @@ func (a *App) purgeRow(ctx context.Context, ref engine.Ref) error {
 	if err != nil {
 		return err
 	}
-	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
-		return aerr
-	}
-	_, err = st.eng.Purge(ctx, ref)
-	a.wroteTo(ref.Store, err)
+	// batch leftover-3: the actor row rides in the purge's own batch
+	// (engine absorbStaged): a refused purge writes neither
+	_, err = a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, perr := st.eng.Purge(ctx, ref)
+		a.wroteTo(ref.Store, perr)
+		return w, perr
+	})
 	return err
 }
 

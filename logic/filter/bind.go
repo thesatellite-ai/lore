@@ -23,6 +23,19 @@ type Field struct {
 	// not an empty result) and > >= < <= compare by position, so
 	// `priority>=high` keeps high and urgent.
 	Values []string
+	// Aliases are more spellings a value may be named by (a closed value's
+	// label or val_ id, OQ-AV). They are accepted like Values and compare
+	// after them, but a refusal lists only Values: the ids are internal and
+	// a person picks a value by its name (run:tests:q-val-ids).
+	Aliases []string
+}
+
+// accepted is every spelling a value may take, in comparison order.
+func (f Field) accepted() []string {
+	if len(f.Aliases) == 0 {
+		return f.Values
+	}
+	return append(slices.Clone(f.Values), f.Aliases...)
 }
 
 // Resolver maps a term's key to its field, or fails (an unknown key is the
@@ -101,7 +114,7 @@ func (b bound) ordered() bool {
 	case value.KindNumber, value.KindDate, value.KindDateTime, value.KindDuration:
 		return true
 	default:
-		return len(b.field.Values) > 0
+		return len(b.field.accepted()) > 0
 	}
 }
 
@@ -132,9 +145,9 @@ func (b bound) check() error {
 
 // checkValue refuses a value the field can never hold.
 func (b bound) checkValue(v string) error {
-	if vs := b.field.Values; len(vs) > 0 {
+	if vs := b.field.accepted(); len(vs) > 0 {
 		if !slices.Contains(vs, v) {
-			return invalid(b.Key.String() + " " + quoted(v) + " is not one of " + strings.Join(vs, ", "))
+			return invalid(b.Key.String() + " " + quoted(v) + " is not one of " + strings.Join(b.field.Values, ", "))
 		}
 		return nil
 	}
@@ -221,7 +234,7 @@ func (b bound) anyEqual(have []string) bool {
 // compare orders a row value against a filter value by the field kind;
 // ok is false when the row value does not parse (it then matches nothing).
 func (b bound) compare(have, want string) (int, bool) {
-	if vs := b.field.Values; len(vs) > 0 {
+	if vs := b.field.accepted(); len(vs) > 0 {
 		hi, wi := slices.Index(vs, have), slices.Index(vs, want)
 		if hi < 0 {
 			return 0, false

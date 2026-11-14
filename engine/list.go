@@ -84,7 +84,7 @@ func (e *Engine) List(ctx context.Context, source store.Source, table row.Table)
 		if sr.Table != table || sr.Deleted {
 			continue
 		}
-		r, err := sr.Decode()
+		r, err := decode(ctx, sr) // readsnap.go: once per row version in a snapshot
 		if err != nil {
 			return nil, err
 		}

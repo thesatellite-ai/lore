@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"maps"
 	"slices"
 	"sync"
 
@@ -33,6 +35,8 @@ import (
 type readSnapshot struct {
 	mu   sync.Mutex
 	full map[store.Backend]*snapFill
+	// decoded memoizes row decodes for the snapshot's life (decode).
+	decoded map[decodeKey]decodedRow
 }
 
 // snapFill is one backend's full read: done closes once rows, next and err
@@ -175,4 +179,56 @@ func dropSnapshot(ctx context.Context, st Attached) {
 		delete(s.full, st.Backend)
 		s.mu.Unlock()
 	}
+}
+
+// decodeKey names one stored row version in a snapshot's decode memo.
+type decodeKey struct {
+	table row.Table
+	id    string
+	hlc   string
+}
+
+// decodedRow is one memoized decode: doc is the stored document it was
+// decoded from (a hit must hold the same bytes).
+type decodedRow struct {
+	doc []byte
+	r   row.Row
+}
+
+// decode is sr.Decode, memoized in ctx's read snapshot (D-110): doctor's
+// checks list the same tables many times, and decoding every row again for
+// each List was a quarter of a doctor run in a 5,500-row repo. A hit is
+// served only for the same table, id, HLC and document bytes, and the
+// caller gets its own Fields and Meta maps (values are immutable), so no
+// caller sees another's edits. Without a snapshot: a plain decode.
+func decode(ctx context.Context, sr store.Row) (row.Row, error) {
+	s := snapshotOf(ctx)
+	if s == nil {
+		return sr.Decode()
+	}
+	k := decodeKey{table: sr.Table, id: sr.ID.String(), hlc: sr.HLC.String()}
+	s.mu.Lock()
+	d, ok := s.decoded[k]
+	s.mu.Unlock()
+	if ok && bytes.Equal(d.doc, sr.Doc) {
+		return ownCopy(d.r), nil
+	}
+	r, err := sr.Decode()
+	if err != nil {
+		return row.Row{}, err
+	}
+	s.mu.Lock()
+	if s.decoded == nil {
+		s.decoded = map[decodeKey]decodedRow{}
+	}
+	s.decoded[k] = decodedRow{doc: sr.Doc, r: ownCopy(r)}
+	s.mu.Unlock()
+	return r, nil
+}
+
+// ownCopy is r with its own Fields and Meta maps.
+func ownCopy(r row.Row) row.Row {
+	r.Fields = maps.Clone(r.Fields)
+	r.Meta = maps.Clone(r.Meta)
+	return r
 }

@@ -13,7 +13,7 @@ lore: wrote tasks/tsk_2ad3618e878ebbf527d34d446ef4f891 on this clone's refs/lore
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 lore: wrote ~/work/app/web/.lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
 ✓ rul_162df51b7f78b785c97c26b41ea89666
-  scope: [master] severity: must
+  scope: [project] severity: must
 carol (work/app)$ git ls-tree -r --name-only refs/lore/live
 _live/epoch
 _live/meta.json
@@ -88,7 +88,7 @@ lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_28f8d32584b2db54ffb146bede5b03df.json (store agency)
 ✓ mem_28f8d32584b2db54ffb146bede5b03df [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
-  scope: [master]
+  scope: [project]
 alice$ git -C ~/.lore/stores/agency/notes ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20
 .0-needs-lore-0.1.18-or-newer
 README.md

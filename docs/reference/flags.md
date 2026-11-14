@@ -55,7 +55,7 @@ A number flag whose default you get by leaving it out (`--limit`, `--page`, `--d
 
 ## Repo scope in a multi-repo project
 
-A project can hold several repos. A row either belongs to one repo or to the whole project (lore calls the whole project *master*). With `--repo`, a command sees that repo's rows and the whole-project rows.
+A project can hold several repos. A row either belongs to one repo or to the whole project: an add prints `scope: [repo:<name>]` or `scope: [project]` (the `--scope project` place), and two flags below keep the older name *master* for the whole project. With `--repo`, a command sees that repo's rows and the whole-project rows.
 
 | Flag | What it does |
 |---|---|
@@ -96,7 +96,7 @@ $ lore memory add --to me --body 'I write short commit messages'
 lore: wrote ~/.lore/stores/_me/_store/actors/act_b4f4…a5b0.json (store me)
 lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537…6bbb.json (store me)
 ✓ mem_2537…6bbb [me]
-  scope: [master]
+  scope: [project]
 
 # alice, in landing
 $ lore memory list
@@ -148,7 +148,7 @@ lore: committed locally to store freelance; lore sync sends it
 lore: wrote ~/.lore/stores/other/notes/_store/actors/act_b4f4…a5b0.json (store freelance)
 lore: wrote ~/.lore/stores/other/notes/_store/memories/mem_28f8…03df.json (store freelance)
 ✓ mem_28f8…03df [freelance]
-  scope: [master]
+  scope: [project]
 ```
 <!-- /example -->
 

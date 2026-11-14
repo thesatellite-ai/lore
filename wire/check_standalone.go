@@ -136,6 +136,10 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	if hasV017Rows(gitTopLevel(ctx, root)) {
 		a.notice(OldRowsReadLine)
 	}
+	// mac:firstcommit-staged-binary: a compiled program the commit adds
+	// is named in the check's own output (the hook prints it), never
+	// refused (compiledstaged.go)
+	compiled := compiledProgramsLine(ctx, gitTop(ctx, root), docs)
 	// Secrets first, in every repo (hooksecrets.go), then F16 (client repos).
 	old, serr := a.hookSecrets(ctx, root, checkWhereCommit, docs)
 	if serr == nil {
@@ -147,10 +151,14 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 		HookIndexRestore(ctx, root)
 		return opscheck.LeaksOut{}, serr
 	}
+	var lines []string
 	if old > 0 { // values the same rows already held at HEAD: let through, named once
-		return opscheck.LeaksOut{Message: historyLine(old, checkWhereCommit)}, nil
+		lines = append(lines, historyLine(old, checkWhereCommit))
 	}
-	return opscheck.LeaksOut{}, nil // silent when clean
+	if compiled != "" {
+		lines = append(lines, "lore: "+compiled)
+	}
+	return opscheck.LeaksOut{Message: strings.Join(lines, "\n")}, nil // silent when clean
 }
 
 // checkCI is F16's CI mode over the checked-out tree's .lore/data.

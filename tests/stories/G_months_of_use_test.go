@@ -134,7 +134,6 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 			ines.M.LoreIn(ines.C, "inbox").OK(t).Says(t, "rotate the queue credentials", "overdue")
 		})
 		t.Run("overdue-reminders-in-render", func(t *testing.T) {
-			t.Skip("waiting for D-148-render: render and doctor still say nothing of an overdue reminder")
 			ines.M.LoreIn(ines.C, "render").OK(t)
 			if b, _ := ines.C.ReadFile(".lore/LORE.md"); !strings.Contains(b, "rotate the queue credentials") {
 				t.Errorf("LORE.md does not name the overdue reminder")

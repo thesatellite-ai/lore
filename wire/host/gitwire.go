@@ -395,18 +395,23 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			return
 		}
 	}
-	// H-19: a hooks folder in the work tree (husky's .husky) is committed
-	// with the repo. A write never creates a new hook file there; an
-	// install step (lore fix asks first, init is asked for) does and says
-	// which files are new.
-	newTracked := s.trackedNewHooks(ctx, dir, names)
+	// H-19, stories H-1: a hooks folder in the work tree (husky's .husky)
+	// is committed with the repo. A write never creates or changes a hook
+	// file there; an install step (lore fix asks first, init is asked
+	// for) does and says which files it touched.
+	writes := make([]hookWrite, 0, len(names))
+	for _, n := range names {
+		writes = append(writes, hookWrite{name: n, marker: blocks[n].marker, lines: blocks[n].lines})
+	}
+	teamNew, teamChanged := s.teamHookWrites(ctx, dir, writes)
 	skip := map[string]bool{}
-	var skipped []string
+	skipped := ""
 	if mode != wireInstall {
-		for _, n := range newTracked {
+		for _, n := range append(append([]string{}, teamNew...), teamChanged...) {
 			skip[n] = true
 		}
-		skipped, newTracked = newTracked, nil
+		skipped = teamHookNames(teamNew, teamChanged)
+		teamNew, teamChanged = nil, nil
 	}
 	for _, n := range names {
 		b := blocks[n]
@@ -425,13 +430,14 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		if shared {
 			note = "; " + dir + " is the hooks folder of every repo (core.hooksPath in your global git config): lore's blocks there run lore only in repos lore is set up in"
 		}
-		if len(newTracked) > 0 {
-			note += fmt.Sprintf(trackedHooksCreated, dir, strings.Join(newTracked, ", "))
+		if team := append(append([]string{}, teamNew...), teamChanged...); len(team) > 0 {
+			sort.Strings(team)
+			note += fmt.Sprintf(trackedHooksCreated, dir, strings.Join(team, ", "))
 		}
 		s.cmdNotice(ctx, "set up git for lore's row files in this clone: "+strings.Join(changed, "; ")+note+" (`lore where` lists everything lore keeps here)")
 	}
-	if len(skipped) > 0 && !wire.ReadNoticeSaid(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp) {
-		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, strings.Join(skipped, ", "), dir))
+	if skipped != "" && !wire.ReadNoticeSaid(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp) {
+		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, skipped, dir))
 		wire.MarkReadNotice(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp)
 	}
 	if wasWired && len(guardBefore) > 0 && !formatOld {
@@ -449,7 +455,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if !wire.HoldsLoreData(root) {
 		// no row files to re-include, and no tracked file of a client
 		// repo is changed (plain files sweep 3.8)
-		if len(skipped) > 0 {
+		if skipped != "" {
 			return // not wired in full: the next write looks again
 		}
 		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
@@ -467,7 +473,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	case len(still) > 0:
 		s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed):\n  " + strings.Join(still, "\n  "))
 	}
-	if len(skipped) > 0 {
+	if skipped != "" {
 		return // not wired in full: the next write looks again (its notice is said once per state)
 	}
 	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)

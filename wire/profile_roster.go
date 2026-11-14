@@ -86,27 +86,44 @@ func (a *App) Roster(ctx context.Context, write bool) (profilestore.Roster, func
 // roster verbs make an agent's change as its person and check this same
 // flag, rosterCaller).
 func (a *App) profileWriter(ctx context.Context, st *state, target store.Source) error {
-	who, err := a.Who(ctx)
-	if err != nil {
+	agent, err := a.profileAgent(ctx)
+	if err != nil || agent == "" {
 		return err
 	}
+	set, err := st.eng.Policy(ctx, target)
+	if err != nil {
+		return err // fail closed: a policy that cannot be read allows nothing
+	}
+	return peopleWriteByAgent(set, agent)
+}
+
+// profileAgent is the agent a profile write is made by ("" for a person),
+// or an error when lore cannot tell who writes: the surface's choice
+// (REST X-Lore-Agent, an explicit agent) wins over detection.
+func (a *App) profileAgent(ctx context.Context) (string, error) {
+	who, err := a.Who(ctx)
+	if err != nil {
+		return "", err
+	}
 	if who.StableKey == "" {
-		return errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
+		return "", errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
 	}
 	agent := who.Agent
 	if c, ok := ctx.Value(profileCallerKey{}).(op.Caller); ok && (c.AgentFixed || c.Agent != "") {
 		agent = c.Agent // the surface decided (REST X-Lore-Agent, or an explicit agent)
 	}
 	if agent == "" && who.Kind != schema.ActorKindAgent {
-		return nil
+		return "", nil
 	}
 	if agent == "" {
 		agent = who.StableKey
 	}
-	set, err := st.eng.Policy(ctx, target)
-	if err != nil {
-		return err // fail closed: a policy that cannot be read allows nothing
-	}
+	return agent, nil
+}
+
+// peopleWriteByAgent is E_POLICY_DENIED unless set has
+// agents.may_manage_people true; agent names who tried.
+func peopleWriteByAgent(set policy.Set, agent string) error {
 	if v, ok := set.Get(policy.KeyAgentsMayManagePeople); ok && v.Value != nil {
 		if b, isBool := v.Value.(value.Bool); isBool && b.Bool() {
 			return nil
@@ -116,6 +133,32 @@ func (a *App) profileWriter(ctx context.Context, st *state, target store.Source)
 		WithHint("a person runs it in their own terminal, or sets `lore policy set --key " + string(policy.KeyAgentsMayManagePeople) + " --value true`")
 	e.NeedsPerson = true
 	return e
+}
+
+// agentMayCreateTeam refuses an agent's team step before it writes
+// anything when this machine's own policy (the `policies:` map of
+// config.yaml, which every store's writes on this machine obey and which
+// can only tighten) sets agents.may_manage_people false (agentpol 4). The
+// new org's store has no policy rows yet, so the machine level is the one
+// level that already decides its roster write; refused there, the step
+// used to have written the store and the org entry first (a half-write).
+func (a *App) agentMayCreateTeam(ctx context.Context) error {
+	agent, err := a.profileAgent(ctx)
+	if err != nil || agent == "" {
+		return err
+	}
+	entries, _, err := machinePolicy(a.opts.Home)
+	if err != nil {
+		return err
+	}
+	set, err := policy.Resolve(entries)
+	if err != nil {
+		return err
+	}
+	if _, set0 := set.Get(policy.KeyAgentsMayManagePeople); !set0 {
+		return nil // nothing set here: the key's default (true) applies
+	}
+	return peopleWriteByAgent(set, agent)
 }
 
 // profileRoster is the opened org roster for one profile op.

@@ -14,7 +14,7 @@ lore sets both up on its first command in a clone and checks them, quickly, afte
 ## Before you start
 
 - A repo set up with lore ([How notes travel with git](how-notes-travel-with-git.md)). Here Alice works in `github.com/client/website`.
-- If your team uses a hook manager (a tool that shares one set of hooks with the whole team: husky, lefthook, or a committed `.githooks` folder), lore adds its lines to the hook scripts already there. When that folder is part of the repo (husky's `.husky`), a lore command never creates a new hook file in it, because a new file there reaches every teammate: it says which hooks it left out, and `lore fix`, which asks first, creates them and tells you to commit them (or delete them). A folder git ignores (husky 9's `.husky/_`), or one with no committed file in it, is not part of the repo, so lore writes there as in `.git/hooks`.
+- If your team uses a hook manager (a tool that shares one set of hooks with the whole team: husky, lefthook, or a committed `.githooks` folder), lore adds its lines to the hook scripts already there. When that folder is part of the repo (husky's `.husky`, a committed `.githooks`), a lore command never creates a hook file in it and never adds its lines to the team's own hook files there, because a new or changed file there reaches every teammate: it says which hooks it left alone, and `lore fix`, which asks first, writes them and tells you to commit them (or undo them). A folder git ignores (husky 9's `.husky/_`), or one with no committed file in it, is not part of the repo, so lore writes there as in `.git/hooks`.
 
 ## Step 1 — See what lore set up
 

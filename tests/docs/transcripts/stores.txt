@@ -58,7 +58,7 @@ lore: wrote ~/stores/agency-notes/golang/actors/act_162df51b7f78b785c97c26b41ea8
 lore: wrote ~/stores/agency-notes/golang/memories/mem_54fe984c9b495744c0217776765a28f2.json (store notes/golang)
 lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3618e878ebbf527d34d446ef4f891.json (store notes/golang)
 ✓ mem_54fe984c9b495744c0217776765a28f2 [notes/golang]
-  scope: [master]
+  scope: [project]
 alice (work/website)$ cat .lore/stores.yaml
 stores:
     - name: notes
@@ -77,7 +77,7 @@ store notes folders:
 alice (work/website)$ lore rule add --body 'Keep the agency hourly rate out of the client repo.'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
 ✓ rul_05e99e22e9e86e96fe4daa7777994603
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ lore row move --id rul_05e99e22e9e86e96fe4daa7777994603 --to notes
 ERROR: [E_NEEDS_CONFIRM] This becomes visible to everyone with access to notes (internal):
   "Keep the agency hourly rate out of the c…" (rul_05e99e22e9e86e96fe4daa7777994603, id kept), now in repo

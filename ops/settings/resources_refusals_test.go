@@ -77,6 +77,11 @@ func TestResourceRefusalCodes(t *testing.T) {
 	if e := errs.EnvelopeOf(err).Error; !errs.Has(err, errs.ResourceArchived) || e.Hint != "ref another resource of that kind" {
 		t.Errorf("ref to an archived resource: %v hint %q", err, e.Hint)
 	}
+	// The code's description (docs/reference errors table) names no
+	// unarchive either (run:tests:q-resource-unarchive).
+	if d := errs.DefOf(errs.ResourceArchived).Description; strings.Contains(d, "unarchive") {
+		t.Errorf("E_RESOURCE_ARCHIVED description names a verb that does not exist: %q", d)
+	}
 }
 
 // TestResourceReportOffboarding (later 38, RES 3.22): report --meta

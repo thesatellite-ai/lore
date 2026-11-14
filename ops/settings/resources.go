@@ -1194,7 +1194,7 @@ func resourceMatcher(d kindDef, where []string) (filter.Matcher, error) {
 			return filter.Field{}, errs.Wrap(errs.ConfigInvalid, "kind field "+def.Row.ID.String()+" has an unknown type", perr)
 		}
 		// OQ-AV: a closed value may be named by its name, label or val_ id.
-		return filter.Field{Kind: kind, Elem: value.KindText, Values: append(texts(def.Row, fValues), valueAliases(def.Row)...)}, nil
+		return filter.Field{Kind: kind, Elem: value.KindText, Values: texts(def.Row, fValues), Aliases: valueAliases(def.Row)}, nil
 	})
 }
 

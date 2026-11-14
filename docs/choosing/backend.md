@@ -58,11 +58,11 @@ lore: wrote ~/stores/notes/_store/actors/act_2ad3…f891.json (store notes)
 lore: wrote ~/stores/notes/_store/memories/mem_162d…9666.json (store notes)
 lore: wrote ~/stores/notes/_store/machines/mch_54fe…28f2.json (store notes)
 ✓ mem_162d…9666 [notes]
-  scope: [master]
+  scope: [project]
 $ lore rule add --body 'Run the tests before you push.'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
 ✓ rul_05e9…4603
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ find ~/stores/notes -type f | sort
 ~/stores/notes/.lore-state/lock
 ~/stores/notes/README.md

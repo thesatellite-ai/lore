@@ -54,7 +54,7 @@ Write `${var:<name>}` anywhere in a text field. `lore show --id <id>` prints the
 $ lore memory add --body 'Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes'
 lore: wrote ~/work/website/.lore/data/memories/mem_162d…9666.json
 ✓ mem_162d…9666
-  scope: [master]
+  scope: [project]
 $ lore show --id mem_162d…9666
 mem_162d…9666  memories  repo
   body: Products come from ${var:api_host} and are cached for ${var:cache_minutes} minutes

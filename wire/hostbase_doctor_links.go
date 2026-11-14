@@ -71,19 +71,18 @@ func (a *App) doctorStaleLinks(ctx context.Context, warn func(string)) {
 	for l := range strings.SplitSeq(string(out), "\n") {
 		onBranch[strings.TrimSpace(l)] = true
 	}
-	have := map[string]bool{}
+	var off []string // the off-branch commits, each asked about once
+	asked := map[string]bool{}
+	for _, l := range links {
+		if !onBranch[l.sha] && !asked[l.sha] {
+			asked[l.sha] = true
+			off = append(off, l.sha)
+		}
+	}
+	have := commitsPresent(ctx, dir, off)
 	var stale []link
 	for _, l := range links {
-		if onBranch[l.sha] {
-			continue
-		}
-		known, seen := have[l.sha]
-		if !seen {
-			_, cerr := gitRun{dir: dir, args: []string{"cat-file", "-e", l.sha + "^{commit}"}}.output(ctx)
-			known = cerr == nil
-			have[l.sha] = known
-		}
-		if known {
+		if !onBranch[l.sha] && have[l.sha] {
 			stale = append(stale, l)
 		}
 	}
@@ -101,4 +100,30 @@ func (a *App) doctorStaleLinks(ctx context.Context, warn func(string)) {
 	}
 	warn("commit_links: " + strconv.Itoa(len(stale)) + " link(s) name a commit that is on no branch (rewritten by a rebase or an amend, or dropped by a force-push): " +
 		strings.Join(names, ", ") + "; move one to the rewritten commit: lore link remap --pair <old>=<new>, or remove it: lore link remove --id <cml_…> --yes")
+}
+
+// commitsPresent reports which of shas name a commit this repository
+// holds, with one `git cat-file --batch-check` (D-110: one `cat-file -e`
+// per link was 177 git processes of a doctor run in a 5,500-row repo, and
+// a process start is slow on macOS). A failed run reports none present,
+// as a failed `cat-file -e` did.
+func commitsPresent(ctx context.Context, dir string, shas []string) map[string]bool {
+	have := map[string]bool{}
+	if len(shas) == 0 {
+		return have
+	}
+	var in strings.Builder
+	for _, sha := range shas {
+		in.WriteString(sha + "^{commit}\n")
+	}
+	out, err := gitRun{dir: dir, args: []string{"cat-file", "--batch-check=%(objectname) %(objecttype)"}, stdin: []byte(in.String())}.output(ctx)
+	if err != nil {
+		return have
+	}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if sha, typ, ok := strings.Cut(strings.TrimSpace(line), " "); ok && typ == "commit" {
+			have[sha] = true
+		}
+	}
+	return have
 }

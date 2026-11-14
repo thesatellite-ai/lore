@@ -56,7 +56,10 @@ const (
 	loreDirName = ".lore"
 	// hintNotAStore is v0.1.17's storeHintInit.
 	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in ~/.lore/config.yaml"
-	hintNoBranch  = "the store repo has branches but not this one (an empty repo gets its branch with the first link): to start a separate lore on that branch on purpose, run `lore store init --name <name> --url '<url>?branch=<branch>'`; otherwise check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org>"
+	// hintEmptyStore: org create (and import) read the org entry a store
+	// suggests; a brand-new repo has none until it is a lore store.
+	hintEmptyStore = "the repo is empty: make it a lore store first with `lore store init --name <name> --url <url>`, then run this again"
+	hintNoBranch   = "the store repo has branches but not this one (an empty repo gets its branch with the first link): to start a separate lore on that branch on purpose, run `lore store init --name <name> --url '<url>?branch=<branch>'`; otherwise check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org>"
 )
 
 // standaloneOrg implements opsorgcmd.Host for cmd/lore.
@@ -388,6 +391,8 @@ func linkError(err error) error {
 	switch {
 	case errors.Is(err, orgcfg.ErrNotAStore):
 		return errs.New(errs.NotAStore, err.Error()).WithHint(hintNotAStore)
+	case errors.Is(err, orgcfg.ErrStoreEmpty):
+		return errs.New(errs.NotAStore, err.Error()).WithHint(hintEmptyStore)
 	case errors.Is(err, orgcfg.ErrNoStoreBranch):
 		return errs.New(errs.InvalidInput, err.Error()).WithHint(hintNoBranch)
 	case errors.Is(err, orgcfg.ErrStoreOffline):

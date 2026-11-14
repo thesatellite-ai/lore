@@ -3,8 +3,10 @@ package setupweb
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -593,5 +595,26 @@ func TestAllowlistMatchesSetupPageOps(t *testing.T) {
 	slices.Sort(got)
 	if !slices.Equal(got, want) {
 		t.Fatalf("allowlist %v\nwant      %v", got, want)
+	}
+}
+
+// TestListenTakenPortIsPortInUse (batch not-built): a --port another
+// program holds is E_PORT_IN_USE (it was E_UNSUPPORTED, "does not work
+// here"), naming the port, the setup page and --port 0; lore api's own
+// Listen gives the same code.
+func TestListenTakenPortIsPortInUse(t *testing.T) {
+	held, err := rest.Listen(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = held.Close() }()
+	port := held.Addr().(*net.TCPAddr).Port
+	_, err = Listen(port)
+	var e *errs.Error
+	if !errors.As(err, &e) || e.Code != errs.PortInUse || !strings.Contains(e.Message, "--port "+strconv.Itoa(port)) || !strings.Contains(e.Hint, "--port 0") {
+		t.Fatalf("setup page on a taken port: %#v", err)
+	}
+	if _, err = rest.Listen(port); !errs.Has(err, errs.PortInUse) {
+		t.Fatalf("lore api on a taken port: %v", err)
 	}
 }

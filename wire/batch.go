@@ -290,12 +290,17 @@ func (a *App) Revert(ctx context.Context, ref engine.Ref, want hlc.HLC, before r
 	if ferr := a.checkTarget(src); ferr != nil {
 		return engine.Written{}, ferr
 	}
-	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
-		return engine.Written{}, aerr
-	}
 	at, was, gerr := st.eng.Get(ctx, ref)
-	w, err := st.eng.Revert(ctx, ref, want, before)
-	a.wroteTo(src, err)
+	// batch leftover-3: the actor row and the revert as one batch (a
+	// stale revert writes neither)
+	w, err := a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.Revert(ctx, ref, want, before)
+		a.wroteTo(src, err)
+		return w, err
+	})
 	if err == nil && gerr == nil {
 		w = a.keepPrior(ctx, at, was, w) // the undo's own batch can be undone too
 	}

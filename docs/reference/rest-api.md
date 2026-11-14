@@ -63,7 +63,7 @@ With the token, `POST /v1/rules` is `lore rule add` (201 Created), and `GET /v1/
 ```console
 # alice, in ~
 $ curl -s -X POST -H "Authorization: Bearer $(cat ~/.lore/api-token)" -d '{"body": "Run the tests before you push"}' -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/rules
-{"id":"rul_7a67…9504","store":"repo","scope":"master","severity":"must"}
+{"id":"rul_7a67…9504","store":"repo","scope":"project","severity":"must"}
 HTTP 201
 $ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" http://127.0.0.1:$PORT/v1/rules
 {"schema_version":1,"kind":"rule.list","count":1,"data":[{"id":"rul_7a67…9504","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z","trust_score":0.5,"source_kind":"manual","project_id":"prj_2ad3…f891","body":"Run the tests before you push","activation":"always","severity":"must","created_by_actor_id":"act_162d…9666","created_by":"act_162d…9666","updated_by":"act_162d…9666"}]}

@@ -328,6 +328,15 @@ func absorbStaged(ctx context.Context, name store.Source) stagedStore {
 	}
 	delete(s.bySrc, name)
 	s.order = slices.DeleteFunc(s.order, func(n store.Source) bool { return n == name })
+	// The taken rows are no longer the stage's: a later write of the same
+	// key in another store (a move's source tombstone after its copy was
+	// absorbed, batch leftover-3) is not a second write of a staged row.
+	for _, c := range p.changes {
+		delete(s.written, c.Row.Key())
+	}
+	for _, ev := range p.events {
+		delete(s.created, store.Key{Table: ev.Table, ID: ev.ID})
+	}
 	return *p
 }
 

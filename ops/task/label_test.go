@@ -165,7 +165,7 @@ func TestExternalRowLines(t *testing.T) {
 	ext := h.ID(h.MustYes("memory.add", `{"body":"multi\n  line\tbody `+long+`","to":"northwind"}`))
 	repoAdd := h.MustYes("memory.add", `{"body":"repo memory"}`)
 	repo := h.ID(repoAdd)
-	if got, want := opstest.Text(repoAdd), "✓ "+repo+"\n  scope: [master]\n"; got != want {
+	if got, want := opstest.Text(repoAdd), "✓ "+repo+"\n  scope: [project]\n"; got != want {
 		t.Errorf("repo memory add %q, want %q", got, want)
 	}
 	// B3-7: a row of another store has the repo rows' layout, folded onto

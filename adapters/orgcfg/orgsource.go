@@ -53,6 +53,11 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 	}
 	tip, ok := orgFileTip(ctx, dir, branch)
 	if !ok {
+		if cloneHasNoBranches(ctx, dir) {
+			// plainfiles:4: `lore org create` on a brand-new repo said "has
+			// no branch main" with a hint about the repo's other branches.
+			return Suggestion{}, fmt.Errorf("%w (%w): %s has no commits yet", ErrStoreEmpty, ErrNoStoreBranch, norm)
+		}
 		return Suggestion{}, fmt.Errorf("%w: %s has no branch %s", ErrNoStoreBranch, norm, branch)
 	}
 	if err := checkStoreTree(ctx, dir, tip, norm, branch); err != nil {

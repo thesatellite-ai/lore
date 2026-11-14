@@ -50,7 +50,6 @@ Notes:
   - live: last fetch 5s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 Context (information, nothing to fix):
@@ -65,7 +64,7 @@ What each block means:
 | `[db]` | The database file opens and passes SQLite's own quick check. `wal_size` is the size of the database's side journal (a scratch file SQLite writes before it folds changes into the main file). | `ok: true`. A journal over 100 MB is a warning. |
 | `[sync]` | Read from the plain files in `.lore/data` and from git only, never from a database: whether this is a git repo, how many files git tracks under `.lore/data` (`tracked files`), files with conflict markers, plus each rendered file (`.lore/LORE.md`, `.lore/LORE.full.md`, the path rule files) git left unmerged, named in a warning with `lore render && git add <file>`, plus each row of an attached store both this machine and the store's remote changed (a refused store sync, one warning per store naming `lore sync conflicts` and `lore sync resolve`) (`open conflicts`), files lore cannot read (`file errors`, also reported as doctor errors), whether `.lore/data` is gitignored (checked only where `.lore/data` exists: a repo with no lore project of its own gets no warning about lore files it does not have), and whether the git merge helper is installed. | All counts 0, `merge driver: true`, `data gitignored: false`. A missing merge driver is only a note (every lore command installs it; it is off only with `LORE_SYNC_GIT=0`). A `merge.lore.driver` that does not run `lore merge-driver` is also a note, with `merge driver: false`: `lore doctor --fix` installs lore's driver in its place. `uncommitted` is only information: it counts files you have not committed yet. |
 | `[identity]` | Who lore thinks you are, and where that came from (here: your git email). | `stable: yes`. A made-up, one-time identity is a warning, because your later sessions would not be linked to this one. |
-| `Notes` | Facts that are fine, for example that lore's git hooks are installed. `Team versions` names each writer by handle (else name); the identity this machine writes as outside every setup's folders (a `lore setup apply` step run in your home folder before the folders step) shows as `<name> (<where lore found it>, outside any setup)`, since no store holds an actor row for it. | Nothing to do. |
+| `Notes` | Facts that are fine, for example that lore's git hooks are installed. `Team versions` names each writer by handle (else name); the identity this machine writes as outside every setup's folders (a `lore setup apply` step run in your home folder before the folders step) shows as `<name> (<where lore found it>, outside any setup)`, since no store holds an actor row for it. A save in a code repo carries no machine id; it shows as `<name> on (code repo, no machine id)` only when no machine line of that writer has the same lore version. | Nothing to do. |
 | `Warnings` / `Errors` | What makes the status DEGRADED or BROKEN, each with the command that fixes it. | Absent. |
 
 ## Step 2 — Read the exit code
@@ -138,7 +137,7 @@ When you report a problem, attach a support bundle: one JSON file with the docto
 ```console
 # alice, in website
 $ lore support-bundle --out bundle.json
-✓ wrote support bundle to bundle.json (2010 bytes)
+✓ wrote support bundle to bundle.json (1930 bytes)
 $ grep -E '"(binary_version|status|rules|memories|sanitized)"' bundle.json
   "binary_version": "dev",
     "binary_version": "dev",

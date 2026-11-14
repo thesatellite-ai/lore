@@ -5,13 +5,13 @@ lore: wrote ~/.lore/personal/agency/actors/act_7a670ae8548ed05bf57ad29ad0759504.
 lore: wrote ~/.lore/personal/agency/memories/mem_2ad3618e878ebbf527d34d446ef4f891.json (store me)
 lore: wrote ~/.lore/personal/agency/machines/mch_162df51b7f78b785c97c26b41ea89666.json (store me)
 ✓ mem_2ad3618e878ebbf527d34d446ef4f891 [me/agency]
-  scope: [master]
+  scope: [project]
 alice (work/scratch)$ lore memory add --body 'I prefer tabs over spaces' --to me
 lore: wrote ~/.lore/personal/everywhere/actors/act_54fe984c9b495744c0217776765a28f2.json (store me)
 lore: wrote ~/.lore/personal/everywhere/memories/mem_05e99e22e9e86e96fe4daa7777994603.json (store me)
 lore: wrote ~/.lore/personal/everywhere/machines/mch_162df51b7f78b785c97c26b41ea89666.json (store me)
 ✓ mem_05e99e22e9e86e96fe4daa7777994603 [me/everywhere]
-  scope: [master]
+  scope: [project]
 alice (work/website)$ lore memory list
 mem_2ad3618e878ebbf527d34d446ef4f891 [retrieved] I always forget the staging VPN profile [me/agency]
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] I prefer tabs over spaces [me/everywhere]
@@ -32,7 +32,7 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a670ae8548ed05bf57ad
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_76bd560aff0771fab8457dbfa9823f10.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162df51b7f78b785c97c26b41ea89666.json (store me)
 ✓ mem_76bd560aff0771fab8457dbfa9823f10 [me]
-  scope: [master]
+  scope: [project]
 alice-devbox (work/website)$ lore memory list
 lore memory list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 lore memory list: store clone ~/.lore/stores/alice/lore-me: git user set to Alice Doe <alice@agency.example> (your lore identity)

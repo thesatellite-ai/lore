@@ -275,7 +275,7 @@ func TestInputHelpers(t *testing.T) {
 			t.Fatalf("labels of %q: %q %q", src, StoreLabel(src), AddLabel(src))
 		}
 	}
-	if ScopeLabel("") != "master" || ScopeLabel("web") != "repo:web" {
+	if ScopeLabel("") != "project" || ScopeLabel("web") != "repo:web" { // plainfiles:4: never "master" (read as the git branch)
 		t.Fatal("ScopeLabel")
 	}
 	// FLAG1: `_source` is an object; zero (omitted) for the repo, the name alone

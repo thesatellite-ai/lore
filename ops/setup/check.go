@@ -45,7 +45,7 @@ func (e engine) Check(ctx context.Context, in CheckIn) (CheckOut, error) {
 	out := CheckOut{Step: step.ID, FieldErrors: []onboard.FieldError{}, Checks: []onboard.CheckResult{}}
 	if joinedAlready(s, step, answers) {
 		// Joined already: no invite to check (see joinedAlready).
-		out.Status = onboard.StepDone
+		out.Status, out.Checks = onboard.StepDone, e.joinedChecks(step)
 		return out, nil
 	}
 	if fe := append(e.validateStep(ctx, step, askedKind(s, step, answers), answers), routeErr...); len(fe) > 0 {

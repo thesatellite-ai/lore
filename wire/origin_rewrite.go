@@ -22,10 +22,13 @@ func (a *App) RewriteOrigin(ctx context.Context, ref engine.Ref, fn func(value.J
 	if ferr := a.checkTarget(src); ferr != nil {
 		return engine.Written{}, ferr
 	}
-	if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	w, err := st.eng.RewriteOrigin(ctx, ref, fn)
-	a.wroteTo(src, err)
-	return w, err
+	// batch leftover-3: the actor row and the rewrite as one batch
+	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActorFor(ctx, st, ref); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.RewriteOrigin(ctx, ref, fn)
+		a.wroteTo(src, err)
+		return w, err
+	})
 }

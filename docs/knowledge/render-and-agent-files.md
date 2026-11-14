@@ -235,7 +235,7 @@ Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) 
 $ lore rule add --body 'Every price change needs the client written OK' --severity must
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore pin set --id rul_54fe…28f2 --context line
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context line (lore render to apply)

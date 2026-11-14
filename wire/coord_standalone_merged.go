@@ -50,21 +50,53 @@ const (
 // coordination here (no git repo, no identity).
 func (a *App) MergedCheck(ctx context.Context, out io.Writer) {
 	h := standaloneCoord{a: a}
-	if !a.hasMergeCandidates(ctx) {
+	if _, err := a.state(ctx); err != nil {
+		return
+	}
+	// mergedmemo.go: a check over unchanged rows (and target tip) that
+	// found nothing is not run again (D-110).
+	memoPath := a.mergedMemoPath()
+	rowsKey, keyed := a.mergedRowsKey(ctx)
+	memo := readMergedMemo(memoPath)
+	rowsSame := keyed && memo.Rows == rowsKey
+	if rowsSame && memo.Tip == "" {
+		return
+	}
+	// With the rows unchanged since a check that had candidates, they
+	// are still there: only the target tip can decide (below).
+	if !rowsSame && !a.hasMergeCandidates(ctx) {
+		if keyed {
+			writeMergedMemo(memoPath, mergedMemo{Rows: rowsKey})
+		}
 		return
 	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
 		return // no coordination here: nothing to say
 	}
+	adapter, _ := mergewatch.AdapterFor(w.mergeCheck, w.repo.Dir())
+	ck := mergewatch.Checker{Repo: w.repo, Target: mergewatch.Target(w.remoteName, w.defaultBranch(ctx)), Adapter: adapter}
+	// A forge adapter (GitHub) can find a merge the local target does not
+	// show yet, so only a plain git check is remembered by its tip.
+	tip, tipOK := "", false
+	if adapter == nil {
+		tip, tipOK = ck.Tip(ctx)
+	}
+	if rowsSame && tipOK && memo.Tip == tip {
+		return
+	}
 	repoOnly := linkedStoreScope(out, w, func() error { return w.forTask(ctx, "") })
 	cands := a.mergeCandidates(ctx, w, repoOnly)
 	if len(cands) == 0 {
+		if keyed && !repoOnly {
+			writeMergedMemo(memoPath, mergedMemo{Rows: rowsKey})
+		}
 		return
 	}
-	adapter, _ := mergewatch.AdapterFor(w.mergeCheck, w.repo.Dir())
-	ck := mergewatch.Checker{Repo: w.repo, Target: mergewatch.Target(w.remoteName, w.defaultBranch(ctx)), Adapter: adapter}
 	found, probs := ck.Sweep(ctx, h.hereRepo(ctx, w), cands)
+	if keyed && tipOK && !repoOnly && len(found) == 0 && len(probs) == 0 {
+		writeMergedMemo(memoPath, mergedMemo{Rows: rowsKey, Tip: tip})
+	}
 	for _, p := range probs {
 		_, _ = fmt.Fprintln(out, mergewatch.ProblemLine(p)) // the output is gone: nothing left to report to
 	}

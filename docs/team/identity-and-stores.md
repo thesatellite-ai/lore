@@ -184,7 +184,7 @@ $ lore memory add --body 'the client replies faster on WhatsApp than email' --to
 lore: wrote ~/work/website/.lore/data/actors/act_05e9…4603.json
 lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
 ✓ mem_c0f3…b5b8
-  scope: [master]
+  scope: [project]
 $ lore move --id mem_c0f3…b5b8 --to agency --yes
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
@@ -276,12 +276,12 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a67…9504.json (sto
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_2ad3…f891.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (store me)
 ✓ mem_2ad3…f891 [me]
-  scope: [master]
+  scope: [project]
 $ lore memory add --body 'I prefer short standups' --to me
 lore: committed locally to store me; lore sync sends it
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_54fe…28f2.json (store me)
 ✓ mem_54fe…28f2 [me]
-  scope: [master]
+  scope: [project]
 $ lore store show --store me
 me: push batch every 10m, compact off
   at        git@github.com:alice/lore-me
@@ -446,7 +446,7 @@ lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
 ✓ mem_c0f3…b5b8 [agency/client]
-  scope: [master]
+  scope: [project]
 $ lore sync
 lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
 store agency/client (here: agency): sent 2, received 0, merged 0, refused 0

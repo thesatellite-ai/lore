@@ -174,9 +174,14 @@ func (h *Host) metaIndexLines(ctx context.Context, sources []store.Source) ([]st
 	return out, nil
 }
 
-// renderTails are the committed file's tail blocks: the resource index,
-// then the metadata keys block (META 3.14), over the render sources.
-func (h *Host) renderTails(ctx context.Context) ([]tailBlock, error) {
+// renderTails are the committed file's tail blocks: the pending
+// reminders of projectID (D-148), the resource index, then the metadata
+// keys block (META 3.14), over the render sources.
+func (h *Host) renderTails(ctx context.Context, projectID string) ([]tailBlock, error) {
+	rem, err := h.remindersBlock(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
 	srcs, err := h.renderSources(ctx)
 	if err != nil {
 		return nil, err
@@ -189,5 +194,5 @@ func (h *Host) renderTails(ctx context.Context) ([]tailBlock, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []tailBlock{{Name: "resource_index", Text: res}, {Name: "meta_keys", Text: keys}}, nil
+	return []tailBlock{{Name: "reminders", Text: rem}, {Name: "resource_index", Text: res}, {Name: "meta_keys", Text: keys}}, nil
 }

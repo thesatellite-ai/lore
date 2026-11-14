@@ -65,7 +65,7 @@ alice (work/billing)$ git log --oneline -1 && git status --short
 bob (work/billing)$ lore rule add --body 'Never deploy on a Friday'
 lore: wrote ~/work/billing/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
 ✓ rul_05e99e22e9e86e96fe4daa7777994603
-  scope: [master] severity: must
+  scope: [project] severity: must
 bob (work/billing)$ lore sync promote --ids rul_05e99e22e9e86e96fe4daa7777994603 --to main --dry-run
 would commit .lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json onto main
 bob (work/billing)$ git fetch -q origin main:main && lore sync promote --ids rul_05e99e22e9e86e96fe4daa7777994603 --to main

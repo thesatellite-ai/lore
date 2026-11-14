@@ -28,7 +28,7 @@ func norm(s string) string { return opstest.IDPattern(s) }
 func TestTextMatchesV017(t *testing.T) {
 	h := opstest.New(t)
 	r1 := h.Must(rule.OpAdd, `{"body":"never push on friday","severity":"should","activation":"manual"}`)
-	if got, want := norm(opstest.Text(r1)), "✓ rul_ID\n  scope: [master] severity: should\n"; got != want {
+	if got, want := norm(opstest.Text(r1)), "✓ rul_ID\n  scope: [project] severity: should\n"; got != want {
 		t.Fatalf("add:\n%q\nwant\n%q", got, want)
 	}
 	id1 := h.ID(r1)

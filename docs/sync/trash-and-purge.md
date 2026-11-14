@@ -113,7 +113,7 @@ A note deleted with a lore command (`lore memory delete`, `lore rule delete`, �
 $ lore memory add --body 'The demo is on Friday at 10.'
 lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 ✓ mem_2537…6bbb
-  scope: [master]
+  scope: [project]
 $ lore memory delete --id mem_2537…6bbb --reason 'the demo moved' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2537…6bbb.json
 ✓ mem_2537…6bbb moved to the trash (restore: lore trash restore --id mem_2537…6bbb)

@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -22,6 +23,10 @@ type txStmts struct {
 	tx *sql.Tx
 	by map[string]*sql.Stmt
 }
+
+// prepares counts the statements stmt prepared, so a test can tell that a
+// refresh prepares each statement once, not once per row (migfix:n2).
+var prepares atomic.Int64
 
 // openTxs maps each transaction inTx has open to its statements.
 var openTxs sync.Map // *sql.Tx → *txStmts
@@ -48,6 +53,7 @@ func stmt(ctx context.Context, tx *sql.Tx, q string) *sql.Stmt {
 	if err != nil {
 		return nil
 	}
+	prepares.Add(1)
 	s.by[q] = st
 	return st
 }

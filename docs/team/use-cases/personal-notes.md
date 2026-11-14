@@ -33,7 +33,7 @@ lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
 lore: wrote ~/.lore/personal/agency/memories/mem_2ad3…f891.json (store me)
 lore: wrote ~/.lore/personal/agency/machines/mch_162d…9666.json (store me)
 ✓ mem_2ad3…f891 [me/agency]
-  scope: [master]
+  scope: [project]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
@@ -41,7 +41,7 @@ lore: wrote ~/.lore/personal/everywhere/actors/act_54fe…28f2.json (store me)
 lore: wrote ~/.lore/personal/everywhere/memories/mem_05e9…4603.json (store me)
 lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me)
 ✓ mem_05e9…4603 [me/everywhere]
-  scope: [master]
+  scope: [project]
 
 # alice, in website
 $ lore memory list
@@ -78,7 +78,7 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a67…9504.json (sto
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_76bd…3f10.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (store me)
 ✓ mem_76bd…3f10 [me]
-  scope: [master]
+  scope: [project]
 
 # alice-devbox, in website
 $ lore memory list

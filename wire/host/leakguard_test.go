@@ -185,12 +185,13 @@ func TestLeakGuardOffIsSaidFirstAndScanned(t *testing.T) {
 	}
 }
 
-// TestWriteCreatesNoHookFileInATrackedHooksFolder (H-19): with
-// core.hooksPath at a folder of the work tree (husky's .husky), a write
-// adds lore's block to the hook files there but creates no new file (a
-// new file reaches every teammate) and says which it left out; an install
-// step (lore fix, which asks first) creates them and says they are new
-// files of the repo. A hooks folder git ignores is written as .git/hooks.
+// TestWriteCreatesNoHookFileInATrackedHooksFolder (H-19, stories H-1):
+// with core.hooksPath at a folder of the work tree (husky's .husky), a
+// write neither creates a hook file there nor appends lore's block to the
+// team's own (either reaches every teammate with the next commit) and
+// says which it left out; an install step (lore fix, which asks first)
+// writes them and says they are new or changed files of the repo. A hooks
+// folder git ignores is written as .git/hooks.
 func TestWriteCreatesNoHookFileInATrackedHooksFolder(t *testing.T) {
 	f := newLiveFixture(t)
 	markWired(t, f)
@@ -213,11 +214,14 @@ func TestWriteCreatesNoHookFileInATrackedHooksFolder(t *testing.T) {
 		t.Fatalf("a write created hook files in the tracked .husky: %v", names)
 	}
 	pc, err := os.ReadFile(filepath.Join(dir, hookPreCommit))
-	if err != nil || !strings.Contains(string(pc), gitBlockMarker) || !strings.Contains(string(pc), "echo team check") {
-		t.Fatalf("the write did not chain its block into the existing .husky/pre-commit: %v\n%s", err, pc)
+	if err != nil || string(pc) != "#!/bin/sh\necho team check\n" {
+		t.Fatalf("the write changed the team's tracked .husky/pre-commit: %v\n%s", err, pc)
+	}
+	if status := gitOut(t, f, "status", "--porcelain", "--", ".husky"); status != "" {
+		t.Fatalf("a write changed the tracked .husky:\n%s", status)
 	}
 	out := stderrOf(f)
-	if !strings.Contains(out, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push in "+dir) || !strings.Contains(out, "`lore fix`") {
+	if !strings.Contains(out, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push or add its block to pre-commit in "+dir) || !strings.Contains(out, "`lore fix`") {
 		t.Fatalf("the write said %q, want the hooks it left out and lore fix", out)
 	}
 	if status := gitOut(t, f, "status", "--porcelain", "--untracked-files=all", "--", ".husky"); strings.Contains(status, "??") {
@@ -228,7 +232,7 @@ func TestWriteCreatesNoHookFileInATrackedHooksFolder(t *testing.T) {
 	if got := missingGuardHooks(dir); len(got) != 0 {
 		t.Fatalf("after lore fix the guard misses %v", got)
 	}
-	if out := stderrOf(f); !strings.Contains(out, "new files in "+dir+", a folder committed with the repo: commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push") {
+	if out := stderrOf(f); !strings.Contains(out, "new or changed files in "+dir+", a folder committed with the repo: commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push") {
 		t.Fatalf("lore fix did not name the new files of the repo:\n%s", out)
 	}
 

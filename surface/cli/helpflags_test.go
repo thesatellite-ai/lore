@@ -12,7 +12,8 @@ import (
 // TestHelpHidesFlagsThatNeverApply (B3-3, B3-6): a flag kept only so a
 // v0.1.17 script parses is hidden from --help but still parses, and an
 // operation whose only question is its own yes/no gets no secret answer
-// flags at all.
+// flags at all; nor does a read (a show whose only question is --reveal,
+// batch not-built), which writes no row a secret scan could flag.
 func TestHelpHidesFlagsThatNeverApply(t *testing.T) {
 	t.Parallel()
 	f := newFake(t)
@@ -26,6 +27,9 @@ func TestHelpHidesFlagsThatNeverApply(t *testing.T) {
 			Confirm: op.ConfirmRule{MayAsk: true, NoSecretFindings: true}}, run),
 		op.Define(op.Spec{Name: "thing.add", Summary: "s", Permission: op.PermWrite, Access: op.AccessWrite,
 			Confirm: op.ConfirmRule{MayAsk: true}}, run),
+		// batch not-built: a read whose question is a reveal (every show)
+		op.Define(op.Spec{Name: "thing.show", Summary: "s", Permission: op.PermRead, Access: op.AccessRead,
+			Confirm: op.ConfirmRule{MayAsk: true}}, run),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +39,7 @@ func TestHelpHidesFlagsThatNeverApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	initCmd, addCmd := child(child(root, "thing"), "init"), child(child(root, "thing"), "add")
+	showCmd := child(child(root, "thing"), "show")
 	if fl := initCmd.Flags().Lookup("repo"); fl == nil || !fl.Hidden {
 		t.Fatalf("the v0.1.17 flag is %+v, want defined and hidden", fl)
 	}
@@ -42,11 +47,14 @@ func TestHelpHidesFlagsThatNeverApply(t *testing.T) {
 		if initCmd.Flags().Lookup(name) != nil {
 			t.Errorf("thing init offers --%s, an answer it never asks for", name)
 		}
+		if showCmd.Flags().Lookup(name) != nil {
+			t.Errorf("thing show (a read: it writes no row) offers --%s", name)
+		}
 		if addCmd.Flags().Lookup(name) == nil {
 			t.Errorf("thing add lost --%s", name)
 		}
 	}
-	if initCmd.Flags().Lookup(FlagYes) == nil {
-		t.Error("thing init lost --yes")
+	if initCmd.Flags().Lookup(FlagYes) == nil || showCmd.Flags().Lookup(FlagYes) == nil {
+		t.Error("thing init or thing show lost --yes")
 	}
 }

@@ -136,6 +136,7 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 | `E_NOT_FOUND` | 27 | no row with that id | check the id; when your branch is behind main it may have landed there (the hint names `lore sync peek`); when your branch already has main as last fetched, the row may belong to another repo (run the command there) or be newer than that fetch (the same `lore sync peek`). A task or gate command whose `--id` is the task has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
+| `E_PORT_IN_USE` | 23 | `lore api` or the setup page cannot listen on the `--port` you gave: another program (or another `lore api`) holds it | pick another `--port`, or `--port 0` for a free one (lore prints the port it picked) |
 | `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo, or `lore migrate rollback` after a shared-database conversion | run it inside a git repo; a shared-database conversion has no rollback (see [the shared-database guide](../sync/shared-database-mode-b.md#pitfalls)) |
 | `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. On coordination commands: an agent with no person behind it (an agent actor whose roster row names no owner) doing a human override such as cancel, reassign or revoke (the `--json` error has `"needs_person": true`; a person's own coding agent acts for them and passes), the WIP limit, a poisoned task, or a task that is no longer open | do what the message says instead; do not retry the same command |
 | `E_NEEDS_CONFIRM` | 26 | the command asks first, and ran with no terminal and no `--yes`; the error carries the question | read the question, then run the command again with `--yes` |
@@ -259,7 +260,7 @@ Removing a key the row does not have is `E_META_UNKNOWN`; the message says which
 $ lore rule add --body 'Keep the footer links in one list'
 lore: wrote ~/work/website/.lore/data/rules/rul_3b62…e913.json
 ✓ rul_3b62…e913
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore meta unset --id rul_3b62…e913 --key client_tier
 ERROR: [E_META_UNKNOWN] rul_3b62…e913 has no metadata key "client_tier"; it has no metadata
   hint: lore meta show --id rul_3b62…e913 lists its keys
@@ -283,7 +284,7 @@ ERROR: [E_META_UNKNOWN] rul_3b62…e913 has no metadata key "client_tier"; it ha
 | `E_RESOURCE_INTERNAL` | 19 | an internal resource field would be written in a client repo | write it in the store or an own repo, or move with `--drop-internal` |
 | `E_RESOURCE_IN_USE` | 23 | a kind field or value that resources still use | move those resources off it first |
 | `E_RESOURCE_TAKEN` | 23 | that resource name is already used at this level (archived and trashed rows count) | pick another name, or restore the old one |
-| `E_RESOURCE_ARCHIVED` | 23 | a new reference to an archived resource | refer to its replacement, or unarchive it |
+| `E_RESOURCE_ARCHIVED` | 23 | a new reference to an archived resource | refer to its replacement, or another resource of that kind (archive is one way) |
 | `E_RESOURCE_PLACE` | 23 | resources are not allowed in this place (`resources.allowed_in`, or `--to me`) | write them in an allowed place |
 | `E_RESOURCE_QUARANTINED` | 23 | the resource has values lore could not read cleanly | fix them before moving it |
 | `E_RESOURCE_BATCH` | 23 | an import failed its checks as a whole; nothing was written | fix the rows the message lists and import again |

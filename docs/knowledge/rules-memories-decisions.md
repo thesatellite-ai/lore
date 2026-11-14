@@ -26,15 +26,15 @@ All three share the same verbs: `add`, `list`, `show`, `edit`, `search`, `archiv
 $ lore rule add --body 'Run the tests before you push'
 lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore rule add --body 'Never put passwords in the code' --severity must
 lore: wrote ~/work/website/.lore/data/rules/rul_2ad3…f891.json
 ✓ rul_2ad3…f891
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore rule add --body 'Keep pull requests under 400 lines' --severity should
 lore: wrote ~/work/website/.lore/data/rules/rul_162d…9666.json
 ✓ rul_162d…9666
-  scope: [master] severity: should
+  scope: [project] severity: should
 $ lore rule list
 rul_7a67…9504 [must/always] Run the tests before you push
 rul_2ad3…f891 [must/always] Never put passwords in the code
@@ -58,14 +58,14 @@ A memory has a *kind* (`--kind`): `retrieved` (the default; found by search when
 $ lore memory add --body 'The client replies faster on WhatsApp than email'
 lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
 ✓ mem_54fe…28f2
-  scope: [master]
+  scope: [project]
 $ lore tag add --name staging
 lore: wrote ~/work/website/.lore/data/tags/tag_05e9…4603.json
 ✓ tag staging tag_05e9…4603
 $ lore memory add --body 'The staging site is reset every Monday morning' --tag staging
 lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
 ✓ mem_c0f3…b5b8
-  scope: [master]
+  scope: [project]
 $ lore memory list
 mem_54fe…28f2 [retrieved] The client replies faster on WhatsApp than email
 mem_c0f3…b5b8 [retrieved] The staging site is reset every Monday morning
@@ -239,7 +239,7 @@ $ lore memory add --body 'The staging password is pass''word=example-only' --not
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913
-  scope: [master]
+  scope: [project]
 $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 $ lore memory delete --id mem_3b62…e913 --yes

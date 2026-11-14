@@ -1317,6 +1317,15 @@ func (sp setupProber) repoInit(ctx context.Context, r opssetup.ProbeRequest) ops
 	}
 	v := map[string]string{onboard.VarRepoRoot: root}
 	if !loreReady(root) {
+		// D-165 / I-13: a client repo of an org (the folder lore runs in)
+		// keeps no lore files; its step is the org link, never lore init,
+		// which would write into the client's repository. Skipped with that
+		// step, so no page or doctor offers init's runnable fix there.
+		if root == sp.hereTop(ctx) {
+			if c := sp.a.clientRepo(ctx); c.Org != "" {
+				return result(onboard.StatusSkip, clientRepoStep(c), v)
+			}
+		}
 		if t := initTargets(ctx, sp, r); t != "" {
 			v[onboard.VarFixVariant], v[onboard.VarTargets] = string(onboard.FixInitTargets), t
 		}

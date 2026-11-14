@@ -75,7 +75,7 @@ lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_28f8d32584b2db54ffb146bede5b03df.json (store agency)
 ✓ mem_28f8d32584b2db54ffb146bede5b03df [agency/client2]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client2/
-  scope: [master]
+  scope: [project]
 agent-backend (work/agents/api)$ lore sync >/dev/null && lore search --query 'invite links'
 lore: pushed store agency/client2, agency/org: commit 601d285 to branch main
 Found 1 hit for "invite links" across 1 entity type:

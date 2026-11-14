@@ -28,7 +28,7 @@ Alice (an agency developer) adds a rule, then reads the log. Each line is: time,
 $ lore rule add --body 'Never put passwords in the code'
 lore: wrote ~/work/website/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore audit log
 2026-11-02T10:00:00Z  rules.write                  rules/rul_7a67…9504  by alice
 2026-11-02T10:00:00Z  memories.write               memories/mem_2ad3…f891  by alice

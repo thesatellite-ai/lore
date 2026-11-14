@@ -71,8 +71,8 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		// A member setup that joined its team, its join step saved again
 		// with no invite (the line is never kept): nothing to re-join, so
 		// nothing is written. Before, this refused "Invite is required".
-		out.Status = onboard.StepDone
-		return out, e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: onboard.Answers{}, Checks: []onboard.CheckResult{}, Status: onboard.StepDone})
+		out.Status, out.Checks = onboard.StepDone, e.joinedChecks(step)
+		return out, e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: onboard.Answers{}, Checks: out.Checks, Status: onboard.StepDone})
 	}
 	if step.ID == onboard.StepKind {
 		if answers, err = e.withKindDefault(ctx, st, s, step, answers); err != nil {
@@ -431,6 +431,18 @@ func failingWithDetail(checks []onboard.CheckResult, id onboard.CheckID) string 
 // joined setup has none to send, and there is nothing to re-join.
 func joinedAlready(s stepState, step onboard.Step, answers onboard.Answers) bool {
 	return step.ID == onboard.StepJoin && s.exists && s.entry.Org != "" && strings.TrimSpace(answers[onboard.QIDInvite].Text) == ""
+}
+
+// joinedChecks are the results a joined setup's join step shows on an
+// edit (joinedAlready): every check the plan lists, skipped with the
+// reason. Without them the step and Summary said "not checked" for six
+// checks the page had just run (run:life:rest-kinds-open, member edit).
+func (e engine) joinedChecks(step onboard.Step) []onboard.CheckResult {
+	out := make([]onboard.CheckResult, 0, len(step.Checks))
+	for _, id := range step.Checks {
+		out = append(out, onboard.CheckResult{Check: id, Status: onboard.StatusSkip, Level: onboard.LevelInfo, Detail: onboard.SkipJoinedAlready, CheckedAt: e.now()})
+	}
+	return out
 }
 
 // complete reports every plan step done or skipped.

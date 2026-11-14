@@ -30,7 +30,7 @@ rep_54fe984c9b495744c0217776765a28f2  help
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
 ✓ rul_05e99e22e9e86e96fe4daa7777994603
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ lore rule add --repo shop --body 'Buttons are blue.'
 lore: wrote ~/work/website/.lore/data/rules/rul_c0f3c11a5724b0cfd74b256190d9b5b8.json
 ✓ rul_c0f3c11a5724b0cfd74b256190d9b5b8
@@ -137,15 +137,15 @@ lore: wrote ~/stores/client2/_store/actors/act_28f8d32584b2db54ffb146bede5b03df.
 lore: wrote ~/stores/client2/_store/rules/rul_4c590afb2a0cc7ae1b97b7e4e62d6c38.json (store client2)
 lore: wrote ~/stores/client2/_store/machines/mch_3b6283bc4392c556bbae5f094246e913.json (store client2)
 ✓ rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 [client2]
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/api)$ lore rule add --to client2 --body 'Every change comes with a test.'
 lore: wrote ~/stores/client2/_store/rules/rul_f147dd95f1aaf742dd4f5214843a5139.json (store client2)
 ✓ rul_f147dd95f1aaf742dd4f5214843a5139 [client2]
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/api)$ lore rule add --body 'The API answers in JSON only.'
 lore: wrote ~/work/api/.lore/data/rules/rul_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ rul_2537f9b2f7de77bfe5ca958860216bbb
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/api)$ lore rule list
 rul_2537f9b2f7de77bfe5ca958860216bbb [must/always] The API answers in JSON only.
 rul_4c590afb2a0cc7ae1b97b7e4e62d6c38 [must/always] Every screen works on a phone. [client2]
