@@ -29,6 +29,8 @@ package userscen
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -593,5 +595,29 @@ func TestSyncTeam_NoMachineLocalDataInGitObjects(t *testing.T) {
 	needles := []string{st.w.Root, st.people[0].Home, st.people[1].Home, "api-token", "/.lore/cache", "/.lore/clones"}
 	if found := st.app.AllObjectsContain(needles...); len(found) > 0 {
 		t.Fatalf("machine-local data reached the remote's git objects: %v", found)
+	}
+}
+
+// netDown cuts a person off the network the way a dead network does:
+// teamharness's Offline points the fake GitHub at a missing folder, which
+// git reports as "does not appear to be a git repository" and lore reads,
+// rightly, as a store that is gone (moved or deleted, exit 15). This
+// rewrites that route to a host that never resolves (.invalid, RFC 6761),
+// so git fails with "Could not resolve host", as with the wifi off (the
+// journeys' Machine.Offline does the same). Online() puts it back.
+func netDown(t *testing.T, w *th.World, p *th.Actor) {
+	t.Helper()
+	p.Offline()
+	gc := filepath.Join(p.Home, ".gitconfig")
+	b, err := os.ReadFile(gc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(w.Root, "no-network") + "/"
+	if !strings.Contains(string(b), missing) {
+		t.Fatalf("netDown: the offline route %q is not in %s", missing, gc)
+	}
+	if err := os.WriteFile(gc, []byte(strings.ReplaceAll(string(b), missing, "https://github.com.invalid/")), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

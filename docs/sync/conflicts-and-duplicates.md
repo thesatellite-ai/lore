@@ -13,7 +13,7 @@ lore installs a **merge driver**: a small helper git calls to combine two edits 
 |---|---|
 | different fields (one the strength, one the text) | both changes kept, no conflict |
 | the same field to the same value | that value |
-| the same choice-type field (status, priority, an archive date, a link to another row) | the side changed last wins |
+| the same choice-type field (status, priority, an archive date, a link to another row), or a task's one-value text field (who finished or approved it, its done commit, its work branch, its team, its role) | the side changed last wins |
 | the same free-text field (title, body) | a real conflict: both versions are written into the value, and you choose |
 | a list that works like a set (labels, approvers) | additions from both sides kept, removals honoured |
 

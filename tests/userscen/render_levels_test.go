@@ -51,7 +51,9 @@ func renderRepoFor(t *testing.T, slug string, cfg th.Config) *th.Clone {
 	p := w.Human("person", "person@example.com")
 	p.WriteConfig(cfg)
 	c := p.Clone(w.Remote(slug), "repo")
-	c.MustLore("init", "--non-interactive", "--name=repo")
+	// --yes: a client repo asks before lore writes into it (I-13); these
+	// fixtures set lore up in it on purpose
+	c.MustLore("init", "--non-interactive", "--name=repo", "--yes")
 	return c
 }
 

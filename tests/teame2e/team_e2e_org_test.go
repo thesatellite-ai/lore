@@ -32,7 +32,7 @@ type orgWorld struct {
 // newOrgWorld builds the P1 laptop; every repo gets a lore project.
 func newOrgWorld(t *testing.T, caps ...th.Cap) *orgWorld {
 	t.Helper()
-	w := newTeamWorld(t, append([]th.Cap{th.Cmd("whoami"), th.Cmd("store", "init")}, caps...)...)
+	w := newTeamWorld(t, append([]th.Cap{th.Cmd("whoami"), th.Cmd("store", "init"), th.Flag("yes", "init")}, caps...)...)
 	o := &orgWorld{w: w, remote: map[string]*th.Remote{}}
 	o.alice = w.Human("alice", "alice@northwind.example")
 	o.alice.WriteConfig(aliceConfig())
@@ -47,7 +47,7 @@ func newOrgWorld(t *testing.T, caps ...th.Cap) *orgWorld {
 		r := w.Remote(slug)
 		o.remote[slug] = r
 		c := o.alice.Clone(r, name)
-		c.MustLore("init", "--non-interactive", "--name="+name)
+		c.MustLore("init", "--non-interactive", "--name="+name, "--yes") // acme is a client repo: init asks until --yes (I-13)
 		c.CommitAll("lore")
 		c.AdminPush("origin", "main")
 		return c

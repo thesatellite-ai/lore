@@ -134,6 +134,7 @@ With the server from Step 1 running, ask it which routes it has for one noun. `G
 # alice, in ~
 $ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" http://127.0.0.1:$PORT/openapi.json | python3 -c 'import json, sys; p = json.load(sys.stdin)["paths"]; [print(" ".join(sorted(m.upper() for m in p[k])), k) for k in sorted(p) if k.startswith("/v1/rules")]'
 DELETE GET POST /v1/rules
+POST /v1/rules/archive
 POST /v1/rules/search
 DELETE GET PATCH /v1/rules/{id}
 POST /v1/rules/{id}/archive

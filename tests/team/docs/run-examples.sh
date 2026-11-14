@@ -76,12 +76,12 @@ make_store() {
   quiet "$1" work "mkdir -p stores && cd stores && { [ -d .git ] || git init -q; } && lore store init --name $2 --url '$3' --yes"
 }
 
-# client_repo SLUG DIR [PERSON]: the client (default carol) creates SLUG with an initial commit and lore set up.
+# client_repo SLUG DIR [PERSON]: the client (default carol) creates SLUG with an initial commit and lore set up. (--yes: when PERSON is in an org that claims SLUG, lore init asks first in a client repo)
 client_repo() {
   local slug="$1" dir="$2" who="${3:-carol}"
   remote "$slug"
   [ -d "$HOMES/$who" ] || person "$who" "$who@${slug%%/*}.example"
-  quiet "$who" work "git clone -q https://github.com/$slug $dir && cd $dir && echo '# $dir' > README.md && git add . && git commit -qm init && lore init --name=$dir >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
+  quiet "$who" work "git clone -q https://github.com/$slug $dir && cd $dir && echo '# $dir' > README.md && git add . && git commit -qm init && lore init --name=$dir --yes >/dev/null 2>&1 && git add -A && git commit -qm 'lore: init' && git push -q origin main"
 }
 
 # agency_config NAME KEY DISPLAY HANDLE: the agency's org entry (one monorepo store).

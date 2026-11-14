@@ -29,6 +29,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/yamlfmt"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -299,7 +300,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: cfg, Now: h.wall(), Route: typed.withRule(h.router())}
 	sg, err := g.ReadSuggestion(ctx, in.URL, in.Branch)
 	if err != nil {
-		return opsorgcmd.Report{}, orgFileError(err, in.URL)
+		return opsorgcmd.Report{}, importError(err, in.URL)
 	}
 	entry := orgconf.Org{Name: sg.Doc.Name}
 	if in.As != "" {
@@ -572,6 +573,24 @@ func orgConfigWith(home string, edit func(root *yaml.Node) error) ([]byte, error
 		return nil
 	})
 	return out, err
+}
+
+// importError is orgFileError for `lore org import`: an address with no
+// repository behind it is a url never imported here, so the steps for a
+// known store that moved (store set-url --name, store push --restore) do
+// not apply; the person checks the url or asks the store's admin.
+func importError(err error, url string) error {
+	if errors.Is(err, orgcfg.ErrStoreOffline) && gitfault.Classify(err.Error()) == gitfault.Missing {
+		return errs.New(errs.Offline, strings.Replace(err.Error(), "store is offline", "the store answers that there is no repository", 1)).
+			WithHint(importMissingHint(url))
+	}
+	return orgFileError(err, url)
+}
+
+// importMissingHint is the way on from importError's missing repository.
+func importMissingHint(url string) string {
+	return "check the address for a typo and import again: lore org import --url <store-url>; if " + url +
+		" is right, ask an admin of the org whether the store moved (its new address) or whether your account may read it"
 }
 
 // orgFileError maps a lore-org.yaml read or write error onto a lore code.

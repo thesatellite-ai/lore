@@ -209,10 +209,20 @@ func TestReposKinds(t *testing.T) {
 		before := treeSnap(t, bare)
 		// Every repo command refuses with what the folder is and the way
 		// out (a clone), never "run git init here" in a git repository.
-		for _, args := range [][]string{{"init"}, {"render"}, {"sync", "status"}, {"memory", "list"}, {"memory", "add", "a note"}} {
+		for _, args := range [][]string{{"init"}, {"render"}, {"memory", "list"}, {"memory", "add", "a note"}} {
 			r := m.Lore(t, bare, args...)
 			if r.Code == 0 || !strings.Contains(r.Stderr, "E_NOT_A_STORE") || !strings.Contains(r.Stderr, "bare repository") ||
 				!strings.Contains(r.Stderr, "git clone") || strings.Contains(r.Stderr, "git init here") {
+				t.Errorf("in a bare repo: %s", r)
+			}
+		}
+		// sync status (and sync) with no code repo here answer for the
+		// setup's stores (H-10), and still say what the folder is and the
+		// way to its repo status: a clone, never "git init here".
+		for _, args := range [][]string{{"sync", "status"}, {"sync"}} {
+			r := m.Lore(t, bare, args...)
+			if r.Code != 0 || !strings.Contains(r.Stdout, "bare repository") || !strings.Contains(r.Stdout, "git clone") ||
+				strings.Contains(r.Stdout+r.Stderr, "git init here") {
 				t.Errorf("in a bare repo: %s", r)
 			}
 		}

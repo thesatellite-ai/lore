@@ -127,7 +127,7 @@ func TestCampaignTeam_BadInputMatrix(t *testing.T) {
 		{"org set no org", []string{"org", "set"}, orgExitBadInput, "E_INVALID_INPUT", []string{"org"}},
 		{"org link no project", []string{"org", "link", orgName}, orgExitBadInput, "E_INVALID_INPUT", []string{"--project"}},
 		{"org create taken", []string{"org", "create", orgName, "--store", "https://" + orgSlugNotes, "--yes"}, orgExitBadInput, "E_INVALID_INPUT", []string{"already exists", "lore org link"}},
-		{"org import unreachable", []string{"org", "import", "https://github.com/agency/nothere", "--yes"}, th.ExitOffline, "E_OFFLINE", []string{"retry"}},
+		{"org import unreachable", []string{"org", "import", "https://github.com/agency/nothere", "--yes"}, th.ExitOffline, "E_OFFLINE", []string{"no repository", "check the address", "lore org import --url"}},
 		// scopes and workspaces
 		{"scope move unknown", []string{"scope", "move", "nosuch", "other"}, th.ExitNotFound, "E_NOT_FOUND", []string{"lore scope list"}},
 		{"scope move into itself", []string{"scope", "move", "a", "a"}, orgExitBadInput, "E_INVALID_INPUT", nil},

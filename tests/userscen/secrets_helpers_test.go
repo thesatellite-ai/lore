@@ -97,7 +97,9 @@ func newSecOrgLaptop(t *testing.T) *secOrgLaptop {
 	mk := func(slug, name string) (*th.Clone, *th.Remote) {
 		r := w.Remote(slug)
 		c := alice.Clone(r, name)
-		c.MustLore("init", "--non-interactive", "--name="+name)
+		// --yes: the client repo asks before lore writes into it (I-13);
+		// the fixture sets lore up in it on purpose
+		c.MustLore("init", "--non-interactive", "--name="+name, "--yes")
 		c.CommitAll("lore")
 		c.AdminPush("origin", "main")
 		return c, r

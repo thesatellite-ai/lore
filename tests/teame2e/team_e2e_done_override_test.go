@@ -40,6 +40,15 @@ func TestF07_HumanDoneOnExpiredClaim(t *testing.T) {
 	if raw, ok := row.Raw["done_pr"]; !ok || json.Unmarshal(raw, &pr) != nil || row.Status != statusDone || pr != 41 {
 		t.Fatalf("row after the override done: status %q done_pr %s", row.Status, row.Raw["done_pr"])
 	}
-	z := ac.Lore("task", "done", id).Fails(t, th.ExitLostClaim, "E_LOST_CLAIM")
+	// G-10: a second done is a no-op that names who finished it; the old
+	// holder still changes nothing (its done never lands over alice's).
+	z := ac.MustLore("task", "done", id).Says(t, "was already done by alice", "nothing changed")
 	t.Logf("old holder's done afterwards:\n%s", z.Out())
+	after, ok := readRow(t, cr.tools, refLive, liveRowPath(rootFolder, tblTasks, id))
+	if !ok {
+		after = mustRow(t, cr.tools, refMain, mainRowPath(rootFolder, tblTasks, id))
+	}
+	if raw, ok := after.Raw["done_pr"]; !ok || json.Unmarshal(raw, &pr) != nil || after.Status != statusDone || pr != 41 {
+		t.Fatalf("row after the old holder's done: status %q done_pr %s", after.Status, after.Raw["done_pr"])
+	}
 }
