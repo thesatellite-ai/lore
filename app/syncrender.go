@@ -10,6 +10,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/op"
@@ -36,6 +37,11 @@ func syncRenderHook(rend *lateRender, wd string) hosthooks.Hook {
 		// SOURCE_OF_TRUTH rows 10, 11: LORE.md when its stamp no longer
 		// matches its rows, then the private files and import lines.
 		rend.h.RerenderStaleQuiet(ctx, wd)
+		// devco:D-231: a committed render the sync kept as it is (K-8)
+		// is named with what brings it up to date.
+		if n := rend.h.HeldStaleNotice(ctx, wd); n != "" {
+			_, _ = os.Stderr.WriteString(n + "\n") // a sync never fails over its notice
+		}
 		rend.h.RerenderPrivateQuiet(ctx, wd)
 		hints := rend.h.ScopeRenameHints(ctx, wd)
 		if len(hints) == 0 {

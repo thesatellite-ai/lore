@@ -141,7 +141,7 @@ ERROR: [E_INVITE_REVOKED] invite inv_01a1b195c0f47163971b269b3863583a was revoke
 
 ### `E_INVITE_EMAIL` (exit 20)
 
-**Cause:** the invite is for another email than the one you gave in the identity step (your main identity email is not the invite's; other addresses do not count).
+**Cause:** the invite is for another email than the one you gave in the identity step (your main identity email is not the invite's; other addresses do not count, except when you run the join again on the machine that already joined with this invite).
 
 **Fix:** if the invite is yours, make its address your main email in the identity step; otherwise ask the inviter for an invite to the address you use. An invite is for one person: never type someone else's address.
 

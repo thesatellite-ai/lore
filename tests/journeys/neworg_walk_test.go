@@ -12,9 +12,19 @@ package journeys
 //   - a note written with --to <second org store>/<folder> said "lore sync
 //     sends it", and `lore sync` synced only the repo's attached store, so
 //     the commits never left the laptop; `lore sync` now pushes every org
-//     store clone that holds waiting commits.
+//     store clone that holds waiting commits;
+//   - a folder added from a folder in no repo and no setup (~/notes) said
+//     "lore sync sends it", and `lore sync` there answered "no stores to
+//     sync" and left the commit on the laptop (devco D-224); the sync
+//     outside a repo now pushes the waiting org store clones too.
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+)
 
 func TestJourneyNewOrgThreeStores(t *testing.T) {
 	t.Parallel()
@@ -51,5 +61,24 @@ func TestJourneyNewOrgThreeStores(t *testing.T) {
 			t.Fatal("lore sync left the org-clients commits on the laptop (the write said lore sync sends it)")
 		}
 		lap.LoreIn(app, "sync").OK(t).Never(t, "store org-clients")
+	})
+
+	w.Step("day2/sync-outside-any-repo-sends-the-folder", func() {
+		notes := filepath.Join(lap.Home, "notes")
+		if err := os.MkdirAll(notes, 0o750); err != nil {
+			t.Fatal(err)
+		}
+		inLab := func() bool {
+			return slices.ContainsFunc(research.Files("refs/heads/main"), func(f string) bool { return strings.HasPrefix(f, "lab/") })
+		}
+		lap.Lore(notes, "store", "folder", "add", "--store", "org-research", "--folder", "lab").OK(t).Says(t, "lore sync sends it")
+		if inLab() {
+			t.Fatal("the lab folder reached org-research before any sync: the test proves nothing")
+		}
+		lap.Lore(notes, "sync").OK(t).Says(t, "store org-research: pushed").Never(t, "no stores to sync")
+		if !inLab() {
+			t.Fatalf("lore sync outside a repo left the lab folder on the laptop (the write said lore sync sends it): %v", research.Files("refs/heads/main"))
+		}
+		lap.Lore(notes, "sync").OK(t).Never(t, "store org-research")
 	})
 }

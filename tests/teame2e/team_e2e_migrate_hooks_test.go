@@ -262,18 +262,19 @@ func TestMigrateRaceLockHolderCrash(t *testing.T) {
 	bc.Lore("migrate", "run", "--team-lock").Refused(t, migrateLockedCode, "alice")
 	bc.Lore("migrate", "unlock", "--team", "--yes").Refused(t, migrateLockedCode)
 	crashed(t, "team-locked", p.kill())
-	// Today's machine lock (wire/migrate.go LockMigration) is a plain
-	// O_EXCL file holding the pid, so kill -9 leaves it behind: her own
-	// rerun is E_MIGRATE_LOCKED naming the dead pid until `unlock`.
-	// FORMAT_EVOLUTION 7.2 describes a kernel lock the OS drops when the
-	// process dies (rerun would just go ahead); which one 0.1.18 keeps is
-	// an owner question (P3-FMT-1), and this pin flips with the answer.
+	// The machine lock (wire/migrate_lock.go) is a plain O_EXCL file
+	// holding the pid, so kill -9 leaves it behind. P3-FMT-1 was answered
+	// by owner item 46 (9626c1cb): a lock whose pid no longer runs is
+	// taken over by the next run, which says so; it used to stop
+	// E_MIGRATE_LOCKED until `lore migrate unlock` (devco D-224).
 	if _, ok := alice.ReadFile(".lore/state/migrate.lock"); !ok {
-		t.Fatal("the killed run's machine lock file is gone; was the lock changed to a kernel lock? update this pin (P3-FMT-1)")
+		t.Fatal("the killed run's machine lock file is gone; was the lock changed to a kernel lock? update this pin")
 	}
-	alice.Lore("migrate", "run", "--no-push").Refused(t, migrateLockedCode, "pid", strconv.Itoa(p.pid))
-	alice.MustLore("migrate", "status").Says(t, "stale")
-	alice.MustLore("migrate", "unlock").Says(t, "released")
+	alice.MustLore("migrate", "run", "--no-push").Says(t, "took over .lore/state/migrate.lock from pid "+strconv.Itoa(p.pid)+", which is no longer running")
+	if _, ok := alice.ReadFile(".lore/state/migrate.lock"); ok {
+		t.Fatal("the run that took the lock over left it behind")
+	}
+	assertMigrated(t, "alice", memoryFiles(t, alice))
 	bob.Advance(5 * time.Minute) // inside the 10-minute lease
 	bc.Lore("migrate", "run", "--team-lock").Refused(t, migrateLockedCode)
 	bob.Advance(6 * time.Minute) // past Expires, inside the 2-minute grace

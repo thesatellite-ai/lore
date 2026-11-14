@@ -161,3 +161,57 @@ func TestJourneyLiveStrictMetaClash(t *testing.T) {
 		}
 	})
 }
+
+// TestJourneyLiveOffRowMerge (devco D-224): with live rows off
+// (LORE_LIVE=0) every row is a file on the branch. Mei and Tom set the
+// priority of one task in their own clones and commit; Tom's `git pull`
+// merges the row through lore's merge driver (the newer edit wins; a text
+// field both changed would keep both, as any git merge of row files does)
+// instead of stopping on a git conflict in the _hlc and updated_at lines. Before, a run with live rows off never configured the
+// driver, so the pull conflicted in .lore/data.
+func TestJourneyLiveOffRowMerge(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	mei := w.Persona("Mei Lin", "mei.lin@example.test").Laptop()
+	tom := w.Persona("Tom Ash", "tom.ash@example.test").Laptop()
+	for _, m := range []*Machine{mei, tom} {
+		m.SetEnv("LORE_LIVE", "0")
+	}
+	remote := w.Remote(lcSlug)
+	m := mei.Clone(remote, "board")
+	var id string
+	var tc *teamharness.Clone
+
+	w.Step("day1/mei-adds-a-task-as-a-file", func() {
+		m.WriteFile("README.md", "# board\n")
+		mei.LoreIn(m, "init").OK(t)
+		r := mei.LoreIn(m, "task", "add", "Fixture task", "--commitment", "accepted").OK(t)
+		if id = lcTaskID.FindString(r.Out()); id == "" {
+			t.Fatalf("task add printed no id: %s", r)
+		}
+		m.CommitAll("board and a task")
+		m.Git("push", "-q", "origin", "HEAD:main")
+		tc = tom.Clone(remote, "board")
+		tom.LoreIn(tc, "task", "show", id).OK(t).Says(t, "Fixture task")
+	})
+
+	w.Step("day2/both-set-priority-and-tom-pulls", func() {
+		w.AdvanceDays(1)
+		mei.LoreIn(m, "task", "edit", id, "--priority", "high").OK(t)
+		m.CommitAll("mei raises it")
+		m.Git("push", "-q", "origin", "HEAD:main")
+		w.Advance(time.Minute) // Tom's edit is the newer one
+		tom.LoreIn(tc, "task", "edit", id, "--priority", "low").OK(t)
+		tc.CommitAll("tom lowers it")
+		if drv := tc.Git("config", "--get", "merge.lore.driver"); !strings.Contains(drv, "merge-driver") {
+			t.Fatalf("a write with live rows off wires the clone's merge driver: %q", drv)
+		}
+		if r := tc.TryGit("-c", "pull.rebase=false", "pull", "--no-edit", "origin", "main"); r.Code != 0 {
+			t.Fatalf("git pull of two edits of one row must merge through lore's driver: %s\n%s", r, tc.Status())
+		}
+		tom.LoreIn(tc, "task", "show", id).OK(t).Says(t, "priority: low").Never(t, lcMarkers...)
+		if st := tc.Status(); st != "" {
+			t.Fatalf("the merge leaves a clean checkout: %q", st)
+		}
+	})
+}

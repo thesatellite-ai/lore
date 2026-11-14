@@ -143,6 +143,16 @@ func (h *Host) RerenderStaleQuiet(ctx context.Context, root string) {
 	h.rerenderStaleQuiet(ctx, root)
 }
 
+// HeldStaleNotice is the one line a sync prints when it left a committed
+// .lore/LORE.md behind its rows ("" when the render is current, not
+// held, or cannot be checked). Why (devco:D-231): the sync may not
+// rewrite it (K-8: a dirty tracked render stops the next git pull, even
+// one bringing the same rows), so it says where the render stands and
+// what brings it up to date instead of leaving it silently stale.
+func (h *Host) HeldStaleNotice(ctx context.Context, root string) string {
+	return h.heldStaleNotice(ctx, root)
+}
+
 // RenderedCopies implements opsrender.CopyChecker: the rendered files and
 // pointer files of the repo at root that no longer match their source.
 func (h *Host) RenderedCopies(ctx context.Context, root string) (_ []opsrender.CopyFinding, err error) {

@@ -100,17 +100,18 @@ type RosterResult struct {
 // ApplyJoin is the member join write (4.5 Apply 1–5).
 func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, error) {
 	inv := req.Invite
-	email, inviteID, err := inviteEmail(inv, req.Emails)
+	je, err := inviteEmail(inv, req.Emails)
 	if err != nil {
 		return RosterResult{}, err
 	}
+	email, inviteID := je.email, je.id
 	var res RosterResult
 	// The invite check comes before anyone is registered (owner item 19):
 	// org.import runs it as Admit, so a missing, revoked, used, expired or
 	// mismatched invite writes no actor row, no commit and no push; an
 	// entry that was already here is checked before the write-mode open.
 	admit := func(ctx context.Context, _ string) error {
-		return checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email, false)
+		return checkInvite(ctx, d.Profiles, inv, je, req.Emails, false)
 	}
 	// SkipRegister (W-12): the joining person's actor row is written below,
 	// in the join's one store commit, not as a commit of its own first.
@@ -118,7 +119,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 		return RosterResult{}, err
 	}
 	if !res.Imported {
-		if err = checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email, true); err != nil {
+		if err = checkInvite(ctx, d.Profiles, inv, je, req.Emails, true); err != nil {
 			return RosterResult{}, err
 		}
 	}
@@ -167,7 +168,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	res.Actor = actor.ID.String()
 	today := r.Today()
 	verdict, err := onboard.DecideInvite(x.record(), inv.By, today, onboard.Acceptor{Actor: res.Actor, Email: email, Rerun: !res.Imported})
-	if err != nil {
+	if err = je.allow(verdict, err); err != nil {
 		return RosterResult{}, err
 	}
 	if verdict == onboard.VerdictAlready {
@@ -237,26 +238,68 @@ func readInvite(ctx context.Context, r profilestore.Roster, inv onboard.Invite, 
 	return inviteOf(invRow)
 }
 
+// joinEmail is the address an invite join writes as and the invite's id.
+// notPrimary is set when the invite's address is only one of the
+// person's other addresses: E_INVITE_EMAIL for every join except a
+// re-run on the machine whose actor accepted this invite (allow).
+type joinEmail struct {
+	email      string
+	id         ids.AnyID
+	notPrimary error
+}
+
+// allow is the invite decision with the primary-email rule applied: a
+// join whose primary email is not the invite's passes only when the
+// invite is Already this machine's. Why (devco:D-230): a member who
+// joined and then changed their main email re-saved the join step on the
+// same machine and was refused as if they were someone else; the other
+// address names nobody new, the accepting actor is the entry's caller.
+// verdict and err are DecideInvite's answer; the email refusal comes
+// first, as it did before the invite was read.
+func (j joinEmail) allow(verdict onboard.InviteVerdict, err error) error {
+	if j.notPrimary != nil && (err != nil || verdict != onboard.VerdictAlready) {
+		return j.notPrimary
+	}
+	return err
+}
+
 // inviteEmail is the address an invite join writes as: the person's
 // primary identity email (emails[0]), which must be the invite's, and
 // the invite's id. Why (J-9): any address of the identity step used to
 // match, so a second person listing the invitee's email as an "other
-// address" joined as the invitee; the hint even told them to.
-func inviteEmail(inv onboard.Invite, emails []string) (string, ids.AnyID, error) {
+// address" joined as the invitee; the hint even told them to. The
+// invite's address among the other addresses is kept as notPrimary, for
+// the re-run joinEmail.allow lets through; no address at all is refused
+// here.
+func inviteEmail(inv onboard.Invite, emails []string) (joinEmail, error) {
 	primary := ""
 	if len(emails) > 0 {
 		primary = strings.TrimSpace(emails[0])
 	}
-	if !onboard.SameEmail(primary, inv.Email) {
+	var je joinEmail
+	switch {
+	case onboard.SameEmail(primary, inv.Email):
+		je.email = primary
+	default:
 		ask := "ask " + cmpOr(inv.By, "the org admin")
-		return "", ids.AnyID{}, errs.New(errs.InviteEmail, "invite "+inv.ID+" is for "+inv.Email+", not your identity email "+cmpOr(primary, "(none)")+"; it is joined only with "+inv.Email+" as the identity email").
+		je.notPrimary = errs.New(errs.InviteEmail, "invite "+inv.ID+" is for "+inv.Email+", not your identity email "+cmpOr(primary, "(none)")+"; it is joined only with "+inv.Email+" as the identity email").
 			WithHint(ask + " to run lore team invite --email " + cmpOr(primary, "<your email>") + " (an invite is for one person)")
+		for _, e := range emails[min(1, len(emails)):] {
+			if e = strings.TrimSpace(e); onboard.SameEmail(e, inv.Email) {
+				je.email = e
+				break
+			}
+		}
+		if je.email == "" {
+			return joinEmail{}, je.notPrimary
+		}
 	}
 	inviteID, err := ids.ParseAny(inv.ID)
 	if err != nil || inviteID.Prefix() != ids.PrefixInvite {
-		return "", ids.AnyID{}, errs.New(errs.InviteInvalid, "this is not a lore invite; copy the whole line starting with "+onboard.InvitePrefix)
+		return joinEmail{}, errs.New(errs.InviteInvalid, "this is not a lore invite; copy the whole line starting with "+onboard.InvitePrefix)
 	}
-	return primary, inviteID, nil
+	je.id = inviteID
+	return je, nil
 }
 
 // cmpOr is s, or def when s is blank (messages only).
@@ -276,15 +319,19 @@ func cmpOr(s, def string) string {
 // same actor is Already). On a fresh join nobody is, so an accepted
 // invite is used (J-9). The full decision runs again on the write-mode
 // open, as the registered actor.
-func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, id ids.AnyID, emails []string, email string, rerun bool) error {
+func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, je joinEmail, emails []string, rerun bool) error {
+	if je.notPrimary != nil && !rerun {
+		return je.notPrimary // a fresh join: only the primary email counts (J-9)
+	}
+	email := je.email
 	r, done, err := profiles.Roster(ctx, false)
 	defer done()
 	if err != nil {
 		return err
 	}
-	x, err := readInvite(ctx, r, inv, id)
+	x, err := readInvite(ctx, r, inv, je.id)
 	if err != nil {
-		return err
+		return je.allow("", err)
 	}
 	who := onboard.Acceptor{Email: email, Rerun: rerun}
 	self := ""
@@ -298,7 +345,7 @@ func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.I
 			who.Actor = a.ID.String()
 		}
 	}
-	if _, err = onboard.DecideInvite(x.record(), inv.By, r.Today(), who); err != nil {
+	if err = je.allow(onboard.DecideInvite(x.record(), inv.By, r.Today(), who)); err != nil {
 		return err
 	}
 	if who.Actor != "" {
@@ -314,11 +361,11 @@ func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.I
 // check answers what apply would (J-9: invite.status and invite.email
 // were "not checked here yet" and said ready for an invite apply refuses).
 func CheckInviteJoin(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, emails []string, rerun bool) error {
-	email, id, err := inviteEmail(inv, emails)
+	je, err := inviteEmail(inv, emails)
 	if err != nil {
 		return err
 	}
-	return checkInvite(ctx, profiles, inv, id, emails, email, rerun)
+	return checkInvite(ctx, profiles, inv, je, emails, rerun)
 }
 
 // actorByEmail is the roster actor an address names (an email identity

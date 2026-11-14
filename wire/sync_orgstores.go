@@ -50,16 +50,42 @@ func (a *App) pushWaitingOrgStores(ctx context.Context, done []opsstores.Report)
 			unreachable[norm] = true
 		}
 	}
+	pushed := a.waitingOrgPushes(ctx, unreachable)
+	out := make([]opsstores.Report, 0, len(pushed))
+	for _, p := range pushed {
+		out = append(out, p.report)
+	}
+	return out
+}
+
+// orgPush is one waiting org store clone that a sync pushed: the push's
+// report and the store's url (the setup sync's line names it).
+type orgPush struct {
+	report opsstores.Report
+	url    string
+}
+
+// waitingOrgPushes pushes every configured org store clone that holds
+// commits its remote has not got, except the stores whose normalized url
+// skip names (a store this sync already reported). It is shared by the
+// repo sync (pushWaitingOrgStores) and the sync outside a code repo
+// (SyncSetup): a write outside any setup (`lore store folder add` from ~)
+// said "lore sync sends it", and `lore sync` there must send it too
+// (devco D-224).
+func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool) []orgPush {
+	if a.opts.Home == "" {
+		return nil
+	}
 	c := &standaloneClones{home: a.opts.Home, now: a.opts.Wall}
 	list, err := c.configuredStores()
 	if err != nil {
 		return nil
 	}
 	cl := c.clonesFor()
-	var out []opsstores.Report
+	var out []orgPush
 	for _, cs := range list {
-		if unreachable[cs.norm] {
-			continue // the attached store's line already says it (K-7)
+		if skip[cs.norm] {
+			continue // this sync's own line already says it (K-7)
 		}
 		info := cl.Inspect(ctx, cs.norm)
 		if !info.Cloned || !slices.ContainsFunc(info.Unpushed, isBranchRef) {
@@ -86,7 +112,7 @@ func (a *App) pushWaitingOrgStores(ctx context.Context, done []opsstores.Report)
 		default:
 			r.Sent, r.Offline = res.Sent, res.Offline
 		}
-		out = append(out, r)
+		out = append(out, orgPush{report: r, url: cs.url})
 	}
 	return out
 }

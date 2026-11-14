@@ -38,11 +38,19 @@ func mergedStampScenario(t *testing.T, together bool) {
 	rt.c2.MustLore("task", "done", id, "--commit", sha)
 	rt.c2.Git("push", "-q", "-u", "origin", "feat/checkout")
 
-	// Both clones stand on main with the landed row; it leaves live.
+	// Both clones stand on main with the landed row; it leaves live. The
+	// sync that lands the row pushes the landing commit to origin/main and
+	// says the row "leaves live once main is fetched" (devco D-224), so
+	// each clone pulls and syncs once more, as a person does, before dev1
+	// merges on an up-to-date main.
 	for _, c := range []*th.Clone{rt.c1, rt.c2} {
 		c.Git("checkout", "-q", "main")
-		c.Git("pull", "-q")
-		c.MustLore("sync")
+	}
+	for range 2 {
+		for _, c := range []*th.Clone{rt.c1, rt.c2} {
+			c.Git("pull", "-q")
+			c.MustLore("sync")
+		}
 	}
 	if _, ok := rt.liveTask(t, id); ok {
 		t.Fatalf("setup: the finished row must have left live once main holds it")
@@ -89,7 +97,14 @@ func mergedStampScenario(t *testing.T, together bool) {
 	}
 	// Recorded once: one landing commit after the merge, whoever noticed
 	// (two finders stage the same bytes, so the second landing has nothing
-	// to commit).
+	// to commit). A landing goes out with lore sync, never by itself
+	// (owner rule U-2, devco D-224), so both clones sync first.
+	if got, _, _ := strings.Cut(rt.c1.Git("ls-remote", "origin", "refs/heads/main"), "\t"); got != mergeSHA {
+		t.Fatalf("a lore command other than sync moved main by itself: origin main %s, the merge %s", got, mergeSHA)
+	}
+	for _, c := range []*th.Clone{rt.c1, rt.c2} {
+		c.MustLore("sync")
+	}
 	rt.c1.Git("fetch", "-q", "origin")
 	if n := strings.Count(rt.c1.Git("log", "--format=%s", "origin/main", "^"+mergeSHA), "lore: land"); n != 1 {
 		t.Fatalf("the merged stamp must land exactly once, got %d landing commits", n)
@@ -122,6 +137,10 @@ func TestMerged_ManualMarkKeepsCheckoutClean(t *testing.T) {
 	rt := newRepoTeam(t, capLand, th.Cmd("task", "merged"))
 	id := rt.addTask(t, rt.c1, "deploy to staging", "--live")
 	rt.c1.MustLore("task", "done", id)
+	rt.c1.Git("pull", "-q")
+	// the sync lands the row on origin/main and says when it leaves live;
+	// the next sync after a pull takes it off live (devco D-224)
+	rt.c1.MustLore("sync").Says(t, "landed on main", "leaves live once main is fetched")
 	rt.c1.Git("pull", "-q")
 	rt.c1.MustLore("sync")
 	if _, ok := rt.liveTask(t, id); ok {

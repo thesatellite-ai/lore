@@ -123,7 +123,10 @@ vars:
     journey-agency    2   test:journeys:agency PARALLEL=2
     journey-joiner    2   test:journeys:joiner PARALLEL=2
     sweep-rest        7   test:machines:sweep:rest PARALLEL=8
-    teame2e           7   test:team:run PARALLEL=10
+    teame2e           5   test:team:core PARALLEL=8
+    teame2e-te        4   test:team:te PARALLEL=8
+    teame2e-rest      4   test:team:rest PARALLEL=8
+    teame2e-race      3   test:team:race:run
     race-wire         12  test:race:wire SHARDS=6
     life-teams        4   test:machines:life:teams PARALLEL=4
     test-all          6   test:all
@@ -464,9 +467,21 @@ tasks:
       - testlock task lore:test:team:run -- {{.CLI_ARGS}}
 
   test:team:run:
-    desc: "Body of lore:test:team WITHOUT the machine-wide test lock; call lore:test:team instead"
+    desc: "Body of lore:test:team WITHOUT the machine-wide test lock (every test of tests/teame2e); call lore:test:team instead"
+    cmds:
+      - task: test:team:part
+        vars: {PART: all, FILTER: "{{.CLI_ARGS}}"}
+
+  # The gate runs tests/teame2e as parallel parts, each with its own binary name, instead of one
+  # package run (devco D-223: the one gate step ran only the tests a -run prefix list named, so
+  # 138 of 331 tests, TestB11*, TestTeA..TeF*, TestMerged*, TestMigrate*, TestRoster* among them,
+  # ran nowhere and 39 broke unseen). core and te select by name; rest skips exactly what they
+  # run, so the three parts cover every test by construction, and tests/gatecover fails when a
+  # test of a tagged suite is selected by no gate step.
+  test:team:part:
+    desc: "One part of tests/teame2e with its own binary (PART names it, FILTER is the go test -run/-skip); test:team:run and the gate's teame2e-* steps call it"
     vars:
-      TEAM_BIN: "{{.BIN_DIR}}/lore-team"
+      TEAM_BIN: "{{.BIN_DIR}}/lore-team-{{.PART}}"
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW (test clock).
@@ -482,8 +497,26 @@ tasks:
         set -o pipefail
         # -parallel: how many team tests run at once (the gate passes its share of the load
         # budget; a manual run uses 24).
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$)' ./tests/teame2e/ {{.CLI_ARGS}} \
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout 40m -json {{.FILTER}} ./tests/teame2e/ \
           | go run ./tests/teame2e/teamharness/matrix
+
+  test:team:core:
+    desc: "tests/teame2e, the spec scenarios: F*, E*, recipes, side effects, leaks, next, worked examples, API parity"
+    cmds:
+      - task: test:team:part
+        vars: {PART: core, FILTER: "-run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$)'"}
+
+  test:team:te:
+    desc: "tests/teame2e, the later te-a..te-f groups and the B11 sync and CLI tests"
+    cmds:
+      - task: test:team:part
+        vars: {PART: te, FILTER: "-run '^Test(Te[A-F]_|B11)'"}
+
+  test:team:rest:
+    desc: "tests/teame2e minus the core and te parts: everything else (Fin*, Merged*, Migrate*, Roster*, Time*, Task*, Access*, ...)"
+    cmds:
+      - task: test:team:part
+        vars: {PART: rest, FILTER: "-skip '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$|Te[A-F]_|B11)'"}
 
   test:setupe2e:
     desc: "Setup page e2e suite (tests/setupe2e, tag setupe2e): every valid machine shape (1764) through the real binary's HTTP API. Fails, never skips, when a world or the server cannot start. Narrow with SETUPE2E_ONLY=<text in the shape name>"
@@ -503,7 +536,7 @@ tasks:
       # 189 s at 32 vs 194 s at 48; each shape spawns lore processes, so more Go-level
       # parallelism only adds load.
       # PARALLEL: the gate passes its share of the load budget.
-      - "SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout 60m -run '^(TestAPIMatrix|TestBinaryServesDefaultUI|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/"
+      - "SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout 60m ./tests/setupe2e/"
 
   test:machines:
     desc: "Real-machine suite (tests/machines, tag machines): homes shaped like real users' (fresh, v0.1.17, migrated with *.migrated backups, several gh accounts and ssh aliases with a key without .pub, org member, setups disabled/trashed/purged) and every valid 4-step setup lifecycle sequence on them, checking after each step that nothing purged or trashed is offered, disabled never applies, config check knows every key, doctor --all reports, and repo files are 0644 / ~/.lore owner-only. MACHINES_FULL=1 runs every sequence on every shape"
@@ -685,13 +718,15 @@ tasks:
       - testlock task lore:test:team:race:run -- {{.CLI_ARGS}}
 
   test:team:race:run:
-    desc: "Body of lore:test:team:race WITHOUT the machine-wide test lock; call lore:test:team:race instead"
+    desc: "Body of lore:test:team:race WITHOUT the machine-wide test lock; call lore:test:team:race instead (the gate's teame2e-race step)"
     vars:
-      TEAM_BIN: "{{.BIN_DIR}}/lore-team"
+      TEAM_BIN: "{{.BIN_DIR}}/lore-team-race"
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./cmd/lore
-      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./tests/teame2e/ {{.CLI_ARGS}}
+      # -timeout 40m: five rounds of every race test under -race outlast go test's 10-minute
+      # default beside the other gate steps (devco D-223 made this a gate step).
+      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -timeout 40m -run 'Race' -count=5 ./tests/teame2e/ {{.CLI_ARGS}}
 
   docs:examples:
     desc: "Run every docs/team example against the real binary (tests/team/docs/run-examples.sh), then refresh the pages from the transcripts (paste.py); fails when an example misbehaves or a page is stale. One section: task lore:docs:examples -- agents"

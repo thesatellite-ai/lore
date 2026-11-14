@@ -87,7 +87,7 @@ Send it in chat or email; the person runs `lore setup join --invite <line>` (see
 
 ## Single use, 14 days
 
-- An invite is **accepted once**. After that, the same line answers `E_INVITE_USED` on every fresh join, whoever runs it; only running the join again on the machine that already joined is harmless. Someone already on the roster who joins again (a new machine, a purged setup) answers the join step with the org's store url instead of the line. `lore setup check --step join` says so before the join is saved.
+- An invite is **accepted once**. After that, the same line answers `E_INVITE_USED` on every fresh join, whoever runs it; only running the join again on the machine that already joined is harmless, also after you made another address your main email there (the invite's address still among your other addresses). Someone already on the roster who joins again (a new machine, a purged setup) answers the join step with the org's store url instead of the line. `lore setup check --step join` says so before the join is saved.
 - It **expires** after its last day (14 days by default, `--expires` up to 90). An expired invite answers `E_INVITE_EXPIRED`; send a new one.
 - The **email must match**: the person joining must give the invite's email as their main identity email, or the join is refused with `E_INVITE_EMAIL`. Listing it only among "other addresses" is not enough, and any other address that already belongs to someone on the roster is refused with `E_CONTACT_TAKEN`, naming the address.
 - A **revoked** invite answers `E_INVITE_REVOKED`.

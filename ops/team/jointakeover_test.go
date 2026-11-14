@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/setup"
 	"github.com/thesatellite-ai/lore/schema"
@@ -75,4 +76,42 @@ func TestJoinMemberByPrimaryOnly(t *testing.T) {
 	x.joiner()
 	_, err := ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"pat@elsewhere.example", "tomas@agency.example"}, Name: "Pat"})
 	wantCode(t, "member by other address", err, errs.NotFound)
+}
+
+// TestJoinRerunAfterEmailChange (devco:D-230, break-verify target): tomas
+// joined, then made another address his main email and kept the
+// invite's among his other addresses; saving the join step again on his
+// machine is Already (setup check and apply agree). The same emails on a
+// fresh machine, and a pending invite for someone else listed as an
+// other address on tomas's joined machine, are still E_INVITE_EMAIL.
+func TestJoinRerunAfterEmailChange(t *testing.T) {
+	x := newFixture(t)
+	out := x.invite(setup.TeamInviteIn{Email: "tomas@agency.example", Roles: []string{"dev"}, Projects: []string{"acme-hub"}})
+	delete(x.e.origins, "agency")
+	tomas := x.joiner()
+	if _, err := x.join(out.Line, "tomas@agency.example"); err != nil {
+		t.Fatal(err)
+	}
+	emails := []string{"tomas@home.example", "tomas@agency.example"}
+	inv, err := onboard.DecodeInvite(out.Line)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = CheckInviteJoin(context.Background(), x.e, inv, emails, true); err != nil {
+		t.Errorf("setup check of the re-run: %v", err)
+	}
+	res, err := x.join(out.Line, emails...)
+	if err != nil || !res.Already {
+		t.Fatalf("re-run on the joined machine after an email change: %+v %v", res, err)
+	}
+
+	other := x.invite(setup.TeamInviteIn{Email: "pat@agency.example", Roles: []string{"dev"}, Projects: []string{"acme-hub"}})
+	x.e.CallerID = tomas
+	_, err = x.join(other.Line, "tomas@agency.example", "pat@agency.example")
+	wantCode(t, "someone else's pending invite as an other address", err, errs.InviteEmail)
+
+	delete(x.e.origins, "agency") // a fresh machine
+	x.joiner()
+	_, err = x.join(out.Line, emails...)
+	wantCode(t, "fresh join, invite address not primary", err, errs.InviteEmail)
 }

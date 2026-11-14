@@ -19,6 +19,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // Words of the hidden hook command.
@@ -78,6 +79,8 @@ func runStagedLeakCheck(cmd *cobra.Command, root *cobra.Command, msg string) err
 			return errs.Wrap(errs.InvalidInput, "lore check leaks --"+name, err)
 		}
 	}
-	leaks.SetContext(cmd.Context())
+	// the block's separate check runs after a refusal here and must see
+	// the index the pre-commit hook staged (wire.KeepHookIndex)
+	leaks.SetContext(wire.KeepHookIndex(cmd.Context()))
 	return leaks.RunE(leaks, nil)
 }

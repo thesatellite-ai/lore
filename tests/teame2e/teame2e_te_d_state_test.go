@@ -73,7 +73,9 @@ func TestTeD_StateColumnAcrossClones(t *testing.T) {
 	// the merge.
 	cr.toolsC.Git("pull", "-q")
 	cr.toolsC.Git("merge", "-q", "--no-ff", "--no-edit", "origin/agent/w-3/ship")
-	cr.toolsC.AdminPush("origin", "main")
+	// the rows that finished in live land with alice's push (U-2): the
+	// pre-push hook adds the landing commit and asks for the push again
+	cr.toolsC.AdminPushLanding("origin", "main")
 	list = cr.toolsC.MustLore("task", "list", "--all")
 	if l := teDStateLine(t, list, shipped); !strings.Contains(l, "done · merged ") {
 		t.Errorf("merged: %q", l)

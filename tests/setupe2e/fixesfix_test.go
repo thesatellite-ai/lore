@@ -183,6 +183,16 @@ type fixCase struct {
 	// versioned runs the case on a release-stamped binary.
 	versioned bool
 	prepare   func(w *fixWorld) // makes the check fail
+	// doctor marks a check no setup step runs (onboard.DoctorOnly): the
+	// world is read the way the setup page's Doctor and `lore doctor
+	// --all` read it, and the offered fix must be the variant's row.
+	doctor bool
+	// settled is the check's status once the problem is gone (ok when
+	// zero). identity.top_level_keep only exists while the two identities
+	// disagree: after its fix it is skipped with "do not disagree".
+	settled onboard.Status
+	// verify checks what the fix left behind beyond the check's own word.
+	verify func(w *fixWorld)
 }
 
 // fixCases covers every runnable, non-outward fix row (see
@@ -262,6 +272,203 @@ var fixCases = []fixCase{
 		step: onboard.StepThisFolder, check: onboard.CheckRepoInit,
 		prepare: func(*fixWorld) {},
 	},
+	{
+		// The setup's identity lacks the name the old top-level block holds.
+		name: "top-level identity is an old copy beside the setup's",
+		step: onboard.StepIdentity, check: onboard.CheckIdentityTopLevel, doctor: true,
+		prepare: func(w *fixWorld) {
+			w.setIdentity(topIdentityOld, "      key: "+fixKey+"\n      emails: [e2e@example.com]\n")
+		},
+		verify: func(w *fixWorld) {
+			w.configSays("name: Old Name", "the setup took the name only the top-level block held")
+		},
+	},
+	{
+		name: "top-level identity disagrees with the setup's: keep the setup's",
+		step: onboard.StepIdentity, check: onboard.CheckIdentityTopLevel, variant: onboard.FixIdentityConflict, doctor: true,
+		prepare: func(w *fixWorld) { w.setIdentity(topIdentityOld, setupIdentityNew) },
+		verify:  func(w *fixWorld) { w.configSays("name: New Name", "the setup kept its own name") },
+	},
+	{
+		name: "top-level identity disagrees with the setup's: keep the top-level one",
+		step: onboard.StepIdentity, check: onboard.CheckIdentityTopLevelKeep, doctor: true, settled: onboard.StatusSkip,
+		prepare: func(w *fixWorld) { w.setIdentity(topIdentityOld, setupIdentityNew) },
+		verify: func(w *fixWorld) {
+			w.configSays("name: Old Name", "the setup took the top-level name")
+			if r := w.doctorCheck(onboard.CheckIdentityTopLevel); r.Status != onboard.StatusOK {
+				w.t.Errorf("after keeping the top-level identity, identity.top_level is %s (%s), want ok", r.Status, r.Detail)
+			}
+		},
+	},
+	{
+		// The repo's copy of the actor was written under the old name; the
+		// setup (the source) is renamed by hand afterwards. With agent
+		// detection on (a run under an AI tool) the actor is "<name> via
+		// <tool>" and is stale the same way.
+		name: "a store holds an old copy of an actor",
+		step: onboard.StepIdentity, check: onboard.CheckIdentityActorCopies, doctor: true,
+		prepare: func(w *fixWorld) {
+			w.setIdentity("", "      key: "+fixKey+"\n      name: Pat One\n      emails: [e2e@example.com]\n")
+			w.run("lore", "init")
+			w.run("lore", "memory", "add", "first memory")
+			w.editFile(w.configFile(), func(s string) string { return strings.Replace(s, "name: Pat One", "name: Pat Two", 1) })
+		},
+	},
+	{
+		// personal.store and the setup's personal_store reach one store
+		// (one bare repo, two paths): lore writes only to one of them.
+		name: "personal store reached at two addresses",
+		step: onboard.StepPersonalStore, check: onboard.CheckStoreAddress, doctor: true,
+		prepare: func(w *fixWorld) {
+			bare, alias := w.bareRepo("me.git"), filepath.Join(filepath.Dir(w.home), "me-alias.git")
+			if err := os.Symlink(bare, alias); err != nil {
+				w.t.Fatal(err)
+			}
+			w.run("lore", "init")
+			w.run("lore", "store", "init", "--name", "me", "--url", bare, "--yes")
+			w.run("lore", "memory", "add", "a personal note", "--to", "me")
+			w.run("lore", "sync")
+			w.editFile(w.configFile(), func(s string) string {
+				return strings.Replace(s, "    kind: solo\n", "    kind: solo\n    personal_store: "+alias+"\n", 1)
+			})
+			w.run("lore", "sync") // the alias gets its own clone: two addresses of one store id
+		},
+		verify: func(w *fixWorld) { w.run("lore", "memory", "add", "a note after set-url", "--to", "me") },
+	},
+	{
+		// A member setup whose org entry was changed by hand (no source
+		// stamp, an extra repo pattern) against the store's lore-org.yaml.
+		name: "org entry differs from the store's lore-org.yaml",
+		step: onboard.StepJoin, check: onboard.CheckOrgSource, doctor: true,
+		prepare: func(w *fixWorld) {
+			bare := w.bareRepo("team.git")
+			w.run("lore", "init")
+			w.run("lore", "store", "init", "--name", "acme_team", "--url", bare, "--yes")
+			w.run("lore", "org", "create", "--org", "acme", "--store", "acme_team", "--key", fixKey, "--name", "E2E", "--yes")
+			w.run("lore", "sync")
+			w.editFile(w.configFile(), func(s string) string {
+				s = strings.Replace(s, "    kind: solo\n", "    kind: member\n    org: acme\n", 1)
+				s = strings.Replace(s, "    identity:\n      emails: [e2e@example.com]\n", "", 1) // a member's identity is its org entry's
+				return orgSourceStamp.ReplaceAllString(s, "    repos:\n      - github.com/elsewhere/*\n")
+			})
+		},
+		verify: func(w *fixWorld) {
+			if c := w.readFile(w.configFile()); strings.Contains(c, "github.com/elsewhere/*") || !strings.Contains(c, "version:") {
+				w.t.Errorf("the org entry after lore org refresh:\n%s", c)
+			}
+		},
+	},
+}
+
+// Identities and patterns of the doctor-only cases.
+const (
+	fixKey           = "human:e2e@example.com"
+	topIdentityOld   = "identity:\n  key: " + fixKey + "\n  name: Old Name\n"
+	setupIdentityNew = "      key: " + fixKey + "\n      name: New Name\n      emails: [e2e@example.com]\n"
+)
+
+// orgSourceStamp is the source block lore org create stamps on an entry.
+var orgSourceStamp = regexp.MustCompile(`    source:\n      store: .*\n      version: .*\n`)
+
+// configFile is the world's ~/.lore/config.yaml.
+func (w *fixWorld) configFile() string { return filepath.Join(w.home, ".lore", "config.yaml") }
+
+// readFile is path's content; a missing file fails the test.
+func (w *fixWorld) readFile(path string) string {
+	w.t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		w.t.Fatal(err)
+	}
+	return string(b)
+}
+
+// setIdentity puts top (a top-level identity: block, "" for none) in front
+// of the config and replaces the setup's identity body with setup.
+func (w *fixWorld) setIdentity(top, setup string) {
+	w.t.Helper()
+	w.editFile(w.configFile(), func(s string) string {
+		return top + strings.Replace(s, "      emails: [e2e@example.com]\n", setup, 1)
+	})
+}
+
+// configSays fails the test when config.yaml lacks want or still holds a
+// top-level identity: block.
+func (w *fixWorld) configSays(want, why string) {
+	w.t.Helper()
+	c := w.readFile(w.configFile())
+	if !strings.Contains(c, want) || strings.HasPrefix(c, "identity:") || strings.Contains(c, "\nidentity:") {
+		w.t.Errorf("%s: want %q and no top-level identity: block in config.yaml:\n%s", why, want, c)
+	}
+}
+
+// bareRepo makes an empty bare git repo next to HOME and returns its path.
+func (w *fixWorld) bareRepo(name string) string {
+	w.t.Helper()
+	p := filepath.Join(filepath.Dir(w.home), name)
+	if out, err := exec.Command("git", "init", "-q", "--bare", "-b", "main", p).CombinedOutput(); err != nil {
+		w.t.Fatalf("git init --bare %s: %v\n%s", p, err, out)
+	}
+	return p
+}
+
+// doctorCheck is check id's row of the setup in `lore doctor --all
+// --json` (the setup page's Doctor runs the same checks). The command
+// exits non-zero while a check warns; its JSON is still the answer.
+func (w *fixWorld) doctorCheck(id onboard.CheckID) onboard.CheckResult {
+	w.t.Helper()
+	out, _ := w.cmd("lore", "doctor", "--all", "--json")
+	var d struct {
+		Setups []struct {
+			Name   string                `json:"name"`
+			Checks []onboard.CheckResult `json:"checks"`
+		} `json:"setups"`
+	}
+	if err := json.Unmarshal([]byte(out), &d); err != nil {
+		w.t.Fatalf("doctor --all: %v\n%s", err, out)
+	}
+	for _, s := range d.Setups {
+		if s.Name != fixSetup {
+			continue
+		}
+		for _, r := range s.Checks {
+			if r.Check == id {
+				return r
+			}
+		}
+	}
+	w.t.Fatalf("doctor --all: no %s row for setup %s\n%s", id, fixSetup, out)
+	return onboard.CheckResult{}
+}
+
+// probe is c's check as the page shows it: the step's check, or the
+// Doctor's row for a doctor-only check.
+func (w *fixWorld) probe(c fixCase) onboard.CheckResult {
+	w.t.Helper()
+	if c.doctor {
+		return w.doctorCheck(c.check)
+	}
+	return w.check(c.step, c.check)
+}
+
+// placeholder is a {var} of a fix row's text.
+var placeholder = regexp.MustCompile(`\\\{[a-z_]+\\\}`)
+
+// offersRow fails the test unless text is row (check, variant)'s fix
+// text with its {vars} filled in: the case covers the row it names.
+func offersRow(t *testing.T, check onboard.CheckID, v onboard.FixVariant, text string) {
+	t.Helper()
+	for _, r := range onboard.FixRows() {
+		if r.Check != check || r.Variant != v {
+			continue
+		}
+		re := regexp.MustCompile("^" + placeholder.ReplaceAllString(regexp.QuoteMeta(r.Fix.Text), ".+") + "$")
+		if !re.MatchString(text) {
+			t.Fatalf("%s offers %q, not the %q row's text %q", check, text, v, r.Fix.Text)
+		}
+		return
+	}
+	t.Fatalf("no fix row %s / %q", check, v)
 }
 
 // TestEveryFixFixesItsCheck: fail → Run it → re-check passes, and
@@ -276,12 +483,19 @@ func TestEveryFixFixesItsCheck(t *testing.T) {
 			}
 			w := newFixWorld(t, bin, c.tools)
 			c.prepare(w)
-			before := w.check(c.step, c.check)
+			before := w.probe(c)
 			if before.Status != onboard.StatusFail && before.Status != onboard.StatusWarn {
 				t.Fatalf("prepared world: %s is %s (%s), want it failing", c.check, before.Status, before.Detail)
 			}
 			if !before.Fix.Runnable || len(before.Fix.Command) == 0 {
 				t.Fatalf("%s offers no runnable fix: %+v", c.check, before.Fix)
+			}
+			if c.doctor {
+				offersRow(t, c.check, c.variant, before.Fix.Text)
+			}
+			settled := c.settled
+			if settled == "" {
+				settled = onboard.StatusOK
 			}
 			out, err := w.cmd("lore", "setup", "fix", fixSetup, "--check", string(c.check), "--target", before.Target, "--yes", "--json")
 			if err != nil {
@@ -294,12 +508,15 @@ func TestEveryFixFixesItsCheck(t *testing.T) {
 			if run.Exit != 0 {
 				t.Fatalf("fix %v exited %d:\n%s", run.Argv, run.Exit, run.OutputTail)
 			}
-			if run.StillFailing != "" || run.Recheck != onboard.StatusOK {
+			if run.StillFailing != "" || run.Recheck != settled {
 				t.Fatalf("fix %v ran but setup.fix's re-check is %q: %s\noutput:\n%s", run.Argv, run.Recheck, run.StillFailing, run.OutputTail)
 			}
-			after := w.check(c.step, c.check)
-			if after.Status != onboard.StatusOK {
-				t.Fatalf("after %v: %s is %s (%s), want ok\nfix output:\n%s", run.Argv, c.check, after.Status, after.Detail, run.OutputTail)
+			after := w.probe(c)
+			if after.Status != settled {
+				t.Fatalf("after %v: %s is %s (%s), want %s\nfix output:\n%s", run.Argv, c.check, after.Status, after.Detail, settled, run.OutputTail)
+			}
+			if c.verify != nil {
+				c.verify(w)
 			}
 		})
 	}
