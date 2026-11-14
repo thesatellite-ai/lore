@@ -128,6 +128,20 @@ func TestJourneyAgentsAdminSetup(t *testing.T) {
 		tt.lore(ada, "store", "folder", "add", jAdminOrg, "notes").OK(t)
 		tt.lore(ada, "agent", "start", "--label", "helper2").OK(t)
 	})
+
+	w.Step("day2/detected-agent-coordinates-for-ada", func() {
+		// Agent-policy round 2, finding 6: the coordination roster check
+		// (an agent actor must be on the org roster) refused a detected
+		// coding agent, which acts for its person. Ada's Codex session,
+		// never registered on the roster, claims a task Ada added; an
+		// agent actor with no roster row (LORE_ACTOR) is still refused.
+		tt.lore(ada, "init").OK(t)
+		id := jGateID(t, "tsk", tt.lore(ada, "task", "add", "--title", "review the design notes", "--to", jAdminOrg+"/"+jAdminFolder).OK(t).Out())
+		codex := jAgentsAs(tt.repo[ada.Email], &jCodex, "cx-org")
+		codex.Lore("task", "claim", "--id", id, "--push").OK(t).Never(t, "roster")
+		stranger := tt.repo[ada.Email].With("LORE_ACTOR=agent:stranger")
+		stranger.Lore("task", "claim", "--id", id, "--push").Refused(t).Says(t, "agent:stranger")
+	})
 }
 
 // tlAnswers is a setup step's answers as the --answers JSON.
