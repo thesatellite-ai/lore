@@ -39,6 +39,7 @@ type fakeHost struct {
 	undone, primed, inherited bool
 	created                   map[string]value.Value
 	targets                   []string
+	fromSetup                 string
 	setupTools                SetupTools
 }
 
@@ -83,8 +84,8 @@ func (f *fakeHost) InheritRepoID(context.Context, rowfs.RepoMeta) error {
 func (f *fakeHost) EnsureRepoIdentity(context.Context) (string, error) { return "rep_test", nil }
 func (f *fakeHost) EnsureGitignore(context.Context) error              { return f.gitignore }
 func (f *fakeHost) Prime(context.Context)                              { f.primed = true }
-func (f *fakeHost) WireToolFiles(_ context.Context, targets []string) (string, error) {
-	f.targets = targets
+func (f *fakeHost) WireToolFiles(_ context.Context, targets []string, fromSetup string) (string, error) {
+	f.targets, f.fromSetup = targets, fromSetup
 	return "  wired AGENTS.md\n", f.toolErr
 }
 
@@ -275,7 +276,7 @@ func TestRunToolsFromSetup(t *testing.T) {
 	f := newFake(t)
 	f.setupTools = st
 	out, err := Run(ctx, f, InitIn{})
-	if err != nil || strings.Join(f.targets, ",") != "claude_code" || out.ToolsFromSetup != "test1" {
+	if err != nil || strings.Join(f.targets, ",") != "claude_code" || out.ToolsFromSetup != "test1" || f.fromSetup != "test1" {
 		t.Fatalf("setup tools: targets %v out %+v err %v", f.targets, out, err)
 	}
 	if !strings.Contains(out.Body(), "tool files from setup test1: CLAUDE.md") {
@@ -285,7 +286,7 @@ func TestRunToolsFromSetup(t *testing.T) {
 	f = newFake(t)
 	f.setupTools = st
 	out, err = Run(ctx, f, InitIn{Target: []string{"codex"}})
-	if err != nil || strings.Join(f.targets, ",") != "codex" || out.ToolsFromSetup != "" || strings.Contains(out.Body(), "from setup") {
+	if err != nil || strings.Join(f.targets, ",") != "codex" || out.ToolsFromSetup != "" || f.fromSetup != "" || strings.Contains(out.Body(), "from setup") {
 		t.Fatalf("--target: targets %v out %+v err %v", f.targets, out, err)
 	}
 

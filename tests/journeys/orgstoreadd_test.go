@@ -9,6 +9,7 @@ package journeys
 // naming only the team store. Now the refusal names the command; the
 // command commits lore-org.yaml in the store clone without pushing, the
 // lead's entry lists the store at once, and --push sends it to the team.
+// The next sync pushes the link commit and its summary says so.
 
 import (
 	"strings"
@@ -54,5 +55,13 @@ func TestJourneyOrgStoreAdd(t *testing.T) {
 			t.Fatalf("pushed lore-org.yaml lacks a store:\n%s", got)
 		}
 		tt.lore(tlLee, "org", "store", "add", "--org", tlOrg, "--url", client.SSHURL(), "--yes").OK(t).Says(t, "already lists it")
+	})
+
+	// devco J-4: the link commit has no row file, so the sync that pushed
+	// it said "sent 0" (outside a repo: "up to date") under its own push
+	// line; the store's line now says it pushed commits with no rows.
+	w.Step("day1/sync-says-it-sent-the-link", func() {
+		tt.lore(tlLee, "sync").OK(t).Says(t, "lore: pushed store client-store", "pushed local commit(s) with no note rows")
+		tt.lore(tlLee, "sync").OK(t).Never(t, "pushed local commit(s) with no note rows")
 	})
 }

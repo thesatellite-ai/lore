@@ -224,9 +224,12 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	goneSaid := map[string]bool{}     // a store's folders share its clone: said once
 	for _, r := range res.Stores {
 		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
-			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held})
+			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held, Pushed: r.Pushed})
 		shown := s.app.shownStoreName(ctx, r.Store) // B-9: the store's own name (storeshown.go)
 		line := fmt.Sprintf("store %s: sent %d, received %d, merged %d, refused %d", shown, r.Sent, r.Received, r.Merged, r.Refused)
+		if r.Pushed && r.Sent == 0 {
+			line += syncPushedNoRows
+		}
 		if r.Unattached {
 			line += syncUnattachedFolder
 		}
@@ -806,3 +809,8 @@ func (a *App) FixProjects(ctx context.Context, keep string, dryRun bool) (FixRes
 	}
 	return fx, nil
 }
+
+// syncPushedNoRows follows the line of a store whose sync pushed local
+// commits that carry no row (a store link, the org file): "sent 0" alone
+// read as nothing left the machine under the push line (devco J-4).
+const syncPushedNoRows = "; pushed local commit(s) with no note rows (store links or org settings)"

@@ -339,3 +339,32 @@ func TestSetupProberPathLoreOlder(t *testing.T) {
 		})
 	}
 }
+
+// TestSetupProberPointerFileGenerated (devco J-17): a CLAUDE.md another
+// tool generates (its banner says so) failed tools.pointer_file with the
+// fix "lore render --add-target claude_code", which render then skipped,
+// so doctor stayed degraded forever. The row now names the banner and
+// takes the generated fix, which names the generator's source and runs
+// nothing.
+func TestSetupProberPointerFileGenerated(t *testing.T) {
+	ctx := context.Background()
+	h := toolsHarness(t, "0.1.18", "")
+	seedLoreMeta(t, h.Repo)
+	pr, err := h.App.SetupProber(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	banner := "<!-- GENERATED FILE — do not edit directly; run make agents -->"
+	if err := os.WriteFile(filepath.Join(h.Repo, "CLAUDE.md"), []byte(banner+"\n# Shop\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	me := onboard.SetupEntry{Name: "personal", Kind: onboard.KindSolo, Tools: []string{"claude_code"}}
+	r := probeOne(t, pr, opssetup.ProbeRequest{Check: check(onboard.CheckToolsPointerFile, onboard.LevelWarn), Setup: me, Target: "claude_code " + h.Repo})
+	if r.Status == onboard.StatusOK || !strings.Contains(r.Detail, "another tool generates it") || r.Vars[onboard.VarFixVariant] != string(onboard.FixGenerated) {
+		t.Fatalf("generated CLAUDE.md = %+v, want a failing row with the generated fix", r)
+	}
+	fix := onboard.FixFor(onboard.CheckToolsPointerFile, onboard.StepTools, onboard.FixGenerated)
+	if fix.Runnable || len(fix.Command) != 0 || strings.Contains(fix.Text, "--add-target") || !strings.Contains(fix.Text, "the source that generates the file") {
+		t.Fatalf("generated fix = %+v, want the generator's source and no command", fix)
+	}
+}

@@ -131,6 +131,11 @@ type SyncReport struct {
 	// the person was removed from the org, F-9). Not a refusal: nothing is
 	// wrong with the rows, and the sync itself succeeded.
 	Held string
+	// Pushed is true when this sync pushed local commits to the remote,
+	// even ones that carry no row file (a store link, the org file): Sent
+	// counts rows only, so without it a sync that sent such a commit
+	// reported "up to date" under its own push line (devco J-4).
+	Pushed bool
 }
 
 // FolderCount is what one sync sent and received for one data folder.

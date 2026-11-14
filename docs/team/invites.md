@@ -24,6 +24,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 ⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
+access: mira@agency.example needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone
 Send this to mira@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 $ lore team invite ana@agency.example --type contractor --expires 30d
@@ -31,6 +32,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 ✓ invite inv_2ad3…f891 written to store agency (expires 2026-12-02)
 ⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
+access: ana@agency.example needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone
 Send this to ana@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 ```

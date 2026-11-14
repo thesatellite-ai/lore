@@ -293,12 +293,12 @@ func (i *initHost) Prime(ctx context.Context) {
 
 // WireToolFiles implements repoinit.Host (TOOL NEUTRAL,
 // renderhost.WireToolFiles): no render machinery, nothing to wire.
-func (i *initHost) WireToolFiles(ctx context.Context, targets []string) (string, error) {
+func (i *initHost) WireToolFiles(ctx context.Context, targets []string, fromSetup string) (string, error) {
 	if i.h.render == nil {
 		return "", nil
 	}
 	var lines strings.Builder
-	err := i.h.render.WireToolFiles(ctx, &lines, i.wd, targets)
+	err := i.h.render.WireToolFiles(ctx, &lines, i.wd, targets, fromSetup)
 	return lines.String(), err
 }
 

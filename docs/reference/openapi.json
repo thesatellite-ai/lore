@@ -8710,7 +8710,7 @@
                   },
                   "on_table": {
                     "type": "string",
-                    "description": "target entity table (memories|rules|decisions|...)"
+                    "description": "target entity table (memories|rules|decisions|...); default: the table of the --on-id prefix"
                   },
                   "to": {
                     "type": "string",
@@ -8722,7 +8722,6 @@
                   }
                 },
                 "required": [
-                  "on_table",
                   "on_id",
                   "body"
                 ],
@@ -52035,7 +52034,7 @@
                   },
                   "on_table": {
                     "type": "string",
-                    "description": "optional target entity table"
+                    "description": "optional target entity table (default: the table of the --on-id prefix)"
                   },
                   "recurrence": {
                     "type": "string",
@@ -85354,6 +85353,9 @@
                                   "type": "string"
                                 }
                               },
+                              "pushed": {
+                                "type": "boolean"
+                              },
                               "received": {
                                 "type": "integer"
                               },
@@ -86268,7 +86270,7 @@
                   },
                   "on_table": {
                     "type": "string",
-                    "description": "target entity table (memories|rules|decisions|...)"
+                    "description": "target entity table (memories|rules|decisions|...); default: the table of the --on-id prefix"
                   },
                   "tag": {
                     "type": "string",
@@ -86276,7 +86278,6 @@
                   }
                 },
                 "required": [
-                  "on_table",
                   "on_id",
                   "tag"
                 ],
@@ -86419,7 +86420,7 @@
                   },
                   "on_table": {
                     "type": "string",
-                    "description": "target entity table (memories|rules|decisions|...)"
+                    "description": "target entity table (memories|rules|decisions|...); default: the table of the --on-id prefix"
                   },
                   "tag": {
                     "type": "string",
@@ -86427,7 +86428,6 @@
                   }
                 },
                 "required": [
-                  "on_table",
                   "on_id",
                   "tag"
                 ],
@@ -96354,6 +96354,12 @@
                             "store"
                           ]
                         },
+                        "assigned_team": {
+                          "type": "string"
+                        },
+                        "assigned_team_handle": {
+                          "type": "string"
+                        },
                         "assignees": {
                           "type": "array",
                           "items": {
@@ -100263,6 +100269,12 @@
                             "store"
                           ]
                         },
+                        "assigned_team": {
+                          "type": "string"
+                        },
+                        "assigned_team_handle": {
+                          "type": "string"
+                        },
                         "assignees": {
                           "type": "array",
                           "items": {
@@ -102917,7 +102929,7 @@
     "/v1/tasks/{id}/note": {
       "post": {
         "operationId": "task.note",
-        "summary": "Record a progress note on a task (pushes your work branch)",
+        "summary": "Record a progress note on a task (a live row; your next `lore sync` or `git push` sends it)",
         "tags": [
           "task"
         ],

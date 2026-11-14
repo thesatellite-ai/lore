@@ -1346,7 +1346,7 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	}
 	out, err := opsstores.SyncAll(ctx, a, only)
 	if err == nil && only == "" {
-		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx)...)
+		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx, out.Stores)...)
 	}
 	a.forgetStoreChecks(ctx, out.Stores)
 	return out, err

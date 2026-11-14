@@ -92,3 +92,13 @@ func TestDefaults(t *testing.T) {
 		t.Fatal("Defaults wrote into the caller's map")
 	}
 }
+
+// TestNameOf: only the reserved id is named "unknown" (devco K-2).
+func TestNameOf(t *testing.T) {
+	if n, ok := NameOf(UnknownActor().String()); !ok || n != UnknownName {
+		t.Fatalf("NameOf(unknown) = %q, %v", n, ok)
+	}
+	if n, ok := NameOf("act_0123456789abcdef0123456789abcdef"); ok || n != "" {
+		t.Fatalf("NameOf(real id) = %q, %v", n, ok)
+	}
+}

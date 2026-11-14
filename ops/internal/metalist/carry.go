@@ -130,3 +130,15 @@ func (c Carry) Line() string {
 	}
 	return "carried over " + strconv.Itoa(c.Count) + " keys\n"
 }
+
+// NoMetaNeedsSupersedes refuses --no-meta on an add that replaces nothing
+// (devco:L-6: `memory add --no-meta --meta a=b` was accepted and the two
+// flags read as a contradiction). --no-meta only stops the copy of the
+// replaced row's metadata, so it means nothing without --supersedes.
+func NoMetaNeedsSupersedes(noMeta bool, supersedes string) error {
+	if !noMeta || supersedes != "" {
+		return nil
+	}
+	return errs.New(errs.InvalidInput, "--no-meta goes with --supersedes: it stops the replaced row's metadata from being copied, and this add replaces nothing").
+		WithHint("leave --no-meta out, or give --supersedes <id> with it; --meta key=value sets this row's own metadata either way")
+}

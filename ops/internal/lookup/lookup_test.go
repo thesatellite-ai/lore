@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -201,4 +202,43 @@ func TestLookupIDMatrix(t *testing.T) {
 		t.Fatalf("only %d lookup ops found: the registry walk is broken", n)
 	}
 	t.Logf("%d lookup ops × %d malformed + %d well-formed ids", n, len(malformed), len(wellFormed))
+}
+
+// TestBadIDMalformedOfTheRightKind (devco:L-9): an id with the expected
+// prefix and length whose hex tail lore never makes (all zeros) is named
+// as a malformed id of that kind, never "not a msn_ id"; an id of
+// another kind keeps the wrong-kind message.
+func TestBadIDMalformedOfTheRightKind(t *testing.T) {
+	t.Parallel()
+	zero := "msn_00000000000000000000000000000000"
+	_, cause := ids.ParseAny(zero)
+	e := lookup.BadID(`task: --mission "`+zero+`" is not a msn_ id`, cause)
+	if !strings.Contains(e.Message, "is a malformed msn_ id") || strings.Contains(e.Message, "is not a msn_ id") {
+		t.Errorf("all-zero msn_: %q", e.Message)
+	}
+	e = lookup.BadID(`task: --mission "`+zero+`" is not an actor id (act_…)`, cause)
+	if !strings.Contains(e.Message, "is not an actor id") {
+		t.Errorf("another kind: %q", e.Message)
+	}
+}
+
+// TestOnTableFromThePrefix (devco:J-8): --on-id alone names its table by
+// its prefix (mem_ → memories); a given --on-table wins; an id whose prefix
+// names no built-in table asks for --on-table.
+func TestOnTableFromThePrefix(t *testing.T) {
+	t.Parallel()
+	tid, err := ids.New[ids.Memory]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := tid.String()
+	if got, err := lookup.OnTable("comment add", "", task); err != nil || got != schema.TableMemories {
+		t.Errorf("mem_: %q %v", got, err)
+	}
+	if got, err := lookup.OnTable("comment add", "rules", task); err != nil || got != "rules" {
+		t.Errorf("given: %q %v", got, err)
+	}
+	if _, err := lookup.OnTable("comment add", "", "nope"); !errs.Has(err, errs.InvalidID) {
+		t.Errorf("bad id: %v", err)
+	}
 }

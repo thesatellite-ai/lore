@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"slices"
 	"strconv"
 	"strings"
@@ -156,7 +157,7 @@ type AddIn struct {
 	Message    string `json:"message" arg:"0" rest:"true" desc:"the reminder text (several words are joined)"`
 	Due        string `json:"due" flag:"due" desc:"due date (YYYY-MM-DD, RFC3339 or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM) (required)"`
 	Recurrence string `json:"recurrence,omitempty" flag:"recurrence" desc:"recurrence: 7d | 30d | 1m | 3m | 6m | 1y"`
-	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table"`
+	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table (default: the table of the --on-id prefix)"`
 	OnID       string `json:"on_id,omitempty" flag:"on-id" desc:"optional target entity id"`
 	Repo       string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts; reminders have no repo scope"`
 	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
@@ -319,6 +320,11 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 	if in.Recurrence != "" && !slices.Contains(schema.ReminderRecurrences(), in.Recurrence) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput,
 			fmt.Sprintf("bad --recurrence %q (want %s)", in.Recurrence, strings.Join(schema.ReminderRecurrences(), " | ")))
+	}
+	// devco:J-8: --on-id alone names its table by its prefix; the row
+	// kept an empty target table.
+	if in.OnTable, err = lookup.OnTable("reminder add", in.OnTable, in.OnID); err != nil {
+		return work.WriteOut{}, err
 	}
 	fields, err := work.Texts(Noun, map[string]string{
 		schema.FieldReminderMessage:     msg,

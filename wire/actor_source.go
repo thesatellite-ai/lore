@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/actorsource"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -352,6 +353,9 @@ func (a *App) ActorNamer(ctx context.Context) func(string) string {
 	return func(actor string) string {
 		if actor == "" {
 			return ""
+		}
+		if name, ok := auditfill.NameOf(actor); ok {
+			return name
 		}
 		return n(actor)
 	}

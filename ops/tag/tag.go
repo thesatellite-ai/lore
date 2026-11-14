@@ -173,7 +173,7 @@ func (o ListOut) Text() string {
 
 // BindIn is the input of tag.attach and tag.detach.
 type BindIn struct {
-	OnTable string `json:"on_table" flag:"on-table" desc:"target entity table (memories|rules|decisions|...)"`
+	OnTable string `json:"on_table,omitempty" flag:"on-table" desc:"target entity table (memories|rules|decisions|...); default: the table of the --on-id prefix"`
 	OnID    string `json:"on_id" flag:"on-id" desc:"target entity id"`
 	Tag     string `json:"tag" flag:"tag" desc:"tag name"`
 }
@@ -459,6 +459,9 @@ func (o ops) bind(ctx context.Context, in BindIn, mustExist bool) (engine.Ref, r
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
 		return engine.Ref{}, row.Row{}, nil, errs.Wrap(errs.Internal, "tag: built-in schema", err)
+	}
+	if in.OnTable, err = lookup.OnTable("tag", in.OnTable, in.OnID); err != nil {
+		return engine.Ref{}, row.Row{}, nil, err
 	}
 	table, err := row.ParseTable(strings.TrimSpace(in.OnTable))
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1621,6 +1622,13 @@ func (sp setupProber) pointerFile(ctx context.Context, r opssetup.ProbeRequest) 
 			// repo's context.targets; the fix (render --add-target) adds it.
 			all = append(all, toolOne{tool: t, status: onboard.StatusFail, vars: v,
 				detail: "no " + p.PointerFile + " in this repo"})
+		case !strings.Contains(string(b), loreMDName) && toolprofile.GeneratedBanner(string(b)) != "":
+			// devco J-17: render skips a generated file, so its
+			// --add-target fix changed nothing and the check failed forever
+			gv := maps.Clone(v)
+			gv[onboard.VarFixVariant] = string(onboard.FixGenerated)
+			all = append(all, toolOne{tool: t, status: onboard.StatusFail, vars: gv,
+				detail: p.PointerFile + " does not import .lore/" + loreMDName + "; its banner says another tool generates it (" + strconv.Quote(toolprofile.GeneratedBanner(string(b))) + ")"})
 		case !strings.Contains(string(b), loreMDName):
 			all = append(all, toolOne{tool: t, status: onboard.StatusFail, detail: p.PointerFile + " does not import .lore/" + loreMDName, vars: v})
 		default:

@@ -369,6 +369,12 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 	if r.src != store.SourceRepo {
 		hint = r.missHint()
 	}
+	if active := activeTeamHandles(teams); len(active) > 0 {
+		// devco:J-14: a handle that names nobody may be a team's old
+		// handle (lore team rename); the person-only hint sent the caller
+		// to ask a team to register. Name the teams first.
+		hint = "if @" + h + " was a team, it may have been renamed: the teams now are " + strings.Join(active, ", ") + " (`lore team list`); a person not on the roster yet: " + hint
+	}
 	if near, found := t.a.nearHandle(ctx, r, h); found {
 		hint = nearHandleHint(near, h)
 	}
@@ -592,6 +598,25 @@ func removedTeam(teams []RosterTeam, h string) (RosterTeam, bool) {
 	}
 	return RosterTeam{}, false
 }
+
+// activeTeamHandles lists the @handles of the active teams, sorted, at
+// most maxTeamsNamed of them (then "…").
+func activeTeamHandles(teams []RosterTeam) []string {
+	var out []string
+	for _, x := range teams {
+		if x.Active && x.Handle != "" {
+			out = append(out, rosterHandleMark+x.Handle)
+		}
+	}
+	slices.Sort(out)
+	if len(out) > maxTeamsNamed {
+		out = append(out[:maxTeamsNamed], "…")
+	}
+	return out
+}
+
+// maxTeamsNamed bounds the team handles a miss hint lists.
+const maxTeamsNamed = 6
 
 // removedTeamErr refuses an @handle of a removed team (G-15: the task went
 // to a team nobody sees in lore team list). It names the team list and,

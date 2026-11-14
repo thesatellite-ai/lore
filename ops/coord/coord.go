@@ -96,7 +96,7 @@ func Ops(env Env) []op.Entry {
 			op.Example{Title: "mark merged", CLI: "lore task merged --id tsk_<id>", Want: "merged"}), o.merged),
 		op.Define(with(write, OpTaskNext, "Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)",
 			op.Example{Title: "rank without claiming", CLI: "lore task next --mission msn_<id> --why --dry-run", Want: "nothing written"}), o.next),
-		op.Define(with(write, OpTaskNote, "Record a progress note on a task (pushes your work branch)",
+		op.Define(with(write, OpTaskNote, "Record a progress note on a task (a live row; your next `lore sync` or `git push` sends it)",
 			op.Example{Title: "a checkpoint note", CLI: `lore task note --id tsk_<id> --text "route + loader done, form next"`, Want: "note"}), o.note),
 		op.Define(mayAsk(withErrs(with(write, OpTaskReassign, "Assign a task to someone else, dropping any claim (human override); --from reassigns every open task of a person as one batch",
 			op.Example{Title: "offboarding", CLI: "lore task reassign --from @bob --assign @alice --yes", Want: "batch"}), errs.NeedsConfirm)), o.reassign),

@@ -120,8 +120,10 @@ type Host interface {
 	Prime(ctx context.Context)
 	// WireToolFiles points the AI tools at .lore/LORE.md (--target, else
 	// the context.targets row, else their files, else AGENTS.md) and
-	// returns the lines it reports.
-	WireToolFiles(ctx context.Context, targets []string) (string, error)
+	// returns the lines it reports. fromSetup names the setup whose tools
+	// targets are ("" when they are --target): the printed reason says
+	// where they came from (devco J-2: it said "from --target").
+	WireToolFiles(ctx context.Context, targets []string, fromSetup string) (string, error)
 	// SetupTools is the setup that applies in the work folder and its
 	// chosen tools that have a pointer file (zero when no setup applies,
 	// it chose none, or it cannot be read: init then keeps its default).
@@ -292,7 +294,7 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 		// row first, so a team's saved choice still wins over a setup.
 		st := h.SetupTools(ctx)
 		if len(in.Target) > 0 || len(st.Profiles) > 0 {
-			lines, terr := h.WireToolFiles(ctx, in.Target)
+			lines, terr := h.WireToolFiles(ctx, in.Target, "")
 			out.ToolLines = lines
 			out.addWarning(warnToolFiles, terr)
 		}
@@ -337,15 +339,16 @@ func Run(ctx context.Context, h Host, in InitIn) (InitOut, error) {
 	if mh, isMono := h.(MonorepoHost); isMono {
 		out.OtherProjects = mh.OtherProjectFolders(ctx)
 	}
-	targets := in.Target
+	targets, fromSetup := in.Target, ""
 	if len(targets) == 0 {
 		// --target always wins; else the applying setup's tools; else
 		// WireToolFiles' default (context.targets, found files, AGENTS.md).
 		if st := h.SetupTools(ctx); len(st.Profiles) > 0 {
 			targets, out.ToolsFromSetup, out.ToolFiles = st.Profiles, st.Setup, st.Files
+			fromSetup = st.Setup
 		}
 	}
-	lines, terr := h.WireToolFiles(ctx, targets)
+	lines, terr := h.WireToolFiles(ctx, targets, fromSetup)
 	out.ToolLines = lines
 	out.addWarning(warnToolFiles, terr)
 	return out, nil

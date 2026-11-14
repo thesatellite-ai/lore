@@ -462,11 +462,24 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 	// were "4 settings file(s)", each listed twice): one detail line per
 	// file, naming the hook events it gets.
 	var change []opssetup.HookPlan
-	var files []string
+	var files, kept, fresh []string
 	events := map[string][]string{}
 	for _, p := range plans {
 		if !p.Change {
 			continue
+		}
+		// devco L-2: a settings file the repo commits is the team's; a
+		// fix in a fresh clone wrote lore's hooks into it, so every clone
+		// showed a modified tracked file under "HEALTHY". It is left as
+		// it is and named; `lore setup --agent-hooks` writes it on purpose.
+		if hookFileTracked(ctx, top, p.File) {
+			if !slices.Contains(kept, p.File) {
+				kept = append(kept, p.File)
+			}
+			continue
+		}
+		if hookFileNew(ctx, top, p.File) && !slices.Contains(fresh, p.File) {
+			fresh = append(fresh, p.File)
 		}
 		change = append(change, p)
 		key := p.Tool + ": " + p.File
@@ -477,7 +490,13 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 			events[key] = append(events[key], ev)
 		}
 	}
+	for _, f := range kept {
+		st.Detail = append(st.Detail, fmt.Sprintf(fixHookTrackedF, f))
+	}
 	if len(change) == 0 {
+		if len(kept) > 0 {
+			st.Result = fixHookTrackedResult
+		}
 		return st
 	}
 	for _, f := range files {
@@ -486,6 +505,11 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 			line += " (" + strings.Join(events[f], ", ") + ")"
 		}
 		st.Detail = append(st.Detail, line)
+	}
+	if len(fresh) > 0 && !dry {
+		// a new settings file git does not ignore shows in git status:
+		// said once, as the run's next step, so nobody is surprised by it
+		st.Next = fmt.Sprintf(fixHookNewNextF, strings.Join(fresh, ", "))
 	}
 	st.Changed = true
 	if dry {
@@ -963,4 +987,29 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 		a.opts.Notice(OldRowsReadLineAt(top))
 	}
 	return nil
+}
+
+// The agent hooks step's lines for a settings file the repo tracks (left
+// as it is) and for new settings files git does not ignore (devco L-2).
+const (
+	fixHookTrackedF      = "skipped: %s is tracked by the repo; lore fix never changes a committed file (to add lore's hooks for the whole team: lore setup --agent-hooks, then commit it)"
+	fixHookTrackedResult = "skipped: the settings file(s) are tracked by the repo"
+	fixHookNewNextF      = "lore's agent hooks are in new file(s) %s, which git status now lists: commit them to share the hooks with the team, or add them to .gitignore to keep them on this machine"
+)
+
+// hookFileTracked reports whether git tracks rel (a settings file, slash
+// separated, under the work tree top).
+func hookFileTracked(ctx context.Context, top, rel string) bool {
+	out, err := gitRun{dir: top, args: []string{"ls-files", "--", filepath.FromSlash(rel)}}.output(ctx)
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+// hookFileNew reports whether rel does not exist yet and git does not
+// ignore it: writing it adds an untracked file to git status.
+func hookFileNew(ctx context.Context, top, rel string) bool {
+	if _, err := os.Lstat(filepath.Join(top, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+		return false
+	}
+	_, err := gitRun{dir: top, args: []string{"check-ignore", "-q", "--", filepath.FromSlash(rel)}}.output(ctx)
+	return err != nil
 }

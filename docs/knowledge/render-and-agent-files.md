@@ -7,7 +7,7 @@
 Coding tools read a fixed file when a session starts: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` and similar names. You could type your rules into that file by hand, but then lore and the file drift apart. `lore render` keeps them in step:
 
 - it writes the generated text to `.lore/LORE.md` (or the path you give with `--out`);
-- it adds a *pointer block* to each tool's file, between two marker comments. For a tool that follows imports it is an import line (`@.lore/LORE.md`); for the others it is one sentence telling the agent to read `.lore/LORE.md`. A tool file whose first lines say another tool generates it (`GENERATED FILE`, `do not edit`, `@generated`) is left alone with a note: that generator would drop the block on its next run, so point its source at `.lore/LORE.md` or wire another file (`lore render --add-target codex` for `AGENTS.md`).
+- it adds a *pointer block* to each tool's file, between two marker comments. For a tool that follows imports it is an import line (`@.lore/LORE.md`); for the others it is one sentence telling the agent to read `.lore/LORE.md`. A tool file whose first lines say another tool generates it (`GENERATED FILE`, `do not edit`, `@generated`) is left alone with a note: that generator would drop the block on its next run, so point its source at `.lore/LORE.md` or wire another file (`lore render --add-target codex` for `AGENTS.md`). Once another file gets the pointer (codex added), the note names that file instead of the command, and says the generated file's tool still reaches `.lore/LORE.md` only through its generator's source.
 - it never touches the rest of the tool's file, so your own hand-written notes are safe.
 
 Run it after you change rules or hotfixes, and commit the result.

@@ -684,8 +684,19 @@ func (e *Engine) notInTrash(ctx context.Context, id ids.AnyID) error {
 		return err
 	}
 	if !cur.Deleted {
-		return errs.New(errs.NotFound, ""+id.String()+" is not in the trash (it is alive in "+string(src)+")").
-			WithHint("nothing to restore: read it with `lore row show --id " + id.String() + "`")
+		// devco:L-8: one answer for restore and purge alike: the row was
+		// never deleted, so nothing is restored or purged; to remove it,
+		// its own delete moves it to the trash first (B2-3: its noun).
+		del := "its kind's delete command"
+		n := tableNoun(cur.Table)
+		if def, derr := e.tableDef(cur.Table); derr == nil && def.Noun != "" {
+			n = def.Noun
+		}
+		if n != "" {
+			del = "`lore " + n + " delete --id " + id.String() + "`"
+		}
+		return errs.New(errs.NotFound, ""+id.String()+" is not in the trash (it is alive in "+string(src)+"; it was never deleted)").
+			WithHint("nothing to restore or purge; to remove it, " + del + " moves it to the trash first; `lore row show --id " + id.String() + "` reads it")
 	}
 	return deletedErr(ctx, e.stores[src], cur, "is deleted for good (a tombstone), not in the trash")
 }

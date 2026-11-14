@@ -23,6 +23,10 @@ package wire
 //
 // A v1 copy is upcast as the format rewrite would (upcastV1) before it is
 // trimmed, so the rewrite that follows finds it already in format 2.
+// Outside a client repo only such a v1 copy is trimmed in full; a copy
+// already in format 2 loses only `_o` (projectionExtra), so a second
+// machine whose identity resolves no org never undoes the full rows an
+// org member's migration wrote (devco K-4).
 
 import (
 	"context"
@@ -66,6 +70,7 @@ func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) (opsmigra
 		return opsmigrate.Settings{}, nil // no repo store attached: nothing to trim
 	}
 	b := st.backends[at]
+	client := st.eng.IsClient(store.SourceRepo)
 	rows, _, err := b.Read(ctx, "")
 	if err != nil {
 		return opsmigrate.Settings{}, errs.Prefix("migrate: read the repo's actor copies", err)
@@ -85,14 +90,15 @@ func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) (opsmigra
 		if derr != nil {
 			continue // a broken row file is the format step's report
 		}
-		if r.SourceVersion != row.FormatVersion {
+		wasV1 := r.SourceVersion != row.FormatVersion
+		if wasV1 {
 			r = upcastV1(reg, r)
 		}
 		up, ferr := store.FromRow(r)
 		if ferr != nil {
 			return opsmigrate.Settings{}, ferr
 		}
-		extra := leakcheck.ActorCopyExtraKeys(up.Doc)
+		extra := projectionExtra(leakcheck.ActorCopyExtraKeys(up.Doc), client || wasV1)
 		if len(extra) == 0 {
 			continue
 		}
@@ -129,6 +135,28 @@ func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) (opsmigra
 		return opsmigrate.Settings{}, err
 	}
 	return done, nil
+}
+
+// projectionExtra is the part of extra (leakcheck.ActorCopyExtraKeys of a
+// copy) the step removes. all is true in a client repo, where the guard
+// and `lore check leaks --ci` refuse every extra key, and for a copy that
+// was still `_v: 1` (lore 0.1.17 wrote stable_key into any repo). A copy
+// already in format 2 in a repo that is not client-class was written by
+// lore 0.1.18 under the projection rules, on a machine that may know the
+// repo is its org's own (Q-R2-2: the full row with handle, stable_key and
+// origin_*), which this machine cannot see when its identity resolves no
+// org; it loses only `_o`, which no repo copy keeps. Without this a second
+// machine's `lore fix --migrate` stripped the four keys the first
+// migration wrote and every teammate's branch carried that diff (devco
+// K-4).
+func projectionExtra(extra []string, all bool) []string {
+	if all {
+		return extra
+	}
+	if slices.Contains(extra, row.KeyOrigin) {
+		return []string{row.KeyOrigin}
+	}
+	return nil
 }
 
 // trimActorCopy returns r without the document keys extra (as

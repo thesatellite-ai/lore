@@ -47,10 +47,11 @@ func TestInitWiresTheApplyingSetupsTools(t *testing.T) {
 		want      []string
 		notWant   []string
 		saysSetup bool
+		reason    string // the reason the "context targets" line gives
 	}{
-		{name: "setup with claude_code", tools: []string{"claude_code"}, want: []string{"CLAUDE.md"}, notWant: []string{"AGENTS.md"}, saysSetup: true},
+		{name: "setup with claude_code", tools: []string{"claude_code"}, want: []string{"CLAUDE.md"}, notWant: []string{"AGENTS.md"}, saysSetup: true, reason: "(the tools of setup test1;"},
 		{name: "no setup applies", want: []string{"AGENTS.md"}, notWant: []string{"CLAUDE.md"}},
-		{name: "--target wins over the setup", tools: []string{"claude_code"}, args: []string{"--target", "codex"}, want: []string{"AGENTS.md"}, notWant: []string{"CLAUDE.md"}},
+		{name: "--target wins over the setup", tools: []string{"claude_code"}, args: []string{"--target", "codex"}, want: []string{"AGENTS.md"}, notWant: []string{"CLAUDE.md"}, reason: "(from --target)"},
 		{name: "setup with unknown tools only", tools: []string{"nosuchtool"}, want: []string{"AGENTS.md"}, notWant: []string{"CLAUDE.md"}},
 	}
 	for _, c := range cases {
@@ -74,6 +75,14 @@ func TestInitWiresTheApplyingSetupsTools(t *testing.T) {
 			}
 			if says := strings.Contains(out, "tool files from setup test1: CLAUDE.md"); says != c.saysSetup {
 				t.Errorf("output names the setup = %v, want %v\n%s", says, c.saysSetup, out)
+			}
+			// devco J-2: the setup's tools said "(from --target)", a
+			// flag nobody typed
+			if c.reason != "" && !strings.Contains(out, "context targets: claude_code (CLAUDE.md) "+c.reason) && !strings.Contains(out, "context targets: codex (AGENTS.md) "+c.reason) {
+				t.Errorf("context targets line lacks %q\n%s", c.reason, out)
+			}
+			if c.args == nil && strings.Contains(out, "from --target") {
+				t.Errorf("no --target given, output says it\n%s", out)
 			}
 		})
 	}

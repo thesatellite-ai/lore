@@ -25,28 +25,35 @@ import (
 	"strconv"
 	"strings"
 
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
 // StepActorCopies names the step as the run reports it.
 const StepActorCopies = "actor_copies"
 
-// migrateActorCopies is the step: it returns the step lines and the copies
-// written (dry run: the copies it would write).
-func (a *App) migrateActorCopies(ctx context.Context, dryRun bool) ([]string, int, error) {
+// migrateActorCopies is the step: it returns the step lines, the copies
+// written (dry run: the copies it would write) as Rows, and each copy in
+// the repo store named in Upgraded ("actors/<id>"). Named, a copy counts
+// once with the format rewrite: a dry run finds the copy still at `_v: 1`
+// and the rewrite lists it too, while the real run refreshes it first and
+// the rewrite then skips it; unnamed, the dry run promised one actor row
+// more than the real run reported (devco K-5).
+func (a *App) migrateActorCopies(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	open := a.writeState
 	if dryRun {
 		open = a.state // a dry run only reads
 	}
 	st, err := open(ctx)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	all, err := a.actorIDs(ctx, st)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	var names, failed []string
+	var names, failed, upgraded []string
 	n := 0
 	for _, id := range all {
 		rep := a.actorReport(ctx, st, id)
@@ -59,8 +66,12 @@ func (a *App) migrateActorCopies(ctx context.Context, dryRun bool) ([]string, in
 			if _, _, _, differs := firstDiff(rep.Source, c); !differs {
 				continue // only the stamp differs: nothing a reader sees is wrong (doctor_actorcopies.go)
 			}
+			repoFile := string(schema.TableActors) + "/" + id.String()
 			if dryRun {
 				done++
+				if c.Store == string(store.SourceRepo) {
+					upgraded = append(upgraded, repoFile)
+				}
 				continue
 			}
 			wrote, rerr := refreshCopy(ctx, st, id, rep.Source, c)
@@ -71,6 +82,9 @@ func (a *App) migrateActorCopies(ctx context.Context, dryRun bool) ([]string, in
 			}
 			if wrote {
 				done++
+				if c.Store == string(store.SourceRepo) {
+					upgraded = append(upgraded, repoFile)
+				}
 			}
 		}
 		if done > 0 {
@@ -90,7 +104,7 @@ func (a *App) migrateActorCopies(ctx context.Context, dryRun bool) ([]string, in
 	if len(failed) > 0 {
 		lines = append(lines, StepActorCopies+": could not refresh "+strings.Join(failed, "; ")+"; lore doctor names them, `"+actorRefreshFix+"` retries")
 	}
-	return lines, n, nil
+	return opsmigrate.Settings{Steps: lines, Rows: n, Upgraded: upgraded}, nil
 }
 
 // copiesText is "1 actor copy" / "2 actor copies".

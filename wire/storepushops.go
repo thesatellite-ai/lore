@@ -548,7 +548,15 @@ func (a *App) doctorPushModes(ctx context.Context, warn, note func(string), wait
 	if err != nil {
 		return
 	}
+	pushModeNotes(views, warn, note, waits)
+}
+
+// pushModeNotes is doctorPushModes over views already read.
+func pushModeNotes(views []opsstores.PushView, warn, note func(string), waits map[string]string) {
 	for _, v := range views {
+		if v.Folder {
+			continue // a folder store has no push mode: its line read "store me: " and nothing after (devco J-12)
+		}
 		w := waits[v.Store]
 		switch {
 		case v.Problem != "":

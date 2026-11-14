@@ -1326,7 +1326,7 @@ Flags:
 ### `lore task note`
 
 <!-- help: task note -->
-Record a progress note on a task (pushes your work branch)
+Record a progress note on a task (a live row; your next `lore sync` or `git push` sends it)
 
 ```text
 Usage:

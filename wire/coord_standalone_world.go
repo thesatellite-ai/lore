@@ -1117,12 +1117,32 @@ func coordErr(err error) error {
 		return e
 	case errors.Is(err, coord.ErrNotOpen):
 		return errs.New(errs.Refused, err.Error())
+	case errors.Is(err, coord.ErrNotGated):
+		// devco:L-3: approving a task nobody asked a gate for is a refusal
+		// by the data's state, not an internal error; the next step is to
+		// request the gate first. The id is the last word before the
+		// parenthesised next step coord.Approve appends.
+		id := notGatedID(err)
+		return errs.New(errs.Refused, id+" has no gate to approve (nobody requested one)").
+			WithHint("lore gate request --id " + id + " puts a gate on it; approve once it is requested")
 	case errors.Is(err, signals.ErrNotHeld):
 		return errs.New(errs.LostClaim, err.Error())
 	case errors.Is(err, signals.ErrBadName):
 		return errs.New(errs.InvalidInput, err.Error())
 	}
 	return err
+}
+
+// notGatedID is the task id a coord.ErrNotGated names (its text is
+// "<ErrNotGated>: <id> (request one …)"); "the task" when none parses.
+func notGatedID(err error) string {
+	rest := strings.TrimPrefix(err.Error(), coord.ErrNotGated.Error()+": ")
+	if f := strings.Fields(rest); len(f) > 0 {
+		if _, perr := ids.ParseAny(f[0]); perr == nil {
+			return f[0]
+		}
+	}
+	return "the task"
 }
 
 // unknownCoordID is the id a coord.ErrUnknownTask names (its text is

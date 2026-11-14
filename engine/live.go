@@ -32,7 +32,8 @@ func bindInputLive(ctx context.Context, in op.Input) (context.Context, error) {
 	off, _ := in.Bool(inputNoLive)
 	switch {
 	case on && off:
-		return nil, errs.New(errs.InvalidInput, "--live and --no-live cannot be used together")
+		return nil, errs.New(errs.InvalidInput, "--live and --no-live cannot be used together").
+			WithHint("give --live to keep the row on the live ref, or --no-live to keep it with the code, not both")
 	case on:
 		return store.WithLiveChoice(ctx, store.LiveChoice{Mode: store.LiveOn, Table: opTable(in.Op())}), nil
 	case off:

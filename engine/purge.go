@@ -10,6 +10,7 @@ package engine
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -168,6 +169,9 @@ func purgedErr(ctx context.Context, st Attached, table row.Table, id ids.AnyID) 
 // "purged by mira"): the actor's display name from the store's actors
 // rows, else the act_ id when the row cannot be read (never a guess).
 func purgerName(ctx context.Context, st Attached, actor ids.ID[ids.Actor]) string {
+	if name, ok := auditfill.NameOf(actor.String()); ok {
+		return name
+	}
 	sr, err := st.Backend.Get(ctx, schema.TableActors, actor.Any())
 	if err != nil || sr.Deleted {
 		return actor.String()

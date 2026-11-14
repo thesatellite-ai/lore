@@ -74,8 +74,7 @@ func (a *App) FindProject(ctx context.Context, ref string) (opsmember.Project, e
 		if f, ok := scan.match(ref, byID); ok {
 			return opsmember.Project{ID: f.ID, Name: f.Folder}, nil
 		}
-		return opsmember.Project{}, errs.New(errs.NotFound, "no project or store folder "+ref+" in the stores this command reads"+scan.missDetail()).
-			WithHint("lore project list shows the projects and folders of the org; name one by its name or prj_ id, or make the folder first: lore store folder add --store <store> --folder " + ref)
+		return opsmember.Project{}, projectMissError(ref, scan.missDetail(), insideWorkTree(ctx, a.opts.RepoDir))
 	}
 	switch len(hits) {
 	case 1:
@@ -114,4 +113,21 @@ func (a *App) ProjectName(ctx context.Context, id string) (string, bool) {
 		return "", false
 	}
 	return p.Name, true
+}
+
+// projectMissError is FindProject's E_NOT_FOUND. A project lore init made
+// lives in its repo's .lore/data, which only a command run inside that repo
+// reads; outside a repo the old hint sent the admin to lore project list
+// (which needs a repo) and to lore store folder add, which made a second,
+// unrelated project of the same name (devco:J-10). So outside a repo the
+// way on is to run the command again inside the project's repo, and the
+// store folders are listed with lore store folder list.
+func projectMissError(ref, searched string, inRepo bool) error {
+	msg := "no project or store folder " + ref + " in the stores this command reads" + searched
+	if inRepo {
+		return errs.New(errs.NotFound, msg).
+			WithHint("lore project list shows the projects and folders of the org; name one by its name or prj_ id, or make a store folder for it: lore store folder add --store <store> --folder " + ref)
+	}
+	return errs.New(errs.NotFound, msg+"; a project kept in a repo (the one lore init made) is read only from inside that repo").
+		WithHint("run the same command again from inside the repo of " + ref + " (cd <repo>); lore store folder list shows the store folders that work from anywhere")
 }

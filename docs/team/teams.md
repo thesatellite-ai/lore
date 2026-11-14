@@ -52,7 +52,7 @@ lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e9…4603.json (sto
 ```
 <!-- /example -->
 
-Every member of `@web` then finds the task in `lore task list --mine` and in `lore inbox` under assignments, marked `(team @web)`, until someone claims it.
+Every member of `@web` then finds the task in `lore task list --mine` and in `lore inbox` under assignments, marked `(team @web)`, until someone claims it. `lore task show --id <task>` prints a `team:     @web` line, and its `--json` carries `assigned_team` (the `tem_` id) and `assigned_team_handle`.
 
 A team's name is internal to the org, so a task written into a client's own repo cannot be assigned to a team; write it to the org's store (`--to agency`) as above.
 
@@ -104,7 +104,7 @@ $ lore team list --json
 ```
 <!-- /example -->
 
-To change the handle itself, `lore team rename --handle @web --to @frontend` keeps the team (same `tem_` id and members): tasks assigned to it show `@frontend` from then on, and a pending invite that named `@web` names `@frontend`. The new handle may not be a person's or another team's, removed ones included.
+To change the handle itself, `lore team rename --handle @web --to @frontend` keeps the team (same `tem_` id and members): tasks assigned to it show `@frontend` from then on, and a pending invite that named `@web` names `@frontend`. The new handle may not be a person's or another team's, removed ones included. The old handle names nobody afterwards: `--assign @web` is refused, and the hint lists the teams there are now, so the new handle is in it.
 
 ## What lore refuses
 

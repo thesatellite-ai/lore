@@ -30,9 +30,25 @@ import (
 // pushWaitingOrgStores pushes every configured org store clone that still
 // holds commits its remote has not got, after the attached stores synced.
 // A config that does not load is no report (`lore config check` names it).
-func (a *App) pushWaitingOrgStores(ctx context.Context) []opsstores.Report {
+//
+// done is the attached stores' reports of this sync. A clone whose store
+// url one of them already reported as unreachable (offline, or a problem
+// such as an address that holds no store now) is skipped: its push just
+// failed under its own name, and a second try would print the same store
+// again under its url's repo name ("store team-store: … (offline …)"
+// beside "store umbrella", devco K-7).
+func (a *App) pushWaitingOrgStores(ctx context.Context, done []opsstores.Report) []opsstores.Report {
 	if a.opts.Home == "" {
 		return nil
+	}
+	unreachable := map[string]bool{}
+	for _, r := range done {
+		if !r.Offline && len(r.Problems) == 0 {
+			continue
+		}
+		if norm, nerr := repourl.NormalizeStore(a.storeURLOf(ctx, r.Store)); nerr == nil && norm != "" {
+			unreachable[norm] = true
+		}
 	}
 	c := &standaloneClones{home: a.opts.Home, now: a.opts.Wall}
 	list, err := c.configuredStores()
@@ -42,6 +58,9 @@ func (a *App) pushWaitingOrgStores(ctx context.Context) []opsstores.Report {
 	cl := c.clonesFor()
 	var out []opsstores.Report
 	for _, cs := range list {
+		if unreachable[cs.norm] {
+			continue // the attached store's line already says it (K-7)
+		}
 		info := cl.Inspect(ctx, cs.norm)
 		if !info.Cloned || !slices.ContainsFunc(info.Unpushed, isBranchRef) {
 			continue // only a branch's commits wait for a push: refs/lore/backup/* stay local by design

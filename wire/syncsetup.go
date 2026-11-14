@@ -329,6 +329,7 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 	// the store's own report gives its state
 	for _, s := range res.Stores {
 		r.Sent, r.Received, r.Merged = r.Sent+s.Sent, r.Received+s.Received, r.Merged+s.Merged
+		r.Pushed = r.Pushed || s.Pushed // one clone pushes once, for whichever folder synced it
 		if s.Unattached {
 			continue
 		}
@@ -352,9 +353,9 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 		r.Error = "its remote could not be reached; local changes are kept and sent on the next sync"
 		r.Next = "check the network and your access to " + r.URL + ", then run `lore sync` again (`lore doctor` explains a store it cannot reach)"
 		return r, errs.StoreUnreachable
-	case r.Sent > 0 && r.Received > 0:
+	case (r.Sent > 0 || r.Pushed) && r.Received > 0:
 		r.Status = opssync.StoreStatusBoth
-	case r.Sent > 0:
+	case r.Sent > 0 || r.Pushed:
 		r.Status = opssync.StoreStatusPushed
 	case r.Received > 0:
 		r.Status = opssync.StoreStatusPulled
@@ -447,6 +448,9 @@ func syncStoreLines(r opssync.StoreReport) []string {
 		line = head + "up to date"
 	default:
 		line = fmt.Sprintf("%s%s (sent %d, received %d, merged %d)", head, r.Status, r.Sent, r.Received, r.Merged)
+		if r.Pushed && r.Sent == 0 {
+			line += syncPushedNoRows
+		}
 	}
 	if r.Held != "" {
 		line = head + r.Held

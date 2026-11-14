@@ -33,7 +33,10 @@ const (
 // row, else toolprofile.Resolve), prints the chosen targets to w and records
 // them as the repo's context.targets row. Init never asks which tools to
 // wire (Q-R2-4): it prints what it chose and why, and --target overrides it.
-func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root string, values []string) error {
+// fromSetup names the setup whose tools values are ("" when values are
+// --target), so the printed reason names the setup, not a flag nobody
+// typed (devco J-2).
+func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root string, values []string, fromSetup string) error {
 	pick, err := h.resolveTargets(ctx, root, values, func(ctx context.Context) ([]string, bool, error) {
 		return h.contextTargetsOf(ctx, h.app)
 	})
@@ -41,7 +44,10 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 		return err
 	}
 	reason := initTargetReason(len(values) > 0, pick.sel.Reason)
-	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetup {
+	switch {
+	case len(values) > 0 && fromSetup != "":
+		reason = setupReason(fromSetup)
+	case len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetup:
 		reason = setupReason(pick.setup)
 	}
 	fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), reason)

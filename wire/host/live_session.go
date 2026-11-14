@@ -126,6 +126,11 @@ type liveSession struct {
 	// asked: the command is a push the person asked for (liveRun.asked):
 	// it pushes waiting live writes even with live.autopush off.
 	asked bool
+	// still: the run leaves .git as it was (liveRun.still): prepare takes
+	// no lock, fetches and integrates nothing; finish writes nothing.
+	still bool
+	// ci: a CI-form run (liveRun.ci): readWiring says no wiring note.
+	ci bool
 	// fetchErr is the last fetch failure (offline).
 	fetchErr error
 	// remoteURL is remote.<RemoteName>.url as configured ("" without a
@@ -263,6 +268,9 @@ func (s *liveSession) prepare(ctx context.Context) {
 		return
 	}
 	s.prepared = true
+	if s.still {
+		return // live_still.go: the refs the clone has, as they are
+	}
 	l, err := acquireLiveLock(ctx, s.stateDir)
 	if err != nil {
 		s.warn(err.Error())
@@ -388,7 +396,7 @@ func (s *liveSession) defaultBranch(ctx context.Context) string {
 // the remote behind the person's back (owner rule U-2).
 func (s *liveSession) finish(ctx context.Context) {
 	defer s.release()
-	if !s.prepared || s.finished {
+	if !s.prepared || s.finished || s.still {
 		return
 	}
 	s.finished = true
