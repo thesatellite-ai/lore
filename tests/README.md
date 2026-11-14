@@ -33,6 +33,10 @@ Each script:
 6. Calls `fail "<reason>"` and exits non-zero on assertion failure
 7. Reads `$LORE` env var for binary path (default: `aicoder` on PATH)
 
+## Regression index
+
+`tests/stories/REGRESSIONS.md` lists every scenario, incident and finding of the 0.1.18 effort with the Go test(s) that guard it. The plain `go test` in `tests/stories/regressguard` reads it on every `go test ./...`: a row naming a test that no longer exists fails the build. A fix lands with its regression test and its row in the same commit.
+
 ## Adding a new scenario
 
 1. Pick the next free number (e.g., SC-31)
