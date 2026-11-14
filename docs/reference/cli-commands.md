@@ -684,8 +684,6 @@ Every switch (a flag that takes no value, such as `--force`) also has an off for
 | `E_STATUS_CHANGE` | 23 | `refused` | 409 | a status change the rules do not allow; use lore actor offboard, lore actor rejoin or lore actor status <a> active |
 | `E_STORE_BACKEND` | 23 | `refused` | 409 | a store's filler and backend do not fit |
 | `E_STORE_LOCKED` | 23 | `refused` | 409 | the store lock stayed held past store.lock_timeout |
-| `E_STORE_NO_ACCESS` | 23 | `refused` | 409 | the store refused this GitHub account or key; ask the owner for access, or check the key (lore doctor --setup <name>) |
-| `E_STORE_NO_WRITE` | 23 | `refused` | 409 | the store can be read but not written with this account; ask for push access or attach it --read-only |
 | `E_STORE_READ_ONLY` | 23 | `refused` | 409 | a write to a store attached read-only |
 | `E_STORE_SCHEME` | 20 | `bad_input` | 400 | a store url uses a scheme no backend is registered for |
 | `E_STORE_UNREACHABLE` | 15 | `coordination` | 503 | a store with no local copy could not be reached |

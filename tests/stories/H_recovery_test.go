@@ -428,7 +428,7 @@ func TestStoryHLostRemotes(t *testing.T) {
 			}
 		}
 		t.Run("stories:H-1", func(t *testing.T) {
-			t.Skip("waiting for stories:H-1: a write still appends lore's block to the team's own tracked .husky/pre-commit without asking")
+			// the team's own tracked pre-commit is left as committed too
 			if strings.Contains(st, ".husky/pre-commit") {
 				t.Errorf("a lore write changed the tracked .husky/pre-commit:\n%s", st)
 			}

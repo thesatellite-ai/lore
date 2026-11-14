@@ -403,8 +403,6 @@ A team profile write in a repo without an org answers `E_REFUSED` (profiles live
 | `E_INVITE_REVOKED` | 23 | the invite was revoked | ask the inviter |
 | `E_INVITE_USED` | 23 | the invite was accepted by another person | ask for a new one |
 | `E_INVITE_EMAIL` | 20 | the invite is for another email | use that address, or ask for a new invite |
-| `E_STORE_NO_ACCESS` | 23 | the store refused this account or key (not a network failure). Not raised yet: setup reports the `store.read` check | ask for access, or check the key (`lore doctor --all --setup <name>`) |
-| `E_STORE_NO_WRITE` | 23 | the store can be read but not written. Not raised yet: setup reports the `store.write` check | ask for push access, or attach it `--read-only` |
 | `E_SKILL_LINKED` | 23 | `lore skill install`: the tool's skill folder (or a file in it) is a symbolic link whose target holds an older or hand-edited lore skill, another skill, or nothing; lore does not write through a link unasked | `--link replace` puts lore's own copy where the link was (its target is untouched); `--link update` writes this lore's skill into the target ([more](../knowledge/skill-install.md)) |
 | `E_FIX_REFUSED` | 20 | a check's fix is not runnable, or a value in its command failed the safety check | follow the fix text by hand ([more](../team/setup-errors.md#e_fix_refused-exit-20)) |
 

@@ -1,7 +1,7 @@
 # lore installer for Windows (PowerShell).
 #
 # Usage:
-#   irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/thesatellite-ai/lore/v0.1.18/install.ps1 | iex
 #
 # Downloads the latest released binary from GitHub Releases, installs it
 # to %LOCALAPPDATA%\lore, adds that dir to the user PATH, and

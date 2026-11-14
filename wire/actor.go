@@ -119,6 +119,15 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if st.actorDone[target] {
 		return nil
 	}
+	if w, ok := st.storeWho[target]; ok {
+		// C19: an org store's rows are stamped with the person's identity
+		// in that org (orgstoreactor.go), so that actor's row goes there.
+		if err := a.ensureWriterRow(ctx, st, target, w); err != nil {
+			return err
+		}
+		st.actorDone[target] = true
+		return nil
+	}
 	// In a client repo an agent's writes are stamped as its owner
 	// (clientActorAs), so the actor row written there is the owner's
 	// projection, never the agent's (D8).
@@ -193,6 +202,40 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		return errs.Prefix("wire: write the actor row to store "+string(target), err)
 	}
 	st.actorDone[target] = true
+	return nil
+}
+
+// ensureWriterRow writes the actor row of w, the person's identity in the
+// org that owns target (storeWho), into target unless it is there: the
+// same projection ensureActor writes for the open's own identity (kind,
+// display_name, and stable_key, handle, owner and label where
+// fullActorRow allows them).
+func (a *App) ensureWriterRow(ctx context.Context, st *state, target store.Source, w storeWriter) error {
+	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: w.id.Any()}
+	if _, _, err := st.eng.Get(ctx, ref); err == nil {
+		return nil
+	} else if !errs.Has(err, errs.NotFound) {
+		return err
+	}
+	vals := map[string]string{actorFieldKind: actorKindOf(w.who.Kind), actorFieldDisplay: w.who.DisplayName}
+	if fullActorRow(st, target) {
+		vals[actorFieldKey], vals[actorFieldHandle], vals["label"] = w.who.StableKey, w.who.Handle, w.who.Label
+		if o := w.who.Owner; o != nil {
+			if oid, oerr := o.ActorID(); oerr == nil {
+				if oerr := a.ensureOwnerRow(ctx, st, target, oid, *o); oerr != nil {
+					return oerr
+				}
+				vals[rosterFieldOwner] = oid.String()
+			}
+		}
+	}
+	fields, err := textFields(vals)
+	if err != nil {
+		return errs.Prefix("wire: the actor row of your identity in store "+string(target), err)
+	}
+	if _, err := st.eng.CreateWithID(ctx, target, schema.TableActors, w.id.Any(), fields); err != nil && !errs.Has(err, errs.Stale) {
+		return errs.Prefix("wire: write the actor row to store "+string(target), err)
+	}
 	return nil
 }
 

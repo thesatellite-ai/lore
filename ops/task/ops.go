@@ -370,6 +370,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		if fields[fieldParent], err = parentRef(par.id); err != nil {
 			return AddOut{}, err
 		}
+		if in.rank != "" {
+			par.rank = in.rank // task split's own rank chain (staged siblings are not read back)
+		}
 		if fields[fieldRank], err = value.TextOf(par.rank); err != nil {
 			return AddOut{}, err
 		}
@@ -379,10 +382,15 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		// lands in ONE engine batch with the task (and the caller's actor
 		// row), so an add refused later (a bad --mission, a ref the engine
 		// refuses, a secret) leaves no default list behind; the staged list
-		// resolves as the task's tasklist_id (engine stagedLive).
-		sctx := engine.Staging(ctx)
-		defer engine.Discard(sctx) // no-op once committed
-		ctx, staged = sctx, sctx
+		// resolves as the task's tasklist_id (engine stagedLive). A caller
+		// that already stages a batch (task split: every child in one
+		// commit) is joined, not nested: a nested stage would replace the
+		// caller's and commit this task on its own.
+		if !engine.InStage(ctx) {
+			sctx := engine.Staging(ctx)
+			defer engine.Discard(sctx) // no-op once committed
+			ctx, staged = sctx, sctx
+		}
 		listTo, terr := o.routedTarget(ctx, in.To)
 		if terr != nil {
 			return AddOut{}, terr

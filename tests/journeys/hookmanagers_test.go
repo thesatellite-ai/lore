@@ -61,13 +61,15 @@ func TestJourneyHookManagers(t *testing.T) {
 		c.TryGit("commit", "-q", "-m", "husky").OK(t)
 		c.Git("config", "core.hooksPath", ".husky")
 		lap.LoreIn(c, "memory", "add", "--body", "husky runs the lint").OK(t).
-			Says(t, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push in "+husky, "leak guard off in this clone")
-		if st := c.Git("status", "--porcelain", "--untracked-files=all", "--", ".husky"); strings.Contains(st, "??") {
-			t.Fatalf("a lore write created files in the tracked .husky:\n%s", st)
+			Says(t, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push or add its block to pre-commit in "+husky, "`lore fix`", "leak guard off in this clone")
+		// D-142: a write neither creates nor changes a file in the tracked
+		// .husky (it would reach every teammate); `lore fix` does, after asking.
+		if st := c.Git("status", "--porcelain", "--untracked-files=all", "--", ".husky"); st != "" {
+			t.Fatalf("a lore write created or changed files in the tracked .husky:\n%s", st)
 		}
 		pc, err := os.ReadFile(filepath.Join(husky, "pre-commit"))
-		if err != nil || !strings.Contains(string(pc), "lore-sync") || !strings.Contains(string(pc), "echo team check") {
-			t.Fatalf("lore's block is not in the existing .husky/pre-commit beside the team's line: %v\n%s", err, pc)
+		if err != nil || strings.Contains(string(pc), "lore-sync") || string(pc) != "#!/bin/sh\necho team check\n" {
+			t.Fatalf("a lore write changed the team's committed .husky/pre-commit: %v\n%s", err, pc)
 		}
 	})
 
@@ -88,7 +90,7 @@ func TestJourneyHookManagers(t *testing.T) {
 	})
 
 	w.Step("day2/lore-fix-creates-the-hook-files-and-says-so", func() {
-		lap.LoreIn(c, "fix", "--yes").Says(t, "new files in "+husky+", a folder committed with the repo", "restored now").Never(t, key)
+		lap.LoreIn(c, "fix", "--yes").Says(t, "hook blocks in "+husky, "new or changed files in "+husky+", a folder committed with the repo", "commit them to share lore's checks").Never(t, key)
 		c.TryGit("push", "-q").Refused(t, "E_LEAK_BLOCKED", "deploy/aws.env").Never(t, key)
 	})
 }

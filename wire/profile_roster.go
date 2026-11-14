@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/actorsource"
 	"github.com/thesatellite-ai/lore/logic/identmatch"
@@ -99,12 +100,24 @@ func (a *App) profileWriter(ctx context.Context, st *state, target store.Source)
 
 // profileAgent is the agent a profile write is made by ("" for a person),
 // or an error when lore cannot tell who writes: the surface's choice
-// (REST X-Lore-Agent, an explicit agent) wins over detection.
+// (REST X-Lore-Agent, an explicit agent) wins over detection. Outside a
+// git checkout (setup's team step runs from home, gate7a) the repo's row
+// state does not exist, so the same identity chain runs without it: the
+// agent detection and LORE_ACTOR do not depend on a repo.
 func (a *App) profileAgent(ctx context.Context) (string, error) {
 	who, err := a.Who(ctx)
+	if errs.Has(err, errs.NotAStore) {
+		who, err = resolveIdentity(ctx, a.opts)
+	}
 	if err != nil {
 		return "", err
 	}
+	return agentOfWriter(ctx, who)
+}
+
+// agentOfWriter is profileAgent's answer for an identity already resolved:
+// the agent who writes ("" for a person), the surface's choice first.
+func agentOfWriter(ctx context.Context, who identity.Resolved) (string, error) {
 	if who.StableKey == "" {
 		return "", errs.New(errs.InvalidInput, "no identity: lore cannot tell who you are").WithHint("run `lore whoami` to see the identity chain")
 	}
@@ -142,11 +155,11 @@ func peopleWriteByAgent(set policy.Set, agent string) error {
 // new org's store has no policy rows yet, so the machine level is the one
 // level that already decides its roster write; refused there, the step
 // used to have written the store and the org entry first (a half-write).
+// The team step runs from any folder (the setup page is often opened
+// outside a git checkout), so the policy is read first and the identity
+// is resolved without a repo (resolveIdentity, not Who, which opens the
+// folder's store and answered E_NOT_A_STORE there: gate7b).
 func (a *App) agentMayCreateTeam(ctx context.Context) error {
-	agent, err := a.profileAgent(ctx)
-	if err != nil || agent == "" {
-		return err
-	}
 	entries, _, err := machinePolicy(a.opts.Home)
 	if err != nil {
 		return err
@@ -157,6 +170,14 @@ func (a *App) agentMayCreateTeam(ctx context.Context) error {
 	}
 	if _, set0 := set.Get(policy.KeyAgentsMayManagePeople); !set0 {
 		return nil // nothing set here: the key's default (true) applies
+	}
+	who, err := resolveIdentity(ctx, a.opts)
+	if err != nil {
+		return err
+	}
+	agent, err := agentOfWriter(ctx, who)
+	if err != nil || agent == "" {
+		return err
 	}
 	return peopleWriteByAgent(set, agent)
 }

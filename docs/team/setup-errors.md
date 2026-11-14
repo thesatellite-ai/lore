@@ -147,21 +147,11 @@ ERROR: [E_INVITE_REVOKED] invite inv_01a1b195c0f47163971b269b3863583a was revoke
 
 ## Stores
 
-### `E_STORE_NO_ACCESS` (exit 23)
+A store that refuses this setup's GitHub account or key (you are not a collaborator, the repo does not exist, or the ssh key logs in as another account) shows as the failing `store.read` check of the step; a store you can read but not push to shows as the failing `store.write` check. A network failure is `E_STORE_UNREACHABLE` (exit 15). lore has no separate error code for either refusal.
 
-**Cause:** GitHub (or the git host) refused this setup's account or key for the store: you are not a collaborator, the repo does not exist, or the ssh key logs in as another account. A network failure is a different code (`E_STORE_UNREACHABLE`, exit 15).
+**Fix for `store.read`:** ask the store's owner for access (for a team store, the admin can run `lore team invite --email … --grant`), accept the GitHub invitation at github.com/notifications, or check the key with `lore doctor --all --setup <name>` (`github.ssh_auth`, `github.ssh_user`).
 
-**Fix:** ask the store's owner for access (for a team store, the admin can run `lore team invite --email … --grant`), accept the GitHub invitation at github.com/notifications, or check the key with `lore doctor --all --setup <name>` (`github.ssh_auth`, `github.ssh_user`).
-
-In this build the code is registered but the setup steps report the problem as the failing `store.read` check (with the same fixes) rather than as this error.
-
-### `E_STORE_NO_WRITE` (exit 23)
-
-**Cause:** you can read the store but not push to it with this account.
-
-**Fix:** ask for push (write) access, or attach the store `--read-only` if reading is all you need.
-
-In this build the code is registered but the setup steps report the problem as the failing `store.write` check rather than as this error.
+**Fix for `store.write`:** ask for push (write) access, or attach the store `--read-only` if reading is all you need.
 
 ## Fixes
 

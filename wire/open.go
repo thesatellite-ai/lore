@@ -312,10 +312,14 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
 	}
+	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go: an org store's rows carry that org's identity (C19)
 	for _, o := range attached {
 		a := o.Attached
 		a.KeyNamespace = keyNamespace(a)
 		a.Place = placeOf(ctx, a) // FQ4: sto_ id (+ "/<folder prj_ id>") of a marked store; "" keeps the attached name
+		if as := st.storeWriterAs(a.Name); as != nil {
+			a.ActorAs = as
+		}
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	// FQ11 / FA-AGENT-6: this machine's stricter local policy values.
@@ -1264,10 +1268,14 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		engine.WithProvenance(storeOnlyProvenance{inner: newProvenance(opts, "")}),
 		engine.WithMachinePolicy(machinePol),
 	}
+	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go (C19)
 	for _, o := range attached {
 		a := o.Attached
 		a.KeyNamespace = keyNamespace(a)
 		a.Place = placeOf(ctx, a)
+		if as := st.storeWriterAs(a.Name); as != nil {
+			a.ActorAs = as
+		}
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	if engOpts, err = st.withMachine(ctx, opts.Home, reg, exp, engOpts); err != nil { // P3-LOCAL-2

@@ -471,6 +471,10 @@ type state struct {
 	agentOwner ids.ID[ids.Actor]
 	// agentOwnerName is that person's roster display_name ("" unknown).
 	agentOwnerName string
+	// storeWho is, per attached org store, the person's identity in that
+	// org when it differs from who (orgstoreactor.go, C19): rows written
+	// there are stamped with it and its actor row is written there.
+	storeWho map[store.Source]storeWriter
 	// unreachable holds the org stores (Options.OrgStores) left out at open
 	// because they have no local copy and cannot be reached, with that
 	// error; nil when every store opened (openAttached, unreachableGuard).

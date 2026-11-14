@@ -15,7 +15,7 @@ See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** for layout, build, and releas
 task lore:hooks:install   # once: the pre-push hook runs the full gate
 task lore:build
 task lore:test:quick      # quick tier: unit tests, cached, no race, no e2e — run it all the time
-task check:fast           # fast tier (~5 min): enough to land a small fix; the full gate then runs on main
+task check:fast           # fast tier (~5 min): enough to land a small fix; the full gate then runs on dev
 task check                # full tier, the gate — must pass before you push anything bigger
 ```
 

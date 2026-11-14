@@ -276,10 +276,6 @@ const (
 	InviteUsed Code = "E_INVITE_USED"
 	// InviteEmail: the identity email is not the invite's email.
 	InviteEmail Code = "E_INVITE_EMAIL"
-	// StoreNoAccess: the read probe was refused (auth or not found), not a network failure.
-	StoreNoAccess Code = "E_STORE_NO_ACCESS"
-	// StoreNoWrite: the dry-run push was refused (ONB 4.4).
-	StoreNoWrite Code = "E_STORE_NO_WRITE"
 	// FixRefused: a fix argv failed re-validation before it would run (ONB 5.3).
 	FixRefused Code = "E_FIX_REFUSED"
 	// SkillLinked: lore skill install found the tool's skill folder (or a
@@ -476,8 +472,6 @@ var table = map[Code]entry{
 	InviteRevoked:         {class: ClassRefused, desc: "the invite was revoked; ask the inviter"},
 	InviteUsed:            {class: ClassRefused, desc: "the invite was already used by another person; ask the inviter for a new one"},
 	InviteEmail:           {class: ClassBadInput, desc: "the invite is for another email; use that address or ask for a new invite"},
-	StoreNoAccess:         {class: ClassRefused, desc: "the store refused this GitHub account or key; ask the owner for access, or check the key (lore doctor --setup <name>)"},
-	StoreNoWrite:          {class: ClassRefused, desc: "the store can be read but not written with this account; ask for push access or attach it --read-only"},
 	FixRefused:            {class: ClassBadInput, desc: "a fix command failed re-validation and was not run"},
 	SkillLinked:           {class: ClassRefused, desc: "the tool's skill folder is a symbolic link to a folder that does not hold this lore's skill; choose --link replace (lore's own copy replaces the link) or --link update (write into the link's target)"},
 }

@@ -79,6 +79,13 @@ type AddIn struct {
 	Template string   `json:"template,omitempty" flag:"template" desc:"apply this task template (its name or ttp_ id); the title comes from the template"`
 	Args     []string `json:"args,omitempty" flag:"arg" desc:"a template argument name=value (repeatable)"`
 	DryRun   bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --template: show the tasks that would be added, write nothing"`
+	// rank is the sub-task's rank when the caller computed it (task split,
+	// run:plat:split-perf): the split's children are staged in ONE batch,
+	// and a staged row is not visible to reads, so the parent's "last
+	// child" seen from the store is the same for every child and only the
+	// caller knows the chain. Empty: after the parent's last child. Never
+	// a flag or a JSON field.
+	rank string
 }
 
 // Inherited is what a new sub-task copied from its parent (6.5: the output
