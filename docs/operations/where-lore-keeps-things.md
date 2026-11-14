@@ -193,7 +193,7 @@ Cache files are named by a store id or by a hash of a repo's path, not by a name
 
 The first time lore writes any of these it says so, with the file and the lines or keys, for example `lore sync: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in …/.git/config; lore's merge rules in …/.gitattributes; hook blocks in …/.git/hooks (commit-msg, pre-commit, …)`.
 
-A repo that holds no lore data of its own (a client repo whose notes live in a store folder, with at most `.lore/stores.yaml`) never gets a tracked file changed by lore, `lore fix` included: no `.gitignore` lines and no `.gitattributes` block. lore's local files stay out of git status through `.git/info/exclude`, and lore says so the first time.
+A repo that holds no lore data of its own (a client repo whose notes live in a store folder, with at most `.lore/stores.yaml`) never gets a tracked file changed by lore, `lore fix` included: no `.gitignore` lines and no `.gitattributes` block. lore's local files stay out of git status through `.git/info/exclude`, and lore says so the first time. In a project someone migrated with `lore migrate run`, only the clone that ran it (git config `lore.migratedhere`) adds lore's lines to the tracked `.gitignore` and `.gitattributes` on its next write; other clones keep the same rules in `.git/info/exclude` and `.git/info/attributes` until that commit reaches them, and `lore doctor --fix` or `lore fix` writes the tracked lines anywhere ([Upgrading](upgrade.md)).
 
 `lore fix` (and `lore doctor --fix`, which runs the same steps) checks again after fixing: the status it prints is the state after the fixes, and a `Fixed` list under it names what changed (`fixed` in `--json`).
 

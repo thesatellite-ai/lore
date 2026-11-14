@@ -392,22 +392,25 @@ func TestStoryABranches(t *testing.T) {
 	var rule, mem string
 	s.Step("week3/dev-syncs-cto-writes-notes", func() {
 		at.lore(aDev1, at.svc, "sync").OK(t)
+		// A-1: the teammate's first sync in the migrated repo keeps lore's
+		// wiring in the clone's own .git/info files; the tracked
+		// .gitignore and .gitattributes come with the cto's commit.
+		if st := devSvc.Git("status", "--porcelain"); st != "" {
+			t.Errorf("Dana's first lore sync in the migrated repo left files for git to show:\n%s", st)
+		}
 		rule = aID(t, at.lore(aCTO, at.svc, "rule", "add", "--body", "every handler takes a context first").OK(t), "rul")
 		mem = aID(t, at.lore(aCTO, at.svc, "memory", "add", "--body", "the session cache holds 5 minutes").OK(t), "mem")
 		at.lore(aCTO, at.svc, "render").OK(t)
 		aPush(svc, "lore: notes")
 	})
 	s.Step("week3/teammate-pulls-the-notes", func() {
-		journeys.Pending(t, "st1", "a teammate's first lore sync in a migrated repo leaves lore's wiring (.gitignore, .gitattributes, and LORE.md and LORE.full.md when it renders) uncommitted; once the cto commits the same files, the teammate's git pull aborts", func(tb testing.TB) {
-			if r := devSvc.TryGit("pull", "-q", "--no-rebase", "origin", "main"); r.Code != 0 {
-				tb.Errorf("Dana's git pull of the cto's notes commit aborts: %s", r)
-			}
-		})
-		// What Dana does today: set lore's uncommitted files aside, then pull.
-		if devSvc.Git("status", "--porcelain") != "" {
-			devSvc.Git("stash", "-q", "-u")
-			devSvc.Git("pull", "-q", "--no-rebase", "origin", "main")
-			devSvc.Git("stash", "drop", "-q")
+		// A-1: the cto's commit carries lore's .gitignore and
+		// .gitattributes lines; Dana's plain git pull takes it.
+		if r := devSvc.TryGit("pull", "-q", "--no-rebase", "origin", "main"); r.Code != 0 {
+			t.Fatalf("Dana's git pull of the cto's notes commit aborts: %s", r)
+		}
+		if ga, ok := devSvc.ReadFile(".gitattributes"); !ok || !strings.Contains(ga, "merge=lore") {
+			t.Errorf("the cto's commit did not bring lore's .gitattributes rules: %q", ga)
 		}
 		at.lore(aDev1, at.svc, "memory", "show", "--id", mem).OK(t).Says(t, "5 minutes")
 	})

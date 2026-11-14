@@ -19,15 +19,17 @@ import (
 // hMemID matches the first memory id a command prints.
 var hMemID = regexp.MustCompile(`mem_[0-9a-f]{32}`)
 
-// hWaiting runs a step whose right behaviour waits on an open finding: the
-// step is written as it SHOULD behave and skipped with the finding id, so
-// the regression guard knows which finding it guards and removing the Skip
-// is the whole change once the fix lands. It runs as a subtest so the skip
-// ends only this step, never the story around it.
-func hWaiting(t *testing.T, finding string, fn func(t *testing.T)) {
+// hTaskID matches the first task id a command prints.
+var hTaskID = regexp.MustCompile(`tsk_[0-9a-f]{32}`)
+
+// hFinding runs a step that guards one finding of this story (once
+// waiting on it, now fixed): a subtest named after the finding id, so a
+// failure names the finding it brings back and ends only this step, never
+// the story around it. The regression index names the story test as that
+// finding's guard.
+func hFinding(t *testing.T, finding string, fn func(t *testing.T)) {
 	t.Helper()
 	t.Run(finding, func(t *testing.T) {
-		t.Skip("waiting for " + finding)
 		fn(t)
 	})
 }

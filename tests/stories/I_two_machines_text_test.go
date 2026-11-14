@@ -124,20 +124,25 @@ func TestStoryITwoMachines(t *testing.T) {
 		}
 	})
 
-	iWaiting(t, "D-120", func(t *testing.T) {
+	iFinding(t, "D-120", func(t *testing.T) {
 		// doctor counts the open store sync conflicts and names the command
 		// that settles them; never HEALTHY with "open conflicts: 0"
 		b.LoreIn(cb, "doctor").Never(t, "open conflicts: 0", "lore sync pushes them")
 	})
 
-	iWaiting(t, "D-121", func(t *testing.T) {
+	iFinding(t, "D-121", func(t *testing.T) {
 		// sync's counts match what moved: one row arrives, "received 1"
+		// (the offline edits' store conflict is settled first, keeping each
+		// laptop's side, so the sync measured here is not refused by it)
+		iSettle(t, a, ca)
+		iSettle(t, b, cb)
+		a.LoreIn(ca, "sync").OK(t)
 		a.LoreIn(ca, "memory", "add", "--body", "one more from a", "--to", "notes").OK(t)
 		a.LoreIn(ca, "sync").OK(t).Says(t, "sent 1")
 		b.LoreIn(cb, "sync").OK(t).Says(t, "received 1")
 	})
 
-	iWaiting(t, "D-122", func(t *testing.T) {
+	iFinding(t, "D-122", func(t *testing.T) {
 		// every actor doctor's Team versions names can be looked up
 		r := b.LoreIn(cb, "doctor")
 		for _, id := range iActors(r.Out()) {
@@ -145,7 +150,7 @@ func TestStoryITwoMachines(t *testing.T) {
 		}
 	})
 
-	iWaiting(t, "D-153", func(t *testing.T) {
+	iFinding(t, "D-153", func(t *testing.T) {
 		// the org admin's second laptop can join as an admin
 		b.LoreIn(cb, "setup", "join", "--help").OK(t).Says(t, "admin")
 	})
@@ -301,7 +306,7 @@ func TestStoryIEnvironment(t *testing.T) {
 		m.SetEnv("LC_ALL", "C.UTF-8")
 	})
 
-	iWaiting(t, "D-136", func(t *testing.T) {
+	iFinding(t, "D-136", func(t *testing.T) {
 		// lists show the viewer's local date: a reminder due tomorrow 20:00
 		// in Los Angeles is listed on that day, not the next UTC day
 		m.SetEnv("TZ", "America/Los_Angeles")
@@ -309,7 +314,7 @@ func TestStoryIEnvironment(t *testing.T) {
 		m.LoreIn(ca, "reminder", "list").OK(t).Says(t, s.Now().Add(24*time.Hour).Format("2006-01-02"))
 	})
 
-	iWaiting(t, "D-137", func(t *testing.T) {
+	iFinding(t, "D-137", func(t *testing.T) {
 		// search folds the Turkish dotted and dotless i
 		m.SetEnv("LANG", "tr_TR.UTF-8")
 		m.LoreIn(ca, "memory", "add", "--body", "ıspanak DİYARBAKIR").OK(t)
@@ -317,38 +322,54 @@ func TestStoryIEnvironment(t *testing.T) {
 		m.LoreIn(ca, "search", "diyarbakır").OK(t).Never(t, "(no matches)")
 	})
 
-	iWaiting(t, "D-138", func(t *testing.T) {
-		// a handle with an accent keeps it, and its ASCII spelling resolves
-		cto.LoreIn(ca, "member", "add", "--email", "chloe.b@twomachines.example.test", "--handle", "chloé").OK(t).Never(t, "@chlo ")
-		cto.LoreIn(ca, "task", "add", "--title", "x", "--assign", "@chloe").OK(t)
-	})
+	// D-138 (accented handles) needs a team roster, which this story's solo
+	// project has none of: TestHandleKeyFoldsAccents and
+	// TestPersonHandleFoldsAccents guard it.
 
-	iWaiting(t, "D-139", func(t *testing.T) {
-		// a shared group checkout: under umask 002 a teammate in the group
-		// can edit a row; under 077 lore keeps the checkout's own modes
-		f := hRows(t, ca.Dir, "memories")[0]
-		fi, err := os.Stat(f)
-		if err != nil || fi.Mode().Perm()&0o060 != 0o060 {
-			t.Errorf("row file %s mode %v under umask 002", f, fi.Mode())
+	iFinding(t, "D-139", func(t *testing.T) {
+		// row files follow the writer's umask: under 002 (a shared group
+		// checkout) a teammate in the group can edit a new row, and nobody
+		// else can write it. (077 in a setgid group folder is unit-tested by
+		// TestSharedWriteInSetgidFolder; an owner-only row in a plain folder
+		// would trip the story's own readable-files invariant.)
+		for _, c := range []struct {
+			mask       string
+			want, deny os.FileMode
+		}{{"002", 0o060, 0o002}} {
+			before := map[string]bool{}
+			for _, f := range hRows(t, ca.Dir, "memories") {
+				before[f] = true
+			}
+			iUnderUmask(t, s, c.mask, func() {
+				cto.LoreIn(ca, "memory", "add", "--body", "written under umask "+c.mask).OK(t)
+			})
+			for _, f := range hRows(t, ca.Dir, "memories") {
+				if before[f] {
+					continue
+				}
+				fi, err := os.Stat(f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if m := fi.Mode().Perm(); m&c.want != c.want || m&c.deny != 0 {
+					t.Errorf("row file %s has mode %v under umask %s", hRel(t, ca.Dir, f), m, c.mask)
+				}
+			}
 		}
 	})
 
-	iWaiting(t, "D-145", func(t *testing.T) {
-		// lore where labels a live client repo's caches as live, never gone
-		m.LoreIn(cs, "where").Never(t, "gone: moved or deleted")
-	})
+	// D-145 and D-146 are about client repos (linked to an org), which this
+	// story has none of: story F's client repo step guards D-145, and
+	// TestJourneyClientRepoNoInit guards both.
 
-	iWaiting(t, "D-146", func(t *testing.T) {
-		// a refused write in a client repo never hints lore init there
-		m.LoreIn(cs, "memory", "add", "--body", "x").Never(t, "lore init")
-	})
-
-	iWaiting(t, "D-147", func(t *testing.T) {
+	iFinding(t, "D-147", func(t *testing.T) {
 		// init writes its pointer once when CLAUDE.md imports @AGENTS.md
-		cs.WriteFile("AGENTS.md", "# agents\n")
-		cs.WriteFile("CLAUDE.md", "@AGENTS.md\n")
-		m.LoreIn(cs, "init").OK(t)
-		got, _ := cs.ReadFile("CLAUDE.md")
+		// (in a second clone of the site: cs must stay untouched)
+		c := m.Clone(site, "site-agents")
+		c.WriteFile("AGENTS.md", "# agents\n")
+		c.WriteFile("CLAUDE.md", "@AGENTS.md\n")
+		m.LoreIn(c, "init").OK(t)
+		got, _ := c.ReadFile("CLAUDE.md")
 		if strings.Contains(got, "LORE.md") {
 			t.Errorf("init pointed CLAUDE.md at lore too although it imports AGENTS.md:\n%s", got)
 		}

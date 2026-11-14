@@ -130,23 +130,23 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 		ines := team[0]
 		ines.M.LoreIn(ines.C, "reminder", "add", "--message", "rotate the queue credentials", "--due", s.Now().AddDate(0, 0, -3).Format("2006-01-02")).OK(t)
 		ines.M.LoreIn(ines.C, "reminder", "list").OK(t).Says(t, "rotate the queue credentials")
-		t.Run("overdue-reminders-in-inbox-and-render", func(t *testing.T) {
-			t.Skip("waiting for D-148")
-			ines.M.LoreIn(ines.C, "inbox").OK(t).Says(t, "rotate the queue credentials")
+		t.Run("overdue-reminders-in-inbox", func(t *testing.T) {
+			ines.M.LoreIn(ines.C, "inbox").OK(t).Says(t, "rotate the queue credentials", "overdue")
+		})
+		t.Run("overdue-reminders-in-render", func(t *testing.T) {
+			t.Skip("waiting for D-148-render: render and doctor still say nothing of an overdue reminder")
 			ines.M.LoreIn(ines.C, "render").OK(t)
 			if b, _ := ines.C.ReadFile(".lore/LORE.md"); !strings.Contains(b, "rotate the queue credentials") {
 				t.Errorf("LORE.md does not name the overdue reminder")
 			}
 		})
 		t.Run("bulk-archive", func(t *testing.T) {
-			t.Skip("waiting for D-152")
 			ines.M.LoreIn(ines.C, "memory", "archive", "--where", "body~=queue drains", "--yes").OK(t)
 			if got := gCount(t, ines.M.LoreIn(ines.C, "memory", "list", "--json").OK(t)); got > 4 {
 				t.Errorf("bulk archive left %d memories", got)
 			}
 		})
 		t.Run("trash-purge-is-fast", func(t *testing.T) {
-			t.Skip("waiting for D-155")
 			start := time.Now()
 			ines.M.LoreIn(ines.C, "trash", "purge", "--older-than", "0d", "--confirm").OK(t)
 			if d := time.Since(start); d > 5*time.Second {
@@ -154,17 +154,18 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 			}
 		})
 		t.Run("task-stale-days-zero", func(t *testing.T) {
-			t.Skip("waiting for r3 G-20")
-			ines.M.LoreIn(ines.C, "task", "stale", "--days", "0").OK(t).Says(t, "tidy the handler").Never(t, "60 days")
+			// G-20: 0 is refused with the floor, never read as "not given"
+			// (which ran the 60-day default)
+			ines.M.LoreIn(ines.C, "task", "stale", "--days", "0").Fails(t, 20, "--days must be 1 or more").Never(t, "60 days")
 		})
 		t.Run("doctor-quiet-on-a-small-LORE.md", func(t *testing.T) {
-			t.Skip("waiting for D-156")
 			ines.M.LoreIn(ines.C, "doctor").Never(t, "of 32000 bytes")
 		})
 		t.Run("must-rules-over-budget-keep-their-text", func(t *testing.T) {
-			t.Skip("waiting for D-151")
+			// 80 must rules of ~450 bytes each: well over the 32000-byte budget
+			pad := strings.Repeat(" because the on-call engineer greps the logs by it", 8)
 			for i := 0; i < 80; i++ {
-				ines.M.LoreIn(ines.C, "rule", "add", "--body", fmt.Sprintf("must rule %02d: every handler logs its request id", i), "--must").OK(t)
+				ines.M.LoreIn(ines.C, "rule", "add", "--body", fmt.Sprintf("must rule %02d: every handler logs its request id%s", i, pad), "--severity", "must").OK(t)
 			}
 			ines.M.LoreIn(ines.C, "render").OK(t)
 			if b, _ := ines.C.ReadFile(".lore/LORE.md"); !strings.Contains(b, "must rule 79") {
@@ -239,7 +240,6 @@ func TestStoryGRenames(t *testing.T) {
 		chloe.M.LoreIn(chloe.C, "search", "--query", "export").OK(t).Says(t, memID)
 		chloe.M.LoreIn(chloe.C, "memory", "add", "the export job retries twice").OK(t)
 		t.Run("whoami-shows-one-actor", func(t *testing.T) {
-			t.Skip("waiting for r3 G-14")
 			r := chloe.M.LoreIn(chloe.C, "whoami").OK(t)
 			if n := len(fActorID.FindAllString(r.Stdout, -1)); n > 1 {
 				t.Errorf("whoami names %d actors after an email change: %s", n, r)
@@ -250,9 +250,13 @@ func TestStoryGRenames(t *testing.T) {
 	s.Step("month2/the-repo-moves-to-a-new-address", func() {
 		s.AdvanceDays(30)
 		t.Run("writes-keep-working-after-a-remote-rename", func(t *testing.T) {
-			t.Skip("waiting for D-123 (and r3 G-17, G-18)")
 			ines := team[0]
 			moved := s.Remote("github.com/initrode/orders-service")
+			// the host renames the repo: the old address is gone and the new
+			// one holds its history (Remote made an empty one there first)
+			if err := os.RemoveAll(moved.Dir); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.Rename(api.Dir, moved.Dir); err != nil {
 				t.Fatal(err)
 			}
@@ -332,7 +336,6 @@ func TestStoryGManyAgents(t *testing.T) {
 	s.Step("day1/claim-races", func() {
 		ines := team[0]
 		t.Run("task-next-never-hands-out-a-done-task", func(t *testing.T) {
-			t.Skip("waiting for D-157")
 			var next []*teamharness.Pending
 			for i := 0; i < agents; i++ {
 				c := ines.C.As(ines.M.Agent(fmt.Sprintf("agent-%d", i)))
@@ -348,7 +351,6 @@ func TestStoryGManyAgents(t *testing.T) {
 			}
 		})
 		t.Run("concurrent-done-writes-no-conflict-markers", func(t *testing.T) {
-			t.Skip("waiting for D-158")
 			var done []*teamharness.Pending
 			for i := 0; i < agents; i++ {
 				c := ines.C.As(ines.M.Agent(fmt.Sprintf("agent-%d", i)))
@@ -367,7 +369,6 @@ func TestStoryGManyAgents(t *testing.T) {
 			t.Skip("waiting for D-159")
 		})
 		t.Run("task-add-help-matches-what-agents-must-pass", func(t *testing.T) {
-			t.Skip("waiting for D-160")
 			ines.M.LoreIn(ines.C, "task", "add", "--help").OK(t).Never(t, "defaults to accepted")
 		})
 	})

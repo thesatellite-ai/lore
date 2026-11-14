@@ -1,8 +1,8 @@
 # Regression index
 
-Every scenario, incident and finding of the 0.1.18 effort, with the Go test(s) that keep it from coming back. One row per item; the id is `<source>:<the source's own id>`. The guard test `tests/stories/regressguard` reads this file on every `go test ./...` and fails when a row is malformed, an id repeats, a named test does not exist in the tree, a row that needs no test gives no reason, or an open item sits outside the Open section. A fixed item whose test is `NONE` is listed under "Needs a test"; the guard reports their count (set `LORE_REGRESSIONS_STRICT=1` to make it fail).
+Every scenario, incident and finding of the 0.1.18 effort, with the Go test(s) that keep it from coming back. One row per item; the id is `<source>:<the source's own id>`. The guard test `tests/stories/regressguard` reads this file on every `go test ./...` and fails when a row is malformed, an id repeats, a named test does not exist in the tree, a row that needs no test gives no reason, an open, on-hold or owner item sits outside its own section, or the Summary counts differ from the rows. A fixed item whose test is `NONE` is listed under "Needs a test"; the guard reports their count (set `LORE_REGRESSIONS_STRICT=1` to make it fail).
 
-States: `fixed` (a test guards it), `open` (not fixed yet; only in the Open section), `not-reproduced`, `not-a-bug`, `docs-only`, `process` (gate, harness or another repository; the notes say why no test here). A test cell holds Go test names (comma-separated) or repo-relative script paths; `-` means none needed.
+States: `fixed` (a test guards it), `open` (not fixed yet; only in the Open section), `not-reproduced`, `not-a-bug`, `docs-only`, `process` (gate, harness or another repository; the notes say why no test here), `on-hold` (a feature or design the owner put on hold; only in the On hold section, with a reason), `owner` (only the owner can do it; current defaults kept; only in the Waiting on the owner section, with a reason). On-hold and owner rows are not counted as open. A test cell holds Go test names (comma-separated) or repo-relative script paths; `-` means none needed.
 
 Every new scenario or finding lands with its test and its row here in the same commit.
 
@@ -10,8 +10,10 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1346 |
-| open | 119 |
+| fixed | 1382 |
+| open | 69 |
+| on-hold | 12 |
+| owner | 5 |
 | not-reproduced | 109 |
 | not-a-bug | 65 |
 | docs-only | 69 |
@@ -351,6 +353,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-107 | finding | after-land on main: TeamLead journeys, env_lore_home_ro, SotRender row11_private, CampaignSetup schema-only outside a repo, OrgActorRefusals show_unknown_store fail | fixed | TestJourneyTeamLeadStoreWipedEmpty, TestOrgActorRefusals, TestCampaignSetup_MoreRefusals | pkg tests/journeys, tests/userscen, tests/machines |
 | devco:D-108 | finding | the web page build setup page after core's manual push default: page e2e push-manual flows fail (pagewalk looks for 'Manual'), help text still says Now is the default | process | - | fixed in the web page build (setup page wording and its page tests) |
 | devco:D-109 | finding | after-land FAIL on 094f7b14 (1112 s): setupe2e, teame2e, docs-examples, docsync, journey-agents/folders/land/rest, life-objects, scenarios — batches 8-14 landed on check:fast while the old after-land loop was dead | fixed | TestOutsideRepoLeavesALinkedRepoAlone, TestOpenDuringInitIgnoresTheRemoteLink, TestLiveLeakCheckNamesCheckoutPaths, TestRepoTopProjectIDAsksNoGitAtTheTop | pkg wire, wire/host, adapters/orgcfg |
+| devco:D-110 | finding | owner Mac: warm task list 5-6 s (2.9 s system time), doctor 22 s, commit hook 31 s on 5.5k rows: every command touches all row files | fixed | TestHeadVersionsOneBatch, TestProblemsReadsAKnownGoodFileOnce, TestRowMirrorNeverWaitsForTheCache | pkg adapters/backend/git, adapters/backend/rowfs, engine (perf3, perf4); measured in a 5.5k-row sandbox, not re-measured on a Mac: warm task list opens 16 row files instead of 1,304, doctor 163k to 37k syscalls, the migration commit's hooks 29.8 s to 2.8 s |
 | devco:D-111 | finding | deleted .lore folder blamed on a sparse checkout; doctor HEALTHY (r3 H-1) | fixed | TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg tests/journeys |
 | devco:D-112 | finding | chmod 000 row file: E_INTERNAL with no cause (r3 H-2) | fixed | TestUnreadableFileSaysChmod, TestUnreadableWhy, TestStoryHCorruption | pkg adapters/backend/rowfs, wire/host |
 | devco:D-113 | finding | deleted _meta.json: doctor HEALTHY, --fix does not restore (r3 H-3) | fixed | TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg tests/journeys |
@@ -360,13 +363,48 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-117 | finding | write path strips ZWJ/ZWNJ: emoji split, Indic/Persian spelling changed (r3 I-4) | fixed | TestJoinersKept, TestJourneyTextSafety, TestStoryIText | pkg logic/textnorm, tests/journeys |
 | devco:D-118 | finding | search misses CJK words inside sentences; --help wrong about emoji (r3 I-5) | fixed | TestSearchCJKAndEmoji, TestJourneyTextSafety, TestStoryIText | pkg adapters/cache/sqlite, tests/journeys |
 | devco:D-119 | finding | search takes ~10 s when a hit is a 1 MB body (r3 I-6) | fixed | TestSearchBigBodyFast, TestStoryIText | pkg adapters/cache/sqlite |
+| devco:D-120 | finding | doctor HEALTHY with two open store sync conflicts; wrong next step (r3 I-1) | fixed | TestPushModeLineNamesWhatTheStoreWaitsFor, TestJourneyTeamLeadStoreConflict, TestStoryITwoMachines | pkg wire, tests/journeys |
+| devco:D-121 | finding | sync received/sent counts wrong (r3 I-2) | fixed | TestAttributeFoldersByClone, TestStoryITwoMachines | pkg ops/stores; the story step settles the earlier offline conflict first |
+| devco:D-122 | finding | doctor Team versions names an actor id show cannot find (r3 I-3) | fixed | TestTeamVersionsNameUnscopedIdentity, TestStoryITwoMachines | pkg wire |
+| devco:D-123 | finding | repo moved to a new remote: writes blocked as live ref deleted or rewritten (r3 G-1) | fixed | TestMovedRemoteRunBeforeFetch, TestMovedRemoteAcrossRuns, TestRewrittenErrorURLUnknownNamesTheMove, TestStoryGRenames | pkg adapters/live (sync3, sync3b) |
+| devco:D-124 | finding | force-push dropping a notes commit: pre-push silent, no recovery route (r3 H-7) | fixed | TestForcedPushThatDropsRowsIsRefused, TestRowFileHintNamesTheGitWayBack, TestRebaseDroppedNotice, TestJourneyRewriteKeepsNotes, TestStoryHRewrites | pkg wire/host, tests/journeys |
+| devco:D-125 | finding | rebase + force-push leaves commit links on old shas (r3 H-8) | fixed | TestLinkRemapFollowsARewrite, TestJourneyRewriteKeepsNotes, TestStoryHRewrites | pkg ops/link, tests/journeys |
+| devco:D-126 | finding | store remote rewound by force-push: next sync silently re-pushes dropped commits (r3 H-9) | fixed | TestSyncRefusesARewoundRemote, TestSyncAfterAForwardMoveIsNotARewind, TestStoryHRewrites | pkg adapters/backend/git |
+| devco:D-127 | finding | trash restore of an org-store row refused E_FORMAT_OLD in a format-1 repo (r3 H-13) | fixed | TestRestoreOfStoreRowInOldFormatRepo | pkg wire |
+| devco:D-128 | finding | git rm'd row: trash says 'purged by ?', no git restore line (r3 H-14) | fixed | TestHistoryNamesARowAGitRmRemoved, TestHistoryLinesOfARemovedRow, TestStoryHRewrites | pkg wire, ops/trash |
+| devco:D-129 | finding | lore sync status outside a repo fails (r3 H-10) | fixed | TestJourneyTeamLeadStoreMoved, TestStoryHLostRemotes | pkg tests/journeys |
+| devco:D-130 | finding | deleted/moved store remote reported as offline; nobody names set-url (r3 H-11) | fixed | TestStoreGone, TestJourneyTeamLeadStoreMoved, TestStoryHLostRemotes | pkg adapters/backend/git, tests/journeys |
+| devco:D-131 | finding | store set-url: wrong refusal outside a repo; a member rewrites the org url; old clone left (r3 H-12) | fixed | TestKeepMovedStores, TestJourneyTeamLeadStoreMoved, TestStoryHLostRemotes | pkg adapters/orgcfg, tests/journeys |
 | devco:D-132 | finding | every git pull --rebase that brings rows leaves LORE.md modified; next pull refuses (r3 G-2) | fixed | TestRefreshHookHoldsTrackedRender, TestJourneyPullNeverBlocked, TestStoryGMonthsOfUse | pkg app, tests/journeys |
 | devco:D-133 | finding | a read on a fresh clone writes tracked rows; teammates' git pull aborts (r3 I-7) | fixed | TestSyncRepoAddressesCleanCloneWritesNothing, TestJourneyPullNeverBlocked, TestStoryIEnvironment | pkg wire, tests/journeys |
 | devco:D-134 | finding | rows read through from the fetched default branch never found by search (r3 G-3) | fixed | TestLiveBackend_FetchMovesTheReadCursor, TestStoryGMonthsOfUse | pkg wire/host |
 | devco:D-135 | finding | memory search with no hits prints nothing; emoji-only search (r3 G-4) | fixed | TestSearchTextNoMatches, TestStoryGMonthsOfUse | pkg ops/memory |
+| devco:D-136 | finding | reminder/task lists show UTC dates, not the viewer's (r3 I-8) | fixed | TestDayInAndDueBy, TestJourneyLocalDaysAndTurkishSearch, TestStoryIEnvironment | pkg logic/dates, tests/journeys |
+| devco:D-137 | finding | search case folding not Turkish-aware (r3 I-9) | fixed | TestSearchFold, TestSearchTurkishI, TestSearchTurkishIWithCJKAndBigRow, TestJourneyLocalDaysAndTurkishSearch, TestStoryIEnvironment | pkg logic/textnorm, adapters/cache/sqlite, tests/journeys |
+| devco:D-138 | finding | member add --handle chloé stores @chlo; @chloe does not resolve (r3 I-10) | fixed | TestHandleKeyFoldsAccents, TestPersonHandleFoldsAccents | pkg wire, ops/team; story I has no team roster, so no story step |
+| devco:D-139 | finding | umask: 0600 rows / 2700 folders under 077; group never readable under 002 (r3 I-11) | fixed | TestSharedWriteInSetgidFolder, TestStoryIEnvironment | pkg adapters/backend/rowfs; the story step writes under umask 002 |
+| devco:D-140 | finding | git commit -a with a new row: 'added 1 file' then 'nothing added' (r3 H-15) | fixed | TestPreCommitLeavesRowsOutWhenNothingElseIsStaged, TestJourneyHookManagers, TestStoryHRewrites | pkg wire/host, tests/journeys; git decides before the hooks run, so lore says the row was left out and how to commit it |
+| devco:D-141 | finding | hooks removed or taken over by husky/pre-commit: doctor never says the leak guard is off (r3 H-18) | fixed | TestLeakGuardOffIsSaidFirstAndScanned, TestJourneyHookManagers, TestStoryHLostRemotes | pkg wire/host, tests/journeys |
+| devco:D-142 | finding | with husky, lore adds 5 hook files to tracked .husky without asking (r3 H-19) | fixed | TestWriteCreatesNoHookFileInATrackedHooksFolder, TestJourneyHookManagers, TestStoryHLostRemotes | pkg wire/host, tests/journeys; new files only: a write still adds lore's block to an existing tracked hook (stories:H-1) |
+| devco:D-143 | finding | store doctor: unsent org commits as an error ×3 with a false 'next command pushes' (r3 H-16) | fixed | TestCheckStores, TestStoryHLostRemotes | pkg wire |
+| devco:D-144 | finding | new laptop: a local personal store lost silently; join picks 'local' without saying machine-only (r3 H-17) | fixed | TestLocalPersonalStoreNote, TestJoinLinesSayLocalIsMachineOnly | pkg ops/doctor, ops/setup; story H has no setup with a local personal store, so no story step |
+| devco:D-145 | finding | lore where labels a live client repo's caches 'gone' (r3 I-12) | fixed | TestPruneKeepsClientRepoCaches, TestWhereUsesClientRepoNotGone, TestJourneyClientRepoNoInit, TestStoryFClientRepo | pkg ops/cache, wire, tests/journeys |
+| devco:D-146 | finding | client repo: refused write hints lore init, which writes .lore/hooks/pointer files there (r3 I-13) | fixed | TestClientRepoHintsNeverSayInit, TestClientByMatch, TestJourneyClientRepoNoInit | pkg wire, logic/orgresolve, tests/journeys |
+| devco:D-147 | finding | init writes its pointer into CLAUDE.md and AGENTS.md although CLAUDE.md imports @AGENTS.md (r3 I-14) | fixed | TestResolveSkipsImporter, TestStoryIEnvironment | pkg logic/toolprofile |
+| devco:D-148 | finding | overdue reminders only in reminder list; inbox/render/doctor silent (r3 G-5) | fixed | TestJourneyLocalDaysAndTurkishSearch, TestStoryGMonthsOfUse | pkg tests/journeys; the inbox part: render and doctor are devco:D-148-render |
 | devco:D-149 | finding | a row file with a UTF-8 BOM is refused everywhere; doctor --fix does not strip it (r3 I-15) | fixed | TestDecodeIgnoresBOM, TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg model/row, tests/journeys |
 | devco:D-150 | finding | SECURITY: control characters in a row drive the reader's terminal (show/list/search) (r3 I-16) | fixed | TestEscapeControls, TestJourneyTextSafety, TestStoryIText | pkg logic/textnorm, tests/journeys |
+| devco:D-151 | finding | LORE.md over budget renders must rules as bare ids (r3 G-6) | fixed | TestShortForm, TestShortFormMaxCuts, TestBuildBudgetedFileMatrix, TestJourneySoloVolume, TestStoryGMonthsOfUse | pkg logic/contextfit, wire/renderhost, tests/journeys |
+| devco:D-152 | finding | no bulk archive (archive takes only --id) (r3 G-7) | fixed | TestArchiveWhereMatrix, TestJourneySoloVolume, TestStoryGMonthsOfUse | pkg wheredel, tests/journeys |
+| devco:D-153 | finding | the org admin's second laptop can only join as a member (r3 I-17) | fixed | TestJoinMemberCarriesOrgRole, TestJoinKeepsAdminKind, TestStoryITwoMachines | pkg ops/team, ops/setup |
+| devco:D-154 | finding | URGENT: pre-commit refuses every migration commit: the .0-needs-lore-0.1.18-or-newer signpost is checked as a row file (found by perf3) | fixed | TestJourneyMigrationCommitPassesTheHook, TestIsSignpost, TestStoryEMixedFormats | pkg tests/journeys, adapters/backend/rowfs |
+| devco:D-155 | finding | trash purge slow: 50 rows 12 s, dry-run 4.6 s (r3 G-8) | fixed | TestPurgeManyRowsWritesOnce, TestStoryGMonthsOfUse | pkg engine |
+| devco:D-156 | finding | doctor lists an 8%-of-budget LORE.md under Warnings (r3 G-9) | fixed | TestWithContextBlocksSplitsWarnings, TestJourneySoloVolume, TestStoryGMonthsOfUse | pkg app, tests/journeys |
+| devco:D-157 | finding | 10 agents: 37 tasks finished 104 times; task next hands out done tasks (r3 G-10) | fixed | TestDoneTaskIsNeverHandedOutAgain, TestReopenedTaskIsClaimableAgain, TestJourneyAgentSprint, TestStoryGManyAgents | pkg adapters/signals/coord, tests/journeys |
+| devco:D-158 | finding | concurrent task done writes nested conflict markers into done_by; sync fails, resolve refuses (r3 G-11) | fixed | TestNewestTextFieldNeverMarks, TestLiveSyncResolveSettlesNestedMarkers, TestJourneyAgentSprint, TestStoryGManyAgents | pkg logic/merge, wire, tests/journeys |
+| devco:D-160 | finding | task add --help says --commitment defaults to accepted but agents are refused without it (r3 G-13) | fixed | TestAddCommitmentHelpNamesAgents, TestStoryGManyAgents | pkg ops/task |
 | devco:D-161 | finding | STORIES round (owner 09:35): every track and every fixed finding becomes a replayable story + test, REGRESSIONS.md index + guard, stories step in the full gate | process | - | the stories round itself (this index, the story tests, the guard) |
+| devco:D-162 | finding | after-land FAIL on 0999e1d2: machines row15_repo_urls, userscen DoctorBreak broken files, docs-examples, life-teams, race (search timing under -race) | fixed | TestTempBareFolderRemovedMeanwhile, TestDoctorBreak_BrokenRowFiles, TestSotRightRows, TestSearchBigBodyFast | pkg adapters/probe, tests/userscen, tests/machines, adapters/cache/sqlite (gate5, batch 19) |
 
 ## lore-adoptfix
 
@@ -1878,42 +1916,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
-| devco:D-110 | finding | owner Mac: warm task list 5-6 s (2.9 s system time), doctor 22 s, commit hook 31 s on 5.5k rows: every command touches all row files | open | - |  |
-| devco:D-120 | finding | doctor HEALTHY with two open store sync conflicts; wrong next step (r3 I-1) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
-| devco:D-121 | finding | sync received/sent counts wrong (r3 I-2) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
-| devco:D-122 | finding | doctor Team versions names an actor id show cannot find (r3 I-3) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
-| devco:D-123 | finding | repo moved to a new remote: writes blocked as live ref deleted or rewritten (r3 G-1) | open | TestStoryGRenames |  |
-| devco:D-124 | finding | force-push dropping a notes commit: pre-push silent, no recovery route (r3 H-7) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-125 | finding | rebase + force-push leaves commit links on old shas (r3 H-8) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-126 | finding | store remote rewound by force-push: next sync silently re-pushes dropped commits (r3 H-9) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-127 | finding | trash restore of an org-store row refused E_FORMAT_OLD in a format-1 repo (r3 H-13) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-128 | finding | git rm'd row: trash says 'purged by ?', no git restore line (r3 H-14) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-129 | finding | lore sync status outside a repo fails (r3 H-10) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-130 | finding | deleted/moved store remote reported as offline; nobody names set-url (r3 H-11) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-131 | finding | store set-url: wrong refusal outside a repo; a member rewrites the org url; old clone left (r3 H-12) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-136 | finding | reminder/task lists show UTC dates, not the viewer's (r3 I-8) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-137 | finding | search case folding not Turkish-aware (r3 I-9) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-138 | finding | member add --handle chloé stores @chlo; @chloe does not resolve (r3 I-10) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-139 | finding | umask: 0600 rows / 2700 folders under 077; group never readable under 002 (r3 I-11) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-140 | finding | git commit -a with a new row: 'added 1 file' then 'nothing added' (r3 H-15) | open | TestStoryHRewrites | story step TestStoryHRewrites (skipped until fixed) |
-| devco:D-141 | finding | hooks removed or taken over by husky/pre-commit: doctor never says the leak guard is off (r3 H-18) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-142 | finding | with husky, lore adds 5 hook files to tracked .husky without asking (r3 H-19) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-143 | finding | store doctor: unsent org commits as an error ×3 with a false 'next command pushes' (r3 H-16) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-144 | finding | new laptop: a local personal store lost silently; join picks 'local' without saying machine-only (r3 H-17) | open | TestStoryHLostRemotes | story step TestStoryHLostRemotes (skipped until fixed) |
-| devco:D-145 | finding | lore where labels a live client repo's caches 'gone' (r3 I-12) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-146 | finding | client repo: refused write hints lore init, which writes .lore/hooks/pointer files there (r3 I-13) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-147 | finding | init writes its pointer into CLAUDE.md and AGENTS.md although CLAUDE.md imports @AGENTS.md (r3 I-14) | open | TestStoryIEnvironment | story step TestStoryIEnvironment (skipped until fixed) |
-| devco:D-148 | finding | overdue reminders only in reminder list; inbox/render/doctor silent (r3 G-5) | open | TestStoryGMonthsOfUse |  |
-| devco:D-151 | finding | LORE.md over budget renders must rules as bare ids (r3 G-6) | open | TestStoryGMonthsOfUse |  |
-| devco:D-152 | finding | no bulk archive (archive takes only --id) (r3 G-7) | open | TestStoryGMonthsOfUse |  |
-| devco:D-153 | finding | the org admin's second laptop can only join as a member (r3 I-17) | open | TestStoryITwoMachines | story step TestStoryITwoMachines (skipped until fixed) |
-| devco:D-154 | finding | URGENT: pre-commit refuses every migration commit: the .0-needs-lore-0.1.18-or-newer signpost is checked as a row file (found by perf3) | open | TestStoryEMixedFormats |  |
-| devco:D-155 | finding | trash purge slow: 50 rows 12 s, dry-run 4.6 s (r3 G-8) | open | TestStoryGMonthsOfUse |  |
-| devco:D-156 | finding | doctor lists an 8%-of-budget LORE.md under Warnings (r3 G-9) | open | TestStoryGMonthsOfUse |  |
-| devco:D-157 | finding | 10 agents: 37 tasks finished 104 times; task next hands out done tasks (r3 G-10) | open | TestStoryGManyAgents |  |
-| devco:D-158 | finding | concurrent task done writes nested conflict markers into done_by; sync fails, resolve refuses (r3 G-11) | open | TestStoryGManyAgents |  |
-| devco:D-159 | finding | under 10 agents 50 of 457 commands took over 5 s (r3 G-12) | open | TestStoryGManyAgents |  |
-| devco:D-160 | finding | task add --help says --commitment defaults to accepted but agents are refused without it (r3 G-13) | open | TestStoryGManyAgents |  |
+| devco:D-159 | finding | under 10 agents 50 of 457 commands took over 5 s (r3 G-12) | open | TestStoryGManyAgents | dc-coord cut it (10 agents: next p95 8.2 s to 1.9 s, done p95 12.3 s to 5.7 s) but done still peaks at 12.4 s; story step every-command-under-five-seconds still skipped |
 | agentpol:4 | finding | Residual: a personal-store or machine-level may_manage_people false set by the person still refuses at the new org's roster write, after the store/org entry is written (half-write) | open | - | only by the person's own explicit choice |
 | fastgate:G1 | finding | Goal: full gate at most 10 min wall with every step still run | open | - | 1526 s before, 753-977 s after in four green runs; CPU-bound (~27,000 CPU-s, ~100,000 lore processes) |
 | fastgate:G1a | finding | Per-process lore startup cost dominates the gate: registry reflection ~18 %, SQLite cache open/parse ~17 %, 40-60 git subprocesses | open | - | product-side lever, not done; registry memo tried, no gain, reverted |
@@ -1923,7 +1926,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 | pagewalk:home-budget-2 | finding | trashed/home went over budget again under gate load (1082 ms vs 1000 ms) after the baseline fix | open | - | a re-measure-and-retry-once draft was not landed: the current walker has the baseline ratio but no retry |
 | run:core:GR-1 | finding | Release tool pinned to an older version because newer deprecates the brew tap config | open | - | revisit when the shared tap moves |
 | run:core:format-confirm-live | finding | Format confirm prompt (E_NEEDS_CONFIRM) not tested on the live path | open | - | FINALIZE nice-to-have |
-| run:core:fmt-open-qs | finding | FORMAT_EVOLUTION F1/F4, lessons, plugins, skill version pin still open questions | open | - | PASS4 on hold |
 | run:integrate:open-writers-line | finding | Writers line not printed on link, comment, tag and why-context shows | open | - | no test found asserting a writers line for these nouns |
 | run:life:rest-kinds-open | finding | REST lifecycle covers only solo; join/start-team kinds need a git-serving fake; start team from home with hosted url | open | - | no later resolution in this folder |
 | run:onboarding:open-2 | finding | doctor --all store checks cover only personal + org roster stores; doctor cache per process, Home health counts only cached results | open | TestSetupHealthAcrossProcesses | cache-across-processes part fixed in polish item 2 (fingerprinted health file); coverage of every stores.yaml store not verified |
@@ -1938,30 +1940,16 @@ Every new scenario or finding lands with its test and its row here in the same c
 | run:realmac:lookup-tests | finding | ops/internal/lookup actor_contacts matrix tests failing on the base commit, unrelated to setup | open | - | Pre-existing at REALMAC DONE; not re-checked here |
 | run:rollout:credential | incident | A task row in a client project store matching the built-in password_pair pattern had been committed into a client code repo by an older lore or with the check bypassed | open | - | Metadata-only record; current lore refuses to export it; needs a human review on a trusted machine; scratch copies shredded |
 | run:rollout:old-lore-path | finding | An older lore first on PATH silently turns the leak guards off; the installer cannot pin a version | open | - | Rollout decision D8 (pin one version everywhere) |
-| run:split:secrets | finding | Release token secrets must be added by the owner before the first binary release | open | - | Names only; none created |
 | run:ui8:summary-recheck | finding | Setup Summary re-checked every step on open (ssh on the GitHub step) | open | - | Fixed for setups mid-way (vitest only); a finished setup still checks on open (proposed: feed from doctor.last) |
 | run:ui8:discover-on-load | finding | Home still starts account discovery on load | open | - | Proposed: only with no setups, on Add setup, or a Find accounts button |
-| run:webui2:realmac | scenario | Owner check on a real machine: account cards, key_matches red → Repair → green, import against the real lore home | open | - | Owner-run; not recorded as done |
-| run:batch:18 | scenario | Setup kinds end to end against real throwaway GitHub repos | open | - | needs owner's throwaway accounts/keys; manual-only |
 | run:batch:24 | finding | Release config pinned to an old goreleaser version | open | - | waits on the shared tap; outward-facing |
 | run:batch:25 | finding | row_meta does not scale past 100k rows | open | - | scheduled after 0.1.18 |
-| run:batch:28 | finding | Messaging and orchestration design on hold | open | - | later release |
-| run:batch:29 | finding | Plugin system | open | - | later release |
-| run:batch:30 | finding | Later-feature branches on hold (server access, encryption, vector search, lessons, skill pin, setup phase 2) | open | - | later releases |
 | run:batch:leftover-3 | finding | A refused write with live OFF can still leave the writer's actor file | open | - | live-on case guarded by TestMiscFollowups_RefusedWriteLeavesNoActorRow |
 | run:batch:leftover-5 | finding | `resource field add/edit --to me` and `resource adopt --to me` not refused; `resource delete <name>` asks before checking the name | open | - |  |
 | run:batch:not-built | finding | Not built: dedicated E_PORT_IN_USE; dropping secret flags from ops that never ask about secrets | open | - | recorded, not built |
 | run:bugs:lore-sync-0 | finding | LORE_SYNC=0 no longer means "cache only" | open | - | BUGFIX-05: description aligned to 0.1.18 meaning; keep-or-retire is an owner question |
 | run:docs:normalize-machine-id | finding | Team docs normaliser leaves raw machine ids, so team paste --check goes stale on another host | open | - | docs tooling |
 | run:docs:ds-stray-blocks | finding | `ds scan` leaves untracked block files that the docs check does not clean | open | - | removed by hand each run |
-| run:docs-update:XQ9 | finding | `task import` vs top-level `import <plugin>` | open | - | parked with plugins |
-| run:docs-update:PQ2-22 | finding | Plugin questions PQ2..PQ22 | open | - | parked until the plugin design |
-| run:docs-update:RQ8 | finding | How resource last_checked stays current (needed by verifiers) | open | - | tied to plugins |
-| run:docs-update:RES-6 | finding | Encryption at rest for sensitive resource values | open | - | parked until encryption design |
-| run:docs-update:RES-9 | finding | Resources question 9 (plugin-related) | open | - | parked |
-| run:docs-update:SQ9 | finding | Default holder for shared secrets | open | - | parked until plugins |
-| run:docs-update:AI1-2 | finding | Agent identity plugin detector order and shape | open | - | parked with plugins |
-| run:docs-update:cli-naming | finding | CLI reference naming items: rename E_NAME_TAKEN, E_PARENT_CYCLE to a warning, soft delete as breaking change, two meanings of "migration" | open | - | owner naming calls, not decided in the run |
 | run:team:matrix | scenario | Older team build scenario matrix | open | - | not present in these run reports; source folder absent |
 | run:team:live-drop | finding | Live import dropped rows when the live-state read failed (old team build) | open | - | code since rewritten; current path not verified |
 | run:team:merged-without-row | finding | A staging failure still wrote the signal and printed "merged" (old team build) | open | - | code since rewritten |
@@ -1970,7 +1958,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 | run:team:mine-failopen | finding | task list --mine silently empty / unfiltered when a team or signals read failed (old team build) | open | - | code since rewritten |
 | run:team:note-rollback | finding | Failed rollback delete of a note left a row a later sync exports (old team build) | open | - | code since rewritten |
 | run:team:store-remove-worktrees | finding | store remove reported success while worktrees stayed (old team build) | open | - | code since rewritten |
-| run:team:hosted-model-env | finding | Hosted-model API key env var is user-facing but cannot be named in public docs | open | - | owner decision |
 | run:tests:q-edit-title | finding | Some kinds take --title on add but only --name on edit | open | - |  |
 | run:tests:q-kind-code | finding | memory --kind bad value gives E_RESOURCE_INVALID while similar flags give E_INVALID_INPUT | open | - |  |
 | run:tests:q-comment-table-typo | finding | comment add --on-table with a typo of a core table name accepted | open | - | non-core tables allowed on purpose |
@@ -1990,13 +1977,45 @@ Every new scenario or finding lands with its test and its row here in the same c
 | run:journeys:store-push-batch | finding | Per-setup local personal folder vs `store init me <url>` broke a store push batch test | open | TestStorePushBatch | owner decision at landing |
 | run:journeys:doctor-cache-stale | finding | Doctor's 60 s cache can show a store failure from before a successful sync; purged org store rows linger in the cache | open | - |  |
 | teamfix:n3 | finding | doctor identity.period fix text still says "You are marked as left" also when the person has no period yet (detail line names the real cause) | open | - | logic/onboard/fix.go still carries the single text on origin/main |
-| ux:inv5-fail | finding | inventory Roles kind with filter "Login: yes" shows "Something went wrong" instead of the filtered rows | open | - | inv5-fail screenshot; no record whether it was fixed later |
 | mac:firstcommit-staged-binary | incident | first commit staged a compiled binary | open | - | no cause, fix or test found in any round's log; needs a story showing what the commit hook does with a staged binary (TestSizeGate covers only the scanner's size gate) |
 | mac:named-no-pairs | incident | every switch that can be turned off has a --no-<switch> pair | open | - | U-4 left generic pairs to S-3 and S-3 did not add them; only pre-existing pairs exist |
 | plainfiles:4 | scenario | Look as a user: fresh home, solo setup, org with three stores, hand edits, plain git, lore edit, then judge the trees as a newcomer | open | - | no "AS A USER" section with trees was ever written in the status file; the owner's own machine runs and the docs agent's run stood in and found the B1-B5 bugs |
 | plainfiles:open-tmp-test-worlds | finding | Some test suites leave their worlds in the shared temp folder (filled its inodes) | open | - | suites named in the note are not in this tree (likely the commercial edition); no cleanup fix found |
 | team:BUG-ASSIGN-HANDLE | finding | --add-assignee @handle is E_NOT_FOUND on a second clone after a teammate assigned that handle | open | TestTask_AssignHandleAfterTeammateAssigned | th.Bug Open: true; the test skips PENDING on that defect; outside the gate's team -run filter |
 | stories:A-1 | finding | a teammate's first lore sync in a freshly migrated repo leaves lore's wiring (.gitignore, .gitattributes, and LORE.md/LORE.full.md when it renders) uncommitted; once the migrator commits the same files, the teammate's git pull aborts (would be overwritten by merge) | open | - | Pending(st1) step in TestStoryABranches; repro in tests/stories/A-daily-dev.md |
+| devco:D-148-render | finding | an overdue reminder shows in lore inbox but render (LORE.md) and doctor still say nothing of it (the rest of r3 G-5) | open | TestStoryGMonthsOfUse | story step overdue-reminders-in-render (skipped until fixed) |
+| stories:H-1 | finding | with husky, a lore write still appends lore's block to the team's own tracked .husky/pre-commit without asking (D-142 stopped only the new files) | open | TestStoryHLostRemotes | story step D-142/stories:H-1 (skipped until fixed) |
+
+## On hold (owner, not built in 0.1.18)
+
+Features and designs the owner put on hold for a later release. State `on-hold`; the notes give the reason. Not counted as open.
+
+| id | kind | title | state | guarding test(s) | notes |
+|---|---|---|---|---|---|
+| run:batch:28 | finding | Messaging and orchestration design on hold | on-hold | - | feature/design on hold (owner 2026-11-14); was: later release |
+| run:batch:29 | finding | Plugin system | on-hold | - | feature/design on hold (owner 2026-11-14); was: later release |
+| run:batch:30 | finding | Later-feature branches on hold (server access, encryption, vector search, lessons, skill pin, setup phase 2) | on-hold | - | feature/design on hold (owner 2026-11-14); was: later releases |
+| run:core:fmt-open-qs | finding | FORMAT_EVOLUTION F1/F4, lessons, plugins, skill version pin still open questions | on-hold | - | feature/design on hold (owner 2026-11-14); was: PASS4 on hold |
+| run:docs-update:XQ9 | finding | `task import` vs top-level `import <plugin>` | on-hold | - | feature/design on hold (owner 2026-11-14); was: parked with plugins |
+| run:docs-update:PQ2-22 | finding | Plugin questions PQ2..PQ22 | on-hold | - | feature/design on hold (owner 2026-11-14); was: parked until the plugin design |
+| run:docs-update:RQ8 | finding | How resource last_checked stays current (needed by verifiers) | on-hold | - | feature/design on hold (owner 2026-11-14); was: tied to plugins |
+| run:docs-update:RES-6 | finding | Encryption at rest for sensitive resource values | on-hold | - | feature/design on hold (owner 2026-11-14); was: parked until encryption design |
+| run:docs-update:RES-9 | finding | Resources question 9 (plugin-related) | on-hold | - | feature/design on hold (owner 2026-11-14); was: parked |
+| run:docs-update:SQ9 | finding | Default holder for shared secrets | on-hold | - | feature/design on hold (owner 2026-11-14); was: parked until plugins |
+| run:docs-update:AI1-2 | finding | Agent identity plugin detector order and shape | on-hold | - | feature/design on hold (owner 2026-11-14); was: parked with plugins |
+| run:docs-update:cli-naming | finding | CLI reference naming items: rename E_NAME_TAKEN, E_PARENT_CYCLE to a warning, soft delete as breaking change, two meanings of "migration" | on-hold | - | feature/design on hold (owner 2026-11-14); was: owner naming calls, not decided in the run |
+
+## Waiting on the owner
+
+Items only the owner can do; lore keeps its current defaults until then. State `owner`; the notes give the reason. Not counted as open. The task-claim default (C13) has no row here: no finding was ever filed for it.
+
+| id | kind | title | state | guarding test(s) | notes |
+|---|---|---|---|---|---|
+| run:split:secrets | finding | Release token secrets must be added by the owner before the first binary release | owner | - | owner adds the release token secrets before the first binary release; current defaults kept |
+| run:webui2:realmac | scenario | Owner check on a real machine: account cards, key_matches red → Repair → green, import against the real lore home | owner | - | owner checks the account cards and Repair on a real Mac; current defaults kept |
+| run:batch:18 | scenario | Setup kinds end to end against real throwaway GitHub repos | owner | - | owner runs the setup kinds against real throwaway GitHub repos with the owner's accounts and keys; current defaults kept |
+| run:team:hosted-model-env | finding | Hosted-model API key env var is user-facing but cannot be named in public docs | owner | - | owner names the hosted-model API key env var for public docs; current defaults kept |
+| ux:inv5-fail | finding | inventory Roles kind with filter "Login: yes" shows "Something went wrong" instead of the filtered rows | owner | - | owner checks it in the separate web repository; current defaults kept |
 
 ## Needs a test
 
