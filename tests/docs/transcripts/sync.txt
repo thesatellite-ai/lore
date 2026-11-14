@@ -222,8 +222,9 @@ conflicted files: 1
   .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (git conflict markers; lore sync conflicts)
 refused pushes:   0
 alice (work/website)$ git commit -qam 'merge'
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict markers in a value)
-  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files:
+  .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (conflict markers in a value: an unresolved git merge conflict; lore sync conflicts lists it, keep one side and delete the marker lines)
+  hint: fix the file by hand (a row file is one JSON object named after its own id; settle a conflict with the row's edit command), or restore it with `git checkout HEAD -- <path>`; then commit again
 (exit 1)
 alice (work/website)$ lore rule edit --id rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue.'
 lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
@@ -420,8 +421,9 @@ alice (work/website)$ cat .git/hooks/pre-commit
 ### commit refused
 alice (work/website)$ printf '{ broken' > .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json && git add .lore
 alice (work/website)$ git commit -m 'oops'
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid JSON)
-  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files:
+  .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json (invalid JSON)
+  hint: fix the file by hand (a row file is one JSON object named after its own id; settle a conflict with the row's edit command), or restore it with `git checkout HEAD -- <path>`; then commit again
 (exit 1)
 alice (work/website)$ git checkout -q HEAD -- .lore/data && git status --short
 

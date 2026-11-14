@@ -84,6 +84,11 @@ func TestFTSSegment(t *testing.T) {
 // tokens); it now stays well under a second and the snippet is a short,
 // balanced cut around the first match.
 func TestSearchBigBodyFast(t *testing.T) {
+	if raceDetector {
+		// The bound is about wall time; under -race it measured the detector
+		// (5.3 s at best on the after-land gate). The plain test run keeps it.
+		t.Skip("wall-time bound: not meaningful under the race detector; the plain test run checks it")
+	}
 	t.Parallel()
 	f := newFixture(t)
 	c := f.open("c.db")

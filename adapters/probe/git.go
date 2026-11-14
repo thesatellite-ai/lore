@@ -2,6 +2,8 @@ package probe
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"regexp"
 	"strings"
@@ -239,14 +241,34 @@ func (p *Prober) checkRemote(rawURL string, route Route) (string, *Outcome) {
 	return u, nil
 }
 
+// tempDirTries bounds how often tempBare makes Options.TmpDir again when
+// it vanished between its MkdirAll and MkdirTemp.
+const tempDirTries = 3
+
+// mkdirTemp is os.MkdirTemp; a test swaps it to remove the folder first.
+var mkdirTemp = os.MkdirTemp
+
 // tempBare makes an empty bare repo under Options.TmpDir.
+//
+// Why the retry: lore's home tidy (any command that opens the machine
+// store) removes ~/.lore/tmp when it is empty, so another lore process
+// can remove the folder this probe just made before the temp repo is
+// in it; doctor then failed store.read with "cannot create a temp repo"
+// (after-land gate, TestLifeTeams). A folder that is gone is made again.
 func (p *Prober) tempBare(ctx context.Context) (string, *Outcome) {
-	if err := os.MkdirAll(p.o.TmpDir, 0o700); err != nil {
-		return "", &Outcome{Class: ClassFailed, Detail: "cannot create the probe folder " + p.o.TmpDir}
+	var dir string
+	var err error
+	for range tempDirTries {
+		if merr := os.MkdirAll(p.o.TmpDir, 0o700); merr != nil {
+			return "", &Outcome{Class: ClassFailed, Detail: "cannot create the probe folder " + p.o.TmpDir}
+		}
+		dir, err = mkdirTemp(p.o.TmpDir, probeTmpPattern)
+		if err == nil || !errors.Is(err, fs.ErrNotExist) {
+			break
+		}
 	}
-	dir, err := os.MkdirTemp(p.o.TmpDir, probeTmpPattern)
 	if err != nil {
-		return "", &Outcome{Class: ClassFailed, Detail: "cannot create a temp repo in " + p.o.TmpDir}
+		return "", &Outcome{Class: ClassFailed, Detail: "cannot create a temp repo in " + p.o.TmpDir + ": " + err.Error()}
 	}
 	r := p.run(ctx, p.gitSpec(Route{}, dir, "init", "--quiet", "--bare", "."))
 	if !r.ok() {

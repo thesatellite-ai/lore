@@ -167,11 +167,15 @@ func TestDoctorBreak_BrokenRowFiles(t *testing.T) {
 	for _, tc := range []struct {
 		name, body, kind string
 		conflicts        int
+		// cause and next are the parts of doctor's line that name what is
+		// wrong with this file and what to do about it (each cause has its
+		// own next step; a cause without one says "fix or remove it").
+		cause, next string
 	}{
-		{"not json", "{broken", "invalid-file", 0},
-		{"empty file", "", "invalid-file", 0},
-		{"json array", "[1,2]", "invalid-file", 0},
-		{"conflict markers", "<<<<<<< HEAD\n{\"a\":1}\n=======\n{\"a\":2}\n>>>>>>> theirs\n", "conflict-markers", 1},
+		{"not json", "{broken", "invalid-file", 0, "is not valid JSON", "fix it, or put it back: git -C "},
+		{"empty file", "", "invalid-file", 0, "the file is empty", "fix it, or put it back: git -C "},
+		{"json array", "[1,2]", "invalid-file", 0, "", "fix or remove it"},
+		{"conflict markers", "<<<<<<< HEAD\n{\"a\":1}\n=======\n{\"a\":2}\n>>>>>>> theirs\n", "conflict-markers", 1, "holds an unresolved git merge conflict", "lore sync conflicts lists it"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := newDoctorPerson(t)
@@ -185,7 +189,7 @@ func TestDoctorBreak_BrokenRowFiles(t *testing.T) {
 			rep, res := p.doctor(t)
 			s := rep.Sync
 			if rep.Status != "broken" || s == nil || len(s.FileErrors) != 1 || s.FileErrors[0].Path != rel || s.FileErrors[0].Kind != tc.kind ||
-				s.OpenConflicts != tc.conflicts || !hasLine(rep.Errors, "store repo: "+rel+" is not a usable row file", "fix or remove it (every read leaves it out)") {
+				s.OpenConflicts != tc.conflicts || !hasLine(rep.Errors, "store repo: "+rel+" is not a usable row file", tc.cause, tc.next, "(every read leaves it out)") {
 				t.Fatalf("broken row file %q: %s", tc.name, res)
 			}
 			// Reads leave it out, and say so on stderr pointing at doctor.
