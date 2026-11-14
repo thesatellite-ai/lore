@@ -45,8 +45,19 @@ func stillRun(run *Run) bool {
 	if run.Entry == nil {
 		return false
 	}
-	return dryRun(run) || ciRun(run) || (run.OldRows && run.Entry.Spec().Name == opsfix.OpRun)
+	return (dryRun(run) && !dryRunReadsLive[noun(run.Entry.Spec().Name)]) || ciRun(run) || (run.OldRows && run.Entry.Spec().Name == opsfix.OpRun)
 }
+
+// dryRunReadsLive are the nouns whose dry run answers about the team's
+// current work, so it reads teammates' live rows the way the plain read
+// does (fetching refs/lore/* when due): lore task next --dry-run ranks the
+// tasks a teammate just added and claims nothing, and a task bulk change's
+// --dry-run lists the rows the real run would change. A still dry run
+// there saw only the rows this clone last fetched and answered "nothing
+// ready" while the real run claimed one (after-land 29e8d071,
+// TestTasksClaims_NextPicksReadyLeaf). Off this list (lore fix, migrate,
+// setup, …) a dry run stays still (devco K-9).
+var dryRunReadsLive = map[string]bool{"task": true}
 
 // ciRun reports whether run is a CI-form command: lore check leaks --ci,
 // one of render's read forms (renderReads), or any read while a CI marker

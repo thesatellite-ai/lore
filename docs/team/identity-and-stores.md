@@ -139,7 +139,7 @@ orgs:
 $ lore whoami
 org        agency  (matched by: repos pattern github.com/client/* of agency)
 identity   Bob Roe <human:bob@agency.example>   act_2ad3…f891  @bob  (from: org entry (config.yaml orgs[agency].identity))
-repo       client repo  (guards on)
+repo       client repo  (guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; lore fix here installs it)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2

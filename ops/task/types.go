@@ -10,6 +10,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
+	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -86,6 +87,14 @@ type AddIn struct {
 	// caller knows the chain. Empty: after the parent's last child. Never
 	// a flag or a JSON field.
 	rank string
+	// status and checklist are a task import's own values for a task that
+	// joins its ONE staged batch (D-214): a staged row is not visible to
+	// reads, so the import cannot set them afterwards with task edit /
+	// checklist add (both read the task back); add writes them into the
+	// create instead, through the same status transition. Never a flag
+	// or a JSON field.
+	status    string
+	checklist []checklist.Item
 }
 
 // Inherited is what a new sub-task copied from its parent (6.5: the output

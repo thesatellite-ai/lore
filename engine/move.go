@@ -107,7 +107,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		return Written{}, err
 	}
 	cl := e.callOf(ctx)
-	dst, err := e.writable(to)
+	dst, err := e.writable(ctx, to)
 	if err != nil {
 		return Written{}, err
 	}
@@ -115,7 +115,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	if err != nil {
 		return Written{}, err
 	}
-	srcSt, err := e.writable(src)
+	srcSt, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}

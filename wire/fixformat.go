@@ -25,7 +25,11 @@ import (
 )
 
 // formatOldMigrateHint is the per-repo command --all lists.
-func formatOldMigrateHint(top string) string {
+func formatOldMigrateHint(ctx context.Context, top string) string {
+	if _, ok := upstreamMigrated(ctx, top); ok {
+		// K-11: the team already migrated; a pull brings it here
+		return "to bring it here: cd " + top + " && git pull (never lore fix --migrate in this checkout)"
+	}
 	return "to upgrade it here: cd " + top + " && lore fix --migrate (or " + opsfix.LineMigrateAll + " for every such repo)"
 }
 
@@ -44,7 +48,10 @@ func projectFormatOld(top string) (bool, error) {
 
 // formatOldLine is FP-2's refusal line for the project at top (the
 // message of FormatOldErr, without its code).
-func formatOldLine(top string) string {
+func formatOldLine(ctx context.Context, top string) string {
+	if u, ok := upstreamMigrated(ctx, top); ok {
+		return pullFirstLine(top, u) // K-11
+	}
 	var e *errs.Error
 	if err := FormatOldErr(top); errors.As(err, &e) {
 		return e.Message
@@ -59,7 +66,7 @@ func (a *App) FixFormatOld(ctx context.Context) (string, bool, error) {
 	if err != nil || !old {
 		return "", false, err
 	}
-	return formatOldLine(top), true, nil
+	return formatOldLine(ctx, top), true, nil
 }
 
 // FormatOldAt is the refusal line of the project of the git repository
@@ -74,7 +81,7 @@ func FormatOldAt(ctx context.Context, dir string) (line string, old bool) {
 	if o, err := projectFormatOld(top); err != nil || !o {
 		return "", false
 	}
-	return formatOldLine(top), true
+	return formatOldLine(ctx, top), true
 }
 
 // fixFormatOldSteps are the fix steps of a project on an older format when
@@ -82,7 +89,7 @@ func FormatOldAt(ctx context.Context, dir string) (line string, old bool) {
 // says the line, the steps that would write the project's files are
 // skipped; the old clones step (machine files only) runs.
 func (a *App) fixFormatOldSteps(ctx context.Context, top string, dry bool) []opsdoctor.FixStep {
-	line := formatOldLine(top)
+	line := formatOldLine(ctx, top)
 	skipped := "skipped: " + line
 	return []opsdoctor.FixStep{
 		{Step: opsdoctor.StepMigrate, Where: filepath.Join(top, ".lore", "data"), Result: "not migrated: " + line}, // fmt1: one next step, the line's lore migrate run

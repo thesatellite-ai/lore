@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -99,8 +100,33 @@ type call struct {
 	stdin []byte
 }
 
-// run runs git and returns stdout.
+// run runs git and returns stdout. A fetch, push or ls-remote whose
+// connection never opened (gitremote.NeverConnected) is tried once more
+// after gitremote.RetryPause (devco L-10 / L-12: one dropped ssh call on a
+// flaky link made the store "offline" for the whole sync); the remote saw
+// nothing, so the retry cannot apply a push twice.
 func (r runner) run(ctx context.Context, c call) ([]byte, error) {
+	out, err := r.runOnce(ctx, c)
+	if err == nil || !retriedSubcommands[subcommand(c.args)] {
+		return out, err
+	}
+	var ge *gitError
+	if !errors.As(err, &ge) || ge.code == netRefusedExit || !gitremote.NeverConnected(ge.stderr) {
+		return out, err
+	}
+	select {
+	case <-ctx.Done():
+		return out, err
+	case <-time.After(gitremote.RetryPause):
+	}
+	return r.runOnce(ctx, c)
+}
+
+// retriedSubcommands are the network calls run retries once.
+var retriedSubcommands = map[string]bool{"fetch": true, "push": true, "ls-remote": true}
+
+// runOnce is one try of run.
+func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	args := c.args
 	if r.owned {
 		// core.autocrlf=false: row files are bytes lore hashes and

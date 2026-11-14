@@ -188,6 +188,7 @@ $ git status --short
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
 $ lore task add --title 'Check the contact form on a phone'
+lore: moved task_lists/tlt_7a67…9504 to this clone's refs/lore/live with the live row that names it, so teammates can read it; ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json is no longer in your working folder (it lands with that row)
 lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — Check the contact form on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)

@@ -137,13 +137,17 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	}
 	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: who.Any()}
 	if _, cur, err := st.eng.Get(ctx, ref); err == nil {
-		if berr := a.backfillKey(ctx, st, ref, cur, who); berr != nil {
+		// devco:K-6: both updates below are lore's own upkeep of a copy
+		// that exists, so a live write carries them with its row instead
+		// of rewriting the committed actor file (store.WithSupportingRefresh).
+		rctx := store.WithSupportingRefresh(ctx)
+		if berr := a.backfillKey(rctx, st, ref, cur, who); berr != nil {
 			return berr
 		}
 		// SOURCE_OF_TRUTH actors: a copy whose stamp is not its source's
 		// version is rewritten on this first write to its store
 		// (actor_source.go; the caller's own actor only).
-		a.refreshOwnCopy(ctx, st, target, cur)
+		a.refreshOwnCopy(rctx, st, target, cur)
 		st.actorDone[target] = true
 		return nil
 	} else if !errs.Has(err, errs.NotFound) {

@@ -69,7 +69,7 @@ func (e *Engine) purgedWith(ctx context.Context, table row.Table, id ids.AnyID) 
 	var out []dependent
 	seen := map[string]bool{}
 	for _, name := range e.allStores() {
-		st, err := e.writable(name)
+		st, err := e.writable(ctx, name)
 		if err != nil {
 			continue // read-only: nothing here can be purged
 		}

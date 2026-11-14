@@ -479,6 +479,21 @@ func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLi
 // pendingLiveRowsOf is pendingLiveRows, without the repo's own live ref when
 // skipRepo (liveNote: a list nobody would show).
 func pendingLiveRowsOf(ctx context.Context, st *state, fetchAll, skipRepo bool) ([]pendingLive, error) {
+	return pendingLiveRowsWhere(ctx, st, fetchAll, skipRepo, nil)
+}
+
+// pendingOldLiveRows is pendingLiveRows for the live rows older than the
+// current row format only: the ones `lore migrate status` counts (D-217).
+// A current-format live row is never looked up in its store, so a repo
+// with 2,400 open live tasks no longer pays a store read per row on every
+// lore doctor and lore fix.
+func pendingOldLiveRows(ctx context.Context, st *state) ([]pendingLive, error) {
+	return pendingLiveRowsWhere(ctx, st, false, false, func(lr liveRow) bool { return lr.row.SourceVersion < row.FormatVersion })
+}
+
+// pendingLiveRowsWhere is pendingLiveRowsOf for the live rows keep accepts
+// (nil: every row), filtered before any store lookup.
+func pendingLiveRowsWhere(ctx context.Context, st *state, fetchAll, skipRepo bool, keep func(liveRow) bool) ([]pendingLive, error) {
 	var out []pendingLive
 	srcs, serr := liveSources(ctx, st)
 	if serr != nil {
@@ -497,6 +512,9 @@ func pendingLiveRowsOf(ctx context.Context, st *state, fetchAll, skipRepo bool) 
 		}
 		b := st.byName[src.name]
 		for _, lr := range rows {
+			if keep != nil && !keep(lr) {
+				continue
+			}
 			sr, err := b.Get(ctx, lr.row.Table, lr.row.ID)
 			if errors.Is(err, store.ErrNotFound) {
 				if src.name == store.SourceRepo {

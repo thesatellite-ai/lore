@@ -31,7 +31,7 @@ func (e *Engine) RewriteOrigin(ctx context.Context, ref Ref, fn func(value.JSON)
 	if err != nil {
 		return Written{}, err
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}

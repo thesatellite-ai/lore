@@ -218,6 +218,14 @@ func TestStoryEMixedFormats(t *testing.T) {
 
 	s.Step("week3/two-branches-migrate-and-merge", func() {
 		d2.Git("switch", "-q", "-c", "mig-a", preMigration)
+		// devco K-11: origin/main is already migrated, so a migration here
+		// is refused with "git pull first"
+		dev2.LoreIn(d2, "migrate", "run").Refused(t, "git pull first")
+		// two branches that migrate before the team's migration was fetched:
+		// this clone forgets origin's default branch for the step, so
+		// nothing upstream is migrated yet as far as the check can see
+		d2.Git("remote", "set-head", "origin", "-d")
+		defer d2.Git("remote", "set-head", "origin", "main")
 		d2.Git("switch", "-q", "-c", "mig-b", preMigration)
 		count := len(eRowIDs(t, d2.Dir))
 		// mig-a migrates with migrate run, mig-b with fix --migrate, whose

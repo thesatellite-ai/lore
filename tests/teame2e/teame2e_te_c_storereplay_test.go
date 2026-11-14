@@ -8,7 +8,9 @@ package teame2e
 // fetches and replays its write through the one row merge (logic/merge's
 // nested meta strategy), so both keys survive and no marker or conflict
 // entry appears; the v0.1.17 store replay merged meta as one value and
-// kept only one side.
+// kept only one side. Store writes leave the machine with lore sync only
+// (owner rule U-2), so the race is two local writes and the syncs that
+// follow (devco D-221: the test still expected each write to push).
 
 import (
 	"strings"
@@ -23,6 +25,12 @@ func TestTeC_StoreReplayRaceMergesMetaPerKey(t *testing.T) {
 	a.aliceApp.MustLore("meta", "add", "cost", "--type", "number", "--to", to)
 	a.aliceApp.MustLore("meta", "add", "team", "--type", "text", "--to", to)
 	id := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", "the replay race memory", "--to", to), "mem")
+	// devco D-221: a store write is committed locally and sent by lore
+	// sync, never by itself (owner rule U-2), so alice syncs before dev1
+	// can read the row; until then dev1's not-found names that step
+	a.dev1App.Lore("memory", "show", id).Fails(t, 27, "E_NOT_FOUND", "a row a teammate wrote to a store arrives once they and you run `lore sync`")
+	a.aliceApp.MustLore("sync")
+	a.dev1App.MustLore("sync")
 	a.dev1App.MustLore("memory", "show", id).Says(t, "the replay race memory")
 
 	for _, r := range a.w.Simultaneously(
@@ -31,7 +39,10 @@ func TestTeC_StoreReplayRaceMergesMetaPerKey(t *testing.T) {
 	) {
 		r.OK(t)
 	}
-	for _, c := range []*th.Clone{a.aliceApp, a.dev1App} {
+	// alice's sync sends cost first; dev1's sync replays team over it
+	// through the row merge and sends the result; alice's second sync
+	// brings dev1's key back to her
+	for _, c := range []*th.Clone{a.aliceApp, a.dev1App, a.aliceApp} {
 		c.MustLore("sync")
 	}
 	for name, c := range map[string]*th.Clone{"alice": a.aliceApp, "dev1": a.dev1App} {

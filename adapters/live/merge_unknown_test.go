@@ -6,9 +6,9 @@ package live
 // key such as a future `_w` member — survives MergeTrees with its value
 // unchanged, for every value shape, whichever side added or changed it:
 // for v2 and v1 row bodies (both carry `_v`, so both merge through
-// logic/merge; a clash takes the newer side) and for a body without `_v` (a
-// hand-written file: the merge3 path, where a clash keeps both values in a
-// loud conflict). Break-verified: logic/merge dropping Reserved or an
+// logic/merge) and for a body without `_v` (a hand-written file: the
+// merge3 path); a clash takes the newer side on every path, never markers
+// (L-19: markers on the shared live ref broke every clone). Break-verified: logic/merge dropping Reserved or an
 // undeclared field fails every v2 and v1 case.
 
 import (
@@ -40,9 +40,8 @@ type unknownMergeCase struct {
 	name       string
 	base, o, t string
 	newerOurs  bool
-	// bothChanged: both sides set different values. A row merge takes the
-	// newer side; the merge3 path (a body without `_v`, no strategies)
-	// keeps both in a loud conflict instead, so nothing is lost either way.
+	// bothChanged: both sides set different values; the newer side wins
+	// on every path, and the merge note names the replaced value.
 	bothChanged bool
 	want        string // "" = the key must be absent after the merge
 }
@@ -127,9 +126,8 @@ func TestUnknownFieldsSurviveLiveMerge(t *testing.T) {
 						t.Fatalf("%s: merge: %v", name, err)
 					}
 					got, has := unkMergedValue(t, name, out[p], key)
-					if ver == "bare" && c.bothChanged {
-						unkCheckLoudConflict(t, name, out[p], got, c.want)
-						continue
+					if c.bothChanged {
+						unkCheckNoMarkers(t, name, out[p])
 					}
 					switch {
 					case c.want == "" && has:
@@ -145,25 +143,16 @@ func TestUnknownFieldsSurviveLiveMerge(t *testing.T) {
 	}
 }
 
-// unkCheckLoudConflict: the merged value is a marker block holding both
-// sides' values, and the file is flagged as a conflict.
-func unkCheckLoudConflict(t *testing.T, name string, file []byte, got, want string) {
+// unkCheckNoMarkers: a clash never leaves conflict markers in the merged
+// live file (L-19).
+func unkCheckNoMarkers(t *testing.T, name string, file []byte) {
 	t.Helper()
 	f, err := DecodeFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	text, err := strconv.Unquote(got)
-	if err != nil {
-		t.Errorf("%s: both sides changed, want a marker block, got %s", name, got)
-		return
-	}
-	w := unkCompact(t, want)
-	if u, err := strconv.Unquote(w); err == nil {
-		w = u
-	}
-	if !strings.Contains(text, w) || !strings.Contains(text, "older") || !f.HasConflictMarkers() {
-		t.Errorf("%s: both sides changed, want both values kept in a conflict, got %s (conflict=%v)", name, got, f.HasConflictMarkers())
+	if f.HasConflictMarkers() || f.Block.Conflict {
+		t.Errorf("%s: both sides changed, want the newer value and no markers, got %s", name, file)
 	}
 }
 
@@ -234,4 +223,36 @@ func unkSquash(s string) string {
 		b.WriteRune(c)
 	}
 	return b.String()
+}
+
+// TestLiveV2TextClashKeepsNewer (devco D-219, L-19): two clones changed
+// the free-text body of one v2 row at once. The live merge keeps the newer
+// edit whichever side is ours, writes no markers (the live ref is shared
+// by every clone), and its note names the replaced text.
+func TestLiveV2TextClashKeepsNewer(t *testing.T) {
+	p := RowPath("proj", unkTable, unkID)
+	doc := func(sec int, body string) []byte {
+		return unkFile(t, strings.Replace(unkDoc("v2", sec, "", ""), `"body":"b"`, `"body":"`+body+`"`, 1), sec)
+	}
+	base := Tree{p: doc(1, "b")}
+	for _, swap := range []bool{false, true} {
+		ours, theirs := Tree{p: doc(2, "from Mei")}, Tree{p: doc(3, "from Tom")}
+		if swap {
+			ours, theirs = theirs, ours
+		}
+		out, notes, err := MergeTrees(base, ours, theirs, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := DecodeFile(out[p])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.HasConflictMarkers() || f.Block.Conflict || f.Body.Str("body") != "from Tom" {
+			t.Fatalf("swap=%v: body %q conflict=%v, want the newer text and no markers", swap, f.Body.Str("body"), f.Block.Conflict)
+		}
+		if len(notes) != 1 || !strings.Contains(notes[0].Describe(), `body was "from Mei"`) {
+			t.Fatalf("swap=%v: notes %+v, want the replaced text named", swap, notes)
+		}
+	}
 }

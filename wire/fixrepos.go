@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 )
 
@@ -202,6 +203,7 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 	var out opsfix.Found
 	seen := map[string]bool{}
 	skipped := map[string]bool{}
+	var walked bool // the folder walk (not a known repo): repos with no lore data count
 	consider := func(p string) {
 		root := resolvedPath(p)
 		if seen[root] || skipped[root] {
@@ -218,6 +220,11 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 		case !isGitTop(root) && hasLoreDir(root) && !w.isLoreHome(root):
 			skipped[root] = true
 			out.Skipped = append(out.Skipped, opsfix.Skip{Path: root, Why: skipNotRepo})
+		case walked && isGitTop(root) && !w.inLoreStore(root):
+			// K-10: a repo in the folders with no lore data is counted and
+			// (with --verbose) named, so the person can tell it was seen
+			skipped[root] = true
+			out.NoLore = append(out.NoLore, root)
 		}
 	}
 	for _, k := range w.known {
@@ -225,6 +232,7 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 			consider(k)
 		}
 	}
+	walked = true
 	for _, base := range w.bases {
 		base = filepath.Clean(base)
 		err := filepath.WalkDir(base, func(p string, d fs.DirEntry, werr error) error {
@@ -248,16 +256,24 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 		}
 	}
 	slices.Sort(out.Roots)
+	slices.Sort(out.NoLore)
 	slices.SortFunc(out.Skipped, func(x, y opsfix.Skip) int { return strings.Compare(x.Path, y.Path) })
 	return out, nil
 }
 
-// isLinked reports whether one of dir's remotes is named by a store link.
+// inLoreStore reports whether dir is a lore store's checkout (a store
+// clone a setup folder holds): a store, never a repo without lore data.
+func (w fixRepoWalk) inLoreStore(dir string) bool {
+	_, _, in := rowfs.StoreTop(dir)
+	return in
+}
+
 // isLoreHome reports whether root's .lore folder is lore's own home.
 func (w fixRepoWalk) isLoreHome(root string) bool {
 	return w.loreHome != "" && resolvedPath(filepath.Join(root, rowfs.LoreDir)) == w.loreHome
 }
 
+// isLinked reports whether one of dir's remotes is named by a store link.
 func (w fixRepoWalk) isLinked(ctx context.Context, dir string) bool {
 	if len(w.linked) == 0 || w.remotes == nil {
 		return false
@@ -279,4 +295,34 @@ func isGitTop(dir string) bool {
 // failing the whole --all) nor lists it as a folder with lore data.
 func hasLoreDir(dir string) bool {
 	return loreFolderAt(dir)
+}
+
+// DoctorFleet implements opsdoctor.FleetEnv (K-10): the repos of the
+// enabled setups' folders as lore fix --all finds them, each repo on the
+// lore 0.1.17 format with its next step, and the repos with no lore data.
+// With no setup folders it finds nothing (doctor --all looks only through
+// the setups' folders; lore fix --all's home walk is its own fallback).
+func (a *App) DoctorFleet(ctx context.Context) (opsdoctor.Fleet, error) {
+	cfg, err := ReadSetupsConfig(a.opts.Home)
+	if err != nil || !setupsHaveFolders(cfg) {
+		return opsdoctor.Fleet{}, nil // config.yaml's own problem is the doctor's config check
+	}
+	found, err := a.FixRepos(ctx, nil)
+	if err != nil {
+		return opsdoctor.Fleet{}, err
+	}
+	out := opsdoctor.Fleet{Repos: make([]opsdoctor.FleetRepo, 0, len(found.Roots)), NoLore: found.NoLore}
+	for _, root := range found.Roots {
+		r := opsdoctor.FleetRepo{Path: root}
+		if old, ferr := projectFormatOld(root); ferr == nil && old {
+			r.FormatOld, r.Next = true, formatOldMigrateHint(ctx, root)
+		}
+		out.Repos = append(out.Repos, r)
+	}
+	return out, nil
+}
+
+// setupsHaveFolders reports whether an enabled setup names a folder.
+func setupsHaveFolders(cfg onboard.Config) bool {
+	return slices.ContainsFunc(cfg.Enabled(), func(e onboard.SetupEntry) bool { return len(e.Folders) > 0 })
 }

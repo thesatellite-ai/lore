@@ -36,6 +36,7 @@ func TestStillRunsAreDryRunsAndCIForms(t *testing.T) {
 	render := op.Spec{Name: opsrender.OpRun, Permission: op.PermWrite, Access: op.AccessRead}
 	fix := op.Spec{Name: opsfix.OpRun, Permission: op.PermWrite, Access: op.AccessWrite}
 	write := op.Spec{Name: "memory.add", Permission: op.PermWrite, Access: op.AccessWrite}
+	next := op.Spec{Name: "task.next", Permission: op.PermWrite, Access: op.AccessWrite}
 	body := func(s string) op.Decoder { return op.JSONDecoder{Body: []byte(s)} }
 	cases := []struct {
 		name      string
@@ -48,6 +49,8 @@ func TestStillRunsAreDryRunsAndCIForms(t *testing.T) {
 		{"render --check", Run{Entry: specEntry{spec: render}, Decoder: body(`{"check":true}`)}, false, true, true},
 		{"render", Run{Entry: specEntry{spec: render}, Decoder: body(`{}`)}, false, false, false},
 		{"fix --dry-run", Run{Entry: specEntry{spec: fix}, Decoder: body(`{"dry_run":true}`)}, false, true, false},
+		{"task next --dry-run reads teammates' live rows", Run{Entry: specEntry{spec: next}, Decoder: body(`{"dry_run":true}`)}, false, false, false},
+		{"task next --dry-run on a CI runner", Run{Entry: specEntry{spec: next}, Decoder: body(`{"dry_run":true}`)}, true, true, true},
 		{"fix in a 0.1.17-format repo", Run{Entry: specEntry{spec: fix}, Decoder: body(`{}`), OldRows: true}, false, true, false},
 		{"fix", Run{Entry: specEntry{spec: fix}, Decoder: body(`{}`)}, false, false, false},
 		{"a read on a CI runner", Run{Entry: specEntry{spec: read}, Decoder: body(`{}`)}, true, true, true},

@@ -414,19 +414,46 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	if err != nil {
 		return ImportOut{}, err
 	}
+	// D-214: the records outside any task tree (most files) are written as
+	// ONE staged batch: one store commit for the default list, every task,
+	// its checklist, first status and dropped-ref note (2,000 rows: one
+	// live commit, not 2,000, each re-reading a growing ref). A record of a
+	// tree reads its parent back (rank, inheritance, width), so the batch
+	// so far is committed first and the record is written on its own, as
+	// before; file order is kept either way.
+	tree := inTree(recs)
+	sctx := engine.Staging(store.WithCommitTitle(bctx, "task import: "+strconv.Itoa(len(recs)-out.existing())+" tasks from "+from))
+	defer func() { engine.Discard(sctx) }() // no-op once committed
+	flush := func() error {
+		_, ferr := engine.Commit(sctx)
+		sctx = engine.Staging(store.WithCommitTitle(bctx, "task import"))
+		return ferr
+	}
 	// The default list is created (if needed) outside the import slot: it
 	// is not an imported row and must not carry _o.import.
-	defList, _, err := o.defaultTasklist(bctx, in.To, project)
+	defList, _, err := o.defaultTasklist(sctx, in.To, project)
 	if err != nil {
 		return ImportOut{}, err
 	}
+	stagedKeys := map[string]string{} // keyOfRecord -> the id this batch gave it
+	statusSet := make([]bool, len(recs))
 	for i, r := range recs {
 		if out.Rows[i].Existing {
 			continue
 		}
+		wctx := sctx
+		if tree[i] {
+			if err = flush(); err != nil {
+				return ImportOut{}, err
+			}
+			wctx = bctx
+		} else if k := keyOfRecord(r); k != "" && stagedKeys[k] != "" {
+			out.Rows[i].ID = stagedKeys[k] // add's --key rule: already added by this batch
+			continue
+		}
 		// XQ9 / PROVENANCE 5.1: the row's _o.import names the importer
 		// kind and the external id (no ext_ source record for a file).
-		rctx := engine.WithImport(bctx, origin.Import{Source: from, ExtID: r.extID})
+		rctx := engine.WithImport(wctx, origin.Import{Source: from, ExtID: r.extID})
 		add := AddIn{Title: r.cols[colTitle], Body: r.cols[colBody], Priority: r.cols[colPriority], Commitment: r.cols[colCommitment],
 			Due: r.cols[colDue], DeferUntil: r.cols[colDeferUntil], Tasklist: orDefault(r.cols[colTasklist], defList),
 			Mission: r.cols[colMission], Plan: r.cols[colPlan], Role: r.cols[colRole], Key: r.cols[colKey], To: in.To,
@@ -436,8 +463,16 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 			// parent's instead of the import default.
 			add.Parent, add.Tasklist = out.Rows[r.parent].ID, r.cols[colTasklist]
 		}
+		if !tree[i] {
+			add.status, statusSet[i] = r.cols[colStatus], true
+			if len(r.checklist) > 0 {
+				if add.checklist, err = o.importedItems(rctx, r.checklist); err != nil {
+					return ImportOut{}, err
+				}
+			}
+		}
 		got, aerr := o.add(rctx, add)
-		if aerr == nil && len(r.checklist) > 0 {
+		if aerr == nil && tree[i] && len(r.checklist) > 0 {
 			aerr = o.importChecklist(rctx, got.Data.ID, r.checklist)
 		}
 		if aerr != nil {
@@ -445,20 +480,31 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 				strconv.Itoa(i)+" of "+strconv.Itoa(len(recs))+" tasks; the ones written are in batch "+out.Batch))
 		}
 		out.Rows[i].ID = got.Data.ID
+		if k := keyOfRecord(r); k != "" && !tree[i] {
+			stagedKeys[k] = got.Data.ID
+		}
 		for _, d := range dropped[i] {
 			// PC-TASK-1: the row says what it lost, outside the import
 			// slot (the note is not an imported row).
-			if err = o.addNote(bctx, got.Data.ID, d.note()); err != nil {
+			if tree[i] {
+				err = o.addNote(bctx, got.Data.ID, d.note())
+			} else {
+				err = o.stagedNote(sctx, store.Source(got.Store), got.Data.ID, d.note())
+			}
+			if err != nil {
 				return ImportOut{}, err
 			}
 		}
+	}
+	if err = flush(); err != nil {
+		return ImportOut{}, err
 	}
 	// G-TASK-3: a status other than todo is set after every task exists,
 	// children before parents (pre-order reversed), so a done parent finds
 	// its sub-tasks already closed (checkStatusTree refused the rest).
 	for i := len(recs) - 1; i >= 0; i-- {
 		st := recs[i].cols[colStatus]
-		if out.Rows[i].Existing || st == "" || st == schema.TaskStatusTodo {
+		if out.Rows[i].Existing || statusSet[i] || st == "" || st == schema.TaskStatusTodo {
 			continue
 		}
 		rctx := engine.WithImport(bctx, origin.Import{Source: from, ExtID: recs[i].extID})
@@ -685,6 +731,21 @@ func (o ops) importChecklist(ctx context.Context, id string, items []importItem)
 	}
 	_, err = o.saveChecklist(ctx, h, nil, "")
 	return err
+}
+
+// importedItems is a record's checklist as the items checklist add would
+// append to an empty list (TASK 7.3), for a task created with them in
+// one staged batch (D-214).
+func (o ops) importedItems(ctx context.Context, items []importItem) ([]checklist.Item, error) {
+	texts, done := make([]string, len(items)), make([]bool, len(items))
+	for i, it := range items {
+		texts[i], done[i] = it.Text, it.Done
+	}
+	var h clHit
+	if _, err := o.appendItems(ctx, &h, texts, done); err != nil {
+		return nil, err
+	}
+	return h.list, nil
 }
 
 // importSource settles --from: given, or the file's extension.

@@ -17,6 +17,7 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -215,11 +216,23 @@ func (b *liveBackend) leaveWorkTree(ctx context.Context, s *liveSession, carried
 			s.warn("carried row " + k.String() + ": could not unstage its work-tree copy: " + err.Error())
 			continue
 		}
-		if err := os.Remove(filepath.Join(b.top, filepath.FromSlash(rel))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		full := filepath.Join(b.top, filepath.FromSlash(rel))
+		if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			s.warn("carried row " + k.String() + ": could not remove its work-tree copy: " + err.Error())
+			continue
 		}
+		// devco:J-6: the command that wrote the file said
+		// "wrote <file>"; the move is said too, and the table folder the
+		// move emptied is removed, so `git status` and the folder agree.
+		_ = os.Remove(filepath.Dir(full)) // fails while the folder holds other files: kept
+		s.h.line(fmt.Sprintf(carriedMovedLine, k.Table, k.ID, s.ref.Name, full))
 	}
 }
+
+// carriedMovedLine names a row file a live write moved off the working
+// folder (table, id, the live ref, the removed file): the person who read
+// "wrote <file>" a moment earlier learns where the row went and why.
+const carriedMovedLine = "lore: moved %s/%s to this clone's %s with the live row that names it, so teammates can read it; %s is no longer in your working folder (it lands with that row)"
 
 // committedHere (F-ADDADD-2) reports whether HEAD holds k's row file. A
 // row not on origin/<default> that HEAD holds sits in a local commit not

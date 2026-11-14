@@ -52,7 +52,7 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 	if err = refuseActorDelete(cur); err != nil { // BATCH2 #8
 		return Written{}, err
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}

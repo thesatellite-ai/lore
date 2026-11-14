@@ -53,7 +53,7 @@ func TestRenderEmptyStoreWiresAgentsMD(t *testing.T) {
 	// The empty-state hint is its own paragraph, not glued onto the last
 	// bullet of "Not in this file" (markdown would read it as that
 	// bullet's continuation).
-	hint := "_No pinned knowledge yet. Run `lore rule add` or `lore memory add` to add some._"
+	hint := "_No pinned knowledge yet. A must rule (`lore rule add --body \"<rule>\"`) or a critical or high hotfix (`lore hotfix add --title \"<title>\" --body \"<fix>\"`) shows here; memories stay search-only._"
 	if !strings.Contains(md, "\n\n"+hint+"\n") {
 		t.Errorf("the empty-state hint is a paragraph of its own: %q", md[max(0, len(md)-300):])
 	}

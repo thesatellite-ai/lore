@@ -74,6 +74,13 @@ type Policy struct {
 	// merge driver); a merge every machine must compute alike (live rows,
 	// store sync) keeps the order-independent newer-first Mark.
 	OursFirst bool
+	// TextNewerWins settles a text clash like any other field: the newer
+	// side by HLC is kept and the older text is listed in Result.Replaced,
+	// never written into the row inside conflict markers. Set for a row
+	// that goes on a shared ref every clone reads (the live ref, L-19):
+	// markers there were pushed to everyone, broke every list and render,
+	// and failed the sync of people who never touched the row.
+	TextNewerWins bool
 }
 
 // PolicyFor builds the policy of a known table: text fields with no closed
@@ -133,6 +140,12 @@ type Result struct {
 	// Trash is the soft-delete rule that settled the row (DELETION 3.7,
 	// trash.go), "" when none applied.
 	Trash TrashOutcome
+	// Replaced lists, for a Policy.TextNewerWins merge, every table field
+	// both sides changed differently (free text or not): Newer was kept,
+	// Older is the value it replaced (nil when the older side had none),
+	// so a caller can show what was dropped; sorted by field. Non-text
+	// fields are in NewerWins too, as in any merge.
+	Replaced []FieldConflict
 }
 
 // Clean reports whether the merge needs no person.
@@ -247,6 +260,11 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) 
 		switch {
 		case how == pickedNewer && isText(k) && isTextValue(newer.Fields[k]) && isTextValue(older.Fields[k]):
 			n, o := newer.Fields[k], older.Fields[k]
+			if p.TextNewerWins {
+				merged[k] = n
+				res.Replaced = append(res.Replaced, FieldConflict{Field: k, Newer: n, Older: o})
+				continue
+			}
 			// Both sides are valid UTF-8 text, so the joined text is too;
 			// should TextOf ever refuse it, the newer text is kept and the
 			// clash is still listed, so nothing is dropped silently.
@@ -262,6 +280,9 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) 
 			continue
 		case how == pickedNewer:
 			res.NewerWins = append(res.NewerWins, k)
+			if p.TextNewerWins {
+				res.Replaced = append(res.Replaced, FieldConflict{Field: k, Newer: newer.Fields[k], Older: older.Fields[k]})
+			}
 		}
 		if v != nil {
 			merged[k] = v
@@ -311,6 +332,7 @@ func fields(p Policy, base, ours, theirs, newer, older row.Row, newerSide side) 
 	out.Origin = mergeOrigin(base, ours, theirs)
 
 	slices.SortFunc(res.Conflicts, func(a, b FieldConflict) int { return strings.Compare(a.Field, b.Field) })
+	slices.SortFunc(res.Replaced, func(a, b FieldConflict) int { return strings.Compare(a.Field, b.Field) })
 	slices.Sort(res.NewerWins)
 	res.Row = out
 	return res

@@ -138,9 +138,20 @@ type Found struct {
 	// names that hold no lore data (FP-7): a note each, never a failure
 	// (owner item 26), never run in.
 	Skipped []Skip
+	// NoLore are the git repos the folder walk found with no lore data
+	// and no store link naming them (K-10): never run in, counted in the
+	// summary and named with --verbose, so the person can tell they were
+	// seen.
+	NoLore []string
 	// Note says how the repos were chosen when no setup has folders
 	// (B4-8: a machine upgraded from lore 0.1.17), "" otherwise.
 	Note string
+}
+
+// NoLoreLine is the --verbose line of a repo --all found with no lore
+// data (docs/operations/upgrade.md).
+func NoLoreLine(repo string) string {
+	return "skipped " + repo + ": no lore data (no .lore folder; lore fix --all creates nothing there, lore init sets it up)"
 }
 
 // Skip is one folder --all passed over, and why.
@@ -187,6 +198,9 @@ type RunIn struct {
 	// setup's folders: a lore 0.1.17 repo outside the home folder that no
 	// lore command ran in yet is found no other way.
 	Dirs []string `json:"dirs,omitempty" arg:"0" rest:"true" desc:"with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all --dirs ~/code --dirs ~/work)"`
+	// Verbose (K-10) names every repo --all found with no lore data; the
+	// summary always counts them.
+	Verbose bool `json:"verbose,omitempty" flag:"verbose" desc:"with --all: also list each repo found with no lore data (the summary always counts them)"`
 }
 
 // RepoResult is one repo's block of --all.
@@ -322,6 +336,11 @@ type Out struct {
 	// Skipped are the folders --all passed over (not git repos, or no
 	// lore data), noted.
 	Skipped []Skip `json:"skipped,omitempty"`
+	// NoLore are the repos --all found with no lore data (K-10): counted
+	// in the summary, listed in the text with --verbose, always in JSON.
+	NoLore []string `json:"no_lore,omitempty"`
+	// Verbose: the text lists NoLore one line each.
+	Verbose bool `json:"-"`
 	// Note says how --all chose the repos when no setup has folders.
 	Note string `json:"note,omitempty"`
 	// Failed names the repos (--all) or steps that failed.
@@ -355,6 +374,11 @@ func (o Out) Text() string {
 		}
 		for _, sk := range o.Skipped {
 			b.WriteString(sk.Line() + "\n")
+		}
+		if o.Verbose {
+			for _, r := range o.NoLore {
+				b.WriteString(NoLoreLine(r) + "\n")
+			}
 		}
 		for _, e := range o.Errors {
 			b.WriteString("error: " + e + "\n")
@@ -424,6 +448,12 @@ func (o Out) Summary() string {
 	}
 	if len(o.Skipped) > 0 {
 		fmt.Fprintf(&b, "; %d folder(s) skipped (see the skipped lines)", len(o.Skipped))
+	}
+	if len(o.NoLore) > 0 {
+		fmt.Fprintf(&b, "; %d repo(s) without lore data left as they are", len(o.NoLore))
+		if !o.Verbose {
+			b.WriteString(" (--verbose lists them)")
+		}
 	}
 	if len(o.Errors) > 0 {
 		fmt.Fprintf(&b, "; %d cache error(s)", len(o.Errors))
@@ -504,7 +534,11 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	}
 	if len(in.Dirs) > 0 {
 		return Out{}, errs.New(errs.InvalidInput, "lore fix takes folders only with --all").
-			WithHint("lore fix --all --dirs " + strings.Join(in.Dirs, " "))
+			WithHint("lore fix --all --dirs " + strings.Join(in.Dirs, " --dirs "))
+	}
+	if in.Verbose {
+		return Out{}, errs.New(errs.InvalidInput, "lore fix takes --verbose only with --all").
+			WithHint("lore fix --all --verbose")
 	}
 	top, err := env.RepoTop(ctx)
 	if err != nil || top == "" {
@@ -580,7 +614,7 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	prep := env.FixPrepare(ctx, in.DryRun, jobs)
 	prep.Yes = op.Confirmed(ctx) // --yes reaches each repo's own run
 	prep.Migrate = in.Migrate    // D15: only --migrate migrates, in each repo
-	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped, Note: found.Note}
+	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped, NoLore: found.NoLore, Verbose: in.Verbose, Note: found.Note}
 	var emit func(RepoResult)
 	if w := env.FixProgress(); w != nil {
 		out.Streamed = true

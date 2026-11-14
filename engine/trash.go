@@ -242,7 +242,7 @@ func (e *Engine) writeTrash(ctx context.Context, b Batch, reason string, roots [
 		byStore[it.src] = append(byStore[it.src], it.row)
 	}
 	for name := range byStore {
-		st, werr := e.writable(name) // check every store before writing any
+		st, werr := e.writable(ctx, name) // check every store before writing any
 		if werr != nil {
 			return Written{}, werr
 		}
@@ -259,7 +259,7 @@ func (e *Engine) writeTrash(ctx context.Context, b Batch, reason string, roots [
 		if len(rows) == 0 {
 			continue
 		}
-		st, _ := e.writable(name)
+		st, _ := e.writable(ctx, name)
 		changes := make([]store.Change, 0, len(rows))
 		docs := make([]store.Row, 0, len(rows))
 		events := make([]Event, 0, len(rows))
@@ -353,7 +353,7 @@ func (e *Engine) TrashMany(ctx context.Context, refs []Ref) (Written, error) {
 		if lerr = refuseActorDelete(cur); lerr != nil {
 			return Written{}, lerr
 		}
-		if _, werr := e.writable(src); werr != nil {
+		if _, werr := e.writable(ctx, src); werr != nil {
 			return Written{}, werr
 		}
 		if cur.Deleted {
@@ -791,7 +791,7 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 		byStore[t.Store] = append(byStore[t.Store], t.Row)
 	}
 	for name := range byStore {
-		if _, werr := e.writable(name); werr != nil {
+		if _, werr := e.writable(ctx, name); werr != nil {
 			return TrashResult{}, werr
 		}
 	}
@@ -802,7 +802,7 @@ func (e *Engine) Restore(ctx context.Context, target string) (TrashResult, error
 		if len(rows) == 0 {
 			continue
 		}
-		st, _ := e.writable(name)
+		st, _ := e.writable(ctx, name)
 		changes := make([]store.Change, 0, len(rows))
 		docs := make([]store.Row, 0, len(rows))
 		events := make([]Event, 0, len(rows))

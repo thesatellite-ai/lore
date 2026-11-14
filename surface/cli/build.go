@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -730,6 +731,13 @@ func (cfg config) flagError(cmd *cobra.Command, err error, fields []op.FieldInfo
 // parsing "maybe": invalid syntax` (also `-j, --json`).
 var badFlagValueRe = regexp.MustCompile(`^invalid argument "(.*)" for "(?:-\w, )?--([\w-]+)" flag: `)
 
+// badFlagTagRe is the "[E_CODE] " tag an errs error's text starts with.
+var badFlagTagRe = regexp.MustCompile(`^\[E_[A-Z_]+\] `)
+
+// pflagPkg is the package of pflag's built-in flag value types, whose
+// refusals are Go parser text.
+const pflagPkg = "github.com/spf13/pflag"
+
 // badFlagValue words a value pflag's own parser refused in plain words,
 // by the flag's type, with no Go parser text (devco:L-9: --json=maybe
 // printed strconv.ParseBool). nil when err is not such a refusal.
@@ -739,8 +747,18 @@ func badFlagValue(cmd *cobra.Command, err error) *errs.Error {
 		return nil
 	}
 	val, name := m[1], m[2]
-	want, form := "a valid value", "--"+name+" <value>"
-	if fl := cmd.Flags().Lookup(name); fl != nil {
+	form := "--" + name + " <value>"
+	// A flag value type lore defines (--color's ColorFlag, …) refuses in
+	// lore's own words, naming the accepted values; that cause is the
+	// message (after-land 29e8d071: --color=purple lost "must be auto,
+	// always or never"). Only pflag's built-in types speak Go parser text.
+	msg := strings.TrimSpace(err.Error()[len(m[0]):])
+	want := ""
+	fl := cmd.Flags().Lookup(name)
+	if fl == nil || reflect.Indirect(reflect.ValueOf(fl.Value)).Type().PkgPath() == pflagPkg {
+		msg = "" // pflag's own types (or a flag not found): Go parser text, worded below
+	}
+	if fl != nil {
 		switch t := fl.Value.Type(); {
 		case t == "bool":
 			want, form = "true or false", "--"+name+" alone to turn it on, --"+name+"=false to turn it off"
@@ -752,7 +770,22 @@ func badFlagValue(cmd *cobra.Command, err error) *errs.Error {
 			want, form = "a number", "--"+name+" 1.5"
 		}
 	}
-	return errs.New(UsageCode, "--"+name+" takes "+want+", not "+strconv.Quote(val)).
+	if msg != "" {
+		msg = badFlagTagRe.ReplaceAllString(msg, "") // the cause's own [E_…] tag: errs.New adds one
+		if !strings.HasPrefix(msg, "--"+name) {
+			msg = "--" + name + " " + msg
+		}
+		if !strings.Contains(msg, strconv.Quote(val)) {
+			msg += ", not " + strconv.Quote(val)
+		}
+	}
+	if want != "" || msg == "" {
+		if want == "" {
+			want = "a valid value"
+		}
+		msg = "--" + name + " takes " + want + ", not " + strconv.Quote(val)
+	}
+	return errs.New(UsageCode, msg).
 		WithHint("give " + form + "; " + cmd.CommandPath() + " --help lists its flags")
 }
 

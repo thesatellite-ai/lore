@@ -154,6 +154,7 @@ type fakeEnv struct {
 	gotYes   []bool
 	prepDry  bool
 	skipped  []Skip
+	noLore   []string
 	sweep    []string
 	sweeps   int
 	gotDirs  []string
@@ -170,7 +171,7 @@ func (f *fakeEnv) FixFormatOld(context.Context) (string, bool, error) {
 func (f *fakeEnv) RepoTop(context.Context) (string, error) { return "", nil }
 func (f *fakeEnv) FixRepos(_ context.Context, dirs []string) (Found, error) {
 	f.gotDirs = dirs
-	return Found{Roots: f.roots, Skipped: f.skipped}, nil
+	return Found{Roots: f.roots, Skipped: f.skipped, NoLore: f.noLore}, nil
 }
 func (f *fakeEnv) FixProgress() io.Writer { return writerFunc(f.write) }
 func (f *fakeEnv) FixCacheSweep(context.Context) []string {

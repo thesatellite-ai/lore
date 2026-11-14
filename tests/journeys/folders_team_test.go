@@ -99,7 +99,7 @@ func TestJourneyFoldersTeamFromLinkedRepo(t *testing.T) {
 		// outside any repo, a folder of either store resolves
 		lee.Lore(parent, "team", "invite", jTeamQAEmail, "--role", "qa", "--project", "client_b", "--project", "client_c", "--yes").OK(t)
 		lee.Lore(parent, "team", "invite", "nobody@example.test", "--role", "dev", "--project", "client_zz", "--yes").
-			Fails(t, teamharness.ExitNotFound, "E_NOT_FOUND", "client_zz", "lore project list")
+			Fails(t, teamharness.ExitNotFound, "E_NOT_FOUND", "client_zz", "lore store folder list")
 		// project list shows every folder of the org, each with its store
 		// (by its name)
 		var pl struct {

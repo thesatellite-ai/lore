@@ -50,6 +50,7 @@ store agency folders:
 
 ### a client repo with no lore files
 tomas (work/clients/south-app)$ lore org link --org agency --project client_south --yes
+lore: leak guard installed in this clone: ~/work/clients/south-app/.git/hooks/commit-msg (commits are checked for internal notes; teammates get it when they run the same link in their clone)
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e99e22e9e86e96fe4daa7777994603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)

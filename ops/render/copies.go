@@ -26,6 +26,11 @@ const (
 	PointerOrphan CopyKind = "pointer_orphan"
 	// PointerMissing: a tool in context.targets has no pointer in its file.
 	PointerMissing CopyKind = "pointer_missing"
+	// PointerGenerated: a tool in context.targets has no pointer in its
+	// file because another tool generates that file (its banner says so),
+	// so render leaves it alone: a note naming the steps that wire the
+	// pointer, not a warning whose fix (lore render) cannot clear it.
+	PointerGenerated CopyKind = "pointer_generated"
 )
 
 // CopyFinding is one generated copy that does not match its source.

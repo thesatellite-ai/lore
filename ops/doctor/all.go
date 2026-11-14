@@ -512,6 +512,8 @@ type allOut struct {
 	// checked because no setup applies to them (no default), one info line
 	// each (UncheckedNote; never degrades).
 	unchecked []string
+	// checked are the repo roots the setup checks ran over (K-10).
+	checked map[string]bool
 }
 
 // DisabledNote is doctor --all's one line about a disabled setup it skipped.
@@ -592,6 +594,12 @@ func (sr *setupRun) runAll(ctx context.Context, only string) (allOut, error) {
 	attached, swarn := sr.attachedBySetup(ctx, entries, storeRepos)
 	out.storeWarnings = swarn
 	out.setups = sr.runSetups(ctx, entries, repos, attached)
+	out.checked = map[string]bool{}
+	for _, e := range entries {
+		for _, root := range repos[e.Name] {
+			out.checked[root] = true
+		}
+	}
 	out.machine.Checks = sr.machineChecks(cfg.Setups)
 	out.status = StatusHealthy
 	for _, s := range out.setups {
@@ -1105,6 +1113,16 @@ func addSetups(ctx context.Context, env Env, in RunIn, r *Report) error {
 		r.disabled = out.disabled
 		r.Notes = append(r.Notes, out.unchecked...)
 		r.unchecked = out.unchecked
+		r.verbose = in.Verbose
+		if fe, ok := env.(FleetEnv); ok && len(out.setups) > 0 {
+			// K-10: every repo of the setups' folders, not only the known
+			// ones the checks ran over
+			if f, ferr := fe.DoctorFleet(ctx); ferr == nil {
+				r.Found = fleetOf(f, out.checked)
+			} else {
+				r.Notes = append(r.Notes, "the repos in the setups' folders could not be listed: "+ferr.Error())
+			}
+		}
 		if len(out.setups) == 0 && len(out.disabled) == 0 {
 			// C-12: --all checks repos through the setups' folders; with
 			// none it checks no repo, and a bare "healthy" read as "every

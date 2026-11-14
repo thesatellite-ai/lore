@@ -157,6 +157,15 @@ type Settings struct {
 	Detail []string
 }
 
+// PullFirstGate is a Rewriter that knows the checkout's fetched remote
+// branch (K-11: a checkout behind a pushed migration migrated again, and
+// the second migration commit conflicted with the first in every row
+// file). run asks it first, dry run included: a non-nil error (the team
+// already migrated; git pull is the step) refuses the run.
+type PullFirstGate interface {
+	MigratePullFirst(ctx context.Context) error
+}
+
 // ActorRecorder is a Rewriter that writes the running person's actor row
 // into every store where the run stamped rows with that actor (E-3:
 // settings steps write through the engine, which stamps updated_by, but
@@ -383,6 +392,11 @@ func Ops(rw Rewriter) []op.Entry {
 // was asked for it (--team-lock: T itself is a push to the remote).
 func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}, Verbose: in.Verbose}
+	if g, ok := rw.(PullFirstGate); ok {
+		if err := g.MigratePullFirst(ctx); err != nil {
+			return RunOut{}, err
+		}
+	}
 	if !in.DryRun { // a dry run only reads, and reading works on a gated project
 		if err := rw.WriteGate(ctx); err != nil {
 			return RunOut{}, err
@@ -586,7 +600,7 @@ func baseOps(rw Rewriter) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Rewrite v0.1.17 row files (_v: 1) as _v: 2 (the migrated nouns)",
 			Permission: op.PermAdmin, Access: op.AccessWrite, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.ConfigInvalid, errs.NotAStore, errs.Internal},
+			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.ConfigInvalid, errs.NotAStore, errs.Refused, errs.Internal},
 			Examples: []op.Example{
 				{Title: "see what would change", CLI: "lore migrate run --dry-run", Want: "count:"},
 				{Title: "rewrite once the whole team runs 0.1.18", CLI: "lore migrate run", Want: "count:"},

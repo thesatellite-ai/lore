@@ -390,7 +390,7 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 	if len(rep.Data.Stores) != 1 || !rep.Data.Stores[0].Offline || rep.Data.Stores[0].Sent != 0 {
 		t.Fatalf("an offline sync reports the store offline: %+v", rep.Data.Stores)
 	}
-	a.MustLore("sync").Says(t, "offline: local changes kept, sent on the next sync")
+	a.MustLore("sync").Says(t, "(offline: ", " did not answer", "; local changes kept, sent on the next sync)")
 
 	st.people[0].Online()
 	rep = th.DecodeJSON[syncReport](t, a.MustLore("sync", "--json"))

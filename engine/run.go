@@ -79,7 +79,7 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		return op.Result{}, err
 	}
 	if spec.Access == op.AccessWrite {
-		if _, err := e.writable(cl.target); err != nil {
+		if _, err := e.writable(ctx, cl.target); err != nil {
 			return op.Result{}, err
 		}
 	}

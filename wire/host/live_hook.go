@@ -110,6 +110,11 @@ type LiveConfig struct {
 	// (quarantined rows, registries past their key cap; FA-META-11);
 	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.
 	MetaStatus func(ctx context.Context) (quarantined, overCap []string)
+	// ClientRepo reports whether the repo of WorkDir resolves as a client
+	// repo of an org (J-11: a link of a repo with no .lore/ installs the
+	// leak guard there, clientguard.go); cmd/lore passes the org
+	// resolution's role. nil installs nothing.
+	ClientRepo func(ctx context.Context) bool
 }
 
 // Leak check actions (the refusal names them).
@@ -883,6 +888,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		}
 	}
 	res, err := next(ctx)
+	if !wired && err == nil {
+		h.installClientGuard(ctx, spec.Name) // clientguard.go: a linked client repo with no .lore/ (J-11)
+	}
 	if !wired && err == nil && !leavesWorkRepo(spec.Name) {
 		// The operation made the project (repo.init from the setup page or
 		// `lore repo init`): wire the clone now, as `lore init` does through

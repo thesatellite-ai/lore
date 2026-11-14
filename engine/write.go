@@ -64,7 +64,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if target, err = e.routeTable(target, def); err != nil { // P3-LOCAL-1
 		return Written{}, err
 	}
-	st, err := e.writable(target)
+	st, err := e.writable(ctx, target)
 	if err != nil {
 		return Written{}, err
 	}
@@ -273,7 +273,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 // as the last commit holds it.
 func (e *Engine) updateFrom(ctx context.Context, src store.Source, cur row.Row, patch map[string]value.Value) (Written, error) {
 	cl := e.callOf(ctx)
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}
@@ -556,7 +556,7 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	if err = refuseActorDelete(cur); err != nil {
 		return Written{}, err
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}
@@ -631,7 +631,7 @@ func (e *Engine) writeRemove(ctx context.Context, roots []ids.AnyID, plan delete
 		isRoot[r] = true
 	}
 	for name := range plan.byStore {
-		st, err := e.writable(name) // check every store before writing any
+		st, err := e.writable(ctx, name) // check every store before writing any
 		if err != nil {
 			return Written{}, err
 		}
@@ -646,7 +646,7 @@ func (e *Engine) writeRemove(ctx context.Context, roots []ids.AnyID, plan delete
 		if len(steps) == 0 {
 			continue
 		}
-		st, err := e.writable(name)
+		st, err := e.writable(ctx, name)
 		if err != nil {
 			return Written{}, err
 		}
@@ -1040,7 +1040,7 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 	if err != nil {
 		return stored{}, err
 	}
-	changes := []store.Change{{Row: sr, Expect: expect}}
+	changes := []store.Change{{Row: sr, Expect: expect, Upkeep: store.SupportingRefreshFrom(ctx)}}
 	out := stored{row: r, doc: sr}
 	for _, x := range extra {
 		if err := e.refuseNeverClient(st, x.Table); err != nil {

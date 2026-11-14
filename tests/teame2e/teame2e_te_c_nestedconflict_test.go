@@ -6,9 +6,10 @@ package teame2e
 // a conflict that sits INSIDE a row — a strict metadata key two teammates
 // set differently, a marker block in a metadata text value — blocks the two
 // ways a row leaves a person's hands: landing from the live ref onto main,
-// and a git commit of a row file. The top-level twins are
-// TestF04_TextClashKeepsBothAndBlocksLanding and
-// TestB11Sync_PreCommitStagesLoreDataAndRefusesBrokenFiles.
+// and a git commit of a row file. The top-level twin is
+// TestB11Sync_PreCommitStagesLoreDataAndRefusesBrokenFiles (a top-level
+// text clash on the live ref takes the newer edit, devco D-219:
+// TestF04_TextClashTakesTheNewerEditWithoutMarkers).
 
 import (
 	"encoding/json"
@@ -67,6 +68,7 @@ func TestTeC_NestedMetaConflictBlocksLanding(t *testing.T) {
 	// lands like any finished row.
 	rt.c2.MustLore("meta", "set", id, "cost=5")
 	rt.c2.MustLore("task", "done", id)
+	rt.c2.MustLore("sync") // a finished row lands on lore sync, never by itself (U-2)
 	if _, ok := rt.mainTask(t, id); !ok {
 		t.Fatalf("after the key is settled the task must land: %s", rt.c2.MustLore("sync", "conflicts"))
 	}

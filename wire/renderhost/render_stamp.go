@@ -159,7 +159,7 @@ func copyMessage(kind opsrender.CopyKind, file, what string) string {
 		return file + " is missing: " + what + " is not on disk"
 	case opsrender.CopyEdited:
 		return file + " was edited by hand since it was rendered: " + what + " no longer matches its rows (lore render replaces the edit)"
-	case opsrender.CopyStale, opsrender.PointerOrphan, opsrender.PointerMissing:
+	case opsrender.CopyStale, opsrender.PointerOrphan, opsrender.PointerMissing, opsrender.PointerGenerated:
 	}
 	return file + " is stale: its rows or render settings changed since it was rendered, so " + what + " is out of date"
 }
@@ -260,6 +260,11 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 			found = append(found, opsrender.CopyFinding{Kind: kind, File: file, Message: msg, Fix: fix, Local: true})
 		}
 	}
+	for _, dir := range pp.leftoverFolders() {
+		file := h.redact(dir)
+		found = append(found, opsrender.CopyFinding{Kind: opsrender.CopyStale, File: file, Local: true, Fix: renderFixCommand,
+			Message: file + " is an earlier private render folder of this repo (named by its project id before its repo id arrived, or by an earlier name); lore render removes it and keeps " + h.redact(pp.dir)})
+	}
 	for _, l := range pp.locals {
 		if l.in == l.out {
 			continue
@@ -290,6 +295,24 @@ func pointerCopies(root string, pick targetPick) []opsrender.CopyFinding {
 			continue
 		}
 		if (rootProbe{root: root}).State(t.profile.PointerFile) == toolprofile.FileWired {
+			continue
+		}
+		if banner := generatedBannerOf(root, t.profile.PointerFile); banner != "" {
+			// devco L-13: render leaves a file another tool generates as it
+			// is (D-2), so "fix: lore render" looped forever; name the
+			// steps that do clear it, as render's own skip note does. When
+			// another listed file already carries the pointer, the note
+			// names it and offers no command (devco J-3: never "wire
+			// another file" once one is wired).
+			carriers := wiredPointerFiles(root, pick.targets, t.profile.PointerFile)
+			fix := ""
+			if len(carriers) == 0 {
+				fix = generatedFixCommand(t.profile.Name)
+			}
+			found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerGenerated, File: t.profile.PointerFile,
+				Message: fmt.Sprintf("%s has no lore pointer: %s", t.profile.PointerFile,
+					generatedSkipReason(banner, t.profile.Name, LoreMDRel, carriers)),
+				Fix: fix})
 			continue
 		}
 		found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerMissing, File: t.profile.PointerFile,
@@ -367,12 +390,15 @@ func staleError(found []opsrender.CopyFinding) error {
 // last render. Only
 // for a project that renders, run from its root; a failure is a warning,
 // never a failed sync. A tracked render that matches the index is
-// rewritten only when the sync moved rows (brought: received, sent or
-// landed) or this clone's row files hold uncommitted writes, and the repo
-// is not a client repo (B-8, B-11): a no-op sync on a clean tree changes
-// no tracked file, and in a client repo the committed render is the
-// client's (render_auto.go).
-func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool) {
+// rewritten only when this clone's row files already hold uncommitted
+// writes, and the repo is not a client repo (B-8, B-11, devco:K-8): a
+// sync on a clean tree changes no tracked file, even one that brought
+// rows in (a store's, a teammate's live writes), because a dirty
+// committed render makes the next `git pull --rebase` refuse ("You have
+// unstaged changes"); the committed render catches up in the next commit
+// that carries row files (CommitRender) or on `lore render`. In a client
+// repo the committed render is the client's (render_auto.go).
+func (h *Host) rerenderStaleQuiet(ctx context.Context, root string) {
 	out := filepath.Join(root, filepath.FromSlash(LoreMDRel))
 	if _, err := os.Stat(out); err != nil {
 		return
@@ -382,7 +408,7 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool
 		return
 	}
 	if h.RenderHeld(ctx, root) {
-		if client, cerr := h.repoIsClient(ctx); !(brought || rowsUncommitted(ctx, root)) || client || cerr != nil {
+		if client, cerr := h.repoIsClient(ctx); !rowsUncommitted(ctx, root) || client || cerr != nil {
 			return
 		}
 	}
@@ -404,4 +430,41 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool
 	if err := h.runRender(ctx, rf); err != nil {
 		fmt.Fprintln(os.Stderr, h.decor.warn(syncLogPrefix+"re-render "+LoreMDRel+": "+err.Error()))
 	}
+}
+
+// generatedBannerOf is the "generated file" banner of the repo's tool file
+// rel ("" when the file is missing, unreadable or has none).
+func generatedBannerOf(root, rel string) string {
+	b, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		return ""
+	}
+	return toolprofile.GeneratedBanner(string(b))
+}
+
+// wiredPointerFiles are the pointer files of targets, other than skip,
+// that already carry lore's pointer: where an agent reaches .lore/LORE.md
+// while a generated file is left alone.
+func wiredPointerFiles(root string, targets []contextTarget, skip string) []string {
+	var out []string
+	for _, t := range targets {
+		f := t.profile.PointerFile
+		if !t.profile.HasPointerFile() || f == skip || slices.Contains(out, f) {
+			continue
+		}
+		if (rootProbe{root: root}).State(f) == toolprofile.FileWired {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// generatedFixCommand is the doctor's fix of a pointer file another tool
+// generates: wire another tool file render can write (AGENTS.md), never
+// lore render alone, which skips the generated file again.
+func generatedFixCommand(profile string) string {
+	if profile == toolprofile.NameCodex {
+		return "lore render --add-target <profile>"
+	}
+	return "lore render --add-target " + toolprofile.NameCodex
 }

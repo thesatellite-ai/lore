@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -129,7 +130,10 @@ func applyOp(o ops) op.Entry {
 func (o ops) apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 	raw, err := os.ReadFile(in.File)
 	if err != nil {
-		return ApplyOut{}, errs.Wrap(errs.InvalidInput, "read plan", err)
+		// The path, the system's reason and the next step: a bare "read
+		// plan" left the person guessing which file and why (L-16).
+		return ApplyOut{}, fromfile.Unreadable("mission apply", in.File, err).
+			WithHint("check the path of --file, then re-run lore mission apply --file <plan.yaml>; lore mission apply --help shows the plan's YAML shape")
 	}
 	var p File
 	if yerr := yamlerr.Decode(raw, &p, yamlerr.Lenient); yerr != nil { // line + key, never a Go type

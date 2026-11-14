@@ -159,6 +159,12 @@ func Expired(lastDay, today time.Time) bool {
 type Acceptor struct {
 	Actor string
 	Email string
+	// Rerun: this machine already held the org's entry before this join
+	// ran (a re-run of a join done here). Only then may an accepted invite
+	// answer VerdictAlready. Why (J-9): on a fresh join the actor is found
+	// by the invite's address, which anyone can type, so an accepted
+	// invite would make a second person the invitee.
+	Rerun bool
 }
 
 // InviteVerdict is DecideInvite's answer when the invite may be used.
@@ -174,8 +180,9 @@ const (
 )
 
 // DecideInvite is the accept decision of 4.5 (checks invite.status and
-// invite.email), in this order: revoked, used (by someone else; the same
-// actor is VerdictAlready), expired (status or past expires_on), wrong
+// invite.email), in this order: revoked, used (by someone else, or on a
+// fresh join; the same actor re-running a join done on this machine is
+// VerdictAlready), expired (status or past expires_on), wrong
 // email. by is the inviter from the invite line, for the messages. Fail
 // closed: an unknown status is E_INVITE_INVALID.
 func DecideInvite(rec InviteRecord, by string, today time.Time, who Acceptor) (InviteVerdict, error) {
@@ -185,7 +192,7 @@ func DecideInvite(rec InviteRecord, by string, today time.Time, who Acceptor) (I
 		return "", errs.New(errs.InviteRevoked, "invite "+rec.ID+" was revoked; "+ask).
 			WithHint(ask + " to run lore team invite --email " + rec.Email)
 	case schema.InviteStatusAccepted:
-		if rec.AcceptedBy != "" && rec.AcceptedBy == who.Actor {
+		if who.Rerun && rec.AcceptedBy != "" && rec.AcceptedBy == who.Actor {
 			return VerdictAlready, nil
 		}
 		return "", errs.New(errs.InviteUsed, "invite "+rec.ID+" was already used by "+orSomeone(rec.AcceptedBy)+"; "+ask+" for a new one").

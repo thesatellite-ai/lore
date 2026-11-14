@@ -475,6 +475,9 @@ func (r Report) allText() string {
 	for _, n := range r.unchecked {
 		b.WriteString("\n" + n + "\n")
 	}
+	if t := fleetText(r.Found, r.verbose); t != "" {
+		b.WriteString("\n" + t)
+	}
 	if ps := problems(r.Machine.Checks); len(ps) > 0 {
 		b.WriteString("\nmachine\n")
 		for _, c := range ps {
