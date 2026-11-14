@@ -145,7 +145,7 @@ quiet alice . "rm .lore/config.yaml"
 # --- one error from each group (docs/reference/errors.md) --------------------------------
 note "no work"
 lore_repo alice client/landing
-on! alice work/landing "lore task next"
+on! alice work/landing "lore task next --push"
 
 # --- the store marker, the org choice and --force-org (docs/reference/config.md, flags.md) ---
 remote agency/notes

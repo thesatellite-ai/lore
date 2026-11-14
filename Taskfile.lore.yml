@@ -329,8 +329,13 @@ tasks:
     desc: "Docs cite code through docsync: every citation still matches (ds check). Command/flag drift is TestDocsMatchCLI in test:all"
     cmds:
       - |
+        # `go install` puts ds in $(go env GOPATH)/bin, which a gate's PATH
+        # (a non-login shell, the after-land runner) may not hold: look there too.
         if ! command -v ds >/dev/null 2>&1; then
-          echo "✘ ds (docsync) is not installed, so doc citations cannot be checked"
+          PATH="$PATH:$(go env GOPATH)/bin"
+        fi
+        if ! command -v ds >/dev/null 2>&1; then
+          echo "✘ ds (docsync) is not installed (not on PATH, nor in \$(go env GOPATH)/bin), so doc citations cannot be checked"
           exit 1
         fi
         # ds scan rewrites .ds/ledger.tsv and refs.tsv (their header records

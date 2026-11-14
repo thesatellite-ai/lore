@@ -307,8 +307,15 @@ func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 }
 
 // repoTopProjectID is the project id of the git top of the checkout root
-// is in, when root is a package folder below that top ("" otherwise).
+// is in, when root is a package folder below that top ("" otherwise). A
+// root holding .git (a folder, or the file of a worktree or submodule) is
+// its own top, so git is not asked: Gather runs this for every repo with no
+// link of its own, and the extra git run broke the startup budget of a
+// plain read (journey land7 B, `memory list` at most 5 repo-top asks).
 func repoTopProjectID(ctx context.Context, root string) string {
+	if _, err := os.Lstat(filepath.Join(root, ".git")); err == nil {
+		return ""
+	}
 	out, err := gitRun(ctx, "-C", root, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return ""

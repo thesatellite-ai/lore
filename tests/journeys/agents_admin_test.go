@@ -60,12 +60,17 @@ func TestJourneyAgentsAdminSetup(t *testing.T) {
 		// Ada (the setup's identity) is the org's admin and on its roster,
 		// as herself: the agent registered her, not itself.
 		tt.lore(ada, "setup", "list").OK(t).Says(t, jAdminSetup, "admin", jAdminOrg)
-		if a, ok := tt.roster(t, ada)["human:"+ada.Email]; !ok || a.Display != ada.Name {
-			t.Errorf("Ada is not on %s's roster as herself after her agent's team step: %+v", jAdminOrg, tt.roster(t, ada))
+		roster := tt.roster(t, ada)
+		me, ok := roster["human:"+ada.Email]
+		if !ok || me.Display != ada.Name {
+			t.Errorf("Ada is not on %s's roster as herself after her agent's team step: %+v", jAdminOrg, roster)
 		}
-		for key := range tt.roster(t, ada) {
-			if strings.HasPrefix(key, "agent:") {
-				t.Errorf("the team step registered the agent %s on the roster; it acts as Ada", key)
+		// D-17: the agent session's own actor row goes into the org store
+		// (it signs the rows it writes), but only as Ada's agent: never a
+		// person, never a member of its own.
+		for key, a := range roster {
+			if strings.HasPrefix(key, "agent:") && (a.Kind != "agent" || a.Owner != me.ID) {
+				t.Errorf("the team step registered the agent %s as %+v; it acts as Ada (an agent row owned by %s)", key, a, me.ID)
 			}
 		}
 		if !store.Has("refs/heads/main") {

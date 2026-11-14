@@ -813,10 +813,11 @@ s_team_ops() {
   on bob work/billing "lore sync >/dev/null && lore task list"
 
   note "resource"
-  on alice work/billing "lore hold claim --name full-suite --ttl 30m"
-  on! bob work/billing "lore hold claim --name full-suite --ttl 30m"
+  # a hold in a code repo goes through its remote, which lore pushes to only when asked (--push)
+  on alice work/billing "lore hold claim --name full-suite --ttl 30m --push"
+  on! bob work/billing "lore hold claim --name full-suite --ttl 30m --push"
   on alice work/billing "lore hold release --name full-suite"
-  on bob work/billing "lore hold claim --name full-suite --ttl 30m"
+  on bob work/billing "lore hold claim --name full-suite --ttl 30m --push"
 
   # Then the agency's client repo, with the org config: claims a person takes back or moves.
   agency_config alice "human:alice@agency.example" "Alice Doe" alice

@@ -32,7 +32,7 @@ pending   3 write(s) not confirmed by the remote
   _root/task_lists/tlt_7a670ae8548ed05bf57ad29ad0759504.json
   _root/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json
   _root/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
-alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task claim --id tsk_54fe984c9b495744c0217776765a28f2
+alice (work/website)$ LORE_LIVE_AUTOPUSH=0 lore task claim --id tsk_54fe984c9b495744c0217776765a28f2 --push
 ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (live.autopush / LORE_LIVE_AUTOPUSH=0))
   hint: coordination writes (claims, releases, holds) are never queued; turn live.autopush on (or unset LORE_LIVE_AUTOPUSH=0) and run the command again
 (exit 15)

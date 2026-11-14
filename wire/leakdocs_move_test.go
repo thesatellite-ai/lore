@@ -63,3 +63,45 @@ func TestLeakSelfMatchByPath(t *testing.T) {
 		t.Fatalf("commit hint for a row file: %q", got)
 	}
 }
+
+// TestLeakRosterActorCopyIsNoMove: the roster is in the leak index
+// (leakRosterRows), but an actor or team is never moved into a client
+// repo, so the actor rule's finding on a client actor copy carrying more
+// than the projection is not dropped as a self match (a stable_key in the
+// copy committed before), and no live row is named a move for it.
+func TestLeakRosterActorCopyIsNoMove(t *testing.T) {
+	t.Parallel()
+	const actor = "act_0190aaaa0000700080000000000000c3"
+	rows := []leakcheck.IndexRow{{ID: actor, Table: "actors", Label: "store northwind/org"}}
+	for _, p := range []string{".lore/data/actors/" + actor + ".json", "_root/actors/" + actor + ".json"} {
+		fs := []leakcheck.Finding{{Rule: leakcheck.RuleActor, Path: p, RowID: actor}}
+		out, moved := withoutSelfMatches(leakWhereLiveWrite, fs, rows)
+		if moved || len(out) != 1 {
+			t.Fatalf("%s: moved %v, %d findings left; want the actor finding kept, no move", p, moved, len(out))
+		}
+	}
+}
+
+// TestLiveRowDoc: the docs of a live write, a landing and a ride-along
+// commit are row files at their live path; any other action's, or a
+// reserved live folder's, are not.
+func TestLiveRowDoc(t *testing.T) {
+	t.Parallel()
+	const id = "tsk_0190aaaa0000700080000000000000a1"
+	cases := []struct {
+		where, path string
+		want        bool
+	}{
+		{leakWhereLiveWrite, "_root/tasks/" + id + ".json", true},
+		{leakWhereLanding, "apps/web/tasks/" + id + ".json", true},
+		{leakWhereRide, "_root/tasks/" + id + ".json", true},
+		{LeakWhereCommit, "_root/tasks/" + id + ".json", false},
+		{leakWhereLiveWrite, "_live/tasks/" + id + ".json", false},
+		{leakWhereLiveWrite, "src/main.go", false},
+	}
+	for _, c := range cases {
+		if got := liveRowDoc(c.where, c.path); got != c.want {
+			t.Errorf("liveRowDoc(%q, %q) = %v, want %v", c.where, c.path, got, c.want)
+		}
+	}
+}

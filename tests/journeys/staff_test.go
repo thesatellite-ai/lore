@@ -69,6 +69,9 @@ func TestJourneyStaff(t *testing.T) {
 		tt.lore(tlLee, "team", "show", "@ops").OK(t).Says(t, "members (3)", tlBob.Name, tlCat.Name)
 		// a pending invite written before member add existed converts
 		tlInvite(t, lee, tt.repo[tlLee.Email].Dir, "eve@example.test", "--team", "@web")
+		// doctor's store checks run in a lore project (in a repo nobody ran
+		// lore init in it stops at one note, D-20)
+		tt.lore(tlLee, "init", "--non-interactive", "--name=app").OK(t)
 		tt.lore(tlLee, "doctor").Says(t, "pending_invites", "eve@example.test", "lore member add --from-invites")
 		tt.lore(tlLee, "member", "add", "--from-invites", "--yes").OK(t).Says(t, "added eve@example.test", "now accepted", "teams @web")
 		tt.lore(tlLee, "team", "invite", "list").OK(t).Says(t, "eve@example.test", "accepted")

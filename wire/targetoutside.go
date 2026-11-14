@@ -38,8 +38,12 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		return op.Result{}, false, nil
 	}
 	// A git repo lore is not set up in counts as no repo (F-15): the write
-	// names its store, and the repo is left untouched (S-2) either way.
-	if (insideWorkTree(ctx, a.opts.RepoDir) && UntouchedRepo(ctx, a.opts.RepoDir) == "") || inStore(a.opts.RepoDir) {
+	// names its store, and the repo is left untouched (S-2) either way. A
+	// repo linked to a store folder by its remote is not such a repo: its
+	// open attaches the stores its link and its org name (the org store's
+	// roster for --assign @team, a folder of a second org store by name),
+	// which the store-only open here lacks, so it takes the usual path.
+	if (insideWorkTree(ctx, a.opts.RepoDir) && (UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "")) || inStore(a.opts.RepoDir) {
 		return op.Result{}, false, nil
 	}
 	in, derr := e.Decode(d)
@@ -111,6 +115,11 @@ func (a *App) outsideTarget(ctx context.Context, to string, create bool) (attach
 	}
 	if !exists && !create {
 		return attach.Store{}, newFolder{}, a.missingFolder(ctx, src, base, folderName)
+	}
+	if !exists {
+		if err := a.refuseStaleLinkFolder(ctx, to, folderName, src); err != nil { // stalelink.go (L-7)
+			return attach.Store{}, newFolder{}, err
+		}
 	}
 	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly, Branch: src.Branch}
 	return target, newFolder{target: name, folder: folderName}, nil

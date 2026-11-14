@@ -269,8 +269,11 @@ func isGitTop(dir string) bool {
 	return err == nil
 }
 
-// hasLoreDir reports whether dir holds a .lore folder.
+// hasLoreDir reports whether dir holds a .lore folder with something in
+// it: the rule of loreFolderAt (D-20), which `lore fix` itself applies. An
+// empty .lore/ (only an earlier lore run left it) is no lore data, so
+// fix --all neither runs in such a repo (where fix refuses "no lore data",
+// failing the whole --all) nor lists it as a folder with lore data.
 func hasLoreDir(dir string) bool {
-	fi, err := os.Stat(filepath.Join(dir, rowfs.LoreDir))
-	return err == nil && fi.IsDir()
+	return loreFolderAt(dir)
 }

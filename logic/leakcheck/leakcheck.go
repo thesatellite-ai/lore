@@ -74,6 +74,13 @@ type Item struct {
 	// rule honours it, and only for this item: every other internal row
 	// still blocks, and the id and reference rules are unchanged.
 	AllowRows []string
+	// LiveRow marks a row file the caller recognised at a path rowPathRe
+	// does not (a live-ref row, <folder>/<table>/<id>.json). Its rows
+	// reference roster actors by id as any client row does (the actor
+	// projection), so the roster-id rule for text outside row files (F-4)
+	// does not apply to it: every task written in a linked client repo
+	// names its author, and was refused as naming a person of the org.
+	LiveRow bool
 }
 
 // Index is what the id and text rules compare against: every internal and
@@ -493,6 +500,7 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 	if !o.Secrets {
 		secrets = nil
 	}
+	projected := projectedActors(items)
 	per := make([][]Finding, len(items))
 	var next atomic.Int64
 	var wg sync.WaitGroup
@@ -505,7 +513,7 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 				if i >= len(items) {
 					return
 				}
-				per[i] = checkItem(items[i], idx, o, secrets)
+				per[i] = checkItem(items[i], idx, o, secrets, projected)
 			}
 		}()
 	}
@@ -518,9 +526,29 @@ func Check(items []Item, idx *Index, o Options) []Finding {
 	return out
 }
 
+// projectedActors are the actor ids whose row file (.lore/data/actors/<id>.json,
+// or a live row <folder>/actors/<id>.json) is among items: the client repo
+// receives that actor's projection with them, so its id named beside it is
+// nothing new there (lore's own land commit lists the ids of the rows it
+// lands, the actor copy among them, and the pre-push check refused it).
+func projectedActors(items []Item) map[string]bool {
+	out := map[string]bool{}
+	for _, it := range items {
+		if m := rowPathRe.FindStringSubmatch(it.Path); m != nil && m[1] == tableActors {
+			out[m[2]] = true
+		} else if m := liveActorPathRe.FindStringSubmatch(it.Path); it.LiveRow && m != nil {
+			out[m[1]] = true
+		}
+	}
+	return out
+}
+
+// liveActorPathRe is a live-ref actor row file, <folder>/actors/<id>.json.
+var liveActorPathRe = regexp.MustCompile(`(?:^|/)` + tableActors + `/([a-z]{3}_[0-9a-f]{32})\.json$`)
+
 // checkItem is Check's rules over one item; secrets is nil when the
-// secret rule is off.
-func checkItem(it Item, idx *Index, o Options, secrets SecretScan) []Finding {
+// secret rule is off; projected is projectedActors of the whole check.
+func checkItem(it Item, idx *Index, o Options, secrets SecretScan, projected map[string]bool) []Finding {
 	var out []Finding
 	content := string(it.Content)
 	if table, id, ok := profileRowFile(it.Path); ok && o.ClientRepo {
@@ -531,7 +559,7 @@ func checkItem(it Item, idx *Index, o Options, secrets SecretScan) []Finding {
 	if m := rowPathRe.FindStringSubmatch(it.Path); m != nil {
 		out = append(out, checkRowFile(it, m[1], m[2], idx, o)...)
 	} else if idx != nil {
-		out = append(out, idHits(it, content, idx)...)
+		out = append(out, idHits(it, content, idx, projected)...)
 		out = append(out, emailHits(it, content, idx)...)
 	}
 	if idx != nil {
@@ -730,15 +758,16 @@ func projectRefsIn(doc canonjson.Object) []string {
 	return out
 }
 
-// idHits finds internal ids named in any other content (source, message).
-func idHits(it Item, content string, idx *Index) []Finding {
+// idHits finds internal ids named in any other content (source, message);
+// a roster actor id in projected (projectedActors) is not one.
+func idHits(it Item, content string, idx *Index, projected map[string]bool) []Finding {
 	var out []Finding
 	seen := map[string]bool{}
 	for _, loc := range idRe.FindAllStringIndex(content, -1) {
 		id := content[loc[0]:loc[1]]
 		label, ok := idx.IDs[id]
 		detail := "names a row of " + label
-		if !ok {
+		if !ok && !it.LiveRow && !projected[id] {
 			// F-4: a roster actor id outside a row file (the projection
 			// rule covers row files) names a person of the org
 			if label, ok = idx.actorLabels[id]; ok {
