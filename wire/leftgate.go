@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
@@ -73,6 +74,98 @@ func (st *state) refuseWritesIfLeft(ctx context.Context, home string, attached [
 		}
 		st.eng.RefuseWrites(o.Name, refusal)
 	}
+}
+
+// armLeftHold gives every store clone of the org (all but the personal
+// stores) a push hold read from the roster at push time (F-9): the
+// refusal above starts with the command after the sync that brings the
+// removal, so without it that very sync pushed what the person wrote
+// after the removal (a store write committed locally, waiting for lore
+// sync). The roster is read again right before each push, after the
+// fetch merged the remote, so the sync that brings the removal holds.
+func (st *state) armLeftHold(home string, attached []attach.Opened) {
+	if st.actor.IsZero() || st.who.Org == "" {
+		return
+	}
+	hold := leftPushHold(home, st.who.Org, st.actor.String())
+	for _, o := range attached {
+		if o.Level == policy.LevelPersonal {
+			continue
+		}
+		if sp := storePushOf(o.Backend); sp != nil {
+			sp.hold = hold
+		}
+	}
+}
+
+// storePushOf finds the storePush wrapper in b's chain (nil = none: a
+// store with no remote, or a repo store).
+func storePushOf(b store.Backend) *storePush {
+	for b != nil {
+		if sp, ok := b.(*storePush); ok {
+			return sp
+		}
+		u, ok := b.(Unwrapper)
+		if !ok {
+			return nil
+		}
+		b = u.Unwrap()
+	}
+	return nil
+}
+
+// leftPushHold is the push hold of a person (actor) of org: none while the
+// roster on this machine says they are in the org; once it says left or
+// archived, commits made after left_at are held with leftRefusal's text
+// (an unreadable left_at holds every commit: fail closed).
+func leftPushHold(home, org, actor string) gitbackend.PushHoldFunc {
+	return func(context.Context) (gitbackend.PushHold, bool) {
+		status, leftAt := rosterStatusOnDisk(home, org, actor)
+		if !rosterGone(status) {
+			return gitbackend.PushHold{}, false
+		}
+		return gitbackend.PushHold{After: parseLeftAt(leftAt), Reason: leftPushReason(org, status, leftAt)}, true
+	}
+}
+
+// LivePushHold is LiveConfig.PushHold (cmd/lore): the hold of the
+// caller on the repo's refs/lore/live push, the same rule as the org's
+// store clones (armLeftHold); ok false when the caller is in the org,
+// has no org here, or the command never opened the App (it then wrote
+// nothing; opening it at the push only to check would cost a whole open).
+func (a *App) LivePushHold(ctx context.Context) (after time.Time, reason string, ok bool) {
+	a.mu.Lock()
+	st := a.st
+	a.mu.Unlock()
+	if st == nil || st.actor.IsZero() || st.who.Org == "" {
+		return time.Time{}, "", false
+	}
+	h, ok := leftPushHold(a.opts.Home, st.who.Org, st.actor.String())(ctx)
+	return h.After, h.Reason, ok
+}
+
+// leftAtLayouts are the spellings of an actor's left_at.
+var leftAtLayouts = []string{time.RFC3339Nano, time.RFC3339, time.DateOnly}
+
+// parseLeftAt reads left_at; the zero time when it cannot be read, which
+// holds every commit.
+func parseLeftAt(s string) time.Time {
+	for _, l := range leftAtLayouts {
+		if t, err := time.Parse(l, strings.TrimSpace(s)); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
+// leftPushReason is the one line a held push says: who is marked as what
+// in which org since when, and that writes made after it stay unsent.
+func leftPushReason(org, status, leftAt string) string {
+	since := ""
+	if day, _, _ := strings.Cut(leftAt, "T"); day != "" {
+		since = " since " + day
+	}
+	return "you are marked as " + status + " in " + org + since + ": writes made after that are not sent to its stores or repos (ask an admin of " + org + " to run lore member add --email <your-email> if you are back)"
 }
 
 // leftRefusal is the E_REFUSED every write of a removed person gets: the

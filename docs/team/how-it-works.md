@@ -320,6 +320,8 @@ $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-
 ```
 <!-- /example -->
 
+A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` naming `--push`, and `lore task start --id <id>` works on a task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag. A claim on a linked store's signals ref (the example above: a client repo's task) needs no flag and never touches the client's remote.
+
 | Operation | What is checked | What is written (claims on a task push signals and the task row together, atomically) |
 |---|---|---|
 | **claim** (`task claim`, `task next`) | task ready, no unexpired claim, you hold fewer than `agents.max_claims_per_agent` | a claim with a fresh `claim_token` and `expires = now + lease.ttl` (20m); the task row's `claim_epoch` goes up by one, status `in_progress`, `attempts` counted |

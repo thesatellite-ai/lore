@@ -264,6 +264,9 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if err = w.forHolds(ctx); err != nil {
 		return opscoord.Report{}, err
 	}
+	if err = w.requirePushAsked(in.Push, "a hold"); err != nil {
+		return opscoord.Report{}, err
+	}
 	st := w.signalsStore()
 	d := in.TTL
 	if d <= 0 {

@@ -168,6 +168,7 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 |---|---|
 | `LORE_LIVE` | `0` turns live rows off in this shell: every row waits for a commit, as before live rows existed |
 | `LORE_LIVE_AUTOPUSH` | `0` means lore never uses the network by itself (same as `live.autopush: false`): live writes and store writes wait on your machine until `lore sync` whatever the store's push mode ([How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote)), and writes that must reach the server at once, such as claiming a task, fail with `E_OFFLINE` |
+| `LORE_PUSH_CLAIMS` | `1` is your standing go-ahead to push claims and holds (`lore task claim`, `lore task next`, `lore hold claim`) to a code repo's remote at once, as `--push` gives it for one command (`live.autopush: true` in `config.yaml` gives it too); without any of them, a claim there is refused before anything is written. Set it in an agent's environment when the agent should claim work by itself |
 | `LORE_LIVE_REMOTE` | the git remote that holds the live rows (default `origin`), for forks and tests |
 | `LORE_TRACE` | `1` prints every git command lore runs for live rows, with timing, like `--trace` |
 

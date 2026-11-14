@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -98,6 +99,12 @@ type LiveConfig struct {
 	// CONFIG_GUIDE "overridden per org entry"). cmd/lore passes the org
 	// resolution's entry; nil reads only the top level.
 	OrgLive func(ctx context.Context) *orgconf.Live
+	// PushHold is asked right before refs/lore/live is pushed: ok true
+	// with commits on the local ref made after `after` keeps the push from
+	// running and prints reason once (F-9: a person the org removed must
+	// not publish writes made after the removal with the sync that brings
+	// it). cmd/lore passes wire.App.LivePushHold; nil holds nothing.
+	PushHold func(ctx context.Context) (after time.Time, reason string, ok bool)
 	// MetaStatus gives the metadata lines of `lore sync status`
 	// (quarantined rows, registries past their key cap; FA-META-11);
 	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.
@@ -856,8 +863,12 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		// `lore repo init`): wire the clone now, as `lore init` does through
 		// Live.Prime, so .gitattributes exists before the first commit.
 		// Nothing else opens a repo with no .lore/ before the op any more
-		// (wire/doctor_nocreate.go, ReadOnlyNotice reads git only).
-		if root := liveProjectRoot(h.cfg.WorkDir); root != "" {
+		// (wire/doctor_nocreate.go, ReadOnlyNotice reads git only). Only a
+		// project that now holds lore data counts: a .lore/ holding just
+		// state (an audit line, a lock) left in a linked client repo is not
+		// a project, and wiring there put hooks and merge drivers into the
+		// client's clone (F-14).
+		if root := liveProjectRoot(h.cfg.WorkDir); root != "" && wire.HoldsLoreData(root) {
 			top, _ := livePlace(root)
 			if s := r.session(ctx, top); s != nil {
 				s.ensureGitWiring(ctx, root, wireInstall)

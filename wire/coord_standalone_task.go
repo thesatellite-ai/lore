@@ -41,8 +41,11 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	if err != nil {
 		return opscoord.Report{}, err
 	}
+	if err = w.requirePushAsked(in.Push, "a claim"); err != nil {
+		return opscoord.Report{}, err
+	}
 	env := w.env(ctx)
-	opts := coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), Repo: h.hereRepo(ctx, w), InRepo: !w.spot.store, Coordinate: in.Coordinate}
+	opts := coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), Repo: h.hereRepo(ctx, w), InRepo: w.taskInRepo(), Coordinate: in.Coordinate}
 	// TASK 6.9: a parent with open sub-tasks is refused unless --coordinate.
 	docs, err := engineRows{a: h.a}.List(ctx)
 	if err != nil {
@@ -304,6 +307,11 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 	if err != nil {
 		return opscoord.NextOut{}, err
 	}
+	if !in.DryRun {
+		if err = w.requirePushAsked(in.Push, "the claim task next takes"); err != nil {
+			return opscoord.NextOut{}, err
+		}
+	}
 	env := w.env(ctx)
 	rows := engineRows{a: h.a}
 	if er, ok := env.Rows.(engineRows); ok {
@@ -311,7 +319,7 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 	}
 	req := coord.NextRequest{
 		Filter: queue.Filter{Mission: in.Mission, Role: in.Role, Repo: in.Repo, Here: h.hereRepo(ctx, w)},
-		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: !w.spot.store},
+		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: w.taskInRepo()},
 		List:   rows.List, RepoName: rows.RepoName, Pick: cryptoPick, Urgency: h.urgencyContext(ctx),
 	}
 	if in.DryRun {

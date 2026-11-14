@@ -55,6 +55,9 @@ const (
 	EnvKillCounter = "LORE_TEAM_KILL_COUNTER"
 	// EnvRealGit is the absolute path of the real git the wrapper execs.
 	EnvRealGit = "LORE_TEAM_REAL_GIT"
+	// EnvPushClaims is lore's standing go-ahead to push claims and holds to
+	// a code repo's remote (wire envPushClaims, D-15).
+	EnvPushClaims = "LORE_PUSH_CLAIMS"
 	// EnvAdminPush lets a push through the protected-main pre-receive hook,
 	// the way a repo admin (or GitHub's merge button) can update main.
 	EnvAdminPush = "LORE_TEAM_ADMIN_PUSH"
@@ -285,6 +288,12 @@ func (w *World) baseEnv(home, actorName string) []string {
 		// nothing, so whoami's agent line does not depend on where the run
 		// starts either.
 		"LORE_NO_DETECT=1",
+		// LORE_PUSH_CLAIMS=1: every simulated person and agent has given the
+		// standing go-ahead to push claims and holds to a code repo's
+		// remote, as the suites written before D-15 expect (a claim there
+		// otherwise needs --push). A test of the refusal unsets it with
+		// Actor.SetEnv(EnvPushClaims, "0").
+		EnvPushClaims+"=1",
 		EnvRealGit+"="+w.realGit,
 		EnvGitLog+"="+w.gitLog,
 		EnvLockTrace+"="+w.lockTrace,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -145,6 +146,18 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		}
 		if o.NoPush {
 			break // the local commits wait for a push (batch, manual)
+		}
+		if holdOf := pushHoldOf(ctx); holdOf != nil {
+			if hold, ok := holdOf(ctx); ok {
+				n, cerr := b.commitsAfter(ctx, remote, h, hold.After)
+				if cerr != nil {
+					return rep, cerr
+				}
+				if n > 0 {
+					rep.Held = fmt.Sprintf("%s; %d local commit(s) kept on this machine, not pushed", hold.Reason, n)
+					break
+				}
+			}
 		}
 		if o.Squash && remote != "" {
 			if h, herr = b.squashOnto(ctx, remote, h); herr != nil {

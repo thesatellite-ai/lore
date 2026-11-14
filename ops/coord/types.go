@@ -60,6 +60,9 @@ type ClaimIn struct {
 	Strict     bool     `json:"strict,omitempty" flag:"strict" desc:"refuse instead of warning when --owns overlaps another claim"`
 	Coordinate bool     `json:"coordinate,omitempty" flag:"coordinate" desc:"take a coordinator lease on a parent with open sub-tasks"`
 	From       string   `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
+	// Push is the person's go-ahead to push the claim to the code repo's
+	// remote (D-15: nothing reaches a remote unasked).
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
 }
 
 // HeartbeatIn is the input of task.heartbeat.
@@ -83,6 +86,8 @@ type NextIn struct {
 	Owns    []string `json:"owns,omitempty" flag:"owns" desc:"paths the claim owns"`
 	Why     bool     `json:"why,omitempty" flag:"why" desc:"explain the urgency score term by term"`
 	DryRun  bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain without claiming (nothing written)"`
+	// Push: as ClaimIn.Push, for the claim task next takes.
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
 }
 
 // NextOut is the output of task.next. With --dry-run, Ready and Waiting are
@@ -182,6 +187,8 @@ type HoldClaimIn struct {
 	Name string        `json:"name" arg:"0" desc:"the resource to hold (a test suite, a staging slot)"`
 	TTL  time.Duration `json:"ttl,omitempty" flag:"ttl" desc:"how long the hold lasts (default: lease.ttl)"`
 	On   string        `json:"on,omitempty" flag:"on" desc:"project (the project's signals ref, the default) or machine"`
+	// Push: as ClaimIn.Push, for a hold on the code repo's signals ref.
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"`
 }
 
 // HoldReleaseIn is the input of hold.release.

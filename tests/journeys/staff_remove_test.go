@@ -37,6 +37,7 @@ func TestJourneyStaffRemove(t *testing.T) {
 	lee := tt.person(tlLee)
 	orgStore := tlOrg + "/org"
 	mainRef := "refs/heads/main"
+	liveRef := "refs/lore/live"
 
 	w.Step("day1/lee-adds-ann", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
@@ -65,6 +66,23 @@ func TestJourneyStaffRemove(t *testing.T) {
 		}
 		tt.lore(tlLee, "member", "show", tlAnn.Email).OK(t).Says(t, "left").Never(t, "@web")
 		tt.lore(tlLee, "team", "show", "@web").OK(t).Never(t, tlAnn.Name)
+	})
+
+	w.Step("day1/ann-writes-after-removal-then-syncs", func() {
+		// F-9: Ann has not synced since Lee removed her; what she writes now
+		// is kept locally (writes commit locally until lore sync), and the
+		// sync that brings the removal must not send it to the team's
+		// remotes: it says why in one line and keeps the commits
+		storeBefore, liveBefore := tt.store.Log(mainRef), tt.app.Log(liveRef)
+		tt.lore(tlAnn, "memory", "add", "a repo note after leaving", "--to", "repo").OK(t)
+		tt.lore(tlAnn, "memory", "add", "ann's note after leaving", "--to", orgStore, "--yes").OK(t)
+		tt.lore(tlAnn, "sync").Says(t, "you are marked as left in "+tlOrg, "kept on this machine")
+		if got := tt.store.Log(mainRef); len(got) != len(storeBefore) {
+			t.Errorf("Ann's sync pushed to the team store after her removal:\n%v", got[:len(got)-len(storeBefore)])
+		}
+		if got := tt.app.Log(liveRef); len(got) != len(liveBefore) {
+			t.Errorf("Ann's sync pushed refs/lore/live after her removal:\n%v", got[:len(got)-len(liveBefore)])
+		}
 	})
 
 	w.Step("day1/ann-next-write-is-refused", func() {

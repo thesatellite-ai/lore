@@ -10,18 +10,22 @@ package wire
 //	                ~/.lore/stores/<owner>/<repo> (git.MoveOldClone): commits
 //	                the remote lacks and uncommitted changes carried over,
 //	                no network needed; the old clone is left in place
-//	2. sync         each moved clone syncs per its store's push mode: its
-//	                carried commits are pushed now when the store pushes now
-//	                and the remote answers; otherwise they wait, as any
-//	                local commit does, for the next push
+//	2. sync         each moved clone fetches and merges its remote; its
+//	                carried commits stay local, as any local commit does,
+//	                until lore sync (owner rule: nothing reaches a remote
+//	                without a push or sync the person ran, E-13: a first
+//	                read used to push them)
 //	3. flatten      every store clone whose tree is still in the old layout
 //	                (rows under <folder>/.lore/data) gets one commit moving
 //	                them under <folder>/ (the root folder's into _store/,
-//	                git.Backend.FlattenLayout), pushed per the push mode
-//	                with the push line printed; a store of the first plain
-//	                layout (lore_store: 3, the root folder's tables at the
-//	                store's top) gets one commit moving those into _store/
-//	                (D-ad), pushed the same way
+//	                git.Backend.FlattenLayout), committed locally with a
+//	                line saying lore sync sends it; a store of the first
+//	                plain layout (lore_store: 3, the root folder's tables at
+//	                the store's top) gets one commit moving those into
+//	                _store/ (D-ad), kept local the same way
+//
+// lore migrate run and lore fix (FlattenAfterMigrate) push per the
+// store's push mode instead: the person ran a migration that pushes.
 //
 // A v0.1.17 store is moved by the run that migrates it instead (lore fix,
 // lore migrate run: FlattenAfterMigrate), in that same command.
@@ -83,13 +87,13 @@ func (a *App) MoveOldLayout(ctx context.Context, w io.Writer) {
 		}
 	}
 	for _, dir := range flat {
-		a.settleClone(ctx, dir, say)
+		a.settleClone(ctx, dir, firstRunLocal, say)
 	}
 	for _, p := range personalV017Candidates(home) {
 		if personalMarkerOld(p.dir) {
 			continue // D16: lore migrate run moves it (oldLayoutNotices names it)
 		}
-		a.flattenPersonal(ctx, p, say)
+		a.flattenPersonal(ctx, p, firstRunLocal, say)
 	}
 	a.oldLayoutNotices(home, say)
 }
@@ -176,8 +180,8 @@ func personalV017Candidates(home string) []personalClone {
 // flattenPersonal moves the rows lore 0.1.17 filed under everywhere/ of a
 // git personal store to its _store/ folder (`me`, git.Backend.FlattenPersonal;
 // <org>/ folders keep their scope, personal_orgs.go), and pushes per the
-// push mode.
-func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(string)) {
+// push mode when push says so (a migration), else keeps it local.
+func (a *App) flattenPersonal(ctx context.Context, p personalClone, push layoutPush, say func(string)) {
 	name := filepath.Base(p.dir)
 	canon, err := canonical(attach.Store{URL: p.raw})
 	if err != nil {
@@ -210,7 +214,7 @@ func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(str
 	// one line for the move and its push (B4-10: a first read makes this
 	// commit, which the docs promise; it says so once)
 	var pushLines []string
-	a.pushPerMode(ctx, gb, name, mode, "the personal store move", func(l string) { pushLines = append(pushLines, l) })
+	a.pushPerMode(ctx, gb, name, mode, push, "the personal store move", func(l string) { pushLines = append(pushLines, l) })
 	pushed := ", not pushed yet"
 	if len(pushLines) == 1 && strings.HasPrefix(pushLines[0], "pushed store ") {
 		pushed, pushLines = ", pushed", nil
@@ -250,12 +254,12 @@ func (a *App) FlattenAfterMigrate(ctx context.Context) []string {
 	var lines []string
 	say := func(line string) { lines = append(lines, line) }
 	for _, dir := range flat {
-		a.settleClone(ctx, dir, say)
+		a.settleClone(ctx, dir, migratePushes, say)
 	}
 	// D16: the personal store's everywhere/ move is lore migrate run's too
 	for _, p := range personalV017Candidates(home) {
 		if !personalMarkerOld(p.dir) {
-			a.flattenPersonal(ctx, p, say)
+			a.flattenPersonal(ctx, p, migratePushes, say)
 		}
 	}
 	return lines
@@ -368,7 +372,7 @@ func flattenCandidates(home string) []string {
 // the store pushes now; a layout commit already on the remote comes in),
 // then gives it the layout commit when it still needs one and pushes per
 // the store's push mode.
-func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
+func (a *App) settleClone(ctx context.Context, dir string, push layoutPush, say func(string)) {
 	name := filepath.Base(dir)
 	origin := git.OriginAt(dir)
 	pinned := ""
@@ -405,7 +409,7 @@ func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
 	// first level with the remote: a moved clone's carried commits go out
 	// (push mode now), and a layout commit a teammate pushed already is
 	// fetched instead of made a second time
-	a.syncMoved(ctx, gb, name, mode, say)
+	a.syncMoved(ctx, gb, name, mode, push, say)
 	done()
 	if gb, done, err = open(); err != nil {
 		say(fmt.Sprintf("could not open the store clone %s again: %s", dir, errLine(err)))
@@ -436,7 +440,7 @@ func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
 	for _, p := range res.Kept {
 		say(fmt.Sprintf("store %s: %s was at both places and could not be merged; the plain-layout copy is kept, the other is in the history (git -C %s log -- %s)", name, p, dir, p))
 	}
-	a.pushPerMode(ctx, gb, name, mode, "the layout commit", say)
+	a.pushPerMode(ctx, gb, name, mode, push, "the layout commit", say)
 }
 
 // OldLoreLockoutLines are the block said once per store, on its own and
@@ -495,27 +499,52 @@ func LayoutCommitLine(name, commit string, c rowfs.LayoutChange) string {
 	return fmt.Sprintf("store %s: layout commit %s — %s", name, short(commit), c.Summary())
 }
 
-// syncMoved brings a clone level with its remote: a store that pushes now
-// sends the commits it carries; any other only fetches and merges.
-func (a *App) syncMoved(ctx context.Context, gb *git.Backend, name string, mode storepush.Mode, say func(string)) {
+// layoutPush says whether a step of the old-layout move may push: only a
+// command the person ran to migrate (lore migrate run, lore fix) pushes,
+// per the store's push mode; the automatic first-run step before any
+// other command, a read included, never does (E-13).
+type layoutPush bool
+
+const (
+	// firstRunLocal: MoveOldLayout, before the command the person typed.
+	firstRunLocal layoutPush = false
+	// migratePushes: FlattenAfterMigrate, inside a migration that pushes.
+	migratePushes layoutPush = true
+)
+
+// syncMoved brings a clone level with its remote: in a migration a store
+// that pushes now sends the commits it carries; otherwise it only fetches
+// and merges, and says the carried commits wait for lore sync.
+func (a *App) syncMoved(ctx context.Context, gb *git.Backend, name string, mode storepush.Mode, push layoutPush, say func(string)) {
 	n, _ := gb.Unpushed(ctx)
-	if n == 0 || mode != storepush.ModeNow {
+	if n == 0 || mode != storepush.ModeNow || !push {
 		if _, err := gb.SyncWith(ctx, git.SyncOptions{NoPush: true}); err != nil && !errors.Is(err, context.Canceled) {
 			say(fmt.Sprintf("store %s: could not fetch its remote (%s); lore sync tries again", name, errLine(err)))
 		}
 		if n > 0 {
-			say(fmt.Sprintf("store %s: %d carried commit(s) wait (push mode %s); lore sync pushes them", name, n, mode))
+			say(fmt.Sprintf("store %s: %d carried commit(s) wait%s; lore sync sends them", name, n, waitWhy(mode, push)))
 		}
 		return
 	}
-	a.pushPerMode(ctx, gb, name, mode, strconv.Itoa(n)+" carried commit(s)", say)
+	a.pushPerMode(ctx, gb, name, mode, push, strconv.Itoa(n)+" carried commit(s)", say)
 }
 
-// pushPerMode pushes what the clone holds when the store pushes now and
-// prints the push line; otherwise it says what waits and why.
-func (a *App) pushPerMode(ctx context.Context, gb *git.Backend, name string, mode storepush.Mode, what string, say func(string)) {
-	if mode != storepush.ModeNow {
-		say(fmt.Sprintf("store %s: %s waits (push mode %s); lore sync pushes it", name, what, mode))
+// waitWhy is why a commit of the old-layout move waits: the first-run
+// step never pushes (committed on this machine only), a migration waits
+// for a store that does not push now.
+func waitWhy(mode storepush.Mode, push layoutPush) string {
+	if !push {
+		return " (committed on this machine only)"
+	}
+	return fmt.Sprintf(" (push mode %s)", mode)
+}
+
+// pushPerMode pushes what the clone holds in a migration of a store that
+// pushes now and prints the push line; otherwise it says what waits and
+// why.
+func (a *App) pushPerMode(ctx context.Context, gb *git.Backend, name string, mode storepush.Mode, push layoutPush, what string, say func(string)) {
+	if mode != storepush.ModeNow || !push {
+		say(fmt.Sprintf("store %s: %s waits%s; lore sync sends it", name, what, waitWhy(mode, push)))
 		return
 	}
 	pctx, cancel := context.WithTimeout(ctx, oldLayoutPushTimeout)

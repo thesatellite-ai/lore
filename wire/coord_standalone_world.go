@@ -72,11 +72,15 @@ type coordWorld struct {
 	remoteName string
 	remote     gitremote.Remote
 	autopush   bool
-	lease      signals.Lease
-	agents     coord.Agents
-	folder     string
-	who        identity.Resolved
-	actorID    string
+	// autopushChosen: live.autopush is set to true in config.yaml (the top
+	// level or the org entry), the person's standing choice to push at
+	// once, which is also the go-ahead for claims (requirePushAsked).
+	autopushChosen bool
+	lease          signals.Lease
+	agents         coord.Agents
+	folder         string
+	who            identity.Resolved
+	actorID        string
 	// sit is the org resolution of this checkout (links, role, org).
 	sit orgresolve.Result
 	// orgStore is the attached name of the org store at this repo's linked
@@ -433,6 +437,7 @@ func (w *coordWorld) settings(cfg *orgconf.Config, org *orgconf.Org) {
 			}
 			if l.Autopush != nil {
 				w.autopush = *l.Autopush
+				w.autopushChosen = *l.Autopush
 			}
 			if l.Remote != "" {
 				w.remoteName = l.Remote
@@ -443,9 +448,46 @@ func (w *coordWorld) settings(cfg *orgconf.Config, org *orgconf.Org) {
 		w.remoteName = v
 	}
 	if os.Getenv(envLiveAutopushSwitch) == envValueOff {
-		w.autopush = false
+		w.autopush, w.autopushChosen = false, false
 	}
 }
+
+// envPushClaims = envPushClaimsOn is the standing go-ahead of a shell or
+// an agent's environment to push its claims and holds to a code repo's
+// remote, as --push gives it for one command (D-15).
+const (
+	envPushClaims   = "LORE_PUSH_CLAIMS"
+	envPushClaimsOn = "1"
+)
+
+// requirePushAsked refuses a new claim or hold (what names it) that would
+// push refs/lore/signals to this code repo's own remote when the person
+// did not ask for that push (asked: the command's --push; or
+// LORE_PUSH_CLAIMS=1; or live.autopush: true in config.yaml, the choice
+// to push every write at once). Owner rule D-15: nothing reaches a remote without
+// an explicit push, sync or git push, and a claim is pushed in the same
+// command because it is a lease two people race for: it cannot wait for
+// lore sync. A claim on a linked store's signals ref (a client task, a
+// linked repo) is not a code remote and is not asked here; a repo with no
+// remote fails as before (offline). Renewing, releasing or finishing a
+// claim already pushed needs no new go-ahead: it changes what the person
+// published.
+func (w *coordWorld) requirePushAsked(asked bool, what string) error {
+	if asked || w.autopushChosen || w.spot.store || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+		return nil
+	}
+	return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through %s on this repo's remote %s, and lore pushes nothing to a code remote unless you ask; nothing was written", what, signals.CodeRepoRef, w.remoteName)).
+		WithHint("run the command again with --push to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim); `lore task start --id <id>` works on a task without a claim")
+}
+
+// taskInRepo reports whether the claimed task row lives in this checkout's
+// repo (HeldRecord.InRepo, which lets the commit-msg hook add the
+// Lore-Task trailer): a claim on the repo's own signals ref, and a client
+// repo's own task whose claim sits on the linked store (D-14: its row is
+// in the client repo's history already, so the trailer reveals nothing new
+// and a squash merge keeps the link; it was left out because the claim's
+// ref is the store's).
+func (w *coordWorld) taskInRepo() bool { return !w.spot.store || w.client }
 
 // applyLease overlays one `lease:` block (nil = none).
 func (w *coordWorld) applyLease(l *orgconf.Lease) {

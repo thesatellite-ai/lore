@@ -55,7 +55,7 @@ func newDaemonWorld(t *testing.T) daemonWorld {
 		t.Fatalf("task add output has no id: %s", out)
 	}
 	id := out[i : i+36]
-	if _, err = run(t, app, opscoord.OpTaskClaim, `{"id":"`+id+`"}`, true); err != nil {
+	if _, err = run(t, app, opscoord.OpTaskClaim, `{"id":"`+id+`","push":true}`, true); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	return daemonWorld{w: w, dir: dir, app: app, task: id, now: now}
