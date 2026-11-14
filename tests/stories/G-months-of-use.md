@@ -17,7 +17,7 @@ Dev-company round 3, track G. Replayed by `TestStoryGMonthsOfUse` (volume, lifec
 5. Lifecycle: a reminder past its due date is listed by `lore reminder list`. An overdue reminder also shows in `lore inbox` (in LORE.md and doctor too once D-148-render is fixed: skipped until then); old memories archive in bulk with one `--where`; trash purge finishes in seconds; `lore task stale --days 0` is refused with "--days must be 1 or more", never run as the 60-day default; doctor does not warn about a LORE.md at 8% of its budget; 80 must rules over the render budget keep their text.
 6. The docs-only repo: its own `CLAUDE.md` comes first, then `lore init`, a rule and `lore render`; the file keeps its own text; a markdown-only commit with lore's hooks takes under 3 s and leaves the tree clean.
 7. Renames (`TestStoryGRenames`): Chloé changes email and display name; her note is still shown by id and found by search, and she keeps writing. whoami shows one actor; the repo moves to a new address and writes and sync keep working. Still empty steps (skipped): team renames reach members' inboxes; a moved org store makes sync name `lore store set-url`; the old store clone is named by `store doctor`. After every rename every note is still found by id on every clone.
-8. Many agents (`TestStoryGManyAgents`): four agent sessions add a task each and comment on one task at the same instant: every task and every comment is there, nothing is pushed without `--push`. `task next --push` never hands one task to two agents or a done task out again; concurrent `task done` writes no conflict markers and sync works; `task add --help` matches what agents must pass. Every command staying under 5 s is skipped until D-159.
+8. Many agents (`TestStoryGManyAgents`): four agent sessions add a task each and comment on one task at the same instant: every task and every comment is there, nothing is pushed without `--push`. `task next --push` never hands one task to two agents or a done task out again; concurrent `task done` writes no conflict markers and sync works; `task add --help` matches what agents must pass. Ten agent sessions in one clone then run `task next --push`, `comment add` and `task done` back to back, all at once: the 95th percentile of their command times stays under 5 s (on a loaded machine, under fifteen times one command of a lone agent measured just before).
 
 ## What must hold
 
@@ -44,7 +44,7 @@ Steps for findings still being fixed are written as they should behave and skipp
 | D-156 | r3 G-9 | doctor warns at 8% of budget | `TestStoryGMonthsOfUse` |
 | D-157 | r3 G-10 | tasks finished many times, next hands out done tasks | `TestStoryGManyAgents` |
 | D-158 | r3 G-11 | nested conflict markers in done_by | `TestStoryGManyAgents` |
-| D-159 | r3 G-12 | commands over 5 s under 10 agents | `TestStoryGManyAgents` (skipped until D-159) |
+| D-159 | r3 G-12 | commands over 5 s under 10 agents | `TestStoryGManyAgents` |
 | D-160 | r3 G-13 | `--commitment` help wrong for agents | `TestStoryGManyAgents` |
 | r3 G-14 | (no D- id yet) | email change: whoami shows a second actor | `TestStoryGRenames` |
 | r3 G-15 | (no D- id yet) | team tasks never reach the inbox; team rename | `TestJourneyTeamRename`; `TestStoryGRenames` step still empty (skipped) |

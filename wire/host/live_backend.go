@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -200,6 +201,14 @@ type liveDecoded struct {
 	mu      sync.Mutex
 	oid     string
 	folders map[string]map[live.RowKey]live.File
+	// stored holds each live file of oid already turned into its backend
+	// row (liveStoreRow: clone, encode, decode, encode again). One command
+	// reads the live rows several times (the cache refresh, the policy and
+	// actor lookups, the write's checks), all while it holds the live lock;
+	// converting every live row on every read made ten agent sessions in
+	// one clone queue for seconds behind each other (D-159). Same lifetime
+	// as folders: a new commit drops it.
+	stored map[live.RowKey]store.Row
 }
 
 // get returns folder's rows decoded from commit oid, when held.
@@ -218,9 +227,37 @@ func (d *liveDecoded) put(oid, folder string, rows map[live.RowKey]live.File) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.oid != oid || d.folders == nil {
-		d.oid, d.folders = oid, map[string]map[live.RowKey]live.File{}
+		d.oid, d.folders, d.stored = oid, map[string]map[live.RowKey]live.File{}, nil
 	}
 	d.folders[folder] = rows
+}
+
+// storeRow is liveStoreRow(k, f) for the file k of commit oid, converted
+// once per commit. A row handed out is shared: callers read its Doc and
+// never change it (as the decoded files above). Another commit's file is
+// converted and not kept.
+func (d *liveDecoded) storeRow(oid string, k live.RowKey, f live.File) (store.Row, error) {
+	d.mu.Lock()
+	if d.oid == oid {
+		if r, ok := d.stored[k]; ok {
+			d.mu.Unlock()
+			return r, nil
+		}
+	}
+	d.mu.Unlock()
+	r, err := liveStoreRow(k, f)
+	if err != nil {
+		return store.Row{}, err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.oid == oid {
+		if d.stored == nil {
+			d.stored = map[live.RowKey]store.Row{}
+		}
+		d.stored[k] = r
+	}
+	return r, nil
 }
 
 // liveStoreRow is the backend row of a live file: its `_v: 2` body, with the
@@ -331,16 +368,25 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 			innerCur = store.Cursor(ic)
 		}
 	}
+	// A one-table read (store.WithTables, a full read only) converts and
+	// returns only the live rows of those tables: the policy and actor
+	// lookups of every command asked for a handful of rows and paid for
+	// every live task and comment (D-159). As the rowfs backend does, a
+	// hinted read is never a complete picture, so its cursor is empty.
+	hint := store.TablesOf(ctx)
+	hinted := cursor == "" && len(hint) > 0
+	wanted := func(t row.Table) bool { return !hinted || slices.Contains(hint, t) }
 	rows, next, err := b.inner.Read(ctx, innerCur)
 	if err != nil {
 		return nil, "", err
 	}
 	lives := map[store.Key]store.Row{}
 	for k, f := range files {
-		if !readsLive(s, row.Table(k.Table)) {
+		t := row.Table(k.Table)
+		if !wanted(t) || !readsLive(s, t) {
 			continue
 		}
-		lr, err := liveStoreRow(k, f)
+		lr, err := s.decoded.storeRow(oid, k, f)
 		if err != nil {
 			return nil, "", err
 		}
@@ -382,7 +428,10 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		for _, k := range keys {
 			out = append(out, lives[k])
 		}
-		out = append(out, b.landedRows(ctx, s, have)...)
+		out = append(out, b.landedRows(ctx, s, have, wanted)...)
+	}
+	if hinted {
+		return out, "", nil
 	}
 	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
 }
