@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1451 |
+| fixed | 1452 |
 | open | 0 |
 | on-hold | 14 |
 | owner | 6 |
@@ -417,6 +417,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:gate7a-hookmanagers | finding | TestJourneyHookManagers expected a write to add lore's block to a tracked .husky/pre-commit and lore fix's old wording; D-142 leaves a committed hooks folder alone until lore fix | fixed | TestJourneyHookManagers | test now checks the "or add its block to pre-commit" line, an untouched .husky, and lore fix's "new or changed files" line |
 | devco:D-159 | finding | under 10 agents 50 of 457 commands took over 5 s (r3 G-12) | fixed | TestStoryGManyAgents, TestLiveLockArrivalOrder, TestLiveLockWaitsForAnOlderWaiter, TestLiveLockPassesAnAbandonedTicket, TestLiveReadOfOneTableConvertsOnlyIt, TestApplySameRowAgainIsANoOp | live lock handed out first come, first served; 10 agents in one clone: p95 4.0 s (was 31 s) |
 | devco:D-166 | finding | sqlite cache open fails SQLITE_BUSY / deadline under load: race gate at load ~100, concurrent opens of one fresh cache failed "database is locked" and an open beside a writer hit a fixed 3 s deadline | fixed | TestOpenWaitsForALockHeldPastTheOldWait, TestConcurrentOpensOfOneCache, TestOpenCurrentCacheTakesNoWriteLock | pkg adapters/cache/sqlite: connect, begin and quick_check wait for a busy lock until ctx ends (busy.go lockWait) instead of fixed 5/60/20 s caps sized for an idle machine; machine store and doctor cache writes use the same wait |
+| devco:D-167 | finding | after the D-166 land the gate failed TestStoryGManyAgents: p50 10.3 s p95 18.1 s against a limit of 15 x a lone command timed at a quiet moment (0.77 s) | fixed | TestStoryGManyAgents | not a slowdown: both binaries measured the same (idle p95 4.5 vs 5.9 s at 10.1 vs 10.3 x a lone command; 80 CPU burners p95 12.6 vs 13.0 s); the lone command is now timed before and after the burst and the slower counts, and fairness is checked on its own (p95 at most 3 x p50; arrival order measured 1.3 to 1.8, the old poll race over 4) |
 | stories:A-1 | finding | a teammate's first lore sync in a freshly migrated repo leaves lore's wiring (.gitignore, .gitattributes, and LORE.md/LORE.full.md when it renders) uncommitted; once the migrator commits the same files, the teammate's git pull aborts (would be overwritten by merge) | fixed | TestStoryABranches, TestJourneyTeammatePullAfterMigration, TestTeammateWriteKeepsWiringLocal | D-164; story tests/stories (A) |
 | stories:H-1 | finding | with husky, a lore write still appends lore's block to the team's own tracked .husky/pre-commit without asking (D-142 stopped only the new files) | fixed | TestWriteCreatesNoHookFileInATrackedHooksFolder, TestStoryHLostRemotes | a write neither adds nor changes a hook file in a tracked hooks folder; it names the hooks it left out and lore fix; story step D-142/stories:H-1 runs |
 

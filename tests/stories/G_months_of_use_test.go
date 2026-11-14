@@ -393,23 +393,25 @@ const (
 //
 // The bound scales with the machine: a gate machine under its own load
 // runs every command slower, so the limit is the larger of 5 s and fifteen
-// times one command of a lone agent measured just before (ten queued
-// commands plus room); the old behaviour measured thirty to forty times a
-// lone command.
+// times one command of a lone agent (ten queued commands plus room); the
+// old behaviour measured thirty to forty times a lone command.
+//
+// The lone command is measured just before AND just after the burst and the
+// slower one counts (devco:D-167): on a gate machine the load swings by a
+// factor of two within a minute, and a lone command timed at a quiet moment
+// before the burst (0.77 s) set a limit the burst, run at the next peak,
+// could not meet although the queue was fair (p50 10.3 s, p95 18.1 s). The
+// fairness the fix is about is checked on its own, independent of load: in
+// arrival order the slowest commands wait about as long as the median one,
+// while the old poll race left p95 at four times p50.
 func gManyAgentsStayFast(t *testing.T, ines gMember) {
 	t.Helper()
-	for i := 0; i < gManyAgentsBusy*gManyAgentsRounds+1; i++ {
+	for i := 0; i < gManyAgentsBusy*gManyAgentsRounds+2; i++ {
 		ines.M.LoreIn(ines.C, "task", "add", "--title", fmt.Sprintf("sprint task %02d", i)).OK(t)
 	}
-	// one agent alone first: the mean of its next, comment and done is what
-	// one command costs on this machine right now
 	lone := ines.C.As(ines.M.Agent("sprinter-alone"))
-	start := time.Now()
-	id := fTaskID.FindString(lone.Lore("task", "next", "--push", "--yes", "--json").OK(t).Stdout)
-	lone.Lore("comment", "add", "--on-table", "tasks", "--on-id", id, "--body", "warming up").OK(t)
-	lone.Lore("task", "done", "--id", id, "--no-lesson", "--yes").OK(t)
-	solo := time.Since(start) / 3
-	limit := max(5*time.Second, 15*solo)
+	before := gLoneCommand(t, lone, "warming up")
+	limit := max(5*time.Second, 15*before) // refined after the burst
 
 	type timed struct {
 		what string
@@ -455,11 +457,38 @@ func gManyAgentsStayFast(t *testing.T, ines gMember) {
 	if len(all) == 0 {
 		t.Fatal("no command ran")
 	}
+	after := gLoneCommand(t, lone, "cooling down")
+	solo := max(before, after)
+	limit = max(limit, 15*solo)
+	p50 := all[len(all)/2]
 	p95 := all[min(len(all)-1, len(all)*95/100)]
 	slowest := all[len(all)-1]
-	t.Logf("%d commands by %d agents in one clone: p50 %v p95 %v max %v (%s); a lone agent's command %v, limit %v",
-		len(all), gManyAgentsBusy, all[len(all)/2].took, p95.took, slowest.took, slowest.what, solo, limit)
+	t.Logf("%d commands by %d agents in one clone: p50 %v p95 %v max %v (%s); a lone agent's command %v before, %v after, limit %v",
+		len(all), gManyAgentsBusy, p50.took, p95.took, slowest.took, slowest.what, before, after, limit)
 	if p95.took > limit {
-		t.Errorf("p95 of agent commands %v is over %v (a lone agent's command took %v)", p95.took, limit, solo)
+		t.Errorf("p95 of agent commands %v is over %v (a lone agent's command took %v before, %v after)", p95.took, limit, before, after)
 	}
+	if p95.took > gManyAgentsFairness*p50.took {
+		t.Errorf("p95 of agent commands %v is over %d times p50 %v: commands do not take turns in arrival order", p95.took, gManyAgentsFairness, p50.took)
+	}
+}
+
+// gManyAgentsFairness bounds p95 / p50 of the agents' commands: with the
+// live lock handed out in arrival order it measured 1.3 to 1.8 (idle and at
+// load 80); the poll race it replaced measured over 4.
+const gManyAgentsFairness = 3
+
+// gLoneCommand runs task next, comment add and task done as one agent with
+// the clone to itself and returns the mean: what one command costs on this
+// machine right now.
+func gLoneCommand(t *testing.T, lone *teamharness.Clone, body string) time.Duration {
+	t.Helper()
+	start := time.Now()
+	id := fTaskID.FindString(lone.Lore("task", "next", "--push", "--yes", "--json").OK(t).Stdout)
+	if id == "" {
+		t.Fatal("the lone agent got no task to time")
+	}
+	lone.Lore("comment", "add", "--on-table", "tasks", "--on-id", id, "--body", body).OK(t)
+	lone.Lore("task", "done", "--id", id, "--no-lesson", "--yes").OK(t)
+	return time.Since(start) / 3
 }
