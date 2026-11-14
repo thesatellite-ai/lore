@@ -10,14 +10,14 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1449 |
-| open | 8 |
+| fixed | 1450 |
+| open | 0 |
 | on-hold | 14 |
 | owner | 6 |
 | not-reproduced | 108 |
 | not-a-bug | 66 |
 | docs-only | 69 |
-| process | 177 |
+| process | 184 |
 | needs a test | 0 |
 
 ## bughunt
@@ -415,6 +415,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:gate7a-team-outside-repo | finding | the admin setup's team step saved from a folder that is no git checkout (a new machine's home) failed with E_NOT_A_STORE: the agent check added before the step writes (agentpol 4) read the caller from the repo's row state | fixed | TestSetupTeamStepOutsideAGitCheckout, TestJourneyTeamLeadNewMachine, TestJourneySetupSecondOrgInFirstOrgsFolder, TestRestLifecycle | pkg wire: profileAgent resolves the caller without a repo; break-verified |
 | devco:gate7a-left-orgstore-push | finding | a removed person's lore sync pushed what they wrote after the removal to the team store: sync's new push of org stores the repo does not attach (and lore store push) opened the clone by url without the left push hold | fixed | TestJourneyStaffRemove, TestOrgsListingStoreNamesOnlyThatOrgsStores | pkg wire: PushStoreNow arms the hold of every org listing the url (merged with gate7b urlPushHold) and refuses with the held line when nothing went out; break-verified with the journey |
 | devco:gate7a-hookmanagers | finding | TestJourneyHookManagers expected a write to add lore's block to a tracked .husky/pre-commit and lore fix's old wording; D-142 leaves a committed hooks folder alone until lore fix | fixed | TestJourneyHookManagers | test now checks the "or add its block to pre-commit" line, an untouched .husky, and lore fix's "new or changed files" line |
+| devco:D-159 | finding | under 10 agents 50 of 457 commands took over 5 s (r3 G-12) | fixed | TestStoryGManyAgents, TestLiveLockArrivalOrder, TestLiveLockWaitsForAnOlderWaiter, TestLiveLockPassesAnAbandonedTicket, TestLiveReadOfOneTableConvertsOnlyIt, TestApplySameRowAgainIsANoOp | live lock handed out first come, first served; 10 agents in one clone: p95 4.0 s (was 31 s) |
 | stories:A-1 | finding | a teammate's first lore sync in a freshly migrated repo leaves lore's wiring (.gitignore, .gitattributes, and LORE.md/LORE.full.md when it renders) uncommitted; once the migrator commits the same files, the teammate's git pull aborts (would be overwritten by merge) | fixed | TestStoryABranches, TestJourneyTeammatePullAfterMigration, TestTeammateWriteKeepsWiringLocal | D-164; story tests/stories (A) |
 | stories:H-1 | finding | with husky, a lore write still appends lore's block to the team's own tracked .husky/pre-commit without asking (D-142 stopped only the new files) | fixed | TestWriteCreatesNoHookFileInATrackedHooksFolder, TestStoryHLostRemotes | a write neither adds nor changes a hook file in a tracked hooks folder; it names the hooks it left out and lore fix; story step D-142/stories:H-1 runs |
 
@@ -696,6 +697,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 | pagewalk:home-budget | finding | Home load budget failed only under full gate load (1137/1206 ms vs a 1000 ms budget) | process | - | page e2e timing in the web page build's own walker |
 | pagewalk:fresh/home-details | finding | fresh/home "Details" click timed out because a late re-render replaced the marked node | process | - | page e2e harness fix in the web page build's own walker |
 | pagewalk:doctor-run-all | finding | walker assumed the Doctor page runs on open; Doctor now opens with no run started | process | - | walker's doctor check presses Run all first |
+| pagewalk:trashed/home-dup-restore | finding | Home on a machine with one trashed setup suggests "restore personal and personal from the trash?" with two identical Restore buttons while the trash holds one item | process | - | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
+| pagewalk:home-budget-2 | finding | trashed/home went over budget again under gate load (1082 ms vs 1000 ms) after the baseline fix | process | - | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
 
 ## lore-run-reports
 
@@ -1811,6 +1814,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | mergefix:gate-al-try2 | incident | after-land try 2 failed docs-examples (one transcript line) only under load; three reruns gave no diff | not-reproduced | - | passed on the next after-land |
 | mergefix:gate-al-try3 | incident | after-land try 3 failed: the command sweep did not list the five new member commands | fixed | TestSweepCoversEveryCommand | member commands listed, run by TestJourneyStaff |
 | mergefix:push-f | incident | a private branch push used -f by mistake (it was a fast-forward, nothing overwritten) | process | - | no test needed: process |
+| mergefix:8-setuppage | finding | the web setup page still showed the old invite-code placeholder on the join field, though it now accepts an org/store url | process | - | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
 | outfix:gate-fast1 | incident | first fast gate failed: unused helper (staticcheck) and a stale core docs transcript | process | - | fixed in the branch before landing |
 | outfix:gate-al1 | incident | after-land run 1 failed: the agency journey still asserted the old store-url redaction | fixed | TestJourneyAgencyFirstWeeks | expectation updated in a follow-up commit; three commits landed instead of one (no force-push) |
 | run:core:smoke-token-echo | incident | First final smoke printed a scratch local API token in its output | process | - | throwaway 127.0.0.1 token, file deleted, output masked, script uses 0600 curl config |
@@ -1879,6 +1883,10 @@ Every new scenario or finding lands with its test and its row here in the same c
 | run:journeys:store-push-batch | finding | Per-setup local personal folder vs `store init me <url>` broke a store push batch test | fixed | TestStorePushBatch | decided at landing: one personal store per person; store init me <url> moves setups on ~/.lore/stores/me to inherit |
 | run:realmac:17 | finding | Saved identity emails list leaves out the primary email (intent question) | fixed | TestEmailsQuestionSaysWhereTheMainEmailIs | Intent never answered; STILL in wave 3, not rechecked |
 | run:realmac:lookup-tests | finding | ops/internal/lookup actor_contacts matrix tests failing on the base commit, unrelated to setup | fixed | TestLookupInTrashMatrix, TestLookupIDMatrix, TestConfirmAfterLookupMatrix | Pre-existing at REALMAC DONE; not re-checked here |
+| run:realmac:18 | finding | An extra "Details" toggle under every Checks list (#18, m6) | process | - | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
+| run:realmac:m4 | finding | One ticked tool yields five check rows with no grouping or Run all | process | TestPerToolChecksFanOut | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
+| run:ui8:summary-recheck | finding | Setup Summary re-checked every step on open (ssh on the GitHub step) | process | - | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
+| run:ui8:discover-on-load | finding | Home still starts account discovery on load | process | - | fixed in the web edition (its dev branch, page e2e); guarded by the web page build's own page tests, not in this tree |
 | mac:setup-parent-not-repo | incident | org admin works from a parent folder that is not a git repo: store folder add and store list outside a repo | fixed | TestStoreFolderAddOutsideRepoPolicy, TestSetupStoreOutsideRepo, TestJourneyStoreCommands | plainfiles m3/m4 (sync and org refresh outside a repo) and D-22 (rule add --to org/folder outside a repo); wire/, tests/journeys |
 | mac:setup-member-csv | incident | an org with 38 members added by member add --from csv | fixed | TestJourneyStaff, TestStaffFromFileListsEveryBadLine, TestStaffFromFileBrokenQuote | devco D-7: csv errors named "person N" not the file line, stopped at the first bad row; ops/team |
 | mac:setup-invites-converted | incident | pending invites converted to members when each person joins | not-a-bug | TestJoinInviteRefusedFirst, TestInviteRoundTrip | no failure recorded; story step; plainfiles:19 (non-member registered before refusal) is the nearest fix; no end-to-end guard of the invite→member conversion over many people |
@@ -1983,14 +1991,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
-| devco:D-159 | finding | under 10 agents 50 of 457 commands took over 5 s (r3 G-12) | open | TestStoryGManyAgents, TestLiveLockArrivalOrder, TestLiveLockWaitsForAnOlderWaiter, TestLiveLockPassesAnAbandonedTicket, TestLiveReadOfOneTableConvertsOnlyIt, TestApplySameRowAgainIsANoOp | remains: p95 under 10 agents below 5 s on a quiet machine; fxperf removed the cache-open write lock and cut per-process CPU (10 agents x 30 commands: p95 3.4 s to 2.5 s, max 8.0 s to 5.6 s, 5 to 2 over 5 s, on a loaded machine); story step every-command-under-five-seconds still skipped |
-| mergefix:8-setuppage | finding | the web setup page still showed the old invite-code placeholder on the join field, though it now accepts an org/store url | open | - | fixed in the web edition (private repo, already on its main): the join field hint names a store url (JOIN_PLACEHOLDER), vitest join/logic.test.ts; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
-| pagewalk:trashed/home-dup-restore | finding | Home on a machine with one trashed setup suggests "restore personal and personal from the trash?" with two identical Restore buttons while the trash holds one item | open | - | fixed in the web edition (private repo, branch dc-fxee; lands with its next bump): one Restore per trashed setup, vitest discovery/logic.test.ts 'suggestion offers one Restore per trashed setup'; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
-| pagewalk:home-budget-2 | finding | trashed/home went over budget again under gate load (1082 ms vs 1000 ms) after the baseline fix | open | - | fixed in the web edition (private repo, already on its main): web/e2e/pagewalk.mjs re-measures the baseline and judges Home once more before failing; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
-| run:realmac:18 | finding | An extra "Details" toggle under every Checks list (#18, m6) | open | - | fixed in the web edition (private repo, branch dc-fxee; lands with its next bump): page regression web/e2e/regress-one-details-per-row.mjs; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
-| run:realmac:m4 | finding | One ticked tool yields five check rows with no grouping or Run all | open | TestPerToolChecksFanOut | fixed in the web edition (private repo, already on its main): one row per picked tool with its sub-checks under Details and one run-all action, page regression web/e2e/regress-five-tool-wall.mjs; core fan-out guarded here; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
-| run:ui8:summary-recheck | finding | Setup Summary re-checked every step on open (ssh on the GitHub step) | open | - | fixed in the web edition (private repo, branch dc-fxee; lands with its next bump): a finished setup's Summary shows doctor.last's recorded checks (withRecorded), vitest steps/edit.test.ts; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
-| run:ui8:discover-on-load | finding | Home still starts account discovery on load | open | - | fixed in the web edition (private repo, branch dc-fxee; lands with its next bump): Home discovers on open only with no setups (discoverOnOpen), else Find accounts, vitest discovery/logic.test.ts; the guard names only Go tests in this tree, so the row stays open here until a core test can guard it |
 
 ## On hold (owner, not built in 0.1.18)
 
