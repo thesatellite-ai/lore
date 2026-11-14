@@ -41,8 +41,9 @@ alice (notes-checkout)$ git add org/lore-org.yaml && git commit -qm 'suggest the
 
 ### org import
 bob$ lore org import --url git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
-lore: pushed store agency/org: commit 601d285 to branch main
-lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
+lore: committed locally to store agency/org; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3618e878ebbf527d34d446ef4f891.json (store agency/org)
 This adds to ~/.lore/config.yaml:
 
     name: agency
@@ -59,7 +60,7 @@ This adds to ~/.lore/config.yaml:
         - github.com/client/*
 
 ✓ added org entry agency
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Bob Roe (@bob) registered in agency org/
+✓ act_2ad3618e878ebbf527d34d446ef4f891 Bob Roe (@bob) registered in agency org/
 bob$ cat ~/.lore/config.yaml
 orgs:
   - name: agency
@@ -75,20 +76,24 @@ orgs:
     repos:
       - github.com/client/*
     source:
-      store: sto_2ad3618e878ebbf527d34d446ef4f891
-      version: 86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
+      store: sto_162df51b7f78b785c97c26b41ea89666
+      version: 601d2850ffd047c2890d2472633cc4dbdabe12fd
 bob (work/website)$ lore whoami
-org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
-identity   Bob Roe <human:bob@agency.example>   act_7a670ae8548ed05bf57ad29ad0759504  @bob  (from: org entry (config.yaml orgs[agency].identity))
+org        agency  (matched by: repos pattern github.com/client/* of agency)
+identity   Bob Roe <human:bob@agency.example>   act_2ad3618e878ebbf527d34d446ef4f891  @bob  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
-project    prj_162df51b7f78b785c97c26b41ea89666
+project    prj_54fe984c9b495744c0217776765a28f2
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder org)
-internal   github.com/agency/notes client/
-links      known  1 link(s) for this repo (stores of 1 entry scanned)
+links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
+bob (work/website)$ lore sync
+lore sync: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+lore: pushed store agency/org: commit 86dbae4 to branch main
+store agency: sent 0, received 0, merged 0, refused 0
+store agency/org: sent 2, received 0, merged 0, refused 0
 
 ### org set
 alice (work/tools)$ lore org set --org agency --commit
@@ -103,23 +108,22 @@ ERROR: [E_INVALID_INPUT] refusing to write .lore/org.yaml: .lore/org.yaml names 
 
 ### move
 alice (work/website)$ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
-lore: wrote 2 row file(s) in ~/work/website/.lore/data
-✓ mem_54fe984c9b495744c0217776765a28f2
+lore: wrote ~/work/website/.lore/data/actors/act_05e99e22e9e86e96fe4daa7777994603.json
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json
+✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8
   scope: [master]
-alice (work/website)$ lore move --id mem_54fe984c9b495744c0217776765a28f2 --to agency --yes
-lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+alice (work/website)$ lore move --id mem_c0f3c11a5724b0cfd74b256190d9b5b8 --to agency --yes
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e99e22e9e86e96fe4daa7777994603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_54fe984c9b495744c0217776765a28f2.json (store agency)
-lore: wrote ~/work/website/.lore/data/memories/mem_54fe984c9b495744c0217776765a28f2.json
-✓ mem_54fe984c9b495744c0217776765a28f2 moved to store agency (same id; the old copy is tombstoned)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json
+✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 moved to store agency (same id; the old copy is tombstoned)
 alice (work/website)$ lore memory list
-mem_54fe984c9b495744c0217776765a28f2 [retrieved] the client replies faster on WhatsApp than email [agency/client]
+mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 
 ### store open and forget
 alice$ lore store open --url git@github.com:agency/notes
-✓ ~/.lore/stores/agency/notes on main (05513aa7ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
+✓ ~/.lore/stores/agency/notes on main (9b40ce71af28): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
 alice$ ls ~/.lore/stores/agency/notes
 README.md
 client

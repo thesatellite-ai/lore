@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -110,9 +111,24 @@ func newSPOrg(t *testing.T, start time.Time) *spPair {
 	p.ca, p.cb = spCodeClone(w, p.a), spCodeClone(w, p.b)
 	p.ca.MustLore("store", "init", spOrgStore, p.store.URL())
 	p.ca.MustLore("org", "create", spOrg, "--store", spOrgStore, "--key", "human:alice@example.test", "--name", "Alice", "--yes")
+	p.ca.MustLore("sync") // C5: the org reaches the remote with alice's sync
 	p.cb.MustLore("store", "add", spOrgStore, p.store.URL())
 	p.cb.MustLore("org", "import", p.store.URL(), "--key", "human:bob@example.test", "--name", "Bob", "--yes")
+	p.cb.MustLore("sync")
 	return p
+}
+
+// spPushNow sets store to push now from p.ca (an org store needs an admin
+// setup, which it adds once): the compaction tests build their history one
+// pushed commit per write, the opt-in mode (the default, manual, sends a
+// batch on lore sync: C5). The other machine syncs the setting.
+func (p *spPair) spPushNow(t *testing.T, store string) {
+	t.Helper()
+	if store != "me" {
+		spMakeAdmin(t, p.a)
+	}
+	p.ca.MustLore("store", "set", store, "push=now")
+	p.cb.MustLore("sync")
 }
 
 // spMakeAdmin gives a's machine an admin setup of org acme (config.yaml
@@ -316,8 +332,9 @@ func TestE42_StorePushOfflineBatchThenOnline(t *testing.T) {
 
 // ---------------------------------------------------------------- manual
 
-// Manual mode: writes and later reads (even after a long time) never reach
-// the remote; only `lore sync` pushes, as one batch commit.
+// Manual mode (the default, C5): writes and later reads (even after a long
+// time) never reach the remote; only `lore sync` pushes, sending the waiting
+// commits as they are (each keeps its title and author; only batch folds).
 func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 	p := newSPPersonal(t, spNow)
 	p.ca.MustLore("store", "set", "me", "push=manual").Says(t, "me: push manual")
@@ -334,7 +351,22 @@ func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 	p.cb.MustLore("sync")
 	p.cb.MustLore("memory", "list").Never(t, "manual fact one")
 	p.ca.MustLore("sync").Says(t, "store me: sent")
-	spOneBatchOnTop(t, before, p.log(), 3)
+	after := p.log()
+	if len(after) <= len(before) || !slices.Equal(after[len(after)-len(before):], before) {
+		t.Fatalf("the sync must add commits on top of the old history:\nbefore %q\nafter  %q", before, after)
+	}
+	adds := 0
+	for _, s := range after[:len(after)-len(before)] {
+		if strings.HasPrefix(s, "lore: batch ") {
+			t.Fatalf("a manual sync folded the commits into a batch: %q", after)
+		}
+		if strings.Contains(s, "memory add mem_") {
+			adds++
+		}
+	}
+	if adds != 3 {
+		t.Fatalf("want the three memory adds as their own commits, got %q", after)
+	}
 	p.cb.MustLore("sync")
 	spSees(t, p.cb, "manual fact one", "manual fact two", "manual fact three")
 }
@@ -347,6 +379,7 @@ func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 // new history and keeps writing on it.
 func TestE44_StorePushCompactPersonalKeepsEveryRow(t *testing.T) {
 	p := newSPPersonal(t, spOld)
+	p.spPushNow(t, "me")
 	old := []string{"old fact one", "old fact two", "old fact three"}
 	for _, b := range old {
 		p.add(t, p.ca, "me", b)
@@ -379,6 +412,7 @@ func TestE44_StorePushCompactPersonalKeepsEveryRow(t *testing.T) {
 	}
 	spSees(t, p.cb, append(old, "new fact")...)
 	p.add(t, p.cb, "me", "after compaction")
+	p.cb.MustLore("sync") // the desktop sends its write (C5)
 	log := p.log()
 	if len(log) != 4 || !strings.HasPrefix(log[1], spCompactSubject) {
 		t.Fatalf("a write after compaction lands on the new history, got %q", log)
@@ -393,17 +427,21 @@ func TestE44_StorePushCompactPersonalKeepsEveryRow(t *testing.T) {
 // "yes", a dry run, then yes); the other machine re-fetches.
 func TestE45_StorePushRESTSetShowCompact(t *testing.T) {
 	p := newSPPersonal(t, spOld)
+	// the default mode (manual, C5): each write is sent by its own lore sync
 	p.add(t, p.ca, "me", "rest old one")
+	p.ca.MustLore("sync")
 	p.add(t, p.ca, "me", "rest old two")
+	p.ca.MustLore("sync")
 	p.a.SetNow(spNow)
 	p.b.SetNow(spNow)
 	p.add(t, p.ca, "me", "rest new")
+	p.ca.MustLore("sync")
 	api := startAPI(t, p.ca)
 
 	var shown spPushView
 	spDecode(t, api.spDo(t, http.MethodGet, "/v1/stores/me", nil), http.StatusOK, &shown)
-	if shown.Push.Store != "me" || shown.Push.Place != "personal" || shown.Push.Push != "now" {
-		t.Fatalf("GET /v1/stores/me: want me, personal, push now, got %+v", shown.Push)
+	if shown.Push.Store != "me" || shown.Push.Place != "personal" || shown.Push.Push != "manual" { // C5: the default
+		t.Fatalf("GET /v1/stores/me: want me, personal, push manual, got %+v", shown.Push)
 	}
 	var set spSetOut
 	spDecode(t, api.spDo(t, http.MethodPost, "/v1/stores/set", spJSON(t, spSetBody{Store: "me", Settings: []string{"push=batch", "push_every=15m"}})), http.StatusOK, &set)
@@ -447,6 +485,7 @@ func TestE45_StorePushRESTSetShowCompact(t *testing.T) {
 // both clones read every row.
 func TestE46_StorePushOrgCompactReplaysMemberWork(t *testing.T) {
 	p := newSPOrg(t, spOld)
+	p.spPushNow(t, spOrgStore)
 	old := []string{"org old one", "org old two", "org old three"}
 	for _, b := range old {
 		p.add(t, p.ca, spOrgStore, b)
@@ -457,7 +496,6 @@ func TestE46_StorePushOrgCompactReplaysMemberWork(t *testing.T) {
 	p.cb.MustLore("sync")
 	spSees(t, p.cb, append(old, "org new")...)
 	p.add(t, p.cb.With(autopushOff), spOrgStore, "bob unpushed")
-	spMakeAdmin(t, p.a)
 	if v := spShow(t, p.ca, spOrgStore); !v.Push.Admin || v.Push.Place != "org" {
 		t.Fatalf("admin machine: show says admin in an org store, got %+v", v.Push)
 	}
@@ -481,6 +519,7 @@ func TestE46_StorePushOrgCompactReplaysMemberWork(t *testing.T) {
 	spSees(t, p.ca, all...)
 	// The admin's settings reach the member through the store.
 	p.ca.MustLore("store", "set", spOrgStore, "push=batch", "push_every=10m").Says(t, "push batch every 10m", "which this machine is")
+	p.ca.MustLore("sync") // C5: a setting other than push now waits for the admin's sync
 	p.cb.MustLore("sync")
 	if v := spShow(t, p.cb, spOrgStore); v.Push.Push != "batch" || v.Push.PushEvery != "10m" {
 		t.Fatalf("member sees the org's batch setting, got %+v", v.Push)
@@ -512,7 +551,7 @@ func TestE47_StorePushNonAdminRefused(t *testing.T) {
 		}
 	}
 	spSameLog(t, "refused set and compact", p.log(), before)
-	if v := spShow(t, p.cb, spOrgStore); v.Push.Push != "now" || v.Push.Epoch != 0 {
+	if v := spShow(t, p.cb, spOrgStore); v.Push.Push != "manual" || v.Push.Epoch != 0 {
 		t.Fatalf("refusals change nothing, got %+v", v.Push)
 	}
 }
@@ -622,7 +661,8 @@ func TestE52_StorePushCrashWhileFoldingLosesNothing(t *testing.T) {
 // and both machines read every row.
 func TestE51_StorePushLeftoverMergeLosesNothing(t *testing.T) {
 	p, _, bodies := spCrashSetup(t)
-	p.add(t, p.cb, "me", "other machine fact")         // desktop pushes at once (push now)
+	p.add(t, p.cb, "me", "other machine fact")
+	p.cb.MustLore("sync")                              // the desktop sends its write (C5: on lore sync)
 	_, slugPath, _ := strings.Cut(spPersonalSlug, "/") // the host is never in a clone's path
 	work := p.a.LorePath("stores", filepath.FromSlash(slugPath))
 	p.w.Git(work, "fetch", "-q", p.store.Dir, spBranch)

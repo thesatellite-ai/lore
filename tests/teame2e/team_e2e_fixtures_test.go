@@ -478,8 +478,12 @@ func newAgency(t *testing.T, caps ...th.Cap) *agency {
 	a.aliceApp = a.alice.Clone(a.app, "app")
 	a.aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
 	a.aliceApp.MustLore("actor", "register")
+	// C5: store writes wait for each person's lore sync
+	a.aliceApp.MustLore("sync")
 	a.dev1App = a.dev1.Clone(a.app, "app")
 	a.dev1App.MustLore("actor", "register")
+	a.dev1App.MustLore("sync")
+	a.aliceApp.MustLore("sync")
 	return a
 }
 

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -87,45 +88,61 @@ const syncLiveRefused = "live: %d write(s) not pushed: the remote refused refs/l
 
 // pushAndLand pushes the waiting live writes, then lands what is due.
 // waiting is the number of live writes still not on the remote after the
-// push (0 when every write was delivered or there is no remote).
-func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int, err error) {
+// push (0 when every write was delivered or there is no remote); moved is
+// the session's moved (rows brought in, sent or landed by this run).
+func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int, moved bool, err error) {
 	s, folder, err := l.here(ctx)
 	if err != nil || s == nil {
-		return nil, 0, err
+		return nil, 0, false, err
+	}
+	defer func() { moved = s.moved }()
+	if _, serr := os.Stat(filepath.Join(s.stateDir, liveNoteRenderDue)); serr == nil {
+		// a write since the last sync (pushed at once or waiting): its
+		// rows are not in a committed render yet
+		s.moved = true
+		if werr := s.writeNote(liveNoteRenderDue, ""); werr != nil {
+			s.warn("clear the render refresh note: " + werr.Error())
+		}
 	}
 	if s.blocked != nil {
 		// G-SYNC-3: the remote live ref was deleted or rewritten; nothing
 		// can be delivered, so sync refuses as every live write does
 		// (never "· already in sync"), naming the backup and the restore.
-		return nil, 0, rewrittenError(errs.ReadOnly, s.blocked)
+		return nil, 0, false, rewrittenError(errs.ReadOnly, s.blocked)
+	}
+	if snap, serr := s.ref.Snapshot(ctx); serr == nil && snap.Ahead() {
+		s.moved = true // this sync sends the clone's own waiting writes
 	}
 	s.syncReport = true // this report's own line says what waits (syncLiveWaiting)
 	pushed := s.push(ctx)
 	s.syncReport = false
 	if !pushed || s.ref.Remote == nil {
 		if s.blocked != nil { // the push found it rewritten
-			return nil, 0, rewrittenError(errs.ReadOnly, s.blocked)
+			return nil, 0, false, rewrittenError(errs.ReadOnly, s.blocked)
 		}
 		if !pushed && s.ref.Remote != nil {
 			// The push could not deliver (offline, refused): the writes
 			// wait here; say so rather than "already in sync".
 			n := s.waiting()
 			if s.waitWhy == liveRefusedWhy {
-				return []string{fmt.Sprintf(syncLiveRefused, n, s.refusedDetail, s.remoteLabel())}, n, nil
+				return []string{fmt.Sprintf(syncLiveRefused, n, s.refusedDetail, s.remoteLabel())}, n, false, nil
 			}
 			why := s.waitWhy
 			if why == "" {
 				why = syncWaitWhyDefault
 			}
-			return []string{fmt.Sprintf(syncLiveWaiting, n, why)}, n, nil
+			return []string{fmt.Sprintf(syncLiveWaiting, n, why)}, n, false, nil
 		}
-		return nil, 0, nil
+		return nil, 0, false, nil
 	}
 	out, err := s.landPass(ctx, folder, nil, true)
 	if err != nil {
-		return nil, 0, landErr(err)
+		return nil, 0, false, landErr(err)
 	}
-	return landLines(out), 0, nil
+	if out.Landed+out.Copied+out.Left > 0 {
+		s.moved = true
+	}
+	return landLines(out), 0, false, nil
 }
 
 // SyncRun implements opssync.Env.
@@ -148,12 +165,12 @@ func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut,
 	if err := l.refuseIgnoredData(ctx); err != nil {
 		return opssync.RunOut{}, err
 	}
-	lines, waiting, err := l.pushAndLand(ctx)
+	lines, waiting, moved, err := l.pushAndLand(ctx)
 	if err != nil {
 		return opssync.RunOut{}, err
 	}
 	return opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport,
-		Data: opssync.RunData{Pass: syncPassLive, LivePending: waiting}, Lines: lines}, nil
+		Data: opssync.RunData{Pass: syncPassLive, LivePending: waiting, LiveMoved: moved}, Lines: lines}, nil
 }
 
 // refuseIgnoredData is E_SYNC_DATA_IGNORED while git ignores row files of

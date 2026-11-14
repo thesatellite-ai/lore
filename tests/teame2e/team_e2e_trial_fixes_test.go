@@ -98,6 +98,7 @@ func TestRecipe15_NoteOnATaskNotHeldGoesToTheStore(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ac.Lore("task", "note", tc.id, tc.note).OK(t).Says(t, "note", tc.id)
+			ac.MustLore("sync") // C5: the note reaches the store with the agent's sync
 			// The note is a comment row of the store project acme/. A v0.1.17
 			// store kept it on the live ref under acme/comments/; a 0.1.18
 			// store keeps its rows on the store branch under

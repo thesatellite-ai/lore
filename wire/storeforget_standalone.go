@@ -195,8 +195,15 @@ func (c *standaloneClones) forgetCopies(id string) error {
 		return errs.Wrap(errs.Internal, "list the private renders", err)
 	}
 	for _, dir := range repos {
-		if err := os.Remove(filepath.Join(dir, id+privateRenderExt)); err != nil && !os.IsNotExist(err) {
-			return errs.Wrap(errs.Internal, "remove the store's private render", err)
+		// <store>-<id>.md (or <id>.md before B-17)
+		files, _ := filepath.Glob(filepath.Join(dir, "*"+id+privateRenderExt))
+		for _, f := range files {
+			if b := filepath.Base(f); b != id+privateRenderExt && !strings.HasSuffix(b, "-"+id+privateRenderExt) {
+				continue
+			}
+			if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+				return errs.Wrap(errs.Internal, "remove the store's private render", err)
+			}
 		}
 		idx := filepath.Join(dir, privateRenderIndex)
 		b, err := os.ReadFile(idx)
@@ -205,7 +212,7 @@ func (c *standaloneClones) forgetCopies(id string) error {
 		}
 		var keep []string
 		for _, l := range strings.SplitAfter(string(b), "\n") {
-			if !strings.HasPrefix(l, id+privateRenderExt+" ") {
+			if !strings.Contains(l, id+privateRenderExt+" ") {
 				keep = append(keep, l)
 			}
 		}
@@ -219,7 +226,8 @@ func (c *standaloneClones) forgetCopies(id string) error {
 }
 
 // Private render names (wire/renderhost/render_private.go's layout:
-// ~/.lore/render/<repo id>/<store id>.md and index.md, owner-only files).
+// ~/.lore/render/<repo>-<repo id>/<store>-<store id>.md and index.md,
+// owner-only files).
 const (
 	renderDirName         = "render"
 	privateRenderExt      = ".md"

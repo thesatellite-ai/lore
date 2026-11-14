@@ -173,6 +173,7 @@ func TestKnowledgeLevels_OrgStoreFolders(t *testing.T) {
 	}
 	o.app.CommitAll("attach tips")
 	o.app.AdminPush("origin", "main")
+	o.app.MustLore("sync") // C5: mira's store notes reach the team with her sync
 	_, bob := o.join(t, "bob", orgBobEmail, orgBobName, "bob")
 	if got := knowIDs(t, bob, "--store", "tips"); !knowSame(got, tip.ID, tip2.ID) {
 		t.Fatalf("bob's list --store tips: %v", got)

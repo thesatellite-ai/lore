@@ -70,6 +70,8 @@ func TestClientTaskUnheldNoteGoesToTheStore(t *testing.T) {
 	cid := strings.Fields(lines[0])[2]
 
 	// the comment is in the store's linked folder on main, naming the task
+	// (once the person pushes: C5)
+	w.push(t, mira, orgTestStoreURL)
 	store := filepath.Join(w.hosts, "agency/notes.git")
 	var path string
 	for _, f := range strings.Split(w.storeFiles(t), "\n") {
@@ -116,6 +118,7 @@ func TestClientTaskUnheldNoteGoesToTheStore(t *testing.T) {
 	if got := orgGit(t, store, "ls-tree", "-r", "--name-only", "refs/lore/signals/main"); got != "acme/claims/"+t2.Data.ID+".json" {
 		t.Fatalf("store signals ref holds %q, want the claim under the linked folder acme/", got)
 	}
+	w.push(t, mira, orgTestStoreURL) // C5: the task row waits for the person's push
 	linkedRow := false
 	for _, f := range strings.Split(w.storeFiles(t), "\n") {
 		linkedRow = linkedRow || strings.HasPrefix(f, "acme/tasks/")

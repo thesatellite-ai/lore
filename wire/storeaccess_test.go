@@ -400,6 +400,9 @@ func TestShortNameTargets(t *testing.T) {
 	if out.Store != "lore-x" {
 		t.Errorf("output names the store %q, want lore-x", out.Store)
 	}
+	if _, err := a.PushStoreNow(ctx, opsstores.PushIn{Store: accessCanonURL}); err != nil { // C5: `lore store push`
+		t.Fatal(err)
+	}
 	if !strings.Contains(w.storeFiles(t, "acme/lore-x"), "client_a/") {
 		t.Fatalf("client_a not pushed to lore-x: %s", w.storeFiles(t, "acme/lore-x"))
 	}

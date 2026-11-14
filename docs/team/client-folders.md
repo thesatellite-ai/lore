@@ -23,10 +23,13 @@ stores:
   agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy  
 count: 2
 $ lore store folder add --store team --folder client_north
+committed locally to store agency; lore sync sends it
 ✓ created folder client_north in agency (prj_7a67…9504; shown only in repos that attach it)
 $ lore store folder add --store team --folder client_south
+committed locally to store agency; lore sync sends it
 ✓ created folder client_south in agency (prj_2ad3…f891; shown only in repos that attach it)
 $ lore store folder add --store git@github.com:agency/notes --folder client_east
+committed locally to store agency; lore sync sends it
 ✓ created folder client_east in agency (prj_162d…9666; shown only in repos that attach it)
 ```
 <!-- /example -->
@@ -73,11 +76,10 @@ Once North's repo exists, link it to its folder. `lore store folder list` run in
 ```console
 # tomas, in clients/north-web
 $ lore org link --org agency --project client_north --yes
-lore: pushed store agency: commit 601d285 to branch main
 This marks github.com/client/north-web as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_north/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
-✓ github.com/client/north-web (prj_54fe…28f2) linked to github.com/agency/notes client_north/ (pushed)
+✓ github.com/client/north-web (prj_54fe…28f2) linked to github.com/agency/notes client_north/ (committed in the local clone; `lore sync` sends it)
   nothing was written to this repo
 $ lore store folder list --store team
 store agency folders:
@@ -96,16 +98,13 @@ A client's repo must never hold lore files. Link it without `lore init`: the lin
 ```console
 # tomas, in clients/south-app
 $ lore org link --org agency --project client_south --yes
-lore: pushed store agency: commit 86dbae4 to branch main
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e9…4603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
-✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (pushed)
+✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (committed in the local clone; `lore sync` sends it)
   nothing was written to this repo
 $ lore task add --title 'set up the staging deploy'
-lore: pushed store agency/client_south (here: agency): commit 9b40ce7 to branch main
-lore: pushed store agency/client_south (here: agency): commit 05513aa to branch main
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
+lore: committed locally to store agency; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
@@ -126,9 +125,11 @@ Folder names are unique across all of an org's stores, so a folder made in the w
 ```console
 # tomas, in clients
 $ lore store folder add --store team --folder client_old
+committed locally to store agency; lore sync sends it
 ✓ created folder client_old in agency (prj_d431…313a; shown only in repos that attach it)
 $ lore store folder remove --store team --folder client_old --yes
 ✓ removed folder client_old (prj_d431…313a) from agency
+  committed in this machine's copy of the store; push manual sends it with the store's next push (`lore sync` sends it now)
 $ lore store folder remove --store team --folder client_north --yes
 ERROR: [E_REFUSED] store folder remove: folder client_north of agency holds 1 repo link; nothing was removed
   hint: unlink each repo with `lore org unlink --org <org> --project client_north` run in that repo; or remove it with everything in it: `lore store folder remove --store agency --folder client_north --purge` (the rows go to the store's trash first)
@@ -161,6 +162,7 @@ $ lore store adopt --target team/client_east --from east-api --yes
   from the repo's live ref (refs/lore/live): 2
   left in the repo: projects: 1 row (the folder is its own project)
   left in the repo: repos: 1 row (the code repo's own row; a folder links repos with lore org link)
+  committed in this machine's copy of the store; push manual sends it with the store's next push (`lore sync` sends it now)
 $ lore store adopt --target team/client_east --from east-api --yes
 ✓ nothing to adopt: agency/client_east already holds every row of ~/work/clients/east-api (no commit)
   already there: 5 unchanged, 0 newer or deleted in the folder (kept)

@@ -3,11 +3,13 @@ package wire
 import (
 	"context"
 	"fmt"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -280,12 +282,34 @@ const rosterLookups = 2
 
 // rosterPush syncs an org roster's store at once (v0.1.17 autopush); a
 // failure leaves the change committed in the local copy for `lore sync`.
-func (a *App) rosterPush(ctx context.Context, r rosterAt) {
+// It reports whether the roster's commit stayed in the local clone (held):
+// the store waits for `lore sync`, or the push did not reach the remote.
+func (a *App) rosterPush(ctx context.Context, r rosterAt) (held bool) {
 	if r.src == store.SourceRepo {
-		return
+		return false
 	}
-	_, _ = a.SyncStores(ctx, string(r.src)) // best effort: committed locally, `lore sync` pushes
+	// C5 (B-16): nothing reaches a remote unless a person asked. The
+	// roster's commit stays in the local clone (the write said so once)
+	// unless the person chose push: now for that store.
+	if v, err := a.StorePush(ctx, string(r.src)); err != nil || v.Push != string(storepush.ModeNow) {
+		return true
+	}
+	out, err := a.SyncStores(ctx, string(r.src)) // best effort: committed locally, `lore sync` pushes
+	if err != nil {
+		return true
+	}
+	for _, rep := range out.Stores {
+		if rep.Offline || rep.Refused > 0 || rep.HeldBy != "" {
+			return true
+		}
+	}
+	return false
 }
+
+// fetchOnly marks ctx so a store sync under it fetches and merges but never
+// pushes (a lookup that missed reads the remote again; C5: a read never
+// sends the person's waiting commits).
+func fetchOnly(ctx context.Context) context.Context { return opsmigrate.WithNoPush(ctx) }
 
 // rosterApp is the App the roster verbs write r with: a itself inside a
 // git work tree or for the repo's own roster, else a store-only App on r's
@@ -534,7 +558,7 @@ func (a *App) rosterFind(ctx context.Context, r rosterAt, match func(RosterActor
 			if r.src == store.SourceRepo {
 				break
 			}
-			if _, serr := a.Sync(ctx, r.src); serr != nil {
+			if _, serr := a.Sync(fetchOnly(ctx), r.src); serr != nil {
 				break
 			}
 		}

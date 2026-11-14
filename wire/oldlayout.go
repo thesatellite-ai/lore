@@ -203,7 +203,7 @@ func (a *App) flattenPersonal(ctx context.Context, p personalClone, say func(str
 	if res.Commit == "" {
 		return
 	}
-	mode := storepush.ModeNow
+	mode := storepush.Default().Push
 	if s, serr := storepush.FromRaw(gb.Marker().Push); serr == nil {
 		mode = s.Push
 	}
@@ -398,7 +398,7 @@ func (a *App) settleClone(ctx context.Context, dir string, say func(string)) {
 		say(fmt.Sprintf("could not open the store clone %s: %s", dir, errLine(err)))
 		return
 	}
-	mode := storepush.ModeNow
+	mode := storepush.Default().Push
 	if s, serr := storepush.FromRaw(gb.Marker().Push); serr == nil {
 		mode = s.Push
 	}

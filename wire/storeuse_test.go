@@ -53,6 +53,10 @@ func TestStoreUse(t *testing.T) {
 	if _, err := run(t, repo, opsstores.OpFolderAdd, `{"store":"kb","folder":"client_a"}`, true); err != nil {
 		t.Fatalf("folder add: %v", err)
 	}
+	// C5: the folder commit waits in lore's clone until the person pushes
+	if _, err := run(t, repo, opsstores.OpPush, `{"store":"kb"}`, true); err != nil {
+		t.Fatalf("store push: %v", err)
+	}
 	lores := filepath.Join(home, gitbackend.StoresDir, "acme", "kb")
 
 	// the person's own clone, anywhere

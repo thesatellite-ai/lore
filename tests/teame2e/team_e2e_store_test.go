@@ -237,6 +237,9 @@ func TestF11_Race_ConcurrentLinksMergeAsUnion(t *testing.T) {
 	) {
 		r.OK(t)
 	}
+	// C5: each person sends their link with lore sync; the two merge as a union
+	clones[0].MustLore("sync")
+	clones[1].MustLore("sync")
 	meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile)
 	for _, slug := range []string{"github.com/acme/web", "github.com/acme/mobile", slugApp} {
 		if !strings.Contains(meta, slug) {
@@ -256,6 +259,7 @@ func TestSideEffect04_TwoLinksNeedADefault(t *testing.T) {
 	a.aliceApp.Lore("memory", "add", "--body", "which folder?", "--to", orgNorthwind).Refused(t, folderAcme, folderGlobex)
 	a.aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--default", "--yes")
 	a.aliceApp.MustLore("memory", "add", "--body", "goes to the default link", "--to", orgNorthwind)
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderAcme, "goes to the default link") {
 		t.Fatal("--to <org> must use the link marked default")
 	}
@@ -282,6 +286,7 @@ func TestRecipe14_OneStorePerClient(t *testing.T) {
 	c := alice.Clone(app, "app")
 	c.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--store", acmeStore.URL(), "--yes")
 	c.MustLore("memory", "add", "--body", "NDA client note")
+	c.MustLore("sync") // C5: the note reaches the store with alice's sync
 	found := false
 	for _, ref := range []string{storeLiveRef, refMain} {
 		for _, f := range acmeStore.Files(ref) {
@@ -325,6 +330,8 @@ func TestRecipe04_ContractorSeesOnlyTheirClient(t *testing.T) {
 	ic := alice.Clone(globex, "globex")
 	ic.MustLore("org", "link", orgNorthwind, "--project", folderGlobex, "--store", globexStore.URL(), "--yes")
 	ic.MustLore("memory", "add", "--body", "globex internal: proxy strips headers")
+	ac.MustLore("sync") // C5: alice sends her store writes before the contractor reads
+	ic.MustLore("sync")
 
 	cont := w.Human("cont1", "contractor@northwind.example")
 	narrow := northwindOrg("human:contractor@northwind.example", "Contractor Name", "cont1")
@@ -347,6 +354,7 @@ func TestRecipe04_ContractorSeesOnlyTheirClient(t *testing.T) {
 func TestF14_ClientRepoWriteTargets(t *testing.T) {
 	a := newAgency(t, th.Flag("to", "memory", "add"), th.Flag("to", "rule", "add"), th.Cmd("agent", "start"), th.Flag("create", "memory", "add"))
 	a.aliceApp.MustLore("memory", "add", "--body", "memory goes internal by default")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderAcme, "memory goes internal by default") {
 		t.Fatal("a memory without --to in a client repo goes to the linked project")
 	}
@@ -363,10 +371,12 @@ func TestF14_ClientRepoWriteTargets(t *testing.T) {
 	// listed store is refused with the existing folders and a hint; only
 	// --create makes a new store project.
 	a.aliceApp.Lore("memory", "add", "--body", "for the globex group", "--to", orgNorthwind+"/"+folderGlobex).Refused(t, folderAcme, "--create")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if a.storeHas(t, folderGlobex, "for the globex group") {
 		t.Fatal("a refused --to <org>/<new folder> must write nothing")
 	}
 	a.aliceApp.MustLore("memory", "add", "--body", "for the globex group", "--to", orgNorthwind+"/"+folderGlobex, "--create")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderGlobex, "for the globex group") {
 		t.Fatal("--to <org>/<folder> writes that folder of the resolved org's stores")
 	}
@@ -392,6 +402,7 @@ func TestF14_StoreDefaultBeatsLooserPersonalDefault(t *testing.T) {
 	if _, ok := a.dev1App.ReadFile(mainRowPath("", tblMemories, mustID(t, r, "mem"))); ok {
 		t.Fatal("a personal 'repo' default must not override the store's stricter default")
 	}
+	a.dev1App.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderAcme, "stricter default wins") {
 		t.Fatal("the memory goes to the linked project")
 	}
@@ -407,6 +418,7 @@ func TestF15_PointersOnlyFlowInward(t *testing.T) {
 	clientTask := mustID(t, a.acmeApp.MustLore("task", "add", "migrate checkout to the new API", "--tasklist", a.tl), "tsk")
 	a.acmeApp.MustLore("sync")
 	a.aliceApp.MustLore("comment", "add", "--on-table", tblTasks, "--on-id", clientTask, "--body", "client is slow to test, push them", "--to", orgNorthwind)
+	a.aliceApp.MustLore("sync") // C5: the comment reaches dev1 with alice's sync
 	a.dev1App.MustLore("task", "show", clientTask).Says(t, "client is slow to test", "["+orgNorthwind+"/"+folderAcme+"]")
 	a.acmeApp.MustLore("task", "show", clientTask).Never(t, "client is slow to test")
 	internalTask := mustID(t, a.aliceApp.MustLore("task", "add", "internal follow-up", "--to", orgNorthwind), "tsk")
@@ -624,7 +636,7 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	pid := repoID(t, a.aliceApp)
 
 	// CONFIG_GUIDE CFG6 / STORE_SERVER_SPEC 7.3 (privrender 307e9f4): one
-	// private render file per internal store, ~/.lore/render/<repo_id>/<store_id>.md,
+	// private render file per internal store, ~/.lore/render/<repo>-<repo_id>/<store>-<store_id>.md,
 	// and CLAUDE.local.md is exactly one import line per file (v0.1.17
 	// wrote one ~/.lore/render/<project-id>.md and one line).
 	local, ok := a.aliceApp.ReadFile("CLAUDE.local.md")
@@ -641,11 +653,13 @@ func TestF20_RenderKeepsInternalContextOutsideTheCheckout(t *testing.T) {
 	}
 	var renders []string
 	for _, l := range imports {
-		rel, isImport := strings.CutPrefix(l, "@~/.lore/render/"+pid+"/")
-		if !isImport || !strings.HasPrefix(rel, "sto_") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "/") {
+		// B-17: the folder and file names say which repo and store, ids last
+		path, isImport := strings.CutPrefix(l, "@~/.lore/render/")
+		dir, rel, _ := strings.Cut(path, "/")
+		if !isImport || (dir != pid && !strings.HasSuffix(dir, "-"+pid)) || !strings.Contains(rel, "sto_") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "/") {
 			t.Fatalf("CLAUDE.local.md must be exactly the import lines: %q", local)
 		}
-		renders = append(renders, a.alice.LorePath("render", pid, rel))
+		renders = append(renders, a.alice.LorePath("render", dir, rel))
 	}
 	if out := a.aliceApp.Git("ls-files", "CLAUDE.local.md"); out != "" {
 		t.Fatal("CLAUDE.local.md must never be tracked")
@@ -758,14 +772,17 @@ func TestRecipe10_MoveChainKeepsTheId(t *testing.T) {
 	const text = "prune the pnpm store before the Docker build"
 	mine := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text, "--to", "me"), "mem")
 	a.aliceApp.Lore("move", mine, "--to", orgNorthwind).Refused(t)
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if a.storeHas(t, folderAcme, text) {
 		t.Fatal("a refused move writes nothing")
 	}
 	a.aliceApp.MustLore("move", mine, "--to", orgNorthwind, "--yes")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderAcme, text) || !a.storeHas(t, folderAcme, mine) {
 		t.Fatal("the team move lands the row, same id, in the linked project")
 	}
 	a.aliceApp.MustLore("move", mine, "--to", orgNorthwind+"/"+folderOrg, "--yes")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderOrg, text) || a.storeHas(t, folderAcme, text) {
 		t.Fatal("the company move lands it in the org folder and leaves no live copy in acme/")
 	}
@@ -782,15 +799,17 @@ func TestRecipe12_InternalTasksNeverReachClient(t *testing.T) {
 	appRefs := strings.Join(a.app.Refs(""), ",") + a.app.Rev(refMain) + a.app.Rev(refLive)
 	r := a.aliceApp.MustLore("task", "add", "send invoice reminder before demo", "--to", orgNorthwind, "--assign", "@dev1", "--ref", clientTask, "--ref", "commit:a1b2c3")
 	id := mustID(t, r, "tsk")
-	// A row written into a store is committed on the store branch and
-	// pushed at once (STORE_SERVER_SPEC 6.1 + LORE_TEAM_SPEC §3.2; a store
-	// clone has no live ref in 0.1.18), so dev1's clone can see it.
+	// A row written into a store is committed on the store branch and sent
+	// with alice's lore sync (C5; STORE_SERVER_SPEC 6.1: a store clone has
+	// no live ref in 0.1.18), so dev1's clone can see it.
+	a.aliceApp.MustLore("sync")
 	if row, ok := a.storeMainRow(t, folderAcme, tblTasks, id); !ok || row.Status == statusDone {
 		t.Fatalf("the open task must be on the store branch after the push: %v", a.store.Files(refMain))
 	}
 	a.dev1App.Git("checkout", "-q", "-b", "feat/login")
 	a.dev1App.MustLore("task", "list").Says(t, "["+orgNorthwind+"/"+folderAcme+"]", "send invoice reminder before demo")
 	a.dev1App.MustLore("task", "done", id)
+	a.dev1App.MustLore("sync") // C5: dev1's done reaches the store with his sync
 	if r, ok := a.storeMainRow(t, folderAcme, tblTasks, id); !ok || r.Status != statusDone {
 		t.Fatal("done lands on the store branch in acme")
 	}
@@ -823,6 +842,7 @@ func TestRecipe13_StagingLoreIsSeparate(t *testing.T) {
 	}
 	a.aliceApp.MustLore("org", "link", orgStaging, "--project", folderAcme, "--yes")
 	id := mustID(t, a.aliceApp.MustLore("task", "add", "seed staging with demo data", "--to", orgStaging), "tsk")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	// Ported to STORE_SERVER_SPEC 6.1 (LORE_TEAM_SPEC 3.2): a store clone
 	// has no live ref in 0.1.18, so the open row is committed on the staging
 	// store branch (was refs/lore/live/staging).
@@ -837,6 +857,7 @@ func TestRecipe13_StagingLoreIsSeparate(t *testing.T) {
 	}
 	a.aliceApp.MustLore("org", "use", orgNorthwind)
 	a.aliceApp.MustLore("task", "done", id, "--from", orgStaging+"/"+folderAcme)
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if a.storeHas(t, folderAcme, "seed staging with demo data") {
 		t.Fatal("lore never moves rows between store branches")
 	}
@@ -872,6 +893,7 @@ func TestSideEffect32_Race_ProcessesShareOneBareClone(t *testing.T) {
 	for _, r := range res {
 		r.OK(t)
 	}
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	for _, s := range []string{"first writer", "second writer"} {
 		if !a.storeHas(t, folderAcme, s) {
 			t.Fatalf("%q lost with a shared clone", s)
@@ -1115,6 +1137,7 @@ func TestLeak_MoveInternalMemoryToClientRepoKeepsIdNoOrigin(t *testing.T) {
 	a := newAgency(t, th.Cmd("move"))
 	const text = "checkout must support INR and USD"
 	internal := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", text), "mem")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if !a.storeHas(t, folderAcme, internal) {
 		t.Fatal("the memory must start in the store's acme/ project")
 	}
@@ -1128,6 +1151,7 @@ func TestLeak_MoveInternalMemoryToClientRepoKeepsIdNoOrigin(t *testing.T) {
 			t.Fatalf("the moved row carries no origin field %q: %s", field, body)
 		}
 	}
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if a.storeHas(t, folderAcme, text) {
 		t.Fatal("the store keeps no live copy of the moved row (one home)")
 	}

@@ -65,6 +65,18 @@ func runTeamPush(t *testing.T) {
 	if err := w.StartTeamPush(ctx, loreBin, w.Home, InviteHub, InviteOrg, inviteRepo, PushBatch); err != nil {
 		t.Fatalf("start a team with push batch: %v\nserver output:\n%s", err, w.Output())
 	}
+	// C5: the settings commit waits in the admin's clone of the team store
+	// until they send it; a git push there keeps the commit as it is (a
+	// batch-mode lore sync would fold it into one batch commit)
+	clones, _ := filepath.Glob(filepath.Join(w.Home, ".lore", "stores", "*", inviteRepo))
+	if len(clones) != 1 {
+		t.Fatalf("the admin's clone of the team store: %v", clones)
+	}
+	push := exec.CommandContext(ctx, "/usr/bin/git", "push", "-q", "origin", "main")
+	push.Dir, push.Env = clones[0], w.runEnv
+	if out, err := push.CombinedOutput(); err != nil {
+		t.Fatalf("git push in the team store clone: %v\n%s", err, out)
+	}
 	bare := filepath.Join(w.Dir, "remote", w.Accounts[0].Login, inviteRepo+".git")
 	show := exec.CommandContext(ctx, "/usr/bin/git", "--git-dir", bare, "show", "main:lore-store.yaml")
 	marker, err := show.CombinedOutput()

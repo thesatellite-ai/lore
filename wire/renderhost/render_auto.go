@@ -22,7 +22,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 )
+
+// rowsDirRel is the project's row files folder, relative to the root.
+const rowsDirRel = rowfs.LoreDir + "/" + rowfs.DataDir
 
 // LoreFullRel is the full render file beside LoreMDRel, relative to the
 // project root (slash-separated).
@@ -80,6 +85,17 @@ func (h *Host) CommitRender(ctx context.Context, root string) []string {
 		}
 	}
 	return stage
+}
+
+// rowsUncommitted reports whether the row files of the project at root
+// have changes git shows (a write in this clone not committed yet). The
+// committed render is then already behind the work tree's rows, and the
+// commit that carries them also carries their render, so an automatic
+// render may refresh it (B-8 protects a clean tree only). Any git failure
+// answers false.
+func rowsUncommitted(ctx context.Context, root string) bool {
+	out, err := runGit(ctx, false, "-C", root, "status", "--porcelain", "--untracked-files=all", "--", rowsDirRel)
+	return err == nil && len(bytes.TrimSpace(out)) > 0
 }
 
 // tracked reports whether git tracks rel (slash-separated, under root).

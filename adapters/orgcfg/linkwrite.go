@@ -111,7 +111,7 @@ func (g *GitLinks) WriteLink(ctx context.Context, w LinkWrite) (LinkWriteResult,
 	if err != nil {
 		return LinkWriteResult{}, err
 	}
-	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live)}
+	res := LinkWriteResult{StoreURL: target, NoPush: !g.autopush(o.Live) || g.held(g.cloneDirOf(target))}
 	cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(target), Store: target, Branch: w.Plan.Branch, NoPush: res.NoPush, Route: g.Route, NewMarker: w.NewMarker,
 		FirstCommit: w.NewMarker != nil,
 		Message:     fmt.Sprintf(linkMessage, w.Plan.ProjectID), Signature: w.Signature,

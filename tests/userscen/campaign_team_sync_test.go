@@ -43,6 +43,7 @@ func TestCampaignTeam_TwoClonesSeeProfileWrites(t *testing.T) {
 	}
 	for _, w := range writes {
 		w.by.MustLore(w.args...)
+		w.by.MustLore("sync") // C5: a write reaches the team with its author's sync
 		other := bc
 		if w.by == bc {
 			other = o.app

@@ -269,6 +269,9 @@ func (a *App) afterWrite(ctx context.Context, e op.Entry) {
 	if e.Spec().Access != op.AccessWrite || e.Spec().Name == opsinfra.OpMachineLabel || opscoord.SignalsOnly(e.Spec().Name) || migrateBookkeeping(e.Spec().Name) {
 		return
 	}
+	if !a.wroteToMachineTarget(ctx) {
+		return
+	}
 	_, err := a.RefreshMachineProfile(ctx)
 	switch {
 	case err == nil, errs.Has(err, errs.StoreReadOnly):
@@ -277,6 +280,26 @@ func (a *App) afterWrite(ctx context.Context, e op.Entry) {
 	case a.opts.Notice != nil:
 		a.opts.Notice("machine profile not refreshed: " + err.Error())
 	}
+}
+
+// wroteToMachineTarget reports whether this command already wrote to the
+// store the machine profile goes to (ensureActor marks every store a
+// write reaches, state.wroteTo). The profile rides along with a write the person made
+// to that store, never on its own (B-16, C5): a task edit in a code repo
+// wrote only the repo, so it must not add an actor or machine row (and a
+// commit to push) to the personal store.
+func (a *App) wroteToMachineTarget(ctx context.Context) bool {
+	target, err := a.MachineTarget(ctx, "")
+	if err != nil {
+		return true // RefreshMachineProfile answers the same refusal (none, or a notice)
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return false
+	}
+	st.actorMu.Lock()
+	defer st.actorMu.Unlock()
+	return st.wroteTo[target]
 }
 
 // migrateBookkeeping reports the migrate operations, which carry no

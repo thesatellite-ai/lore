@@ -173,7 +173,9 @@ func (o StaffAddOut) Text() string {
 		b.WriteString("nothing written (--dry-run)\n")
 	default:
 		join := cmp.Or(o.JoinWith, joinPlaceholder)
-		b.WriteString(fmt.Sprintf("  %d roster rows in %s, one store commit; each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, join))
+		// C5: the roster commit waits for the admin's lore sync (unless the
+		// store is push=now), and a newcomer's join reads the remote roster
+		b.WriteString(fmt.Sprintf("  %d roster rows in %s, one store commit; once the roster is sent (`lore sync`), each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, join))
 	}
 	return b.String() + profilestore.WarningText(o.Warnings)
 }

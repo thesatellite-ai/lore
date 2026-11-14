@@ -97,7 +97,7 @@ func TestJourneySoloWhere(t *testing.T) {
 	sam := w.Persona(soloName, soloEmail)
 	lap := sam.Laptop()
 	app := w.Remote("github.com/sam-dev/app")
-	w.Remote(soloStore)
+	store := w.Remote(soloStore)
 	var appRepo *teamharness.Clone
 
 	w.Step("day1/setup-and-notes", func() {
@@ -109,9 +109,21 @@ func TestJourneySoloWhere(t *testing.T) {
 		lap.LoreIn(appRepo, "init").OK(t)
 		// the write names the row file it wrote
 		lap.LoreIn(appRepo, "memory", "add", "--body", "app: timestamps are UTC").OK(t).Says(t, "lore: wrote "+filepath.Join(appRepo.Dir, ".lore", "data", "memories"))
-		// a personal note's push names the store, the commit and the branch
-		lap.LoreIn(appRepo, "memory", "add", "--body", "I like short commit subjects", "--to", "me").OK(t).Says(t, "[me]", "lore: pushed store me: commit ", " to branch main")
-		lap.LoreIn(appRepo, "task", "add", "write the release notes").OK(t)
+		// C5 (B-16): a personal note is committed on the laptop and waits
+		// for Sam's lore sync; the push then names the store, the commit
+		// and the branch
+		before := store.Rev("refs/heads/main")
+		lap.LoreIn(appRepo, "memory", "add", "--body", "I like short commit subjects", "--to", "me").OK(t).
+			Says(t, "[me]", "lore: committed locally to store me; lore sync sends it").Never(t, "pushed store")
+		if store.Rev("refs/heads/main") != before {
+			t.Errorf("memory add --to me pushed the personal store without a sync")
+		}
+		// a task edit in the code repo writes nothing to the personal store
+		lap.LoreIn(appRepo, "task", "add", "write the release notes").OK(t).Never(t, "store me", "pushed store")
+		lap.LoreIn(appRepo, "sync").OK(t).Says(t, "lore: pushed store me: commit ", " to branch main")
+		if store.Rev("refs/heads/main") == before {
+			t.Errorf("lore sync did not send the personal note")
+		}
 		lap.LoreIn(appRepo, "render").OK(t)
 	})
 

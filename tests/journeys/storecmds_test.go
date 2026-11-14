@@ -56,6 +56,7 @@ func TestJourneyStoreCommands(t *testing.T) {
 		tlApply(t, lee, app.Dir, tlLeadSetup, "personal_store", map[string]any{"personal_store": "create", "store_url": me.SSHURL()})
 		tlApply(t, lee, app.Dir, tlLeadSetup, "team", map[string]any{"org": tlOrg, "store_url": tt.store.SSHURL()})
 		tlLastSteps(t, lee, app.Dir, tlLeadSetup, []string{tlFolders})
+		lee.Lore(app.Dir, "sync").OK(t) // C5: the new team store reaches the remote with Lee's sync
 		s := lee.Clone(tt.store, "team-store")
 		jWrite(t, filepath.Join(s.Dir, filepath.FromSlash(jManyOrgFile)), "name: "+tlOrg+"\nstores:\n"+
 			"    - url: "+tt.store.SSHURL()+"\n      org_folder: org\n"+
@@ -129,6 +130,7 @@ func TestJourneyStoreCommands(t *testing.T) {
 		lee.Lore(filepath.Join(twoClone, "client_a"), "sync").OK(t).Says(t, "store notes-two: up to date").Never(t, "store "+tlOrg)
 		// a row changed in the store by another clone is pulled
 		id := jID(t, lee.Lore(filepath.Join(twoClone, "client_a"), "task", "add", "a task in notes-two", "--json").OK(t))
+		lee.Lore(filepath.Join(twoClone, "client_a"), "sync").OK(t) // C5: the task reaches the store with Lee's sync
 		other := lee.Clone(two, "notes-two-other")
 		p := filepath.Join(other.Dir, "client_a", "tasks", id+".json")
 		body := jRead(t, p)
@@ -161,6 +163,7 @@ func TestJourneyStoreCommands(t *testing.T) {
 		if !gotMe {
 			t.Errorf("store list --json from ~ has no personal store me (%s): %+v", me.SSHURL(), list.Stores)
 		}
+		lee.Lore(lee.Home, "sync").OK(t) // C5: sends what this machine's writes left waiting
 		lee.Lore(lee.Home, "sync").OK(t).Says(t, "store "+tlOrg+": up to date", "store notes-two: up to date", "store me: up to date")
 		// a row of lore-me changed by another clone is pulled
 		other := lee.Clone(me, "lore-me-other")

@@ -131,6 +131,8 @@ type storePush struct {
 	// waitSaid: this read command already said its commits wait for
 	// `lore sync` (one line per store and command).
 	waitSaid bool
+	// localSaid: this command already said a write stayed local (sayLocal).
+	localSaid bool
 	// reach is what this command's read fetch learned of the remote
 	// (reachOnline, reachOffline; reachUnknown without one): sayWaiting
 	// says the waiting commits again when it changed.
@@ -168,7 +170,7 @@ func (b *storePush) settings(ctx context.Context) (autopush bool, ttl time.Durat
 
 // pushSettings is the store's push settings, resolved once per command:
 // the personal: block for `me`, the store's lore-store.yaml for any other
-// store. A bad value pushes as mode now (`lore store show` and `lore
+// store. A bad value is the default, manual (`lore store show` and `lore
 // doctor` name it).
 func (b *storePush) pushSettings() storepush.Settings {
 	if b.push != nil {
@@ -224,7 +226,7 @@ const piggybackTimeout = 15 * time.Second
 func (b *storePush) begin(ctx context.Context) {
 	if r := requestOf(ctx); r != b.req {
 		b.req, b.fetched, b.earlier, b.pushFailed = r, false, store.SyncReport{}, false
-		b.push, b.compacted, b.waitSaid, b.reach = nil, false, false, reachUnknown
+		b.push, b.compacted, b.waitSaid, b.reach, b.localSaid = nil, false, false, reachUnknown, false
 	}
 }
 
@@ -332,8 +334,10 @@ func (b *storePush) hasUnpulled(ctx context.Context) bool {
 	return err == nil && n > 0
 }
 
-// syncInner syncs the clone: noPush fetches and merges only; a held
-// store's push folds its unpushed commits into one batch commit.
+// syncInner syncs the clone: noPush fetches and merges only; a batch
+// store's push folds its unpushed commits into one batch commit. A manual
+// store (the default, C5) sends its commits as they are: each keeps its
+// subject and author (a layout commit, a hand edit, a settings change).
 func (b *storePush) syncInner(ctx context.Context, noPush bool) (store.SyncReport, error) {
 	gb := gitOf(b.inner)
 	if gb == nil || (!noPush && !b.held()) {
@@ -342,7 +346,8 @@ func (b *storePush) syncInner(ctx context.Context, noPush bool) (store.SyncRepor
 		}
 		return b.inner.Sync(ctx)
 	}
-	return gb.SyncWith(ctx, gitbackend.SyncOptions{NoPush: noPush, Squash: !noPush})
+	squash := !noPush && b.pushSettings().Push == storepush.ModeBatch
+	return gb.SyncWith(ctx, gitbackend.SyncOptions{NoPush: noPush, Squash: squash})
 }
 
 // pushNow pushes what the clone holds (a batch commit for a held store);
@@ -458,13 +463,16 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		return
 	}
 	if autopush, _ := b.settings(ctx); !autopush {
+		b.sayLocal()
 		return
 	}
 	switch b.pushSettings().Push {
 	case storepush.ModeManual:
+		b.sayLocal()
 		return
 	case storepush.ModeBatch:
 		if !b.batchDue(ctx) {
+			b.sayLocal()
 			return
 		}
 	}
@@ -476,6 +484,17 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		return
 	}
 	b.pushNow(ctx)
+}
+
+// sayLocal says once per command and store that a write stayed in the
+// local clone (C5: the person sees where their change is and what sends
+// it; nothing pushes unasked).
+func (b *storePush) sayLocal() {
+	if b.localSaid || b.notes == nil {
+		return
+	}
+	b.localSaid = true
+	_, _ = fmt.Fprintln(b.notes, "lore: committed locally to store "+string(b.name)+"; lore sync sends it")
 }
 
 // pendingPush is what happens to a commit whose push failed: the next

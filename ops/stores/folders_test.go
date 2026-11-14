@@ -65,7 +65,7 @@ func TestCheckStoreArg(t *testing.T) {
 // a repo; the .lore/stores.yaml writers do not; LeavesRepo is every store
 // command but those writers, and nothing outside the store noun.
 func TestRunsWithoutRepo(t *testing.T) {
-	for _, name := range []string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpSet, OpCompact} {
+	for _, name := range []string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpSet, OpCompact, OpPush} { // push: from ~ as lore sync
 		if !RunsWithoutRepo(name) || !LeavesRepo(name) {
 			t.Errorf("%s: RunsWithoutRepo %v LeavesRepo %v, want both true", name, RunsWithoutRepo(name), LeavesRepo(name))
 		}

@@ -139,6 +139,8 @@ func tlStartTeam(t testing.TB, m *Machine, dir, setup, org, storeURL string, p t
 	tlFirstSteps(t, m, dir, setup, "admin", p)
 	tlApply(t, m, dir, setup, "team", map[string]any{"org": org, "store_url": storeURL})
 	tlLastSteps(t, m, dir, setup, folders)
+	// C5: the new team store waits in the admin's clone until they send it
+	m.Lore(dir, "sync").OK(t)
 }
 
 // tlJoin saves every step of a member setup from an invite line.
@@ -147,6 +149,8 @@ func tlJoin(t testing.TB, m *Machine, dir, setup, invite string, p tlPerson, fol
 	tlFirstSteps(t, m, dir, setup, "member", p)
 	tlApply(t, m, dir, setup, "join", map[string]any{"invite": invite})
 	tlLastSteps(t, m, dir, setup, folders)
+	// C5: the joiner's roster row reaches the team with their sync
+	m.Lore(dir, "sync").OK(t)
 }
 
 // tlInvite runs `team invite` and returns the invite line it prints.
@@ -160,5 +164,7 @@ func tlInvite(t testing.TB, m *Machine, dir, email string, extra ...string) (id,
 	if err := json.Unmarshal([]byte(r.Stdout), &o); err != nil || !strings.HasPrefix(o.Text, "lore-invite:") {
 		t.Fatalf("team invite printed no invite line: %s", r)
 	}
+	// C5: the invite reaches the team store with the inviter's sync
+	m.Lore(dir, "sync").OK(t)
 	return o.ID, o.Text
 }

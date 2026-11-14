@@ -404,10 +404,10 @@ const (
 // step, which they do only when the store picked there is a git repo:
 // create or existing with a git url, or inherit with a git personal.store.
 // A local folder or none has no remote (lore refuses another mode there),
-// so the question stays empty, as it does for push now.
+// so the question stays empty, as it does for push manual (the default).
 func pickPush(o *Outcome, w *World, step opssetup.PlanStep, answers onboard.Answers) {
 	mode := w.Shape.PushMode()
-	if string(step.ID) != personalStoreStep || mode == PushNow {
+	if string(step.ID) != personalStoreStep || mode == PushManual {
 		return
 	}
 	url := ""
@@ -458,7 +458,7 @@ func personalPush(path string) (string, error) {
 }
 
 // judgePush: config.yaml personal.push is the mode the walk picked, and
-// unset when it picked none (push now writes nothing). After a batch
+// unset when it picked none (push manual, the default, writes nothing). After a batch
 // save, `lore store show me` for the new setup says so, with the default
 // interval.
 func judgePush(ctx context.Context, o *Outcome, w *World, name string) {

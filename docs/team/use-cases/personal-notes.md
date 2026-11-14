@@ -68,14 +68,12 @@ To sync between machines, make a new, empty private repo of your own into your p
 # alice, in scratch
 $ lore store init --name me --url git@github.com:alice/lore-me --yes
 lore store init: store clone ~/.lore/stores/alice/lore-me: git user set to alice <alice@devbox> (your lore identity)
-lore store init: store clone ~/.lore/stores/alice/lore-me: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store me (sto_c0f3…b5b8) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website
 $ lore memory add --body 'my invoice template lives in the shared drive' --to me
 lore memory add: store clone ~/.lore/stores/alice/lore-me: git user set to Alice Doe <alice@agency.example> (your lore identity, was alice@devbox)
-lore: pushed store me: commit 601d285 to branch main
-lore: pushed store me: commit 86dbae4 to branch main
+lore: committed locally to store me; lore sync sends it
 lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a67…9504.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_76bd…3f10.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (store me)
@@ -86,7 +84,7 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (s
 $ lore memory list
 lore memory list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 lore memory list: store clone ~/.lore/stores/alice/lore-me: git user set to Alice Doe <alice@agency.example> (your lore identity)
-mem_76bd…3f10 [retrieved] my invoice template lives in the shared drive [me]
+(no memories)
 ```
 <!-- /example -->
 

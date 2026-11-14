@@ -207,6 +207,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		w.AdvanceDays(3)
 		from, until := w.Now().Format("2006-01-02"), w.Now().AddDate(0, 0, 14).Format("2006-01-02")
 		tt.lore(tlLee, "actor", "status", "@bob", "on_leave", "--from", from, "--until", until, "--note", "parental leave").OK(t).Says(t, "on_leave")
+		tt.lore(tlLee, "sync").OK(t) // C5: the status change reaches the team with Lee's sync
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		if a := tt.roster(t, tlAnn)["human:"+tlBob.Email]; a.Status != "on_leave" || a.LeaveUntil != until {
 			t.Errorf("a teammate does not see Bob on leave until %s: %+v", until, a)
@@ -223,6 +224,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		if a := tt.roster(t, tlCat)["human:"+tlCat.Email]; a.Display != "Cat Doe" {
 			t.Errorf("Cat's own roster still names %q after the rename", a.Display)
 		}
+		tt.lore(tlCat, "sync").OK(t) // C5: the new name reaches the team with Cat's sync
 		tt.lore(tlLee, "sync", "run").OK(t)
 		if a := tt.roster(t, tlLee)["human:"+tlCat.Email]; a.Display != "Cat Doe" {
 			t.Errorf("the lead's roster still names %q after Cat renamed", a.Display)
@@ -288,7 +290,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		ann := tt.m[tlAnn.Email]
 		ann.Offline()
 		r := tt.lore(tlAnn, "memory", "add", "flaky checkout test: retry once", "--to", tlOrg+"/"+tlProject, "--json").OK(t)
-		r.Says(t, "unreachable", "lore sync")
+		r.Says(t, "committed locally to store", "lore sync") // C5: no push is tried
 		var o struct {
 			ID string `json:"id"`
 		}
@@ -311,6 +313,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		r.Never(t, "offline")
 		tt.lore(tlAnn, "sync", "status").OK(t).Says(t, "refused pushes:   0")
 		tt.lore(tlLee, "sync", "run").OK(t)
+		tt.lore(tlAnn, "sync", "run").OK(t) // C5: Lee's note of the week reached the store with his sync
 		for _, p := range []tlPerson{tlLee, tlAnn} {
 			if tt.body(t, p, annNote) == "" || tt.body(t, p, leeNote) == "" {
 				t.Errorf("%s does not see both notes of the offline week", p.Name)
@@ -335,6 +338,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		tt.lore(tlAnn, "setup", "list").OK(t).Says(t, tlTeamSetup, "admin", tlOrg)
 		// Lee hands over and leaves the team.
 		tt.lore(tlAnn, "actor", "offboard", "@lee", "--reason", "moved to another team", "--yes").OK(t).Says(t, "left")
+		tt.lore(tlAnn, "sync").OK(t) // C5: the offboard reaches the team with Ann's sync
 		tt.lore(tlLee, "sync", "run").OK(t)
 		if a := tt.roster(t, tlLee)["human:"+tlLee.Email]; a.Status != "left" {
 			t.Errorf("Lee's own roster says %q after the offboard", a.Status)
@@ -357,6 +361,7 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 	w.Step("week3/bob-back-from-leave", func() {
 		w.AdvanceDays(5)
 		tt.lore(tlAnn, "actor", "status", "@bob", "active").OK(t)
+		tt.lore(tlAnn, "sync").OK(t) // C5: the status change reaches the team with Ann's sync
 		tt.lore(tlBob, "sync", "run").OK(t)
 		if a := tt.roster(t, tlBob)["human:"+tlBob.Email]; a.Status != "active" || a.LeaveUntil != "" {
 			t.Errorf("Bob is back but his roster says %+v", a)
@@ -430,12 +435,17 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 	})
 
 	w.Step("day1/invite-revoked-then-resent", func() {
-		// A typo: revoked before anyone used it.
-		typoID, _ := tlInvite(t, lee, leeDir, "ann@exmaple.test")
-		tt.lore(tlLee, "team", "invite", "revoke", typoID, "--yes").OK(t)
+		// A typo: revoked before anyone used it. The invite waits in Lee's
+		// clone of the team store (C5), so the text says to sync before
+		// sending the line (the join reads the store's remote).
+		tt.lore(tlLee, "team", "invite", "ann@exmaple.test", "--yes").OK(t).Says(t, "run `lore sync` before you send the line")
+		tt.lore(tlLee, "sync").OK(t)
+		tt.lore(tlLee, "team", "invite", "revoke", "--ref", "ann@exmaple.test", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t) // C5: each revoke reaches the team store with Lee's sync
 		// The right address, but the lead forgot the project: revoke, invite again.
 		firstID, first := tlInvite(t, lee, leeDir, tlAnn.Email)
 		tt.lore(tlLee, "team", "invite", "revoke", firstID, "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
 		tt.invites(t, tlLee, map[string]string{"ann@exmaple.test": "revoked", tlAnn.Email: "revoked"})
 		_, line := tlInvite(t, lee, leeDir, tlAnn.Email, "--project", tlProject, "--role", "dev")
 		ann := tt.person(tlAnn)
@@ -446,6 +456,7 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 		ann.LoreIn(tt.repo[tlAnn.Email], "setup", "apply", tlTeamSetup, "--step", "join", "--answers", string(b), "--json").Refused(t, "revoked")
 		before := ownCommits(tt.store, "refs/heads/main")
 		tlApply(t, ann, dir, tlTeamSetup, "join", map[string]any{"invite": line})
+		ann.Lore(dir, "sync").OK(t) // C5: her join reaches the team store with her sync
 		// W-12: her actor row, contacts, stint, membership and the invite
 		// accepted land as ONE store commit (it was one per row)
 		if n := ownCommits(tt.store, "refs/heads/main") - before; n != 1 {
@@ -472,9 +483,11 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 	w.Step("week1/edit-then-edit-back", func() {
 		w.AdvanceDays(2)
 		tt.lore(tlAnn, "memory", "edit", ruleID, "--body", "run the linter when you remember").OK(t)
+		tt.lore(tlAnn, "sync").OK(t) // C5: each edit reaches the team with its author's sync
 		tt.lore(tlLee, "sync", "run").OK(t)
 		tt.seesRule(t, tlLee, ruleID, "run the linter when you remember")
 		tt.lore(tlLee, "memory", "edit", ruleID, "--body", tlRuleBody).OK(t)
+		tt.lore(tlLee, "sync").OK(t)
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		tt.seesRule(t, tlAnn, ruleID, tlRuleBody)
 	})
@@ -482,11 +495,13 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 	w.Step("week1/delete-then-restore", func() {
 		w.AdvanceDays(1)
 		tt.lore(tlLee, "memory", "delete", ruleID, "--yes").OK(t).Says(t, "trash restore --id "+ruleID)
+		tt.lore(tlLee, "sync").OK(t) // C5: the delete reaches the team with Lee's sync
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		if tt.body(t, tlAnn, ruleID) != "" {
 			t.Error("Ann still sees the rule the lead deleted")
 		}
 		tt.lore(tlLee, "trash", "restore", ruleID, "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		for _, p := range []tlPerson{tlLee, tlAnn} {
 			tt.seesRule(t, p, ruleID, tlRuleBody)
@@ -528,11 +543,13 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 		w.AdvanceDays(5)
 		from := w.Now().Format("2006-01-02")
 		tt.lore(tlLee, "actor", "status", "@ann", "on_leave", "--from", from).OK(t)
+		tt.lore(tlLee, "sync").OK(t) // C5: each status change reaches the team with Lee's sync
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		if a := tt.roster(t, tlAnn)["human:"+tlAnn.Email]; a.Status != "on_leave" {
 			t.Errorf("Ann's roster says %q while on leave", a.Status)
 		}
 		tt.lore(tlLee, "actor", "status", "@ann", "active").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		if a := tt.roster(t, tlAnn)["human:"+tlAnn.Email]; a.Status != "active" || a.LeaveUntil != "" {
 			t.Errorf("Ann is back but her roster says %+v", a)
@@ -543,12 +560,14 @@ func TestJourneyTeamLeadUndo(t *testing.T) {
 		w.AdvanceDays(7)
 		id := tt.roster(t, tlLee)["human:"+tlAnn.Email].ID
 		tt.lore(tlLee, "actor", "offboard", "@ann", "--reason", "contract ended", "--yes").OK(t).Says(t, "left")
+		tt.lore(tlLee, "sync").OK(t) // C5: each roster change reaches the team with Lee's sync
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		if a := tt.roster(t, tlAnn)["human:"+tlAnn.Email]; a.Status != "left" {
 			t.Errorf("Ann's roster says %q after the offboard", a.Status)
 		}
 		w.AdvanceDays(14)
 		tt.lore(tlLee, "actor", "rejoin", "@ann", "--type", "employee", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
 		tt.lore(tlAnn, "sync", "run").OK(t)
 		a := tt.roster(t, tlAnn)["human:"+tlAnn.Email]
 		if a.Status != "active" || a.ID != id {

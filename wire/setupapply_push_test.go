@@ -9,6 +9,7 @@ package wire
 
 import (
 	"context"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,7 @@ func TestSetupApplyPersonalPush(t *testing.T) {
 	}
 
 	// No remote to push to: refused before config.yaml is touched.
-	for _, c := range []struct{ choice, push string }{{onboard.PersonalStoreLocal, "batch"}, {onboard.PersonalStoreNone, "manual"}} {
+	for _, c := range []struct{ choice, push string }{{onboard.PersonalStoreLocal, "batch"}, {onboard.PersonalStoreNone, "now"}} {
 		before := cfgText()
 		_, aerr := apply(onboard.Answers{onboard.QIDPersonalStore: {Text: c.choice}, onboard.QIDPush: {Text: c.push}})
 		if !errs.Has(aerr, errs.InvalidInput) || !strings.Contains(aerr.Error(), "needs a git repo") {
@@ -93,16 +94,25 @@ func TestSetupApplyPersonalPush(t *testing.T) {
 	if res, err = apply(batch); err != nil || res.Changed {
 		t.Fatalf("second identical save = %+v, %v; want unchanged", res, err)
 	}
-	// now (or no answer) writes nothing, also over an earlier batch.
+	// manual (the default, C5) or no answer writes nothing, also over an
+	// earlier batch.
 	before := cfgText()
-	for _, p := range []string{"now", ""} {
+	for _, p := range []string{"manual", ""} {
 		ans := onboard.Answers{onboard.QIDPersonalStore: {Text: onboard.PersonalStoreExisting}, onboard.QIDStoreURL: {Text: url}, onboard.QIDPush: {Text: p}}
 		if res, err = apply(ans); err != nil || res.Changed {
 			t.Fatalf("push %q = %+v, %v; want nothing written", p, res, err)
 		}
 	}
 	if cfgText() != before {
-		t.Fatalf("push now rewrote config.yaml:\n%s", cfgText())
+		t.Fatalf("push manual rewrote config.yaml:\n%s", cfgText())
+	}
+	// now is an opt-in the answer writes out
+	nowAns := onboard.Answers{onboard.QIDPersonalStore: {Text: onboard.PersonalStoreExisting}, onboard.QIDStoreURL: {Text: url}, onboard.QIDPush: {Text: "now"}}
+	if res, err = apply(nowAns); err != nil || !res.Changed {
+		t.Fatalf("push now = %+v, %v; want config.yaml written", res, err)
+	}
+	if raw, err := personalPushRaw(home); err != nil || raw.Push != string(storepush.ModeNow) {
+		t.Fatalf("personal push after now = %+v, %v", raw, err)
 	}
 }
 
@@ -141,6 +151,13 @@ func TestSetupApplyTeamPush(t *testing.T) {
 	}
 	if !isOrgAdmin(home, "northwind") {
 		t.Fatal("no admin setups[] entry for northwind after the team step")
+	}
+	// C5: the settings commit waits in the local clone until a person syncs
+	if marker := orgGit(t, filepath.Join(w.hosts, "agency/team.git"), "show", "main:lore-store.yaml"); strings.Contains(marker, "push: batch") {
+		t.Fatalf("the push setting reached the remote before any sync:\n%s", marker)
+	}
+	if _, err := app.PushStoreNow(ctx, opsstores.PushIn{Store: url}); err != nil { // `lore store push`
+		t.Fatal(err)
 	}
 	marker := orgGit(t, filepath.Join(w.hosts, "agency/team.git"), "show", "main:lore-store.yaml")
 	if !strings.Contains(marker, "push: batch") {

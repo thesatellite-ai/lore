@@ -169,3 +169,17 @@ func TestRefetch(t *testing.T) {
 		}
 	}
 }
+
+// TestDefaultIsManual (C5, B-16): a store with no settings waits for a
+// person's lore sync; push now is only ever an explicit choice.
+func TestDefaultIsManual(t *testing.T) {
+	if Default().Push != ModeManual {
+		t.Fatalf("default push mode %s, want manual", Default().Push)
+	}
+	if s, err := FromRaw(Raw{}); err != nil || s.Push != ModeManual {
+		t.Fatalf("no settings read as %v, %v", s.Push, err)
+	}
+	if s, err := FromRaw(Raw{Push: "now"}); err != nil || s.Push != ModeNow {
+		t.Fatalf("push=now read as %v, %v", s.Push, err)
+	}
+}

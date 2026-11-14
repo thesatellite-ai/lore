@@ -110,7 +110,7 @@ func (a *App) planRepoLinks(ctx context.Context, projectID string, confirmed []s
 	if len(cfg.Orgs) == 0 {
 		return p
 	}
-	p.g = &orgcfg.GitLinks{Home: a.opts.Home, Config: cfg, Always: true, Now: a.opts.Wall, Route: storeRouter(a.opts.Home, a.projectDir())} // fetch stamps on the app clock
+	p.g = &orgcfg.GitLinks{Held: orgStoreHeld, Home: a.opts.Home, Config: cfg, Always: true, Now: a.opts.Wall, Route: storeRouter(a.opts.Home, a.projectDir())} // fetch stamps on the app clock
 	res, err := p.g.Links(ctx, projectID, confirmed)
 	if err != nil {
 		p.warning = repoLinkWarning + "store links not updated: " + err.Error()

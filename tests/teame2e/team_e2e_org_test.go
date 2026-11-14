@@ -242,6 +242,7 @@ func TestF18_HandleClashIsRefused(t *testing.T) {
 func TestF18_AgentStartRegistersAnAgentWithItsOwner(t *testing.T) {
 	a := newAgency(t, th.Cmd("agent", "start"))
 	ag := startAgent(t, a.alice, a.aliceApp, "frontend-2")
+	a.aliceApp.MustLore("sync") // C5: the agent's roster row reaches the store with its owner's sync
 	if !strings.HasPrefix(ag.Env(th.EnvLoreActor), "agent:") || ag.Env(th.EnvLoreSession) == "" {
 		t.Fatalf("agent start must set LORE_ACTOR=agent:… and LORE_SESSION: %q %q", ag.Env(th.EnvLoreActor), ag.Env(th.EnvLoreSession))
 	}
@@ -334,6 +335,7 @@ func TestRecipe05_PersonalNotesSyncBetweenMachines(t *testing.T) {
 	cfg.Personal = &th.Personal{Store: personal.URL()}
 	o.alice.WriteConfig(cfg)
 	o.acme.MustLore("memory", "add", "--body", "remember the VPN on devbox", "--to", "me")
+	o.acme.MustLore("sync") // C5: the note reaches the personal store remote with lore sync
 	server := o.w.Human("alice-server", "alice@northwind.example")
 	server.WriteConfig(cfg)
 	sc := server.Clone(o.remote[slugOwnTools], "tools")

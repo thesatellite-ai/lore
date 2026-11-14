@@ -1,7 +1,7 @@
 
 ### show
 alice (work/website)$ lore store show --store me
-me: push now, compact off
+me: push manual, compact off
   at        git@github.com:alice/lore-me
   used by   your setup agency (one personal store per person: any other setup of yours shares it)
   set in    ~/.lore/config.yaml (personal:)
@@ -14,12 +14,14 @@ me: push batch every 10m, compact off
   epoch     0
 alice (work/website)$ lore memory add --body 'I always forget the staging VPN profile' --to me
 lore memory add: store clone ~/.lore/stores/alice/lore-me: git user set to Alice <alice@agency.example> (your lore identity, was alice@devbox)
+lore: committed locally to store me; lore sync sends it
 lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_2ad3618e878ebbf527d34d446ef4f891.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162df51b7f78b785c97c26b41ea89666.json (store me)
 ✓ mem_2ad3618e878ebbf527d34d446ef4f891 [me]
   scope: [master]
 alice (work/website)$ lore memory add --body 'I prefer short standups' --to me
+lore: committed locally to store me; lore sync sends it
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json (store me)
 ✓ mem_54fe984c9b495744c0217776765a28f2 [me]
   scope: [master]
@@ -69,11 +71,17 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 (exit 20)
 
 ### org settings
-alice (work/website)$ lore store set --store agency --settings push=batch --settings push_every=15m
+alice (work/website)$ lore store set --store agency --settings push=batch --settings push_every=15m && lore sync
+committed locally to store agency; lore sync sends it
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin, which this machine is)
   epoch     0
-  pushed    2026-11-02T10:01:05Z
+  waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
+  pushed    2026-08-03T09:00:00Z
+lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
+store me: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
+store agency/org: sent 0, received 0, merged 0, refused 0
 bob (work/website)$ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin)
@@ -82,6 +90,7 @@ agency: push batch every 15m, compact off
 
 ### compact
 bob (work/website)$ lore memory add --body 'the client wants the invoice on the 1st' --to agency
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e99e22e9e86e96fe4daa7777994603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 [agency/client]
@@ -93,10 +102,10 @@ ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agen
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/website)$ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae476bd6)
-  pushed store agency: commit 9b40ce7 to branch main
+✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
+  pushed store agency: commit 05513aa to branch main
 bob (work/website)$ lore sync
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
 store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 bob (work/website)$ lore memory list

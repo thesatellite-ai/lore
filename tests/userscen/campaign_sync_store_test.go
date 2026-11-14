@@ -52,6 +52,7 @@ func TestCampaignSync_StoreForget(t *testing.T) {
 	if clones := alice.StoreClones(t); len(clones) != 1 || !strings.HasPrefix(clones[0], alice.LorePath("stores")) {
 		t.Fatalf("the git store has one clone under ~/.lore/stores: %v", clones)
 	}
+	a.MustLore("sync") // C5: forget keeps a store with unsent work; send it first
 	a.MustLore("store", "forget", "notes").Says(t, "forgot")
 	a.MustLore("store", "forget", r.URL()).Says(t, "nothing to forget")
 	for _, args := range [][]string{{"store", "forget", "shelf"}, {"store", "forget", folder}} {

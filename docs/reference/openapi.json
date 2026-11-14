@@ -104853,6 +104853,9 @@
                     "repo": {
                       "type": "string"
                     },
+                    "sync_first": {
+                      "type": "boolean"
+                    },
                     "teams": {
                       "type": "array",
                       "items": {

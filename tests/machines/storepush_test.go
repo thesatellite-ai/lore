@@ -58,7 +58,7 @@ func spBatchMachine(t *testing.T, shape string) {
 	m.CheckMachine(t, shape+"/admin with git stores", gone)
 
 	// Both start as now; set them to batch.
-	want := spWant{Push: "now", PushEvery: "5m", Compact: "off"}
+	want := spWant{Push: "manual", PushEvery: "5m", Compact: "off"} // C5: the default
 	want.check(t, "before set me", spShow(t, m, repo, "me"))
 	want.check(t, "before set "+spOrg, spShow(t, m, repo, spOrg))
 	want = spWant{Push: "batch", PushEvery: spEvery, Compact: "off"}

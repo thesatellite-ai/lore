@@ -51,6 +51,7 @@ func TestJourneyInitLinkedRepo(t *testing.T) {
 		s.Git("push", "-q", "origin", "HEAD:main")
 		lee.Lore(parent, "org", "refresh", tlOrg).OK(t)
 		lee.Lore(parent, "store", "folder", "add", "team", ilFolder).OK(t)
+		lee.Lore(parent, "sync").OK(t) // C5: the folder reaches the store with Lee's sync
 		hub = jPlainRepo(t, lee, remote, filepath.Join(parent, "svc"))
 		lee.LoreIn(hub, "org", "link", tlOrg, "--project", ilFolder, "--own", "--yes").OK(t)
 		// H-2: a plain write in a repo linked by its remote (no --to) goes to
@@ -149,6 +150,7 @@ func TestJourneyLinkedFolderOfAnotherStore(t *testing.T) {
 		w.AdvanceDays(1)
 		lee.LoreIn(repo, "memory", "add", "--body", "plain write to extra").OK(t)
 		lee.LoreIn(repo, "memory", "add", "--body", "hinted write to extra", "--to", tlOrg+"/extra").OK(t)
+		lee.LoreIn(repo, "sync").OK(t) // C5: the writes reach the store with Lee's sync
 		if f := two.FilesMatching("refs/heads/main", "extra/memories/"); len(f) != 2 {
 			t.Fatalf("both writes must land in the second store's extra/ folder: %v", f)
 		}

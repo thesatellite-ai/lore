@@ -346,3 +346,43 @@ func TestLeakRowsNamesANeverReadStore(t *testing.T) {
 		t.Fatalf("refusal %q hint %q: want the store named and the sync hint", coded.Message, coded.Hint)
 	}
 }
+
+// TestLeakRowsRosterOnlyForClientRepos: the roster's actor ids and emails
+// are indexed only for a linked client repo (F-4, batch 11). In any other
+// checked repo (a solo person's own repo, link unknown) the personal store
+// is indexed for its notes, but its roster (the person themself) is not:
+// a task there that names its author is no leak.
+func TestLeakRowsRosterOnlyForClientRepos(t *testing.T) {
+	// Heavy on SQLite: its own process keeps it off this process's
+	// allocator lock (see package isolate).
+	if isolate.Run(t) {
+		return
+	}
+	a := leakWorld(t, false)
+	if _, err := a.Create(background(), "me", schema.TableActors, leakActorFields(t)); err != nil {
+		t.Fatalf("actor in me: %v", err)
+	}
+	got, err := a.leakRows(background(), false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range got {
+		if r.Table == string(schema.TableActors) {
+			t.Errorf("own repo: the roster of %s is indexed: %+v", r.Source, r)
+		}
+	}
+}
+
+// leakActorFields is a minimal actors row (a person on the roster).
+func leakActorFields(t *testing.T) map[string]value.Value {
+	t.Helper()
+	f := map[string]value.Value{}
+	for k, v := range map[string]string{"display_name": "Pat Example", "kind": "human", leakActorStableKey: leakHumanKeyPrefix + "pat@example.test"} {
+		tv, err := value.TextOf(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f[k] = tv
+	}
+	return f
+}

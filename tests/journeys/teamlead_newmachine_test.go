@@ -39,6 +39,7 @@ func TestJourneyTeamLeadNewMachine(t *testing.T) {
 		lap.LoreIn(app, "store", "init", tnOrg, store.URL(), "--yes").OK(t)
 		lap.LoreIn(app, "org", "create", tnOrg, "--store", tnOrg, "--own", "github.com/rivet/*", "--repos", "github.com/clientco/*",
 			"--key", "human:"+tnEmail, "--name", rae.Name, "--yes").OK(t)
+		lap.LoreIn(app, "sync").OK(t) // C5: the org reaches the store with Rae's sync
 		// the team's file lists a second store
 		edit := filepath.Join(w.Root, "org-edit")
 		w.Git(w.Root, "clone", "-q", store.Dir, edit)

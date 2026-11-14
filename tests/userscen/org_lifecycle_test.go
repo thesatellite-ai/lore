@@ -74,6 +74,7 @@ func TestOrgOffboardThenRejoin(t *testing.T) {
 		Says(t, "offboarded on 2026-11-10", "1 memberships ended")
 	o.app.Lore("actor", "offboard", "@bob", "--yes").Fails(t, th.ExitRefused, "E_STATUS_CHANGE", "already left", "lore actor rejoin --actor @bob")
 
+	o.app.MustLore("sync") // C5: mira's writes reach bob with her sync
 	left := showActor(t, bc, "@bob")
 	if left.ID != bobID || left.Status != "left" || left.Active || len(left.Periods) != 1 || left.Periods[0].EndedOn != "2026-11-10" || left.Periods[0].EndReason != "moved abroad" {
 		t.Fatalf("after offboard: %+v", left)
@@ -117,6 +118,7 @@ func TestOrgOffboardThenRejoin(t *testing.T) {
 	bob.SetNow(orgDay(t, "2026-11-20"))
 	o.app.Lore("actor", "rejoin", "@bob", "--type", "contractor").Fails(t, th.ExitNeedsConfirm, "E_NEEDS_CONFIRM")
 	o.app.MustLore("actor", "rejoin", "@bob", "--type", "contractor", "--org-role", "Contract engineer", "--yes")
+	o.app.MustLore("sync") // C5: the rejoin reaches bob with mira's sync
 	back := showActor(t, bc, "@bob")
 	if back.ID != bobID || back.Status != "active" || !back.Active || len(back.Periods) != 2 {
 		t.Fatalf("rejoin is a second stint on the same actor: %+v", back)
@@ -320,6 +322,7 @@ func TestOrgProjectMembers(t *testing.T) {
 	o.app.MustLore("project", "member", "add", "app", "@bob", "--role", "dev,reviewer")
 	o.app.MustLore("project", "member", "add", "app", "@bob", "--role", "qa", "--role", "dev").Says(t, "already a member")
 	o.app.MustLore("project", "member", "add", "app", "@mira", "--role", "lead")
+	o.app.MustLore("sync") // C5: mira's writes reach bob with her sync
 	ms := members(bc)
 	if len(ms) != 2 {
 		t.Fatalf("two members, seen from bob's clone too: %+v", ms)
@@ -362,6 +365,7 @@ func TestOrgV0117DeactivatedRow(t *testing.T) {
 	tl := orgID(t, o.app.MustLore("tasklist", "add", "--title", "Inbox", "--body", "default list"), "tlt")
 
 	o.app.MustLore("actor", "deactivate", "@bob")
+	o.app.MustLore("sync") // C5: mira's writes reach bob with her sync
 	gone := showActor(t, bc, "@bob")
 	if gone.Active || gone.Status != "left" || gone.LeftAt == "" {
 		t.Fatalf("a v0.1.17 deactivate reads as left: %+v", gone)
@@ -373,6 +377,7 @@ func TestOrgV0117DeactivatedRow(t *testing.T) {
 	o.app.Lore("task", "add", "for bob", "--tasklist", tl, "--assign", "@bob").Refused(t, "@bob")
 
 	bc.MustLore("actor", "register").Says(t, "already registered (refreshed)")
+	bc.MustLore("sync") // C5: bob's register reaches mira with his sync
 	back := showActor(t, bc, "@bob")
 	if !back.Active || back.Status != "active" || back.LeftAt != "" {
 		t.Fatalf("register undoes a v0.1.17 deactivate: %+v", back)

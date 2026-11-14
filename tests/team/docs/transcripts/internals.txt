@@ -77,26 +77,27 @@ carol (work/app)$ git branch -a
 
 ### store layout
 alice (work/website)$ lore task add --title 'renew the client SSL certificate' --to agency
-lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
-lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/client (store agency)
-✓ tsk_76bd560aff0771fab8457dbfa9823f10 — renew the client SSL certificate [medium] → [agency/client]
+lore: committed locally to store agency; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_76bd560aff0771fab8457dbfa9823f10.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json (store agency)
+✓ tsk_b4f4765e593d51fd1352985e8af3a5b0 — renew the client SSL certificate [medium] → [agency/client]
   created tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a "default" for tasks added without --tasklist
 alice (work/website)$ lore memory add --body 'the client wants a demo every second Friday'
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json (store agency)
-✓ mem_b4f4765e593d51fd1352985e8af3a5b0 [agency/client]
+lore: committed locally to store agency; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_28f8d32584b2db54ffb146bede5b03df.json (store agency)
+✓ mem_28f8d32584b2db54ffb146bede5b03df [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [master]
 alice$ git -C ~/.lore/stores/agency/notes ls-tree -r --name-only main | grep -v '_meta.json\|.gitattributes' | head -20
 .0-needs-lore-0.1.18-or-newer
 README.md
-client/actors/act_28f8d32584b2db54ffb146bede5b03df.json
-client/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json
+client/actors/act_76bd560aff0771fab8457dbfa9823f10.json
+client/memories/mem_28f8d32584b2db54ffb146bede5b03df.json
 client/task_lists/tlt_d4314eba822f1bf5908b2b8ded5f313a.json
-client/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json
+client/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json
 lore-store.yaml
-org/actors/act_28f8d32584b2db54ffb146bede5b03df.json
+org/actors/act_76bd560aff0771fab8457dbfa9823f10.json
 org/projects/prj_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 alice$ git -C ~/.lore/stores/agency/notes for-each-ref --format='%(refname)'
 refs/heads/main
@@ -120,22 +121,22 @@ alice$ git -C ~/.lore/stores/agency/notes cat-file -p main:client/_meta.json
 
 ### signals
 alice (work/website)$ lore agent start --label agent-backend --owner @alice
-lore: pushed store agency/org: commit dfd8dc8 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_f147dd95f1aaf742dd4f5214843a5139.json (store agency/org)
 ✓ act_f147dd95f1aaf742dd4f5214843a5139 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
-agent-backend (work/website)$ lore task claim --id tsk_76bd560aff0771fab8457dbfa9823f10
-lore: pushed store agency/client (here: agency): commit cf563f3 to branch main
+agent-backend (work/website)$ lore task claim --id tsk_b4f4765e593d51fd1352985e8af3a5b0
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147dd95f1aaf742dd4f5214843a5139.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd560aff0771fab8457dbfa9823f10.json (store agency)
-✓ claimed tsk_76bd560aff0771fab8457dbfa9823f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json (store agency)
+✓ claimed tsk_b4f4765e593d51fd1352985e8af3a5b0 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 alice$ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
-client/claims/tsk_76bd560aff0771fab8457dbfa9823f10.json
-df3a55c lore: signals
+client/claims/tsk_b4f4765e593d51fd1352985e8af3a5b0.json
+9b40ce7 lore: signals
 alice$ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
-  "task": "tsk_76bd560aff0771fab8457dbfa9823f10",
+  "task": "tsk_b4f4765e593d51fd1352985e8af3a5b0",
   "project": "client",
   "holder": "act_f147dd95f1aaf742dd4f5214843a5139",
   "holder_label": "agent:agent-backend",
@@ -148,10 +149,10 @@ alice$ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin
   "renewed_at": "2026-11-02T10:01:10Z",
   "host": "devbox"
 }
-agent-backend (work/website)$ lore task heartbeat --id tsk_76bd560aff0771fab8457dbfa9823f10
-✓ tsk_76bd560aff0771fab8457dbfa9823f10 renewed until 2026-11-02T10:21:25Z (seq 1)
+agent-backend (work/website)$ lore task heartbeat --id tsk_b4f4765e593d51fd1352985e8af3a5b0
+✓ tsk_b4f4765e593d51fd1352985e8af3a5b0 renewed until 2026-11-02T10:21:25Z (seq 1)
 alice$ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git log --oneline refs/lore-remote/origin/signals/main
-6d00426 lore: signals
+05513aa lore: signals
 
 ### hooks
 alice (work/website)$ ls .git/hooks | grep -v sample; grep -h 'lore' .git/hooks/pre-commit | head -5

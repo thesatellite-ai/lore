@@ -66,7 +66,7 @@ func orgSuggestionLocal(ctx context.Context, home string, cfg *orgconf.Config, o
 		}
 		sc = &o.Stores[0]
 	}
-	g := &orgcfg.GitLinks{Home: home, Config: cfg}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: home, Config: cfg}
 	sg, err := g.LocalSuggestion(ctx, sc.URL, sc.Branch)
 	if err != nil || sg.Version == "" {
 		return orgcfg.Suggestion{}, false
@@ -249,7 +249,7 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 		}
 		sc = &o.Stores[0]
 	}
-	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
 	sg, err := g.ReadSuggestion(ctx, sc.URL, sc.Branch)
 	if err != nil {
 		return opsorgcmd.Report{}, orgFileError(err, sc.URL)

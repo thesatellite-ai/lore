@@ -79,7 +79,7 @@ func TestDeferredFetch(t *testing.T) {
 func TestHandEditContextNeverFetches(t *testing.T) {
 	t.Parallel()
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}}
-	b := &storePush{inner: f, name: "northwind", res: pushRes(t), notes: io.Discard}
+	b := &storePush{inner: f, name: "northwind", res: pushRes(t), notes: io.Discard, push: nowPush()}
 	if _, _, err := b.Read(handEditContext(background()), ""); err != nil || f.syncs != 0 {
 		t.Fatalf("a read inside the pick-up synced the store: syncs=%d err=%v", f.syncs, err)
 	}

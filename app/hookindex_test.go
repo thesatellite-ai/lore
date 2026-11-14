@@ -57,6 +57,7 @@ func pfStoreWorld(t *testing.T) (w *cliWorld, repo, clone, bare, memID string) {
 	if memID == "" {
 		t.Fatalf("no memory id in:\n%s\n%s", out, errOut)
 	}
+	w.mustLore(t, repo, "sync") // C5: the note reaches the store's remote with the person's sync
 	return w, repo, filepath.Join(home, ".lore", "stores", "acme", "notes"), bare, memID
 }
 

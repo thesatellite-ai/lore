@@ -23,13 +23,12 @@ $ lore store init --name notes --url git@github.com:acme/notes
 lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
 ✓ created store notes (sto_7a67…9504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
 $ lore task add --title 'Renew the TLS certificate' --to notes --no-live
-lore: pushed store notes: commit 601d285 to branch main
-lore: pushed store notes: commit 86dbae4 to branch main
+lore: committed locally to store notes; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
 ✓ tsk_2ad3…f891 — Renew the TLS certificate [medium] → [notes]
   created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
 $ lore memory add --to notes --body 'The staging database is reset every Monday.'
-lore: pushed store notes: commit 9b40ce7 to branch main
+lore: committed locally to store notes; lore sync sends it
 lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json (store notes)
 ✓ mem_54fe…28f2 [notes]
   scope: [master]
@@ -79,7 +78,7 @@ $ cat _store/memories/mem_54fe…28f2.json
     "cmd": "memory add",
     "git": {
       "branch": "main",
-      "commit": "05513aa29b78",
+      "commit": "601d2850ffd0",
       "state": "branch"
     },
     "project": "prj_76bd…3f10",
@@ -109,7 +108,6 @@ $ ls .git/lore
 fetch-stamp
 identity
 lock
-push_stamp
 remote-tip
 state
 $ head -12 README.md
@@ -153,12 +151,13 @@ You can clone the store wherever you like and point lore at it. lore records the
 # alice, in ~
 $ git clone -q git@github.com:acme/notes ~/code/notes && ls ~/code/notes
 README.md
-_store
 lore-store.yaml
 
 # alice, in website
+$ lore sync
+lore: pushed store notes: commit 9b40ce7 to branch main
+store notes: sent 5, received 0, merged 0, refused 0
 $ lore store use --path ~/code/notes --yes
-lore: pushed store notes: commit df3a55c to branch main
 ✓ store notes now uses your clone ~/code/notes (recorded on this machine only)
   before: ~/.lore/stores/acme/notes
   lore's earlier clone ~/.lore/stores/acme/notes is no longer used and stays on disk; remove it when you no longer need it

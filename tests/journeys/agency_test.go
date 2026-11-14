@@ -203,6 +203,7 @@ func agStart(t *testing.T) *agJ {
 		lm.LoreIn(j.tools, "init", "--non-interactive", "--name=tools").OK(t)
 		lm.LoreIn(j.tools, "store", "init", agOrg, "https://"+agStoreSlug, "--yes").OK(t).Says(t, "created store "+agOrg)
 		lm.LoreIn(j.tools, "actor", "register").OK(t)
+		lm.LoreIn(j.tools, "sync").OK(t) // C5: the roster row waits for the lead's sync
 		j.tools.CommitAll("lore")
 		j.tools.Git("push", "-q", "origin", "main")
 		if !j.storeR.Has("refs/heads/main") {
@@ -232,6 +233,7 @@ func agStart(t *testing.T) *agJ {
 			t.Errorf("org link changed the client repo: %q → %q", before, j.acme.Status())
 		}
 		m.LoreIn(j.acme, "actor", "register").OK(t)
+		m.LoreIn(j.acme, "sync").OK(t) // C5: the link and her roster row reach the store with her sync
 		who = m.LoreIn(j.acme, "whoami").OK(t)
 		if l := agLine(who.Stdout, "org"); !strings.Contains(l, "project id + remote") {
 			t.Errorf("whoami after the link does not say the link matched: %q", l)
@@ -255,6 +257,7 @@ func agStart(t *testing.T) *agJ {
 		m.LoreIn(j.acme, "check", "leaks", "--ci").OK(t) // the client CI's backstop
 		j.acme.CommitAll("lore notes")
 		j.acme.Git("push", "-q", "origin", "main")
+		m.LoreIn(j.acme, "sync").OK(t) // C5: the store notes reach the agency store with her sync
 	})
 
 	w.Fact("no client repo commits or serves an agency note", func(c Ctx) {
@@ -276,6 +279,7 @@ func agWeek1(t *testing.T, j *agJ) {
 		m.LoreIn(j.globex, "org", "link", agOrg, "--project", agFolderGlobex, "--yes").OK(t)
 		m.LoreIn(j.globex, "memory", "add", "--body", agGlobexNote).OK(t).Says(t, "["+agOrg+"/"+agFolderGlobex+"]")
 		m.LoreIn(j.globex, "task", "add", agGlobexTask, "--to", agOrg).OK(t)
+		m.LoreIn(j.globex, "sync").OK(t)
 		// One client's notes never show in another client's repo.
 		m.LoreIn(j.globex, "memory", "list").OK(t).Says(t, agGlobexNote).Never(t, agAcmeNote)
 		m.LoreIn(j.acme, "memory", "list").OK(t).Says(t, agAcmeNote).Never(t, agGlobexNote)
@@ -376,6 +380,7 @@ func TestJourneyAgencyClientMoves(t *testing.T) {
 		m.LoreIn(j.acme, "memory", "add", "--body", "a note while the link is stale").Refused(t, "lore org link")
 		// She re-links at the new address, as whoami told her.
 		m.LoreIn(j.acme, "org", "link", agOrg, "--project", agFolderAcme, "--yes").OK(t)
+		m.LoreIn(j.acme, "sync").OK(t)
 		who = m.LoreIn(j.acme, "whoami").OK(t)
 		if l := agLine(who.Stdout, "org"); !strings.Contains(l, "project id + remote") {
 			t.Errorf("after re-linking, whoami does not match by the link: %q", l)
@@ -399,6 +404,9 @@ func TestJourneyAgencyClientMoves(t *testing.T) {
 			t.Errorf("an unconfirmed unlink changed the store")
 		}
 		m.LoreIn(j.acme, "org", "unlink", agOrg, "--yes").OK(t).Says(t, "2 link(s) removed", "nothing was written to this repo")
+		// C5: the unlink reaches the store with her sync, from a repo still
+		// linked to the agency (acme no longer is)
+		m.LoreIn(j.globex, "sync").OK(t)
 		if agStoreLinks(t, j.storeR, agFolderAcme, acmePrj) {
 			t.Errorf("the store still links acme after the unlink")
 		}
@@ -457,6 +465,7 @@ func TestJourneyAgencyLeaves(t *testing.T) {
 		danaActor = agActorID(t, m.LoreIn(j.globex, "whoami").OK(t))
 		r := lm.LoreIn(j.tools, "actor", "offboard", "@dana", "--reason", "moved on", "--yes").OK(t)
 		r.Says(t, "offboarded")
+		lm.LoreIn(j.tools, "sync").OK(t) // C5: the offboard reaches the team with the lead's sync
 		lm.LoreIn(j.tools, "actor", "list").OK(t).Says(t, agDanaName)
 		// Her own clone cannot put her back on the roster.
 		m.LoreIn(j.globex, "actor", "register").Refused(t, "E_STATUS_CHANGE")
@@ -477,6 +486,7 @@ func TestJourneyAgencyLeaves(t *testing.T) {
 	w.AdvanceDays(60)
 	w.Step("month6/dana-rejoins-as-contractor", func() {
 		lm.LoreIn(j.tools, "actor", "rejoin", "@dana", "--type", "contractor", "--yes").OK(t)
+		lm.LoreIn(j.tools, "sync").OK(t) // C5: the rejoin reaches the team with the lead's sync
 		m.WriteConfig(agConfig(agDanaName, agDanaEmail, "dana"))
 		m.LoreIn(j.globex, "actor", "register").OK(t)
 		if got := agActorID(t, m.LoreIn(j.globex, "whoami").OK(t)); got != danaActor {

@@ -135,6 +135,8 @@ func lsTeamFor(t *testing.T, m *Machine, kind, email string) lsTeam {
 	if !strings.HasPrefix(tm.invite, "lore-invite:") {
 		t.Fatalf("team invite printed no invite line: %s", out)
 	}
+	// C5: the invite reaches the team store with the admin's sync
+	lsRun(t, admin, admin.Repos[RepoWorkApp], "sync")
 	return tm
 }
 
@@ -168,6 +170,12 @@ func lsCreate(t *testing.T, m *Machine, name, kind, email string, folders []stri
 	lsApply(t, m, cwd, name, "folders", map[string]any{"folders": folders, "default": def})
 	lsApply(t, m, cwd, name, "this_folder", map[string]any{})
 	lsApply(t, m, cwd, name, "summary", map[string]any{})
+	if kind == kindAdmin || kind == kindMember {
+		// C5: the new team store (admin) or the joiner's roster row (member)
+		// reaches the remote with the person's sync (a shape that is offline
+		// on purpose keeps it waiting; the life's own checks say what follows)
+		m.Lore(t, cwd, "--setup", name, "sync")
+	}
 }
 
 // lsCreateRefused saves the new setup's steps on a machine whose ~/.lore

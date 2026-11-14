@@ -107,11 +107,15 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if target == store.SourceMachine {
 		return nil
 	}
+	st.actorMu.Lock()
+	defer st.actorMu.Unlock()
+	if st.wroteTo == nil {
+		st.wroteTo = map[store.Source]bool{}
+	}
+	st.wroteTo[target] = true
 	if st.who.StableKey == "" {
 		return nil
 	}
-	st.actorMu.Lock()
-	defer st.actorMu.Unlock()
 	if st.actorDone[target] {
 		return nil
 	}

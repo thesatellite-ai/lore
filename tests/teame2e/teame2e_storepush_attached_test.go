@@ -42,14 +42,16 @@ func TestE55_StorePushAttachedStoreSetBatchCompact(t *testing.T) {
 	p := newSPAttached(t)
 	for _, b := range []string{"kb old one", "kb old two", "kb old three"} {
 		p.add(t, p.ca, spAttachedStore, b)
+		p.ca.MustLore("sync") // C5: each write sent by its own lore sync (manual, the default)
 	}
 	p.a.SetNow(spNow)
 	p.b.SetNow(spNow)
-	if v := spShow(t, p.ca, spAttachedStore); v.Push.Place != "store" || v.Push.Push != "now" {
-		t.Fatalf("show: want place store, push now, got %+v", v.Push)
+	if v := spShow(t, p.ca, spAttachedStore); v.Push.Place != "store" || v.Push.Push != "manual" { // C5: the default
+		t.Fatalf("show: want place store, push manual, got %+v", v.Push)
 	}
 	p.ca.MustLore("store", "set", spAttachedStore, "push=batch", "push_every=10m").
 		Says(t, "kb: push batch every 10m", "anyone who can push to the store may change it")
+	p.ca.MustLore("store", "push", spAttachedStore) // C5: the setting reaches the remote when alice pushes it
 	if tip := p.log()[0]; tip != "lore: store set "+spAttachedStore {
 		t.Fatalf("the setting is one pushed commit to the store, tip %q", tip)
 	}
@@ -91,12 +93,13 @@ func TestE56_StorePushAttachedOrgStoreStaysAdminOnly(t *testing.T) {
 	p.ca, p.cb = spCodeClone(w, p.a), spCodeClone(w, p.b)
 	p.ca.MustLore("store", "init", spOrgStore, p.store.URL())
 	p.ca.MustLore("org", "create", spOrg, "--store", spOrgStore, "--key", "human:alice@example.test", "--name", "Alice", "--yes")
+	p.ca.MustLore("sync")                                    // C5: the org file reaches the remote with alice's sync
 	p.cb.MustLore("store", "add", spOrgStore, p.store.URL()) // no `org import`
 	before := p.log()
 	p.cb.Lore("store", "set", spOrgStore, "push=batch").Fails(t, spExitRefused, spCodeRefused, "only an admin of "+spOrg)
 	p.cb.Lore("store", "compact", spOrgStore, "--yes").Fails(t, spExitRefused, spCodeRefused, "only an admin of "+spOrg)
 	spSameLog(t, "refused set and compact by a non-member", p.log(), before)
-	if v := spShow(t, p.cb, spOrgStore); v.Push.Place != "org" || v.Push.Push != "now" {
-		t.Fatalf("show: want the org's store, push now, got %+v", v.Push)
+	if v := spShow(t, p.cb, spOrgStore); v.Push.Place != "org" || v.Push.Push != "manual" {
+		t.Fatalf("show: want the org's store, push manual, got %+v", v.Push)
 	}
 }

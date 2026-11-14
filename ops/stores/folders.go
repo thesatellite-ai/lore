@@ -159,8 +159,10 @@ func LeavesRepo(name string) bool {
 // reads or writes a store, ~/.lore/config.yaml or this machine's clones,
 // never the repo's .lore/stores.yaml. init, add, remove and set-url write
 // that file and keep needing a repo (`store init me` excepted, see wire).
+// push sends a store clone of this machine, as `lore sync` does from any
+// folder, so it runs from ~ too.
 func RunsWithoutRepo(name string) bool {
-	return slices.Contains([]string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpFolderRemove, OpAdopt, OpSet, OpCompact, OpUse}, name)
+	return slices.Contains([]string{OpList, OpVisibility, OpFolderAdd, OpFolderList, OpFolderRemove, OpAdopt, OpSet, OpCompact, OpUse, OpPush}, name)
 }
 
 // noneShown fills an empty column of the folder table.

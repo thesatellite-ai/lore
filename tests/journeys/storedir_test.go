@@ -107,7 +107,10 @@ func TestJourneyUpgraderStoreDir(t *testing.T) {
 		bodies[rootIDs[0]] = "flat layout note, edited by hand"
 
 		r := m.Lore(m.Home, "doctor")
-		r.Says(t, "store lore-flat: layout commit ", " rows moved to _store/", "pushed store lore-flat")
+		r.Says(t, "store lore-flat: layout commit ", " rows moved to _store/")
+		// C5: the layout commit reaches the store with the person's sync, run
+		// in the store's clone (the home folder is in no setup)
+		m.Lore(dir, "sync").OK(t).Says(t, "pushed store lore-flat")
 	})
 
 	w.Fact("the remote has one layout commit, _store/ rows, lore_store 4, the current README, no table folder at the top", func(c Ctx) {

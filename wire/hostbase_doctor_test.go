@@ -359,6 +359,16 @@ func TestDoctorUnpushedStores(t *testing.T) {
 	}
 	gitIn(t, filepath.Dir(clone), nil, "init", "-q", "--bare", clone)
 	writeLiveRef(t, clone, "refs/heads/main", map[string]string{"lore-store.yaml": "version: 1\n"})
+	// a held store (manual, the default: C5) keeps work waiting by design:
+	// doctorPushModes speaks for it, this row does not
+	a.doctorUnpushedStores(background(), collectWarn)
+	if len(warns) != 0 {
+		t.Fatalf("held store: warns %v, want none", warns)
+	}
+	// push now: waiting work means a push failed, which is news
+	if err := os.WriteFile(filepath.Join(clone, rowfs.MarkerFile), []byte("lore_store: 4\npush: now\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	a.doctorUnpushedStores(background(), collectWarn)
 	if len(warns) != 1 || !strings.Contains(warns[0], "unpushed store work (refs/heads/main)") {
 		t.Fatalf("warns = %v, want one naming refs/heads/main", warns)

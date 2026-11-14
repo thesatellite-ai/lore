@@ -53,31 +53,31 @@ stores     git@github.com:agency/notes on branch staging  (org folder org)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   me -> ~/.lore/personal
 $ lore org link --org agency-stag --project client --yes
-lore: pushed store agency: commit 601d285 to branch staging
 This marks github.com/client/website as a CLIENT repo of agency-stag: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
-✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; pushed)
+✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
   nothing was written to this repo
 $ lore task add --title 'seed staging with demo data' --to agency-stag
-lore: pushed store agency/client (here: agency-stag): commit 86dbae4 to branch staging
-lore: wrote 2 row file(s) in ~/.lore/personal/agency-stag (store me)
-lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes@staging/client (store agency-stag)
-✓ tsk_54fe…28f2 — seed staging with demo data [medium] → [agency-stag/client]
-  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
+lore: committed locally to store agency-stag; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag)
+✓ tsk_05e9…4603 — seed staging with demo data [medium] → [agency-stag/client]
+  created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 $ lore task list
-○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
+○ tsk_05e9…4603 seed staging with demo data [medium]  [agency-stag/client]
 $ lore org use --entry agency
 ✓ prj_2ad3…f891 uses org agency on this machine
   recorded in ~/.lore/config.yaml (machine-only, nothing committed)
 $ lore task list
 (no tasks)
 $ LORE_ORG=agency-stag lore task list
-○ tsk_54fe…28f2 seed staging with demo data [medium]  [agency-stag/client]
+○ tsk_05e9…4603 seed staging with demo data [medium]  [agency-stag/client]
 $ git ls-remote https://github.com/agency/notes
-9b40ce71af28	HEAD
-9b40ce71af28	refs/heads/main
-86dbae429b78	refs/heads/staging
+601d2850ffd0	HEAD
+601d2850ffd0	refs/heads/main
+86dbae476bd6	refs/heads/staging
 ```
 <!-- /example -->
 

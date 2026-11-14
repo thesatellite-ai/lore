@@ -41,7 +41,9 @@ func TestF11_SyncRefreshesTheLinkIndex(t *testing.T) {
 	if l := linksLine(t, dev1App); !strings.Contains(l, "0 link(s)") {
 		t.Fatalf("before the link: %q", l)
 	}
-	alice.Clone(app, "app").MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
+	ac := alice.Clone(app, "app")
+	ac.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
+	ac.MustLore("sync") // C5: the link reaches the store with alice's sync
 	if l := linksLine(t, dev1App); !strings.Contains(l, "0 link(s)") {
 		t.Fatalf("test premise: inside fetch_ttl whoami reads its last fetch: %q", l)
 	}
@@ -93,7 +95,7 @@ func TestF11_RefusedLinkLeavesNothingAndTheRerunSaysWhatItDid(t *testing.T) {
 	aliceApp := alice.Clone(app, "app")
 	before := store.Rev(refMain)
 	aliceApp.Lore("org", "link", orgNorthwind, "--project", folderAcme).Refused(t, "--yes")
-	aliceApp.MustLore("whoami") // pushes any waiting store write
+	aliceApp.MustLore("sync") // sends any waiting store write
 	if store.Rev(refMain) != before {
 		t.Fatal("a refused link must leave nothing for a later command to push")
 	}
@@ -101,9 +103,12 @@ func TestF11_RefusedLinkLeavesNothingAndTheRerunSaysWhatItDid(t *testing.T) {
 		t.Fatalf("a refused link writes nothing in the repo: %q", st)
 	}
 
-	dev1.Clone(app, "app").MustLore("actor", "register") // moves the store branch
+	d := dev1.Clone(app, "app")
+	d.MustLore("actor", "register")
+	d.MustLore("sync") // moves the store branch
 	r := aliceApp.MustLore("org", "link", orgNorthwind, "--project", folderAcme, "--yes")
-	r.Says(t, "created; pushed").Never(t, "already so")
+	r.Says(t, "created; committed in the local clone; `lore sync` sends it").Never(t, "already so")
+	aliceApp.MustLore("sync") // C5: the link reaches the store with alice's sync
 	if _, ok := store.Read(refMain, folderAcme+"/_meta.json"); !ok {
 		t.Fatal("the link reached the store")
 	}

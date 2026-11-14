@@ -86,7 +86,15 @@ type GitLinks struct {
 	// Route reaches each store as its setup's account (fetch, ls-remote,
 	// push); nil = git as configured.
 	Route Router
+	// Held reports whether a commit lore makes in the store clone at dir
+	// waits there for a person's `lore sync` (the store's push mode; C5,
+	// B-16) instead of being pushed at once. nil pushes at once (the
+	// adapter's own tests); wire always sets it.
+	Held func(dir string) bool
 }
+
+// held asks Held about the clone at dir (false when unset).
+func (g *GitLinks) held(dir string) bool { return g.Held != nil && g.Held(dir) }
 
 // compile-time check.
 var _ LinkSource = (*GitLinks)(nil)

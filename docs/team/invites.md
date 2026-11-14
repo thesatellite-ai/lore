@@ -20,21 +20,23 @@ Tomas invites Mira as a developer and reviewer on `acme-hub`, and Ana as a contr
 ```console
 # tomas, in acme-hub
 $ lore team invite mira@agency.example --role dev,reviewer --project acme-hub
-lore: pushed store agency/org: commit 601d285 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
+⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
 Send this to mira@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 $ lore team invite ana@agency.example --type contractor --expires 30d
-lore: pushed store agency/org: commit 86dbae4 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 ✓ invite inv_2ad3…f891 written to store agency (expires 2026-12-02)
+⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
 Send this to ana@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 ```
 <!-- /example -->
 
-The line after "Send this to" is what the person pastes. With `--github <user>`, lore also checks (through `gh`) whether that GitHub user can push to the store and, when not, prints the command that grants it, for example `gh api -X PUT repos/agency/notes/collaborators/mira-dev -f permission=push` (see [GitHub access](#github-access-and---grant)).
+The line after "Send this to" is what the person pastes. Their join reads the invite from the store's remote, so while the invite is only committed in your copy of the store (the default, until `lore sync`), lore prints "run `lore sync` before you send the line" above it: sync first, then send. With `--github <user>`, lore also checks (through `gh`) whether that GitHub user can push to the store and, when not, prints the command that grants it, for example `gh api -X PUT repos/agency/notes/collaborators/mira-dev -f permission=push` (see [GitHub access](#github-access-and---grant)).
 
 | Flag | Meaning |
 |---|---|
@@ -146,7 +148,7 @@ ERROR: [E_NEEDS_CONFIRM] Revoke invite inv_2ad3…f891 for ana@agency.example?
   hint: nothing written; confirm with --yes (or "yes": true over lore api)
 (exit 26)
 $ lore team invite revoke --ref ana@agency.example --yes
-lore: pushed store agency/org: commit 9b40ce7 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 id: inv_2ad3…f891
 status: revoked

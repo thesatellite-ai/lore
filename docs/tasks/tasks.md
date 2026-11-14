@@ -350,6 +350,7 @@ $ lore task list
 ○ tsk_76bd…3f10 Write the welcome email [medium]
 ○ tsk_d431…313a Send the welcome email [medium]
 ○ tsk_28f8…03df Check every link on the home page [medium]
+2 hidden (1 proposed, 1 someday); --include-proposed / --include-someday show them
 ```
 <!-- /example -->
 

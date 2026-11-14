@@ -206,7 +206,7 @@ func spSettingsLife(t *testing.T, shape string, s spSurface) {
 	if v := s.show(t, "me"); v.Place != "personal" || v.Epoch != 0 {
 		t.Errorf("me: place %q epoch %d, want personal 0", v.Place, v.Epoch)
 	}
-	want := spWant{Push: "now", PushEvery: "5m", Compact: "off"}
+	want := spWant{Push: "manual", PushEvery: "5m", Compact: "off"} // C5: the default
 	step("init", want)
 
 	want = spWant{Push: "batch", PushEvery: "10m", Compact: "off"}
@@ -232,8 +232,17 @@ func spSettingsLife(t *testing.T, shape string, s spSurface) {
 		t.Errorf("manual: a write was pushed: %v", spSubjects(got))
 	}
 	lsRun(t, m, repo, "sync")
-	if got := spLog(t, meBare); len(got) != len(before)+1 || !strings.HasPrefix(got[0].Subject, spBatchSubject) || !strings.Contains(got[0].Body, id) {
-		t.Errorf("manual: sync did not push one batch commit naming %s: %v", id, spSubjects(got))
+	// manual sends the waiting commits as they are (only batch folds them)
+	got := spLog(t, meBare)
+	named := false
+	for _, c := range got[:max(0, len(got)-len(before))] {
+		if strings.HasPrefix(c.Subject, spBatchSubject) {
+			t.Errorf("manual: sync folded the commits into a batch: %v", spSubjects(got))
+		}
+		named = named || strings.Contains(c.Subject, id)
+	}
+	if len(got) <= len(before) || !named {
+		t.Errorf("manual: sync did not push the write's own commit naming %s: %v", id, spSubjects(got))
 	}
 	step("manual write and sync", want)
 
@@ -350,6 +359,8 @@ func spCompactionLife(t *testing.T, shape string) {
 	if tm.invite = inv.Text; !strings.HasPrefix(tm.invite, "lore-invite:") {
 		t.Fatalf("team invite printed no invite line: %s", inv.Text)
 	}
+	// C5: the invite reaches the team store with the admin's sync
+	lsRun(t, admin, aRepo, "sync")
 	member := Build(t, shape, bin)
 	spAt(member, spOld)
 	lsGHHosts(t, member)
@@ -361,12 +372,14 @@ func spCompactionLife(t *testing.T, shape string) {
 	var ids []string
 	for _, b := range []string{"old fact one", "old fact two", "old fact three"} {
 		ids = append(ids, spMemAdd(t, admin, aRepo, lsOrg, b))
+		lsRun(t, admin, aRepo, "sync") // C5: each write is sent by the admin's sync
 	}
 	// Today: one more row by the admin; the member syncs, then writes a
 	// row it does not push.
 	spAt(admin, spNow)
 	spAt(member, spNow)
 	ids = append(ids, spMemAdd(t, admin, aRepo, lsOrg, "new fact"))
+	lsRun(t, admin, aRepo, "sync")
 	lsRun(t, member, mRepo, "sync")
 	spEnv(member, "LORE_LIVE_AUTOPUSH", "0")
 	unpushed := spMemAdd(t, member, mRepo, lsOrg, "member's unpushed fact")
@@ -487,9 +500,10 @@ func spCompactionLife(t *testing.T, shape string) {
 	if st != http.StatusOK || json.Unmarshal([]byte(body), &set) != nil {
 		t.Fatalf("admin POST /v1/stores/set compact=on: HTTP %d %s", st, body)
 	}
-	want := spWant{Push: "now", PushEvery: "5m", Compact: "on", CompactAfter: "30d"}
+	want := spWant{Push: "manual", PushEvery: "5m", Compact: "on", CompactAfter: "30d"}
 	want.check(t, "admin REST compact on", set)
 	want.check(t, "admin CLI after REST", spShow(t, admin, aRepo, lsOrg))
+	lsRun(t, admin, aRepo, "sync") // C5: the setting reaches the store with the admin's sync
 	lsRun(t, member, mRepo, "sync")
 	mv := spShow(t, member, mRepo, lsOrg)
 	want.check(t, "member after sync", mv)

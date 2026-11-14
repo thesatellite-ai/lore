@@ -36,6 +36,7 @@ func TestJourneyShowByIDInAnOrgFolder(t *testing.T) {
 		lee.Lore(parent, "org", "refresh", tlOrg).OK(t)
 		lee.Lore(parent, "store", "folder", "add", "team", "core").OK(t)
 		lee.Lore(parent, "store", "folder", "add", "team", "sync").OK(t)
+		lee.Lore(parent, "sync").OK(t) // C5: the folders reach the store with Lee's sync
 		tt.lore(tlLee, "init", "--non-interactive", "--name=app").OK(t)
 		tt.lore(tlLee, "org", "link", tlOrg, "--project", "core", "--own", "--yes").OK(t)
 		r := tt.lore(tlLee, "task", "add", "wire the sync worker", "--to", tlOrg+"/sync", "--yes").OK(t)
@@ -43,6 +44,7 @@ func TestJourneyShowByIDInAnOrgFolder(t *testing.T) {
 		if id == "" {
 			t.Fatalf("task add printed no id: %s", r)
 		}
+		tt.lore(tlLee, "sync").OK(t) // C5: the task reaches the store with Lee's sync
 	})
 
 	w.Step("day1/show-and-edit-it-by-id", func() {

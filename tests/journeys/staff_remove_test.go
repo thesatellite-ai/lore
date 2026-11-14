@@ -42,6 +42,7 @@ func TestJourneyStaffRemove(t *testing.T) {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
 		tt.lore(tlLee, "team", "add", "@web", "--members", "@lee").OK(t)
 		tt.lore(tlLee, "member", "add", tlAnn.Email, "--name", tlAnn.Name, "--team", "@web", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t) // C5: the roster reaches the team store with Lee's sync
 	})
 
 	w.Step("day1/ann-joins-and-writes", func() {
@@ -57,6 +58,7 @@ func TestJourneyStaffRemove(t *testing.T) {
 	w.Step("day1/lee-removes-ann", func() {
 		before := ownCommits(tt.store, mainRef)
 		tt.lore(tlLee, "member", "remove", tlAnn.Email, "--reason", "moved on", "--yes").OK(t).Says(t, "removed")
+		tt.lore(tlLee, "sync").OK(t) // C5: the removal reaches the team store with Lee's sync
 		// B1-21: the stint, the team row and the actor in ONE store commit
 		if n := ownCommits(tt.store, mainRef) - before; n != 1 {
 			t.Errorf("member remove wrote %d store commits, want one", n)
@@ -77,11 +79,13 @@ func TestJourneyStaffRemove(t *testing.T) {
 	w.Step("day1/lee-undoes-it-the-same-day", func() {
 		before := ownCommits(tt.store, mainRef)
 		tt.lore(tlLee, "member", "add", tlAnn.Email, "--team", "@web", "--yes").OK(t).Says(t, "back on the roster")
+		tt.lore(tlLee, "sync").OK(t) // C5: each change reaches the team store with Lee's sync
 		if n := ownCommits(tt.store, mainRef) - before; n != 1 {
 			t.Errorf("member add (restore) wrote %d store commits, want one", n)
 		}
 		before = ownCommits(tt.store, mainRef)
 		tt.lore(tlLee, "member", "edit", tlAnn.Email, "--name", "Ann B", "--role", "pm", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
 		if n := ownCommits(tt.store, mainRef) - before; n != 1 {
 			t.Errorf("member edit --name --role wrote %d store commits, want one", n)
 		}

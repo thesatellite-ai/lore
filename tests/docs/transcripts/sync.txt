@@ -110,7 +110,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
 alice (work/website)$ lore sync
-· already in sync
+· in sync; 1 file(s) in .lore/data wait for your commit (.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json): git add .lore/data && git commit
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
 alice (work/website)$ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin main
@@ -264,7 +264,7 @@ lore: picked up a hand edit of memories mem_05e99e22e9e86e96fe4daa7777994603 (bo
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email or phone.
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 alice (work/website)$ lore sync
-· already in sync
+· in sync; 1 file(s) in .lore/data wait for your commit (.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json): git add .lore/data && git commit
 alice (work/website)$ lore sync conflicts
 · no conflicts
 alice (work/website)$ git add -A && git commit -qm 'lore: whatsapp wording' && git push -q origin main

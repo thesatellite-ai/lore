@@ -49,12 +49,14 @@ func TestTeB_SubtreeMoveAcrossStoresTwoClones(t *testing.T) {
 	const parentTitle, kid1Title, kid2Title = "teb invoices export", "teb export query", "teb download button"
 	p := mustID(t, a.aliceApp.MustLore("task", "add", parentTitle, "--to", orgNorthwind+"/"+folderOrg), "tsk")
 	_, kids := splitIDs(t, a.aliceApp, p, kid1Title, kid2Title)
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	if a.storeHas(t, folderAcme, p) || !a.storeHas(t, folderOrg, p) {
 		t.Fatal("premise: the tree starts in the store's org/ folder")
 	}
 
 	// org/ -> acme/ (the project linked to the client repo), whole subtree.
 	a.aliceApp.MustLore("move", p, "--to", orgNorthwind, "--with-children", "--yes")
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	for _, id := range append([]string{p}, kids...) {
 		if !a.storeHas(t, folderAcme, id) || a.storeHas(t, folderOrg, `"title": "`+parentTitle) {
 			t.Fatalf("%s is in the store's acme/ project after the move (files: %v)", id, a.store.Files(refMain))
@@ -87,6 +89,7 @@ func TestTeB_SubtreeMoveAcrossStoresTwoClones(t *testing.T) {
 	if _, ok := a.clientRepoRow(t, tblTasks, p); !ok {
 		t.Fatal("the parent is in the client repo")
 	}
+	a.aliceApp.MustLore("sync") // C5: store writes reach the remote with the writer's sync
 	for _, title := range []string{parentTitle, kid1Title, kid2Title} {
 		if a.storeHas(t, folderAcme, title) {
 			t.Fatalf("the store keeps no live copy of %q (one home)", title)

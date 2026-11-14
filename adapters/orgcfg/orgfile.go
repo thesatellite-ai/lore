@@ -159,7 +159,7 @@ func (g *GitLinks) WriteOrgFile(ctx context.Context, w OrgFileWrite) (OrgFileRes
 	if err != nil {
 		return OrgFileResult{}, fmt.Errorf("orgcfg: encode %s: %w", orgDefaultsFile, err)
 	}
-	res := OrgFileResult{StoreURL: norm, Branch: g.DefaultBranch(ctx, norm), NoPush: !g.autopush(nil)}
+	res := OrgFileResult{StoreURL: norm, Branch: g.DefaultBranch(ctx, norm), NoPush: !g.autopush(nil) || g.held(dir)}
 	path := orgFilePath(w.OrgFolder)
 	cr, err := commitStore(ctx, storeCommit{Dir: dir, Store: norm, Branch: res.Branch, NoPush: res.NoPush, Route: g.Route,
 		Message: fmt.Sprintf(orgFileMessage, w.Doc.Name), Signature: w.Signature,

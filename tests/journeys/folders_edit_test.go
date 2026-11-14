@@ -135,6 +135,7 @@ func TestJourneyFoldersEditRows(t *testing.T) {
 		commits := tt.store.CommitCount(mainRef)
 		editor("sh " + good) // an EDITOR with arguments, as "code --wait"
 		lee.Lore(web, "edit", storeTask).OK(t).Says(t, "updated in store "+tlOrg, "body, title")
+		lee.Lore(web, "sync").OK(t) // C5: the edit reaches the store with Lee's sync
 		p := jPath(t, lee.Lore(web, "path", storeTask, "--json").OK(t))
 		// the store clone's plain layout: <clone>/<folder>/<table>/<id>.json
 		// under ~/.lore/stores, no .lore/data inside the store

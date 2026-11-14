@@ -279,7 +279,9 @@ s_agency() {
   TTY=1 ANSWER=y on alice work/website "lore org link --org agency --project client"
   on alice work/website "git status --short"
   on alice work/website "lore actor register"
-  on bob work/website "lore actor register"
+  # store writes (the link, the roster rows) wait for each person's lore sync
+  on alice work/website "lore sync"
+  on bob work/website "lore actor register && lore sync"
   TTY=1 on alice work/website "lore whoami"
   on alice work/website "lore whoami"
 
@@ -291,7 +293,7 @@ s_agency() {
   on alice work/website "git add -A && git commit -qm 'lore: rule' && git push -q origin main"
 
   note "internal task"
-  on alice work/website "git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob"
+  on alice work/website "lore sync >/dev/null; git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync"
   local t1; t1=$(id tsk)
   on bob work/website "lore sync >/dev/null; git switch -q -c feat/login && lore task list"
   on bob work/website "lore inbox"
@@ -440,6 +442,8 @@ Y
   on alice work/website "lore actor register"
   on alice work/website "lore memory add --body 'the client staging database is restored every Sunday night'"
   on alice work/website "lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'"
+  # the link and the notes wait in alice's clones until she sends them
+  on alice work/website "lore sync"
 
   note "contractor view"
   quiet bob work "git clone -q https://github.com/client/website website"
@@ -819,11 +823,12 @@ s_team_ops() {
   agency_config bob "human:bob@agency.example" "Bob Roe" bob
   remote agency/notes; client_repo client/website app
   make_store alice agency git@github.com:agency/notes
-  quiet alice work "git clone -q https://github.com/client/website website && cd website && lore org link --org agency --project client --yes && lore actor register"
-  quiet bob work "git clone -q https://github.com/client/website website && cd website && lore actor register"
+  quiet alice work "git clone -q https://github.com/client/website website && cd website && lore org link --org agency --project client --yes && lore actor register && lore sync"
+  quiet bob work "git clone -q https://github.com/client/website website && cd website && lore actor register && lore sync"
+  quiet alice work/website "lore sync"
 
   note "release"
-  on alice work/website "lore task add --title 'send the invoice reminder before Friday' --to agency"
+  on alice work/website "lore task add --title 'send the invoice reminder before Friday' --to agency && lore sync"
   local t1; t1=$(id tsk)
   on bob work/website "lore task claim --id $t1"
   on bob work/website "lore task release --id $t1"
@@ -836,7 +841,7 @@ s_team_ops() {
   AS=agent-backend EXTRA_ENV="${AGENT_ENV[agent-backend]}" on! alice work/website "lore task done --id $t1"
 
   note "reassign"
-  on alice work/website "lore task add --title 'update the contact page' --to agency --assign @bob"
+  on alice work/website "lore task add --title 'update the contact page' --to agency --assign @bob && lore sync"
   local t2; t2=$(id tsk)
   on bob work/website "lore task claim --id $t2"
   on alice work/website "lore task reassign --id $t2 --assign @alice"
@@ -884,6 +889,8 @@ Y
   on bob . "cat ~/.lore/config.yaml"
   quiet bob work "git clone -q https://github.com/client/website website"
   on bob work/website "lore whoami"
+  # bob's roster row waits in his clone of the store until he sends it
+  on bob work/website "lore sync"
 
   note "org set"
   remote agency/tools
@@ -941,7 +948,7 @@ Y
   quiet alice work "git clone -q https://github.com/client/website website"
   quiet alice work/website "lore org link --org agency --project client --yes && lore actor register"
   quiet alice work/website "lore memory add --body 'the client signs off designs on Thursdays' --to agency"
-  quiet alice work/website "lore memory add --body 'staging resets every Sunday night' --to agency"
+  quiet alice work/website "lore memory add --body 'staging resets every Sunday night' --to agency && lore sync"
   CLOCK=2026-11-02T10:00:00Z
   quiet alice . "lore store init --name me --url git@github.com:alice/lore-me"
   quiet bob work "git clone -q https://github.com/client/website website"
@@ -968,7 +975,7 @@ Y
   on! alice work/website "lore store set --store me --settings push_every=30s"
 
   note "org settings"
-  on alice work/website "lore store set --store agency --settings push=batch --settings push_every=15m"
+  on alice work/website "lore store set --store agency --settings push=batch --settings push_every=15m && lore sync"
   on bob work/website "lore sync >/dev/null && lore store show --store agency"
 
   note "compact"
@@ -1024,8 +1031,9 @@ s_profiles() {
   remote agency/notes; client_repo client/acme-hub acme-hub; client_repo client/northwind-app northwind-app
   make_store tomas agency git@github.com:agency/notes
   quiet tomas work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore org link --org agency --project acme-hub --yes && lore actor register"
-  quiet tomas work "git clone -q https://github.com/client/northwind-app && cd northwind-app && lore org link --org agency --project northwind-app --yes"
-  quiet mira work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore actor register"
+  quiet tomas work "git clone -q https://github.com/client/northwind-app && cd northwind-app && lore org link --org agency --project northwind-app --yes && lore sync"
+  quiet mira work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore actor register && lore sync"
+  quiet tomas work/acme-hub "lore sync"
   # Mira joined on 2026-01-12: the story starts then.
   CLOCK=2026-01-12T09:00:00Z
 
@@ -1275,8 +1283,9 @@ s_teams() {
   agency_config mira "human:mira@agency.example" "Mira Patel" mira
   remote agency/notes; client_repo client/acme-hub acme-hub
   make_store tomas agency git@github.com:agency/notes
-  quiet tomas work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore org link --org agency --project acme-hub --yes && lore actor register"
-  quiet mira work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore actor register"
+  quiet tomas work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore org link --org agency --project acme-hub --yes && lore actor register && lore sync"
+  quiet mira work "git clone -q https://github.com/client/acme-hub && cd acme-hub && lore actor register && lore sync"
+  quiet tomas work/acme-hub "lore sync"
   cat >> "$HOMES/tomas/.lore/config.yaml" <<'Y'
 setups:
   - name: agency

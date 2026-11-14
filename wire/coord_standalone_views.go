@@ -235,7 +235,7 @@ func (cv *coordView) syncRoster(ctx context.Context) bool {
 	if err != nil || r.src == store.SourceRepo {
 		return false
 	}
-	_, err = cv.a.Sync(ctx, r.src)
+	_, err = cv.a.Sync(fetchOnly(ctx), r.src)
 	return err == nil
 }
 

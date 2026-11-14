@@ -48,6 +48,7 @@ func TestOrgCreateThenAgentRegisterPushes(t *testing.T) {
 		t.Fatalf("register out %+v", out)
 	}
 	notes := filepath.Join(w.hosts, "agency/notes.git")
+	w.push(t, mira, orgTestStoreURL) // C5: the roster row waits for a person's push
 	agent := orgGit(t, notes, "show", "main:org/actors/"+out.ID+".json")
 	for _, want := range []string{`"_v": 2`, `"agent"`, `"agent:agent-frontend"`, `"owner_actor_id": "act_`} {
 		if !strings.Contains(agent, want) {
@@ -69,6 +70,7 @@ func TestOrgCreateThenAgentRegisterPushes(t *testing.T) {
 	if _, err := orgHostAt(t, outside, bob).Import(ctx, opsorgcmd.ImportIn{URL: orgTestImport, Key: "human:bob@agency.example", Name: "Bob Roe", Handle: "bob"}, true); err != nil {
 		t.Fatalf("import: %v", err)
 	}
+	w.push(t, bob, orgTestStoreURL) // C5: bob's roster row waits for his push
 	if n := strings.Count(w.storeFiles(t), "org/actors/act_"); n != 3 {
 		t.Fatalf("roster rows on the remote after import = %d, want 3 (mira, agent, bob)", n)
 	}

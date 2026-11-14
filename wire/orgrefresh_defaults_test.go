@@ -31,6 +31,7 @@ func TestOrgRefreshCopiesDefaults(t *testing.T) {
 		Key: "human:mira@agency.example", Name: "Mira", Handle: "mira"}, true); err != nil {
 		t.Fatalf("create: %v", err)
 	}
+	w.push(t, mira, orgTestStoreURL)
 	clone := filepath.Join(w.root, "notes-edit")
 	orgGit(t, w.root, "clone", "-q", orgTestStoreURL, clone)
 	orgFile := filepath.Join(clone, "org", "lore-org.yaml")

@@ -12,6 +12,9 @@ import (
 // row kept), and says so; compaction never runs with compact=off.
 func TestE53_StorePushAutoCompactsPersonal(t *testing.T) {
 	p := newSPPersonal(t, spOld)
+	// automatic compaction rides on a push after a write: the store is set
+	// to push now, the person's opt-in (the default, manual: C5)
+	p.ca.MustLore("store", "set", "me", "push=now")
 	old := []string{"auto old one", "auto old two", "auto old three"}
 	for _, b := range old {
 		p.add(t, p.ca, "me", b)
@@ -44,13 +47,17 @@ func TestE53_StorePushAutoCompactsPersonal(t *testing.T) {
 // does, and the member then re-fetches with its rows intact.
 func TestE54_StorePushAutoCompactsOrgFromAdminOnly(t *testing.T) {
 	p := newSPOrg(t, spOld)
+	// automatic compaction rides on a push after a write: the admin sets the
+	// org store to push now, the opt-in (the default, manual: C5)
+	spMakeAdmin(t, p.a)
+	p.ca.MustLore("store", "set", spOrgStore, "push=now")
+	p.cb.MustLore("sync")
 	for _, b := range []string{"org old one", "org old two"} {
 		p.add(t, p.ca, spOrgStore, b)
 	}
 	p.cb.MustLore("sync")
 	p.a.SetNow(spNow)
 	p.b.SetNow(spNow)
-	spMakeAdmin(t, p.a)
 	p.ca.MustLore("store", "set", spOrgStore, "compact=on", "compact_after=30d")
 	p.cb.MustLore("sync")
 	// The member writes: pushed, never compacted.

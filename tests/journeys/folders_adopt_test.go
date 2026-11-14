@@ -138,6 +138,7 @@ func TestJourneyFoldersAdopt(t *testing.T) {
 
 	w.Step("day2/see-what-would-move", func() {
 		w.AdvanceDays(1)
+		lee.Lore(parent, "sync").OK(t) // C5: send what waits first, so the count is the adopt's alone
 		commits = tt.store.CommitCount(mainRef)
 		lee.Lore(parent, "store", "adopt", "team/"+jAdoptFolder, "--from", legacy.Dir, "--dry-run").OK(t).
 			Says(t, "would adopt 5022 rows", "memories 4500", "rules 500", "tasks 20", "missions 1", "from the repo's live ref (refs/lore/live): 21", "projects: 1 row (the folder is its own project)")
@@ -163,9 +164,11 @@ func TestJourneyFoldersAdopt(t *testing.T) {
 		if took := time.Since(start); took > jAdoptBudget {
 			t.Errorf("adopting 5,022 rows took %s, want under %s", took, jAdoptBudget)
 		}
-		if out.Written != 5022 || out.Live != 21 || !out.Pushed {
-			t.Fatalf("adopt = %+v, want 5022 rows written (21 from the live ref), pushed", out)
+		// C5: the adopt commit waits in Lee's clone until he sends it
+		if out.Written != 5022 || out.Live != 21 || out.Pushed {
+			t.Fatalf("adopt = %+v, want 5022 rows written (21 from the live ref), not pushed yet", out)
 		}
+		lee.Lore(parent, "sync").OK(t)
 		if n := tt.store.CommitCount(mainRef); n != commits+1 {
 			t.Errorf("adopt made %d store commits, want exactly one", n-commits)
 		}

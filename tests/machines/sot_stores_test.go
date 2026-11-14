@@ -71,6 +71,7 @@ func TestSotStoresMove(t *testing.T) {
 	if c := ssConfig(t, admin); strings.Contains(c, lsTeamURL) || !strings.Contains(c, ssMovedURL) || !strings.Contains(c, "version:") {
 		t.Errorf("the admin's config after set-url:\n%s", c)
 	}
+	lsRun(t, admin, adminRepo, "sync") // C5: the org file change reaches the moved store with the admin's sync
 	if f := ssOrgFile(t, tm.bare+"-moved"); !strings.Contains(f, ssMovedURL) || strings.Contains(f, lsTeamURL) {
 		t.Errorf("lore-org.yaml after set-url:\n%s", f)
 	}

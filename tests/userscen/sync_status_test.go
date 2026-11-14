@@ -107,6 +107,7 @@ func TestSyncStatus_StoreRefusedPush(t *testing.T) {
 	if mem == "" {
 		t.Fatal("the refused write must still answer its id (committed locally)")
 	}
+	a.Lore("sync") // C5: the push (refused by the hook) happens on lore sync
 	for _, f := range r.Files(syncStoreRef) {
 		if strings.Contains(f, mem) {
 			t.Fatal("a refused push cannot be on the store remote")

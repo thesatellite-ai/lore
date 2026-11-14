@@ -356,7 +356,7 @@ A pointer file whose `db_path` climbs out with `..`, refused and then let throug
 # alice, in blog
 $ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_4c59…6c38
+project_id: prj_f147…5139
 $ lore migrate run --dry-run
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
@@ -364,7 +364,7 @@ ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
-  mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
+  mode-b: rules/rul_2537…6bbb → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
@@ -372,7 +372,7 @@ backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_3b62…e913 [must/always] Posts go out on Tuesdays [shared]
+rul_2537…6bbb [must/always] Posts go out on Tuesdays [shared]
 ```
 <!-- /example -->
 

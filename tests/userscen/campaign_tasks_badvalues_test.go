@@ -41,7 +41,7 @@ func TestCampaignTasks_BadValues(t *testing.T) {
 		{[]string{"task", "decline", prop, "--reason", "not now"}, "E_INVALID_INPUT"},
 		{[]string{"task", "decline", id, "--reason", "wont_do"}, "E_REFUSED"}, // only a proposal can be declined
 		{[]string{"mission", "add", "x", "--target", "notadate"}, "E_DATE"},
-		{[]string{"reminder", "add", "x", "--due", "someday-ish"}, "E_INVALID_INPUT"},
+		{[]string{"reminder", "add", "x", "--due", "someday-ish"}, "E_DATE"}, // one date parser for every --due (batch 5)
 		{[]string{"run", "start", "--task", "nope"}, "E_INVALID_INPUT"},
 		{[]string{"run", "end", "run_" + campTasksUnknownHex, "--outcome", "bogus"}, "E_INVALID_INPUT"},
 		{[]string{"inbox", "show", "--since", "bogus"}, "E_INVALID_INPUT"},
