@@ -95,6 +95,8 @@ The remote's hidden lists arrive in **tracking copies** under `refs/lore-remote/
 
 Each lore command fetches once: one `git fetch` gets live, signals and `main` together. A read skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old, a write if it is less than 60 seconds old. `lore sync` always fetches. So a teammate's change shows up within a minute, or at once after `lore sync`:
 
+Commands in one clone take turns on its live list: each waits for the one before it to finish, in the order they started (a command that waited longer always goes first), and gives up with `E_STORE_LOCKED` after 30 seconds. Ten agent sessions working in one clone at the same time each wait for about the other nine commands, a few seconds; agents that each have their own clone or worktree of the repo do not wait for each other at all.
+
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
 # bob, in billing

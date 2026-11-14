@@ -76,6 +76,7 @@ var whereGitLore = []struct{ pattern, what string }{
 	{"compact_stamp", "when lore last compacted the store's history"},
 	{"git-wiring*", "a fingerprint of lore's git wiring (merge driver, hooks), so it is checked only when something changed"},
 	{"live.lock", "the lock of the live ref"},
+	{"live.queue", "the order lore commands waiting for the live lock take it in (one empty file per waiting command)"},
 	{"live.log", "the log of live ref operations"},
 	{"refs-lore-live.*", "live writes not yet confirmed by the remote"},
 	{"held.json", "the claims this machine holds"},

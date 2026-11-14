@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -469,9 +470,13 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 	if !r.Table.Valid() || r.ID.IsZero() || r.HLC.IsZero() || len(r.Doc) == 0 {
 		return false, errs.New(errs.InvalidInput, "sqlite cache: row without table, id, hlc or document")
 	}
-	var held string
-	err := txQueryRow(ctx, tx, `SELECT hlc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
-		string(source), r.Table.String(), r.ID.String()).Scan(&held)
+	var (
+		held    string
+		heldDel int
+		heldDoc []byte
+	)
+	err := txQueryRow(ctx, tx, `SELECT hlc, deleted, doc FROM "`+tblRows+`" WHERE source = ? AND tbl = ? AND id = ?`,
+		string(source), r.Table.String(), r.ID.String()).Scan(&held, &heldDel, &heldDoc)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 	case err != nil:
@@ -481,7 +486,13 @@ func keepRaw(ctx context.Context, tx *sql.Tx, source store.Source, r store.Row) 
 		if err != nil {
 			return false, errs.Wrap(errs.DBCorrupt, "sqlite cache: held row has a bad hlc", err)
 		}
-		if r.HLC.Compare(h) < 0 {
+		switch c := r.HLC.Compare(h); {
+		case c < 0:
+			return false, nil
+		case c == 0 && (heldDel == 1) == r.Deleted && bytes.Equal(heldDoc, r.Doc):
+			// The same row again: a full re-read (the live ref moved, D-159)
+			// hands every row back, and re-projecting identical rows was a
+			// tenth of a second of every agent command under the live lock.
 			return false, nil
 		}
 	}

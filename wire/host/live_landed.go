@@ -196,8 +196,9 @@ func parseTreeListing(raw []byte) map[string]string {
 // landedRows is every row of a live-readable table that landed on the
 // fetched origin/<default>, is not in HEAD (not pulled, and not deleted here
 // on purpose) and is not in have (neither on the branch nor live), so a done
-// task that left live stays in lists until the checkout pulls.
-func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool) []store.Row {
+// task that left live stays in lists until the checkout pulls. wanted
+// narrows it to the tables of a one-table read (Read).
+func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool, wanted func(row.Table) bool) []store.Row {
 	branch, ok := s.onDefaultBranch(ctx)
 	if !ok {
 		return nil
@@ -218,7 +219,7 @@ func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[s
 		id, isRow := strings.CutSuffix(path.Base(p), rowFileExt)
 		// readsLive, not liveReadable: rows a live row carried (the project,
 		// its repo) land too, and Get reads them through the same way.
-		if !isRow || !readsLive(s, row.Table(table)) {
+		if !isRow || !wanted(row.Table(table)) || !readsLive(s, row.Table(table)) {
 			continue
 		}
 		raw, found, err := s.repo.ReadFile(ctx, remote, p)

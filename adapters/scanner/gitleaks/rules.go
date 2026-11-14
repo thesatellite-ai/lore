@@ -48,6 +48,15 @@ var gitleaksDefaults = sync.OnceValues(func() (glconfig.Config, error) {
 	return cfg, nil
 })
 
+// Warm starts loading gitleaks' default config on another goroutine and
+// returns at once; Defaults then waits for it or finds it done. A write
+// command calls it before it queues for the live lock, so the ~30 ms of
+// translating some 200 rules runs while the command waits instead of while
+// it holds the lock and every other agent of the clone waits (D-159).
+func Warm() {
+	go func() { _, _ = gitleaksDefaults() }()
+}
+
 // Defaults is the base rule set: lore's pack first, then every gitleaks
 // default rule in gitleaks' own order. Gitleaks rules are described here
 // (id, regex text, keywords, entropy) but run on gitleaks' engine, which

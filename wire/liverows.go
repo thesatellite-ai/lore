@@ -473,12 +473,21 @@ func openFetched(ctx context.Context, b store.Backend) bool {
 // otherwise only stores still marked v0.1.17, so a migrated setup pays
 // nothing).
 func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLive, error) {
+	return pendingLiveRowsOf(ctx, st, fetchAll, false)
+}
+
+// pendingLiveRowsOf is pendingLiveRows, without the repo's own live ref when
+// skipRepo (liveNote: a list nobody would show).
+func pendingLiveRowsOf(ctx context.Context, st *state, fetchAll, skipRepo bool) ([]pendingLive, error) {
 	var out []pendingLive
 	srcs, serr := liveSources(ctx, st)
 	if serr != nil {
 		return nil, serr
 	}
 	for _, src := range srcs {
+		if skipRepo && src.name == store.SourceRepo {
+			continue
+		}
 		if src.branch != "" && (fetchAll || src.v017) && !openFetched(ctx, st.byName[src.name]) {
 			fetchStoreLive(ctx, src)
 		}
@@ -519,6 +528,17 @@ func pendingLiveRows(ctx context.Context, st *state, fetchAll bool) ([]pendingLi
 		}
 	}
 	return out, nil
+}
+
+// hasNonRepoStore reports whether a store other than the repo's is
+// attached (where movedOwnerOf looks for a moved row).
+func hasNonRepoStore(st *state) bool {
+	for _, name := range st.eng.Stores() {
+		if name != store.SourceRepo && st.byName[name] != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // LiveNote is a one-line notice for a repo whose v0.1.17 live ref holds
@@ -562,9 +582,15 @@ func servesLiveRef(b store.Backend) bool {
 // holds the App's lock, so it must not call back into the App).
 func liveNote(ctx context.Context, st *state) string {
 	warn := liveResourceNote(ctx, st)
-	p, err := pendingLiveRows(ctx, st, false)
+	serves := servesLiveRef(st.byName[store.SourceRepo])
+	// The repo's live rows are dropped below when its store serves them,
+	// all but those moved to another store (movedOwnerOf); with no other
+	// store attached none can be, so they are not read at all: decoding the
+	// whole live ref a second time was a third of every agent command under
+	// the live lock (D-159).
+	p, err := pendingLiveRowsOf(ctx, st, false, serves && !hasNonRepoStore(st))
 	p = slices.DeleteFunc(p, func(x pendingLive) bool { return x.leftOut }) // nothing to bring in (migrate_moved.go)
-	if servesLiveRef(st.byName[store.SourceRepo]) {
+	if serves {
 		// The repo store's live overlay (cmd/lore) shows the repo's live
 		// rows to every command that opens a live session; a run without
 		// one (a git hook, a skipped-live op such as task heartbeat) only

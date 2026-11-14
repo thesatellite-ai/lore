@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -854,6 +855,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	}
 	if !r.read {
 		ctx = wire.WithWriteFetch(ctx) // its store clones fetch at orgconf.WriteFetchTTL (M-4)
+		gitleaks.Warm()                // the write's secret scan rules load while it queues for the live lock (D-159)
 	}
 	ctx = withRun(ctx, r)
 	defer r.finish(ctx)

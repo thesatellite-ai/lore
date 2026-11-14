@@ -337,3 +337,27 @@ func TestOpenRefusals(t *testing.T) {
 		t.Fatal("cache file not at the odd path")
 	}
 }
+
+// TestApplySameRowAgainIsANoOp (D-159): a full re-read hands back rows the
+// cache already holds (every agent command after another moved the live
+// ref); a row with the same HLC and document is not projected again. The
+// expander's injected failure proves no projection ran; a changed row
+// still is projected.
+func TestApplySameRowAgainIsANoOp(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	c := f.open("c.db")
+	prj := newPrj()
+	steady := f.memory(newMem(), prj, "steady")
+	f.apply(c, store.SourceRepo, "c1", steady)
+	f.exp.failOn = "steady"
+	if err := c.Apply(f.ctx, store.SourceRepo, []store.Row{steady}, "c2"); err != nil {
+		t.Fatalf("the same row again was projected again: %v", err)
+	}
+	if cur := must(c.Cursor(f.ctx, store.SourceRepo)); cur != "c2" {
+		t.Fatalf("cursor = %q after a no-op Apply, want c2", cur)
+	}
+	if err := c.Apply(f.ctx, store.SourceRepo, []store.Row{f.memory(newMem(), prj, "steady")}, "c3"); err == nil {
+		t.Fatal("a new row was not projected (the injected failure never ran)")
+	}
+}
