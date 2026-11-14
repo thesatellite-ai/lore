@@ -109,6 +109,11 @@ func (e *Engine) AuditSecret(ctx context.Context, action Action, a SecretAudit) 
 	}
 	// recorded now, mid-write: never part of a staged batch (unstaged)
 	if err := e.audit.Record(unstaged(ctx), ev); err != nil {
+		if c := errs.CodeOf(err); c != "" && c != errs.Internal {
+			// a refusal that says what to fix (an unwritable ~/.lore:
+			// E_READ_ONLY_FS naming the folder) keeps its code and words
+			return errs.Prefix("secret audit record", err)
+		}
 		return errs.Wrap(errs.Internal, "secret audit record failed", err)
 	}
 	return nil

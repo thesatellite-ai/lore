@@ -164,7 +164,10 @@ func TestOrgActorRefusals(t *testing.T) {
 		{"show unknown handle", []string{"actor", "show", "@nobody"}, th.ExitNotFound, []string{"E_NOT_FOUND", `actor "@nobody" not found`, "lore actor list"}},
 		{"show unknown id", []string{"actor", "show", "act_7fd72ec1e1c473978cd0c00b3703d400"}, th.ExitNotFound, []string{"E_NOT_FOUND"}},
 		{"show a non-actor id", []string{"actor", "show", "tsk_01a1b4a2edaf78f5959066a022572bdc"}, th.ExitNotFound, []string{"E_NOT_FOUND"}},
-		{"show unknown store", []string{"actor", "show", "@mira", "--store", "agency"}, th.ExitNotFound, []string{"E_NOT_FOUND", `not found in store "agency"`, "lore actor list --store agency"}},
+		// a store she is not in: `--store agency` also reads agency/org,
+		// which holds her (E-14: an org's name means its folders too)
+		{"show unknown store", []string{"actor", "show", "@mira", "--store", "me"}, th.ExitNotFound, []string{"E_NOT_FOUND", `not found in store "me"`, "lore actor list --store me"}},
+		{"show by the org's name", []string{"actor", "show", "@mira", "--store", "agency"}, 0, []string{orgMiraName}},
 		{"list bad status", []string{"actor", "list", "--status", "gone"}, orgExitBadInput, []string{"E_INVALID_INPUT", `--status "gone"`, "active, on_leave, left, archived"}},
 		{"agent label with a space", []string{"actor", "register", "--kind", "agent", "--label", "front end"}, orgExitBadInput, []string{"E_INVALID_INPUT", "one word"}},
 		{"agent label with a colon", []string{"actor", "register", "--kind", "agent", "--label", "a:b"}, orgExitBadInput, []string{"E_INVALID_INPUT", "one word"}},

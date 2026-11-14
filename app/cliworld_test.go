@@ -82,11 +82,40 @@ func newCLIWorld(t *testing.T) *cliWorld {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
-	env := map[string]string{"GIT_CONFIG_NOSYSTEM": "1"}
+	// D-105: PATH without the host's lore builds, so doctor's "multiple
+	// lore binaries on PATH" warning (DEGRADED) never depends on the
+	// machine running the test; hermeticPath narrows it further.
+	env := map[string]string{"GIT_CONFIG_NOSYSTEM": "1", "PATH": pathWithoutLore(os.Getenv("PATH"))}
 	for _, k := range testenv.HomeVars { // HOME, and USERPROFILE for Windows
 		env[k] = home
 	}
 	return &cliWorld{gitBin: git, root: root, env: env}
+}
+
+// pathWithoutLore is path with every folder that holds a lore program
+// left out (lore, lore.exe): a dev box or a gate step may put one or two
+// lore builds on PATH, and a world's commands must see none of them. The
+// world's lore is this test binary, started by its path (loreRun).
+func pathWithoutLore(path string) string {
+	var keep []string
+	for _, dir := range filepath.SplitList(path) {
+		if dir == "" || holdsLore(dir) {
+			continue
+		}
+		keep = append(keep, dir)
+	}
+	return strings.Join(keep, string(filepath.ListSeparator))
+}
+
+// holdsLore reports whether dir has a regular file (or a link to one)
+// named lore or lore.exe.
+func holdsLore(dir string) bool {
+	for _, name := range []string{"lore", "lore.exe"} {
+		if fi, err := os.Stat(filepath.Join(dir, name)); err == nil && !fi.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // set makes every later command of this world see k=v ("" is an empty

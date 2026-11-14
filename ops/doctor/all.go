@@ -54,6 +54,19 @@ type SetupEnv interface {
 	skill.InstallEnv
 }
 
+// HomeEnv is the optional check that the lore home can be written. Why:
+// a read works on a home lore cannot write (its caches go to a temp folder
+// removed at exit, so a CI runner's read-only HOME is fine), which also
+// means nothing then fails on the person's own machine either: setups,
+// store clones and machine state are silently lost at exit. doctor --all
+// (the machine check) names it as its finding; plain doctor stays quiet
+// so a CI clone reads HEALTHY.
+type HomeEnv interface {
+	// HomeWritable is nil when the lore home can be written, else an
+	// E_READ_ONLY_FS error naming the home and the fix.
+	HomeWritable(ctx context.Context) error
+}
+
 // CacheEnv is the optional source of the 60-second result cache (6.1).
 // Without it every run probes; with it, --fresh skips the reads. The cache
 // may be shared by every lore process on the machine (wire keeps it in
@@ -1025,6 +1038,12 @@ func addSetups(ctx context.Context, env Env, in RunIn, r *Report) error {
 	name := in.Setup
 	if name == "" {
 		name = op.SetupOf(ctx)
+	}
+	if he, ok := env.(HomeEnv); ok && in.All {
+		if err := he.HomeWritable(ctx); err != nil {
+			reportConfigBroken(r, err) // the machine's one finding, as an unwritable config.yaml is
+			return nil
+		}
 	}
 	sr, err := newSetupRun(ctx, se, in.Fresh)
 	if err != nil {

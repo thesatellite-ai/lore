@@ -29,6 +29,7 @@ var (
 	_ opssetup.Onboard        = (*App)(nil)
 	_ opsdoctor.SetupEnv      = (*App)(nil)
 	_ opsdoctor.CacheEnv      = (*App)(nil)
+	_ opsdoctor.HomeEnv       = (*App)(nil)
 	_ opssetup.HealthSource   = (*App)(nil)
 	_ opssetup.HealthRecorder = (*App)(nil)
 	_ team.Env                = (*App)(nil)
@@ -152,6 +153,17 @@ func (a *App) DoctorCache(ctx context.Context) opsdoctor.Cache {
 	}
 	a.machDoctor = c
 	return c
+}
+
+// HomeWritable implements opsdoctor.HomeEnv: an E_READ_ONLY_FS error when
+// lore cannot create files in its home (homeWritable, the probe that sends
+// a read's caches to a scratch folder instead, dryhome.go).
+func (a *App) HomeWritable(context.Context) error {
+	if a.opts.Home == "" || homeWritable(a.opts.Home) {
+		return nil
+	}
+	return errs.New(errs.ReadOnlyFS, "the lore home "+a.opts.Home+" (~/.lore) is not writable: setups, store clones and this machine's state cannot be saved, and each command keeps its caches in a temp folder it removes when it ends").
+		WithHint("make the lore home writable (chmod u+w on it and on its folders), or set " + modeBLoreHomeEnv + " to a folder you can write, then run lore doctor --all again")
 }
 
 // HasOrg implements setup.OrgFinder: an orgs[] entry named org exists.
