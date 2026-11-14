@@ -57,6 +57,8 @@ func TestSetStoreURLCarriesUnpushedClone(t *testing.T) {
 	if !strings.Contains(out.Clone, "unpushed commit(s)") {
 		t.Fatalf("set-url did not carry the old clone: %+v", out)
 	}
+	_ = a.Close() // the next command, as on the command line (the clone folder moved)
+	a = openWith(t, repo, Options{Home: home})
 	if _, err = a.SyncStores(background(), "kb"); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
@@ -66,6 +68,11 @@ func TestSetStoreURLCarriesUnpushedClone(t *testing.T) {
 	found, err := gitbackend.ScanClones(home)
 	if err != nil || len(found) != 1 {
 		t.Fatalf("want one clone of kb, got %+v (%v)", found, err)
+	}
+	// devco:O-14: the carried clone serves from the new address's folder
+	// (the one set-url's git user line named), not the old-named one
+	if base := filepath.Base(found[0].Paths.Dir); !strings.Contains(base, "kb-moved") || !strings.Contains(out.Clone, "moved to "+found[0].Paths.Dir) {
+		t.Fatalf("the clone serving kb is %s; set-url said %q", found[0].Paths.Dir, out.Clone)
 	}
 	if f, _ := a.DoctorStoreClones(background()); len(f) != 0 {
 		t.Fatalf("doctor after the carry: %+v", f)

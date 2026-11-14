@@ -282,11 +282,11 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Sett
 	out = addSettings(out, opsmigrate.Settings{Steps: editSteps, Rows: n})
 	// --supersedes links lore 0.1.16 and older wrote on the new row
 	// (hostbase_doctor_supersede.go)
-	supSteps, n, err := a.migrateSupersedes(ctx, dryRun)
+	supOut, err := a.migrateSupersedes(ctx, dryRun)
 	if err != nil {
 		return opsmigrate.Settings{}, err
 	}
-	out = addSettings(out, opsmigrate.Settings{Steps: supSteps, Rows: n})
+	out = addSettings(out, supOut)
 	// actors whose stable key the org roster holds under another id
 	// (actor_merge.go)
 	actorSteps, n, err := a.migrateActorKeys(ctx, dryRun)

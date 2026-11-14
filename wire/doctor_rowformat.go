@@ -6,6 +6,9 @@ package wire
 //	no v1 row of a migrated table           ──▶ nothing
 //	v1 rows, repo not migrated (no floor)   ──▶ note: run the migration once
 //	                                            everyone runs 0.1.18
+//	journal in its running phase (killed,   ──▶ warning (DEGRADED): the
+//	crashed, or running now), v1 rows or not    migration did not finish;
+//	                                            lore migrate run (or rollback)
 //	v1 rows, min_lore_version set, this     ──▶ note: the migration did not
 //	checkout's migration journal holds one      finish; run lore fix
 //	that did not finish (interrupted, rolled
@@ -78,6 +81,8 @@ const (
 	rowFormatFromBranch = "row files at _v: 1 (%s) were last written before this repo's migration (%s), so they came from a branch made before it (a rebase, merge or cherry-pick of that branch), not from an older lore"
 	rowFormatBranchFix  = "lore fix --migrate" // upgrades exactly those files; commit them after
 	rowFormatUnfinished = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s); the last migration of this repo did not finish or was rolled back (min_lore_version %s)"
+	// rowFormatInterrupted: the journal's line, what is left, the lock (O-2).
+	rowFormatInterrupted = "the migration of this repo did not finish: %s (%s; migration lock: %s)"
 )
 
 // rowFormatMixedOld is the warning of a repo on the lore 0.1.17 format
@@ -96,6 +101,10 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 	st, err := a.Status(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// first: a run killed before it wrote _meta.json also looks like E-7
+	if f, ok := a.interruptedMigration(ctx, st); ok {
+		return []DoctorFinding{f}, nil
 	}
 	if f, ok := a.mixedOldFormat(ctx, st); ok {
 		return []DoctorFinding{f}, nil
@@ -122,6 +131,32 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 	}
 	return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
 		Message: fmt.Sprintf(rowFormatAfterWarn, st.MinLoreVersion, pending), Fix: rowFormatAfterFix}}, nil
+}
+
+// interruptedMigration is the devco O-2 finding: this checkout's journal
+// holds a migration still in its running phase (killed, crashed, or
+// running right now). Its _meta.json may already say format 2 and lock
+// lore 0.1.17 teammates out while most rows are still _v: 1, so doctor is
+// DEGRADED (a warning), not HEALTHY with a note: a CI or fleet run gating
+// on the exit code must not pass such a repo. The message carries the
+// journal's own line (finish with lore migrate run, or undo with lore
+// migrate rollback; a shared-database conversion cannot be undone) and the
+// lock's state, so the reader knows the next run takes a stale lock over.
+func (a *App) interruptedMigration(ctx context.Context, st opsmigrate.StatusOut) (DoctorFinding, bool) {
+	_, path, err := a.journalPath(ctx)
+	if err != nil {
+		return DoctorFinding{}, false
+	}
+	j, ok, err := readJournal(path)
+	if err != nil || !ok || j.Phase != phaseRunning {
+		return DoctorFinding{}, false
+	}
+	left := "no row file left at _v: 1"
+	if len(st.Pending) > 0 {
+		left = "row files still at _v: 1: " + strings.Join(st.Pending, ", ")
+	}
+	return DoctorFinding{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+		Message: fmt.Sprintf(rowFormatInterrupted, st.Journal, left, st.Lock), Fix: rowFormatBeforeFix}, true
 }
 
 // v1BeforeMigration reports whether every `_v: 1` row file in the repo's

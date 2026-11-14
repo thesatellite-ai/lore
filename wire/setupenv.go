@@ -76,7 +76,13 @@ func (a *App) onboardProbe(ctx context.Context) (*probe.Prober, error) {
 	}
 	// writableHome: a read-only lore home (a CI runner, F-6) puts the
 	// probe's temp repos in the scratch home, so the check still runs
-	tmp := filepath.Join(writableHome(a.opts.Home), probeTmpDir)
+	base := writableHome(a.opts.Home)
+	if NoCreate(ctx) && !isDirAt(a.opts.Home) {
+		// devco O-9: a read (lore doctor on a fresh CI runner) creates no
+		// ~/.lore just for the probe's scratch folder
+		base = scratchFor(a.opts.Home)
+	}
+	tmp := filepath.Join(base, probeTmpDir)
 	if err = os.MkdirAll(tmp, 0o700); err != nil {
 		return nil, errs.FileIO("create the setup probe folder", tmp, err)
 	}
@@ -147,6 +153,12 @@ func (a *App) DoctorCache(ctx context.Context) opsdoctor.Cache {
 	if a.machDoctor != nil {
 		return a.machDoctor
 	}
+	if NoCreate(ctx) && !machineStoreExists(a.opts.Home) {
+		// devco O-9: a read (lore doctor in CI, in a repo with no lore
+		// data) never creates machine.db just to cache its checks; the
+		// in-process cache serves this run, and the next call looks again
+		return a.doctorCache
+	}
 	c, err := openMachineDoctorCache(ctx, a.opts.Home, a.opts.Wall)
 	if err != nil {
 		return a.doctorCache
@@ -169,5 +181,16 @@ func (a *App) HomeWritable(context.Context) error {
 // HasOrg implements setup.OrgFinder: an orgs[] entry named org exists.
 func (a *App) HasOrg(ctx context.Context, org string) bool {
 	_, err := a.TeamOrigin(ctx, org)
+	return err == nil
+}
+
+// machineStoreExists reports whether the machine store file of the lore
+// home home is on disk. Why: a read may use machine.db when it is there,
+// but must not create it (devco O-9).
+func machineStoreExists(home string) bool {
+	if home == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(home, filepath.FromSlash(MachineStoreFile)))
 	return err == nil
 }

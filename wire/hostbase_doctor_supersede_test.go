@@ -243,15 +243,20 @@ func TestMigrateConvertsOldSupersedes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	steps, n, err := a.migrateSupersedes(ctx, true)
-	if err != nil || n != 1 || len(steps) != 1 || !strings.Contains(steps[0], "would move 1 --supersedes link") || !strings.Contains(steps[0], "rule "+oldRule+" → "+newRule) {
-		t.Fatalf("dry run = %q, %d, %v", steps, n, err)
+	// devco O-17: both ends of the moved link are written and named, in
+	// the dry run as in the run, so the two counts agree
+	wantRows := []string{"rules/" + min(oldRule, newRule), "rules/" + max(oldRule, newRule)}
+	dry, err := a.migrateSupersedes(ctx, true)
+	if err != nil || len(dry.Steps) != 1 || !strings.Contains(dry.Steps[0], "would move 1 --supersedes link") || !strings.Contains(dry.Steps[0], "rule "+oldRule+" → "+newRule) ||
+		dry.Rows != 2 || !slices.Equal(dry.Upgraded, wantRows) {
+		t.Fatalf("dry run = %+v, %v; want rows %q", dry, err, wantRows)
 	}
 	if next, _ := successor(t, a, schema.TableRules, oldRule); next != "" {
 		t.Fatal("the dry run wrote")
 	}
-	if steps, n, err = a.migrateSupersedes(ctx, false); err != nil || n != 1 || !strings.Contains(steps[0], "moved 1 --supersedes link") {
-		t.Fatalf("run = %q, %d, %v", steps, n, err)
+	ran, err := a.migrateSupersedes(ctx, false)
+	if err != nil || len(ran.Steps) != 1 || !strings.Contains(ran.Steps[0], "moved 1 --supersedes link") || ran.Rows != dry.Rows || !slices.Equal(ran.Upgraded, dry.Upgraded) {
+		t.Fatalf("run = %+v, %v; want the dry run's rows %q", ran, err, dry.Upgraded)
 	}
 	if next, _ := successor(t, a, schema.TableRules, oldRule); next != newRule {
 		t.Errorf("old rule link = %q, want %s", next, newRule)
@@ -259,8 +264,8 @@ func TestMigrateConvertsOldSupersedes(t *testing.T) {
 	if next, _ := successor(t, a, schema.TableRules, newRule); next != "" {
 		t.Errorf("new rule link = %q, want cleared", next)
 	}
-	if steps, n, err = a.migrateSupersedes(ctx, false); err != nil || n != 0 || len(steps) != 0 {
-		t.Fatalf("rerun = %q, %d, %v; want nothing", steps, n, err)
+	if again, aerr := a.migrateSupersedes(ctx, false); aerr != nil || again.Rows != 0 || len(again.Steps) != 0 {
+		t.Fatalf("rerun = %+v, %v; want nothing", again, aerr)
 	}
 	var warns []string
 	if err = a.doctorSupersedes(ctx, false, func(s string) { warns = append(warns, s) }, func(string) {}, func(s string) { t.Error(s) }, func(s string) { t.Error(s) }); err != nil {

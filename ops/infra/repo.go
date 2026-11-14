@@ -926,6 +926,9 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 		return RepoSetURLOut{}, errs.New(errs.URLUserinfo, "the URL cannot be read, and lore cannot tell whether it holds a credential").
 			WithHint("give the address without any user name or token, e.g. https://github.com/<owner>/<repo>.git")
 	}
+	if repourl.IsLocalRemote(clean) {
+		return localRemoteSetURL(ctx, files, clean), nil
+	}
 	key, err := repourl.Normalize(clean)
 	if err != nil {
 		// E_REPO_URL: the address does not normalise (PROVENANCE 10.4)
@@ -1010,6 +1013,31 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	}
 	out.human = setURLText(out)
 	return out, nil
+}
+
+// localRemoteSetURL is `lore repo set-url --url <path>` (O-13): a remote
+// that is a folder on this machine names no repo across clones, so lore
+// records nothing (repourl.Normalize refuses it as a key) and git remote
+// set-url alone is the move. Before, the command lore's own "the repo
+// moved" hint named for a path remote was refused E_REPO_URL. The text
+// says nothing needed recording, and names the git step when no remote
+// uses the path yet.
+func localRemoteSetURL(ctx context.Context, files RepoFiles, path string) RepoSetURLOut {
+	out := RepoSetURLOut{URL: path, Mode: modePrimary, Confirmed: []string{}}
+	if m, ok, err := files.ReadRepoMeta(ctx); err == nil && ok {
+		out.RepoID = m.RepoID
+	}
+	used := false
+	if remotes, err := files.RepoRemotes(ctx); err == nil {
+		used = slices.ContainsFunc(remotes, func(r Remote) bool { return strings.TrimSpace(r.URL) == path })
+	}
+	out.human = "lore repo set-url: " + path + " is a folder on this machine, not an address lore records (it would not name the repo on a teammate's machine), so nothing was recorded"
+	if used {
+		out.human += "; a git remote already uses it, which is all lore sync needs\n"
+	} else {
+		out.human += "; point git at it with git remote set-url origin " + path + ", then lore sync\n"
+	}
+	return out
 }
 
 // followProjectOrigin moves the project's origin_url along with a moved

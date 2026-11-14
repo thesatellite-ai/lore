@@ -146,8 +146,8 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 		return nil, err
 	}
 	if NoClone(ctx) && !isDir(filepath.Join(dir, gitDirName)) {
-		return nil, errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (dry run)").
-			WithHint("a run that is not a dry run clones it to " + dir)
+		return nil, errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (a dry run or a CI read)").
+			WithHint("a run that is neither a dry run nor a CI read clones it to " + dir)
 	}
 	if err = os.MkdirAll(paths.StateDir, cloneDirMode); err != nil {
 		return nil, errs.FileIO("create the clone folder", paths.StateDir, err)
@@ -495,10 +495,11 @@ func (b *Backend) fetch(ctx context.Context, dir string) error {
 // its result the way fetch documents: stamp on success or on a missing
 // remote ref, errOffline for any other failure git reported.
 func (b *Backend) runFetch(ctx context.Context, dir string, args ...string) error {
-	if gitenv.NoStoreFetch(os.Environ()) {
+	if gitenv.NoStoreFetch(os.Environ()) || NoFetch(ctx) {
 		// LORE_NO_STORE_FETCH (or LORE_NO_FETCH): the parent fetched this
 		// clone moments ago;
-		// LORE_OFFLINE: this run reads what is on disk. Either way the
+		// LORE_OFFLINE, or a CI read (WithNoFetch, devco O-7): this run
+		// reads what is on disk. Either way the
 		// tracking refs there are what the store reads, and no stamp is
 		// written (nothing was fetched by this process).
 		return nil

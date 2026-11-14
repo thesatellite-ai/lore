@@ -15637,10 +15637,16 @@
                               "format_old": {
                                 "type": "boolean"
                               },
+                              "link": {
+                                "type": "string"
+                              },
                               "next": {
                                 "type": "string"
                               },
                               "path": {
+                                "type": "string"
+                              },
+                              "problem": {
                                 "type": "string"
                               }
                             },

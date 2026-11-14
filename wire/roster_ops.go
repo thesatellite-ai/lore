@@ -119,6 +119,9 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 // handle check, the row, the push. setup join reuses it (registerCaller).
 func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind string) (opsinfra.ActorRegisterOut, error) {
 	if kind != opsinfra.RegisterKindAgent {
+		if err := x.rosterFresh(ctx, r); err != nil {
+			return opsinfra.ActorRegisterOut{}, err
+		}
 		// TEAM_PROFILES 6.3 (TP-4): a key that is an identity contact of an
 		// existing actor is that person already; nothing is written, so a
 		// second email never becomes a second actor.
@@ -143,6 +146,31 @@ func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind
 	}
 	x.rosterPush(ctx, r)
 	return opsinfra.ActorRegisterOut{ID: id, Kind: kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Created: created, Where: r.shown()}, nil
+}
+
+// rosterFresh brings the local copy of r's org store up to the remote
+// before a person registers on it (devco D-277). The refusal of a person
+// who left (RosterRegister, INTEG-ORG-1) reads their row from the local
+// copy, and the fetch before a write is skipped or cut short whenever the
+// last fetch is recent, autopush is off, or a held store's bounded fetch
+// times out on a loaded machine: an offboard a teammate pushed a moment
+// ago was then not seen and the register put the person back. So the
+// register always fetches (merge only, nothing is pushed), and a remote it
+// cannot reach refuses instead of deciding on an old roster. A repo
+// roster has no store to fetch.
+func (x *App) rosterFresh(ctx context.Context, r rosterAt) error {
+	if r.src == store.SourceRepo {
+		return nil
+	}
+	rep, err := x.Sync(fetchOnly(ctx), r.src)
+	switch {
+	case err == nil && !rep.Offline:
+		return nil
+	case err != nil && !errs.Has(err, errs.Offline):
+		return fmt.Errorf("actor register: read the latest roster in %s: %w", r.shown(), err) // its own code (a refused merge, a bad store) stays
+	}
+	return errs.Wrap(errs.Offline, "cannot register on the roster in "+r.shown()+": its store's remote could not be reached, and registering needs the latest roster (someone who left is refused)", err).
+		WithHint("run `lore actor register` again once the store's remote is reachable (`lore whoami` shows the store's status)")
 }
 
 // registerCaller registers the caller (a person, or the person an agent

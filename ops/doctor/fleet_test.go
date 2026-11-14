@@ -63,3 +63,31 @@ func TestAllNamesEveryRepoFound(t *testing.T) {
 		}
 	}
 }
+
+// TestAllFleetProblemDegrades (devco:O-19): a repo of the setups' folders
+// whose origin is gone is named in the repos block with its step, counts
+// as a warning and makes doctor --all DEGRADED (exit 1); before, doctor
+// --all said healthy. A repo reached through a link (devco:O-1) is named
+// with the link under --verbose.
+func TestAllFleetProblemDegrades(t *testing.T) {
+	env := newEnv(t)
+	env.store.cfg.Setups = append(env.store.cfg.Setups, personal(env.home))
+	env.top = env.home + "/www/mira/app"
+	linked := env.home + "/elsewhere/kit"
+	problem := "origin: no git repository at /srv/git/app-gone.git (moved or deleted); lore sync cannot fetch or push this repo's notes until it is fixed: if the repo moved, run git remote set-url origin <new-url>, then lore sync"
+	plain := runAllT(t, env, RunIn{})
+	fe := fleetEnv{setupEnv: env, fleet: Fleet{Repos: []FleetRepo{{Path: env.top, Problem: problem}}}}
+	r := runAllT(t, fe, RunIn{})
+	if r.Status != StatusDegraded || r.Exit != 1 {
+		t.Fatalf("status %s exit %d (without the problem %s)\n%s", r.Status, r.Exit, plain.Status, r.Text())
+	}
+	text := r.Text()
+	if !strings.Contains(text, env.top+"  "+problem) || strings.Contains(text, "This repo, warnings") {
+		t.Fatalf("text:\n%s", text)
+	}
+	fe.fleet = Fleet{Repos: []FleetRepo{{Path: env.top}, {Path: linked, Link: env.home + "/www/mira/kit"}}}
+	verbose := runAllT(t, fe, RunIn{Verbose: true}).Text()
+	if !strings.Contains(verbose, linked+"  "+fleetNotChecked) {
+		t.Fatalf("linked repo line:\n%s", verbose)
+	}
+}

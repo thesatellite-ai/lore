@@ -39,6 +39,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -406,20 +407,42 @@ const StepSupersedes = "supersedes"
 // links lore 0.1.16 and older wrote on the new row (the doctor repair,
 // without the question: the run is the person's yes to converting the
 // repo). Rows two links claim are left for doctor to name.
-func (a *App) migrateSupersedes(ctx context.Context, dryRun bool) ([]string, int, error) {
+func (a *App) migrateSupersedes(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	plans, fixes, err := a.planSupersedes(ctx)
 	if err != nil || len(fixes) == 0 {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
+	written := supersedeWrites(plans)
 	verb, commit := "would move", ""
 	if !dryRun {
 		if _, commit, err = a.applySupersedes(ctx, plans, supersedeByMigrate); err != nil {
-			return nil, 0, err
+			return opsmigrate.Settings{}, err
 		}
 		verb = "moved"
 		if commit != "" {
 			commit = ", " + commit
 		}
 	}
-	return []string{StepSupersedes + ": " + verb + " " + plural(len(fixes), "--supersedes link") + " written by lore 0.1.16 or older onto the row each replaces" + commit + " (" + describeSupersedeFixes(fixes) + ")"}, len(fixes), nil
+	line := StepSupersedes + ": " + verb + " " + plural(len(fixes), "--supersedes link") + " written by lore 0.1.16 or older onto the row each replaces" + commit + " (" + describeSupersedeFixes(fixes) + ")"
+	return opsmigrate.Settings{Steps: []string{line}, Rows: len(written), Upgraded: written}, nil
+}
+
+// supersedeWrites names ("table/id") every row applySupersedes writes for
+// plans: both ends of each moved link. devco O-17: the step counted one
+// row per link, while it wrote two; the real run then found both rows at
+// _v: 2 and left them out of its table lines, so a dry run said "Would
+// upgrade 772 rows" and the run "Upgraded 770 rows". Named, each row is
+// counted once whichever step writes it (opsmigrate.RunOut.addRows).
+func supersedeWrites(plans []supersedeKindPlan) []string {
+	var out []string
+	for _, kp := range plans {
+		for id, next := range kp.plan.set {
+			if next != "" && kp.nodes[id].supersededBy == next {
+				continue // applySupersedes leaves it as is
+			}
+			out = append(out, kp.k.table.String()+"/"+id)
+		}
+	}
+	slices.Sort(out)
+	return out
 }

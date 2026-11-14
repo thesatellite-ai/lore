@@ -54,6 +54,16 @@ func writableHome(home string) string {
 	if home == "" || !dryRunProcess() && homeWritable(home) {
 		return home
 	}
+	return scratchFor(home)
+}
+
+// scratchFor is the scratch folder standing in for the lore home home
+// (made on first use, the real machine store copied in, removed at exit
+// by RemoveDryScratch), or home itself when another home already holds
+// the one scratch folder of this process. writableHome uses it for a home
+// lore cannot write; a read uses it for scratch files when the lore home
+// does not exist yet, so the read creates no ~/.lore (devco O-9).
+func scratchFor(home string) string {
 	dryScratchMu.Lock()
 	defer dryScratchMu.Unlock()
 	if dryScratchDir != "" && dryRealHome != home && !dryRunProcess() {

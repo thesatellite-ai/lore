@@ -172,6 +172,8 @@ ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable)
 ```
 <!-- /example -->
 
+`lore actor register` answers `E_OFFLINE` the same way when the org's store cannot be reached: it needs the latest roster (someone who left is refused) and never decides on the local copy.
+
 Fix: reconnect and run the command again. Ordinary writes behave differently:
 
 - A memory or task written while the store is unreachable is committed in the local clone and pushed by a later command ("1 file(s) offline: committed in the local clone, pushed by the next command").
@@ -324,7 +326,7 @@ The status change is not one `lore actor status` makes, or the person is in the 
 | `lore actor offboard` on someone who already left ("already left on <date>") | nothing to do; `lore actor status --actor <a> --to archived` to archive |
 | `lore actor rejoin` on someone who is active | nothing to do |
 | `lore project member add` for a left or archived person | `lore actor rejoin --actor <a>` first |
-| `lore actor register` or `lore agent start` by a person who left or was archived | ask an admin to run `lore actor rejoin --actor <a> --type …` |
+| `lore actor register` or `lore agent start` by a person who left or was archived (register fetches the org store first, so an offboard pushed a moment ago counts) | ask an admin to run `lore actor rejoin --actor <a> --type …` |
 
 ### `E_PERIOD_OVERLAP`
 
