@@ -594,6 +594,12 @@ func (r *Ref) Fetch(ctx context.Context, branches ...string) error {
 		return err
 	}
 	r.markFetched() // in memory: a read fetches and writes nothing in .git (C-8)
+	for _, b := range branches {
+		if r.fetchedBranches == nil {
+			r.fetchedBranches = map[string]bool{}
+		}
+		r.fetchedBranches[b] = true
+	}
 	return nil
 }
 

@@ -229,6 +229,10 @@ type LandResult struct {
 	Commit string
 	Rows   int
 	Detail string
+	// Live is the outcome of the waiting live writes LandRequest.Live
+	// carried (nil when none were sent): the caller reports it as it
+	// reports its own Push.
+	Live *PushOutcome
 }
 
 // LandRequest lands rows on the default branch of Ref's remote.
@@ -236,6 +240,13 @@ type LandRequest struct {
 	Branch string
 	Items  []LandItem
 	Layout Layout
+	// Live carries the local live ref, when it is ahead of the remote's, in
+	// the landing's own push (devco L-12-land: lore sync pushes the code
+	// remote once, not once for the live ref and again for the branch).
+	// The two refs go in one atomic push; a remote without atomic push, or
+	// a refusal of either ref, sends the live ref alone first (Push), so a
+	// branch never holds rows the remote's live ref does not.
+	Live bool
 }
 
 // headsPrefix is the branch ref namespace.
@@ -256,17 +267,22 @@ func (r *Ref) Land(ctx context.Context, req LandRequest) (LandResult, error) {
 	}
 	dst := headsPrefix + req.Branch
 	trk, _ := gitremote.TrackingRef(r.remoteName(), dst)
+	var liveOut *PushOutcome // the carried live ref's outcome, once sent (req.Live)
 	for attempt := 1; attempt <= r.PushRetries+1; attempt++ {
-		if err := r.Remote.Fetch(ctx, gitremote.FetchRequest{Refspecs: gitremote.TrackingRefspecs(r.remoteName(), req.Branch)}); err != nil {
-			if errors.Is(err, gitremote.ErrUnconfirmed) {
-				return LandResult{Status: LandOffline}, nil
+		// attempt 1 lands on the tip this run's Fetch brought (lore sync's
+		// prepare) when it brought the branch; a lost race fetches again
+		if attempt > 1 || !r.fetchedBranches[req.Branch] {
+			if err := r.Remote.Fetch(ctx, gitremote.FetchRequest{Refspecs: gitremote.TrackingRefspecs(r.remoteName(), req.Branch)}); err != nil {
+				if errors.Is(err, gitremote.ErrUnconfirmed) {
+					return LandResult{Status: LandOffline}, nil
+				}
+				if errors.Is(err, gitremote.ErrRemoteRefMissing) {
+					// a brand-new repo whose remote has no default branch yet:
+					// nothing to land on, the rows stay live (U-2)
+					return LandResult{Status: LandNoRemote}, nil
+				}
+				return LandResult{}, err
 			}
-			if errors.Is(err, gitremote.ErrRemoteRefMissing) {
-				// a brand-new repo whose remote has no default branch yet:
-				// nothing to land on, the rows stay live (U-2)
-				return LandResult{Status: LandNoRemote}, nil
-			}
-			return LandResult{}, err
 		}
 		tip, ok, err := r.Repo.ResolveRef(ctx, trk)
 		if err != nil {
@@ -292,12 +308,32 @@ func (r *Ref) Land(ctx context.Context, req LandRequest) (LandResult, error) {
 		if !c.Changed {
 			return LandResult{Status: LandNothing}, nil
 		}
-		res, err := r.Remote.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{{Src: c.OID, Dst: dst, Mode: gitremote.ModeFastForward}}})
-		if err != nil {
-			if errors.Is(err, gitremote.ErrUnconfirmed) {
-				return LandResult{Status: LandOffline}, nil
+		branch := gitremote.RefUpdate{Src: c.OID, Dst: dst, Mode: gitremote.ModeFastForward}
+		var res gitremote.PushResult
+		if req.Live && liveOut == nil {
+			var stop bool
+			res, liveOut, stop, err = r.landWithLive(ctx, branch)
+			if errors.Is(err, errLandOffline) {
+				return LandResult{Status: LandOffline, Live: liveOut}, nil
 			}
-			return LandResult{}, err
+			if err != nil {
+				return LandResult{Live: liveOut}, err
+			}
+			if stop { // the live ref did not go out: nothing lands
+				st := LandOffline
+				if liveOut.Status != PushOffline {
+					st = LandRefused
+				}
+				return LandResult{Status: st, Detail: "the live ref was not pushed, so nothing landed: " + liveOut.Detail, Live: liveOut}, nil
+			}
+		} else {
+			res, err = r.Remote.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{branch}})
+			if err != nil {
+				if errors.Is(err, gitremote.ErrUnconfirmed) {
+					return LandResult{Status: LandOffline, Live: liveOut}, nil
+				}
+				return LandResult{Live: liveOut}, err
+			}
 		}
 		rr, _ := res.Ref(dst)
 		switch {
@@ -305,17 +341,80 @@ func (r *Ref) Land(ctx context.Context, req LandRequest) (LandResult, error) {
 			if cur, _, err := r.Repo.ResolveRef(ctx, trk); err == nil && cur != c.OID {
 				_ = r.Repo.UpdateRef(ctx, trk, c.OID, cur) // tracking catches up; the next fetch would too
 			}
-			return LandResult{Status: LandDone, Commit: c.OID, Rows: n}, nil
+			return LandResult{Status: LandDone, Commit: c.OID, Rows: n, Live: liveOut}, nil
 		case rr.Status == gitremote.StatusProtected:
-			return LandResult{Status: LandProtected, Detail: rr.Message, Rows: n}, nil
+			return LandResult{Status: LandProtected, Detail: rr.Message, Rows: n, Live: liveOut}, nil
 		case rr.Status == gitremote.StatusNonFastForward || rr.Status == gitremote.StatusStale:
 			continue
 		default:
-			return LandResult{Status: LandRefused, Detail: rr.Message}, nil
+			return LandResult{Status: LandRefused, Detail: rr.Message, Live: liveOut}, nil
 		}
 	}
-	return LandResult{Status: LandRetriesOut}, nil
+	return LandResult{Status: LandRetriesOut, Live: liveOut}, nil
 }
+
+// landWithLive pushes the landing commit (branch) and the local live ref,
+// when it is ahead, in one atomic push (LandRequest.Live). It returns the
+// branch's verdict and the live ref's outcome (a PushNothing outcome when
+// the live ref was not ahead). When the two cannot go together (no atomic
+// push on the remote, or either ref refused, which applies neither), the
+// live ref goes alone first through Push (its own lost-race retries); stop
+// is true when it did not go out, so the branch is not pushed. Then the
+// branch's verdict is the atomic push's when the branch was the ref
+// refused, else that of a push of the branch alone.
+func (r *Ref) landWithLive(ctx context.Context, branch gitremote.RefUpdate) (res gitremote.PushResult, live *PushOutcome, stop bool, err error) {
+	s, err := r.Snapshot(ctx)
+	if err != nil {
+		return res, nil, false, err
+	}
+	if !s.Ahead() {
+		live = &PushOutcome{Status: PushNothing}
+		res, err = r.Remote.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{branch}})
+		return res, live, false, landOffline(err)
+	}
+	both, perr := r.Remote.Push(ctx, gitremote.PushRequest{Atomic: true, Updates: []gitremote.RefUpdate{
+		branch, {Src: s.Local, Dst: r.Name, Mode: gitremote.ModeFastForward},
+	}})
+	switch {
+	case perr == nil && both.OK():
+		if err := r.setTracking(ctx, s.Local); err != nil {
+			return both, nil, false, err
+		}
+		live = &PushOutcome{Status: PushDone, Attempts: 1, Commit: s.Local, Ref: r.Name, Remote: r.remoteName()}
+		return both, live, false, r.confirmed(ctx, s.Local)
+	case perr != nil && errors.Is(perr, gitremote.ErrUnconfirmed):
+		return res, &PushOutcome{Status: PushOffline, Attempts: 1, Detail: transportStderr(perr)}, true, nil
+	case perr != nil && !errors.Is(perr, gitremote.ErrAtomicUnsupported):
+		return res, nil, false, perr
+	}
+	// apart: the live ref first, as lore sync did before it carried it
+	out, err := r.Push(ctx)
+	if err != nil {
+		return res, &out, false, err
+	}
+	if !out.Pushed() {
+		return res, &out, true, nil
+	}
+	if perr == nil {
+		if br, _ := both.Ref(branch.Dst); br.Status != gitremote.StatusAtomicFailed {
+			return both, &out, false, nil // the branch itself was refused: its verdict stands
+		}
+	}
+	res, err = r.Remote.Push(ctx, gitremote.PushRequest{Updates: []gitremote.RefUpdate{branch}})
+	return res, &out, false, landOffline(err)
+}
+
+// landOffline keeps an unanswered branch push from being an error: the
+// caller sees an empty result and reports the landing offline.
+func landOffline(err error) error {
+	if errors.Is(err, gitremote.ErrUnconfirmed) {
+		return errLandOffline
+	}
+	return err
+}
+
+// errLandOffline is landOffline's error, turned into LandOffline by Land.
+var errLandOffline = errors.New("live: landing push not answered")
 
 // landChanges builds the file changes of a landing on base and the items
 // that change main.

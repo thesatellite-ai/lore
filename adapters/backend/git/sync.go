@@ -101,13 +101,17 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 	if err != nil {
 		return store.SyncReport{}, err
 	}
+	reuse := fetchedClone(ctx) == b.work // fetched earlier in this run (WithFetchedClone)
 	for attempt := 0; ; attempt++ {
-		if ferr := b.fetch(ctx, b.work); ferr != nil {
-			if !isOffline(ferr) {
-				return rep, ferr
+		// a reused fetch (attempt 0 only) is this run's earlier upload-pack
+		if attempt > 0 || !reuse {
+			if ferr := b.fetch(ctx, b.work); ferr != nil {
+				if !isOffline(ferr) {
+					return rep, ferr
+				}
+				rep.Offline, rep.OfflineDetail = true, stderrOf(ferr)
+				break
 			}
-			rep.Offline, rep.OfflineDetail = true, stderrOf(ferr)
-			break
 		}
 		remote, rerr := b.resolve(ctx, b.work, trackingRefNS+b.branch)
 		if rerr != nil {

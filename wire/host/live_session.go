@@ -105,8 +105,10 @@ type liveSession struct {
 	clk      clock.Clock
 	stateDir string
 	// autopush: live.autopush on (and LORE_LIVE_AUTOPUSH not "0"): each
-	// write pushes at once. It gates pushes only (D18 amended): reads and
-	// writes still fetch teammates' rows when the fetch is due.
+	// write pushes at once. It gates pushes only (D18 amended): reads still
+	// fetch teammates' rows when the fetch is due; a write never fetches
+	// before it writes (devco L-12-perf), its push fetches only when the
+	// remote moved (live.Ref.Push).
 	autopush bool
 	// offline: LORE_LIVE_AUTOPUSH=0 keeps lore off the network on its own,
 	// fetches included (only `lore sync` reaches the remote).
@@ -119,6 +121,12 @@ type liveSession struct {
 	// asked: the command is a push the person asked for (liveRun.asked):
 	// it pushes waiting live writes even with live.autopush off.
 	asked bool
+	// netAsked: the person passed --push to this write (liveRun.netAsked):
+	// it fetches when the fetch is due, as before devco L-12-perf.
+	netAsked bool
+	// landLive: this sync's landing pass carries the waiting live writes in
+	// its own push (canCarryLive, live.LandRequest.Live; devco L-12-land).
+	landLive bool
 	// still: the run leaves .git as it was (liveRun.still): prepare takes
 	// no lock, fetches and integrates nothing; finish writes nothing.
 	still bool
@@ -285,6 +293,14 @@ func (s *liveSession) prepare(ctx context.Context) {
 	if !s.read {
 		ttl = orgconf.ForWrite(ttl) // M-4: only reads reuse a fetch for the whole TTL
 	}
+	if s.localWrite() {
+		// devco L-12-perf: a write lands on the local live ref and says
+		// whether it went out; a slow remote never holds it up. Teammates'
+		// rows arrive with the next read that fetches, `lore sync`, or the
+		// write's own push (a rejected push fetches and integrates).
+		s.integrate(ctx)
+		return
+	}
 	if live.ShouldFetch(live.FetchInputs{
 		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: ttl,
 		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
@@ -312,6 +328,13 @@ func (s *liveSession) integrate(ctx context.Context) {
 	default:
 		s.notes = append(s.notes, res.Notes...)
 	}
+}
+
+// localWrite reports whether this run is a write that does no network
+// I/O before it writes (devco L-12-perf): not a read, not a run that
+// fetches like sync (FetchAlways), and no --push the person passed.
+func (s *liveSession) localWrite() bool {
+	return !s.read && s.kind != live.FetchAlways && !s.netAsked
 }
 
 // fetch is F3 step 2: refs/lore/* and the default branch, then the stamp.
@@ -449,6 +472,13 @@ func (s *liveSession) push(ctx context.Context) bool {
 		return false
 	}
 	out, err := s.ref.Push(ctx)
+	return s.pushed(snap, out, err)
+}
+
+// pushed reports a push of the live ref whose local tip was snap.Local
+// (push, or the landing push that carried it: reportCarried) and whether
+// it went out.
+func (s *liveSession) pushed(snap live.Snapshot, out live.PushOutcome, err error) bool {
 	s.notes = append(s.notes, out.Notes...)
 	s.printNotes()
 	if err != nil {
@@ -463,6 +493,32 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.undelivered = snap.Local
 	}
 	return out.Pushed()
+}
+
+// canCarryLive reports whether lore sync's landing push may carry the
+// waiting live writes (devco L-12-land): the same conditions under which
+// push would send them now (a remote, not blocked, not a read, autopush or
+// a push the person asked for, ahead, not held back, not already tried).
+func (s *liveSession) canCarryLive(ctx context.Context) bool {
+	if s.ref.Remote == nil || s.blocked != nil || s.read || (!s.autopush && !s.asked) {
+		return false
+	}
+	snap, err := s.ref.Snapshot(ctx)
+	if err != nil || !snap.Ahead() || (s.undelivered != "" && s.undelivered == snap.Local) {
+		return false
+	}
+	_, held := s.leftHeld(ctx, snap)
+	return !held
+}
+
+// reportCarried reports the live ref's outcome of a landing push that
+// carried it (live.LandResult.Live) as push reports its own; local is the
+// live ref's tip the landing pass started from.
+func (s *liveSession) reportCarried(local string, out *live.PushOutcome) {
+	if out == nil {
+		return
+	}
+	s.pushed(live.Snapshot{Local: local}, *out, nil)
 }
 
 // leftHeld reports a push LiveConfig.PushHold keeps from running: the

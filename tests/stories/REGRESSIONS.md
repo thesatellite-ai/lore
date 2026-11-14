@@ -10,8 +10,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1519 |
-| open | 1 |
+| fixed | 1521 |
+| open | 0 |
 | on-hold | 14 |
 | owner | 6 |
 | not-reproduced | 108 |
@@ -466,6 +466,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:L-10 | finding | lore sync on a flaky remote exited 0 saying only "offline": no remote, no ssh error, no --json field | fixed | TestLiveOfflineCauseNamed, TestStoreOfflineNote, TestDownRemoteFailsAfterOneRetryWithGitsWords, TestJourneyOfflineCalm, TestSyncStore_OfflineWriteIsSentByTheNextSync | live and store lines name the remote and git's reason; --json live_offline/live_error and per store offline/url/error; one retry of a never-connected call (gitremote and the store runner); exit stays 0 when only offline (B3-13); break-verified with the gitremote tests |
 | devco:L-11 | finding | sync printed "pushed store X" then "store X: ... (offline: local changes kept)" for the same store | fixed | TestStoreOfflineNote | a store line with sent > 0 that then went offline says "sent; then <url> did not answer: <reason>", never "local changes kept" |
 | devco:L-12 | finding | on a flaky remote one dropped ssh call failed a claim (E_OFFLINE) with no retry | fixed | TestDroppedConnectionIsRetriedOnce, TestDroppedPushIsRetriedOnceAndApplied, TestRefusalIsNotRetried | gitremote.Git.run and the store clone runner retry once (300 ms) a fetch/push/ls-remote whose connection never opened (ssh connect/timeout/refused/unresolved); refusals and resets are not retried; the slow local write and the sync call count are devco:L-12-perf |
+| devco:L-12-perf | finding | slow remote: the first local task add after a pause fetches (5.6-7.9 s) and sync makes ~8 ssh calls (repeated upload-pack to one remote) | fixed | TestLocalWriteDoesNoNetworkIO, TestSyncReusesThisRunsFetch | a write fetches nothing before it writes, repo live ref and store clones alike (only a claim/hold the person passed --push to, or LORE_PUSH_CLAIMS=1, fetches when due); lore sync fetches each store clone once (its sync reuses the run's fetch, any folder of the clone) and the landing pass reuses the run's fetch of the branch; counted with a fake ssh: task add / memory add to a store after a pause 2 calls -> 0, sync with a store 5 -> 4 (1 fetch + 1 push each), sync with nothing to send 3 -> 2, a landing sync 6 -> 4 (1 fetch per remote; the code remote still gets 2 pushes, devco:L-12-land) |
+| devco:L-12-land | finding | a lore sync that lands finished rows pushes the code remote twice (refs/lore/live, then the branch; a third time when the landing changes the live ref) | fixed | TestLandCarriesLiveInOnePush, TestLandCarryWithoutAtomicPushesLiveFirst, TestLandCarryProtectedStillDeliversLive, TestLandCarryLiveRefusedLandsNothing, TestLandCarryOffline, TestJourneySlowRemote | lore sync's landing push carries the waiting live writes (live.LandRequest.Live): branch and refs/lore/live in one atomic push; rows that leave live are removed before it so they ride too; no atomic push or a refused ref sends the live ref alone first, and a refused live ref lands nothing; landing sync with a store 4 -> 3 ssh calls; the journey counts task add (0 calls) and a landing sync (1 fetch, 1 push) with a fake ssh |
 | devco:L-13 | finding | doctor DEGRADED "tool_pointer ... fix: lore render" looped: render skips a CLAUDE.md another tool generates | fixed | TestPointerCopiesGeneratedFile, TestGeneratedPointerIsANote, TestPointerCopiesGeneratedFileNamesTheWiredFile | a generated tool file is a pointer_generated note whose fix is lore render --add-target codex (or another profile), with render's own skip reason |
 | devco:D-216 | finding | mission apply with a missing file said only 'read plan' (no file, no cause, no hint); handoff add without --for, task merged on an open task and task edit with two placement flags named the cause but no next step (L-16) | fixed | TestMissionApplyUnreadableFileNamesPathCauseAndStep, TestTemplateFileUnreadableNamesCauseAndStep, TestEditUnreadableFileNamesTheReason, TestAddWithoutForNamesTheNextStep, TestNotMergeableNamesTheNextStep, TestPlaceTwoFlagsNamesTheNextStep, TestJourneyErrorsNameTheNextStep | pkg ops/mission, ops/task, ops/row, ops/handoff, wire, tests/journeys: every --file / --from-file read goes through fromfile.Unreadable (path + system reason) with a hint naming the flag; the --live/--no-live pair already had its hint on dev |
 | devco:D-218 | finding | LORE.md's empty pinned-knowledge line told people to run lore memory add, though memories are search-only and never pinned (L-18) | fixed | TestEmptyStateNamesOnlyWhatPins, TestRenderEmptyStoreWiresAgentsMD, TestJourneyErrorsNameTheNextStep | pkg wire/renderhost: the line names a must rule (lore rule add --body) or a critical or high hotfix (lore hotfix add --title --body) and says memories stay search-only |
@@ -2060,7 +2062,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
-| devco:L-12-perf | finding | slow remote: the first local task add after a pause fetches (5.6-7.9 s) and sync makes ~8 ssh calls (repeated upload-pack to one remote) | open | - | not done in r4net (time box): a local write still fetches when live.fetch_ttl ran out; sync's calls per remote not yet cut to one fetch and one push |
 
 ## On hold (owner, not built in 0.1.18)
 

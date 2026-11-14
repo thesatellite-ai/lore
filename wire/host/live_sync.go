@@ -4,7 +4,8 @@ package host
 // (wire.Options.Sync, opssync.Env) for live rows only (P3-MODEB-3):
 //
 //	sync.run ─▶ (Around: FetchAlways prepare: fetch + integrate)
-//	         ─▶ push the waiting live writes ─▶ landing pass (F5)
+//	         ─▶ landing pass (F5) whose one push also carries the waiting
+//	            live writes ─▶ push them if nothing landed
 //	         ─▶ (Around finish: push what landing changed on the live ref)
 //	land.run ─▶ the same landing pass
 //
@@ -117,6 +118,20 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 		return nil, 0, "", rewrittenError(errs.ReadOnly, s.blocked)
 	}
 	s.syncReport = true // this report's own line says what waits (syncLiveWaiting)
+	// devco L-12-land: the landing push carries the waiting live writes, so
+	// the code remote gets one push; push below then sends them only when
+	// the pass had nothing to land (or the remote took them apart).
+	var landed *landOutcome
+	if s.canCarryLive(ctx) {
+		s.landLive = true
+		o, lerr := s.landPass(ctx, folder, nil, true)
+		s.landLive = false
+		if lerr != nil {
+			s.syncReport = false
+			return nil, 0, "", landErr(lerr)
+		}
+		landed = &o
+	}
 	pushed := s.push(ctx)
 	s.syncReport = false
 	if !pushed || s.ref.Remote == nil {
@@ -144,6 +159,9 @@ func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int,
 			return []string{fmt.Sprintf(syncLiveWaiting, n, why)}, n, cause, nil
 		}
 		return nil, 0, "", nil
+	}
+	if landed != nil {
+		return landLines(*landed), 0, "", nil
 	}
 	out, err := s.landPass(ctx, folder, nil, true)
 	if err != nil {

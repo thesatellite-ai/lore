@@ -78,6 +78,10 @@ type OrgResolution struct {
 	// heldSaid names the store clones whose held push (store.SyncReport.Held,
 	// F-9) this process already said, once per clone like waited.
 	heldSaid waitedClones
+	// fetched names the store clones this process (one CLI command, or one
+	// REST request) already fetched: a later sync of the same clone, from
+	// any of its folders, reuses that fetch (devco L-12-perf).
+	fetched waitedClones
 
 	// routed is the F14 rule of the routed create this process made, for
 	// the "filed: <rule>" line (Routed).
