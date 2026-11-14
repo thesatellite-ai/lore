@@ -182,8 +182,8 @@ The **repo role** decides which guards apply. A leak guard is a check that stops
 
 | Role | When | Leak guards |
 |---|---|---|
-| **client repo** | matched by `repos:` or linked without `--own` | on: internal kinds default to the store, commits are checked |
-| **own repo** | matched by `own:`, or linked with `--own` | off |
+| **client repo** | matched by `repos:`, or linked without `--own` when no `own:` pattern matches it | on: internal kinds default to the store, commits are checked |
+| **own repo** | matched by `own:`, or linked with `--own` (a repo `own:` matches links as own without it) | off |
 | **no org** | nothing matched | off; only your `everywhere/` personal notes load |
 
 ## People: profiles and stints

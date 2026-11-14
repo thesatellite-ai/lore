@@ -21,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/merge"
@@ -905,7 +906,7 @@ func mkCacheDir(dir string) error {
 		return nil
 	}
 	if errors.Is(err, fs.ErrPermission) || errors.Is(err, syscall.EROFS) {
-		return errs.Wrap(errs.ReadOnlyFS, "lore cannot create its cache folder "+dir+": the lore home (~/.lore) is not writable", err).
+		return errs.Wrap(errs.ReadOnlyFS, "lore cannot create its cache folder "+dir+": the lore home ("+lorehome.Shown()+") is not writable", err).
 			WithHint("make the lore home writable (chmod u+w on it and on its cache folder), then run the command again")
 	}
 	return errs.Wrap(errs.Internal, "wire: create the cache folder "+dir, err)
@@ -1171,7 +1172,7 @@ func orgStoreNamed(ctx context.Context, opts Options, target store.Source) (atta
 	idx := slices.IndexFunc(org, func(s attach.Store) bool { return s.Name == target })
 	if idx < 0 {
 		return attach.Store{}, errs.New(errs.NotFound, "roster: no org store named "+string(target)+" is configured").
-			WithHint("the org entry in ~/.lore/config.yaml names the store and its org_folder")
+			WithHint("the org entry in " + lorehome.Shown() + "/config.yaml names the store and its org_folder")
 	}
 	return org[idx], nil
 }

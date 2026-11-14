@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/estimate"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -161,7 +162,7 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 		r := PolicyRule{Key: string(d.Key), Value: display(eff.Value), Source: sourceDefault, Doc: d.Doc}
 		switch {
 		case eff.Level == policy.LevelMachine:
-			r.Level, r.Source = string(eff.Level), "machine (~/.lore/config.yaml policies)"
+			r.Level, r.Source = string(eff.Level), "machine ("+lorehome.Shown()+"/config.yaml policies)"
 		case !eff.IsDefault:
 			r.Level, r.Row, r.Store = string(eff.Level), eff.Source.String(), string(where[eff.Source])
 			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, place(where[eff.Source]), short(eff.Source))

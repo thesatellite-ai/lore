@@ -13,6 +13,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 )
 
@@ -42,7 +43,7 @@ func (a *App) DoctorUntrustedHost(context.Context) ([]DoctorFinding, error) {
 	for _, pat := range cfg.UntrustedHosts {
 		if ok, _ := path.Match(strings.ToLower(pat), strings.ToLower(host)); ok {
 			return []DoctorFinding{{Check: DoctorCheckUntrustedHost, Level: DoctorWarning, Plain: true,
-				Message: "this machine (" + host + ") matches untrusted_hosts " + pat + " but org stores are configured here: anyone with access to it can read ~/.lore/clones (§6.6); remove the stores from this machine's config"}}, nil
+				Message: "this machine (" + host + ") matches untrusted_hosts " + pat + " but org stores are configured here: anyone with access to it can read " + lorehome.Shown() + "/clones (§6.6); remove the stores from this machine's config"}}, nil
 		}
 	}
 	return nil, nil

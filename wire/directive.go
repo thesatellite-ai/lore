@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -41,7 +42,7 @@ func (a *App) toolRegistry(ctx context.Context) (*toolprofile.Registry, error) {
 	}
 	reg, err := toolprofile.New(user)
 	if err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in ~/.lore/"+ConfigFile, err).
+		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in "+lorehome.Shown()+"/"+ConfigFile, err).
 			WithHint("run `lore config check` for every problem with its location")
 	}
 	return reg, nil
@@ -160,7 +161,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 		sel, err = reg.Select(names, repoProbe{root: root})
 		if err != nil {
 			return opsdirective.Pick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(err).Error.Message, string(policy.KeyContextTargets)+": "), err).
-				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
+				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
 		}
 	} else {
 		sel = reg.Resolve(repoProbe{root: root})

@@ -1031,6 +1031,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if res, handled, err := a.runRosterReadNoProject(ctx, e, d, c); handled {
 		return res, err
 	}
+	// a knowledge read there, with a personal store, reads it alone: the
+	// `--to me` write works there, so its rows must be readable there
+	// (personalread_noproject.go, devco P-4)
+	if res, handled, err := a.runPersonalReadNoProject(ctx, e, d, c); handled {
+		return res, err
+	}
 	// `lore sync` with no code repo here syncs every store of the setup,
 	// or the store checkout it runs in, each on its own App (syncsetup.go)
 	if e.Spec().Name == opssync.OpRun && a.opts.Sync != nil && a.setupSyncHere(ctx) {

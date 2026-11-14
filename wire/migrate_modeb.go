@@ -160,6 +160,9 @@ func (a *App) MigrateModeB(ctx context.Context, dryRun bool) ([]string, int, err
 	if dryRun {
 		return steps, len(changes), nil
 	}
+	if err := a.markModeBWriting(ctx); err != nil {
+		return nil, 0, err
+	}
 	written, err := a.writeModeBStore(ctx, raw, changes)
 	if err != nil {
 		return nil, 0, err

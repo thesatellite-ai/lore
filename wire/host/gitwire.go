@@ -180,7 +180,10 @@ func hookBlocks(rel string) map[string]struct {
 	tooOld := `echo "` + bn + `: installed ` + bn + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
 	coreProbe := bn + " migrate --help >/dev/null 2>&1"
 	hasV2 := `grep -rqsE '"_v": *2' .lore/data`
-	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` on PATH is older; install lore 0.1.18 or newer to commit" >&2; exit 1`
+	// P-2: the person may keep an older lore as `lore` on purpose (a newer
+	// build beside it as lore-dev): the first step names what they can do
+	// with the build they have, which points these hooks at itself.
+	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` these hooks run ($(command -v ` + bn + `)) is older; run doctor --fix here with your lore 0.1.18 or newer build (e.g. lore-dev doctor --fix) so the hooks run that build, or install lore 0.1.18 or newer as ` + bn + `" >&2; exit 1`
 	absMsg := `m="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; `
 	// No lore that can check, in a clone the last check found to be a
 	// client repo (wire/clientmark.go): refuse rather than let the commit
@@ -216,13 +219,18 @@ func hookBlocks(rel string) map[string]struct {
 }
 
 // hookBlocksFor is hookBlocks(rel), each block guarded by sharedHookLines
-// when the hooks folder is shared by every repo (hooksFolder).
-func hookBlocksFor(rel string, shared bool) map[string]struct {
+// when the hooks folder is shared by every repo (hooksFolder), and led by
+// pin (hookbin.go: the build these blocks run; "" for bare `lore`).
+func hookBlocksFor(rel string, shared bool, pin string) map[string]struct {
 	marker string
 	lines  []string
 } {
 	blocks := hookBlocks(rel)
 	if !shared {
+		for n, b := range blocks {
+			b.lines = withHookPin(pin, b.lines)
+			blocks[n] = b
+		}
 		return blocks
 	}
 	for n, b := range blocks {
@@ -345,7 +353,11 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		rel = ""
 	}
 	bin := mergeDriverBinary()
-	blocks := hookBlocksFor(rel, shared)
+	pin := hookPinFor(s.top, dir, shared)
+	blocks := hookBlocksFor(rel, shared, pin)
+	// the pin is in the fingerprint: a run of another build (lore and
+	// lore-dev side by side) re-points the blocks at itself
+	fpBin := bin + "\n" + pin
 	paths := []string{strings.TrimSpace(string(cfgPath)), filepath.Join(root, gitAttributesFile), filepath.Join(root, gitignoreName)}
 	names := make([]string, 0, len(blocks))
 	for n := range blocks {
@@ -361,7 +373,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		return
 	}
 	paths = append(paths, localAttrs)
-	fp := wiringFingerprint(s.h.cfg.Version, bin, rel, paths)
+	fp := wiringFingerprint(s.h.cfg.Version, fpBin, rel, paths)
 	stamp := filepath.Join(s.stateDir, gitWiringStamp)
 	if b, rerr := os.ReadFile(filepath.Clean(stamp)); mode != wireInstall && rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
@@ -495,7 +507,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		if skipped != "" {
 			return // not wired in full: the next write looks again
 		}
-		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
+		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
 		return
 	}
 	if formatOld {
@@ -513,7 +525,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if skipped != "" {
 		return // not wired in full: the next write looks again (its notice is said once per state)
 	}
-	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
+	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
 }
 
 // readWiring is a read's look at a clone whose wiring stamp is stale: it
@@ -545,7 +557,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		}
 	}
 	var stale []string
-	blocks := hookBlocksFor(rel, shared)
+	blocks := hookBlocksFor(rel, shared, hookPinFor(s.top, hooks, shared))
 	for n, b := range blocks {
 		if hookBlockStale(filepath.Join(hooks, n), b.marker, b.lines) {
 			stale = append(stale, n)

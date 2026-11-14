@@ -28,6 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -95,7 +96,7 @@ func (t typedStoreURL) Note() string {
 		return ""
 	}
 	c := t.Alias
-	return fmt.Sprintf("%s uses your ssh alias %s (HostName %s): the shared config gets the canonical url %s, and ~/.lore/config.yaml maps it back for this machine (access: url %s via %s)",
+	return fmt.Sprintf("%s uses your ssh alias %s (HostName %s): the shared config gets the canonical url %s, and "+lorehome.Shown()+"/config.yaml maps it back for this machine (access: url %s via %s)",
 		t.Typed, c.Alias, c.HostName, c.URL, c.Rule.URL, c.Rule.Via)
 }
 
@@ -132,8 +133,8 @@ func recordAccess(home string, t typedStoreURL) error {
 		if strings.TrimSpace(r.Via) == want.Via {
 			return nil
 		}
-		return errs.New(errs.InvalidInput, fmt.Sprintf("~/.lore/config.yaml access: already maps %s via %s, and the url typed reaches it via %s", want.URL, r.Via, want.Via)).
-			WithHint("type the canonical url (" + t.URL + "), or change that access: rule's via in ~/.lore/config.yaml to the alias you use")
+		return errs.New(errs.InvalidInput, fmt.Sprintf(lorehome.Shown()+"/config.yaml access: already maps %s via %s, and the url typed reaches it via %s", want.URL, r.Via, want.Via)).
+			WithHint("type the canonical url (" + t.URL + "), or change that access: rule's via in " + lorehome.Shown() + "/config.yaml to the alias you use")
 	}
 	return writeOrgConfig(home, func(root *yaml.Node) error { return appendAccessNode(root, want) })
 }
@@ -152,7 +153,7 @@ func appendAccessNode(root *yaml.Node, rule orgconf.Access) error {
 		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: orgconf.AccessKey}, list)
 	}
 	if list.Kind != yaml.SequenceNode {
-		return errs.New(errs.ConfigInvalid, "~/.lore/config.yaml: access: is not a list").
+		return errs.New(errs.ConfigInvalid, lorehome.Shown()+"/config.yaml: access: is not a list").
 			WithHint("make it a list of {url, via} entries (docs: store access)")
 	}
 	n := &yaml.Node{}

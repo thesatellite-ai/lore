@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -129,10 +130,10 @@ func (a *App) TeamOrigin(_ context.Context, org string) (team.Origin, error) {
 		if len(o.Stores) > 0 {
 			return team.Origin{Store: o.Stores[0].URL}, nil
 		}
-		return team.Origin{}, errs.New(errs.NotFound, "org "+strconv.Quote(org)+" has no store in ~/.lore/"+ConfigFile).
+		return team.Origin{}, errs.New(errs.NotFound, "org "+strconv.Quote(org)+" has no store in "+lorehome.Shown()+"/"+ConfigFile).
 			WithHint("lore org import --url <store-url> adds it")
 	}
-	return team.Origin{}, errs.New(errs.NotFound, "no org named "+strconv.Quote(org)+" in ~/.lore/"+ConfigFile).
+	return team.Origin{}, errs.New(errs.NotFound, "no org named "+strconv.Quote(org)+" in "+lorehome.Shown()+"/"+ConfigFile).
 		WithHint("lore org import --url <store-url> --as " + org)
 }
 
@@ -174,7 +175,7 @@ func (a *App) HomeWritable(context.Context) error {
 	if a.opts.Home == "" || homeWritable(a.opts.Home) {
 		return nil
 	}
-	return errs.New(errs.ReadOnlyFS, "the lore home "+a.opts.Home+" (~/.lore) is not writable: setups, store clones and this machine's state cannot be saved, and each command keeps its caches in a temp folder it removes when it ends").
+	return errs.New(errs.ReadOnlyFS, "the lore home "+a.opts.Home+" ("+lorehome.Shown()+") is not writable: setups, store clones and this machine's state cannot be saved, and each command keeps its caches in a temp folder it removes when it ends").
 		WithHint("make the lore home writable (chmod u+w on it and on its folders), or set " + modeBLoreHomeEnv + " to a folder you can write, then run lore doctor --all again")
 }
 

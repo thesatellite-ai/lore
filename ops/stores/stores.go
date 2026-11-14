@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -348,7 +349,7 @@ func Ops(m Manager) []op.Entry {
 		}, func(ctx context.Context, in RemoveIn) (RemoveOut, error) {
 			if in.Name == PersonalName {
 				return RemoveOut{}, errs.New(errs.InvalidInput, "store remove: `me` is not attached by this repo").
-					WithHint("it is personal.store in ~/.lore/config.yaml; edit that line to change it")
+					WithHint("it is personal.store in " + lorehome.Shown() + "/config.yaml; edit that line to change it")
 			}
 			// A folder entry is named <store>/<folder> (the name --to and
 			// store list use); only its store part is a store name.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -23,5 +24,5 @@ func configYAMLErr(err error) error {
 	if errors.As(err, &ye) && strings.HasPrefix(errors.Unwrap(ye).Error(), yamlSyntaxStart) {
 		what = " is not valid YAML: "
 	}
-	return errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+what+err.Error(), err)
+	return errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+what+err.Error(), err)
 }

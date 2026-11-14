@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -93,7 +94,7 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 	}
 	if !slices.Contains(st.eng.Stores(), target) {
 		return nil, errs.New(errs.NotFound, "roster: no store named "+string(target)+" is attached").
-			WithHint("the org's store is attached from ~/.lore/config.yaml in a repo of that org")
+			WithHint("the org's store is attached from " + lorehome.Shown() + "/config.yaml in a repo of that org")
 	}
 	if st.eng.IsClient(target) {
 		return nil, errs.New(errs.LeakBlocked, "roster: "+string(target)+" is a client repo; the roster lives in the org's store")

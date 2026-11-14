@@ -259,6 +259,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	}
 	res, err := r.around(ctx, run, 0)
 	if err == nil {
+		fresh.settle() // D-282: a set-up run that set nothing up leaves no empty .lore/
 		return res, nil
 	}
 	for _, h := range r.hooks {

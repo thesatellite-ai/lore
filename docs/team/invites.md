@@ -67,7 +67,7 @@ ERROR: [E_INVALID_INPUT] --role is applied on each --project, and no --project i
   hint: --project <project>
 (exit 20)
 $ lore --setup personal team invite bo@agency.example
-ERROR: [E_REFUSED] setup personal is a solo setup; team invites are written from an admin setup of the org
+ERROR: [E_REFUSED] setup personal is a solo setup; people are added and invited from an admin setup of the org
   hint: run with --setup <an admin setup>, or ask the org admin to invite
 (exit 23)
 ```

@@ -339,6 +339,7 @@ lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.b
 lore: committed locally to store acme/org; lore sync sends it
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e20cdd829de837b50a73f9dc3c291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567cf97b52ccbe51c3bd8cd91d6366f.json (store acme/org)
+lore: wrote ~/.lore/stores/acme/lore-notes/org/actor_periods/apd_71f07e3f4ec7ebaeff7d0686d814c07d.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:
 
     name: acme
@@ -355,8 +356,9 @@ This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/c
 ✓ wrote org/lore-org.yaml (committed in the local clone; `lore sync` pushes it)
 ✓ added org entry acme
 ✓ act_8567cf97b52ccbe51c3bd8cd91d6366f Ana Lima (@ana) registered in acme org/
-  teammates join with: lore org import --url git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
-  tie a client repo to it (written only into the store): lore org link --org acme --project <folder>
+✓ you are acme's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
+  teammates join with: lore setup join --invite git@github.com:acme/lore-notes (after lore member add puts them on the roster)
+  use the store in a repo with no lore data (written only into the store): lore org link --org acme --project <folder> (a repo matching the org's own: patterns links as an own repo, any other as a client repo)
 ana (work/handbook)$ lore org rename --old acme --new acme-studio
 ✓ org entry acme is now acme-studio (this machine)
   id prj_67e20cdd829de837b50a73f9dc3c291e recorded (the org folder's project id; it never changes)
@@ -377,7 +379,7 @@ personal   not set
 ### machines
 tomas (work/acme-hub)$ lore machine label --label 'office desktop'
 lore: wrote ~/.lore/personal/agency/actors/act_4f89f5fcb1d81152bdf3f52979ebb64b.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_71f07e3f4ec7ebaeff7d0686d814c07d.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me)
 ✓ machine mch_017941fe labelled "office desktop"
 tomas (work/acme-hub)$ lore machine list | cut -c1-38
 ID            LABEL           HOST    
@@ -389,5 +391,5 @@ mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
   runtime:   bare
   last_write: 2026-11-02T10:00:00.000000001Z
 tomas (work/acme-hub)$ lore machine label --label ''
-lore: wrote ~/.lore/personal/agency/machines/mch_71f07e3f4ec7ebaeff7d0686d814c07d.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me)
 ✓ machine mch_017941fe label cleared

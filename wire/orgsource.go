@@ -26,6 +26,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -190,7 +191,7 @@ func orgEntryNode(root *yaml.Node, name string) *yaml.Node {
 func setOrgSourceNode(root *yaml.Node, name string, sh orgconf.Shared, src orgconf.OrgSource) error {
 	entry := orgEntryNode(root, name)
 	if entry == nil {
-		return errs.New(errs.NotFound, "no org entry named "+name+" in ~/.lore/"+ConfigFile)
+		return errs.New(errs.NotFound, "no org entry named "+name+" in "+lorehome.Shown()+"/"+ConfigFile)
 	}
 	if err := setOrgKey(entry, orgKeyStores, sh.Stores, len(sh.Stores) == 0); err != nil {
 		return err
@@ -294,7 +295,7 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 	}
 	o := cfg.FindOrg(in.Org)
 	if o == nil {
-		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in ~/.lore/config.yaml").
+		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in "+lorehome.Shown()+"/config.yaml").
 			WithHint("entries: lore config check lists them; join one with lore org import --url <url>")
 	}
 	sc := o.OrgFolderStore()

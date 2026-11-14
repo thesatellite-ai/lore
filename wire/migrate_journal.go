@@ -36,6 +36,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -104,6 +105,12 @@ type migrateJournal struct {
 	// cannot be rolled back (BUGFIX-07): Rollback refuses it before it
 	// changes anything, Status and Finish say so instead of naming the undo.
 	ModeBPointer string `json:"mode_b_pointer,omitempty"`
+	// ModeBWriting is set just before the Mode B conversion writes its
+	// first row into the shared store (markModeBWriting): only from then on
+	// is there a conversion that stays when the run fails (devco P-3: a run
+	// refused before it, e.g. the shared lore.db not found, changed nothing
+	// and must leave no journal that makes the next run say "resuming").
+	ModeBWriting bool `json:"mode_b_writing,omitempty"`
 	// Previous is the finished journal this run replaced: a run that
 	// changes nothing puts it back (FA-FMT-3), so a no-op second run never
 	// takes away the rollback of the first.
@@ -399,7 +406,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 		lines = append(lines, line)
 	}
 	if len(j.ConfigKeys) > 0 {
-		lines = append(lines, "~/.lore/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
+		lines = append(lines, lorehome.Shown()+"/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
 	}
 	// the stores this run upgraded get their layout commit now, not from
 	// the next command (FlattenAfterMigrate); a store whose only change

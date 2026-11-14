@@ -37,6 +37,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/selfupdate"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
@@ -407,7 +408,7 @@ func claudeLocalProblem(text string) string {
 		case l == "":
 			continue
 		case !strings.HasPrefix(l, claudeImportPrefix):
-			return claudeLocalFile + " holds more than lore's import lines; internal context belongs in ~/.lore/render"
+			return claudeLocalFile + " holds more than lore's import lines; internal context belongs in " + lorehome.Shown() + "/render"
 		case seen[l]:
 			return claudeLocalFile + " holds the import line " + l + " more than once (`lore render` writes it once)"
 		}

@@ -13,6 +13,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -52,8 +53,9 @@ type LeftoversClearOut struct {
 	DryRun bool   `json:"dry_run,omitempty"`
 }
 
-// leftoversFile is how the op names config.yaml (the page and the CLI).
-const leftoversFile = "~/.lore/config.yaml"
+// leftoversFile is how the op names config.yaml (the page and the CLI), in
+// the lore home this run uses (devco P-1).
+func leftoversFile() string { return lorehome.Shown() + "/config.yaml" }
 
 // Text implements op.Texter.
 func (o LeftoversClearOut) Text() string {
@@ -78,7 +80,7 @@ func (e engine) LeftoversClear(ctx context.Context, in LeftoversClearIn) (Leftov
 	}
 	lc, ok := st.(LeftoverClearer)
 	if !ok {
-		return LeftoversClearOut{}, errs.New(errs.Unsupported, "this lore cannot clear config.yaml keys").WithHint("edit ~/.lore/config.yaml by hand")
+		return LeftoversClearOut{}, errs.New(errs.Unsupported, "this lore cannot clear config.yaml keys").WithHint("edit " + lorehome.Shown() + "/config.yaml by hand")
 	}
 	cfg, err := st.Config(ctx)
 	if err != nil {
@@ -89,7 +91,7 @@ func (e engine) LeftoversClear(ctx context.Context, in LeftoversClearIn) (Leftov
 		return LeftoversClearOut{}, errs.New(errs.NotFound, k.ConfigKey()+" is not a leftover: "+leftoverWhyNot(cfg, k)).
 			WithHint("nothing written; lore setup list shows the leftovers on this machine")
 	}
-	out := LeftoversClearOut{Kind: k, Key: l.Key, Value: l.Value, File: leftoversFile, DryRun: in.DryRun}
+	out := LeftoversClearOut{Kind: k, Key: l.Key, Value: l.Value, File: leftoversFile(), DryRun: in.DryRun}
 	if in.DryRun {
 		return out, nil
 	}
@@ -113,7 +115,7 @@ func leftoverWhyNot(cfg onboard.Config, k onboard.LeftoverKind) string {
 
 // leftoverOps is setup.leftovers.clear over e (registered by guidedOps).
 func leftoverOps(e engine, local func(op.Spec) op.Spec) []op.Entry {
-	s := local(op.Spec{Name: OpLeftoversClear, Summary: "Clear the identity or personal.store of ~/.lore/config.yaml once no setup uses it (setup list shows them)",
+	s := local(op.Spec{Name: OpLeftoversClear, Summary: "Clear the identity or personal.store of " + lorehome.Shown() + "/config.yaml once no setup uses it (setup list shows them)",
 		Permission: op.PermWrite, Errors: with(errs.NotFound),
 		Examples: []op.Example{{Title: "preview clearing a leftover personal store", CLI: "lore setup leftovers clear --what personal_store --dry-run", Want: ""}}})
 	s.RESTNoun = leftoversRESTNoun

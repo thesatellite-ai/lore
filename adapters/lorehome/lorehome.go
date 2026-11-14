@@ -105,3 +105,28 @@ func check(v string) error {
 	}
 	return nil
 }
+
+// shownDefault is how messages name the default lore home.
+const shownDefault = "~/" + DirName
+
+// Shown is how a message names this process's lore home (devco P-1): ~/.lore
+// for the default home, the folder itself when LORE_HOME moved it, so a
+// second build run with LORE_HOME=$HOME/.lore-dev never tells the person it
+// wrote ~/.lore/config.yaml. Messages join file names to it with "/".
+func Shown() string { return System().Shown() }
+
+// Shown is the home e resolves to, as a message names it (see Shown).
+func (e Env) Shown() string {
+	h, err := e.Resolve()
+	if err != nil || h.Source == FromDefault {
+		return shownDefault
+	}
+	// a home under the user's home reads as the other lines spell it
+	// (~/.lore-dev/stores/...)
+	if uh, uerr := e.UserHome(); uerr == nil && uh != "" {
+		if rel, rerr := filepath.Rel(filepath.Clean(uh), h.Dir); rerr == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "~/" + filepath.ToSlash(rel)
+		}
+	}
+	return filepath.ToSlash(h.Dir)
+}

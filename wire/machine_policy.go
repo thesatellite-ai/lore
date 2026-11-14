@@ -24,6 +24,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -59,18 +60,18 @@ func machinePolicy(home string) ([]policy.Entry, []string, error) {
 	var notes []string
 	for _, k := range keys {
 		if _, known := policy.Lookup(policy.Key(k)); !known {
-			notes = append(notes, "~/.lore/"+ConfigFile+": policies."+k+" is not a policy key lore knows; ignored")
+			notes = append(notes, lorehome.Shown()+"/"+ConfigFile+": policies."+k+" is not a policy key lore knows; ignored")
 			continue
 		}
 		v, err := yamlValue(doc.Policies[k])
 		if err != nil {
-			return nil, nil, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" policies."+k+" is not a plain value", err)
+			return nil, nil, errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" policies."+k+" is not a plain value", err)
 		}
 		e := policy.Entry{Level: policy.LevelMachine, Key: policy.Key(k), Value: v}
 		// A value its key's shape refuses fails closed here, naming the
 		// config key (policy.Resolve would name an empty row id).
 		if _, rerr := policy.Resolve([]policy.Entry{e}); rerr != nil {
-			return nil, nil, errs.New(errs.ConfigInvalid, "~/.lore/"+ConfigFile+": policies."+k+": "+policyProblem(rerr))
+			return nil, nil, errs.New(errs.ConfigInvalid, lorehome.Shown()+"/"+ConfigFile+": policies."+k+": "+policyProblem(rerr))
 		}
 		out = append(out, e)
 	}

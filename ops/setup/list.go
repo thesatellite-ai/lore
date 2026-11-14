@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -111,7 +112,7 @@ func (o ListOut) Text() string {
 	}
 	_ = tw.Flush()
 	if len(o.Leftovers) > 0 {
-		b.WriteString("leftovers in ~/.lore/config.yaml (no setup uses them; lore setup leftovers clear --what <kind>):\n")
+		b.WriteString("leftovers in " + lorehome.Shown() + "/config.yaml (no setup uses them; lore setup leftovers clear --what <kind>):\n")
 		for _, l := range o.Leftovers {
 			b.WriteString("  " + string(l.Kind) + "  " + l.Key + " = " + l.Value + "\n")
 		}

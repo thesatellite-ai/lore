@@ -506,7 +506,8 @@ func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.
 	if !ok || !has || f.RefTable != schema.TableProjects {
 		return fields, nil
 	}
-	if id, err := ids.ParseAny(cur.String()); err == nil {
+	id, perr := ids.ParseAny(cur.String())
+	if perr == nil {
 		if got, _, gerr := e.getRow(ctx, to, schema.TableProjects, id); gerr == nil && !got.Deleted {
 			return fields, nil
 		}
@@ -517,7 +518,10 @@ func (e *Engine) rehomeProject(ctx context.Context, to store.Source, def schema.
 	}
 	if len(projects) != 1 {
 		if !strict {
-			return fields, nil
+			if perr != nil {
+				return fields, nil
+			}
+			return e.rehomePersonalProject(ctx, to, fields, id) // devco P-7
 		}
 		return nil, errs.New(errs.Unsupported, "store "+string(to)+" holds "+strconv.Itoa(len(projects))+" projects; a row moving into it needs exactly one to belong to").
 			WithHint("run `lore init` in the client repo first")

@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -278,7 +279,7 @@ func (o ClonesOut) Text() string {
 		b.WriteString(h + "\n")
 	}
 	if len(o.Stores) == 0 {
-		b.WriteString("no stores configured (orgs[].stores in ~/.lore/config.yaml)\n")
+		b.WriteString("no stores configured (orgs[].stores in " + lorehome.Shown() + "/config.yaml)\n")
 		return b.String()
 	}
 	for _, v := range o.Stores {
@@ -394,7 +395,7 @@ func cloneOps(m Manager) []op.Entry {
 			return withEmptyLists(out), err
 		}),
 		op.Define(op.Spec{
-			Name: OpOpen, Summary: "Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>, or <repo>@<branch>), fetched first",
+			Name: OpOpen, Summary: "Print the store's own clone of a branch to browse (" + lorehome.Shown() + "/stores/<owner>/<repo>, or <repo>@<branch>), fetched first",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
 			Examples: []op.Example{{Title: "browse a store", CLI: "lore store open --url git@github.com:agency/notes", Want: "✓"}},
 		}, func(ctx context.Context, in OpenIn) (OpenOut, error) {

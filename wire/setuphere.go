@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -147,7 +148,7 @@ func (a *App) hereOrgStores(ctx context.Context, org string, names []string, sou
 	if !added {
 		return names, source
 	}
-	from := "~/.lore/" + ConfigFile + " (org " + org + ")"
+	from := lorehome.Shown() + "/" + ConfigFile + " (org " + org + ")"
 	if source == "" {
 		return names, from
 	}

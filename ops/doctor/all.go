@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -624,7 +625,7 @@ func (sr *setupRun) runAll(ctx context.Context, only string) (allOut, error) {
 // to do) is the fix text when it has one.
 func configBroken(err error, at time.Time) allOut {
 	var out allOut
-	fix := onboard.Fix{Text: "fix ~/.lore/config.yaml, then run lore config check", Command: []string{"lore", "config", "check"}}
+	fix := onboard.Fix{Text: "fix " + lorehome.Shown() + "/config.yaml, then run lore config check", Command: []string{"lore", "config", "check"}}
 	var e *errs.Error
 	if errors.As(err, &e) && e.Hint != "" {
 		fix = onboard.Fix{Text: e.Hint, Command: []string{}}

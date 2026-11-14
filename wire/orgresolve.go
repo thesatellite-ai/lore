@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -636,7 +637,7 @@ func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situat
 		if l.Entry == s.Result.Org.Name && l.Folder != "" {
 			to := s.Result.Org.Name + "/" + l.Folder
 			return "", errs.New(errs.ReadOnly, "this repo holds no lore files and its store link by remote ("+s.LinkedByRemote+") names folder "+l.Folder+" of "+l.StoreURL+", which is not attached here, so a write has nowhere to go").
-				WithHint("name the folder: --to " + to + " (or add that store to the org entry in ~/.lore/config.yaml so writes go there by themselves)")
+				WithHint("name the folder: --to " + to + " (or add that store to the org entry in " + lorehome.Shown() + "/config.yaml so writes go there by themselves)")
 		}
 	}
 	return "", nil

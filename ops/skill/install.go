@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -272,7 +273,7 @@ func Registry(ctx context.Context, env InstallEnv) (*toolprofile.Registry, error
 	}
 	reg, err := toolprofile.New(user)
 	if err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in ~/.lore/config.yaml", err).
+		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in "+lorehome.Shown()+"/config.yaml", err).
 			WithHint("fix the profile, then check it with `lore config check`")
 	}
 	return reg, nil

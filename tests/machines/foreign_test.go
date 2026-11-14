@@ -359,7 +359,9 @@ func TestForeignV0117(t *testing.T) {
 		}
 		fgMode(t, "hooks", p, 0o755)
 	}
-	if got := fgRead(t, filepath.Join(repo, ".git/hooks/post-commit")); got != v0117PostCmt {
+	// devco P-2: a binary that is not the `lore` on PATH (this suite runs
+	// it by path) adds its pin line; every line 0.1.17 wrote stays as it was
+	if got := withoutHookPin(fgRead(t, filepath.Join(repo, ".git/hooks/post-commit"))); got != v0117PostCmt {
 		t.Errorf("0.1.17's lore-sync:live block (the same bytes 0.1.18 writes) was rewritten:\n%s", got)
 	}
 	if _, err := os.Stat(filepath.Join(hp, ".git/hooks/pre-commit")); err == nil {
@@ -385,4 +387,17 @@ func TestForeignV0117(t *testing.T) {
 		t.Errorf("doctor --all after the import: %s", r)
 	}
 	m.CheckMachine(t, ShapeForeignV0117+"/after import", Gone{})
+}
+
+// withoutHookPin drops lore's pin line (`# lore-bin:`, devco P-2) from a
+// hook file's text.
+func withoutHookPin(s string) string {
+	lines := strings.SplitAfter(s, "\n")
+	out := lines[:0]
+	for _, l := range lines {
+		if !strings.Contains(l, "# lore-bin: ") {
+			out = append(out, l)
+		}
+	}
+	return strings.Join(out, "")
 }

@@ -33,6 +33,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/storeaddr"
@@ -119,7 +120,7 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 	}
 	moved, err := moveConfigURLs(a.opts.Home, old, raw)
 	if err != nil {
-		return out, errs.Prefix(verb+": "+strings.Join(out.Places, ", ")+" moved, but ~/.lore/"+ConfigFile+" was not", err)
+		return out, errs.Prefix(verb+": "+strings.Join(out.Places, ", ")+" moved, but "+lorehome.Shown()+"/"+ConfigFile+" was not", err)
 	}
 	out.Places = append(out.Places, moved.places...)
 	out.Changed = len(out.Places)+len(out.Folders) > 0
@@ -362,7 +363,7 @@ func moveConfigURLs(home string, old []string, raw string) (configMove, error) {
 func (a *App) moveOrgFile(ctx context.Context, org string, old []string, raw string) string {
 	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
 	if err != nil || cfg == nil {
-		return "lore-org.yaml of " + org + " not updated: ~/.lore/" + ConfigFile + " could not be read"
+		return "lore-org.yaml of " + org + " not updated: " + lorehome.Shown() + "/" + ConfigFile + " could not be read"
 	}
 	o := cfg.FindOrg(org)
 	if o == nil {

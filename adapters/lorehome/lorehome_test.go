@@ -76,3 +76,31 @@ func TestResolveLoreHome(t *testing.T) {
 		})
 	}
 }
+
+// TestShown (devco P-1): messages name the home this process uses: ~/.lore
+// by default, ~/<rel> for a LORE_HOME under the user's home, the folder
+// itself elsewhere; never ~/.lore when LORE_HOME moved it.
+func TestShown(t *testing.T) {
+	t.Parallel()
+	env := func(v string, set bool) Env {
+		return Env{
+			Lookup:   func(string) (string, bool) { return v, set },
+			UserHome: func() (string, error) { return "/home/someone", nil },
+			TempDir:  func() string { return "/tmp" },
+		}
+	}
+	for _, c := range []struct {
+		v    string
+		set  bool
+		want string
+	}{
+		{"", false, "~/.lore"},
+		{"/home/someone/.lore-dev", true, "~/.lore-dev"},
+		{"/srv/lore-home", true, "/srv/lore-home"},
+		{"/home/someone", true, "/home/someone"},
+	} {
+		if got := env(c.v, c.set).Shown(); got != filepath.ToSlash(c.want) {
+			t.Errorf("LORE_HOME=%q (set %v): Shown %q, want %q", c.v, c.set, got, c.want)
+		}
+	}
+}

@@ -28,6 +28,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -89,7 +90,18 @@ func (r orgRegistrar) register(ctx context.Context, entry, orgFolder string, wal
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimRight(out.Text(), "\n"), nil
+	line := strings.TrimRight(out.Text(), "\n")
+	// The creator is the org's admin (devco P-5): the open stint with org
+	// role admin the admin setup step writes, so `lore member add` works
+	// at once instead of refusing for want of an admin setup. Same write
+	// as `lore doctor --fix` org_admin_missing.
+	if f, ok := app.orgAdminFinding(ctx, orgRosterStore{a: app, org: entry}, true); ok {
+		if !f.Fixed {
+			return line, errs.New(errs.Internal, f.Message).WithHint(f.Fix)
+		}
+		line += "\n✓ you are " + entry + "'s admin (org role admin): lore member add --email <their-email> --name \"Their Name\" adds a teammate"
+	}
+	return line, nil
 }
 
 // orgEntryLines is the plan's entry block.
@@ -190,7 +202,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 		return opsorgcmd.Report{}, err
 	}
 	if cfg.FindOrg(in.Org) != nil {
-		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+in.Org+" already exists in ~/.lore/config.yaml").
+		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+in.Org+" already exists in "+lorehome.Shown()+"/config.yaml").
 			WithHint("pick another name, or link repos to the existing org with `lore org link`")
 	}
 	entry := orgconf.Org{Name: in.Org, Own: in.Own, Repos: in.Repos,
@@ -199,7 +211,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr
 	}
-	lines, err := orgEntryLines(fmt.Sprintf("This writes %s into the store (no identity) and adds to ~/.lore/config.yaml:", orgcfg.OrgFilePath(in.OrgFolder)), entry)
+	lines, err := orgEntryLines(fmt.Sprintf("This writes %s into the store (no identity) and adds to "+lorehome.Shown()+"/config.yaml:", orgcfg.OrgFilePath(in.OrgFolder)), entry)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
@@ -265,8 +277,8 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	} else if line != "" {
 		lines = append(lines, line)
 	}
-	lines = append(lines, "  teammates join with: lore org import --url "+url+" --key human:<their email> --name \"Their Name\"",
-		"  tie a client repo to it (written only into the store): lore org link --org "+in.Org+" --project <folder>")
+	lines = append(lines, "  teammates join with: lore setup join --invite "+url+" (after lore member add puts them on the roster)",
+		"  use the store in a repo with no lore data (written only into the store): lore org link --org "+in.Org+" --project <folder> (a repo matching the org's own: patterns links as an own repo, any other as a client repo)")
 	return opsorgcmd.Report{Lines: lines}, nil
 }
 
@@ -310,7 +322,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "the store's lore-org.yaml names no org; pass --as <name>")
 	}
 	if cfg.FindOrg(entry.Name) != nil {
-		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in ~/.lore/config.yaml").
+		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in "+lorehome.Shown()+"/config.yaml").
 			WithHint("pass --as <another name>, or edit the existing entry")
 	}
 	suggestedStores(&entry, sg, in.URL)
@@ -318,7 +330,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr
 	}
-	lines, err := orgEntryLines("This adds to ~/.lore/config.yaml:", entry)
+	lines, err := orgEntryLines("This adds to "+lorehome.Shown()+"/config.yaml:", entry)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
@@ -365,7 +377,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if rerr != nil {
 		// BUG-T3: a half-done import must not exit 0. The entry stays (it
 		// is valid on its own); the cause's code says what failed.
-		return opsorgcmd.Report{Lines: lines}, errs.Wrap(errs.CodeOf(rerr), "the org entry "+entry.Name+" is added to ~/.lore/config.yaml, but registering on its roster failed: "+rerr.Error(), rerr).
+		return opsorgcmd.Report{Lines: lines}, errs.Wrap(errs.CodeOf(rerr), "the org entry "+entry.Name+" is added to "+lorehome.Shown()+"/config.yaml, but registering on its roster failed: "+rerr.Error(), rerr).
 			WithHint("run `LORE_ORG=" + entry.Name + " lore actor register` in one of " + entry.Name + "'s repos or outside any repo (BUG-T3)")
 	}
 	if line != "" {
@@ -462,7 +474,7 @@ func renameOrgNode(root *yaml.Node, oldName, newName, id string, out *opsorgcmd.
 				continue
 			}
 			if n.Value == newName && newName != oldName {
-				return errs.New(errs.InvalidInput, fmt.Sprintf("~/.lore/config.yaml already has an org entry named %q", newName))
+				return errs.New(errs.InvalidInput, fmt.Sprintf(lorehome.Shown()+"/config.yaml already has an org entry named %q", newName))
 			}
 			if n.Value == oldName {
 				entry = item
@@ -633,7 +645,7 @@ func editMachineConfigBytes(home string, edit func(root *yaml.Node) error, use f
 	case b == nil:
 	default:
 		if err = yamlfmt.Decode(b, doc); err != nil {
-			return errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+			return errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not valid YAML", err)
 		}
 	}
 	if len(doc.Content) == 0 {
@@ -642,7 +654,7 @@ func editMachineConfigBytes(home string, edit func(root *yaml.Node) error, use f
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return errs.New(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not a mapping")
+		return errs.New(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not a mapping")
 	}
 	if err = edit(root); err != nil {
 		return err

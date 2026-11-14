@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/engine"
@@ -399,7 +400,7 @@ func (a *App) coordRoster(ctx context.Context) (rosterAt, error) {
 	}
 	if !ok {
 		return r, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
-			WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+			WithHint("set org_folder on one of the org's stores in " + lorehome.Shown() + "/config.yaml")
 	}
 	r = newRosterAt(src, org.Name+" "+folder+"/")
 	r.org = org.Name

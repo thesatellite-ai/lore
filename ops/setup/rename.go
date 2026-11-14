@@ -16,6 +16,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -91,7 +92,7 @@ func (e engine) Rename(ctx context.Context, in RenameIn) (RenameOut, error) {
 func (e engine) renameSetup(ctx context.Context, st Store, from, to string) error {
 	rn, ok := st.(SetupRenamer)
 	if !ok {
-		return errs.New(errs.Unsupported, "this lore cannot rename a setup").WithHint("edit the name in ~/.lore/config.yaml by hand")
+		return errs.New(errs.Unsupported, "this lore cannot rename a setup").WithHint("edit the name in " + lorehome.Shown() + "/config.yaml by hand")
 	}
 	cfg, err := st.Config(ctx)
 	if err != nil {

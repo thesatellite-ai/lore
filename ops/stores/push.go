@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -107,7 +108,7 @@ func (v PushView) Text() string {
 	}
 	fmt.Fprintf(&b, "%s: %s\n", v.Store, v.Summary)
 	v.personalLines(&b)
-	where := "~/.lore/config.yaml (personal:)"
+	where := lorehome.Shown() + "/config.yaml (personal:)"
 	switch v.Place {
 	case PlaceOrg:
 		where = "the store's lore-store.yaml (org " + v.Org + "; set by an org admin"

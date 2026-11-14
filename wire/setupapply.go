@@ -30,6 +30,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/engine"
@@ -892,7 +893,7 @@ func (o orgRosterStore) Roster(ctx context.Context, write bool) (profilestore.Ro
 		}
 		if !found {
 			return nil, noop, errs.New(errs.NotFound, "org "+o.org+" has no store holding its roster").
-				WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+				WithHint("set org_folder on one of the org's stores in " + lorehome.Shown() + "/config.yaml")
 		}
 		if x, err = openOrgFolderApp(ctx, o.a.opts, o.org, one); err != nil {
 			return nil, noop, err
@@ -968,7 +969,7 @@ func openOrgFolderApp(ctx context.Context, opts Options, org string, one attach.
 		}
 		e := cfg.FindOrg(org)
 		if e == nil {
-			return nil, errs.New(errs.NotFound, "no org named "+org+" in ~/.lore/"+ConfigFile).WithHint("lore org import --url <store-url> --as " + org)
+			return nil, errs.New(errs.NotFound, "no org named "+org+" in "+lorehome.Shown()+"/"+ConfigFile).WithHint("lore org import --url <store-url> --as " + org)
 		}
 		return &identity.Org{Name: e.Name, Identity: identity.Entry{Key: e.Identity.Key, Name: e.Identity.Name, Handle: e.Identity.Handle}}, nil
 	}
