@@ -296,6 +296,15 @@ func (w *waitedClones) first(dir string, req requestID) bool {
 	return true
 }
 
+// has reports whether dir was recorded in request req (first), without
+// recording it.
+func (w *waitedClones) has(dir string, req requestID) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	r, ok := w.seen[dir]
+	return ok && r == req
+}
+
 // WaitingLine is what a read says about commits that wait to be pushed.
 func WaitingLine(storeName string, n int) string {
 	return "lore: store " + storeName + ": " + strconv.Itoa(n) + " local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)"

@@ -68,6 +68,24 @@ func WithWriteFetch(ctx context.Context) context.Context {
 	return context.WithValue(ctx, writeFetchKey{}, true)
 }
 
+// localWriteKey is the context key of WithLocalWrite.
+type localWriteKey struct{}
+
+// WithLocalWrite marks ctx as a writing command the person did not ask to
+// reach the network (the host's live hook; devco L-12-perf): its store
+// clones do no fetch before the write, whatever live.fetch_ttl says. The
+// write itself still pushes as the store's push mode says (now: the push
+// fetches and merges first), and the next read or `lore sync` fetches.
+func WithLocalWrite(ctx context.Context) context.Context {
+	return context.WithValue(ctx, localWriteKey{}, true)
+}
+
+// localWrite reports whether ctx carries WithLocalWrite.
+func localWrite(ctx context.Context) bool {
+	w, _ := ctx.Value(localWriteKey{}).(bool)
+	return w
+}
+
 // writeFetch reports whether ctx carries WithWriteFetch.
 func writeFetch(ctx context.Context) bool {
 	w, _ := ctx.Value(writeFetchKey{}).(bool)
@@ -251,6 +269,9 @@ func (b *storePush) refresh(ctx context.Context) {
 	if b.res != nil && b.res.fetchAlways {
 		in.Kind = live.FetchAlways
 	}
+	if localWrite(ctx) && !readRun(ctx) && in.Kind != live.FetchAlways {
+		return // devco L-12-perf: a write reads the local copy; its push (if any) syncs
+	}
 	if writeFetch(ctx) && !readRun(ctx) {
 		in.TTL = orgconf.ForWrite(in.TTL) // M-4: only reads reuse a fetch for the whole TTL
 	}
@@ -316,6 +337,28 @@ func (b *storePush) refresh(ctx context.Context) {
 	}
 }
 
+// markFetched records that this command fetched the store's clone (a sync
+// that reached the remote), so a later sync of it in the same command
+// reuses the fetch (devco L-12-perf: one fetch per remote per run).
+func (b *storePush) markFetched() {
+	if gb := gitOf(b.inner); gb != nil && b.res != nil {
+		b.res.fetched.first(gb.Dir(), b.req)
+	}
+}
+
+// reuseFetch returns ctx saying the clone was fetched earlier in this
+// command (gitbackend.WithFetchedClone) when it was, and whether it was.
+func (b *storePush) reuseFetch(ctx context.Context) (context.Context, bool) {
+	gb := gitOf(b.inner)
+	if gb == nil || b.res == nil || !b.res.fetched.has(gb.Dir(), b.req) {
+		return ctx, false
+	}
+	return gitbackend.WithFetchedClone(ctx, gb.Dir()), true
+}
+
+// reached reports whether a sync reached the remote (no error, not offline).
+func reached(rep store.SyncReport, err error) bool { return err == nil && !rep.Offline }
+
 // hasUnpushed reports whether the clone holds commits its remote does not.
 func (b *storePush) hasUnpushed(ctx context.Context) bool {
 	gb := gitOf(b.inner)
@@ -341,10 +384,27 @@ func (b *storePush) hasUnpulled(ctx context.Context) bool {
 // store's push folds its unpushed commits into one batch commit. A manual
 // store (the default, C5) sends its commits as they are: each keeps its
 // subject and author (a layout commit, a hand edit, a settings change).
+//
+// A clone this command already fetched (any folder of it, markFetched) is
+// not fetched again (devco L-12-perf): a fetch-only sync of it has nothing
+// left to do, and a sync that pushes merges and pushes over that fetch.
 func (b *storePush) syncInner(ctx context.Context, noPush bool) (store.SyncReport, error) {
 	if b.hold != nil {
 		ctx = gitbackend.WithPushHold(ctx, b.hold)
 	}
+	ctx, reused := b.reuseFetch(ctx)
+	if reused && noPush {
+		return store.SyncReport{}, nil // merged by this command's earlier sync of the clone
+	}
+	rep, err := b.syncOnce(ctx, noPush)
+	if reached(rep, err) {
+		b.markFetched()
+	}
+	return rep, err
+}
+
+// syncOnce is syncInner's one sync of the clone.
+func (b *storePush) syncOnce(ctx context.Context, noPush bool) (store.SyncReport, error) {
 	gb := gitOf(b.inner)
 	if gb == nil || (!noPush && !b.held()) {
 		if noPush {

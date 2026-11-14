@@ -318,6 +318,19 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 	}
 	items = withoutLoneSupporting(items)
 	exact := map[live.RowKey]live.File{}
+	// Rows the branch already holds leave live before the landing push, so
+	// a push that carries the live ref (landLive) takes their removal too.
+	if len(removeIf) > 0 {
+		res, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, RemoveIf: removeIf, BinaryVersion: s.h.cfg.Version})
+		if err != nil {
+			return out, err
+		}
+		for _, k := range res.Written {
+			if _, left := removeIf[k]; left {
+				out.Left++
+			}
+		}
+	}
 	if len(items) > 0 {
 		// F16: a landing commit never passes a git hook; check it here.
 		docs := make(map[live.RowKey]live.File, len(items))
@@ -327,7 +340,14 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		if err := s.h.leakCheck(ctx, leakWhereLanding, folder, docs); err != nil {
 			return out, err
 		}
-		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: s.layout()})
+		var local string
+		if s.landLive {
+			if snap, err := s.ref.Snapshot(ctx); err == nil {
+				local = snap.Local
+			}
+		}
+		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: s.layout(), Live: s.landLive})
+		s.reportCarried(local, res.Live)
 		if err != nil {
 			return out, err
 		}
@@ -353,15 +373,9 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 			// nothing landed: the rows stay live and the next pass retries
 		}
 	}
-	if len(removeIf)+len(exact) > 0 {
-		res, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, Exact: exact, RemoveIf: removeIf, BinaryVersion: s.h.cfg.Version})
-		if err != nil {
+	if len(exact) > 0 {
+		if _, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, Exact: exact, BinaryVersion: s.h.cfg.Version}); err != nil {
 			return out, err
-		}
-		for _, k := range res.Written {
-			if _, left := removeIf[k]; left {
-				out.Left++
-			}
 		}
 	}
 	return out, nil

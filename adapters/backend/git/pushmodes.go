@@ -68,6 +68,24 @@ func pushHoldOf(ctx context.Context) PushHoldFunc {
 	return h
 }
 
+// fetchedCloneKey carries the work tree of a clone this run already fetched.
+type fetchedCloneKey struct{}
+
+// WithFetchedClone returns ctx saying the clone at dir (Backend.Dir) was
+// fetched earlier in this run, so a sync of it under ctx merges and pushes
+// over the tracking ref it has, without a fetch of its own (devco
+// L-12-perf: one fetch per remote per `lore sync`). A push that loses the
+// race still fetches before it tries again.
+func WithFetchedClone(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, fetchedCloneKey{}, dir)
+}
+
+// fetchedClone is the clone work tree ctx says was fetched ("" = none).
+func fetchedClone(ctx context.Context) string {
+	d, _ := ctx.Value(fetchedCloneKey{}).(string)
+	return d
+}
+
 // PushHold is why and since when a clone's local commits must not be
 // pushed (PushHoldFunc).
 type PushHold struct {
