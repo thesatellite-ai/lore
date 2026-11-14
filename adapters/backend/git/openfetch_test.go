@@ -202,3 +202,44 @@ func TestFetchScopeReusesTheOpenFetch(t *testing.T) {
 		})
 	}
 }
+
+// TestFetchScopeKeepsARefusedOpen: a first open whose fetch the remote did
+// not serve is not tried again over a new connection by a second open of
+// the same clone in the same scope (lore setup web: the schema update and
+// the page's actor lookup each open the stores); outside a scope, or in
+// another one, the second open asks the remote again.
+func TestFetchScopeKeepsARefusedOpen(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct {
+		second    func(first context.Context) context.Context
+		wantCalls int // network calls of the second open
+	}{
+		"same scope":        {second: func(first context.Context) context.Context { return first }, wantCalls: 0},
+		"scope kept":        {second: func(first context.Context) context.Context { return WithFetchScope(first) }, wantCalls: 0},
+		"another scope":     {second: func(context.Context) context.Context { return WithFetchScope(context.Background()) }, wantCalls: 1},
+		"outside any scope": {second: func(context.Context) context.Context { return context.Background() }, wantCalls: 1},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			remote := filepath.Join(t.TempDir(), "gone.git") // no repository there: the fetch fails
+			dir := filepath.Join(t.TempDir(), "clones", "host", "store")
+			opts, log := loggingGit(t)
+			first := WithFetchScope(context.Background())
+			if _, err := OpenClone(first, remote, dir, rowfs.FolderRoot, store.OpenOptions{}, opts...); err == nil {
+				t.Fatal("the first open of a missing remote succeeded")
+			}
+			before := len(networkCalls(t, log))
+			if before != 1 {
+				t.Fatalf("the first open reached the remote %d times, want 1", before)
+			}
+			_, err := OpenClone(c.second(first), remote, dir, rowfs.FolderRoot, store.OpenOptions{}, opts...)
+			if err == nil {
+				t.Fatal("the second open of a missing remote succeeded")
+			}
+			if calls := networkCalls(t, log)[before:]; len(calls) != c.wantCalls {
+				t.Errorf("the second open reached the remote %d times, want %d:\n%s", len(calls), c.wantCalls, strings.Join(calls, "\n"))
+			}
+		})
+	}
+}

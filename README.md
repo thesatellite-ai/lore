@@ -303,8 +303,8 @@ Lore works for a whole team, several repos, several companies and a crew of codi
 lore task add --title "Send the invoice reminder before Friday's demo" --assign @bob  # live: Bob sees it on his next command
 lore org link --org agency --project client                     # once: tie a client repo to an internal project
 lore memory add --body "The client replies faster on WhatsApp than email"  # in a client repo: goes to the store, not the repo
-lore task next --mission msn_01a1…                        # an agent takes the next ready task
-lore hold claim --name full-suite --ttl 30m                      # one heavy test run at a time (lore hold release full-suite)
+lore task next --mission msn_01a1… --push                 # an agent takes the next ready task (--push: the claim goes to the code remote)
+lore hold claim --name full-suite --ttl 30m --push               # one heavy test run at a time (lore hold release --name full-suite)
 ```
 
 Read on in [docs/team](docs/team/README.md): [overview](docs/team/overview.md), [concepts](docs/team/concepts.md), [getting started](docs/team/getting-started.md), [use cases](docs/team/README.md#use-cases) (small team, agency and client repo, group of repos, contractor, two companies, personal notes, agents on one mission), [how it works](docs/team/how-it-works.md), [agents](docs/team/agents.md), [commands reference](docs/team/commands.md) and [troubleshooting](docs/team/troubleshooting.md). The design and every rule: [LORE_TEAM_SPEC.md](LORE_TEAM_SPEC.md).

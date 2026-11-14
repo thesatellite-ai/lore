@@ -351,10 +351,11 @@ func newRepoTeam(t *testing.T, caps ...th.Cap) *repoTeam {
 }
 
 // createTasklist adds the "Inbox" task list every task add names (the
-// existing CLI requires --tasklist; see the status file's QUESTION Q1).
-func createTasklist(t *testing.T, c *th.Clone) string {
+// existing CLI requires --tasklist; see the status file's QUESTION Q1);
+// extra are more flags (--to repo in a client repo with no linked project).
+func createTasklist(t *testing.T, c *th.Clone, extra ...string) string {
 	t.Helper()
-	r := c.MustLore("tasklist", "add", "--title", "Inbox", "--body", "default list", "--json")
+	r := c.MustLore(append([]string{"tasklist", "add", "--title", "Inbox", "--body", "default list", "--json"}, extra...)...)
 	var v struct {
 		Data struct {
 			ID string `json:"id"`

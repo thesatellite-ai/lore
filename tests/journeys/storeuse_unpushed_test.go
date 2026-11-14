@@ -5,10 +5,10 @@ package journeys
 // storeuse_unpushed_test.go — a lead keeps notes in a git store and edits
 // a row file by hand in lore's clone; a read picks the edit up as a commit
 // that waits there, unpushed. Then they switch the store to a clone of
-// their own: `lore store use` first runs the store sync every command
-// runs, which pushes that commit, and then switches. It was refused
-// ("holds work its remote does not have") while the remote was reachable,
-// once the open of a store command stopped running the sync.
+// their own. Store writes stay in lore's clone until `lore sync` (C5), so
+// `lore store use` refuses while that commit waits ("holds work its remote
+// does not have", naming lore sync) and pushes nothing itself; after the
+// sync it switches.
 
 import (
 	"os"
@@ -53,8 +53,17 @@ func TestJourneyStoreUseAfterUnpushedWork(t *testing.T) {
 		}
 	})
 
-	w.Step("day1/store-use-pushes-then-switches", func() {
+	w.Step("day1/store-use-switches-once-the-work-is-sent", func() {
 		own := lee.Clone(notes, "my-notes")
+		// C5: store writes stay in lore's clone until lore sync; switching
+		// clones then would leave them behind, so store use refuses and
+		// names the sync (it pushes nothing itself)
+		tt.lore(tlLee, "store", "use", "--path", own.Dir, "--yes").Refused(t).
+			Says(t, "holds work its remote does not have", "lore sync")
+		if n := unpushed(); n == "0" {
+			t.Fatalf("the refused store use sent lore's clone's work (got %s unpushed)", n)
+		}
+		tt.lore(tlLee, "sync").OK(t)
 		tt.lore(tlLee, "store", "use", "--path", own.Dir, "--yes").OK(t).
 			Says(t, "now uses your clone").
 			Never(t, "holds work its remote does not have")

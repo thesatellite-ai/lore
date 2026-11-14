@@ -45,8 +45,12 @@ var loLives = []loLife{
 }
 
 // loNeedsHome are the lives whose first command writes ~/.lore, which a
-// broken ~/.lore must refuse.
-var loNeedsHome = map[string]bool{"identity": true, "personal_store": true, "machine_label": true, "live": true, "stores": true}
+// broken ~/.lore must refuse. Not "stores": its first command makes a
+// folder store (file://, the store folder and the repo's
+// .lore/stores.yaml), which needs nothing under ~/.lore, and since a home
+// lore cannot write keeps its rebuildable caches in a scratch folder (F-6)
+// it is done there, and the store reads back on the next command.
+var loNeedsHome = map[string]bool{"identity": true, "personal_store": true, "machine_label": true, "live": true}
 
 // loFirst is each life's first command.
 var loFirst = map[string]func(m *Machine) []string{

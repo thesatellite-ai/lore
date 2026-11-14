@@ -89,6 +89,9 @@ func TestJourneyStoreCommands(t *testing.T) {
 
 	w.Step("day2/doctor-flags-a-clone-with-the-personal-identity", func() {
 		w.AdvanceDays(1)
+		// doctor's store checks run in a lore project (in a repo nobody ran
+		// lore init in it stops at one note, D-20)
+		lee.Lore(app.Dir, "init", "--non-interactive", "--name=app").OK(t)
 		lee.OpenClone(tt.store, teamClone).Git("config", "user.email", tlLee.Email)
 		lee.Lore(app.Dir, "doctor").Says(t, "store_identity", teamClone+" commits as "+tlLee.Email,
 			"git -C "+teamClone+" config user.email "+jCmdsWorkEmail)

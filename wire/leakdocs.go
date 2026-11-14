@@ -134,7 +134,7 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 		if p == where {
 			label = where // a PR body is one text, named once
 		}
-		items = append(items, leakcheck.Item{Where: label, Path: p, Content: b})
+		items = append(items, leakcheck.Item{Where: label, Path: p, Content: b, LiveRow: liveRowDoc(where, p)})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
 	fs := leakcheck.Blocking(a.leakCheckByProject(ctx, items, leakcheck.NewIndex(rows, nil), leakcheck.Options{RepoProjectID: s.ProjectID, ClientRepo: client})) // per monorepo project folder (leakdocs_projects.go)
@@ -163,7 +163,12 @@ const leakWhereMove = "move"
 func withoutSelfMatches(where string, fs []leakcheck.Finding, rows []leakcheck.IndexRow) ([]leakcheck.Finding, bool) {
 	internal := make(map[string]string, len(rows))
 	for _, r := range rows {
-		if !r.RepoKey {
+		// a roster actor or team is never moved (a client row names it by
+		// id and the repo holds its projection), so its row file is not a
+		// move: an actor copy carrying more than the projection still
+		// blocks (leakRosterRows put the roster in rows, and the actor
+		// rule's finding on the copy was dropped as a self-match)
+		if !r.RepoKey && !rosterTable(r.Table) {
 			internal[r.ID] = r.Table
 		}
 	}
@@ -180,6 +185,12 @@ func withoutSelfMatches(where string, fs []leakcheck.Finding, rows []leakcheck.I
 		out = append(out, f)
 	}
 	return out, moved
+}
+
+// rosterTable reports whether table holds the roster (actors, teams),
+// whose rows a client repo references by id and never receives by move.
+func rosterTable(table string) bool {
+	return table == string(schema.TableActors) || table == string(schema.TableTeams)
 }
 
 // leakBlocked is the F16 refusal: one line per finding, the fix as hint
@@ -271,6 +282,27 @@ var liveRowPathRe = regexp.MustCompile(`^(.+)/([a-z_]+)/([a-z]{3}_[0-9a-f]{32})\
 // leakWhereLiveWrite is the action whose docs are live-ref paths (wire/host
 // leakWhereLive): only there is <folder>/<table>/<id>.json a row file.
 const leakWhereLiveWrite = "live write"
+
+// The other actions whose docs are live-ref rows (wire/host
+// leakWhereLanding, leakWhereRide): the rows a landing or a ride-along
+// commit moves onto the branch.
+const (
+	leakWhereLanding = "landing"
+	leakWhereRide    = "ride-along commit"
+)
+
+// liveRowDoc reports whether the doc at p of the action where is a
+// live-ref row file (<folder>/<table>/<id>.json): the docs of a live
+// write, a landing and a ride-along commit are keyed by live path
+// (wire/host liveHost.leakCheck), not by .lore/data path, and their rows
+// name roster actors as any client row does (leakcheck.Item.LiveRow).
+func liveRowDoc(where, p string) bool {
+	if where != leakWhereLiveWrite && where != leakWhereLanding && where != leakWhereRide {
+		return false
+	}
+	m := liveRowPathRe.FindStringSubmatch(p)
+	return m != nil && !strings.Contains(m[1], rowfs.LoreDir) && live.ValidateFolder(m[1]) == nil
+}
 
 // leakRowFileOf is the row id and table of a doc path that is a real row file
 // of the write named where: a .lore/data row file for every action, and for

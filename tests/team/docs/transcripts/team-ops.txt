@@ -14,15 +14,15 @@ bob (work/billing)$ lore sync >/dev/null && lore task list
 ○ tsk_54fe984c9b495744c0217776765a28f2 make the buttons blue [medium]
 
 ### resource
-alice (work/billing)$ lore hold claim --name full-suite --ttl 30m
+alice (work/billing)$ lore hold claim --name full-suite --ttl 30m --push
 ✓ holding full-suite until 2026-11-02T10:34:40Z
-bob (work/billing)$ lore hold claim --name full-suite --ttl 30m
+bob (work/billing)$ lore hold claim --name full-suite --ttl 30m --push
 ERROR: [E_CONTENDED] full-suite is held by alice since 10:04AM (lease until 10:34AM)
   hint: retry after the hold ends, or pick other work with `lore task next`
 (exit 11)
 alice (work/billing)$ lore hold release --name full-suite
 ✓ released full-suite
-bob (work/billing)$ lore hold claim --name full-suite --ttl 30m
+bob (work/billing)$ lore hold claim --name full-suite --ttl 30m --push
 ✓ holding full-suite until 2026-11-02T10:38:10Z
 
 ### release

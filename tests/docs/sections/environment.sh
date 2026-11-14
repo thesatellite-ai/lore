@@ -16,7 +16,7 @@ note "autopush off"
 on alice work/website "LORE_LIVE_AUTOPUSH=0 lore task add --title 'Renew the SSL certificate'"
 local t_ssl; t_ssl=$(id tsk)
 on alice work/website "lore live diff"
-on! alice work/website "LORE_LIVE_AUTOPUSH=0 lore task claim --id $t_ssl"
+on! alice work/website "LORE_LIVE_AUTOPUSH=0 lore task claim --id $t_ssl --push"
 on alice work/website "lore sync"
 
 note "live remote"

@@ -29,6 +29,7 @@ func TestJourneyStaffJoinLine(t *testing.T) {
 		tt.lore(tlLee, "member", "add", tlAnn.Email, "--name", tlAnn.Name, "--role", "member", "--yes").OK(t).
 			Says(t, "added "+tlAnn.Email, "joins on their machine with: lore setup join --invite "+url+" ").
 			Never(t, "lore setup join --invite <org>")
+		tt.lore(tlLee, "sync").OK(t) // C5: the roster write reaches the team store with Lee's sync
 	})
 
 	w.Step("day1/ann-on-a-fresh-laptop", func() {

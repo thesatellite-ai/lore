@@ -90,7 +90,14 @@ refused "task add agency->me" tsk_ lore task add t2 --commitment accepted --to a
 TASK=$(lore task add plain --commitment accepted --json | grep -o 'tsk_[0-9a-f]\{32\}' | head -1)
 refused "task edit repo->me" tsk_ lore task edit "$TASK" --ref "$ME_MEM"
 lore task show "$TASK" | grep -q "$ME_MEM" && fail "task edit repo->me stored the pointer"
-refused "comment add repo->me" cmt_ lore comment add --on-table memories --on-id "$ME_MEM" --body "on mine"
+refused "comment add repo->me" cmt_ lore comment add --on-table memories --on-id "$ME_MEM" --body "on mine" --to repo
+# F-5: with no --to a comment follows its target's store, so a comment on a
+# personal note lands in me (personal -> personal), never in the repo.
+repo_cmts() { find .lore/data -path "*comments*" -name "cmt_*" 2>/dev/null | wc -l | tr -d " "; }
+cr0=$(repo_cmts)
+lore comment add --on-table memories --on-id "$ME_MEM" --body "on mine, kept with it" 2>&1 | grep -q "(store me)" \
+    || fail "comment add on a me note with no --to did not land in store me"
+[ "$(repo_cmts)" = "$cr0" ] || fail "comment add on a me note with no --to wrote a comment in the repo"
 refused "link add repo->me" cml_ lore link add --entity "$ME_MEM" --commit "$SHA"
 
 # personal -> anywhere, repo <-> internal: allowed (and the row counter

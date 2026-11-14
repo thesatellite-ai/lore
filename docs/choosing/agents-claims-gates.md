@@ -8,11 +8,11 @@
 |---|---|---|---|
 | **Plain tasks** | a to-do list | one person or one agent does the work | `lore task add`, `lore task start`, `lore task done` |
 | **Agent identity** | a name tag for one agent session, owned by a person | an agent writes notes or takes tasks in a team | `lore agent start --label agent-backend --owner @alice` |
-| **Claim** | your name on the whiteboard next to a task | two or more workers could pick the same task | `lore task next --mission <id>`, `lore task claim --id <id>` |
+| **Claim** | your name on the whiteboard next to a task | two or more workers could pick the same task | `lore task next --mission <id> --push`, `lore task claim --id <id> --push` (in a code repo with a remote; `--push` sends the claim there) |
 | **Lease and heartbeat** | the claim runs out after 20 minutes unless the agent says "still here" | always, with claims; it is how a crashed agent's task comes free | `lore task heartbeat --daemon --id <id>` |
 | **Dependencies** | "do this one after that one" | one task needs another's code first, maybe in another repo | `lore task add --after <id>` (`<id>:merged` waits for the merge) |
 | **Gate** | a "stop, ask a person" sign on a task | a step is risky: a payment change, a change to the live database, a release | `lore gate request --id <id>`, then a person runs `lore gate approve --id <id>` |
-| **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore hold claim --name full-suite --ttl 30m`, `lore hold release --name full-suite` |
+| **Resource hold** | a key to a room only one person may use at a time | only one worker may run something heavy at once, like the full test suite | `lore hold claim --name full-suite --ttl 30m --push`, `lore hold release --name full-suite` |
 | **Handoff and memory** | a note left for the next worker; a fact every agent should know | an agent stops mid-way, or learns something the others need | `lore handoff add --for @agent-frontend --task <id>`, `lore memory add --body "<fact>"` |
 
 ## If this, then that

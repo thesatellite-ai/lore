@@ -119,7 +119,14 @@ const (
 )
 
 // leakCheck runs cfg.LeakCheck over rows of folder (tombstones carry no
-// content and are skipped).
+// content and are skipped). Each row is named by the path it gets in the
+// checkout once landed (.lore/data/<table>/<id>.json, as leakCheckBranch
+// names a branch row), not by its live-tree path (<folder>/<table>/<id>.json):
+// the leak checker applies its row-file rules (the client projection of
+// the actors a row names) only to paths it knows as row files, and on the
+// live-tree path it read the row as free text, so its created_by, an id on
+// the org roster, blocked a live task in a linked client repo that the
+// same write on the branch passed.
 func (h *liveHost) leakCheck(ctx context.Context, where, folder string, rows map[live.RowKey]live.File) error {
 	if h.cfg.LeakCheck == nil {
 		return nil
@@ -133,7 +140,7 @@ func (h *liveHost) leakCheck(ctx context.Context, where, folder string, rows map
 		if err != nil {
 			return errs.Wrap(errs.LeakBlocked, "cannot check: encode "+k.String(), err)
 		}
-		docs[live.RowPath(folder, k.Table, k.ID)] = b
+		docs[mainDataPath(folder, k.Table+"/"+k.ID+rowFileExt)] = b
 	}
 	return h.cfg.LeakCheck(ctx, where, docs)
 }

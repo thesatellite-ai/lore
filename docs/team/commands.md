@@ -1245,6 +1245,7 @@ Flags:
       --id string          the task or mission id (tsk_…, msn_…) (required)
       --json               print the result (or the error) as JSON
       --owns stringArray   paths this claim owns (directory prefixes ending in / or exact files)
+      --push               push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --strict             refuse instead of warning when --owns overlaps another claim
       --yes                answer yes to the confirmation without a terminal
@@ -1269,6 +1270,7 @@ Flags:
       --json               print the result (or the error) as JSON
       --mission string     only tasks of this mission
       --owns stringArray   paths the claim owns
+      --push               push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --repo string        only tasks of this repo (a repo name of the group)
       --role string        plan role (e.g. coordinator)
@@ -1457,6 +1459,7 @@ Flags:
       --json           print the result (or the error) as JSON
       --name string    the resource to hold (a test suite, a staging slot) (required)
       --on string      project (the project's signals ref, the default) or machine
+      --push           push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)
       --ttl duration   how long the hold lasts (default: lease.ttl)
       --yes            answer yes to the confirmation without a terminal
 ```

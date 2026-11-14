@@ -136,6 +136,23 @@ func loreFolderAt(top string) bool {
 	return err == nil && len(entries) > 0
 }
 
+// settingUpHere reports a command that sets the repo up (no noCreate on
+// ctx: lore init and the other host.setsUpRepo commands) whose .lore/
+// already exists, even empty: `lore init` makes it (rootInitAt) before
+// it opens the repo, and that open must set the project up, taking the id
+// a store link gives the repo (LinkedRemoteProject), instead of reading
+// the repo as a client repo linked by its remote. An empty .lore/ stopped
+// counting as a project (loreFolderAt, D-20), so init in a second clone
+// of a linked repo failed "that folder is not attached". A repo with no
+// .lore/ at all (org link, sync in a client repo) is unaffected.
+func settingUpHere(ctx context.Context, top string) bool {
+	if NoCreate(ctx) {
+		return false
+	}
+	fi, err := os.Stat(filepath.Join(top, loreFolderName))
+	return err == nil && fi.IsDir()
+}
+
 // noProjectErr is open's refusal under noCreate: top is a git repo with no
 // .lore/. A write run (WithNoSetUp) says so with its own line.
 func noProjectErr(ctx context.Context, top string) error {

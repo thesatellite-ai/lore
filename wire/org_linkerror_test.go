@@ -3,6 +3,7 @@ package wire
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -48,5 +49,17 @@ func TestLinkErrorMatrix(t *testing.T) {
 	}
 	if c := errs.CodeOf(orgFileError(wrap(orgcfg.ErrOrgFileExists), orgTestStoreURL)); c != errs.InvalidInput {
 		t.Fatalf("org create over another org: %s", c)
+	}
+}
+
+// TestNoStoreBranchHintNamesStoreInit: the refusal of a link to a store
+// branch that does not exist names the explicit way to start one (the
+// docs' fix, and Q8: lore never makes it by accident), not only the
+// typo check.
+func TestNoStoreBranchHintNamesStoreInit(t *testing.T) {
+	t.Parallel()
+	err := linkError(fmt.Errorf("%w: github.com/example/notes has no branch staging", orgcfg.ErrNoStoreBranch))
+	if h := errs.EnvelopeOf(err).Error.Hint; !strings.Contains(h, "lore store init --name <name> --url '<url>?branch=<branch>'") {
+		t.Fatalf("hint %q does not name lore store init with the branch", h)
 	}
 }

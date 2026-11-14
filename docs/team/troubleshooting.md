@@ -152,7 +152,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 # alice, in website
 $ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: the store repo has branches but not this one (an empty repo gets its branch with the first link): check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org> if they are wrong
+  hint: the store repo has branches but not this one (an empty repo gets its branch with the first link): to start a separate lore on that branch on purpose, run `lore store init --name <name> --url '<url>?branch=<branch>'`; otherwise check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org>
 (exit 20)
 ```
 <!-- /example -->

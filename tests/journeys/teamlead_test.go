@@ -89,6 +89,8 @@ type tlActor struct {
 	StableKey  string `json:"stable_key"`
 	Status     string `json:"status"`
 	LeaveUntil string `json:"leave_until"`
+	Kind       string `json:"kind"`
+	Owner      string `json:"owner_actor_id"`
 }
 
 // tlRows is the data array of a list --json answer.

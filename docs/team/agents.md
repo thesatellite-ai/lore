@@ -65,7 +65,7 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 | after each meaningful step | `lore task note --id <id> --text "…"` | a replacement agent reads your notes and fetches your pushed branch |
 | learned something others need | `lore memory add --body "…"` | every agent finds it with `lore search` |
 | about to do something risky | `lore gate request --id <id>`, then stop | a person approves with `lore gate approve`; a `LORE_ACTOR` session never can |
-| need the shared test suite alone | `lore hold claim --name full-suite --ttl 30m`, then `lore hold release --name full-suite` | one heavy run at a time |
+| need the shared test suite alone | `lore hold claim --name full-suite --ttl 30m --push`, then `lore hold release --name full-suite` | one heavy run at a time |
 | finished | `lore task done --id <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged |
 | giving up the task | `lore task release --id <id>` | frees it at once instead of after the lease |
 | handing to someone specific | `lore handoff add --for @agent-frontend-2 --task <id> --body "…"` | the handoff waits in their inbox |
@@ -256,16 +256,16 @@ A **team** is a name for a group of people, like a mailing list: `--assign @fron
 
 ## Sharing one thing nobody may use twice at once: `lore hold`
 
-Some things break when two runs use them together, like one shared test database or the full test suite on a small server. `lore hold claim --name <name>` holds such a thing for you until `--ttl` passes or you release it; anyone else who asks gets an error that names the holder:
+Some things break when two runs use them together, like one shared test database or the full test suite on a small server. `lore hold claim --name <name>` holds such a thing for you until `--ttl` passes or you release it; anyone else who asks gets an error that names the holder. In a code repo with a remote the hold travels through that remote, and lore pushes there only when you ask: pass `--push` (or set `LORE_PUSH_CLAIMS=1`, see [How it works](how-it-works.md)); without it the claim is refused before anything is written. Releasing a hold you pushed pushes again without the flag:
 
 <!-- example: team-ops#resource -->
 ```console
 # alice, in billing
-$ lore hold claim --name full-suite --ttl 30m
+$ lore hold claim --name full-suite --ttl 30m --push
 ✓ holding full-suite until 2026-11-02T10:34:40Z
 
 # bob, in billing
-$ lore hold claim --name full-suite --ttl 30m
+$ lore hold claim --name full-suite --ttl 30m --push
 ERROR: [E_CONTENDED] full-suite is held by alice since 10:04AM (lease until 10:34AM)
   hint: retry after the hold ends, or pick other work with `lore task next`
 (exit 11)
@@ -275,12 +275,12 @@ $ lore hold release --name full-suite
 ✓ released full-suite
 
 # bob, in billing
-$ lore hold claim --name full-suite --ttl 30m
+$ lore hold claim --name full-suite --ttl 30m --push
 ✓ holding full-suite until 2026-11-02T10:38:10Z
 ```
 <!-- /example -->
 
-Running `lore hold claim` again while you hold it renews your hold. A typical line in a script: `lore hold claim --name full-suite --ttl 30m && task test && lore hold release --name full-suite`.
+Running `lore hold claim` again while you hold it renews your hold. A typical line in a script: `lore hold claim --name full-suite --ttl 30m --push && task test && lore hold release --name full-suite`.
 
 ## Rules for agents
 

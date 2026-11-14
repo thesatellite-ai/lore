@@ -184,7 +184,7 @@ alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2
 601d285 lore: init
 
 ### no work
-alice (work/landing)$ lore task next
+alice (work/landing)$ lore task next --push
 ERROR: [E_NO_WORK] nothing ready: no open task matches
   hint: lore task add makes a task; lore task list shows the open ones
 (exit 10)

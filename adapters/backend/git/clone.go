@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
@@ -542,14 +543,53 @@ const remoteHeadRef = trackingRefNS + "HEAD"
 // each a new ssh connection; inside a scope one fetch of every ref serves
 // them all. Outside a scope nothing is reused, so an explicit sync always
 // fetches; a push ends the reuse (pushed), so a lost race fetches again.
-type FetchScope struct{ _ byte }
+//
+// A first-open fetch the remote refused (or that could not reach it) is
+// remembered too: a second open of that clone in the same scope gets the
+// same error without a new connection. Why: `lore setup web` opens the
+// attached stores twice before the page link (the schema update, then the
+// page's actor lookup); with a key the remote refuses that was two ssh
+// connections, each refused (setupe2e startfetch).
+type FetchScope struct {
+	mu     sync.Mutex
+	failed map[string]error // clone folder -> its refused first-open fetch
+}
 
 // fetchScopeKey is FetchScope's context key.
 type fetchScopeKey struct{}
 
-// WithFetchScope returns ctx carrying a new FetchScope.
+// WithFetchScope returns ctx carrying a FetchScope: ctx itself when it
+// carries one already (an outer caller's scope covers the inner work too),
+// else a new one.
 func WithFetchScope(ctx context.Context) context.Context {
+	if scopeOf(ctx) != nil {
+		return ctx
+	}
 	return context.WithValue(ctx, fetchScopeKey{}, &FetchScope{})
+}
+
+// failedFetch is the error the first-open fetch of dir got earlier in
+// scope s, nil when it got none (or s is nil).
+func (s *FetchScope) failedFetch(dir string) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.failed[dir]
+}
+
+// noteFailedFetch records err as dir's first-open fetch failure in s.
+func (s *FetchScope) noteFailedFetch(dir string, err error) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.failed == nil {
+		s.failed = map[string]error{}
+	}
+	s.failed[dir] = err
 }
 
 // scopeOf is ctx's FetchScope, nil when it carries none.
@@ -569,13 +609,20 @@ func scopeOf(ctx context.Context) *FetchScope {
 // when the remote has branches but git did not record its HEAD (a git
 // older than followRemoteHEAD, or a remote HEAD naming no branch).
 func (b *Backend) openFetch(ctx context.Context, dir string) (head string, err error) {
+	scope := scopeOf(ctx)
+	if ferr := scope.failedFetch(dir); ferr != nil {
+		return DefaultBranch, ferr // refused earlier in this scope: no second connection
+	}
 	remote := "remote." + RemoteName + "."
 	err = b.runFetch(ctx, dir, "-c", remote+"followRemoteHEAD=always", "-c", remote+"fetch="+headsRefspec, "-c", remote+"fetch="+liveRefspec,
 		"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", RemoteName)
 	if err != nil {
+		if isOffline(err) {
+			scope.noteFailedFetch(dir, err) // git ran and the remote did not serve it (not a cancelled ctx)
+		}
 		return DefaultBranch, err
 	}
-	b.openScope.Store(scopeOf(ctx))
+	b.openScope.Store(scope)
 	b.openLive = true
 	out, serr := b.git.run(ctx, call{dir: dir, args: []string{"symbolic-ref", "--quiet", remoteHeadRef}})
 	if serr == nil {

@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
@@ -90,7 +91,14 @@ func (r pageRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Call
 			_ = ln.Close()
 		}
 	}
-	res, err := r.env.inner.Run(ctx, e, d, c)
+	// One fetch scope (gitbackend.FetchScope) for the op and the page's
+	// actor lookup: the schema update and pageActor each open the attached
+	// stores, and a store whose remote refused the first open is not
+	// fetched again over a second ssh connection (setupe2e startfetch). The
+	// page itself (serve) runs outside it, so a store fixed on the page is
+	// fetched afresh.
+	scoped := gitbackend.WithFetchScope(ctx)
+	res, err := r.env.inner.Run(scoped, e, d, c)
 	if err != nil || cli.JSONRequested(r.env.args) {
 		release()
 		return res, err
@@ -115,7 +123,8 @@ func (r pageRunner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Call
 	if herr == nil {
 		_, _ = io.WriteString(r.env.out, onboard.HereLine(here)+"\n")
 	}
-	if err := r.serve(opssetup.WithJoin(ctx, joinOf(res, web)), ln, web, flow, here); err != nil {
+	actor := pageActor(scoped, r.env.app)
+	if err := r.serve(opssetup.WithJoin(ctx, joinOf(res, web)), ln, web, flow, here, actor); err != nil {
 		return res, err
 	}
 	return res.WithTextEdit(func(string) string { return "" }), nil
@@ -172,8 +181,8 @@ func (r pageRunner) preListen(e op.Entry, d op.Decoder) (net.Listener, error) {
 }
 
 // serve runs the page until it stops, on ln when preListen bound it
-// already, else on a listener for web.Port.
-func (r pageRunner) serve(ctx context.Context, ln net.Listener, web opssetup.WebStart, flow setupweb.Flow, here onboard.Here) error {
+// already, else on a listener for web.Port; actor is pageActor's answer.
+func (r pageRunner) serve(ctx context.Context, ln net.Listener, web opssetup.WebStart, flow setupweb.Flow, here onboard.Here, actor ids.ID[ids.Actor]) error {
 	if ln == nil {
 		var err error
 		if ln, err = setupweb.Listen(web.Port); err != nil {
@@ -186,7 +195,7 @@ func (r pageRunner) serve(ctx context.Context, ln net.Listener, web opssetup.Web
 	cfg := conf.Settings
 	page, err := setupweb.New(ln, setupweb.Options{
 		Registry: r.env.app.Registry(), Runner: &apiRunner{inner: r.env.inner, join: opssetup.JoinOf(ctx)},
-		Actor: pageActor(ctx, r.env.app), LoreVersion: version,
+		Actor: actor, LoreVersion: version,
 		IdleMinutes: cfg.IdleMinutes, Flow: flow, Invite: web.Invite, Setup: web.Setup,
 		UI: setupUI, DebugLog: wire.SetupDebugLogPath(r.env.home), Here: here,
 	})

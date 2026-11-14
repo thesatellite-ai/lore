@@ -22,7 +22,7 @@ import (
 // on the live ref. A write made after the note is refused itself (the old
 // binary refuses it before the write, cmd/lore at the live write).
 func TestLeak_LandingOfClientRowQuotingAPersonalNoteIsBlocked(t *testing.T) {
-	w := newTeamWorld(t, th.Flag("live", "task", "add"), th.Flag("to", "memory", "add"), capLand)
+	w := newTeamWorld(t, th.Flag("live", "task", "add"), th.Flag("to", "memory", "add"), th.Flag("to", "tasklist", "add"), capLand)
 	app := w.Remote(slugApp)
 	alice := w.Human("alice", "alice@northwind.example")
 	alice.WriteConfig(th.Config{
@@ -36,7 +36,9 @@ func TestLeak_LandingOfClientRowQuotingAPersonalNoteIsBlocked(t *testing.T) {
 	})
 	c := alice.Clone(app, "app")
 	c.MustLore("init", "--non-interactive", "--name=app")
-	tl := createTasklist(t, c)
+	// D-12: a tasklist follows the routing of tasks, and this client repo
+	// has no linked project, so its tasks' list is put in the repo itself
+	tl := createTasklist(t, c, "--to", "repo")
 	c.CommitAll("lore")
 	c.AdminPush("origin", "main")
 	app.ProtectMain()

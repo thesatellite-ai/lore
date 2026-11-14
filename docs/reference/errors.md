@@ -353,7 +353,7 @@ Two of them for real: `lore task next` in a repo with no open task, and a write 
 <!-- example: reference#no-work -->
 ```console
 # alice, in landing
-$ lore task next
+$ lore task next --push
 ERROR: [E_NO_WORK] nothing ready: no open task matches
   hint: lore task add makes a task; lore task list shows the open ones
 (exit 10)

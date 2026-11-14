@@ -64,6 +64,11 @@ func TestFixRepoWalk(t *testing.T) {
 			if err := os.MkdirAll(filepath.Join(p, sub), 0o750); err != nil {
 				t.Fatal(err)
 			}
+			if sub == ".lore" { // lore data: an empty .lore/ is none (D-20)
+				if err := os.WriteFile(filepath.Join(p, sub, "lock"), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
 		}
 		return p
 	}
@@ -78,7 +83,12 @@ func TestFixRepoWalk(t *testing.T) {
 	nested := repo("a/nested", true)
 	deep := repo("org/team/client/svc", true)
 	linked := repo("org/linked", false)
-	repo("org/plain", false)            // no .lore, not linked
+	repo("org/plain", false) // no .lore, not linked
+	// an empty .lore/ (only an earlier lore run left it) is no lore data:
+	// lore fix refuses there, so --all neither runs in it nor lists it
+	if err := os.MkdirAll(filepath.Join(repo("org/emptylore", false), ".lore"), 0o750); err != nil {
+		t.Fatal(err)
+	}
 	repo("web/node_modules/dep", true)  // a dependency tree
 	repo(".cache/hidden", true)         // a hidden folder
 	notRepo := mk("org/notes", ".lore") // .lore, no .git

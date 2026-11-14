@@ -125,7 +125,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	// from the root OpenRepo found (no further git call), and only for a
 	// repo with no .lore/, so a lore project pays nothing for it.
 	remote := ""
-	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) {
+	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) && !settingUpHere(ctx, repo.Dir()) {
 		if remote = opts.RepoLinkedByRemote(ctx); remote != "" {
 			repo.MarkReadOnly()
 		}

@@ -21,7 +21,9 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // staleLink is a link of this repo's remote kept in a store clone whose
@@ -97,4 +99,21 @@ func (a *App) staleLinkOrg(ctx context.Context) string {
 		return ""
 	}
 	return o.Name
+}
+
+// refuseStaleLinkFolder is L-7's refusal of `--to <to>` creating folder
+// folderName in src: this repo's remote was linked to a folder of that name
+// in a store the org entry no longer lists, so creating it here would put
+// the row in a different store than the link named. nil when no such link
+// is found. Both the repo's target resolution (targets.go) and a write in a
+// git repo lore is not set up in (targetoutside.go, F-15) ask it before
+// making the folder; the second once skipped it and made the folder in the
+// org's first store.
+func (a *App) refuseStaleLinkFolder(ctx context.Context, to, folderName string, src attach.Store) error {
+	sl, ok := a.findStaleLink(ctx)
+	if !ok || sl.Folder != folderName || sameStoreURL(src.URL, sl.origin) {
+		return nil
+	}
+	return errs.New(errs.Refused, "--to "+to+" would create folder "+folderName+" in "+repourl.Mask(src.URL)+", but this repo's remote was linked to folder "+folderName+" of store "+sl.StoreURL+", which the org entry no longer lists").
+		WithHint("re-add " + sl.StoreURL + " to the org's lore-org.yaml and run `lore org refresh`, then write again; to create a new folder here anyway, give it another name")
 }
