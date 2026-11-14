@@ -72,6 +72,9 @@ type OrgResolution struct {
 	// already reported (pushreport.go, B2-5): a store and its folders share
 	// one clone, so its commits are named once, not once per folder.
 	waited waitedClones
+	// heldSaid names the store clones whose held push (store.SyncReport.Held,
+	// F-9) this process already said, once per clone like waited.
+	heldSaid waitedClones
 
 	// routed is the F14 rule of the routed create this process made, for
 	// the "filed: <rule>" line (Routed).

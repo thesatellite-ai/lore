@@ -43,6 +43,41 @@ type SyncOptions struct {
 	Squash bool
 }
 
+// PushHoldFunc is asked by a sync right before its push, after the fetch
+// and merge brought the remote's state (so a roster change a teammate
+// pushed is already in the clone): a hold whose ok is true keeps every
+// local commit on this machine when one of them was made after
+// PushHold.After, and the sync reports one refusal with the reason
+// instead of pushing (F-9: a member removed from the org must not publish
+// writes made after the removal with the sync that brings the removal).
+// It rides the context (WithPushHold) so every sync path of a clone —
+// Sync, SyncWith, a push after a write — is held the same way.
+type PushHoldFunc func(ctx context.Context) (PushHold, bool)
+
+// pushHoldKey carries a PushHoldFunc on a context.
+type pushHoldKey struct{}
+
+// WithPushHold returns ctx carrying hold for the syncs run under it.
+func WithPushHold(ctx context.Context, hold PushHoldFunc) context.Context {
+	return context.WithValue(ctx, pushHoldKey{}, hold)
+}
+
+// pushHoldOf is the PushHoldFunc ctx carries (nil = none).
+func pushHoldOf(ctx context.Context) PushHoldFunc {
+	h, _ := ctx.Value(pushHoldKey{}).(PushHoldFunc)
+	return h
+}
+
+// PushHold is why and since when a clone's local commits must not be
+// pushed (PushHoldFunc).
+type PushHold struct {
+	// After: commits made later than this (committer time, the app clock
+	// lore commits with) are held.
+	After time.Time
+	// Reason is the refusal's text, naming who, where and since when.
+	Reason string
+}
+
 // SyncWith is Sync with options. Repo mode has nothing to do.
 func (b *Backend) SyncWith(ctx context.Context, o SyncOptions) (store.SyncReport, error) {
 	if err := b.usable(ctx); err != nil {
@@ -149,6 +184,28 @@ func (b *Backend) OldestUnpushed(ctx context.Context) (time.Time, error) {
 		}
 	}
 	return oldest, nil
+}
+
+// commitsAfter counts the commits reachable from to and not from from
+// ("" = every commit of to) whose committer time is later than after
+// (PushHoldFunc).
+func (b *Backend) commitsAfter(ctx context.Context, from, to string, after time.Time) (int, error) {
+	args := []string{"log", "--format=%ct", to}
+	if from != "" {
+		args = append(args, "^"+from)
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: args})
+	if err != nil {
+		return 0, errs.Wrap(errs.Internal, "git: read the commits waiting to be pushed", err)
+	}
+	n := 0
+	for line := range strings.SplitSeq(trimmed(out), "\n") {
+		sec, perr := strconv.ParseInt(strings.TrimSpace(line), 10, 64)
+		if perr == nil && time.Unix(sec, 0).After(after) {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // countCommits counts commits reachable from to and not from from ("" =

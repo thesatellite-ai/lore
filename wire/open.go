@@ -348,6 +348,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
+	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
 		// agent in a client repo is recorded as its owning person; an org
@@ -1292,6 +1293,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		return fail(err)
 	}
 	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: inside a store clone too (B2-25)
+	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	// rowState: App.finishOpen reads the formats before the first write
 	if !st.refreshPending {
 		if err = st.readFormats(ctx, opts); err != nil {
@@ -1304,11 +1306,20 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 // storeOnlyAudit is the repo audit sink of a store-only open: there is no
 // repo, so an event naming it is refused (fail closed: it would mean a
 // write reached a store that is not attached); every other event already
-// went to its store's machine-local trail (routedAudit).
+// went to its store's machine-local trail (routedAudit). A secret.* event
+// (engine.AuditSecret) names the repo store by convention, not a row
+// written there: it is not recorded in any checkout (a linked client
+// repo's clone must hold nothing of lore's) and the machine-local batch
+// log already has it, so it is accepted (`comment add --secret-unstored
+// --to <store>` in a client repo failed E_INTERNAL "secret audit record
+// failed").
 type storeOnlyAudit struct{}
 
 // Record implements engine.AuditSink.
 func (storeOnlyAudit) Record(_ context.Context, ev engine.Event) error {
+	if slices.Contains(engine.SecretActions(), ev.Action) {
+		return nil
+	}
 	if ev.Store == store.SourceRepo {
 		return errs.New(errs.NotAStore, "wire: no repo is open (a roster command run outside a repo); nothing is recorded for it")
 	}

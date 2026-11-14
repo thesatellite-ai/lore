@@ -121,6 +121,11 @@ type SyncReport struct {
 	// reach the remote ("" when unknown), so a caller can tell no network
 	// from a missing or unreadable repository (logic/gitfault).
 	OfflineDetail string
+	// Held, when not "", is why the local commits were kept on this
+	// machine and not pushed although the remote answered (a push hold:
+	// the person was removed from the org, F-9). Not a refusal: nothing is
+	// wrong with the rows, and the sync itself succeeded.
+	Held string
 }
 
 // FolderCount is what one sync sent and received for one data folder.

@@ -133,6 +133,9 @@ type storePush struct {
 	waitSaid bool
 	// localSaid: this command already said a write stayed local (sayLocal).
 	localSaid bool
+	// hold keeps local commits a person made after the org removed them
+	// from being pushed (leftgate.go armLeftHold, F-9); nil = none.
+	hold gitbackend.PushHoldFunc
 	// reach is what this command's read fetch learned of the remote
 	// (reachOnline, reachOffline; reachUnknown without one): sayWaiting
 	// says the waiting commits again when it changed.
@@ -339,15 +342,34 @@ func (b *storePush) hasUnpulled(ctx context.Context) bool {
 // store (the default, C5) sends its commits as they are: each keeps its
 // subject and author (a layout commit, a hand edit, a settings change).
 func (b *storePush) syncInner(ctx context.Context, noPush bool) (store.SyncReport, error) {
+	if b.hold != nil {
+		ctx = gitbackend.WithPushHold(ctx, b.hold)
+	}
 	gb := gitOf(b.inner)
 	if gb == nil || (!noPush && !b.held()) {
 		if noPush {
 			return store.SyncReport{}, nil // a store lore cannot sync without pushing is left alone
 		}
-		return b.inner.Sync(ctx)
+		return b.sayHeld(b.inner.Sync(ctx))
 	}
 	squash := !noPush && b.pushSettings().Push == storepush.ModeBatch
-	return gb.SyncWith(ctx, gitbackend.SyncOptions{NoPush: noPush, Squash: squash})
+	return b.sayHeld(gb.SyncWith(ctx, gitbackend.SyncOptions{NoPush: noPush, Squash: squash}))
+}
+
+// sayHeld prints a held push's reason (store.SyncReport.Held) once per
+// store clone and command: the clone's folders share one push.
+func (b *storePush) sayHeld(rep store.SyncReport, err error) (store.SyncReport, error) {
+	if rep.Held == "" {
+		return rep, err
+	}
+	dir := string(b.name)
+	if gb := gitOf(b.inner); gb != nil {
+		dir = gb.Dir()
+	}
+	if b.res == nil || b.res.heldSaid.first(dir, b.req) {
+		_, _ = fmt.Fprintln(b.notes, "lore: store "+string(b.name)+": "+rep.Held)
+	}
+	return rep, err
 }
 
 // pushNow pushes what the clone holds (a batch commit for a held store);
@@ -391,6 +413,8 @@ func (b *storePush) pushNow(ctx context.Context) {
 			break
 		}
 		b.note("the store refused the push (`lore sync status` shows the rows and why)")
+	case rep.Held != "":
+		return // sayHeld said why; the commits wait, and a retry would hold them again
 	default:
 		b.pushed(ctx, waiting)
 		return
@@ -547,7 +571,7 @@ func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	if err != nil {
 		return rep, err
 	}
-	if !rep.Offline && len(rep.Refused) == 0 {
+	if !rep.Offline && len(rep.Refused) == 0 && rep.Held == "" {
 		b.pushed(ctx, waiting)
 	}
 	rep.Sent += b.earlier.Sent

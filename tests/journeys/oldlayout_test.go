@@ -174,7 +174,15 @@ func TestJourneyUpgraderOldLayout(t *testing.T) {
 		}
 		w.Git(m.Home, "init", "-q", "--bare", v017)
 
+		hubBefore := w.Git(stores[0].remote.Dir, "for-each-ref")
 		r := m.Lore(m.Home, "doctor")
+		// E-13: the first command (here a read) moves and commits on this
+		// machine only, even for a store whose push mode is now (lore-hub):
+		// its remote is untouched until the person's lore sync
+		if after := w.Git(stores[0].remote.Dir, "for-each-ref"); after != hubBefore {
+			t.Errorf("the first command pushed to lore-hub's remote:\nbefore %s\nafter  %s", hubBefore, after)
+		}
+		r.Says(t, "(committed on this machine only); lore sync sends").Never(t, "pushed store")
 		for _, s := range stores {
 			r.Says(t, "moved store clone "+olShown(m, s.oldBase(m))+" -> "+olShown(m, s.newDir(m)))
 		}
@@ -312,6 +320,9 @@ func olSeed(t testing.TB, w *World, s *olStore, rows map[string]string) {
 	marker := "lore_store: 2\nid: " + id.String() + "\nvisibility: internal\ncreated: \"2026-01-01\"\n"
 	if s.orgFolder != "" {
 		marker += "org_folder: " + s.orgFolder + "\n"
+	}
+	if s.hasOrg {
+		marker += "push: now\n" // E-13: an admin chose push now; the first command still pushes nothing
 	}
 	olWrite(t, filepath.Join(seed, "lore-store.yaml"), marker)
 	if s.hasOrg {

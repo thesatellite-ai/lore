@@ -19,6 +19,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -451,6 +452,12 @@ func (s *liveSession) push(ctx context.Context) bool {
 	if s.undelivered != "" && s.undelivered == snap.Local {
 		return false // this run already tried this commit; waitWhy still says why
 	}
+	if why, held := s.leftHeld(ctx, snap); held {
+		s.printNotes()
+		s.waitWhy = why
+		s.warn(why)
+		return false
+	}
 	out, err := s.ref.Push(ctx)
 	s.notes = append(s.notes, out.Notes...)
 	s.printNotes()
@@ -466,6 +473,37 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.undelivered = snap.Local
 	}
 	return out.Pushed()
+}
+
+// leftHeld reports a push LiveConfig.PushHold keeps from running: the
+// local live ref holds a commit made after the time the hold names (the
+// caller was removed from the org). The commits stay on the local ref.
+func (s *liveSession) leftHeld(ctx context.Context, snap live.Snapshot) (string, bool) {
+	if s.h.cfg.PushHold == nil {
+		return "", false
+	}
+	after, reason, ok := s.h.cfg.PushHold(ctx)
+	if !ok {
+		return "", false
+	}
+	args := []string{"log", "--format=%ct", snap.Local}
+	if snap.Tracking != "" {
+		args = append(args, "^"+snap.Tracking)
+	}
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: args})
+	if err != nil {
+		return reason + "; live writes kept on this machine (their dates could not be read)", true // fail closed
+	}
+	n := 0
+	for _, line := range strings.Fields(string(out)) {
+		if sec, perr := strconv.ParseInt(line, 10, 64); perr == nil && time.Unix(sec, 0).After(after) {
+			n++
+		}
+	}
+	if n == 0 {
+		return "", false
+	}
+	return fmt.Sprintf("%s; %d live write commit(s) kept on this machine, not pushed to refs/lore/live", reason, n), true
 }
 
 // liveRefusedWhy is waitWhy after the remote refused refs/lore/live.

@@ -18447,6 +18447,10 @@
                     "type": "string",
                     "description": "project (the project's signals ref, the default) or machine"
                   },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"
+                  },
                   "ttl": {
                     "type": "integer",
                     "format": "duration-ns",
@@ -95782,6 +95786,10 @@
                       "type": "string"
                     }
                   },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
+                  },
                   "repo": {
                     "type": "string",
                     "description": "only tasks of this repo (a repo name of the group)"
@@ -99246,6 +99254,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
                   },
                   "strict": {
                     "type": "boolean",

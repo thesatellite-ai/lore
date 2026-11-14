@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -182,6 +183,8 @@ func run(ctx context.Context, args []string) int {
 		// FLAG4: live commits fall back to the lore identity, as store commits do.
 		Signer:     func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
 		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
+		// F-9: a removed person's later writes stay local, as in the store clones.
+		PushHold: func(ctx context.Context) (time.Time, string, bool) { return app.LivePushHold(ctx) },
 		// P3-MODEB-2: the resolved org entry's live: block overrides the top level.
 		OrgLive: func(ctx context.Context) *orgconf.Live {
 			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {
