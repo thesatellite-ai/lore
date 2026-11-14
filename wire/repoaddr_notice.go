@@ -70,7 +70,14 @@ func (a *App) SyncRepoAddresses(ctx context.Context, w io.Writer, in io.Reader, 
 	}
 	rep, err := check(ctx)
 	if err != nil {
-		if !errs.Has(err, errs.NotFound) { // no `lore init` yet: nothing to identify
+		switch {
+		case errs.Has(err, errs.NotFound): // no `lore init` yet: nothing to identify
+		case errs.Has(err, errs.Stale):
+			// G-18: printed as "[E_STALE] store: row changed since it was
+			// read" with no cause or step; the repo's row was changed by a
+			// commit this clone has not merged (a teammate's lore repo set-url)
+			_, _ = fmt.Fprintln(w, "warning: repo addresses not checked: this repo's lore row changed in a commit this clone has not merged yet (a teammate may have confirmed a new address); run `git pull`, then `lore sync` again (if the remote moved: lore repo set-url --url <new-url>)")
+		default:
 			_, _ = fmt.Fprintln(w, "warning: repo addresses not checked: "+err.Error()) // stderr gone: nothing left to report to
 		}
 		return

@@ -432,7 +432,7 @@ func (l liveSync) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 		return opssync.DoneOut{}, errs.New(errs.Unsupported, liveUnsupported).WithHint(liveUnsupportedHint)
 	}
 	if s.blocked != nil {
-		return opssync.DoneOut{}, errLiveBlocked()
+		return opssync.DoneOut{}, errLiveBlocked(s.blocked)
 	}
 	plan, err := s.plan(ctx, folder, nil)
 	if err != nil {

@@ -7,6 +7,7 @@ package wire
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -441,4 +443,55 @@ func kindsOf(items []opscoord.InboxItem) map[string]int {
 		out[it.Kind]++
 	}
 	return out
+}
+
+// TestInboxTeamAssignedAndRemovedTeam (G-15): a task assigned to a team I
+// am on reaches my inbox as "(team @web)", as task list --mine lists it;
+// --assign to a removed team is refused naming the team list and the
+// active team with the same members.
+func TestInboxTeamAssignedAndRemovedTeam(t *testing.T) {
+	t.Parallel()
+	f := newViewFixture(t)
+	ctx := background()
+	webID, _, err := f.me.RosterTeamPut(ctx, store.SourceRepo, "", "web", "Web", []string{f.meID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = run(t, f.bob, opstask.OpAdd, `{"title":"fix login redirect","assign":["@web"]}`, true); err != nil {
+		t.Fatal(err)
+	}
+	var team []opscoord.InboxItem
+	for _, it := range inboxItems(t, f.me) {
+		if it.Kind == inboxAssigned {
+			team = append(team, it)
+		}
+	}
+	if len(team) != 1 || !strings.Contains(team[0].Text, "fix login redirect (team @web)") {
+		t.Fatalf("the team task in my inbox: %+v", team)
+	}
+	if _, _, err = f.me.RosterTeamPut(ctx, store.SourceRepo, "", "frontend", "Frontend", []string{f.meID}); err != nil {
+		t.Fatal(err)
+	}
+	eng, err := f.me.Engine(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wid, err := ids.ParseAny(webID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = eng.Update(ctx, engine.Ref{Store: store.SourceRepo, Table: schema.TableTeams, ID: wid}, map[string]value.Value{"active": value.BoolOf(false)}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = run(t, f.bob, opstask.OpAdd, `{"title":"web again","assign":["@web"]}`, true)
+	if !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "team @web was removed") {
+		t.Fatalf("assign to a removed team: %v", err)
+	}
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Hint, "@frontend has the same members") || !strings.Contains(e.Hint, "lore team list") {
+		t.Fatalf("hint of %v", err)
+	}
+	if got := kindsOf(inboxItems(t, f.me)); got[inboxAssigned] != 0 {
+		t.Fatalf("a removed team's task is no one's assignment: %v", got)
+	}
 }

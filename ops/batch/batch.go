@@ -94,7 +94,7 @@ type ListIn struct {
 	// By is always an actor (XQ8): an act_ id or @handle.
 	By    op.ActorRef `json:"by,omitempty" flag:"by" desc:"only batches by this actor (@handle, stable key or act_ id)"`
 	Since string      `json:"since,omitempty" flag:"since" desc:"only batches since a date (YYYY-MM-DD) or a duration (36h, 7d)"`
-	Kind  string      `json:"kind,omitempty" flag:"kind" desc:"only batches of this kind: task | meta | delete | resource | import | secrets"`
+	Kind  string      `json:"kind,omitempty" flag:"kind" desc:"only batches of this kind: task | meta | delete | resource | import | secrets | archive"`
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }

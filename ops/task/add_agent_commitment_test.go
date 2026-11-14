@@ -2,6 +2,7 @@ package task_test
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -40,5 +41,21 @@ func TestAgentAddNeedsCommitment(t *testing.T) {
 	}
 	if _, err := runAs(op.Caller{}, `{"title":"by a person"}`); err != nil {
 		t.Fatalf("person without --commitment: %v", err)
+	}
+}
+
+// TestAddCommitmentHelpNamesAgents (G-13): `task add --help` said
+// "(default accepted)" while every agent add without --commitment was
+// refused; the flag's help now says the default is a person's and that an
+// agent must pass it.
+func TestAddCommitmentHelpNamesAgents(t *testing.T) {
+	t.Parallel()
+	f, ok := reflect.TypeOf(opstask.AddIn{}).FieldByName("Commitment")
+	if !ok {
+		t.Fatal("AddIn has no Commitment field")
+	}
+	desc := f.Tag.Get("desc")
+	if !strings.Contains(desc, "an agent must pass it") || !strings.Contains(desc, "default accepted for a person") {
+		t.Fatalf("--commitment help = %q, want it to say the default is a person's and an agent must pass it", desc)
 	}
 }

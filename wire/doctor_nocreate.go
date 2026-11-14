@@ -165,7 +165,11 @@ func noProjectErr(ctx context.Context, top string) error {
 
 // doctorNoProjectNote is DoctorChecks' one line for a git repo with no
 // lore project (instead of every store check failing to run).
-const doctorNoProjectNote = "no lore project in this repo, so the store checks were skipped (lore init sets one up)"
+const doctorNoProjectNote = doctorNoProjectPrefix + " (lore init sets one up)"
+
+// doctorNoProjectPrefix starts doctorNoProjectNote; a client repo's note
+// ends with the org link instead of lore init (I-13).
+const doctorNoProjectPrefix = "no lore project in this repo, so the store checks were skipped"
 
 // gitRepoWithoutLore reports whether the command's folder is in a git work
 // tree whose top has no .lore/ (the case doctor must leave untouched).

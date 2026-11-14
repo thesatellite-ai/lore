@@ -16,10 +16,13 @@ import (
 // of a git store this machine has fetched from before (its clone under
 // ~/.lore/clones carries git's fetch stamp): the repo existed, so the
 // default fix ("Create it: gh repo create …") is wrong whatever git said.
-// A variant set already (unreachable, not GitHub) is kept: it is more
-// precise. A store the person asks lore to create is never "reached".
+// A cause variant set already (unreachable) is kept: it is more precise.
+// FixNotGitHub only says which host it is, so the cause wins over it
+// (H-11: a deleted store on another host got "check the url and this
+// setup's key" and "store init" instead). A store the person asks lore to
+// create is never "reached".
 func (sp setupProber) reachedBefore(res opssetup.ProbeResult, u string, r opssetup.ProbeRequest) opssetup.ProbeResult {
-	if res.Status != onboard.StatusFail || res.Vars[onboard.VarFixVariant] != "" || creating(r) {
+	if res.Status != onboard.StatusFail || !hostOnlyVariant(res.Vars[onboard.VarFixVariant]) || creating(r) {
 		return res
 	}
 	if storeFetchedBefore(sp.a.opts.Home, u) {
@@ -48,4 +51,11 @@ func storeFetchedBefore(home, raw string) bool {
 		return false
 	}
 	return gitbackend.FetchedOnce(dir)
+}
+
+// hostOnlyVariant reports whether v names no cause of a failed check:
+// none, or FixNotGitHub (which only says the host is not GitHub). A cause
+// variant (reached before, unreachable, no read) replaces it.
+func hostOnlyVariant(v string) bool {
+	return v == "" || v == string(onboard.FixNotGitHub)
 }

@@ -483,7 +483,7 @@ var fixes = map[fixKey]Fix{
 	{check: CheckStoreRead}: {Text: "Create it: gh repo create {owner}/{repo} --private, or ask the owner for access",
 		Command: argv(cmdGH, "repo", "create", "{owner}/{repo}", "--private"), Runnable: true, Outward: true},
 	{check: CheckStoreRead, variant: FixUnreachable}:                 {Text: "Check your network or VPN; lore will retry"},
-	{check: CheckStoreRead, variant: FixReachedBefore}:               {Text: "lore read {url} before and keeps its local copy (nothing is lost; writes wait for the next sync). Check your network, whether the repo was renamed or moved (then give the setup its new url), and whether this setup's GitHub account and key still have access"},
+	{check: CheckStoreRead, variant: FixReachedBefore}:               {Text: "lore read {url} before and keeps its local copy (nothing is lost; writes wait for the next sync). If the store moved or was renamed: lore store set-url --name {store_name} --url <new-url>; if it was deleted: create an empty repository at {url}, then lore store push --store {store_name} --restore --yes from the clone with the most work; otherwise check that this setup's account and key still have access (ask an admin of the store)"},
 	{check: CheckStoreRead, variant: FixNotGitHub}:                   {Text: "No access to {url}. Check the url and this setup's key, or ask the store's owner for access"},
 	{check: CheckStoreRead, step: StepJoin}:                          {Text: "You have no access to {store} yet. Accept the GitHub invitation at https://github.com/notifications, or ask {by} to add {github_user}"},
 	{check: CheckStoreRead, step: StepJoin, variant: FixUnreachable}: {Text: "Check your network or VPN; lore will retry"},
@@ -507,7 +507,7 @@ var fixes = map[fixKey]Fix{
 	// The marker could not be looked for (F-11): an unread store is not
 	// "not a store", and store init over the org's store is never the step.
 	{check: CheckStoreMarker, variant: FixUnreachable}:   {Text: "The store at {url} did not answer, so lore could not look for its lore-store.yaml. Check your network or VPN; lore will retry"},
-	{check: CheckStoreMarker, variant: FixReachedBefore}: {Text: "lore read {url} before and keeps its local copy, but the store now refuses this machine: your access was most likely removed (or the repo was moved or deleted). Ask an admin of the store whether you still have access; do not run lore store init over it. If it moved: lore store set-url --name {store_name} --url <new-url>"},
+	{check: CheckStoreMarker, variant: FixReachedBefore}: {Text: "lore read {url} before and keeps its local copy, but the store now refuses this machine: your access was most likely removed, or the repo was moved or deleted. Do not run lore store init over it. If it moved or was renamed: lore store set-url --name {store_name} --url <new-url>; if it was deleted: create an empty repository at {url}, then lore store push --store {store_name} --restore --yes from the clone with the most work; otherwise ask an admin of the store whether you still have access"},
 	{check: CheckStoreMarker, variant: FixNoRead}:        {Text: "lore cannot read {url}, so it cannot tell whether it is a lore store. Fix store.read first: the url, this setup's key, or access from the store's owner"},
 	{check: CheckStorePrivate}: {Text: "This repo is public. Your personal notes would be readable by anyone: gh repo edit {owner}/{repo} --visibility private",
 		Command: argv(cmdGH, "repo", "edit", "{owner}/{repo}", "--visibility", "private"), Runnable: true, Outward: true},

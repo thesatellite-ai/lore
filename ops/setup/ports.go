@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -548,8 +549,27 @@ func (o JoinOut) Text() string {
 		b.WriteString("  " + c + "\n")
 	}
 	b.WriteString("Each line checks its step first and says what to fix; lore setup list then shows the setup.\n")
+	if slices.ContainsFunc(o.Commands, choosesLocalPersonal) {
+		b.WriteString(LocalPersonalWarning + "\n")
+	}
 	return b.String()
 }
+
+// localPersonalAnswer is the personal_store answer of the "local" choice
+// as a join line writes it.
+var localPersonalAnswer = `"` + onboard.QIDPersonalStore + `":"` + onboard.PersonalStoreLocal + `"`
+
+// choosesLocalPersonal reports whether a join line picks the local
+// personal store.
+func choosesLocalPersonal(line string) bool {
+	return strings.Contains(line, localPersonalAnswer)
+}
+
+// LocalPersonalWarning says what the "local" personal store means (H-17:
+// every member's join lines picked it and nothing said that personal
+// notes then live on one machine only), and how to keep them in a
+// private git repo instead. The personal_store step prints it too.
+const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: push the folder ~/.lore/stores/" + onboard.LocalStoreFolder + " to a private git repo, then lore store set-url --name me --url <private-repo-url>)."
 
 // RepairIn is setup.repair's input.
 type RepairIn struct {

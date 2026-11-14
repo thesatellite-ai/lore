@@ -117,6 +117,7 @@ Rows of a team or personal store do not travel with your code commits: `lore syn
 
 - `lore sync conflicts` lists the row with its store, the fields both sides changed, and both values of each (`mine (kept)` and `theirs (other)`); `--json` carries both row files (`kept_doc`, `other_doc`).
 - `lore explain --id <id>` says which store holds the row and that it waits on a conflict.
+- `lore doctor` counts it in `open conflicts` and warns once per store (status DEGRADED), naming `lore sync conflicts` and `lore sync resolve`; the store's push-mode note says its commits wait on the conflict instead of "`lore sync` pushes them". `lore inbox` lists each such row as a `conflict` item until it is settled.
 - `lore sync resolve --id <n> --take kept` keeps her version of each field both changed, `--take other` takes Bob's; either way lore merges the store, sends the result and both machines end with the same row. Only the clashing fields take the chosen side: a field only one of them changed (her status, his priority) keeps that change.
 - Or she edits the row to any value (hers, Bob's, or a third one) and runs `lore sync`: an edit made after the conflict was reported settles the clashing fields with her values, and Bob's changes to the other fields are kept.
 

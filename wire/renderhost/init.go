@@ -45,6 +45,9 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 		reason = setupReason(pick.setup)
 	}
 	fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), reason)
+	for _, v := range pick.sel.ViaImport { // I-14: one pointer, loaded once
+		fmt.Fprintf(w, "%s %s\n", h.decor.muted("·"), v.Note())
+	}
 	out := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
 	if err := h.stitchPointers(w, root, pick.targets, out); err != nil {
 		return err

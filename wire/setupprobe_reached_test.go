@@ -72,6 +72,21 @@ func TestStoreReadReachedBefore(t *testing.T) {
 	if got := sp.reachedBefore(fail(""), raw, create).Vars[onboard.VarFixVariant]; got != "" {
 		t.Fatalf("create: variant %q, want the default", got)
 	}
+	// H-11: "not GitHub" only names the host; a store read before on
+	// another host gets the moved/deleted fix, never "check the url and
+	// this setup's key" or (for the marker) "store init" over it
+	if got := sp.reachedBefore(fail(string(onboard.FixNotGitHub)), raw, existing).Vars[onboard.VarFixVariant]; got != string(onboard.FixReachedBefore) {
+		t.Fatalf("not GitHub, fetched before: variant %q, want %q", got, onboard.FixReachedBefore)
+	}
+	if got := sp.markerVars(fail(string(onboard.FixNotGitHub)), probe.ClassNoAccess, raw, existing).Vars[onboard.VarFixVariant]; got != string(onboard.FixReachedBefore) {
+		t.Fatalf("marker, not GitHub, fetched before: variant %q, want %q", got, onboard.FixReachedBefore)
+	}
+	for _, c := range []onboard.CheckID{onboard.CheckStoreRead, onboard.CheckStoreMarker} {
+		f := onboard.FixFor(c, "", onboard.FixReachedBefore)
+		if !strings.Contains(f.Text, "lore store set-url --name {store_name}") || !strings.Contains(f.Text, "--restore --yes") {
+			t.Fatalf("%s reached-before fix names neither set-url nor the restore: %q", c, f.Text)
+		}
+	}
 	ok := opssetup.ProbeResult{Status: onboard.StatusOK, Vars: map[string]string{}}
 	if got := sp.reachedBefore(ok, raw, existing).Vars[onboard.VarFixVariant]; got != "" {
 		t.Fatalf("ok read got variant %q", got)

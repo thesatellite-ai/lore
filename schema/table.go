@@ -99,6 +99,12 @@ const (
 	// entry ({name, v, strict, sensitive}): lists as sets, strict clashes go
 	// to a person (RESOURCES 3.13, R4, RQ5). Used by resources.fields.
 	MergeEntriesByID MergeStrategy = "entries_by_id"
+	// MergeNewest is a text field that is one value, never prose (an actor
+	// id, a commit, a branch): a clash takes the newer side by HLC and is
+	// reported as a newer win, never written as conflict markers (G-11:
+	// two agents' task done nested markers into tasks.done_by and blocked
+	// every sync).
+	MergeNewest MergeStrategy = "newest"
 )
 
 // FieldDef is one column of a table.

@@ -138,6 +138,7 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh Refresh, afterCommit fun
 				}
 				l.h.stageCommitRender(cmd.Context(), commitRender)
 			case hookRefresh:
+				l.h.afterRewrite(cmd.Context(), stdin, args[1:])
 				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(cmd.Context(), l.h.git(), cwd, args[1:]) {
 					refresh(cmd.Context())
 				}
@@ -280,7 +281,12 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 			if len(args) > 0 {
 				remote = args[0]
 			}
-			if lerr := h.prePushLeakCheck(ctx, repo, remote, parsePushUpdates(in)); lerr != nil {
+			updates := parsePushUpdates(in)
+			lerr := h.prePushLeakCheck(ctx, repo, remote, updates)
+			if lerr == nil {
+				lerr = prePushDropCheck(ctx, repo, updates) // H-7: a forced push that takes rows away
+			}
+			if lerr != nil {
 				if r != nil {
 					r.release()
 				}

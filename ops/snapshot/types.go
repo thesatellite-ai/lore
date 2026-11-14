@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -116,6 +117,13 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the snapshot id (snp_…)"`
 }
 
+// ArchiveIn is the input of snapshot.archive: one id, or --where for many as
+// one batch (bug hunt G-7).
+type ArchiveIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the snapshot id (snp_…); leave out with --where"`
+	wheredel.ArchiveFlags
+}
+
 // DeleteIn is the input of snapshot.delete.
 type DeleteIn struct {
 	ID     string `json:"id" arg:"0" desc:"the snapshot id (snp_…)"`
@@ -149,7 +157,7 @@ func (o ShowOut) baseText() string {
 type SearchIn struct {
 	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
 	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
 	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`

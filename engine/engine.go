@@ -61,6 +61,9 @@ type Attached struct {
 	// Empty keeps v0.1.17's bytes: the repo store, whose rows must keep
 	// converging with v0.1.17 writers of the same repository.
 	KeyNamespace string
+	// mirror is the cache's row mirror of this store (store.MirrorCache),
+	// nil without one; New sets it.
+	mirror store.RowMirror
 	// Place is the attachment's place id recorded in `_o.moves`
 	// (PROVENANCE_DESIGN 5.4, FQ4): "<sto_ id>/<folder prj_ id>" for a
 	// store folder, "<sto_ id>" for a store root. Empty: the attached name
@@ -341,6 +344,12 @@ func New(opts ...Option) (*Engine, error) {
 	}
 	if len(missing) > 0 {
 		return nil, errs.New(errs.ConfigInvalid, "missing "+strings.Join(missing, ", "))
+	}
+	if mc, ok := e.cache.(store.MirrorCache); ok {
+		for name, a := range e.stores {
+			a.mirror = mc.Mirror(name) // perf3: warm reads take unchanged rows from it
+			e.stores[name] = a
+		}
 	}
 	if e.target == "" {
 		e.target = e.order[0]

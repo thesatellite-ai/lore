@@ -33,6 +33,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/probe"
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -246,6 +247,11 @@ type setupSummary struct {
 	toolVersion map[string]string
 	// storeRepos: the repos attaching each attached store, by target.
 	storeRepos map[string][]string
+	// localPersonal: the personal store is a folder on this machine (the
+	// join lines' "local" choice): no copy of it exists anywhere else
+	// (H-17: a dead laptop lost every personal note, and doctor --all
+	// showed only "read ✓ write ✓").
+	localPersonal bool
 }
 
 // MachineReport is the machine-wide block (6.3 machine).
@@ -706,7 +712,7 @@ func (sr *setupRun) runSetups(ctx context.Context, entries []onboard.SetupEntry,
 		reports[i] = SetupReport{Name: e.Name, Kind: string(e.Kind), Org: e.Org, Default: e.Default,
 			Folders: append([]string{}, e.Folders...), Checks: []onboard.CheckResult{},
 			summary: setupSummary{email: firstEmail(e), user: e.GitHub.User, alias: e.GitHub.HostAlias, https: e.GitHub.IsHTTPS(),
-				backend: e.Secrets.Backend, toolVersion: map[string]string{}}}
+				backend: e.Secrets.Backend, toolVersion: map[string]string{}, localPersonal: strings.HasPrefix(e.PersonalStore, fileuri.Scheme+"://")}}
 		p, t := plan(e, repos[e.Name], attached[e.Name])
 		reports[i].summary.storeRepos = map[string][]string{}
 		for _, as := range attached[e.Name] {

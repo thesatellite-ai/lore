@@ -12,7 +12,10 @@ package wire
 //	each git store clone (its data folder) ─┤ branch walk:
 //	  rev-parse --is-shallow-repository ─► shallow: E_UNSUPPORTED, stop (3.6)
 //	  log --relative --diff-filter=DM --name-status -- <data>/  (newest first)
-//	    ├► D path, file absent now      ─► old hard delete (no purger, "?")
+//	    ├► D path, file absent now      ─► removed by a commit (a git rm, or an
+//	                                        older lore's hard delete): the commit's
+//	                                        author, and the git checkout that
+//	                                        brings the file back (H-14)
 //	    └► M path, file now a tombstone ─► purge (purger from the tombstone)
 //	    first (newest) hit per path wins
 //	  show <commit>^:./<path>           ─► the last content (none: skipped)
@@ -41,8 +44,8 @@ import (
 
 // Git output markers of the history walk.
 const (
-	histCommitMark = "\x00"                // starts a commit header line (%x00%H %cI)
-	histFormat     = "--format=%x00%H %cI" // commit id, committer date (strict ISO)
+	histCommitMark = "\x00"                    // starts a commit header line (%x00%H %cI %an)
+	histFormat     = "--format=%x00%H %cI %an" // commit id, committer date (strict ISO), author name
 	histDeleted    = "D"
 	histModified   = "M"
 	histShallow    = "true"
@@ -128,6 +131,11 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 			WithHint(unshallow + ", then rerun")
 	}
 	data = strings.TrimSuffix(data, "/") + "/"
+	// The checkout's place in its work tree: the printed `git checkout`
+	// names the file from the top (:/<prefix><path>), so it works from any
+	// folder of the clone (H-14).
+	prefix, _ := gitRun{dir: dir, args: []string{"rev-parse", "--show-prefix"}}.output(ctx)
+	w := histWalk{src: src, dir: dir, data: data, prefix: strings.TrimSpace(string(prefix)), store: unshallow != ""}
 	// --relative: paths come relative to dir (a repo in a monorepo
 	// subfolder, a store folder), which is what readUnder and ./<path> use.
 	out, err := gitRun{dir: dir, args: []string{"log", "--relative", "--no-renames", "--diff-filter=DM", "--name-status", histFormat, "--", data}}.output(ctx)
@@ -144,7 +152,7 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 	// the history read is the way back to a purged row's text).
 	for _, c := range uncommittedChanges(ctx, dir, data) {
 		paths[c.path] = true
-		hr, keep := branchRow(ctx, src, dir, data, c)
+		hr, keep := w.row(ctx, c)
 		if !keep || seen[histKey{src, hr.Table, hr.ID}] {
 			continue
 		}
@@ -156,7 +164,7 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 			continue
 		}
 		paths[c.path] = true
-		hr, keep := branchRow(ctx, src, dir, data, c)
+		hr, keep := w.row(ctx, c)
 		if !keep || seen[histKey{src, hr.Table, hr.ID}] {
 			continue
 		}
@@ -166,13 +174,38 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 	return rows, nil
 }
 
+// histWalk is one checkout's branch walk: where it reads and how a
+// printed git command names its files.
+type histWalk struct {
+	src       store.Source
+	dir, data string
+	// prefix is the checkout folder's path from the top of its work tree
+	// (git rev-parse --show-prefix, "" at the top).
+	prefix string
+	// store: the checkout is a store's clone, not the repo the person is
+	// in, so the printed git command runs there (git -C <dir>).
+	store bool
+}
+
+// restoreCmd is the git command that puts the file p (relative to the
+// checkout) back as it was in rev (H-14).
+func (w histWalk) restoreCmd(rev, p string) string {
+	cmd := "git checkout " + rev + " -- :/" + w.prefix + p
+	if w.store {
+		cmd = "git -C " + w.dir + " checkout " + rev + " -- :/" + w.prefix + p
+	}
+	return cmd
+}
+
 // histChange is one D or M path of a `git log --name-status` walk.
 // uncommitted: the change is in the working tree, not in commit (HEAD),
 // so the content is commit's own, not its parent's.
 type histChange struct {
 	status, path, commit string
 	at                   time.Time
-	uncommitted          bool
+	// author is the commit's author name ("" for an uncommitted change).
+	author      string
+	uncommitted bool
 }
 
 // uncommittedChanges is the D and M row paths of the data folder changed
@@ -183,8 +216,7 @@ func uncommittedChanges(ctx context.Context, dir, data string) []histChange {
 	if err != nil {
 		return nil
 	}
-	sha, date, _ := strings.Cut(strings.TrimPrefix(strings.TrimSpace(string(head)), histCommitMark), " ")
-	at, _ := time.Parse(time.RFC3339, strings.TrimSpace(date))
+	sha, at, _ := commitHeader(strings.TrimPrefix(strings.TrimSpace(string(head)), histCommitMark))
 	out, err := gitRun{dir: dir, args: []string{"diff", "--relative", "--no-renames", "--diff-filter=DM", "--name-status", "HEAD", "--", data}}.output(ctx)
 	if err != nil {
 		return nil
@@ -204,24 +236,31 @@ func uncommittedChanges(ctx context.Context, dir, data string) []histChange {
 // histFormat and --name-status, newest commit first.
 func historyChanges(out string) func(yield func(histChange) bool) {
 	return func(yield func(histChange) bool) {
-		var commit string
+		var commit, author string
 		var at time.Time
 		for line := range strings.SplitSeq(out, "\n") {
 			if h, ok := strings.CutPrefix(line, histCommitMark); ok {
-				sha, date, _ := strings.Cut(h, " ")
-				commit = sha
-				at, _ = time.Parse(time.RFC3339, strings.TrimSpace(date))
+				commit, at, author = commitHeader(h)
 				continue
 			}
 			status, p, ok := strings.Cut(line, "\t")
 			if !ok || (status != histDeleted && status != histModified) {
 				continue
 			}
-			if !yield(histChange{status: status, path: p, commit: commit, at: at}) {
+			if !yield(histChange{status: status, path: p, commit: commit, at: at, author: author}) {
 				return
 			}
 		}
 	}
+}
+
+// commitHeader splits one histFormat header ("<sha> <date> <author>",
+// the mark cut off).
+func commitHeader(h string) (sha string, at time.Time, author string) {
+	sha, rest, _ := strings.Cut(h, " ")
+	date, author, _ := strings.Cut(rest, " ")
+	at, _ = time.Parse(time.RFC3339, strings.TrimSpace(date))
+	return sha, at, strings.TrimSpace(author)
 }
 
 // rowFileOf parses <table>/<id>.json; ok=false for side files (_purged.json,
@@ -242,19 +281,28 @@ func rowFileOf(rel string) (row.Table, string, bool) {
 	return row.Table(table), id, true
 }
 
-// branchRow builds one row of a branch walk, or keep=false when the path
-// is not a purged or hard-deleted row file (a live row, a side file, no
-// content).
-func branchRow(ctx context.Context, src store.Source, dir, data string, c histChange) (opstrash.HistoryRow, bool) {
-	tb, id, ok := rowFileOf(strings.TrimPrefix(c.path, data))
+// row builds one row of a branch walk, or keep=false when the path is
+// not a purged or removed row file (a live row, a side file, no content).
+func (w histWalk) row(ctx context.Context, c histChange) (opstrash.HistoryRow, bool) {
+	dir := w.dir
+	tb, id, ok := rowFileOf(strings.TrimPrefix(c.path, w.data))
 	if !ok {
 		return opstrash.HistoryRow{}, false
 	}
-	hr := opstrash.HistoryRow{Store: src, Table: tb, ID: id, Commit: c.commit, CommitAt: c.at, Uncommitted: c.uncommitted}
+	hr := opstrash.HistoryRow{Store: w.src, Table: tb, ID: id, Commit: c.commit, CommitAt: c.at, Uncommitted: c.uncommitted}
 	cur, rerr := readUnder(dir, c.path) // P2-LINT-5: a git-listed path, read through os.Root (no escape)
 	switch {
 	case c.status == histDeleted && rerr == nil:
 		return hr, false // re-added since: not gone
+	case c.status == histDeleted:
+		// H-14: the file was removed by a commit (a git rm, or an older
+		// lore's hard delete), not purged: its commit's author removed it
+		// and git brings it back.
+		hr.Removed, hr.RemovedBy = true, c.author
+		hr.GitRestore = w.restoreCmd(shortCommit(c.commit)+"^", c.path)
+		if c.uncommitted {
+			hr.GitRestore = w.restoreCmd("HEAD", c.path)
+		}
 	case c.status == histModified:
 		if rerr != nil {
 			return hr, false

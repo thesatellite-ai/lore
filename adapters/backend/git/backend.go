@@ -106,6 +106,10 @@ type Backend struct {
 	fullMu   sync.Mutex
 	fullHead string
 	fullRows []store.Row
+
+	// indexPath is the repo's index file, found once (repoStatus).
+	indexPathOnce sync.Once
+	indexPath     string
 }
 
 var _ store.Backend = (*Backend)(nil)
@@ -196,6 +200,9 @@ func (b *Backend) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, s
 		return nil, "", err
 	}
 	if b.mode == modeRepo {
+		if rows, next, ok, err := b.readMirrored(ctx, cursor); ok || err != nil {
+			return rows, next, err
+		}
 		return b.folder.Read(ctx, cursor)
 	}
 	return b.readCommits(ctx, cursor)
@@ -229,7 +236,7 @@ func (b *Backend) Missing(ctx context.Context, cursor store.Cursor) ([]string, e
 		return nil, err
 	}
 	if b.mode == modeRepo {
-		return b.folder.Missing(cursor)
+		return b.folder.Missing(ctx, cursor)
 	}
 	return b.missingCommits(ctx, cursor)
 }

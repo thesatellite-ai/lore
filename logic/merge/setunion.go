@@ -65,26 +65,63 @@ func urlEntryKey(raw []byte) string {
 // base). Identity is the normalised value (setKeyValue). The result is
 // sorted by identity, so both machines write the same bytes.
 func StrategySetUnion(base, ours, theirs value.Value, newer side) (value.Value, error) {
-	return setMerge(base, ours, theirs, newer, setKeyValue, nil)
+	return setMerge(base, ours, theirs, newer, setKeyValue, nil, pickRaw)
 }
 
 // StrategyURLSet is the set merge of repos.urls (PROVENANCE_DESIGN 7, 10.2:
 // union by url): entries keyed by repourl.Normalize of their url; the same
 // url changed on both sides (closed with `to` on one, made primary on the
-// other) takes the newer side's entry. Sorted by `from`, then url, so the
-// history reads oldest first like the repos row sample.
+// other) takes the newer side's entry, except that a confirmed entry
+// (primary or mirror: someone ran `lore repo set-url` or init) always beats
+// an unconfirmed sighting of the same url (pickURLEntry, G-17). Sorted by
+// `from`, then url, so the history reads oldest first like the repos row
+// sample.
 func StrategyURLSet(base, ours, theirs value.Value, newer side) (value.Value, error) {
 	return setMerge(base, ours, theirs, newer, urlEntryKey, func(a, b []byte) int {
 		if c := strings.Compare(memberText(a, "from"), memberText(b, "from")); c != 0 {
 			return c
 		}
 		return strings.Compare(urlEntryKey(a), urlEntryKey(b))
-	})
+	}, pickURLEntry)
 }
 
+// pickURLEntry settles one url entry both sides hold differently. A
+// confirmed side wins over an unconfirmed one whichever is newer: a clone
+// that saw the new remote before pulling the set-url records it as
+// "seen, unconfirmed" a few seconds later, and the newer-side rule then
+// dropped the confirmation, leaving the repo with no primary address
+// (G-17). Anything else is pickRaw.
+func pickURLEntry(bv []byte, inB bool, ov, tv []byte, newer side) []byte {
+	if !bytes.Equal(ov, tv) {
+		oc, tc := urlEntryConfirmed(ov), urlEntryConfirmed(tv)
+		switch {
+		case oc && !tc:
+			return ov
+		case tc && !oc:
+			return tv
+		}
+	}
+	return pickRaw(bv, inB, ov, tv, newer)
+}
+
+// urlEntryConfirmed reports whether a url entry is a confirmed address
+// (primary or mirror), open or closed; an unconfirmed sighting or an
+// entry that does not decode is not.
+func urlEntryConfirmed(raw []byte) bool {
+	var e repourl.Entry
+	if json.Unmarshal(raw, &e) != nil {
+		return false
+	}
+	return e.Kind == repourl.KindPrimary || e.Kind == repourl.KindMirror
+}
+
+// pickFunc settles one element both sides hold (pickRaw, pickURLEntry).
+type pickFunc func(bv []byte, inB bool, ov, tv []byte, newer side) []byte
+
 // setMerge is the shared three-way keyed set merge. order sorts the result
-// (nil: by key). It refuses a side that is not a JSON list.
-func setMerge(base, ours, theirs value.Value, newer side, key elemKey, order func(a, b []byte) int) (value.Value, error) {
+// (nil: by key); pick settles an element both sides hold. It refuses a
+// side that is not a JSON list.
+func setMerge(base, ours, theirs value.Value, newer side, key elemKey, order func(a, b []byte) int, pick pickFunc) (value.Value, error) {
 	b, err := keyedElems(base, key)
 	if err != nil {
 		return nil, err
@@ -104,7 +141,7 @@ func setMerge(base, ours, theirs value.Value, newer side, key elemKey, order fun
 		tv, inT := t[k]
 		switch {
 		case inO && inT:
-			out[k] = pickRaw(bv, inB, ov, tv, newer)
+			out[k] = pick(bv, inB, ov, tv, newer)
 		case inO && !inT:
 			// theirs lacks it: removed by theirs (kept removed) unless it
 			// was never in base (added by ours) or ours changed it since

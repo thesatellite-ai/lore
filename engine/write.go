@@ -583,7 +583,10 @@ func (e *Engine) remove(ctx context.Context, src store.Source, cur row.Row, purg
 // (depindex.go) and are merged: a row two plans reach is written once (a
 // tombstone wins over a cleared field). Roots are not reported in Also.
 func (e *Engine) removeMany(ctx context.Context, items []trashItem, purge bool) (Written, error) {
-	ctx = withDepIndex(ctx)
+	// The plans share one read of each store (bug hunt G-8: a purge's
+	// purgedWith read every store again per row); the write below drops
+	// the snapshot of each backend it writes (readsnap.go).
+	ctx = EnsureReadSnapshot(withDepIndex(ctx))
 	merged := deletePlan{byStore: map[store.Source][]step{}}
 	at := map[ids.AnyID][2]int{} // row id → index of its step: store order slot, position
 	storeSlot := map[store.Source]int{}

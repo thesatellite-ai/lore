@@ -21,6 +21,13 @@ import (
 // hookDoctorRender names the hook in errors and tests.
 const hookDoctorRender = "doctor-render"
 
+// The headings of doctor's context blocks: warnings (something to fix)
+// and information (sizes and launch sets, nothing to fix).
+const (
+	contextWarnHead = "Context warnings:"
+	contextInfoHead = "Context (information, nothing to fix):"
+)
+
 // doctorRenderHook runs after a successful `lore doctor` and appends the
 // context warnings and notes for the checkout at wd.
 //
@@ -43,20 +50,31 @@ func doctorRenderHook(rend *lateRender, wd, home string) hosthooks.Hook {
 		if len(warnings)+len(notes) == 0 {
 			return res, nil
 		}
-		return res.WithTextEdit(func(s string) string {
-			var b strings.Builder
-			b.WriteString(s)
-			if s != "" && !strings.HasSuffix(s, "\n") {
-				b.WriteString("\n")
-			}
-			b.WriteString("\nContext:\n")
-			for _, w := range warnings {
-				b.WriteString("  WARN " + w + "\n")
-			}
-			for _, n := range notes {
-				b.WriteString("  - " + n + "\n")
-			}
-			return b.String()
-		}), nil
+		return res.WithTextEdit(func(s string) string { return withContextBlocks(s, warnings, notes) }), nil
 	}}
+}
+
+// withContextBlocks appends doctor's context rows to its text s. Warnings
+// and information get their own headed blocks: one "Context:" list right
+// after doctor's Warnings: list read as more warnings, so a LORE.md at 8%
+// of its budget looked like something to fix (bug hunt G-9).
+func withContextBlocks(s string, warnings, notes []string) string {
+	var b strings.Builder
+	b.WriteString(s)
+	if s != "" && !strings.HasSuffix(s, "\n") {
+		b.WriteString("\n")
+	}
+	if len(warnings) > 0 {
+		b.WriteString("\n" + contextWarnHead + "\n")
+		for _, w := range warnings {
+			b.WriteString("  WARN " + w + "\n")
+		}
+	}
+	if len(notes) > 0 {
+		b.WriteString("\n" + contextInfoHead + "\n")
+		for _, n := range notes {
+			b.WriteString("  - " + n + "\n")
+		}
+	}
+	return b.String()
 }

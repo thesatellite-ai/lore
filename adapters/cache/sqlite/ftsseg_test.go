@@ -141,3 +141,33 @@ func TestTextChunks(t *testing.T) {
 		}
 	}
 }
+
+// TestSearchTurkishIWithCJKAndBigRow holds both search folds at once: a
+// row mixing Turkish ı with a CJK run is found by ISPANAK and by 迁移, and
+// its snippet shows ıspanak and 迁移 as written (no mark, no folded i); a
+// row too big for snippet() (the chunked path) also shows its own ı.
+func TestSearchTurkishIWithCJKAndBigRow(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	c := f.open("c.db")
+	mixed, big := newDec(), newDec()
+	f.apply(c, store.SourceRepo, "1",
+		f.decision(mixed, "ıspanak 数据库迁移规则", "x"),
+		f.decision(big, "a big one", strings.Repeat("lorem ipsum dolor sit amet\n", 3000)+"Iğdır ılık\n"),
+	)
+	for _, tc := range []struct{ query, want string }{
+		{"ISPANAK", "<b>ıspanak</b>"},
+		{"迁移", "数据库<b>迁移</b>规则"},
+		{"ıspanak 迁移", "<b>ıspanak</b>"},
+		{"igdir", "<b>Iğdır</b> ılık"},
+	} {
+		hits := must(c.SearchHits(f.ctx, schema.TableDecisions, tc.query, 10))
+		if len(hits) != 1 {
+			t.Errorf("search %q: %d hits, want 1", tc.query, len(hits))
+			continue
+		}
+		if s := hits[0].Snippet; !strings.Contains(s, tc.want) || strings.ContainsRune(s, ftsSegMark) {
+			t.Errorf("search %q: snippet %+q, want it to hold %q and no segment mark", tc.query, s, tc.want)
+		}
+	}
+}

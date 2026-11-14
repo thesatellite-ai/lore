@@ -18,7 +18,26 @@ package task
 // P3-SIGCOORD-3: an optional upgrade, so a Team without claims is never
 // forced to answer.
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// AlreadyDoneError is CloseHeldDone's answer for a task someone already
+// finished (G-10): the host's coordination record says so even when this
+// copy of the row has not synced the done yet. task done turns it into a
+// no-op that names who finished it, never a second done.
+type AlreadyDoneError struct {
+	Task string
+	// By names who finished it; At is when.
+	By string
+	At time.Time
+}
+
+func (e *AlreadyDoneError) Error() string {
+	return fmt.Sprintf("%s was already done by %s at %s", e.Task, e.By, e.At.UTC().Format(time.RFC3339))
+}
 
 // HeldCloser is an optional upgrade of the host's Team for closing a task
 // that may be claimed.

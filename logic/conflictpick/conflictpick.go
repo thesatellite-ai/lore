@@ -97,54 +97,85 @@ func metaEntries(meta canonjson.Object, other bool) canonjson.Object {
 // Text keeps one section of every complete marker block of s
 // (open "<<<<<<< ", split "=======", close ">>>>>>> ", git's shape; the
 // base section of git's diff3 style, "||||||| " up to the split, is never
-// kept); an unfinished block is left as written, and a string with a
-// block opened inside another is returned unchanged (still marked).
+// kept). A block nested inside the kept section (a marked text merged
+// again, G-11: done_by held three levels) is settled the same way, keeping
+// the same side at every level; an unfinished block is left as written,
+// and a block that closes before its split returns s unchanged (still
+// marked, the caller refuses).
 func Text(s string, other bool) string {
 	if !merge3.ContainsConflictMarkers(s) {
 		return s
 	}
-	lines := strings.Split(s, "\n")
-	out := make([]string, 0, len(lines))
-	const (
-		outside = iota
-		first
-		base
-		second
-	)
-	state, start := outside, 0
-	var firstLines, secondLines []string
-	for i, line := range lines {
-		switch {
-		case state == outside && strings.HasPrefix(line, merge3.MarkerOurs[:8]):
-			state, start, firstLines, secondLines = first, i, nil, nil
-		case state != outside && strings.HasPrefix(line, merge3.MarkerOurs[:8]):
-			return s // a block inside a block: no side is a clean choice, the caller refuses
-		case state == first && strings.HasPrefix(line, diff3Base):
-			state = base
-		case (state == first || state == base) && line == merge3.MarkerSplit:
-			state = second
-		case state == base:
-			// the common ancestor's lines: neither side
-		case state == second && strings.HasPrefix(line, merge3.MarkerTheirs[:8]):
-			if other {
-				out = append(out, secondLines...)
-			} else {
-				out = append(out, firstLines...)
-			}
-			state = outside
-		case state == first:
-			firstLines = append(firstLines, line)
-		case state == second:
-			secondLines = append(secondLines, line)
-		default:
-			out = append(out, line)
-		}
-	}
-	if state != outside {
-		out = append(out, lines[start:]...) // an unfinished block stays as written
+	out, ok := settle(strings.Split(s, "\n"), other)
+	if !ok {
+		return s
 	}
 	return strings.Join(out, "\n")
 }
+
+// settle replaces each top-level block of lines with its chosen section,
+// settled in turn; ok is false for a block that closes before its split.
+func settle(lines []string, other bool) ([]string, bool) {
+	out := make([]string, 0, len(lines))
+	for i := 0; i < len(lines); {
+		if !isOpen(lines[i]) {
+			out = append(out, lines[i])
+			i++
+			continue
+		}
+		split, base, end, ok := blockOf(lines, i)
+		if !ok {
+			return nil, false
+		}
+		if end < 0 {
+			return append(out, lines[i:]...), true // an unfinished block stays as written
+		}
+		firstEnd := split
+		if base >= 0 {
+			firstEnd = base
+		}
+		chosen := lines[i+1 : firstEnd]
+		if other {
+			chosen = lines[split+1 : end]
+		}
+		sub, ok := settle(chosen, other)
+		if !ok {
+			return nil, false
+		}
+		out = append(out, sub...)
+		i = end + 1
+	}
+	return out, true
+}
+
+// blockOf finds the split, diff3 base (-1: none) and close of the block
+// opened at lines[open], skipping blocks nested inside it; end is -1 when
+// the block never closes, ok false when it closes before its split.
+func blockOf(lines []string, open int) (split, base, end int, ok bool) {
+	split, base, end = -1, -1, -1
+	depth := 0
+	for j := open + 1; j < len(lines); j++ {
+		line := lines[j]
+		switch {
+		case isOpen(line):
+			depth++
+		case isClose(line) && depth > 0:
+			depth--
+		case isClose(line) && split < 0:
+			return -1, -1, -1, false
+		case isClose(line):
+			return split, base, j, true
+		case depth == 0 && split < 0 && line == merge3.MarkerSplit:
+			split = j
+		case depth == 0 && split < 0 && base < 0 && strings.HasPrefix(line, diff3Base):
+			base = j
+		}
+	}
+	return split, base, -1, true
+}
+
+func isOpen(line string) bool  { return strings.HasPrefix(line, merge3.MarkerOurs[:8]) }
+func isClose(line string) bool { return strings.HasPrefix(line, merge3.MarkerTheirs[:8]) }
 
 // diff3Base opens the base section of git's diff3 conflict style.
 const diff3Base = "||||||| "

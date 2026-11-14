@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func entry(id string, full, line int) Entry {
@@ -72,7 +73,8 @@ func TestShortForm(t *testing.T) {
 		{"", "", "Money is ints. More text.", "Money is ints."},
 		{"", "", "# Heading line\nbody", "Heading line"},
 		{"", "", "Why? Because.", "Why?"},
-		{"", "", long, "(no short form; run `lore show --id x`)"},
+		// G-6: a long body with no short sentence is cut at a word, never a bare id.
+		{"", "", long, strings.TrimSpace(strings.Repeat("word ", 24)) + "…"},
 		{"", "", "", "(no short form; run `lore show --id x`)"},
 		{"two\nlines", "", "", "two lines"},
 	}
@@ -80,5 +82,26 @@ func TestShortForm(t *testing.T) {
 		if got := ShortForm("x", c.summary, c.title, c.body); got != c.want {
 			t.Errorf("ShortForm(%q,%q,%q) = %q, want %q", c.summary, c.title, c.body, got, c.want)
 		}
+	}
+}
+
+// TestShortFormMaxCuts: a tighter render shortens every kind of short form
+// at a word, and never returns more than max characters (bug hunt G-6).
+func TestShortFormMaxCuts(t *testing.T) {
+	body := "Rule 7 for area-3: always run the migration check because the deployment pipeline depends on it " + strings.Repeat("and more reasons ", 20)
+	for _, max := range []int{120, 80, 48} {
+		got := ShortFormMax("x", "", "", body, max)
+		if n := utf8.RuneCountInString(got); n > max || !strings.HasPrefix(got, "Rule 7 for area-3") || !strings.HasSuffix(got, "…") {
+			t.Errorf("max %d: %q (%d chars)", max, got, n)
+		}
+	}
+	if got := ShortFormMax("x", "Use cents for money in every service.", "", "", 20); got != "Use cents for money…" {
+		t.Errorf("summary cut = %q", got)
+	}
+	if got := Cut("short", 20); got != "short" {
+		t.Errorf("Cut kept-whole = %q", got)
+	}
+	if got := BriefLine("rul_x", "Use cents"); got != "- `rul_x` Use cents\n" {
+		t.Errorf("BriefLine = %q", got)
 	}
 }

@@ -113,8 +113,10 @@ func TestFromHistoryMatrix(t *testing.T) {
 	if it, ok := got[tomb]; !ok || it.DeletedBy == "?" || it.DeletedBy == "" {
 		t.Errorf("tombstone purge: %+v (listed %v)", it, ok)
 	}
-	if it, ok := got[hard]; !ok || it.DeletedBy != "?" {
-		t.Errorf("old hard delete: %+v (listed %v), want deleter ?", it, ok)
+	// H-14: a row file a commit removed (an older lore's hard delete, a
+	// git rm) is listed as removed by that commit's author, not purged
+	if it, ok := got[hard]; !ok || !it.Removed || it.DeletedBy == "?" || it.DeletedBy == "" || it.GitRestore == "" {
+		t.Errorf("old hard delete: %+v (listed %v), want removed by the commit's author with its git command", it, ok)
 	}
 	if _, ok := got[resID]; !ok {
 		t.Errorf("purged resource not listed: %v", got)
@@ -151,10 +153,14 @@ func TestFromHistoryMatrix(t *testing.T) {
 	if _, serr := run(t, a, opstrash.OpShow, `{"id":"`+alive+`","from_history":true}`, false); !errs.Has(serr, errs.NotFound) {
 		t.Fatalf("show --from-history of a live row: %v, want E_NOT_FOUND", serr)
 	}
-	for _, id := range []string{tomb, hard, "mem_0e45506e64357c94a87e70ef1c6bb0ff"} {
+	for _, id := range []string{tomb, "mem_0e45506e64357c94a87e70ef1c6bb0ff"} {
 		if _, rerr := run(t, a, opstrash.OpRestore, `{"target":"`+id+`","from_history":true}`, true); !errs.Has(rerr, errs.Purged) {
 			t.Fatalf("restore --from-history %s: %v, want E_PURGED", id, rerr)
 		}
+	}
+	// a removed row is not purged: the refusal names the commit that removed it (H-14)
+	if _, rerr := run(t, a, opstrash.OpRestore, `{"target":"`+hard+`","from_history":true}`, true); rerr == nil || errs.Has(rerr, errs.Purged) || !strings.Contains(rerr.Error(), "removed by commit") {
+		t.Fatalf("restore --from-history %s: %v, want the commit that removed it", hard, rerr)
 	}
 }
 

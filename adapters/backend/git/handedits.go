@@ -109,11 +109,13 @@ func (b *Backend) HandChanges(ctx context.Context) (HandReport, error) {
 	if err := b.usable(ctx); err != nil {
 		return HandReport{}, err
 	}
-	args := []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames"}
+	var out []byte
+	var err error
 	if b.mode == modeRepo {
-		args = append(append(args, "--"), b.root.Layout().Pathspecs(b.folder.Name())...)
+		out, err = b.repoStatus(ctx) // shared with the read's IndexView (perf3)
+	} else {
+		out, err = b.git.run(ctx, call{dir: b.work, args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames"}})
 	}
-	out, err := b.git.run(ctx, call{dir: b.work, args: args})
 	if err != nil {
 		return HandReport{}, errs.Wrap(errs.Internal, "git: read the changed files of "+b.work, err)
 	}

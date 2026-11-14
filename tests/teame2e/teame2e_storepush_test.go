@@ -315,7 +315,9 @@ func TestE42_StorePushOfflineBatchThenOnline(t *testing.T) {
 	p.add(t, p.ca, "me", "offline fact two")
 	p.a.Advance(2 * time.Minute)
 	p.add(t, p.ca, "me", "offline fact three")
-	p.ca.MustLore("sync").Says(t, "offline")
+	// the store repo is gone from its address (H-11, G-16): not "offline"
+	// with exit 0, a refusal naming set-url; the writes stay waiting
+	p.ca.Lore("sync").Fails(t, 15, "no git repository at", "lore store set-url --name me")
 	spSees(t, p.ca, "offline fact one", "offline fact two", "offline fact three")
 	if v := spShow(t, p.ca, "me"); v.Push.Unpushed < 3 {
 		t.Fatalf("three writes wait while offline, show says %d", v.Push.Unpushed)

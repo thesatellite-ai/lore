@@ -11,8 +11,10 @@
 package reminder
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
@@ -181,6 +183,9 @@ type ListOut struct {
 	Notes []string `json:"notes,omitempty"`
 	// now is when the list was read (the overdue marker compares to it).
 	now time.Time
+	// loc is the viewer's zone the days are shown and compared in (I-8);
+	// nil is time.Local.
+	loc *time.Location
 }
 
 // Record is one reminder in v0.1.17's --json form (its keys, sorted).
@@ -210,16 +215,17 @@ func (o ListOut) rowsText() string {
 		return "(no reminders)\n"
 	}
 	var b strings.Builder
+	loc := cmp.Or(o.loc, time.Local)
 	for _, r := range o.Data {
 		mark := notDueMark
-		if r.DoneAt == "" && r.due.Before(o.now) {
+		if r.DoneAt == "" && dates.DueBy(r.due, o.now, loc) {
 			mark = overdueMark
 		}
 		rec := ""
 		if r.Recurrence != "" {
 			rec = " (" + r.Recurrence + ")"
 		}
-		fmt.Fprintf(&b, "%s %s  %s%s%s\n    %s\n", mark, r.due.UTC().Format(work.DateLayout), r.Message, rec, work.LabelSuffix(r.Label), r.ID)
+		fmt.Fprintf(&b, "%s %s  %s%s%s\n    %s\n", mark, dates.DayIn(r.due, loc), r.Message, rec, work.LabelSuffix(r.Label), r.ID)
 	}
 	return b.String()
 }
@@ -341,7 +347,7 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 	if err != nil {
 		return work.WriteOut{}, err
 	}
-	human := work.Success + " reminder " + w.Row.ID.String() + " due " + due.UTC().Format(work.DateLayout) + "\n"
+	human := work.Success + " reminder " + w.Row.ID.String() + " due " + dates.DayIn(due, clk.Loc) + "\n"
 	if note != "" {
 		human += "  " + note + "\n"
 	}
@@ -409,7 +415,7 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 			return DoneOut{}, errs.New(errs.InvalidInput, "reminder "+id.String()+": unknown recurrence "+work.Quote(rec)).
 				WithHint("fix it with a recurrence of: " + strings.Join(schema.ReminderRecurrences(), " | "))
 		}
-		human := work.Success + " rescheduled to " + next.UTC().Format(work.DateLayout) + "\n"
+		human := work.Success + " rescheduled to " + dates.DayIn(next, time.Local) + "\n"
 		if skipped > 0 {
 			human += "  skipped " + strconv.Itoa(skipped) + " past dates\n"
 		}
@@ -417,7 +423,7 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 		if perr != nil {
 			return DoneOut{}, perr
 		}
-		return doneOut(w, next.UTC().Format(work.DateLayout)), nil
+		return doneOut(w, dates.DayIn(next, time.Local)), nil
 	}
 	human := work.Success + " reminder " + id.String() + " completed\n"
 	w, err := work.Patch(ctx, o.env, Noun, table, id, map[string]value.Value{schema.FieldReminderDoneAt: work.Now(o.env)}, human)

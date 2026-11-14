@@ -108,6 +108,7 @@ func initScope(o *wire.Options) {
 // run has already taken <path> off the arguments (initpath.go).
 func (h *host) initCommand(wd string) *cobra.Command {
 	var in repoinit.InitIn
+	var yes bool
 	// Read now, before any command opens the store (and creates the cache).
 	ih := h.initHost(wd, hasLocalState(h.home, wd))
 	cmd := &cobra.Command{
@@ -124,6 +125,10 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			}
 			// the rows init writes are named like any write's (wire/host
 			// writeloc.go: lore repo init runs through that hook)
+			// I-13: in a client repo init asks first (clientrepo_hint.go)
+			if err := h.app.ConfirmClientRepoInit(cmd.Context(), yes); err != nil {
+				return err
+			}
 			ctx, written := wire.WithWriteLog(cmd.Context())
 			out, err := repoinit.Run(ctx, ih, in)
 			if err != nil {
@@ -145,6 +150,7 @@ func (h *host) initCommand(wd string) *cobra.Command {
 	cmd.Flags().StringVar(&in.Name, initFlagName, "", "project name (default: the repo name of origin's URL, else the folder name)")
 	cmd.Flags().StringSliceVar(&in.Target, flagTarget, nil, "AI tool profile(s) or file(s) to point at .lore/LORE.md (default: the tools of the setup that applies here, else tool files found in the repo, else AGENTS.md)")
 	cmd.Flags().BoolVar(&in.NonInteractive, flagNonInteractive, false, "accepted for v0.1.17 scripts; init never asks")
+	cmd.Flags().BoolVar(&yes, flagYes, false, "set up a client repo (one an org claims) anyway: init writes lore's files into the client's repository")
 	_ = cmd.Flags().MarkHidden(flagNonInteractive) // parsed for old scripts, never offered in --help (B3-17)
 	return cmd
 }

@@ -204,6 +204,7 @@ const (
 	OpTeamList         = "team.list"
 	OpTeamShow         = "team.show"
 	OpTeamRemove       = "team.remove"
+	OpTeamRename       = "team.rename"
 	OpTeamMemberAdd    = "team.member.add"
 	OpTeamMemberRemove = "team.member.remove"
 	// ops/team staff.go: the org's own people added straight to the
@@ -229,7 +230,7 @@ var directOps = map[string]struct{}{
 	setup.OpTeamInvite: {}, setup.OpTeamInviteList: {}, setup.OpTeamInviteRevoke: {}, setup.OpTeamInviteResend: {},
 	// The teams rows live in the org roster store too (owner report
 	// 2026-11-11: the team commands were missing), so they run direct.
-	OpTeamAdd: {}, OpTeamList: {}, OpTeamShow: {}, OpTeamRemove: {}, OpTeamMemberAdd: {}, OpTeamMemberRemove: {},
+	OpTeamAdd: {}, OpTeamList: {}, OpTeamShow: {}, OpTeamRemove: {}, OpTeamRename: {}, OpTeamMemberAdd: {}, OpTeamMemberRemove: {},
 	// The org's members (staff.go) are roster rows too.
 	OpStaffAdd: {}, OpStaffList: {}, OpStaffShow: {}, OpStaffEdit: {}, OpStaffRemove: {},
 }
@@ -252,7 +253,7 @@ func OpNames() []string {
 		OpMemberAdd, OpMemberEdit, OpMemberRemove, OpMemberList,
 		OpRoleList, OpRoleAdd, OpRoleEdit,
 		setup.OpTeamInvite, setup.OpTeamInviteList, setup.OpTeamInviteRevoke, setup.OpTeamInviteResend,
-		OpTeamAdd, OpTeamList, OpTeamShow, OpTeamRemove, OpTeamMemberAdd, OpTeamMemberRemove,
+		OpTeamAdd, OpTeamList, OpTeamShow, OpTeamRemove, OpTeamRename, OpTeamMemberAdd, OpTeamMemberRemove,
 		OpStaffAdd, OpStaffList, OpStaffShow, OpStaffEdit, OpStaffRemove,
 	}
 }

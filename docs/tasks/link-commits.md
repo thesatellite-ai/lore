@@ -74,6 +74,8 @@ Commit 86dbae476bd6 — 1 linked entities:
 ```
 <!-- /example -->
 
+A rebase or an amend gives your commits new ids. lore's post-rewrite hook moves every link of a rewritten commit to its new id, so `lore commit show --id <new-sha>` lists the rows; a rewrite made without lore's hooks leaves links on the old commits, `lore doctor` names them (`commit_links: … on no branch`), and `lore link remap --pair <old>=<new>` moves them.
+
 `lore commit show` (with a space) is the same command under the `commit` group and prints the same list. A short sha that two linked commits share is refused with `E_AMBIGUOUS_ID`, which lists both shas; add characters until one is left. A word that is neither a sha nor a git revision is refused with `E_INVALID_INPUT`.
 
 ## Step 4 — Finish the task with its commit

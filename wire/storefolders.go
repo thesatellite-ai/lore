@@ -61,6 +61,18 @@ func (a *App) setupOnlyHere(ctx context.Context, name string) bool {
 	return !insideWorkTree(ctx, a.opts.RepoDir) || inStore(a.opts.RepoDir) || !opssetup.LoreRepoAt(a.opts.RepoDir)
 }
 
+// setURLWithoutRepo reports whether `lore store set-url` runs on the setup
+// alone here: where `lore sync` syncs the setup's stores (setupSyncHere:
+// outside any git work tree, or a git repo with no .lore folder, so no
+// .lore/stores.yaml to edit or confirm), and not a store checkout. There it moves what
+// this machine names (an org's store, me, a sto_ id: ~/.lore/config.yaml,
+// the clones, the org's lore-org.yaml), as `lore sync` and `lore member
+// add` work from ~; it used to refuse "it edits a repo's
+// .lore/stores.yaml", which an org store's move never does (H-12).
+func (a *App) setURLWithoutRepo(ctx context.Context, name string) bool {
+	return name == opsstores.OpSetURL && a.setupStatusHere(ctx)
+}
+
 // refuseStoresFileOutsideRepo answers a store command that edits a repo's
 // .lore/stores.yaml (init of a store other than me, add, remove, set-url)
 // run outside any git work tree with what it needs, before anything else

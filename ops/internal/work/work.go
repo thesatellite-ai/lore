@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -189,13 +190,12 @@ func Time(r row.Row, name string) time.Time {
 	return time.Time{}
 }
 
-// DateText is a datetime field as YYYY-MM-DD ("" when unset).
+// DateText is a datetime field as the YYYY-MM-DD the viewer means ("" when
+// unset): a calendar day as stored, a clock time as its day in the local
+// zone (dates.DayIn, I-8: "tomorrow 20:00" in LA was listed as the next
+// day, its UTC date).
 func DateText(r row.Row, name string) string {
-	t := Time(r, name)
-	if t.IsZero() {
-		return ""
-	}
-	return t.UTC().Format(DateLayout)
+	return dates.DayIn(Time(r, name), time.Local)
 }
 
 // TimeText is a datetime field in TimeLayout ("" when unset).

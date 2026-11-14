@@ -31,8 +31,8 @@ import (
 // is set to the rows kept, so count always equals len(rows) in the JSON;
 // the human text gets one line saying which rows it shows and the next page.
 type PageFlags struct {
-	Limit int `json:"limit,omitempty" flag:"limit" desc:"at most this many rows (default: all; 50 when --page is given)"`
-	Page  int `json:"page,omitempty" flag:"page" desc:"page number, from 1 (with --limit)"`
+	Limit int `json:"limit,omitempty" flag:"limit" min:"1" desc:"at most this many rows (default: all; 50 when --page is given)"`
+	Page  int `json:"page,omitempty" flag:"page" min:"1" desc:"page number, from 1 (with --limit)"`
 }
 
 // DefaultPageRows is --limit when only --page is given (trash list's

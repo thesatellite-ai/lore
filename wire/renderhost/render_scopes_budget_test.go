@@ -95,7 +95,7 @@ func TestDirFileBudgetMatrix(t *testing.T) {
 								t.Fatalf("critical %s not in full", h.ID)
 							}
 						default:
-							if !strings.Contains(body, hotfixLine(h)) || strings.Contains(body, hotfixFull(h)) {
+							if !strings.Contains(body, hotfixBrief(h, 0)) || strings.Contains(body, hotfixFull(h)) {
 								t.Fatalf("high %s not a line", h.ID)
 							}
 						}

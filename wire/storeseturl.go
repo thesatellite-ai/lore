@@ -127,7 +127,20 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		}
 		out.Clone, out.Changed = line, true
 	}
+	if line := leftClonesLine(leftClones(ctx, a.opts.Home, out.ID, raw), old); line != "" {
+		if out.Clone != "" {
+			line = out.Clone + "; " + line
+		}
+		out.Clone = line
+	}
 	for _, org := range moved.orgs {
+		if !isOrgAdmin(a.opts.Home, org) {
+			// H-12: the org's lore-org.yaml is every member's address of
+			// the store; only an admin of the org changes it (as `lore store
+			// set` does). This machine follows the move all the same.
+			out.OrgFiles = append(out.OrgFiles, "lore-org.yaml of "+org+" left as it is: only an admin of "+org+" changes the store's address for the whole org (this machine now uses "+raw+"); ask an admin to run lore store set-url --name "+org+" --url "+raw)
+			continue
+		}
 		out.OrgFiles = append(out.OrgFiles, a.moveOrgFile(ctx, org, old, raw))
 	}
 	return out, nil
@@ -172,6 +185,11 @@ func (a *App) setURLSource(ctx context.Context, name string) (attach.Store, erro
 			}
 			return attach.Store{Name: store.Source(name), URL: sc.URL, Branch: sc.Branch}, nil
 		}
+	}
+	if _, err := a.repoTop(ctx); err != nil {
+		// H-12: outside a repo no .lore/stores.yaml names anything
+		return attach.Store{}, errs.New(errs.NotFound, "store set-url: no org entry is named "+name+", and outside a repo set-url takes an org's name, me or a sto_ id").
+			WithHint("for a store a repo's .lore/stores.yaml names, cd into that repo and run lore store set-url --name " + name + " --url <url> again; `lore store list` shows the names that work here")
 	}
 	return attach.Store{}, errs.New(errs.NotFound, "store set-url: no store named "+name+" is attached, and no org entry has that name").
 		WithHint("run `lore store list` (or pass the store's sto_ id)")

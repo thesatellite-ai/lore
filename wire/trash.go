@@ -154,14 +154,31 @@ func (a *App) trashWrite(ctx context.Context, plan, do func(*engine.Engine) (eng
 
 // trashWriteChecked is trashWrite with check, which (when set) vets the
 // planned rows before anything is written (the restore's leak check); an
-// error refuses the write.
+// error refuses the write. The write is gated as one into the store its
+// planned rows live in, as a delete is (H-13: restoring an org store's
+// row from a repo on the 0.1.17 format changes none of the repo's files,
+// so the repo's format does not refuse it); rows of several stores, or
+// none planned, are gated as a repo write (every gate applies).
 func (a *App) trashWriteChecked(ctx context.Context, plan, do func(*engine.Engine) (engine.TrashResult, error),
 	check func(context.Context, *state, engine.TrashResult) error) (engine.TrashResult, error) {
-	st, err := a.writeState(ctx)
+	st, err := a.state(ctx)
 	if err != nil {
 		return engine.TrashResult{}, err
 	}
-	if planned, perr := plan(st.eng); perr == nil { // a bad target is reported by the write itself
+	planned, perr := plan(st.eng)
+	target := store.Source("")
+	if perr == nil {
+		target = plannedStore(planned)
+	}
+	if st, err = a.writeStateFor(ctx, target); err != nil {
+		return engine.TrashResult{}, err
+	}
+	if target != "" && target != store.SourceRepo {
+		if ferr := a.checkTarget(target); ferr != nil { // an attached v0.1.17 store asks its own
+			return engine.TrashResult{}, ferr
+		}
+	}
+	if perr == nil { // a bad target is reported by the write itself
 		if check != nil {
 			if cerr := check(ctx, st, planned); cerr != nil {
 				return engine.TrashResult{}, cerr
@@ -186,6 +203,23 @@ func (a *App) trashWriteChecked(ctx context.Context, plan, do func(*engine.Engin
 		a.wroteTo(t.Store, err)
 	}
 	return res, err
+}
+
+// plannedStore is the one store every planned row lives in, "" when they
+// span several or none is planned (gated then as a repo write).
+func plannedStore(planned engine.TrashResult) store.Source {
+	target := store.Source("")
+	for i, t := range planned.Rows {
+		switch {
+		case t.Store == "":
+			return ""
+		case i == 0:
+			target = t.Store
+		case t.Store != target:
+			return ""
+		}
+	}
+	return target
 }
 
 // lensTrash is the rows of the `lore sql` trash view (DELETION 3.2, 2.9):

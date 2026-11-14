@@ -274,6 +274,7 @@ func Ops(env Env, git CommitResolver) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors,
 			Examples: []op.Example{{Title: "everything linked to a commit", CLI: "lore commit show --id 3f2c9ab"}},
 		}, o.show),
+		op.Define(remapSpec(), o.remap), // H-8: links follow a rebase or an amend
 	}
 }
 

@@ -37,15 +37,20 @@ func TestPreCommitStagesNewModifiedAndDeletedRows(t *testing.T) {
 		}
 		return strings.TrimSpace(string(out))
 	}
-	const a, b, other = ".lore/data/memories/mem_1.json", ".lore/data/memories/mem_2.json", "other.txt"
+	// mine is a change the person staged: with nothing staged but row
+	// files git commits nothing whatever the hook stages, and the hook
+	// leaves them out (H-15, TestPreCommitLeavesRowsOutWhenNothingElseIsStaged)
+	const a, b, other, mine = ".lore/data/memories/mem_1.json", ".lore/data/memories/mem_2.json", "other.txt", "staged.txt"
 	write(a, `{"a":1}`+"\n")
 	write(b, `{"b":1}`+"\n")
 	write(other, "x\n")
+	write(mine, "1\n")
+	gitT(t, top, "add", mine)
 	t.Chdir(top)
 	if err := f.s.h.preCommit(context.Background()); err != nil {
 		t.Fatalf("pre-commit, new rows: %v", err)
 	}
-	if got, want := staged(), "A\t"+a+"\nA\t"+b; got != want {
+	if got, want := staged(), "A\t"+a+"\nA\t"+b+"\nA\t"+mine; got != want {
 		t.Fatalf("staged %q, want %q (other.txt never staged)", got, want)
 	}
 	gitT(t, top, "commit", "-q", "-m", "rows")
@@ -53,10 +58,12 @@ func TestPreCommitStagesNewModifiedAndDeletedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(b, `{"b":2}`+"\n")
+	write(mine, "2\n")
+	gitT(t, top, "add", mine)
 	if err := f.s.h.preCommit(context.Background()); err != nil {
 		t.Fatalf("pre-commit, a deleted row: %v", err)
 	}
-	if got, want := staged(), "D\t"+a+"\nM\t"+b; got != want {
+	if got, want := staged(), "D\t"+a+"\nM\t"+b+"\nM\t"+mine; got != want {
 		t.Fatalf("staged %q, want %q", got, want)
 	}
 }

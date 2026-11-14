@@ -196,6 +196,13 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the memory id (mem_…)"`
 }
 
+// ArchiveIn is the input of memory.archive: one id, or --where for many
+// as one batch (bug hunt G-7).
+type ArchiveIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the memory id (mem_…); leave out with --where"`
+	wheredel.ArchiveFlags
+}
+
 // ShowOut is the output of memory.show: v0.1.17's envelope (count 0 is
 // omitted, as printJSON(kind, row, 0) did).
 type ShowOut struct {
@@ -269,7 +276,7 @@ type SearchIn struct {
 	Columns    []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
 	// Limit caps the hits AFTER the scope filter; 0 means
 	// DefaultSearchLimit.
-	Limit           int    `json:"limit,omitempty" flag:"limit" desc:"at most this many results (default 10)"`
+	Limit           int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"at most this many results (default 10)"`
 	IncludeArchived bool   `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived memories"`
 	Store           string `json:"store,omitempty" flag:"store" alias:"to" desc:"only memories of this store and its folders, <store>/<folder> (default every attached store)"`
 }

@@ -42,7 +42,7 @@ func TestStoreCloneNoticesShort(t *testing.T) {
 func TestStorePushOfflineWhy(t *testing.T) {
 	b := &storePush{name: "me"}
 	gone := "fatal: '/srv/none/lore-me.git' does not appear to be a git repository\nfatal: Could not read from remote repository.\n"
-	if got := b.offlineWhy(store.SyncReport{Offline: true, OfflineDetail: gone}); !strings.HasPrefix(got, "no git repository at me ('/srv/none/lore-me.git' does not appear to be a git repository); check the store's address") {
+	if got := b.offlineWhy(store.SyncReport{Offline: true, OfflineDetail: gone}); !strings.HasPrefix(got, "no git repository at me ('/srv/none/lore-me.git' does not appear to be a git repository); the host answers, but holds no repository") {
 		t.Fatalf("missing repo: %q", got)
 	}
 	// F-11: the same answer from a store this clone fetched before is a
@@ -50,7 +50,7 @@ func TestStorePushOfflineWhy(t *testing.T) {
 	gb := fetchedStoreClone(t)
 	seen := &storePush{name: "acme", inner: gb}
 	if got := seen.offlineWhy(store.SyncReport{Offline: true, OfflineDetail: gone}); !strings.HasPrefix(got, "the store refused this machine: ") ||
-		!strings.Contains(got, "access was removed") || strings.Contains(got, "check the store's address") || !strings.Contains(got, "--name acme") {
+		!strings.Contains(got, "access was removed") || strings.Contains(got, "the host answers, but holds no repository") || !strings.Contains(got, "--name acme") {
 		t.Fatalf("missing repo after a fetch: %q", got)
 	}
 	dns := "ssh: Could not resolve hostname git.example.invalid: Name or service not known\n"

@@ -57,7 +57,7 @@ func TestWhoamiLinesFailMatrix(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			s := &orgcfg.Situation{Config: &orgconf.Config{}, Result: c.res, ResolveErr: c.resolveErr, HasConfig: true}
-			lines := whoamiLines(s, c.id, c.idErr, false, whoamiRedactor{}, nil, c.machine, "")
+			lines := whoamiLines(s, c.id, whoamiActorID(c.id.ActorKey()), c.idErr, false, whoamiRedactor{}, nil, c.machine, "")
 			check := func(label, want string) {
 				t.Helper()
 				got, present := lineOf(lines, label)

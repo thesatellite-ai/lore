@@ -89,6 +89,12 @@ type RosterResult struct {
 	// which nobody joins.
 	Teams        []string
 	SkippedTeams []string
+	// OrgRole is the org-level role of the joining person's open stint
+	// (OrgRoleAdmin for the org's admin), "" when none is set. Why
+	// (I-17): an admin's second machine joins by the roster too, and its
+	// setup must be an admin setup, or every admin command there refused
+	// with "ask the org admin".
+	OrgRole string
 }
 
 // ApplyJoin is the member join write (4.5 Apply 1–5).
@@ -1003,7 +1009,25 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 		res.Already = true
 	}
 	res.Wrote = w.wrote
+	if res.OrgRole, err = openOrgRole(ctx, r, actor.ID.String()); err != nil {
+		return RosterResult{}, err
+	}
 	return res, nil
+}
+
+// openOrgRole is the org role of actor's open stint on r ("" when it has
+// none or no role).
+func openOrgRole(ctx context.Context, r profilestore.Roster, actor string) (string, error) {
+	rows, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range rows {
+		if fieldText(p, schema.FieldPeriodActor) == actor && fieldText(p, schema.FieldPeriodEndedOn) == "" {
+			return fieldText(p, schema.FieldPeriodOrgRole), nil
+		}
+	}
+	return "", nil
 }
 
 // CheckMember is the member check of a join without an invite, run on a

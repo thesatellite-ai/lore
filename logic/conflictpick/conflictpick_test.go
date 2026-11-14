@@ -32,7 +32,11 @@ func TestText(t *testing.T) {
 		{"unicode sides", block("été ✓", "日本"), "été ✓", "日本"},
 		// An unfinished block (no close) is not a complete conflict: left as written.
 		{"unfinished block", "<<<<<<< HEAD\nmine\n=======\ntheirs", "<<<<<<< HEAD\nmine\n=======\ntheirs", "<<<<<<< HEAD\nmine\n=======\ntheirs"},
-		{"nested block: unchanged", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat"},
+		// G-11: a marked text merged again nests; the same side is kept at every level.
+		{"nested in the first section", "<<<<<<< HEAD\n" + block("x", "y") + "\n=======\nz\n>>>>>>> feat", "x", "z"},
+		{"nested in the second section", "<<<<<<< HEAD\na\n=======\n" + block("b", "c") + "\n>>>>>>> feat", "a", "c"},
+		{"three levels", "<<<<<<< HEAD\na\n=======\n<<<<<<< HEAD\nb\n=======\n" + block("c", "d") + "\n>>>>>>> feat\n>>>>>>> feat", "a", "d"},
+		{"close before split: unchanged", "<<<<<<< HEAD\nx\n>>>>>>> feat\n=======\ny", "<<<<<<< HEAD\nx\n>>>>>>> feat\n=======\ny", "<<<<<<< HEAD\nx\n>>>>>>> feat\n=======\ny"},
 		{"complete then unfinished", block("a", "b") + "\n<<<<<<< HEAD\nx\n=======\ny", "a\n<<<<<<< HEAD\nx\n=======\ny", "b\n<<<<<<< HEAD\nx\n=======\ny"},
 	}
 	for _, c := range cases {

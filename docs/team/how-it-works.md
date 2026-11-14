@@ -232,6 +232,8 @@ Two people can edit the same live row at the same time. A branch can also merge 
  file level:   added on one side → take it        deleted on one side, untouched on the other → deleted
                same on both      → take it        deleted on one side, EDITED on the other    → edit wins, row kept
  field level:  status, priority, dates, numbers → the newer edit (by hybrid logical clock)
+               one-value text (done_by, done_commit, work_branch, approved_by, role)
+                                                → the newer edit, never conflict markers
                text fields                      → both edits kept, with conflict markers
                sets (labels, links)             → union
 ```
@@ -342,6 +344,8 @@ The `claim_token` is a ticket number for one claim. The row's `claim_epoch` coun
 Claims for tasks of a linked client repo sit on the **store's** signals list, never on the client's. How the agency runs its agents is internal.
 
 ## Done, then merged
+
+A task is finished once. The holder's `lore task done` drops its claim and, in the same push, leaves a done marker on the signals ref (`<folder>/done/<task>.json`, kept 7 days): a clone whose copy of the row still says todo (not synced yet) cannot claim the task again, `task next` skips it and moves on, and a second `lore task done` on a finished task changes nothing and prints who finished it (`· <id> was already done by <who> at <time>; nothing changed`, `already_done` and `done_by` in `--json`). A task reopened after the done (its row edited later) is claimable again. `lore sync resolve --take kept|other` keeps the same side of nested conflict blocks at every level.
 
 `lore task done` records that the work is finished. Whether the code reached `main` is checked later and separately. Any later `task next`, `task list`, `mission status` or `inbox` in a checkout of the task's repo does the check:
 
@@ -536,7 +540,7 @@ Agents get the private text through `lore context` and the session hooks; nothin
 
 ## Pitfalls
 
-- **Never edit lore's hidden lists by hand** (`refs/lore/live`, `refs/lore/signals`). Lore writes them itself. If the remote's live list is deleted or replaced (a mirror push, a mistaken delete), lore stops writing to it and keeps a local backup: every live write, `lore sync` and `lore land` refuse with `E_READ_ONLY` (exit 23) until then, and that sync exchanges nothing with the attached stores either, so it never reports success it could not deliver. `lore live restore` pushes that backup back. A remote that never had the live list (the repo moved to a new remote) is not a deletion: lore says `never pushed here`, keeps the rows on this clone and goes on writing; your next push or `lore sync` creates it there. This needs a clone that saw the list with lore 0.1.18 or newer, which records the remote's address; a clone last updated by an older lore cannot tell the two apart and stops as for a deletion. A write that goes to the local live list names it (`lore: wrote tasks/<id> on this clone's refs/lore/live (a live row, not pushed yet; <file> is unchanged)`), never the row file it left alone.
+- **Never edit lore's hidden lists by hand** (`refs/lore/live`, `refs/lore/signals`). Lore writes them itself. If the remote's live list is deleted or replaced (a mirror push, a mistaken delete), lore stops writing to it and keeps a local backup: every live write, `lore sync` and `lore land` refuse with `E_READ_ONLY` (exit 23) until then, and that sync exchanges nothing with the attached stores either, so it never reports success it could not deliver. `lore live restore` pushes that backup back. A remote that never had the live list (the repo moved to a new remote) is not a deletion: lore says `never pushed here`, keeps the rows on this clone and goes on writing; your next push or `lore sync` creates it there. This needs a clone that saw the list with lore 0.1.18 or newer, which records the address it fetched the list from (a command run after `git remote set-url` and before the next fetch keeps the old address, so the move is still recognised). A clone last updated by an older lore cannot tell the two apart: it stops with `E_READ_ONLY` saying the repo moved or the list was deleted, and if the repo moved, `lore live restore` publishes the local live rows on the new remote, records its address, and writes go on. A write that goes to the local live list names it (`lore: wrote tasks/<id> on this clone's refs/lore/live (a live row, not pushed yet; <file> is unchanged)`), never the row file it left alone.
 - **A protected `main` delays landing.** Finished rows wait and ride on your next commit to another branch. `lore explain --id <id>` says why a row has not landed yet.
 
 ## Related

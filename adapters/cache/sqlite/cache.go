@@ -37,8 +37,10 @@ const driverName = "sqlite"
 // has no nodes and an older binary would not keep them. 4: an FTS row
 // carries its typed row's rowid (found by key, not by a scan), and the
 // typed rows are upserted so that rowid stays; a layout-3 file's FTS rows
-// have other rowids and could never be removed.
-const layoutVersion = 4
+// have other rowids and could never be removed. 5: FTS text holds the
+// Turkish dotless ı as i (textnorm.SearchFold, I-9); a layout-4 index
+// would never match a folded query on ı.
+const layoutVersion = 5
 
 // busyTimeoutMS is how long a writer waits for another process's lock
 // before failing with SQLITE_BUSY.
@@ -64,6 +66,7 @@ var internalDDL = []string{
 	`CREATE TABLE IF NOT EXISTS "` + tblRefs + `" (entity_table TEXT NOT NULL, entity_id TEXT NOT NULL, field TEXT NOT NULL, ref_id TEXT NOT NULL, PRIMARY KEY (entity_table, entity_id, field, ref_id))`,
 	`CREATE INDEX IF NOT EXISTS "ix_row_refs_ref" ON "` + tblRefs + `" (ref_id)`,
 	`CREATE TABLE IF NOT EXISTS "` + tblExpanded + `" (entity_table TEXT NOT NULL, entity_id TEXT NOT NULL, field TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (entity_table, entity_id, field))`,
+	mirrorDDL,
 }
 
 // Cache is one SQLite cache file. It is safe for concurrent use; writes are
@@ -512,6 +515,7 @@ func (c *Cache) Rebuild(ctx context.Context, source store.Source) error {
 		for _, q := range []string{
 			`DELETE FROM "` + tblRows + `" WHERE source = ?`,
 			`DELETE FROM "` + tblCursors + `" WHERE source = ?`,
+			`DELETE FROM "` + tblMirror + `" WHERE source = ?`,
 			`DELETE FROM "` + tblMetaQuarantine + `" WHERE source = ?`,
 		} {
 			if _, err := tx.ExecContext(ctx, q, string(source)); err != nil {

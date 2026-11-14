@@ -34,6 +34,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/queue"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
@@ -101,6 +102,7 @@ const (
 	inboxBlocked   = "blocked"
 	inboxFinding   = "finding"
 	inboxOverdue   = "overdue"
+	inboxReminder  = "reminder"
 	inboxWatched   = "watched"
 	inboxSLA       = "sla"
 	inboxTriage    = "triage"
@@ -112,6 +114,9 @@ const (
 	inboxMetadata  = "metadata"
 	roleLead       = "lead"
 	roleAssignee   = "assignee"
+	// roleTeam is the part of a member of the task's assigned team; the
+	// inbox line reads "(team @web)".
+	roleTeam = "team"
 )
 
 // coordView is what every coordination view reads once.
@@ -275,13 +280,16 @@ func orNone(s string) string {
 
 // taskWatch is the part of a task document the watched/assigned items read.
 type taskWatch struct {
-	ID        string                 `json:"id"`
-	Title     string                 `json:"title"`
-	Mission   string                 `json:"mission_id"`
-	Lead      string                 `json:"assigned_to_actor_id"`
-	Assignees []string               `json:"assignees"`
-	Watchers  []string               `json:"watchers"`
-	History   []opstask.HistoryEntry `json:"history"`
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Mission   string   `json:"mission_id"`
+	Lead      string   `json:"assigned_to_actor_id"`
+	Assignees []string `json:"assignees"`
+	Watchers  []string `json:"watchers"`
+	// Team is the tem_ id of the team the task is assigned to (--assign
+	// @team), "" for none.
+	Team    string                 `json:"assigned_team"`
+	History []opstask.HistoryEntry `json:"history"`
 }
 
 // watchOf decodes d's watch part (zero on a row that does not decode).
@@ -306,6 +314,28 @@ func (w taskWatch) assignedRole(me string) string {
 		return roleAssignee
 	}
 	return ""
+}
+
+// myTeams maps the id of every active team on the roster that lists me
+// (or person, the person a coding agent acts for) as a member to its
+// handle. A roster that cannot be read gives none: the inbox still shows
+// the caller's own assignments.
+func (cv *coordView) myTeams(ctx context.Context, me, person string) map[string]string {
+	out := map[string]string{}
+	r, err := cv.a.coordRoster(ctx)
+	if err != nil {
+		return out
+	}
+	teams, err := cv.a.RosterTeams(ctx, r.src)
+	if err != nil {
+		return out
+	}
+	for _, t := range teams {
+		if t.Active && (slices.Contains(t.Members, me) || (person != "" && slices.Contains(t.Members, person))) {
+			out[t.ID] = t.Handle
+		}
+	}
+	return out
 }
 
 // assignedBy is the newest history entry that gave me role, by someone else.
@@ -395,6 +425,7 @@ func (h standaloneCoord) Inbox(ctx context.Context, in opscoord.InboxIn) (opscoo
 		return opscoord.InboxOut{}, err
 	}
 	items = append(items, forced...)
+	items = append(items, cv.a.storeConflictInbox(ctx)...) // I-1 (doctor_store_conflicts.go)
 	marker := filepath.Join(cv.w.stateDir, "inbox-"+cv.w.actorID+".json")
 	var m inboxMarker
 	if b, rerr := os.ReadFile(filepath.Clean(marker)); rerr == nil {
@@ -406,7 +437,7 @@ func (h standaloneCoord) Inbox(ctx context.Context, in opscoord.InboxIn) (opscoo
 	}
 	shown := []opscoord.InboxItem{}
 	for _, it := range items {
-		if it.At.IsZero() || it.At.After(cut) || it.Kind == inboxExpired || it.Kind == inboxGate || it.Kind == inboxBlocked {
+		if it.At.IsZero() || it.At.After(cut) || it.Kind == inboxExpired || it.Kind == inboxGate || it.Kind == inboxBlocked || it.Kind == inboxConflict {
 			shown = append(shown, it)
 		}
 	}
@@ -435,6 +466,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		}
 	}
 	involved := map[string]bool{}
+	myTeams := cv.myTeams(ctx, me, person)
 	var out []opscoord.InboxItem
 	slaHours := map[string]int64{}
 	if set, ok := cv.policySet(ctx); ok {
@@ -450,7 +482,15 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		open := docOpenStatus(d)
 		heldByOther := claimed && active && sig.Holder != me
 		w := watchOf(d)
-		if role := w.assignedRole(me); open && role != "" && !heldByOther {
+		role := w.assignedRole(me)
+		if role == "" && w.Team != "" {
+			// G-15: a task assigned to a team the caller is on needs them
+			// too, as task list --mine already says.
+			if h, ok := myTeams[w.Team]; ok {
+				role = roleTeam + " " + rosterHandleMark + h
+			}
+		}
+		if open && role != "" && !heldByOther {
 			involved[mission] = true
 			out = append(out, cv.assignedItem(ctx, w, role, d.Time(docKeyUpdatedAt)))
 		}
@@ -492,6 +532,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		out = append(out, opscoord.InboxItem{Mission: hd.Str(vkMission), Kind: inboxHandoff, Who: cv.label(ctx, hd.Str(vkFromActor)),
 			Text: strings.TrimSpace(hd.Str(vkTaskID) + "  " + hd.Str(vkBody)), At: hd.Time(docKeyCreatedAt)})
 	}
+	out = append(out, cv.reminderItems(ctx)...)
 	for _, f := range cv.projectDocs(ctx, schema.TableMemories) {
 		if f.Str(vkSourceKind) != findingKind {
 			continue
@@ -1008,4 +1049,28 @@ func missionLines(d opscoord.MissionStatus) []string {
 		lines = append(lines, fmt.Sprintf("  %-9s %s  %-28s %-12s %s", r.State, r.ID, r.Title, r.Who, r.Detail))
 	}
 	return lines
+}
+
+// reminderItems are the project's pending reminders that are due by now
+// for the viewer (a day once it has begun in the local zone, a clock time
+// once passed: dates.DueBy). G-5: an overdue reminder showed only in `lore
+// reminder list`, a command people must remember to run, while inbox
+// ("what needs you") said (inbox empty). Reminders have no owner, so every
+// inbox of the project lists them; their At is zero, so an --ack never
+// hides one: it leaves when `lore reminder done` marks it done.
+func (cv *coordView) reminderItems(ctx context.Context) []opscoord.InboxItem {
+	var out []opscoord.InboxItem
+	for _, r := range cv.projectDocs(ctx, schema.TableReminders) {
+		due := r.Time(schema.FieldReminderDueAt)
+		if r.Str(schema.FieldReminderDoneAt) != "" || due.IsZero() || !dates.DueBy(due, cv.now(), time.Local) {
+			continue
+		}
+		state := "overdue"
+		if dates.DayIn(due, time.Local) == cv.now().In(time.Local).Format(dates.DayLayout) {
+			state = "due today"
+		}
+		out = append(out, opscoord.InboxItem{Kind: inboxReminder,
+			Text: fmt.Sprintf("%s  %s (%s, %s; lore reminder done --id %s)", r.Str(docKeyID), r.Str(schema.FieldReminderMessage), state, dates.DayIn(due, time.Local), r.Str(docKeyID))})
+	}
+	return out
 }

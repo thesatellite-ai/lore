@@ -178,7 +178,7 @@ const DefaultJobs = 8
 type RunIn struct {
 	All    bool `json:"all,omitempty" flag:"all" desc:"fix every repo the setups know (their folders and the known repos), one block each; keeps going past a failure and exits 1 naming the failed repos"`
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"show what each step would do; change nothing and reach no remote (no fetch, push or clone)"`
-	Jobs   int  `json:"jobs,omitempty" flag:"jobs" desc:"with --all: how many repos run at once (default 8; 1 runs them one after another)"`
+	Jobs   int  `json:"jobs,omitempty" flag:"jobs" min:"1" desc:"with --all: how many repos run at once (default 8; 1 runs them one after another)"`
 	// Migrate (D15): lore fix never raises a project's format by itself;
 	// with --migrate it runs `lore migrate run` as its migrate step (a
 	// person's choice: teammates then need lore 0.1.18).

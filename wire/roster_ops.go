@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/storepush"
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -537,12 +538,58 @@ func (a *App) rosterHandleFree(ctx context.Context, r rosterAt, handle, stableKe
 
 // rosterByHandle finds the active actor @handle on the repo's roster.
 func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (RosterActor, error) {
-	h := strings.TrimPrefix(handle, rosterHandleMark)
+	h := handleKey(handle)
 	x, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.Handle == h })
 	if err != nil || ok {
 		return x, err
 	}
+	if near, found := a.nearHandle(ctx, r, h); found {
+		return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on the roster in "+r.shown()).WithHint(nearHandleHint(near, h))
+	}
 	return RosterActor{}, r.handleMissErr(h)
+}
+
+// handleKey is a typed @handle as roster handles are stored: without its
+// @, accents folded and lowercased (ops/team personHandle), so @chloé,
+// @Chloe and @chloe name the same person (I-10). Stored handles are one
+// ASCII word, so the fold never hides a match.
+func handleKey(handle string) string {
+	return strings.ToLower(textnorm.ASCIIFold(strings.TrimPrefix(strings.TrimSpace(handle), rosterHandleMark)))
+}
+
+// nearHandleMin is the shortest handle nearHandle pairs by prefix: shorter
+// ones (@a, @ab) are a prefix of too many names to suggest.
+const nearHandleMin = 3
+
+// nearHandle is the active person on r whose handle is close to h (one is
+// the other plus a tail, or they differ only in '-' and '_'): the
+// suggestion a miss names instead of "they run lore actor register" when
+// the person is in fact on the roster under a cut handle (I-10: a roster
+// written before accents were folded holds @chlo for chloé).
+func (a *App) nearHandle(ctx context.Context, r rosterAt, h string) (string, bool) {
+	actors, err := a.RosterActors(ctx, r.src)
+	if err != nil {
+		return "", false
+	}
+	bare := func(s string) string { return strings.NewReplacer("-", "", "_", "").Replace(s) }
+	for _, x := range actors {
+		if !x.Active || x.Handle == "" || x.Handle == h {
+			continue
+		}
+		short, long := x.Handle, h
+		if len(short) > len(long) {
+			short, long = long, short
+		}
+		if bare(x.Handle) == bare(h) || len(short) >= nearHandleMin && strings.HasPrefix(long, short) {
+			return x.Handle, true
+		}
+	}
+	return "", false
+}
+
+// nearHandleHint names the close handle and how to rename it to h.
+func nearHandleHint(near, h string) string {
+	return "did you mean @" + near + "? (`lore member edit --who @" + near + " --handle " + h + "` renames it)"
 }
 
 // rosterFind is the active roster actor match picks. A miss on an org

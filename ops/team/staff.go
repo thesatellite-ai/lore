@@ -47,6 +47,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -645,6 +646,11 @@ func (o ops) planStaff(ctx context.Context, r profilestore.Roster, specs []staff
 			p.id = mustActorID(cur.ID)
 			if isMember(ctx, r, cur) {
 				out.Already = append(out.Already, StaffRow{ID: cur.ID.String(), Email: email, Name: fieldText(cur, actorFieldName)})
+				// I-10: an add naming another handle changed nothing; say
+				// which handle stands and the command that changes it.
+				if was := fieldText(cur, actorFieldHandle); strings.TrimSpace(specs[i].Handle) != "" && s.Handle != "" && s.Handle != was {
+					out.Notes = append(out.Notes, email+": already a member as @"+was+"; the handle is unchanged (lore member edit --who "+email+" --handle "+s.Handle+" changes it)")
+				}
 				continue
 			}
 			p.existing = &cur
@@ -1117,15 +1123,17 @@ func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, 
 }
 
 // personHandle is raw as a person's roster handle: without its @,
-// lowercased, other characters as '-' (a handle is one lowercase word, as
-// a team's; owner report 2026-11-12: `@OnurFromAgency` was refused as
-// a "team handle"). note says what changed ("" when raw was already one).
+// accents folded to ASCII (I-10: `--handle chloé` was cut to @chlo, and her
+// own join as @chloe never met it), lowercased, other characters as '-' (a
+// handle is one lowercase word, as a team's; owner report 2026-11-12:
+// `@OnurFromAgency` was refused as a "team handle"). note says what
+// changed ("" when raw was already one).
 func personHandle(raw string) (h, note string, err error) {
 	given := strings.TrimPrefix(strings.TrimSpace(raw), handleMark)
 	if given == "" {
 		return "", "", nil
 	}
-	h = strings.Trim(strings.ToLower(strings.Map(handleRune, given)), "-_")
+	h = strings.Trim(strings.ToLower(strings.Map(handleRune, textnorm.ASCIIFold(given))), "-_")
 	if h == "" {
 		return "", "", errs.New(errs.InvalidInput, "person handle @"+given+" has no letter or digit").WithHint("--handle mira")
 	}

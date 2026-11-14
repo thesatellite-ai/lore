@@ -50,7 +50,7 @@ Which tools a repo uses is read from the repo itself, so every clone agrees:
 
 ## Step 1 — Init finds your tools
 
-Here the repo already had a `CLAUDE.md` with hand-written notes before lore arrived, so `lore init` detects `claude_code` and puts the pointer on top of that file. In a repo with no tool file at all it would wire `AGENTS.md` instead.
+Here the repo already had a `CLAUDE.md` with hand-written notes before lore arrived, so `lore init` detects `claude_code` and puts the pointer on top of that file. In a repo with no tool file at all it would wire `AGENTS.md` instead. When one tool file already imports another (a `CLAUDE.md` starting with `@AGENTS.md`), init wires only the imported one and says `CLAUDE.md imports @AGENTS.md, so claude_code reads lore's pointer from AGENTS.md`: a second pointer would load `LORE.md` twice, the double load `lore doctor` warns about (its warning names the exact `lore policy set --key context.targets --value <profiles> --yes` that ends it), and doctor never suggests adding such a tool back as a target.
 
 <!-- example: render#init -->
 ```console
@@ -227,7 +227,7 @@ growth: needs renders at least a day apart
 
 ## Pin how a rule appears
 
-Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) is printed in full or as one line, by how much room the tool's budget leaves. `lore pin set --id <id> --context full` makes an entry always print in full, ahead of the other `must` rules; `--context line` makes it always one line that points at `lore show --id <id>`. The pin applies on the next `lore render`. `lore pin unset --id <id>` gives the choice back to render.
+Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) is printed in full or as one line, by how much room the tool's budget leaves. When even the one-line forms do not fit, render first leaves out the high hotfix lines (the last section says how many and that `lore hotfix list` lists them), then shortens every line further; a `must` rule always keeps its id and the start of its text, and a critical hotfix is never shortened. `lore pin set --id <id> --context full` makes an entry always print in full, ahead of the other `must` rules; `--context line` makes it always one line: the id and the entry's summary, else its first sentence, else the start of its text cut at a word (the file's last section says once that `lore show --id <id>` prints the full text). The pin applies on the next `lore render`. `lore pin unset --id <id>` gives the choice back to render.
 
 <!-- example: render#pin -->
 ```console
@@ -240,7 +240,7 @@ $ lore pin set --id rul_54fe…28f2 --context line
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context line (lore render to apply)
 $ lore render >/dev/null && grep -n 'price change' .lore/LORE.md
-42:- `rul_54fe…28f2` Every price change needs the client written OK Full: `lore show --id rul_54fe…28f2`
+42:- `rul_54fe…28f2` Every price change needs the client written OK
 $ lore pin set --id rul_54fe…28f2 --context full
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
 ✓ rul_54fe…28f2 pinned: context full (lore render to apply)

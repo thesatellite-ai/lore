@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -57,6 +58,9 @@ func (c *Cache) SearchHits(ctx context.Context, table row.Table, match string, l
 	if limit <= 0 {
 		return nil, errs.New(errs.InvalidInput, "sqlite cache: search limit must be positive")
 	}
+	// The index holds ı as i (upsertFTS), so the query does too: ISPANAK
+	// finds ıspanak and diyarbakır finds DİYARBAKIR (I-9).
+	match = textnorm.SearchFold(match)
 	out, ftsErr := c.ftsHits(ctx, p, match, limit)
 	// Second column (SECRETS_AND_REFERENCES 9, 8.7): the filled-in text of
 	// row_expanded, so `db.hub.acme.example` finds a row that says
@@ -89,6 +93,11 @@ func (c *Cache) ftsHits(ctx context.Context, p plan, match string, limit int) ([
 			return nil, err
 		}
 		out[i].Snippet = snip
+	}
+	// Every snippet, big-row ones too, shows the row's own letters, not
+	// the folded ı (unfoldSnippet; the segment marks are already gone).
+	for i := range out {
+		out[i].Snippet = c.unfoldSnippet(ctx, p, out[i].ID, out[i].Snippet)
 	}
 	return out, nil
 }
@@ -208,6 +217,81 @@ func textChunks(s string, size int) []string {
 		out = append(out, s)
 	}
 	return out
+}
+
+// unfoldSnippet gives a snippet back the letters the index folded
+// (textnorm.SearchFold: ı is indexed as i), so a hit shows "ıspanak" as
+// written, not "ispanak". The fold maps one rune to one rune, so the
+// snippet's text (without its <b>…</b> marks and the "..." cuts) is a
+// run of the folded field text at the same rune positions as in the row's
+// own text. A snippet with no i, a row with no ı, or a field the typed
+// table does not hold (the resources index) is returned as it is.
+func (c *Cache) unfoldSnippet(ctx context.Context, p plan, id ids.AnyID, snip string) string {
+	if !strings.ContainsRune(snip, 'i') {
+		return snip
+	}
+	core := strings.ReplaceAll(strings.ReplaceAll(snip, snippetOpen, ""), snippetClose, "")
+	core = strings.TrimSuffix(strings.TrimPrefix(core, snippetEllipsis), snippetEllipsis)
+	if core == "" {
+		return snip
+	}
+	tq, err := ident(p.def.Name.String())
+	if err != nil {
+		return snip
+	}
+	for _, f := range p.def.FTS {
+		fq, ferr := ident(f)
+		if ferr != nil {
+			continue
+		}
+		var orig sql.NullString
+		if c.db.QueryRowContext(ctx, `SELECT `+fq+` FROM `+tq+` WHERE "`+colID+`" = ? LIMIT 1`, id.String()).Scan(&orig) != nil || !strings.ContainsRune(orig.String, 'ı') {
+			continue
+		}
+		at := strings.Index(textnorm.SearchFold(orig.String), core)
+		if at < 0 {
+			continue
+		}
+		from := utf8.RuneCountInString(textnorm.SearchFold(orig.String)[:at])
+		src := []rune(orig.String)[from:]
+		return reletter(snip, src)
+	}
+	return snip
+}
+
+// reletter is snip with its text runes (not the <b>, </b> marks or the
+// "..." cuts at either end) taken in order from src.
+func reletter(snip string, src []rune) string {
+	var b strings.Builder
+	rest := snip
+	if strings.HasPrefix(rest, snippetEllipsis) {
+		b.WriteString(snippetEllipsis)
+		rest = rest[len(snippetEllipsis):]
+	}
+	tail := ""
+	if strings.HasSuffix(rest, snippetEllipsis) {
+		rest, tail = rest[:len(rest)-len(snippetEllipsis)], snippetEllipsis
+	}
+	j := 0
+	for len(rest) > 0 {
+		switch {
+		case strings.HasPrefix(rest, snippetOpen):
+			b.WriteString(snippetOpen)
+			rest = rest[len(snippetOpen):]
+		case strings.HasPrefix(rest, snippetClose):
+			b.WriteString(snippetClose)
+			rest = rest[len(snippetClose):]
+		default:
+			r, n := utf8.DecodeRuneInString(rest)
+			if j < len(src) {
+				r = src[j]
+			}
+			j++
+			b.WriteRune(r)
+			rest = rest[n:]
+		}
+	}
+	return b.String() + tail
 }
 
 // expandedHits finds rows of table whose row_expanded text holds every

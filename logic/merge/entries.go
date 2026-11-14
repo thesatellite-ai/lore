@@ -230,7 +230,7 @@ func mergeEntryValue(b []byte, inB bool, o []byte, inO bool, t []byte, inT bool,
 		if perr != nil {
 			return nil, false, false, perr
 		}
-		m, merr := setMerge(bv, ov, tv, newer, setKeyValue, nil)
+		m, merr := setMerge(bv, ov, tv, newer, setKeyValue, nil, pickRaw)
 		if merr != nil {
 			return nil, false, false, merr
 		}

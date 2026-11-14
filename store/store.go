@@ -112,6 +112,11 @@ type SyncReport struct {
 	// "." for the root), "" for a backend without folders. Sent and
 	// Received count only its rows when it has one.
 	Folder string
+	// Clone identifies the clone this backend synced ("" for a backend
+	// without one): folders of different clones share names (each store's
+	// root is "."), so Others is matched to a store by clone and folder
+	// together, never by folder alone (I-2).
+	Clone string
 	// Others counts the rows of the store's other folders this sync sent
 	// and received (one sync of a clone carries every folder), by folder,
 	// so a folder no attached store names is still reported under its own

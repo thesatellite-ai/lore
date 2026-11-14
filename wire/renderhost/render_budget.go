@@ -262,14 +262,36 @@ func scopeNote(dir string) string {
 	return "(only in " + dir + "/) "
 }
 
-// ruleLine and hotfixLine are the 6.4 line forms.
+// ruleLine is the 6.4 line form with its own `lore show` pointer (path
+// rule files, which have no footer).
 func ruleLine(r pinnedRule) string {
 	return contextfit.LineForm(r.ID, scopeNote(r.Dir)+contextfit.ShortForm(r.ID, r.Summary, "", r.Body))
 }
 
-func hotfixLine(h pinnedHotfix) string {
-	return contextfit.LineForm(h.ID, scopeNote(h.Dir)+contextfit.ShortForm(h.ID, h.Summary, h.Title, h.Body))
+// ruleBrief and hotfixBrief are the line forms of LORE.md and the folder
+// files: the text cut to at most cut characters (0: the default short
+// form) and no per-line pointer, the file says once how to see the full
+// text (bug hunt G-6).
+func ruleBrief(r pinnedRule, cut int) string {
+	return contextfit.BriefLine(r.ID, scopeNote(r.Dir)+contextfit.ShortFormMax(r.ID, r.Summary, "", r.Body, cut))
 }
+
+func hotfixBrief(h pinnedHotfix, cut int) string {
+	return contextfit.BriefLine(h.ID, scopeNote(h.Dir)+contextfit.ShortFormMax(h.ID, h.Summary, h.Title, h.Body, cut))
+}
+
+// fitStep is one try at fitting LORE.md: how short the line forms are and
+// whether the high hotfix lines give way to one pointer line.
+type fitStep struct {
+	Cut      int
+	DropHigh bool
+}
+
+// fitSteps are tried in order until the file fits (bug hunt G-6): the
+// lower-priority content goes first (high hotfix lines, after the tails
+// and the index), then every line is shortened; a must rule always keeps
+// its id and some text, and a critical hotfix is never shortened (CQ3).
+var fitSteps = []fitStep{{}, {DropHigh: true}, {Cut: 80, DropHigh: true}, {Cut: 48, DropHigh: true}}
 
 // renderInput is everything one budgeted render reads.
 type renderInput struct {
@@ -330,8 +352,23 @@ type renderReport struct {
 }
 
 // buildBudgetedFile renders LORE.md within the budget and its report.
-// canary goes in the first line (content-derived by the caller).
+// canary goes in the first line (content-derived by the caller). Each
+// fitStep is tried until one fits; when none does the last is written
+// whole (budget_exceeded, nothing dropped that the steps do not drop).
 func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
+	var body string
+	var rep renderReport
+	for _, st := range fitSteps {
+		body, rep = buildBudgetedStep(canary, in, st)
+		if !rep.Over {
+			break
+		}
+	}
+	return body, rep
+}
+
+// buildBudgetedStep renders LORE.md with one fitStep.
+func buildBudgetedStep(canary string, in renderInput, st fitStep) (string, renderReport) {
 	var crit, high []pinnedHotfix
 	for _, h := range in.Hotfixes {
 		if h.Severity == renderHotfixSeverityCritical || h.Pin == contextfit.FormFull {
@@ -351,13 +388,17 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 			critText.WriteString(hotfixFull(h)) // CQ3: never shortened
 		}
 	}
-	if len(high) > 0 {
+	highOut := 0
+	if len(high) > 0 && st.DropHigh {
+		highOut = len(high) // named once in the footer
+	} else if len(high) > 0 {
 		highText.WriteString("## High hotfixes\n\n")
 		for _, h := range high {
-			highText.WriteString(hotfixLine(h)) // CQ3: one line each
+			highText.WriteString(hotfixBrief(h, st.Cut)) // CQ3: one line each
 		}
 		highText.WriteString("\n")
 	}
+	shownHigh := len(high) - highOut
 	mustHead := ""
 	if len(in.Rules) > 0 {
 		mustHead = "## Must rules\n\n"
@@ -372,7 +413,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 		if r.Summary == "" {
 			noSummary++
 		}
-		entries = append(entries, contextfit.Entry{ID: r.ID, Full: ruleFull(r), Line: ruleLine(r),
+		entries = append(entries, contextfit.Entry{ID: r.ID, Full: ruleFull(r), Line: ruleBrief(r, st.Cut),
 			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated, Pin: r.Pin, PinnedAt: r.PinnedAt})
 	}
 	contextfit.Rank(entries)
@@ -380,7 +421,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	idx, idxShort := indexText(in.Topics)+dirIdx, indexCollapsedText(in.Topics)+dirIdx
 	// The footer's counts depend on the result; measure it with the worst
 	// case (all lines) so the fit never under-counts.
-	footerMax := notInFile(len(entries) + len(high))
+	footerMax := notInFile(len(entries)+shownHigh, highOut)
 	fixed := len(head) + len(critText.String()) + len(mustHead) + len(highText.String()) + len(footerMax)
 	if len(entries) > 0 {
 		fixed++ // the blank line after the line forms (worst case: some are lines)
@@ -393,7 +434,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	b.WriteString(critText.String())
 	b.WriteString(mustHead)
 	rep := renderReport{Profile: in.Settings.Profile, Budget: in.Settings.Budget, WarnPct: in.Settings.WarnPct,
-		Critical: len(crit), HighLine: len(high), Topics: len(in.Topics), IndexFolded: res.IndexCollapsed,
+		Critical: len(crit), HighLine: shownHigh, Topics: len(in.Topics), IndexFolded: res.IndexCollapsed,
 		NoSummary: noSummary, SupersededR: in.Skips.SupersededRules, SupersededH: in.Skips.SupersededHotfixes,
 		Manual: in.Skips.ManualRules, PathScoped: in.Skips.PathScoped, Canary: canary}
 	// Full entries first, then lines, each group in rank order.
@@ -419,7 +460,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	} else {
 		b.WriteString(idx)
 	}
-	b.WriteString(notInFile(rep.MustLine + rep.HighLine))
+	b.WriteString(notInFile(rep.MustLine+rep.HighLine, highOut))
 	if len(in.Rules)+len(in.Hotfixes) == 0 {
 		// A paragraph of its own: right after the footer's last bullet
 		// markdown would read it as that bullet's continuation.
@@ -447,11 +488,14 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 
 // notInFile is the closing section: what is one line here, and where the
 // rest lives (6.3 tier 5, RES-OQ3).
-func notInFile(lines int) string {
+func notInFile(lines, highOut int) string {
 	var b strings.Builder
 	b.WriteString("## Not in this file\n\n")
 	if lines > 0 {
 		fmt.Fprintf(&b, "- %s shown here only as one line: `lore show --id <id>` prints the full text.\n", plural.Of(lines, "pinned entry is", "pinned entries are"))
+	}
+	if highOut > 0 {
+		fmt.Fprintf(&b, "- %s left out to fit the budget: `lore hotfix list` lists them.\n", plural.Of(highOut, "high hotfix is", "high hotfixes are"))
 	}
 	b.WriteString("- Memories, decisions, patterns, should/may rules and medium/low hotfixes are search-only: `lore search --query \"<keywords>\"`.\n")
 	b.WriteString("- Infrastructure facts: `lore resource list` / `lore resource show --id <name>`.\n")
@@ -618,8 +662,44 @@ func (h *Host) targetSuggestions(ctx context.Context, root string, targets []con
 	if err != nil {
 		return nil
 	}
-	return suggestTargets(sessions, pid.String(), filepath.Base(root), h.now(), reg, targets)
+	var out []string
+	for _, l := range suggestTargets(sessions, pid.String(), filepath.Base(root), h.now(), reg, targets) {
+		if !suggestionViaImport(root, reg, l, targets) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
+
+// suggestionViaImport reports whether suggestion line l names a tool whose
+// pointer file already imports a target's file (CLAUDE.md with
+// @AGENTS.md): that tool loads lore's pointer through the import, and
+// adding it as a target makes the double load doubleLoads warns about
+// (I-14: init leaves such a tool out on purpose).
+func suggestionViaImport(root string, reg *toolprofile.Registry, l string, targets []contextTarget) bool {
+	rest, ok := strings.CutPrefix(l, suggestPrefix)
+	if !ok {
+		return false
+	}
+	name, _, _ := strings.Cut(rest, " ")
+	p, ok := reg.Lookup(name)
+	if !ok || !p.HasPointerFile() {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Clean(filepath.Join(root, filepath.FromSlash(p.PointerFile))))
+	if err != nil {
+		return false
+	}
+	for _, t := range targets {
+		if t.profile.HasPointerFile() && t.profile.PointerFile != p.PointerFile && toolprofile.ImportsFile(string(data), t.profile.PointerFile) {
+			return true
+		}
+	}
+	return false
+}
+
+// suggestPrefix starts each suggestTargets line.
+const suggestPrefix = "context: "
 
 // suggestTargets is targetSuggestions on given rows (pure, for tests):
 // sessions of projectID in repo (the checkout's folder name, as the
@@ -684,16 +764,25 @@ func doubleLoads(root string, targets []contextTarget) []string {
 			if b.profile.Name == a.profile.Name || !b.profile.HasPointerFile() {
 				continue
 			}
-			for _, l := range strings.Split(string(data), "\n") {
-				if strings.TrimSpace(l) == "@"+b.profile.PointerFile {
-					out = append(out, fmt.Sprintf("context: double load: %s imports %s and both carry lore's pointer, so %s loads LORE.md twice; drop one target (lore policy set --key context.targets --value ...)",
-						a.profile.PointerFile, b.profile.PointerFile, a.profile.Name))
-					break
-				}
+			if toolprofile.ImportsFile(string(data), b.profile.PointerFile) {
+				out = append(out, fmt.Sprintf("context: double load: %s imports %s and both carry lore's pointer, so %s loads LORE.md twice; drop %s: lore policy set --key %s --value %s --yes",
+					a.profile.PointerFile, b.profile.PointerFile, a.profile.Name, a.profile.Name, policy.KeyContextTargets, targetsWithout(targets, a.profile.Name)))
 			}
 		}
 	}
 	return out
+}
+
+// targetsWithout is the targets' names but drop, comma separated: the
+// context.targets value that ends a double load.
+func targetsWithout(targets []contextTarget, drop string) string {
+	var names []string
+	for _, t := range targets {
+		if t.profile.Name != drop {
+			names = append(names, t.profile.Name)
+		}
+	}
+	return strings.Join(names, ",")
 }
 
 // dirFileCount counts the folder scopes whose LORE.md render wrote (8.9).

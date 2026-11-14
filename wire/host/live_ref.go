@@ -6,6 +6,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -123,7 +124,10 @@ func (a *liveRefAdapter) Log(ctx context.Context, n int) (opslive.History, error
 }
 
 // errLiveBlocked refuses a ref write after the remote ref was rewritten.
-func errLiveBlocked() error {
+func errLiveBlocked(blocked error) error {
+	if errors.Is(blocked, live.ErrRemoteGoneURLUnknown) {
+		return errs.New(errs.ReadOnly, liveGoneURLUnknownText).WithHint(liveGoneURLUnknownHint)
+	}
 	return errs.New(errs.ReadOnly, "the remote live ref was deleted or rewritten").WithHint("run `lore live restore` first")
 }
 
@@ -131,7 +135,7 @@ func errLiveBlocked() error {
 func (a *liveRefAdapter) Compact(ctx context.Context, dryRun bool) (opslive.Compacted, error) {
 	s := a.s
 	if s.blocked != nil {
-		return opslive.Compacted{}, errLiveBlocked()
+		return opslive.Compacted{}, errLiveBlocked(s.blocked)
 	}
 	res, err := s.ref.Compact(ctx, dryRun)
 	if err != nil {
@@ -165,7 +169,7 @@ func (a *liveRefAdapter) Compact(ctx context.Context, dryRun bool) (opslive.Comp
 func (a *liveRefAdapter) Purge(ctx context.Context, ids []string) error {
 	s := a.s
 	if s.blocked != nil {
-		return errLiveBlocked()
+		return errLiveBlocked(s.blocked)
 	}
 	if _, err := s.ref.Purge(ctx, ids, s.h.cfg.Version); err != nil {
 		return errs.Wrap(errs.Internal, "purge", err)

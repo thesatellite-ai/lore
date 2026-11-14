@@ -90,6 +90,8 @@ lore memory list: store clone ~/.lore/stores/alice/lore-me: git user set to Alic
 
 ## On your next machine
 
+This works when your personal store is a git repo. The `local` personal store (the one the `lore setup join` lines pick) is a folder on one machine, `~/.lore/stores/_me`, with no copy anywhere else: a lost or wiped laptop loses those notes. The join lines and the personal_store step say so, and `lore doctor --all` notes it on the `store me` line. To keep a copy, push that folder to a private git repo and run `lore store set-url --name me --url <private-repo-url>`, or answer the personal_store step with `{"personal_store":"existing","store_url":"<private-repo-url>"}` when you join.
+
 Install lore, then attach the personal store you already have. `lore store init --name me --url <url>` on an existing store attaches it (it never empties it) and records it as `personal.store`; your notes are there on the next command (lore also prints a line or two about the git settings it made in the store clone and in this repo, left out here):
 
 ```console

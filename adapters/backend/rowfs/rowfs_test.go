@@ -417,11 +417,11 @@ func TestMissingIsNotADelete(t *testing.T) {
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("a vanished file was reported: %v %v", rows, err)
 	}
-	missing, err := f.Missing(cur)
+	missing, err := f.Missing(ctx, cur)
 	if err != nil || len(missing) != 1 || missing[0] != RowPath(memories, a.ID) {
 		t.Fatalf("missing = %v %v", missing, err)
 	}
-	if none, err := f.Missing("garbage"); err != nil || len(none) != 0 {
+	if none, err := f.Missing(ctx, "garbage"); err != nil || len(none) != 0 {
 		t.Fatalf("unreadable cursor: %v %v", none, err)
 	}
 }

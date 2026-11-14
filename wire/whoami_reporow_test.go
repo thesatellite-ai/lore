@@ -42,7 +42,7 @@ func TestWhoamiRepoRowNamesThePlace(t *testing.T) {
 				res.Org = org
 			}
 			s := &orgcfg.Situation{Config: &orgconf.Config{}, HasConfig: true, Result: res, NotGitRepo: c.notRepo, Remotes: c.remotes}
-			got, ok := lineOf(whoamiLines(s, identity.Resolved{DisplayName: "Alice", StableKey: "human:alice@agency.example"}, nil, false, whoamiRedactor{}, nil, testMachine, ""), "repo")
+			got, ok := lineOf(whoamiLines(s, identity.Resolved{DisplayName: "Alice", StableKey: "human:alice@agency.example"}, "", nil, false, whoamiRedactor{}, nil, testMachine, ""), "repo")
 			if !ok || got != c.want {
 				t.Fatalf("repo row %q (present %v), want %q", got, ok, c.want)
 			}

@@ -14,6 +14,7 @@ package task
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"maps"
 	"slices"
 	"strconv"
@@ -1511,6 +1512,13 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
+	// G-10: a task is finished once. A second done (no --commit / --pr to
+	// record) changes nothing and names who finished it.
+	if in.Commit == "" && in.PR == 0 {
+		if src, cur, gerr := o.getSource(ctx, in.From, id); gerr == nil && work.Field(cur, work.FieldStatus) == schema.TaskStatusDone {
+			return alreadyDoneOut(id.String(), string(src), work.Field(cur, fieldDoneBy), work.Field(cur, work.FieldCompleted)), nil
+		}
+	}
 	// TASK 6.7: open sub-tasks refuse (E_OPEN_CHILDREN) unless --children
 	// closes them in the same bat_ batch; close_reason completed (8.3).
 	ctx, f, childLines, err := o.closeTree(ctx, id, "done", in.Children, childrenDone)
@@ -1520,6 +1528,10 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	// F7: a claimed task's done ends the claim first (closeheld.go).
 	if hc, ok := heldCloser(ctx); ok {
 		if in.Commit, err = hc.CloseHeldDone(ctx, id.String(), in.Commit, in.PR); err != nil {
+			var ad *AlreadyDoneError
+			if errors.As(err, &ad) {
+				return alreadyDoneOut(id.String(), "", ad.By, ad.At.UTC().Format(time.RFC3339)), nil
+			}
 			return DoneOut{}, err
 		}
 	}
@@ -1599,6 +1611,22 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 
 // Text implements op.Texter.
 func (o DoneOut) Text() string { return o.Human }
+
+// alreadyDoneOut is the no-op answer of a done on a finished task (G-10).
+func alreadyDoneOut(id, src, by, at string) DoneOut {
+	if by == "" {
+		by = "someone"
+	}
+	line := "· " + id + " was already done by " + by
+	if t, err := time.Parse(time.RFC3339Nano, at); err == nil {
+		at = t.UTC().Format(time.RFC3339)
+	}
+	if at != "" {
+		line += " at " + at
+	}
+	return DoneOut{ID: id, Store: src, AlreadyDone: true, DoneBy: by,
+		Human: line + "; nothing changed\n"}
+}
 
 // linkNote is the done line's word on whether the commit is linked to
 // the task. --commit is kept on the task (done_commit) but makes no

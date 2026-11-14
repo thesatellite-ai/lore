@@ -151,7 +151,11 @@ func queueOf(env Env, v signals.View, req NextRequest, docs []Doc) queue.Result 
 	tasks := make([]queue.Task, 0, len(docs))
 	for _, d := range docs {
 		st, by := ClaimStateOf(v, env.Folder, d.Str(keyID))
-		tasks = append(tasks, withUrgency(ToQueueTask(d, req.RepoName, st, by), d, req.Urgency))
+		t := withUrgency(ToQueueTask(d, req.RepoName, st, by), d, req.Urgency)
+		if _, done := DoneMarkerOf(v, env.Folder, t.ID, d); done && isOpen(d.Status()) {
+			t.Status = queue.Status(statusDone) // G-10: finished elsewhere; this row has not synced it yet
+		}
+		tasks = append(tasks, t)
 	}
 	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts, Weights: env.Urgency})
 }

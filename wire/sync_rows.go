@@ -220,6 +220,8 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 		}
 	}
 	res, serr := s.app.SyncStores(ctx, "")
+	var goneNames, goneNexts []string // H-11 / G-16: stores whose address holds no store now
+	goneSaid := map[string]bool{}     // a store's folders share its clone: said once
 	for _, r := range res.Stores {
 		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
 			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held})
@@ -231,10 +233,30 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 		if r.Held != "" {
 			line = "store " + shown + ": " + r.Held // its push did not run; the refusal is the other folder's line
 		}
+		var next string
 		if r.Offline {
-			line += syncStoreOffline
+			// set-url and --restore take the store, never one folder of it
+			storeName, _, _ := strings.Cut(shown, targetSep)
+			u := s.app.storeURLOf(ctx, r.Store)
+			if cause, n, gone := storeGone(r.OfflineDetail, u, storeName); gone {
+				// H-11 / G-16: not offline (it said so with exit 0 forever):
+				// the address holds no store now
+				if goneSaid[u] {
+					line += " (the same store: see above)"
+				} else {
+					goneSaid[u] = true
+					line += " (" + cause + ")"
+					next = n
+					goneNames, goneNexts = append(goneNames, storeName), append(goneNexts, storeName+": "+n)
+				}
+			} else {
+				line += syncStoreOffline
+			}
 		}
 		out.Lines = append(out.Lines, line)
+		if next != "" {
+			out.Lines = append(out.Lines, "  next: "+next)
+		}
 		for _, p := range r.Problems {
 			out.Lines = append(out.Lines, "  "+p)
 		}
@@ -248,6 +270,10 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 				out.Lines = append(out.Lines, fmt.Sprintf("lore sync: wrote %d queued run time span(s)", f.Written))
 			}
 		}
+	}
+	if serr == nil && len(goneNames) > 0 {
+		serr = errs.New(errs.StoreUnreachable, fmt.Sprintf("sync: %d store(s) answer that there is no repository at their address: %s (the rest synced; local changes are kept)", len(goneNames), strings.Join(goneNames, ", "))).
+			WithHint(strings.Join(goneNexts, "; "))
 	}
 	if serr == nil && len(out.Data.Conflicts) > 0 {
 		// the sync ran, but rows wait on a person: say so in the exit code
@@ -502,6 +528,9 @@ func storeRefusalNextFor(code string) string {
 // reason and next step. A local state that cannot be read adds a note line
 // instead (status still answers).
 func (s syncRows) SyncStatus(ctx context.Context, in opssync.StatusIn) (opssync.StatusOut, error) {
+	if s.coreHost() && s.app.setupStatusHere(ctx) {
+		return s.app.setupSyncStatus(ctx)
+	}
 	out, err := s.Env.SyncStatus(ctx, in)
 	if err != nil && s.coreHost() && s.inStoreFolder(err) {
 		out, err = opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus}, nil

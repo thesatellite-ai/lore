@@ -59,6 +59,12 @@ type Ref struct {
 	PushRetries int
 	// Backoff returns the pause before retry n (1-based); nil = no pause.
 	Backoff func(n int) time.Duration
+
+	// fetchedFrom is the url this run's last fetch or push reached (""
+	// = none yet). A fetch keeps it here and writes no file: a read
+	// fetches too, and a read writes nothing in .git (C-8). markSeen
+	// writes it beside the seen marker it belongs to.
+	fetchedFrom string
 }
 
 // ErrRemoteRewritten means the remote live ref was deleted or replaced by
@@ -66,6 +72,14 @@ type Ref struct {
 // not higher (so it is not a compaction): §6.6, side effect 28. Writes stop
 // until `lore live restore`.
 var ErrRemoteRewritten = errors.New("live: the remote live ref was deleted or rewritten")
+
+// ErrRemoteGoneURLUnknown is the ErrRemoteRewritten case where the remote
+// has no live ref and this clone's seen marker carries no remote url (it
+// was written by a lore that did not record one): a repo moved to a new
+// remote looks exactly like a deleted ref, so callers name both causes
+// and `lore live restore` as the way to confirm a move (G-1). It wraps
+// ErrRemoteRewritten, so every errors.Is check of that keeps holding.
+var ErrRemoteGoneURLUnknown = fmt.Errorf("%w: the remote has no live ref and the url of the last sync was not recorded, so a moved remote cannot be told from a deleted ref", ErrRemoteRewritten)
 
 // ErrBelowFloor means this binary is older than the live ref's
 // min_lore_version (E_OLD_LORE): it may read, never write.
@@ -95,9 +109,13 @@ const defaultRemote = "origin"
 const (
 	seenSuffix    = ".seen"
 	seenURLSuffix = ".seen-url"
-	pendingSuffix = ".pending.json"
-	stateDirMode  = 0o755
-	stateFileMode = 0o644
+	// trackingURLSuffix holds the remote url the tracking ref was last
+	// fetched from or pushed to: the url a seen marker taken from the
+	// tracking ref belongs to (G-1).
+	trackingURLSuffix = ".tracking-url"
+	pendingSuffix     = ".pending.json"
+	stateDirMode      = 0o755
+	stateFileMode     = 0o644
 )
 
 func (r *Ref) stateFile(suffix string) string {
@@ -193,6 +211,9 @@ func (r *Ref) Integrate(ctx context.Context) (IntegrateResult, error) {
 				// had it, nothing was deleted (A-6); forget the old marker
 				return IntegrateResult{Action: IntegrateNeverPushed}, r.ClearSeen()
 			}
+			if r.seenURLUnknown() {
+				return r.rewrittenAs(ctx, s, ErrRemoteGoneURLUnknown)
+			}
 			return r.rewritten(ctx, s)
 		}
 		return IntegrateResult{Action: IntegrateNothing}, nil
@@ -271,11 +292,17 @@ func (r *Ref) historyReplaced(ctx context.Context, s Snapshot) (IntegrateResult,
 
 // rewritten backs up the local ref and reports ErrRemoteRewritten.
 func (r *Ref) rewritten(ctx context.Context, s Snapshot) (IntegrateResult, error) {
+	return r.rewrittenAs(ctx, s, ErrRemoteRewritten)
+}
+
+// rewrittenAs is rewritten reporting cause (ErrRemoteRewritten or an
+// error wrapping it), so the caller can say which case stopped writes.
+func (r *Ref) rewrittenAs(ctx context.Context, s Snapshot, cause error) (IntegrateResult, error) {
 	backup, err := r.ensureBackupOf(ctx, s.Local)
 	if err != nil {
 		return IntegrateResult{}, err
 	}
-	return IntegrateResult{Backup: backup}, fmt.Errorf("%w (local copy kept as %s)", ErrRemoteRewritten, backup)
+	return IntegrateResult{Backup: backup}, fmt.Errorf("%w (local copy kept as %s)", cause, backup)
 }
 
 // mergeOnto three-way merges local onto the remote tip: base..local are
@@ -470,13 +497,50 @@ func (r *Ref) pruneBackups(ctx context.Context) error {
 	return nil
 }
 
+// markSeen records oid, read from the tracking ref, as the last remote
+// commit this clone integrated, with the url the tracking ref came from
+// (G-1). That url is the one of the last fetch or push, never RemoteURL as
+// it is now: after `git remote set-url` a run that does not fetch (a hook,
+// a read inside the fetch interval) still integrates the old remote's
+// tracking ref, and recording the new url made the move read as a
+// deletion on the next fetch. A fetch keeps its url in memory only (a read
+// fetches too, and a read writes nothing in .git, C-8), so it is written
+// here, with the marker it belongs to. When no fetch or push ever recorded
+// a url (a lore before this file), the url beside the marker is left as
+// it is.
 func (r *Ref) markSeen(oid string) error {
-	if r.RemoteURL != "" {
-		if err := writeState(r.stateFile(seenURLSuffix), []byte(r.RemoteURL+"\n")); err != nil {
+	at := readTrim(r.stateFile(trackingURLSuffix))
+	if r.fetchedFrom != "" && r.fetchedFrom != at {
+		at = r.fetchedFrom
+		if err := writeState(r.stateFile(trackingURLSuffix), []byte(at+"\n")); err != nil {
+			return err
+		}
+	}
+	if at != "" {
+		if err := writeState(r.stateFile(seenURLSuffix), []byte(at+"\n")); err != nil {
 			return err
 		}
 	}
 	return writeState(r.stateFile(seenSuffix), []byte(oid+"\n"))
+}
+
+// markFetched remembers, in memory only, that the tracking ref now comes
+// from RemoteURL (after a fetch); markSeen writes it down.
+func (r *Ref) markFetched() {
+	if r.RemoteURL != "" {
+		r.fetchedFrom = r.RemoteURL
+	}
+}
+
+// markTracked records RemoteURL as the url the tracking ref now comes
+// from, after a push that reached it (a write run: the file may be
+// written).
+func (r *Ref) markTracked() error {
+	if r.RemoteURL == "" {
+		return nil
+	}
+	r.fetchedFrom = r.RemoteURL
+	return writeState(r.stateFile(trackingURLSuffix), []byte(r.RemoteURL+"\n"))
 }
 
 // seenElsewhere reports whether the seen marker was recorded on a remote
@@ -486,6 +550,13 @@ func (r *Ref) markSeen(oid string) error {
 func (r *Ref) seenElsewhere() bool {
 	at := readTrim(r.stateFile(seenURLSuffix))
 	return at != "" && r.RemoteURL != "" && at != r.RemoteURL
+}
+
+// seenURLUnknown reports a seen marker with no remote url beside it (an
+// older lore wrote it) while this ref knows its remote url: whether the
+// remote moved since cannot be told.
+func (r *Ref) seenURLUnknown() bool {
+	return r.RemoteURL != "" && readTrim(r.stateFile(seenURLSuffix)) == ""
 }
 
 // ClearSeen forgets the last integrated remote commit (after `lore live

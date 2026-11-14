@@ -63,3 +63,35 @@ func TestAddMonths(t *testing.T) {
 		}
 	}
 }
+
+// TestDayInAndDueBy pins I-8: a clock time is listed as its day in the
+// viewer's zone, a calendar day stays that day, and a day is due once it
+// has begun where the viewer is (not at UTC midnight).
+func TestDayInAndDueBy(t *testing.T) {
+	la, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Skip("no tz database")
+	}
+	sat2000LA := time.Date(2026, 11, 15, 4, 0, 0, 0, time.UTC) // Sat 11-14 20:00 PST
+	if got := DayIn(sat2000LA, la); got != "2026-11-14" {
+		t.Errorf("DayIn instant = %s", got)
+	}
+	day := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	if got := DayIn(day, la); got != "2026-11-14" {
+		t.Errorf("DayIn day = %s", got)
+	}
+	fri1900LA := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
+	if DueBy(day, fri1900LA, la) {
+		t.Error("a 11-14 day is due on Fri 11-13 in LA")
+	}
+	if !DueBy(day, fri1900LA, time.UTC) {
+		t.Error("a 11-14 day is not due at 03:00 UTC on 11-14 in UTC")
+	}
+	if DueBy(sat2000LA, fri1900LA, la) || !DueBy(sat2000LA, sat2000LA.Add(time.Minute), la) {
+		t.Error("instant due compare")
+	}
+	r, err := Parse("tomorrow + 09:00", Clock{Now: fri1900LA, Loc: la, WeekEnd: time.Friday})
+	if err != nil || r.Day || r.At.In(la).Format("2006-01-02 15:04") != "2026-11-14 09:00" {
+		t.Errorf("tomorrow + 09:00 = %v, %v", r, err)
+	}
+}

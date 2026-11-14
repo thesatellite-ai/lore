@@ -94,6 +94,7 @@ func TestHereLine(t *testing.T) {
 	}{
 		{Here{State: HereNotGit}, "This folder: not a git repo"},
 		{Here{State: HereNotLore}, "This folder: a git repo lore is not set up in (lore init sets it up)"},
+		{Here{State: HereNotLore, ClientOrg: "acme"}, "This folder: a client repo of acme (lore keeps its notes in acme's store: lore org link --org acme --project <folder>; not lore init, which writes into the client's repository)"}, // I-13
 		{match, "This folder: org acme, store team_notes, written as Pat Example <work@example.org> — matches setup work (folder ~/code/acme/**)"},
 		{nomatch, "This folder: org acme, store team_notes, written as Pat Example <work@example.org> — no setup matches; lore setup offers a member setup acme from this repo"},
 		{none, "This folder: no org, stores a, b, written as agent:x — no setup matches (two setups tie)"},

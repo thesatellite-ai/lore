@@ -60,7 +60,12 @@ func TestCheckStores(t *testing.T) {
 	list := a.CheckStores(background())
 	me := checkOf(t, list, "me")
 	if me.Source != opsstores.SourcePersonal || me.Kind != opsstores.StoreKindGit || !me.Reachable || me.Clone != "whole" ||
-		me.Unpushed < 1 || me.OldestUnpushed == "" || !hasProblem(me, "not pushed, the oldest") {
+		me.Unpushed < 1 || me.OldestUnpushed == "" || len(me.Problems) != 0 || !slices.ContainsFunc(me.Notes, func(n string) bool {
+		// H-16: push manual (the default) holds commits until a sync: a
+		// note naming what sends them, not a problem saying the next
+		// command pushes them
+		return strings.Contains(n, "not sent yet, the oldest") && strings.Contains(n, "push manual: `lore sync` sends them")
+	}) {
 		t.Fatalf("me with an unpushed write: %+v", me)
 	}
 	if far := checkOf(t, list, "far"); far.Clone != cloneNotCloned || len(far.Problems) != 0 || len(far.Notes) != 1 {

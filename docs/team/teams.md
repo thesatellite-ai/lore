@@ -33,7 +33,7 @@ members (2):
 ```
 <!-- /example -->
 
-`--members` takes `@handle`s, `act_` ids or emails, comma-separated or repeated. A handle is one lowercase word (letters, digits, `_` and `-`).
+`--members` takes `@handle`s, `act_` ids or emails, comma-separated or repeated. A handle is one lowercase word (letters, digits, `_` and `-`). Accents are dropped, never the rest of the word: `lore member add --handle chloé` stores `@chloe`, and `--assign @chloé` or `@Chloe` finds the same person. A handle that is not on the roster but close to one (a roster written by an older lore holds `@chlo` for chloé) is answered with that handle and the `lore member edit --who @chlo --handle chloe` that renames it; `member add` for someone already on the roster with another `--handle` says the handle is unchanged and names the same command.
 
 ## Step 2 — Assign work to the team
 
@@ -52,11 +52,13 @@ lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e9…4603.json (sto
 ```
 <!-- /example -->
 
+Every member of `@web` then finds the task in `lore task list --mine` and in `lore inbox` under assignments, marked `(team @web)`, until someone claims it.
+
 A team's name is internal to the org, so a task written into a client's own repo cannot be assigned to a team; write it to the org's store (`--to agency`) as above.
 
 ## Step 3 — Change who is on it
 
-`team member add` and `team member remove` change the members and say who was already in (or not in); `team add` on an existing team renames it and keeps its members unless `--members` is given, which replaces them. Someone invited who has not joined yet is named by email: `lore team member add --handle @web --members mira@agency.example` records the team on her pending invite and says so, and she joins it when she accepts (`lore team invite --email <email> --team @web` does the same up front). `team list` counts them as pending, and `team show` lists them apart from the members, with their invite and its last day:
+`team member add` and `team member remove` change the members and say who was already in (or not in); `team add` on an existing team changes its display name and keeps its members unless `--members` is given, which replaces them. Someone invited who has not joined yet is named by email: `lore team member add --handle @web --members mira@agency.example` records the team on her pending invite and says so, and she joins it when she accepts (`lore team invite --email <email> --team @web` does the same up front). `team list` counts them as pending, and `team show` lists them apart from the members, with their invite and its last day:
 
 <!-- example: teams#members -->
 ```console
@@ -102,6 +104,8 @@ $ lore team list --json
 ```
 <!-- /example -->
 
+To change the handle itself, `lore team rename --handle @web --to @frontend` keeps the team (same `tem_` id and members): tasks assigned to it show `@frontend` from then on, and a pending invite that named `@web` names `@frontend`. The new handle may not be a person's or another team's, removed ones included.
+
 ## What lore refuses
 
 A team cannot take a person's handle (an `@mention` would mean two things), only people on the roster can join (someone who left must be brought back with `lore actor rejoin` first), and a team that does not exist is named with the command that makes it:
@@ -126,7 +130,7 @@ ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
 
 ## Step 4 — Remove a team
 
-`team remove` takes the team off the roster but keeps its row, so tasks that named `@web` still read it; `team list --all` shows removed teams, and `team add` brings one back with its members:
+`team remove` takes the team off the roster but keeps its row, so tasks that named `@web` still read it; `team list --all` shows removed teams, and `team add` brings one back with its members. Once the removal has reached a clone (`lore sync`), `--assign @web` there is refused with `team @web was removed from the roster`, naming `lore team list` and any active team with the same members:
 
 <!-- example: teams#remove -->
 ```console

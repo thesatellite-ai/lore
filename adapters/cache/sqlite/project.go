@@ -333,7 +333,7 @@ func upsertFTS(ctx context.Context, tx *sql.Tx, p plan, source string, id ids.An
 	for _, f := range p.def.FTS {
 		cell := jsonNull
 		if v, ok := vals[f]; ok && v.Kind() != value.KindNull {
-			cell = canon.String(ftsIndexText(v.String())) // CJK and emoji as tokens (ftsseg.go)
+			cell = canon.String(ftsIndexText(v.String())) // ı folded, CJK and emoji as tokens (ftsseg.go)
 		}
 		cells = append(cells, cell)
 	}

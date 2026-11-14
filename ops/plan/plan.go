@@ -220,7 +220,7 @@ type EditIn struct {
 // SearchIn is the input of plan.search.
 type SearchIn struct {
 	Query   string `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
-	Limit   int    `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit   int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"only plans of this project (prj_ id or name)"`
 	// Columns restricts the match to some full-text fields (v0.1.17
 	// --column).

@@ -45,6 +45,14 @@ const (
 	KindClaim Kind = "claim"
 	// KindResource is a hold on a shared thing such as a test suite (§7.2).
 	KindResource Kind = "resource"
+	// KindDone marks a task its holder finished (G-10). Task rows reach
+	// other clones only with a sync, so a clone whose row still says todo
+	// saw no claim after the done dropped it and claimed the task again;
+	// the marker stays on the signals ref, the one place every claim
+	// decision reads atomically, until its Expires (DoneKeep after the
+	// done), and a claim of a task it marks is refused. A binary without
+	// this kind reads the file as malformed and drops it on its next write.
+	KindDone Kind = "done"
 )
 
 // Folders inside one project folder of the signals tree (§1 "Files and
@@ -52,6 +60,8 @@ const (
 const (
 	ClaimsDir    = "claims"
 	ResourcesDir = "resources"
+	// DoneDir holds the done markers (KindDone): `<folder>/done/<task-id>.json`.
+	DoneDir = "done"
 	// fileExt is the extension of every signal file.
 	fileExt = ".json"
 )
@@ -149,10 +159,10 @@ func Decode(b []byte) (Signal, error) {
 		return Signal{}, fmt.Errorf("%w: %w", ErrBadSignal, err)
 	}
 	switch {
-	case s.Kind != KindClaim && s.Kind != KindResource:
+	case s.Kind != KindClaim && s.Kind != KindResource && s.Kind != KindDone:
 		return Signal{}, fmt.Errorf("%w: unknown kind %q", ErrBadSignal, s.Kind)
-	case s.Kind == KindClaim && s.Task == "":
-		return Signal{}, fmt.Errorf("%w: claim without task", ErrBadSignal)
+	case (s.Kind == KindClaim || s.Kind == KindDone) && s.Task == "":
+		return Signal{}, fmt.Errorf("%w: %s without task", ErrBadSignal, s.Kind)
 	case s.Kind == KindResource && s.Name == "":
 		return Signal{}, fmt.Errorf("%w: resource without name", ErrBadSignal)
 	case s.Holder == "" || s.Session == "" || s.ClaimToken == "":
@@ -163,6 +173,9 @@ func Decode(b []byte) (Signal, error) {
 
 // ClaimPath is the tree path of a claim on id in project folder.
 func ClaimPath(folder, id string) string { return path.Join(folder, ClaimsDir, id+fileExt) }
+
+// DonePath is the tree path of the done marker of task id in project folder.
+func DonePath(folder, id string) string { return path.Join(folder, DoneDir, id+fileExt) }
 
 // ResourcePath is the tree path of a hold on name in project folder.
 func ResourcePath(folder, name string) string { return path.Join(folder, ResourcesDir, name+fileExt) }
@@ -196,8 +209,11 @@ type Key struct {
 
 // Path returns the key's tree path.
 func (k Key) Path() string {
-	if k.Kind == KindResource {
+	switch k.Kind {
+	case KindResource:
 		return ResourcePath(k.Folder, k.Subject)
+	case KindDone:
+		return DonePath(k.Folder, k.Subject)
 	}
 	return ClaimPath(k.Folder, k.Subject)
 }
@@ -221,6 +237,8 @@ func ParsePath(p string) (Key, bool) {
 		return Key{Folder: folder, Kind: KindClaim, Subject: subject}, true
 	case ResourcesDir:
 		return Key{Folder: folder, Kind: KindResource, Subject: subject}, true
+	case DoneDir:
+		return Key{Folder: folder, Kind: KindDone, Subject: subject}, true
 	}
 	return Key{}, false
 }

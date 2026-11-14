@@ -141,6 +141,9 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		}
 		if res.Setup.Name != "" {
 			s.entry, s.exists = res.Setup, true
+			if err := e.keepJoinedKind(ctx, st, s, step); err != nil {
+				return ApplyOut{}, err
+			}
 		}
 		// 2.3: "step status done; re-run its checks once" — what the
 		// page shows after the save is the state after the write. The
@@ -161,6 +164,29 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 	}
 	out.Status, out.Checks = onboard.StepDone, checks
 	return out, e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: answers, Checks: checks, Status: onboard.StepDone})
+}
+
+// keepJoinedKind records the kind a join step gave the setup in the saved
+// kind step. Why (I-17): the org's admin joining from a second machine
+// answers the kind step "member" (the join lines say so: the roster is not
+// read before the join), and the join makes the setup an admin setup; the
+// saved kind step wins over the entry on every later step (loadState), so
+// the next step (folders) made it a member setup again.
+func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step onboard.Step) error {
+	if step.ID != onboard.StepJoin || s.entry.Kind != onboard.KindAdmin {
+		return nil
+	}
+	row, ok := s.progress[onboard.StepKind]
+	if !ok || answerKind(row.Answers) == onboard.KindAdmin {
+		return nil
+	}
+	ans := maps.Clone(row.Answers)
+	if ans == nil {
+		ans = onboard.Answers{}
+	}
+	ans[kindAnswer] = onboard.Answer{Text: string(onboard.KindAdmin)}
+	row.Answers = ans
+	return st.PutProgress(ctx, row)
 }
 
 // withKindDefault fills a kind-step answer set that leaves out default

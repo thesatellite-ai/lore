@@ -119,7 +119,7 @@ type Row struct {
 // Run deletes every live row of sp.Table matching where as one batch (see
 // the package comment for the flow).
 func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Result, error) {
-	m, keys, err := matcher(sp, where)
+	m, keys, err := matcherFor(sp, where, "delete")
 	cols := columns(keys, sp.Aliases)
 	if err != nil {
 		return Result{}, err
@@ -130,28 +130,20 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 		if lerr != nil {
 			return Result{}, lerr
 		}
-		slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+		sortRows(rows)
 		for _, r := range rows {
 			if !r.Deleted && m.Match(getter(r, cols)) {
 				hits = append(hits, Located{Source: src, Row: r})
 			}
 		}
 	}
-	out := Result{IDs: make([]string, 0, len(hits))}
+	out := resultOf(hits)
 	if len(hits) == 0 {
 		out.Human = "no " + sp.Noun + " matches --where; nothing deleted\n"
 		return out, nil
 	}
 	refs := make([]engine.Ref, 0, len(hits))
-	for i, h := range hits {
-		out.IDs = append(out.IDs, h.Row.ID.String())
-		out.Rows = append(out.Rows, Row{ID: h.Row.ID.String(), Store: string(h.Source)})
-		switch {
-		case i == 0:
-			out.Store = string(h.Source)
-		case out.Store != string(h.Source):
-			out.Store = ""
-		}
+	for _, h := range hits {
 		refs = append(refs, engine.Ref{Store: h.Source, Table: sp.Table, ID: h.Row.ID})
 	}
 	var tasks []Located
@@ -241,8 +233,30 @@ func describe(noun string, hits []Located, deps, tasks int, labels bool) string 
 	return b.String()
 }
 
-// matcher parses and binds where against the table's keys.
-func matcher(sp Spec, where []string) (filter.Matcher, map[string]filter.Field, error) {
+// sortRows orders rows by id, so matches list the same on every run.
+func sortRows(rows []row.Row) {
+	slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+}
+
+// resultOf is the Result naming hits (no batch, no text yet).
+func resultOf(hits []Located) Result {
+	out := Result{IDs: make([]string, 0, len(hits))}
+	for i, h := range hits {
+		out.IDs = append(out.IDs, h.Row.ID.String())
+		out.Rows = append(out.Rows, Row{ID: h.Row.ID.String(), Store: string(h.Source)})
+		switch {
+		case i == 0:
+			out.Store = string(h.Source)
+		case out.Store != string(h.Source):
+			out.Store = ""
+		}
+	}
+	return out
+}
+
+// matcherFor parses and binds where against the table's keys; verb
+// ("delete", "archive") words the refusals.
+func matcherFor(sp Spec, where []string, verb string) (filter.Matcher, map[string]filter.Field, error) {
 	keys := Keys(sp.Table)
 	for user, col := range sp.Aliases {
 		if f, ok := keys[col]; ok {
@@ -255,11 +269,11 @@ func matcher(sp Spec, where []string) (filter.Matcher, map[string]filter.Field, 
 		return filter.Matcher{}, nil, err
 	}
 	if f.Empty() {
-		return filter.Matcher{}, nil, errs.New(errs.InvalidInput, sp.Noun+" delete --where: the filter is empty")
+		return filter.Matcher{}, nil, errs.New(errs.InvalidInput, sp.Noun+" "+verb+" --where: the filter is empty")
 	}
 	m, err := f.Bind(func(k filter.Key) (filter.Field, error) {
 		if k.Meta {
-			return filter.Field{}, errs.New(errs.InvalidInput, sp.Noun+" delete --where: "+k.String()+": metadata terms are not taken here").
+			return filter.Field{}, errs.New(errs.InvalidInput, sp.Noun+" "+verb+" --where: "+k.String()+": metadata terms are not taken here").
 				WithHint("filter on a " + sp.Noun + " field (" + strings.Join(sortedKeys(keys), ", ") + ")")
 		}
 		fd, ok := keys[k.Name]

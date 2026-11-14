@@ -145,7 +145,7 @@ func (o ShowOut) baseText() string { return badge + "  " + o.Data.ID + "\n" }
 type SearchIn struct {
 	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
 	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
 	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`

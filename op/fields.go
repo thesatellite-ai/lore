@@ -114,6 +114,13 @@ type FieldInfo struct {
 	// empty --tasklist attached the task to an auto-created default list).
 	// "" lets an empty value through, as before.
 	NonEmpty string
+	// Min is the smallest value a CLI int flag takes when it is given
+	// (`min:"1"`), for a flag whose zero value means "not given, use the
+	// default": `lore task stale --days 0` is refused, `--days must be 1 or
+	// more`, instead of silently running with 60 (G-20). HasMin marks that
+	// the tag is set (Min 0 is a real floor).
+	Min    int64
+	HasMin bool
 
 	index []int
 }
@@ -150,6 +157,7 @@ const (
 	tagAlias    = "alias"
 	tagNonEmpty = "nonempty"
 	tagArgOf    = "argof"
+	tagMin      = "min"
 )
 
 // ui tag keys.
@@ -331,6 +339,13 @@ func fieldOf(op string, sf reflect.StructField, dir fieldDirection) (FieldInfo, 
 			panic(tagError{where + `: nonempty goes with a string flag and names what to give`})
 		}
 		f.NonEmpty = ne
+	}
+	if mn, ok := sf.Tag.Lookup(tagMin); ok {
+		n, err := strconv.ParseInt(mn, 10, 64)
+		if err != nil || f.Flag == "" || (f.Type != TypeInt && f.Type != TypeUint) {
+			panic(tagError{where + `: min goes with an int flag and is an integer`})
+		}
+		f.Min, f.HasMin = n, true
 	}
 	if sh, ok := sf.Tag.Lookup(tagShort); ok {
 		if f.Flag == "" || !shortName.MatchString(sh) {

@@ -33,6 +33,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opswhere "github.com/thesatellite-ai/lore/ops/where"
 )
@@ -149,10 +150,11 @@ func whereUses(home string) map[string]*cacheUse {
 			continue // a damaged record names nothing
 		}
 		repo := r.Record.Repo
-		if !loreFolderAt(repo) {
+		if !opscache.RepoAlive(repo) {
 			// The checkout moved or was deleted: the record is stale until
 			// `lore cache prune` drops it, so say so instead of listing a
-			// path that is not there.
+			// path that is not there. The rule is prune's own: a client
+			// repo holds no .lore/ and is still live (I-12).
 			repo += whereGoneRepo
 		} else {
 			// The repo store's own cache is named from the checkout's path

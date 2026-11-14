@@ -73,7 +73,7 @@ func snapshotOf(ctx context.Context) *readSnapshot {
 func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error) {
 	s := snapshotOf(ctx)
 	if s == nil {
-		return st.Backend.Read(ctx, "")
+		return readAllOf(ctx, st)
 	}
 	s.mu.Lock()
 	f, ok := s.full[st.Backend]
@@ -91,7 +91,7 @@ func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error
 			return nil, "", ctx.Err()
 		}
 		if f.err != nil {
-			return st.Backend.Read(ctx, "") // the filler's failure (its own context, say) is not this reader's
+			return readAllOf(ctx, st) // the filler's failure (its own context, say) is not this reader's
 		}
 	}
 	if f.err != nil {
@@ -106,7 +106,7 @@ func readAll(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error
 func (s *readSnapshot) fill(ctx context.Context, st Attached, f *snapFill) {
 	defer close(f.done)
 	f.err = errFillAborted // replaced below unless Read panics
-	f.rows, f.next, f.err = st.Backend.Read(ctx, "")
+	f.rows, f.next, f.err = readAllOf(ctx, st)
 	if f.err != nil {
 		s.mu.Lock()
 		if s.full[st.Backend] == f {
@@ -129,8 +129,42 @@ func readOneTable(ctx context.Context, st Attached, table row.Table) ([]store.Ro
 		rows, _, err := readAll(ctx, st)
 		return rows, err
 	}
-	rows, _, err := st.Backend.Read(store.WithTables(ctx, table), "")
+	rows, _, err := st.Backend.Read(store.WithTables(withMirror(ctx, st), table), "")
 	return rows, err
+}
+
+// readAllOf is st.Backend.Read(ctx, ""), with the store's row mirror handed
+// down to its MirroredReader (perf3).
+func readAllOf(ctx context.Context, st Attached) ([]store.Row, store.Cursor, error) {
+	return st.Backend.Read(withMirror(ctx, st), "")
+}
+
+// withMirror is ctx carrying st's row mirror for the MirroredReader under
+// st's wrappers; the read still goes through every wrapper.
+func withMirror(ctx context.Context, st Attached) context.Context {
+	if st.mirror == nil {
+		return ctx
+	}
+	r, ok := mirroredReaderOf(st.Backend)
+	if !ok {
+		return ctx
+	}
+	return store.WithRowMirror(ctx, r, st.mirror)
+}
+
+// mirroredReaderOf finds the store.MirroredReader under any wrapper layers.
+func mirroredReaderOf(b store.Backend) (store.MirroredReader, bool) {
+	for b != nil {
+		if r, ok := b.(store.MirroredReader); ok {
+			return r, true
+		}
+		u, ok := b.(unwrapper)
+		if !ok {
+			break
+		}
+		b = u.Unwrap()
+	}
+	return nil, false
 }
 
 // dropSnapshot forgets ctx's snapshot of st's backend: called before every

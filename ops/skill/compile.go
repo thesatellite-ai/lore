@@ -101,9 +101,9 @@ type CompileIn struct {
 	SourceDir   string   `json:"source_dir,omitempty" flag:"source-dir" desc:"directory holding the canonical bundle (.md files; default ./skill)"`
 	Output      string   `json:"output,omitempty" flag:"output" desc:"output path (default <source-dir>/SKILL-<target>-draft.md; the compiler output is never canonical: bench it, then pass --output to promote)"`
 	Model       string   `json:"model,omitempty" flag:"model" desc:"compressor model; must be a strong model (default claude-sonnet-4-6; ollama:<model> for a local one)"`
-	BudgetBytes int      `json:"budget_bytes,omitempty" flag:"budget-bytes" desc:"byte budget the model aims for (default 14000)"`
+	BudgetBytes int      `json:"budget_bytes,omitempty" flag:"budget-bytes" min:"1" desc:"byte budget the model aims for (default 14000)"`
 	Temperature float64  `json:"temperature,omitempty" flag:"temperature" desc:"sampling temperature (default 0.2; raise to 0.5+ for bolder edits)"`
-	TimeoutSec  int      `json:"timeout,omitempty" flag:"timeout" desc:"model call timeout in seconds (default 300)"`
+	TimeoutSec  int      `json:"timeout,omitempty" flag:"timeout" min:"1" desc:"model call timeout in seconds (default 300)"`
 	DryRun      bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"print the result instead of writing the file"`
 	Include     []string `json:"include,omitempty" flag:"include" desc:"file globs relative to source-dir to read (repeatable; default *.md, examples/*.md, playbooks/*.md)"`
 }

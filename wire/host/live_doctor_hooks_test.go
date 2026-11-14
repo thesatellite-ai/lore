@@ -11,9 +11,12 @@ import (
 	"github.com/thesatellite-ai/lore/wire"
 )
 
-// hookLines are the doctor lines about the ride-along hook blocks.
+// hookLines are the doctor lines about the ride-along hook blocks (the
+// leak-guard line, leakguard_test.go, is not one).
 func hookLines(lines []string) []string {
-	return slices.DeleteFunc(slices.Clone(lines), func(l string) bool { return !strings.Contains(l, "hook block") })
+	return slices.DeleteFunc(slices.Clone(lines), func(l string) bool {
+		return !strings.Contains(l, "hook block") || strings.Contains(l, "leak guard off")
+	})
 }
 
 // TestLiveDoctorFixInstallsRideHooks (owner item 37): a repo missing the

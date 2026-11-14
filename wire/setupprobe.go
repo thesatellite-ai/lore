@@ -454,7 +454,9 @@ func (sp setupProber) storeRead(ctx context.Context, r opssetup.ProbeRequest) op
 		return outcome(sp.p.FolderRead(dir), sp.urlVars(u, r))
 	}
 	res := sp.p.ReadRemote(ctx, u, sp.route(r))
-	out := sp.reachedBefore(readVars(outcome(res.Outcome, sp.urlVars(u, r)), res.Class), u, r)
+	vars := sp.urlVars(u, r)
+	vars[onboard.VarStoreName] = markerStoreName(r) // the reached-before fix names set-url and --restore with it
+	out := sp.reachedBefore(readVars(outcome(res.Outcome, vars), res.Class), u, r)
 	if out.Status == onboard.StatusOK && out.Detail == "" {
 		out.Detail = detailReadOK
 		if res.Empty {
@@ -534,7 +536,7 @@ func (sp setupProber) markerVars(res opssetup.ProbeResult, c probe.Class, u stri
 		return res
 	}
 	res = sp.reachedBefore(readVars(res, c), u, r)
-	if res.Vars[onboard.VarFixVariant] == "" {
+	if hostOnlyVariant(res.Vars[onboard.VarFixVariant]) {
 		res.Vars[onboard.VarFixVariant] = string(onboard.FixNoRead)
 	}
 	return res
@@ -547,7 +549,16 @@ func (sp setupProber) markerVars(res opssetup.ProbeResult, c probe.Class, u stri
 // other failure FixWriteUnknown. A variant set already (FixNotGitHub from
 // urlVars) is kept: its text names no read right.
 func writeVars(res opssetup.ProbeResult, c probe.Class) opssetup.ProbeResult {
-	if res.Status != onboard.StatusFail || res.Vars[onboard.VarFixVariant] != "" {
+	if res.Status != onboard.StatusFail {
+		return res
+	}
+	if res.Vars[onboard.VarFixVariant] != "" {
+		// H-11: a host that is not GitHub keeps its text, unless the read
+		// failed too: then "ask for push access" is wrong, store.read's
+		// fix comes first
+		if res.Vars[onboard.VarFixVariant] == string(onboard.FixNotGitHub) && noReadClass(c) {
+			res.Vars[onboard.VarFixVariant] = string(onboard.FixNoRead)
+		}
 		return res
 	}
 	switch c {
@@ -560,6 +571,12 @@ func writeVars(res opssetup.ProbeResult, c probe.Class) opssetup.ProbeResult {
 		res.Vars[onboard.VarFixVariant] = string(onboard.FixWriteUnknown)
 	}
 	return res
+}
+
+// noReadClass reports whether a push test's class is a refused read (no
+// access, auth, host key, gh login): the write right was never tested.
+func noReadClass(c probe.Class) bool {
+	return c == probe.ClassNoAccess || c == probe.ClassAuthDenied || c == probe.ClassHostKey || c == probe.ClassNotLoggedIn
 }
 
 // nameFree is setup.name_free (4.1): fails when another setups[] entry

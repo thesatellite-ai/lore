@@ -359,6 +359,9 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 			}
 			parts = append(parts, "· "+repoCount(len(repos))+": "+strings.Join(names, ", "))
 		}
+		if a == targetStore+storeMe && s.summary.localPersonal {
+			parts = append(parts, localPersonalNote)
+		}
 		return strings.Join(parts, " ")
 	case a == areaTools:
 		return toolsLine(rs, s)
@@ -370,6 +373,11 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 	}
 	return ""
 }
+
+// localPersonalNote follows the store me line of a setup whose personal
+// store is a folder on this machine (H-17): nothing else holds a copy, so
+// a lost machine loses the notes; the way to keep one elsewhere.
+const localPersonalNote = "· a folder on this machine only, with no copy anywhere else (to keep one: push the folder to a private git repo, then lore store set-url --name me --url <private-repo-url>)"
 
 // repoCount is "1 repo" / "<n> repos".
 func repoCount(n int) string {

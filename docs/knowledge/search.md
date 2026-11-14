@@ -128,7 +128,7 @@ memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.0
 
 ## Try it: whole words, prefixes and several words
 
-Search matches whole words, upper or lower case alike. It does not match other forms of a word: `invoice` does not find "invoices". Put `*` at the end to match every word that starts with those letters. Several words find rows that hold all of them.
+Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. It does not match other forms of a word: `invoice` does not find "invoices". Put `*` at the end to match every word that starts with those letters. Several words find rows that hold all of them.
 
 <!-- example: search#word-forms only=2,3,4,5 -->
 ```console

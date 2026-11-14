@@ -104,7 +104,7 @@ func (o BoardOut) Text() string { return o.Human }
 
 // StaleIn is the input of task.stale.
 type StaleIn struct {
-	Days    int    `json:"days,omitempty" flag:"days" desc:"no change for this many days (default tasks.stale_days, else 60)"`
+	Days    int    `json:"days,omitempty" flag:"days" min:"1" desc:"no change for this many days (default tasks.stale_days, else 60)"`
 	Close   bool   `json:"close,omitempty" flag:"close" desc:"cancel them with close_reason stale (one batch; asks above batch.preview_rows)"`
 	DryRun  bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"with --close: list what would be cancelled, write nothing"`
 	Project string `json:"project,omitempty" flag:"project" desc:"only tasks of this project (prj_ id or name)"`

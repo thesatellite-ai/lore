@@ -349,7 +349,7 @@ func (b *Backend) Missing(ctx context.Context, cursor store.Cursor) ([]string, e
 	if err := b.usable(ctx); err != nil {
 		return nil, err
 	}
-	return b.folder.Missing(cursor)
+	return b.folder.Missing(ctx, cursor)
 }
 
 // ReadProblems lists the row files the last Read left out as unusable

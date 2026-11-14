@@ -84,7 +84,7 @@ func (a *App) CheckAsClient(ctx context.Context, root string, explain bool) erro
 		}
 	}
 	if pid == "" {
-		return errs.New(errs.InvalidInput, "no lore project here; run from the project root (lore init)")
+		return errs.New(errs.InvalidInput, "no lore project here; run from the project root").WithHint("lore init sets this repo up")
 	}
 	top := gitTop(ctx, root)
 	if top == "" {

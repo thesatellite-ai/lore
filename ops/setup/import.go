@@ -33,7 +33,7 @@ const (
 // ImportScanIn is setup.import_scan's input.
 type ImportScanIn struct {
 	Folders []string `json:"folders,omitempty" flag:"folder" desc:"also walk these folders for lore repos (repeat)"`
-	Depth   int      `json:"depth,omitempty" flag:"depth" desc:"how deep the folder walk goes (default 4, at most 8)"`
+	Depth   int      `json:"depth,omitempty" flag:"depth" min:"1" desc:"how deep the folder walk goes (default 4, at most 8)"`
 }
 
 // ImportSource is one file or folder the scan read: state is found,

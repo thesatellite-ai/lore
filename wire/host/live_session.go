@@ -587,6 +587,13 @@ func (s *liveSession) fetchFault() string {
 	return "offline"
 }
 
+// fetchMissing reports whether the failed fetch's remote answered that
+// there is no repository at its address (gitfault.Missing).
+func (s *liveSession) fetchMissing() bool {
+	var te *gitremote.TransportError
+	return errors.As(s.fetchErr, &te) && gitfault.ClassifyAt(te.Stderr, fsreason.GitPathState) == gitfault.Missing
+}
+
 // remoteLabel names the live remote for a person: "origin (<url>)", the
 // url with its credentials masked.
 func (s *liveSession) remoteLabel() string {

@@ -506,6 +506,12 @@ func (p rootProbe) Matches(pattern string) []string {
 	return toolprofile.GlobFiles(os.DirFS(p.root), pattern)
 }
 
+// Read implements toolprofile.Reader (a tool file importing another).
+func (p rootProbe) Read(rel string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(p.root, filepath.FromSlash(rel)))
+	return string(data), err == nil
+}
+
 // State implements toolprofile.Probe.
 func (p rootProbe) State(rel string) toolprofile.FileState {
 	data, err := os.ReadFile(filepath.Join(p.root, filepath.FromSlash(rel)))
@@ -588,6 +594,9 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	case toolprofile.ReasonSetup:
 		fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), setupReason(pick.setup))
 	case toolprofile.ReasonWired, toolprofile.ReasonSetting:
+	}
+	for _, v := range pick.sel.ViaImport { // I-14
+		fmt.Fprintf(w, "%s %s\n", h.decor.muted("·"), v.Note())
 	}
 	// TOOL NEUTRAL, no surprises: a tool file added after lore was wired
 	// (say CLAUDE.md in an AGENTS.md repo) is not wired behind the user's

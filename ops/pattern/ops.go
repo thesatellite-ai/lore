@@ -80,9 +80,12 @@ func Ops(env content.Env) []op.Entry {
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a pattern (soft-delete via archived_at)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore pattern archive --id pat_<id>", Want: "archived"}},
+			Examples: []op.Example{{Title: "archive one", CLI: "lore pattern archive --id pat_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore pattern archive --where 'created_at<2026-01-01' --dry-run", Want: "would archive"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: content.WriteErrors(),
-		}, func(ctx context.Context, in IDIn) (content.WriteOut, error) { return o.c.Archive(ctx, in.ID) }),
+		}, func(ctx context.Context, in ArchiveIn) (content.WriteOut, error) {
+			return o.c.ArchiveMany(ctx, in.ID, in.ArchiveFlags)
+		}),
 		op.Define(op.Spec{
 			Name: OpUnarchive, Summary: "Unarchive a pattern (clear archived_at)",
 			Examples:   []op.Example{{Title: "bring it back", CLI: "lore pattern unarchive --id pat_<id>", Want: "unarchived"}},

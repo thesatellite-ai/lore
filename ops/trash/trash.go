@@ -104,8 +104,8 @@ type ListIn struct {
 	Overruled bool `json:"overruled,omitempty" flag:"overruled" desc:"list rows a merge kept alive over a delete (the other side edited them)"`
 	// Search, Limit and Page are the huge-trash reads (DELETION 4.5).
 	Search string `json:"search,omitempty" flag:"search" desc:"only rows whose id, title or delete reason holds this text"`
-	Limit  int    `json:"limit,omitempty" flag:"limit" desc:"rows per page (default: all; 50 when --page is given)"`
-	Page   int    `json:"page,omitempty" flag:"page" desc:"page number, from 1 (with --limit)"`
+	Limit  int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"rows per page (default: all; 50 when --page is given)"`
+	Page   int    `json:"page,omitempty" flag:"page" min:"1" desc:"page number, from 1 (with --limit)"`
 	// FromHistory lists purged and hard-deleted rows from git history (3.6).
 	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"list rows purged or hard-deleted, read from this place's git history"`
 	// Local lists this machine's safety copies instead (local.go, DQ1).
@@ -139,8 +139,9 @@ type TargetIn struct {
 	NoTasklist bool   `json:"no_tasklist,omitempty" flag:"no-tasklist" desc:"restore a task whose tasklist was purged with no tasklist"`
 	Mission    string `json:"mission,omitempty" flag:"mission" desc:"new mission id for the restored row"`
 	Plan       string `json:"plan,omitempty" flag:"plan" desc:"new plan id for the restored row"`
-	// FromHistory is refused: purged rows never come back (DQ4, 3.6).
-	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"refused: a purged row never comes back; read it with trash show --from-history"`
+	// FromHistory is refused: purged rows never come back (DQ4, 3.6); a
+	// row a commit removed is answered with its git checkout (H-14).
+	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"refused: a purged row never comes back (read it with trash show --from-history); a row a commit removed gets the git command that brings it back"`
 	// Local takes Target as the number of this machine's safety copy
 	// (local.go, DQ1).
 	Local bool `json:"local,omitempty" flag:"local" desc:"restore this machine's safety copy <n> (lore trash list --local lists them); replaces lore sync trash restore"`
@@ -178,7 +179,12 @@ type Item struct {
 	Overruled string `json:"overruled,omitempty"`
 	// LastIn is where --from-history read the last content ("<sha>^ (date)").
 	LastIn string `json:"last_content_in,omitempty"`
-	at     time.Time
+	// Removed marks a --from-history row whose file a commit removed (a
+	// git rm, not a purge; DeletedBy is the commit's author) and
+	// GitRestore the git command that brings it back (H-14).
+	Removed    bool   `json:"removed_by_commit,omitempty"`
+	GitRestore string `json:"git_restore,omitempty"`
+	at         time.Time
 	// byLabel is DeletedBy as the text shows it: "@handle" when the roster
 	// knows the actor's handle, else its display name, else "" (the text
 	// falls back to the act_ id).
@@ -467,7 +473,7 @@ func (o ops) shownFields(ctx context.Context, r row.Row, showSensitive bool) map
 // fields of the row and its batch dependents, or of the whole batch.
 func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 	if in.FromHistory {
-		return ResultOut{}, purgedForever(in.Target)
+		return ResultOut{}, o.restoreHistory(ctx, in.Target)
 	}
 	if in.Local {
 		return o.restoreLocal(ctx, in)
@@ -480,6 +486,11 @@ func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 		ctx = engine.WithRestoreHome(ctx, homes...)
 	}
 	res, err := o.env.Restore(ctx, in.Target)
+	if errs.Has(err, errs.NotFound) {
+		if why := o.removedByCommit(ctx, strings.TrimSpace(in.Target)); why != nil {
+			return ResultOut{}, why // H-14: a git rm, not a delete: name the git command
+		}
+	}
 	if err != nil {
 		return ResultOut{}, err
 	}
@@ -979,8 +990,11 @@ func (it Item) line() string {
 func (o ShowOut) Text() string {
 	var b strings.Builder
 	if o.History {
-		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  purged " + o.Data.when() + " by " + o.Data.deleter() + "\n")
+		b.WriteString(o.Data.Table + " " + o.Data.ID + "  " + strconv.Quote(o.Data.Title) + "  " + o.Data.gone() + " " + o.Data.when() + " by " + o.Data.deleter() + "\n")
 		b.WriteString("  from commit " + o.Data.LastIn + " (the last commit that had it)\n")
+		if o.Data.GitRestore != "" {
+			b.WriteString("  bring it back: " + o.Data.GitRestore + ", then commit\n")
+		}
 		b.WriteString(fieldLines(o.Fields))
 		return b.String()
 	}
@@ -1017,11 +1031,32 @@ func (o ListOut) historyText() string {
 		return "no purged or hard-deleted rows in this place's git history\n"
 	}
 	var b strings.Builder
+	removed := 0
 	for _, it := range o.Data {
-		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  purged " + it.when() + "  by " + it.deleter() + "  last content in " + it.LastIn + "\n")
+		b.WriteString(it.ID + "  " + it.Table + "  " + strconv.Quote(it.Title) + "  " + it.gone() + " " + it.when() + "  by " + it.deleter() + "  last content in " + it.LastIn + "\n")
+		if it.GitRestore != "" {
+			removed++
+			b.WriteString("  bring it back: " + it.GitRestore + ", then commit\n")
+		}
 	}
-	b.WriteString(count(o.Count, "row") + " in git history; they never come back (read one: lore trash show --id <id> --from-history)\n")
+	switch {
+	case removed == 0:
+		b.WriteString(count(o.Count, "row") + " in git history; purged rows never come back (read one: lore trash show --id <id> --from-history)\n")
+	case removed == o.Count:
+		b.WriteString(count(o.Count, "row") + " in git history, removed by a commit (not purged): the git command under each brings it back\n")
+	default:
+		b.WriteString(count(o.Count, "row") + " in git history; a purged row never comes back (read one: lore trash show --id <id> --from-history), a row a commit removed comes back with the git command under it\n")
+	}
 	return b.String()
+}
+
+// gone is how a --from-history row left: "removed" by a commit (a git
+// rm, H-14) or "purged".
+func (it Item) gone() string {
+	if it.Removed {
+		return "removed"
+	}
+	return "purged"
 }
 
 // Text implements op.Texter.

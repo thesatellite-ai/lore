@@ -84,13 +84,15 @@ func TestResourcesGraphChain(t *testing.T) {
 	if leaf := th.DecodeJSON[graphJSON](t, c.Lore("resource", "graph", "g1", "--json")); len(leaf.Nodes) != 0 {
 		t.Fatalf("g1 uses nothing: %+v", leaf)
 	}
-	// --depth 0 is the flag's zero value: the default 3 hops.
-	if z := th.DecodeJSON[graphJSON](t, c.Lore("resource", "graph", "lb1", "--depth", "0", "--json")); z.Depth != 3 {
-		t.Fatalf("--depth 0 = %+v", z)
+	// No --depth is the default 3 hops; a typed 0 is refused, never
+	// silently read as the default (G-20).
+	if z := th.DecodeJSON[graphJSON](t, c.Lore("resource", "graph", "lb1", "--json")); z.Depth != 3 {
+		t.Fatalf("no --depth = %+v", z)
 	}
-	for _, d := range []string{"11", "-1"} {
-		c.Lore("resource", "graph", "g1", "--depth", d).Fails(t, resExitInvalid, "E_INVALID_INPUT", "give 1 to 10")
+	for _, d := range []string{"0", "-1"} {
+		c.Lore("resource", "graph", "g1", "--depth", d).Fails(t, resExitInvalid, "E_INVALID_INPUT", "--depth must be 1 or more")
 	}
+	c.Lore("resource", "graph", "g1", "--depth", "11").Fails(t, resExitInvalid, "E_INVALID_INPUT", "give 1 to 10")
 	c.Lore("resource", "graph", "nope").Fails(t, resExitNotFound, "E_NOT_FOUND")
 	// A ref to another kind than the field's ref kind is refused.
 	c.Lore("resource", "add", "lb", "lb2", "--set", "backend=g1").Fails(t, resExitInvalid, "backend")

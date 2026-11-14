@@ -138,6 +138,11 @@ type Here struct {
 	Setup  string `json:"setup,omitempty"`
 	Why    string `json:"why,omitempty"`
 	Detail string `json:"detail,omitempty"`
+	// ClientOrg is the org a not_lore repo is a client repo of (a hosted
+	// remote the org claims), "" otherwise. Why: there the step is the org
+	// link, never lore init, which writes lore's files into the client's
+	// repository (I-13).
+	ClientOrg string `json:"client_org,omitempty"`
 	// Note explains a no_match that is not simply "nothing covers it"
 	// (a refused resolution, a default setup of another org).
 	Note string `json:"note,omitempty"`
@@ -277,6 +282,9 @@ func HereLine(h Here) string {
 	case HereNotGit:
 		return HereLinePrefix + "not a git repo"
 	case HereNotLore:
+		if h.ClientOrg != "" {
+			return HereLinePrefix + "a client repo of " + h.ClientOrg + " (lore keeps its notes in " + h.ClientOrg + "'s store: lore org link --org " + h.ClientOrg + " --project <folder>; not lore init, which writes into the client's repository)"
+		}
 		return HereLinePrefix + "a git repo lore is not set up in (lore init sets it up)"
 	}
 	facts := orgPhrase(h.Org) + ", " + storePhrase(h.Stores) + ", written as " + writerOf(h)

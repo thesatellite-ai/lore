@@ -153,21 +153,42 @@ func TestLiveSyncResolveRefusals(t *testing.T) {
 	}
 }
 
-// TestLiveSyncResolveRefusesLeftoverMarkers: a nested block (a block inside
-// a side) leaves markers after one pass: refused, nothing written.
+// TestLiveSyncResolveRefusesLeftoverMarkers: a block that closes before
+// its split (hand-made) leaves markers after the pick: refused, nothing
+// written.
 func TestLiveSyncResolveRefusesLeftoverMarkers(t *testing.T) {
 	f := newLiveFixture(t)
 	if err := f.b.Write(f.ctx, []store.Change{{Row: ltRow(t, schema.TableTasks, ltTaskA, 1, "a", false)}}); err != nil {
 		t.Fatal(err)
 	}
-	nested := "<<<<<<< ours\n" + conflictBlock("x", "y") + "\n=======\nz\n>>>>>>> theirs"
-	f.markLive(t, ltTaskA, nested)
+	broken := conflictBlock("x", "y") + "\n<<<<<<< ours\nq\n>>>>>>> theirs\n=======\nr"
+	f.markLive(t, ltTaskA, broken)
 	_, err := liveSync{h: f.s.h}.SyncResolve(f.ctx, opssync.ResolveIn{ID: "1", Take: "other"})
 	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "still holds conflict markers") {
 		t.Fatalf("err = %v", err)
 	}
-	if got := f.liveTitle(t, ltTaskA); got != nested {
+	if got := f.liveTitle(t, ltTaskA); got != broken {
 		t.Fatalf("a refused resolve changed the row: %q", got)
+	}
+}
+
+// TestLiveSyncResolveSettlesNestedMarkers (G-11): a marked field merged
+// again nests blocks (tasks.done_by held three levels after ten agents'
+// dones); resolve keeps the chosen side at every level and the row is
+// clean. It used to refuse with "edit the row by hand".
+func TestLiveSyncResolveSettlesNestedMarkers(t *testing.T) {
+	for _, c := range []struct{ take, want string }{{"kept", "x"}, {"other", "z"}} {
+		f := newLiveFixture(t)
+		if err := f.b.Write(f.ctx, []store.Change{{Row: ltRow(t, schema.TableTasks, ltTaskA, 1, "a", false)}}); err != nil {
+			t.Fatal(err)
+		}
+		f.markLive(t, ltTaskA, "<<<<<<< ours\n"+conflictBlock("x", "y")+"\n=======\nz\n>>>>>>> theirs")
+		if _, err := (liveSync{h: f.s.h}).SyncResolve(f.ctx, opssync.ResolveIn{ID: "1", Take: c.take}); err != nil {
+			t.Fatalf("--take %s: %v", c.take, err)
+		}
+		if got := f.liveTitle(t, ltTaskA); got != c.want {
+			t.Fatalf("--take %s: title %q, want %q", c.take, got, c.want)
+		}
 	}
 }
 

@@ -55,7 +55,11 @@ func (a *App) SetupHere(ctx context.Context) (onboard.Here, error) {
 		f.UserHome = uh
 	}
 	if !f.Lore {
-		return onboard.ResolveHere(f, cfg.Enabled()), nil
+		h := onboard.ResolveHere(f, cfg.Enabled())
+		if h.State == onboard.HereNotLore {
+			h.ClientOrg = a.clientRepo(ctx).Org // I-13: the org link, not lore init
+		}
+		return h, nil
 	}
 	f.Pointers = herePointers(f.Root)
 	if s, gerr := orgcfg.Gather(ctx, orgcfg.In{Home: home, Dir: dir, EnvOrg: strings.TrimSpace(os.Getenv(orgcfg.EnvOrg))}); gerr == nil {

@@ -24,8 +24,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
@@ -46,6 +50,49 @@ func (a *App) setupSyncHere(ctx context.Context) bool {
 		return true
 	}
 	return !loreFolderUpTo(a.opts.RepoDir, gitTop(ctx, a.opts.RepoDir))
+}
+
+// setupStatusHere reports whether `lore sync status` here reads the
+// setup's stores alone: where `lore sync` syncs them (setupSyncHere),
+// except in a store checkout, whose status the repo path already gives.
+func (a *App) setupStatusHere(ctx context.Context) bool {
+	return !inStore(a.opts.RepoDir) && a.setupSyncHere(ctx)
+}
+
+// setupStatusLine opens `lore sync status` run with no code repo here: it
+// says why no repo facts follow, so the store lines are not read as a
+// repo's.
+const setupStatusLine = "no code repo here: the stores of this setup (`lore store list` names them; `lore sync` syncs them)"
+
+// setupSyncStatus is `lore sync status` with no code repo here (H-10):
+// the stores' standing against their remotes (local copies only, no
+// network) and the refused pushes, the parts of the repo status that do
+// not need a repo.
+func (a *App) setupSyncStatus(ctx context.Context) (opssync.StatusOut, error) {
+	out := opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus, Lines: []string{setupStatusLine}}
+	a.syncStoreStates(ctx, &out)
+	if len(out.Data.Stores) == 0 {
+		out.Lines = append(out.Lines, "no stores: this folder is in no setup with a team or personal store (`lore setup list`)")
+	}
+	refused, err := a.StorePushRefusals(ctx)
+	if err != nil {
+		out.Lines = append(out.Lines, "store pushes:     unknown (local state: "+err.Error()+")")
+		return out, nil
+	}
+	own, held := splitHeldRecords(refused)
+	out.Lines = append(out.Lines, fmt.Sprintf("refused pushes:   %d", len(own)))
+	for _, r := range own {
+		out.Data.StoreRefusals = append(out.Data.StoreRefusals, opssync.StoreRefusal{Store: r.Store, Code: r.Code, Reason: r.Reason,
+			Rows: r.Rows, At: r.At, Next: storeRefusalNextFor(r.Code)})
+		out.Lines = append(out.Lines, "  store "+a.shownStoreName(ctx, r.Store)+": "+r.Code+" at "+r.At+": "+r.Reason, "    next: "+storeRefusalNextFor(r.Code))
+	}
+	for _, r := range held {
+		on := heldOn(r, own)
+		out.Data.StoreHeld = append(out.Data.StoreHeld, opssync.StoreHeld{Store: r.Store, HeldBy: opsstores.HeldNames(on), Code: r.Code,
+			Rows: r.Rows, At: r.At, Next: heldNext(on)})
+		out.Lines = append(out.Lines, "  store "+a.shownStoreName(ctx, r.Store)+": "+opsstores.HeldLines(on), "    next: "+heldNext(on))
+	}
+	return out, nil
 }
 
 // loreFolderUpTo reports whether dir or a folder above it, up to top,
@@ -260,6 +307,7 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 		return fail(err)
 	}
 	res, err := opsstores.SyncAll(ctx, x, string(one.Name))
+	detail := "" // git's text of the call that did not reach the remote
 	// this pass syncs the whole store: every folder's rows count for it,
 	// the folder reports SyncAll splits off (Unattached, W-5) included;
 	// the store's own report gives its state
@@ -269,12 +317,21 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 			continue
 		}
 		r.Refused, r.Problems, r.Offline, r.HeldBy, r.Held = s.Refused, s.Problems, s.Offline, s.HeldBy, s.Held
+		if s.Offline && detail == "" {
+			detail = s.OfflineDetail
+		}
 	}
 	if err != nil {
 		return fail(err)
 	}
 	switch {
 	case r.Offline:
+		if cause, next, gone := storeGone(detail, one.URL, string(one.Name)); gone {
+			// H-11: the host answered "no repository" (or refused this
+			// machine): waiting or the network fixes nothing
+			r.Status, r.Error, r.Next = opssync.StoreStatusFailed, cause, next
+			return r, errs.StoreUnreachable
+		}
 		r.Status = opssync.StoreStatusOffline
 		r.Error = "its remote could not be reached; local changes are kept and sent on the next sync"
 		r.Next = "check the network and your access to " + r.URL + ", then run `lore sync` again (`lore doctor` explains a store it cannot reach)"
@@ -289,6 +346,47 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 		r.Status = opssync.StoreStatusUpToDate
 	}
 	return r, ""
+}
+
+// storeGone reads git's text of a sync that did not reach the store at
+// raw (named name): gone is false for no answer (the network, waiting
+// fixes it). A host that answers "no repository" (the store moved, was
+// renamed or deleted, or this person lost access) or refuses this
+// machine's credentials is gone: cause says so with git's reason, next
+// names the commands for each case (gitbackend.GoneSteps), never the
+// network (H-11).
+func storeGone(detail, raw, name string) (cause, next string, gone bool) {
+	kind := gitfault.ClassifyAt(detail, fsreason.GitPathState)
+	if detail == "" || kind == gitfault.Unreachable {
+		return "", "", false
+	}
+	shown := repourl.Mask(raw)
+	cause = gitfault.Describe(detail, shown, fsreason.GitPathState)
+	switch kind {
+	case gitfault.Missing:
+		return cause + ": the host answers, but no store is there any more (it moved, was renamed or deleted, or your access was removed); local changes are kept", gitbackend.GoneSteps(name, shown), true
+	case gitfault.Denied:
+		return cause + "; local changes are kept", gitbackend.ProbeHint(kind, shown) + "; if your access was removed, ask an admin of the store", true
+	}
+	return cause + "; local changes are kept", gitbackend.ProbeHint(kind, shown), true
+}
+
+// storeURLOf is the url of the store attached here as name ("" when none
+// is): the address a sync line names.
+func (a *App) storeURLOf(ctx context.Context, name string) string {
+	if list, err := a.ListStores(ctx); err == nil {
+		for _, e := range list {
+			if e.Name == name {
+				return e.URL
+			}
+		}
+	}
+	for _, s := range a.orgStoresHere(ctx) {
+		if string(s.Name) == name {
+			return s.URL
+		}
+	}
+	return ""
 }
 
 // syncFailure is the cause and the next step of a store that failed.

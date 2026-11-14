@@ -169,6 +169,8 @@ type liveHost struct {
 	// holding sends line() to held (a CLI run's finish, live_holdlines.go).
 	holding bool
 	held    []string
+	// remap moves commit links to rewritten shas (OnRewrite; nil: none).
+	remap RewriteRemap
 }
 
 func (h *liveHost) clock() clock.Clock {
@@ -210,7 +212,11 @@ type liveRun struct {
 	// wiring, and it never pushes (S-1).
 	read bool
 	// asked: the run is a push the person asked for (pushAsked).
-	asked    bool
+	asked bool
+	// doctor: the run is `lore doctor`, whose report carries the
+	// leak-guard warning itself (doctorGuard): the wiring's notice of it
+	// would print it twice.
+	doctor   bool
 	sessions map[string]*liveSession
 	// storeWrites counts the store writes this run asked a liveBackend for
 	// (Write, WriteAudited, WritePurge with at least one change or purged
@@ -842,7 +848,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if liveDisabled() || skipLiveRun(run) {
 		return next(ctx)
 	}
-	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name]}
+	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun}
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
 	}
@@ -958,7 +964,13 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 				// `lore fix --dry-run` fetches nothing on purpose: not offline (B4-14)
 				h.line(liveLogPrefix + "dry run: using live rows as fetched " + age + " ago (a real run fetches first)")
 			} else {
-				h.line(liveLogPrefix + s.fetchFault() + ": using live rows as fetched " + age + " ago")
+				line := liveLogPrefix + s.fetchFault() + ": using live rows as fetched " + age + " ago"
+				if s.fetchMissing() {
+					// G-18: the address answers "no repository": the repo
+					// most likely moved; say how to follow it
+					line += "; if the repo moved: git remote set-url " + s.ref.RemoteName + " <new-url>, then lore repo set-url --url <new-url>"
+				}
+				h.line(line)
 			}
 		}
 	}

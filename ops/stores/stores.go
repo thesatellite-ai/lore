@@ -628,6 +628,11 @@ type Report struct {
 	Refused  int      `json:"refused"`
 	Problems []string `json:"problems,omitempty"`
 	Offline  bool     `json:"offline,omitempty"`
+	// OfflineDetail is git's error text of the call that did not reach
+	// the remote (store.SyncReport.OfflineDetail): sync reads it to tell a
+	// store that moved or was deleted from a network outage (H-11). Not
+	// part of the JSON output.
+	OfflineDetail string `json:"-"`
 	// HeldBy is set when this folder's push did not run because of a
 	// refusal of another folder of the same store (owner decision 7): that
 	// folder's attached name; Held is the line that says so (HeldLine).
@@ -651,12 +656,18 @@ type folderSync struct {
 // folder, or to a new Unattached report named "<org>/<folder>" when no
 // attached store does. Reports keep their order; new ones are added after
 // the store whose sync carried them.
+//
+// A folder is matched within the clone that carried it (SyncReport.Clone):
+// every store's root folder is ".", so matching by folder alone gave the
+// rows of one org store's root to the personal store (I-2).
 func attributeFolders(reports []Report, synced []folderSync) []Report {
-	byFolder := map[string]int{}
+	type cloneFolder struct{ clone, folder string }
+	byFolder := map[cloneFolder]int{}
 	for i, d := range synced {
 		if d.rep.Folder != "" {
-			if _, ok := byFolder[d.rep.Folder]; !ok {
-				byFolder[d.rep.Folder] = i
+			k := cloneFolder{d.rep.Clone, d.rep.Folder}
+			if _, ok := byFolder[k]; !ok {
+				byFolder[k] = i
 			}
 		}
 	}
@@ -668,7 +679,7 @@ func attributeFolders(reports []Report, synced []folderSync) []Report {
 			if c.Sent == 0 && c.Received == 0 {
 				continue
 			}
-			if i, ok := byFolder[f]; ok {
+			if i, ok := byFolder[cloneFolder{d.rep.Clone, f}]; ok {
 				out[i].Sent += c.Sent
 				out[i].Received += c.Received
 				continue
@@ -742,7 +753,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	pushRefused := true // every refusal is a push the remote refused (not a merge refusal)
 	for _, d := range done {
 		n, rep := d.name, d.rep
-		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged), Offline: rep.Offline}
+		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail}
 		var held []store.Refusal
 		for _, x := range rep.Refused {
 			if x.Held {

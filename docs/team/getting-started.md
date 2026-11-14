@@ -50,7 +50,7 @@ $ git add -A && git commit -qm 'lore: init' && git push -q origin main
 
 ## Step 3 — See who lore thinks you are
 
-With no config at all, there is no org. Your identity comes from your git email. In a repo with a hosted remote, the `join` line says how to join an org on this machine (a new laptop of someone who already joined needs only the store url from their admin):
+With no config at all, there is no org. Your identity comes from your git email. In a repo with a hosted remote, the `join` line says how to join an org on this machine (a new laptop of someone who already joined needs only the store url from their admin; the org's admin, joining their own second laptop the same way, gets an admin setup there):
 
 <!-- example: getting-started#whoami-without-config -->
 ```console

@@ -38,6 +38,9 @@ type heldState struct {
 	active   bool
 	mine     bool
 	hadClaim bool
+	// done is set when the signals ref says someone finished the task and
+	// this clone's row has not seen it yet (G-10, coord.AlreadyDone).
+	done *coord.AlreadyDoneError
 }
 
 // closeWorld opens the world for a close; nil, nil where this host
@@ -76,6 +79,15 @@ func (w *coordWorld) heldOf(ctx context.Context, env coord.Env, id string) (held
 		hs = heldState{sig: s, claimed: true, active: active, mine: s.Holder == w.actorID && s.Session == w.session()}
 	}
 	_, hs.hadClaim = w.held().Get(w.session(), id)
+	if _, marked := v.Board[signals.DonePath(w.folder, id)]; marked {
+		doc, ok, gerr := env.Rows.Get(ctx, id)
+		if gerr != nil {
+			return heldState{}, coordErr(gerr)
+		}
+		if ok {
+			hs.done, _ = coord.IsAlreadyDone(coord.AlreadyDone(v, w.folder, id, doc))
+		}
+	}
 	return hs, nil
 }
 
@@ -91,6 +103,9 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 		return commit, err
 	}
 	switch {
+	case hs.done != nil && !hs.mine:
+		// G-10: finished once; a second done changes nothing and says who.
+		return commit, &opstask.AlreadyDoneError{Task: taskID, By: hs.done.By, At: hs.done.At}
 	case hs.mine || hs.hadClaim:
 		if commit == "" {
 			commit = w.workBranchHead(ctx)

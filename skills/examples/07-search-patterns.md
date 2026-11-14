@@ -64,7 +64,7 @@ lore memory search --query "invoice" --include-archived
 
 ```bash
 lore memory search --query "" --limit 5         # last 5 memories
-lore memory search --query "" --limit 0         # unlimited (careful)
+lore memory search --query "" --limit 500       # a large page (--limit takes 1 or more)
 ```
 
 ## Empty query = listing
