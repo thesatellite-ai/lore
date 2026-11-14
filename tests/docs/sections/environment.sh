@@ -48,7 +48,7 @@ quiet alice work "mkdir -p Dropbox && git clone -q https://github.com/client/web
 on! alice work/Dropbox/website "lore rule list"
 on alice work/Dropbox/website "LORE_ALLOW_NETWORK_FS=1 lore rule list"
 
-# LORE_ALLOW_DB_PATH_OUTSIDE and LORE_HOME now matter only when `lore migrate run`
+# LORE_ALLOW_DB_PATH_OUTSIDE and LORE_V017_HOME matter only when `lore migrate run`
 # reads a v0.1.17 shared-database pointer (Mode B, retired in 0.1.18: decision Q-MODEB).
 # A v0.1.17 shared lore.db holding one project's rows, in v0.1.17's own table shapes
 # (tests/docs/v017_shared_db.py; 0.1.18 never writes rows into a lore.db).
@@ -65,7 +65,7 @@ note "lore home"
 quiet alice work "mkdir -p docs && cd docs && git init -q && mkdir .lore && printf 'db_path: \${LORE_HOME}/client-docs.db\nproject_id: %s\n' \$(cat ../old-project-id) > .lore/lore.yaml"
 on alice work/docs "cat .lore/lore.yaml"
 on! alice work/docs "lore migrate run --dry-run"
-on alice work/docs "LORE_HOME=~/shared-dbs lore migrate run"
+on alice work/docs "LORE_V017_HOME=~/shared-dbs lore migrate run"
 on alice work/docs "lore rule list"
 on alice . "ls ~/shared-dbs ~/shared-dbs/stores"
 

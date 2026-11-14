@@ -232,7 +232,7 @@ ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
 - **A folder store stays on your machine.** It is not committed anywhere, so back it up yourself, or use a git store if the notes should reach other machines or people.
 - **Use a full path in the address.** `file://~/…` is not expanded; write `file://$HOME/…` so your shell fills it in.
 - **`..` is refused in an old pointer's `db_path`** (`E_BAD_PATH`) when `lore migrate run` reads it, so a cloned repo cannot point lore at a file outside where you expect. `LORE_ALLOW_DB_PATH_OUTSIDE=1` allows it for one run when you really mean it; see [Environment variables](../reference/environment.md).
-- **`${LORE_HOME}` in an old pointer** means `~/.lore` unless `LORE_HOME` is set; set it for the `lore migrate run` that converts such a repo if the shared database lives elsewhere.
+- **`${LORE_HOME}` in an old pointer** means lore's home (`~/.lore`, or `LORE_HOME`, which moves all of lore's files); if the shared database lives elsewhere, set `LORE_V017_HOME=<that folder>` for the `lore migrate run` that converts such a repo (it fills `${LORE_HOME}` in `db_path` only), or write the absolute path into `db_path`.
 
 ## Related
 

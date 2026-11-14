@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1521 |
+| fixed | 1522 |
 | open | 0 |
 | on-hold | 14 |
 | owner | 6 |
@@ -1648,6 +1648,12 @@ Every new scenario or finding lands with its test and its row here in the same c
 | ux:legacy-routes | scenario | legacy connection URLs redirect: `?tab=checks`, `#settings`, the old workspace inventory route (old connection route file kept for comparison) | not-reproduced | - | click.mjs prints the landing URLs; results not recorded |
 | ux:gql-probe | scenario | ad-hoc GraphQL probe of a workspace as a signed-in persona (q.mjs, catalogue dump) | process | - | debugging aid |
 | ux:inv0-fail | finding | first inventory screenshot captured the dev sign-in chooser instead of the page (sign-in step of the script did not complete) | not-a-bug | - | harness timing; the retry inv0 rendered |
+
+## owner
+
+| id | kind | title | state | guarding test(s) | notes |
+|---|---|---|---|---|---|
+| owner:LORE_HOME | finding | a newer build run as lore-dev kept its machine state in ~/.lore too and rewrote lore 0.1.17's config.yaml and store clones; LORE_HOME now moves the whole lore home (one resolver), lore where and doctor name it, LORE_V017_HOME keeps the old db_path meaning | fixed | TestResolveLoreHome, TestJourneyLoreHomeMovesTheWholeHome, TestJourneyLoreHomeBesideOldLore | story tests/stories (K1); pkg adapters/lorehome, app, wire, tests/journeys |
 
 ## plainfiles
 

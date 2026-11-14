@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -133,9 +134,13 @@ type Options struct {
 	// RepoDir is any folder inside the code repository (usually the
 	// working directory). Required.
 	RepoDir string
-	// Home is the lore home (~/.lore): store clones, per-store caches.
-	// Required.
+	// Home is the lore home (lorehome.Resolve: LORE_HOME, else ~/.lore):
+	// config.yaml, store clones, per-store caches, state. Required. Every
+	// lore-home path is built from it, never from os.UserHomeDir.
 	Home string
+	// HomeSource is where Home came from (LORE_HOME or default), shown by
+	// `lore where` and doctor. "" reads as default.
+	HomeSource lorehome.Source
 	// Actor stamps every write. When zero, ResolveActor is called once at
 	// open, else the identity chain of adapters/identity runs (config.yaml
 	// identity, git email, …; CONFIG_GUIDE 5.1).

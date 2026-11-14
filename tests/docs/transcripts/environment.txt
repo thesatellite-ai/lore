@@ -148,8 +148,9 @@ db_path: ${LORE_HOME}/client-docs.db
 project_id: prj_f147dd95f1aaf742dd4f5214843a5139
 alice (work/docs)$ lore migrate run --dry-run
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
+  hint: ${LORE_HOME} in db_path is the lore home; if the shared databases live in another folder, run it again with LORE_V017_HOME=<that folder> (it fills ${LORE_HOME} in db_path only), or write the absolute path into db_path
 (exit 27)
-alice (work/docs)$ LORE_HOME=~/shared-dbs lore migrate run
+alice (work/docs)$ LORE_V017_HOME=~/shared-dbs lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_2537f9b2f7de77bfe5ca958860216bbb → store shared (~/shared-dbs/stores/blog)

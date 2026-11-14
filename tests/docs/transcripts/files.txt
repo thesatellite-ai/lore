@@ -130,6 +130,8 @@ Store cache files are named by a store id, not by a store name: two repos that c
 
 ### lore where
 alice (work/website)$ lore where
+lore home: ~/.lore (default; set LORE_HOME to an absolute folder to move it)
+
 lore's home: ~/.lore
   README.md
       this map of lore's home, written by lore and rewritten when the layout changes

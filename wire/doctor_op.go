@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -20,6 +21,15 @@ import (
 // binary without lore.db.
 func (a *App) DoctorHost(_ context.Context) (opsdoctor.Host, bool) {
 	return a.opts.Context.Doctor, a.opts.Context.Doctor != nil
+}
+
+// MovedLoreHome is the lore home when LORE_HOME set it, else "" (doctor
+// prints it then, so a person running two builds sees which home it read).
+func (a *App) MovedLoreHome() string {
+	if a.opts.HomeSource == lorehome.FromEnv {
+		return a.opts.Home
+	}
+	return ""
 }
 
 // BinaryVersion is Options.Version (opsdoctor.Env).

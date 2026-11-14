@@ -13,7 +13,8 @@ A row command reads its rows from the repository it runs in. It picks its projec
 | `LORE_DB` | refused on row commands with `E_UNSUPPORTED`, like `--db`: rows are files read from the repository, so run the command inside it |
 | `LORE_PROJECT_ID` | use this project id instead of looking it up |
 | `LORE_REPO` | work in this repo of a multi-repo project (its mount name or `rep_` id) instead of the whole project |
-| `LORE_HOME` | the value of `${LORE_HOME}` inside `db_path` of an old shared-database pointer (`.lore/lore.yaml`), read when `lore migrate run` converts it (default `~/.lore`). It does **not** move lore's own folder: config, identity and caches always stay in `~/.lore` |
+| `LORE_HOME` | moves lore's whole home folder (default `~/.lore`): `config.yaml` with your identity and setups, store clones (`stores/`), caches, state (`machine.db`), logs, locks, rendered files and `README.md` all live there instead. It must be an absolute folder: an empty value, a relative path or one starting with `~` is refused (`E_INVALID_INPUT`) with the fix. `HOME` is untouched, so git, ssh and gpg keep their own files. Use it to run two lore builds on one machine without them sharing state, for example a preview as `LORE_HOME=$HOME/.lore-dev lore-dev`. `lore where` names the home and where it came from, and `lore doctor` prints it when `LORE_HOME` set it. In an old shared-database pointer's `db_path`, `${LORE_HOME}` is this home |
+| `LORE_V017_HOME` | fills `${LORE_HOME}` in `db_path` of an old shared-database pointer (`.lore/lore.yaml`) during `lore migrate run`, without moving lore's home: lore 0.1.17's meaning of `LORE_HOME`, for shared databases kept in another folder |
 | `LORE_ALLOW_DB_PATH_OUTSIDE` | `1` lets `lore migrate run` read an old pointer whose `db_path` has a `..` part (normally refused, so a pointer file cannot point somewhere unexpected) |
 
 <!-- example: reference#db-flag -->
@@ -52,7 +53,7 @@ ERROR: [E_NOT_FOUND] rule: no project "prj_website"
 ```
 <!-- /example -->
 
-Older lore could point a repo at a shared database file with a pointer, `.lore/lore.yaml`; 0.1.18 converts such a repo with `lore migrate run` ([One store for several repos](../sync/shared-database-mode-b.md#step-4--convert-a-repo-that-used-a-shared-database)). The pointer below names `${LORE_HOME}`, so `LORE_HOME` decides which database file is converted, and the new store lands beside it. lore's own folder stays `~/.lore` either way:
+Older lore could point a repo at a shared database file with a pointer, `.lore/lore.yaml`; 0.1.18 converts such a repo with `lore migrate run` ([One store for several repos](../sync/shared-database-mode-b.md#step-4--convert-a-repo-that-used-a-shared-database)). The pointer below names `${LORE_HOME}`, which is lore's home (`~/.lore`, or `LORE_HOME`). When the shared databases sit in another folder, `LORE_V017_HOME` names that folder for `${LORE_HOME}` alone, and the new store lands beside the database; lore's own home does not move (setting `LORE_HOME` for this would move all of lore's files with it):
 
 <!-- example: environment#lore-home -->
 ```console
@@ -62,8 +63,9 @@ db_path: ${LORE_HOME}/client-docs.db
 project_id: prj_f147…5139
 $ lore migrate run --dry-run
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
+  hint: ${LORE_HOME} in db_path is the lore home; if the shared databases live in another folder, run it again with LORE_V017_HOME=<that folder> (it fills ${LORE_HOME} in db_path only), or write the absolute path into db_path
 (exit 27)
-$ LORE_HOME=~/shared-dbs lore migrate run
+$ LORE_V017_HOME=~/shared-dbs lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_2537…6bbb → store shared (~/shared-dbs/stores/blog)
@@ -334,7 +336,7 @@ These are set by lore, or read only by lore's own tests. Never set them for real
 
 - `LORE_SYNC=0` also turns live rows off, so `LORE_LIVE=1` does nothing next to it.
 - `LORE_LIVE_AUTOPUSH=0` does not queue claims: a claim that cannot reach the server fails with `E_OFFLINE` instead of waiting.
-- `LORE_HOME` is easy to misread. Setting it does not move `~/.lore`; use a different `HOME` if you need a separate lore setup.
+- `LORE_HOME` moves all of lore's machine state, not only the `${LORE_HOME}` of an old pointer: a shell that sets it for one migration and keeps it set runs every later command against that folder (an empty setup there). For the old meaning use `LORE_V017_HOME`. lore 0.1.17 read `LORE_HOME` only for `db_path`, so a machine running both builds keeps 0.1.17 on `~/.lore` as long as it is not set for 0.1.17.
 - `LORE_HUMAN=1` changes who a write is made as, not whether lore sees the agent: `lore whoami` still names the agent, and `LORE_ACTOR` set in the same shell still wins.
 - `TRUE`, `yes` or `on` are not `1`: lore ignores them and the switch stays at its default.
 - An empty `NO_COLOR=` counts as not set.

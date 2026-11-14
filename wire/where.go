@@ -31,6 +31,7 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	opscache "github.com/thesatellite-ai/lore/ops/cache"
@@ -89,7 +90,10 @@ var whereGitLore = []struct{ pattern, what string }{
 // Where implements opswhere.Env.
 func (a *App) Where(ctx context.Context, in opswhere.ShowIn) (opswhere.Out, error) {
 	home := a.opts.Home
-	out := opswhere.Out{Home: home, Entries: []opswhere.Entry{}}
+	out := opswhere.Out{Home: home, HomeSource: string(lorehome.FromDefault), Entries: []opswhere.Entry{}}
+	if a.opts.HomeSource != "" {
+		out.HomeSource = string(a.opts.HomeSource)
+	}
 	if readme := filepath.Join(home, HomeReadmeFile); fileExists(readme) {
 		out.Readme = readme
 	}
