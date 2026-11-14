@@ -44,7 +44,7 @@ alice (work/website)$ git add -A && git commit -qm 'lore: init' && git push -q o
 alice (work/website)$ lore rule add --body 'Run the tests before you push.'
 lore: wrote ~/work/website/.lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
 ✓ rul_162df51b7f78b785c97c26b41ea89666
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ git status --short
 ?? .lore/data/rules/
 alice (work/website)$ cat .lore/data/rules/rul_162df51b7f78b785c97c26b41ea89666.json
@@ -106,7 +106,7 @@ refused pushes:   0
 alice (work/website)$ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
 lore: wrote ~/work/website/.lore/data/memories/mem_05e99e22e9e86e96fe4daa7777994603.json
 ✓ mem_05e99e22e9e86e96fe4daa7777994603
-  scope: [master]
+  scope: [project]
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
 alice (work/website)$ lore sync
@@ -120,11 +120,11 @@ alice (work/website)$ git checkout -q -b feature/payments
 alice (work/website)$ lore memory add --body 'We use Stripe for payments.'
 lore: wrote ~/work/website/.lore/data/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8
-  scope: [master]
+  scope: [project]
 alice (work/website)$ lore rule add --body 'Never put passwords in the code.'
 lore: wrote ~/work/website/.lore/data/rules/rul_76bd560aff0771fab8457dbfa9823f10.json
 ✓ rul_76bd560aff0771fab8457dbfa9823f10
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ git add -A && git commit -qm 'lore: payment notes' && git push -q -u origin feature/payments
 alice (work/website)$ git checkout -q main && lore memory list
 mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] The client replies faster on WhatsApp than email.
@@ -176,7 +176,7 @@ alice (work/website)$ git checkout -q main && git pull -q --no-rebase origin mai
 alice (work/website)$ lore rule add --body 'Buttons are blue.' --severity should
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0
-  scope: [master] severity: should
+  scope: [project] severity: should
 alice (work/website)$ git add -A && git commit -qm 'lore: button rule' && git push -q origin main
 bob (work/website)$ git pull -q
 alice (work/website)$ lore rule edit --id rul_b4f4765e593d51fd1352985e8af3a5b0 --severity must && git commit -qam 'lore: buttons are a must' && git push -q origin main
@@ -237,11 +237,11 @@ bob (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
 lore: wrote ~/work/website/.lore/data/memories/mem_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 ✓ mem_4c590afb2a0cc7ae1b97b7e4e62d6c38
-  scope: [master]
+  scope: [project]
 bob (work/website)$ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
 lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 ✓ mem_3b6283bc4392c556bbae5f094246e913
-  scope: [master]
+  scope: [project]
 bob (work/website)$ git pull -q --no-rebase origin main
 bob (work/website)$ lore memory list | grep -i invoice
 mem_4c590afb2a0cc7ae1b97b7e4e62d6c38 [retrieved] Send the invoice reminder before the demo on Friday.
@@ -322,7 +322,7 @@ lore live: pushed waiting live writes commit 05513aa to origin refs/lore/live
 alice (work/website)$ lore memory add --body 'The demo is on Friday at 10.'
 lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb
-  scope: [master]
+  scope: [project]
 alice (work/website)$ lore memory delete --id mem_2537f9b2f7de77bfe5ca958860216bbb --reason 'the demo moved' --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json
 ✓ mem_2537f9b2f7de77bfe5ca958860216bbb moved to the trash (restore: lore trash restore --id mem_2537f9b2f7de77bfe5ca958860216bbb)
@@ -537,11 +537,11 @@ alice (work/website)$ git pull -q --no-rebase origin main
 alice (work/website)$ lore memory add --body 'The client signs off every release on Fridays.'
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
 ✓ mem_9a34c925c88945140e68f54b1ba3b418
-  scope: [master]
+  scope: [project]
 alice (work/website)$ lore rule add --body 'Ship only after the client sign-off, see ${row:mem_9a34c925c88945140e68f54b1ba3b418}.'
 lore: wrote ~/work/website/.lore/data/rules/rul_bfed655e145f36ce2ef425180e72eeea.json
 ✓ rul_bfed655e145f36ce2ef425180e72eeea
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ lore memory delete --id mem_9a34c925c88945140e68f54b1ba3b418 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34c925c88945140e68f54b1ba3b418.json
 ✓ mem_9a34c925c88945140e68f54b1ba3b418 moved to the trash (restore: lore trash restore --id mem_9a34c925c88945140e68f54b1ba3b418)

@@ -140,6 +140,7 @@ func Build(reg *op.Registry, runner op.Runner, opts ...Option) *cobra.Command {
 		},
 	}
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error { return cfg.flagError(cmd, err, nil) })
+	root.SetHelpCommand(helpCommand(cfg))
 	acceptJSON(root)
 	if err := Mount(root, reg, runner, opts...); err != nil {
 		panic(err)
@@ -328,7 +329,9 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		}
 		aliases[f.Flag] = f.Aliases
 	}
+	negs := switchPairs(c, fields, values, aliases)
 	asJSON := c.Flags().Bool(FlagJSON, false, "print the result (or the error) as JSON")
+	negs[FlagJSON] = boolNeg(c, FlagJSON, asJSON)
 	// Every write takes --yes (owner report 2026-11-12: `lore member edit
 	// --yes` was "unknown flag"): on a write that never asks it is a no-op,
 	// so a script can pass it to every write command alike.
@@ -336,6 +339,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	yes := new(bool)
 	if asksFirst {
 		c.Flags().BoolVar(yes, FlagYes, false, "answer yes to the confirmation without a terminal")
+		negs[FlagYes] = boolNeg(c, FlagYes, yes)
 	}
 	sf := secretFlags(c, s, values)
 	// A cobra flag parse error (unknown flag, unknown shorthand flag,
@@ -345,6 +349,9 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 	})
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		if err := straySwitchWord(cmd, cfg.args, args); err != nil {
+			return printUsage(cmd, cfg, err)
+		}
+		if err := contradictingSwitch(cmd, negs, aliases); err != nil {
 			return printUsage(cmd, cfg, err)
 		}
 		flags := map[string][]string{}
@@ -563,6 +570,69 @@ func examples(ex []op.Example) string {
 	return strings.Join(lines, "\n")
 }
 
+// switchPairs adds the off spelling --no-<switch> of every bool field
+// flag of c (mac:named-no-pairs) and returns them by switch name. A switch
+// that already has a field of that name (--live / --no-live), a switch
+// that is itself a --no- word, and a legacy flag get none. The pair is
+// hidden: --help lists the switch, and the stray-word refusal (`--force
+// false`) names --no-<switch> as the way to turn it off. It parses into
+// the switch's own value and counts as typing the switch (aliases).
+func switchPairs(c *cobra.Command, fields []op.FieldInfo, values map[string]*rawFlag, aliases map[string][]string) map[string]*negFlag {
+	taken := map[string]bool{}
+	for _, f := range fields {
+		taken[f.Flag] = true
+		for _, a := range f.Aliases {
+			taken[a] = true
+		}
+	}
+	negs := map[string]*negFlag{}
+	for _, f := range fields {
+		if f.Flag == "" || f.Type != op.TypeBool || f.Legacy() || strings.HasPrefix(f.Flag, negPrefix) || taken[negPrefix+f.Flag] || c.Flags().Lookup(negPrefix+f.Flag) != nil {
+			continue
+		}
+		rf := values[f.Flag]
+		negs[f.Flag] = addNeg(c, f.Flag, func(on bool) error { return rf.Set(strconv.FormatBool(on)) })
+		aliases[f.Flag] = append(aliases[f.Flag], negPrefix+f.Flag)
+	}
+	return negs
+}
+
+// addNeg adds the hidden --no-<name> of switch name to c; to receives the
+// switch's resulting state.
+func addNeg(c *cobra.Command, name string, to func(on bool) error) *negFlag {
+	n := &negFlag{to: to}
+	fl := c.Flags().VarPF(n, negPrefix+name, "", "turn --"+name+" off")
+	fl.NoOptDefVal = boolNoValue
+	fl.Hidden = true
+	return n
+}
+
+// boolNeg is addNeg for a switch held in a plain bool (--yes, --json).
+func boolNeg(c *cobra.Command, name string, b *bool) *negFlag {
+	return addNeg(c, name, func(on bool) error { *b = on; return nil })
+}
+
+// contradictingSwitch refuses a switch typed both on and off (`--force
+// --no-force`): naming both is a mistake, never "the last one wins".
+func contradictingSwitch(cmd *cobra.Command, negs map[string]*negFlag, aliases map[string][]string) *errs.Error {
+	for name, n := range negs {
+		if !n.set {
+			continue
+		}
+		on := cmd.Flags().Changed(name)
+		for _, a := range aliases[name] {
+			if a != negPrefix+name && cmd.Flags().Changed(a) {
+				on = true
+			}
+		}
+		if on {
+			return errs.New(UsageCode, "--"+name+" and --"+negPrefix+name+" contradict each other").
+				WithHint("give --" + name + " to turn it on or --" + negPrefix + name + " to turn it off, not both")
+		}
+	}
+	return nil
+}
+
 // changed reports whether the flag was given under its name or an alias.
 func changed(cmd *cobra.Command, name string, aliases []string) bool {
 	if cmd.Flags().Changed(name) {
@@ -715,4 +785,32 @@ func argFlags(fields []op.FieldInfo) string {
 		out = append(out, name)
 	}
 	return strings.Join(out, ",")
+}
+
+// helpCommand is `lore help [command]`. Cobra's own help command resolves
+// the words with Find, which stops at the deepest command it knows and
+// keeps the rest as arguments: `lore help zznosuchword` printed the root
+// help and exited 0, so a mistyped topic looked like success
+// (run:tests:q-help-topic). This one refuses a word that names no command
+// the way the command line itself does (unknownWord: E_INVALID_INPUT, exit
+// 20, near spellings in the hint), and prints the help of a known one.
+func helpCommand(cfg config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "help [command]",
+		Short: "Help about any command",
+		Long:  "Help provides help for any command in the application.\nSimply type " + RootName + " help [path to command] for full details.",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(c *cobra.Command, args []string) error {
+			target, rest, err := c.Root().Find(args)
+			if err != nil || target == nil {
+				target, rest = c.Root(), args
+			}
+			if len(rest) > 0 {
+				return unknownWord(target, cfg, rest[0])
+			}
+			target.InitDefaultHelpFlag()
+			target.InitDefaultVersionFlag()
+			return target.Help()
+		},
+	}
 }

@@ -48,17 +48,17 @@ const envRestStride = "LORE_REST_LIFE_STRIDE"
 const (
 	restSetup   = "rest-life"
 	restRenamed = "rest-renamed"
-	// restHub is the admin setup a member lifecycle joins.
-	restHub = "rest-hub"
-	restOrg = "restorg"
+	restOrg     = "restorg"
 )
 
 // restKinds are the setup kinds the matrix drives. Join a team and Start
 // a team need a team store that is a hosted git repo (orgconf refuses a
-// file:// one, TestRestTeamStoreURL), and these machines serve no git over
-// ssh or https; their lifecycle code below runs once a git-serving fake
-// exists (member: a hub admin setup, team.invite, then join).
-var restKinds = []onboard.Kind{onboard.KindSolo}
+// file:// one, TestRestTeamStoreURL): the team store is the GitHub url of
+// fake_gitserver.go, which git rewrites to a bare repo on this disk
+// (run:life:rest-kinds-open: only solo ran until then). A member joins
+// with the invite of an admin on another machine (lsTeamFor), as a real
+// teammate does.
+var restKinds = []onboard.Kind{onboard.KindSolo, onboard.KindAdmin, onboard.KindMember}
 
 func TestRestLifecycle(t *testing.T) {
 	stride := 1
@@ -88,9 +88,11 @@ type restLife struct {
 	p    *Page
 	kind onboard.Kind
 	gone Gone
-	// stores are file:// folders made for this run, by role.
-	personal, team string
-	// invite is the join line a member setup uses.
+	// personal is a file:// folder made for this run.
+	personal string
+	// team is the team store (fake_gitserver.go) an admin starts and a
+	// member joins; invite is the join line a member setup uses.
+	team   lsTeam
 	invite string
 	// doctored is, per setup, the checks the last doctor run reported.
 	doctored map[string]map[onboard.CheckID]bool
@@ -103,7 +105,11 @@ type restLife struct {
 func runRestLife(t *testing.T, shape string, kind onboard.Kind) {
 	m := Build(t, shape, loreBin)
 	r := &restLife{t: t, m: m, kind: kind, gone: goneAtStart(shape)}
-	r.team = r.storeDir("team-store")
+	if kind != onboard.KindSolo {
+		lsGHHosts(t, m)
+		r.team = lsTeamFor(t, m, string(kind), restSetup+"@example.test")
+		r.invite = r.team.invite
+	}
 	r.p = m.StartPage(t)
 	if lmBrokenHome(shape) {
 		r.createRefused()
@@ -111,17 +117,6 @@ func runRestLife(t *testing.T, shape string, kind onboard.Kind) {
 	}
 	r.baseWarnings = lmWarnings(t, m)
 	r.consistent("start")
-	if kind == onboard.KindMember {
-		// Join needs a team: start one on this machine, invite the member.
-		r.walk(restHub, onboard.KindAdmin, false)
-		// The page's Team screen invites for the setup active where the
-		// page runs: Home's "make default" first.
-		r.must(opssetup.OpEdit, opssetup.EditIn{Name: restHub, Default: true}, nil)
-		var inv opssetup.TeamInviteOut
-		r.must(opssetup.OpTeamInvite, opssetup.TeamInviteIn{Email: restSetup + "@example.test"}, &inv)
-		r.invite = inv.Line
-		r.consistent("hub")
-	}
 	r.walk(restSetup, kind, false)
 	r.consistent("create")
 	r.walk(restSetup, kind, true)
@@ -276,7 +271,7 @@ func (r *restLife) answersFor(name string, kind onboard.Kind, step opssetup.Plan
 		delete(a, "store_url")
 	case onboard.StepTeam:
 		text("org", restOrg)
-		text("store_url", "file://"+r.team)
+		text("store_url", r.team.storeURL)
 	case onboard.StepJoin:
 		text("invite", r.invite)
 	case onboard.StepTools:
@@ -770,7 +765,7 @@ func TestRestTeamStoreURL(t *testing.T) {
 	t.Parallel()
 	m := Build(t, ShapeFresh, loreBin)
 	r := &restLife{t: t, m: m, kind: onboard.KindAdmin}
-	r.team = r.storeDir("team-store")
+	folder := r.storeDir("team-store")
 	r.p = m.StartPage(t)
 	var plan opssetup.PlanOut
 	r.must(opssetup.OpPlan, opssetup.PlanIn{Setup: restSetup, Kind: string(onboard.KindAdmin)}, &plan)
@@ -789,7 +784,7 @@ func TestRestTeamStoreURL(t *testing.T) {
 		url    string
 		wantOK bool
 	}{
-		{"file://" + r.team, false},
+		{"file://" + folder, false},
 		{"git@github.com:" + LoginAlpha + "/lore-team.git", true},
 	} {
 		a := onboard.Answers{"org": {Text: restOrg}, "store_url": {Text: tc.url}}

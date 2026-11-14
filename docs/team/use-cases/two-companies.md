@@ -91,7 +91,7 @@ lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
 lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me)
 lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me)
 ✓ mem_76bd…3f10 [me/agency]
-  scope: [master]
+  scope: [project]
 
 # alice, in client3-api
 $ lore memory add --body 'client3 deploys only on Tuesdays' --to me
@@ -100,7 +100,7 @@ lore: wrote ~/.lore/personal/client3/actors/act_162d…9666.json (store me)
 lore: wrote ~/.lore/personal/client3/memories/mem_b4f4…a5b0.json (store me)
 lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me)
 ✓ mem_b4f4…a5b0 [me/client3]
-  scope: [master]
+  scope: [project]
 
 # alice, in website
 $ lore memory list

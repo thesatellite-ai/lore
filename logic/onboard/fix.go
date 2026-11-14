@@ -92,6 +92,10 @@ const (
 	// spellings); its Run it keeps the setup's, identity.top_level_keep's
 	// keeps the top-level one. Neither is picked for the person.
 	FixIdentityConflict FixVariant = "identity_conflict"
+	// FixNoPeriod: identity.period found the person on the roster with no
+	// period at all. "You are marked as left" would be wrong (they never
+	// had a stint); the fix is to record the first one (teamfix n3).
+	FixNoPeriod FixVariant = "no_period"
 )
 
 // VarLevel is the ProbeResult.Vars key a prober sets to "info" to lower a
@@ -446,8 +450,9 @@ var fixes = map[fixKey]Fix{
 		Command: argv(cmdLore, "store", "set-url", "--name", "{store_id}", "--url", "{url}"), Runnable: true},
 	{check: CheckOrgSource}: {Text: "The {org} entry in ~/.lore/config.yaml is older than, or differs from, the store's lore-org.yaml (the team's source for its stores and repo patterns). Run it to copy them in: lore org refresh --org {org}",
 		Command: argv(cmdLore, "org", "refresh", "--org", "{org}"), Runnable: true},
-	{check: CheckIdentityRoster}: {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add --actor <you> --type email --value <your-email>"},
-	{check: CheckIdentityPeriod}: {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add --email {email} (it reopens a stint that ended today)"},
+	{check: CheckIdentityRoster}:                       {Text: "Your email is not on the {org} roster yet; finish the join step or run lore actor contact add --actor <you> --type email --value <your-email>"},
+	{check: CheckIdentityPeriod}:                       {Text: "You are marked as left in {org}. If you are back, ask an admin of {org} to run lore member add --email {email} (it reopens a stint that ended today)"},
+	{check: CheckIdentityPeriod, variant: FixNoPeriod}: {Text: "{org} has no period (stint) for you yet, so lore cannot tell since when you are a member. Ask an admin of {org} to record your first one: lore actor period add --actor <you> --type employee --started-on <your-first-day>"},
 	// SOURCE_OF_TRUTH row 1: the setup is the one source of who you are.
 	{check: CheckIdentityTopLevel}: {Text: "The top-level identity: in ~/.lore/config.yaml ({top_identity}) is an old copy of setup {setup}'s identity. Run it to move what the setup lacks into it and remove the top-level block: lore identity migrate --keep setup --setup {setup}",
 		Command: argv(cmdLore, "identity", "migrate", "--keep", "setup", "--setup", "{setup}"), Runnable: true},

@@ -328,9 +328,8 @@ func TestTask_PeopleMergeTable_TwoClones(t *testing.T) {
 	for _, c := range []*th.Clone{rt.c1, rt.c2, c3, rt.c1, rt.c2} {
 		c.MustLore("actor", "register")
 	}
-	// Actor ids, not handles: a handle a teammate's clone assigned first is
-	// not found on this clone (BUG-ASSIGN-HANDLE, pinned by
-	// TestTask_AssignHandleAfterTeammateAssigned); this table is about the merge.
+	// Actor ids, not handles: this table is about the merge (handles after a
+	// teammate's assign: TestTask_AssignHandleAfterTeammateAssigned).
 	d1, d2, d3 := actorIDOf(t, rt.c1, "dev1"), actorIDOf(t, rt.c1, "dev2"), actorIDOf(t, rt.c2, "dev3")
 	tAdd := rt.addTask(t, rt.c1, "add/add")
 	tAddRm := rt.addTask(t, rt.c1, "add/remove")
@@ -389,14 +388,13 @@ func actorIDOf(t *testing.T, c *th.Clone, h string) string {
 	return ""
 }
 
-// bugAssignHandle: on dev2's clone, `--add-assignee @dev1` is E_NOT_FOUND
-// once dev1's clone has assigned @dev1 and @dev2 to a task, although
-// `lore actor list` there shows dev1 with that handle. Without the earlier
-// assign the same command works. Found by a-task-e2e (PASS3 queue #10).
-var bugAssignHandle = th.Bug{ID: "BUG-ASSIGN-HANDLE", Owner: "main (roster/live actors)", Open: true}
-
 // A handle resolves on every clone that lists the person, whatever a
 // teammate assigned before (TASK_SYSTEM 14: `--assign @handle`).
+// BUG-ASSIGN-HANDLE (a-task-e2e, PASS3 queue #10): on dev2's clone
+// `--add-assignee @dev1` was E_NOT_FOUND once dev1's clone had assigned
+// @dev1 and @dev2 to a task, although `lore actor list` there showed dev1.
+// It no longer reproduces; the test now fails instead of skipping, and the
+// gate's team step runs it (Taskfile.lore.yml test:team:run filter).
 func TestTask_AssignHandleAfterTeammateAssigned(t *testing.T) {
 	rt := newRepoTeam(t, th.Flag("add-assignee", "task", "edit"))
 	rt.c1.MustLore("actor", "register")
@@ -408,9 +406,7 @@ func TestTask_AssignHandleAfterTeammateAssigned(t *testing.T) {
 	if !strings.Contains(rt.c2.MustLore("actor", "list").Stdout, "dev1") {
 		t.Fatal("control: dev2's clone lists dev1")
 	}
-	r := rt.c2.Lore("task", "edit", other, "--add-assignee", "@dev1")
-	bugAssignHandle.PendingOn(t, r, "E_NOT_FOUND", "@dev1")
-	r.OK(t)
+	rt.c2.Lore("task", "edit", other, "--add-assignee", "@dev1").OK(t).Never(t, "E_NOT_FOUND")
 }
 
 // TASK_SYSTEM 6.15 E2E: two clones re-parent at once into a cycle, sync,

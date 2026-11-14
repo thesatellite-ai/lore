@@ -134,7 +134,7 @@ lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_28f8…03df.json (store agency)
 ✓ mem_28f8…03df [agency/client2]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client2/
-  scope: [master]
+  scope: [project]
 
 # agent-backend, in agents/api
 $ lore sync >/dev/null && lore search --query 'invite links'

@@ -1340,7 +1340,12 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	if _, err := a.Engine(ctx); err != nil {
 		return opsstores.SyncOut{}, err
 	}
-	return opsstores.SyncAll(ctx, a, only)
+	out, err := opsstores.SyncAll(ctx, a, only)
+	if err == nil && only == "" {
+		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx)...)
+	}
+	a.forgetStoreChecks(ctx, out.Stores)
+	return out, err
 }
 
 // builtinRegistry is the schema every App validates against: the built-in

@@ -110,6 +110,12 @@ type Backend struct {
 	// indexPath is the repo's index file, found once (repoStatus).
 	indexPathOnce sync.Once
 	indexPath     string
+	// workPrefix is work's path below the repo's top ("web/", "" at the
+	// top), found once: porcelain status paths are made relative to work
+	// with it (workRelative).
+	workPrefixOnce sync.Once
+	workPrefix     string
+	workPrefixErr  error
 }
 
 var _ store.Backend = (*Backend)(nil)

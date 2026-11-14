@@ -235,6 +235,8 @@ func periodResult(look rosterLook, org string, v map[string]string) opssetup.Pro
 		last := look.periods[n-1]
 		return result(onboard.StatusFail, "no open period in "+org+": the last one ("+last.Type+") ended "+last.EndedOn.Format(value.DateLayout), v)
 	}
+	// Never had a stint: not "marked as left" (teamfix n3).
+	v[onboard.VarFixVariant] = string(onboard.FixNoPeriod)
 	return result(onboard.StatusFail, "no period in "+org+" yet", v)
 }
 

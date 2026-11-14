@@ -189,6 +189,10 @@ const (
 	// run again sends the branch with that commit (A-13: it was
 	// E_INVALID_INPUT, which scripts read as a mistake of theirs).
 	PushAgain Code = "E_PUSH_AGAIN"
+	// PortInUse refuses `lore api` or the setup page on a --port another
+	// program already holds (batch not-built: it was E_UNSUPPORTED, which
+	// reads as "this does not work here").
+	PortInUse Code = "E_PORT_IN_USE"
 	// FORMAT_EVOLUTION rule 4, FQ5.
 	MigrateRollbackLoses Code = "E_MIGRATE_ROLLBACK_LOSES"
 	URLUserinfo          Code = "E_URL_CREDENTIALS"
@@ -403,7 +407,7 @@ var table = map[Code]entry{
 	ResourceKindMismatch:  {class: ClassBadInput, desc: "merge across resource kinds (RES 3.6)"},
 	ResourceAmbiguous:     {class: ClassAmbiguous, desc: "a bare resource name matches rows at two levels or in two kinds"},
 	ResourceTaken:         {class: ClassRefused, desc: "that resource name is already used at this level (archived and trashed rows included)"},
-	ResourceArchived:      {class: ClassRefused, desc: "a new ref to an archived resource; ref its replaced_by or unarchive it"},
+	ResourceArchived:      {class: ClassRefused, desc: "a new ref to an archived resource; ref its replaced_by or another resource (archive is one way)"},
 	ResourceBatch:         {class: ClassRefused, desc: "the import failed validation as a whole; nothing written"},
 	ResourceConflict:      {class: ClassRefused, desc: "a store push hit a strict or kind/field conflict; settle it first"},
 	KindLimit:             {class: ClassBadInput, desc: "over a resource kind cap (kinds per place, fields per kind, values per field)"},
@@ -433,6 +437,7 @@ var table = map[Code]entry{
 	MetaForeignKey:        {class: ClassGuard, desc: "a client-repo row carries a key id or scope label from outside its registry"},
 	MetaStoreUnreadable:   {class: ClassGuard, desc: "a client-repo key registration while the store's key rows cannot be read"},
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
+	PortInUse:             {class: ClassRefused, desc: "the --port is held by another program (or another lore api / setup page); pick another --port, or --port 0 for a free one"},
 	PushAgain:             {class: ClassRefused, desc: "lore's pre-push hook added a commit of finished live rows to the branch being pushed, so this push stopped once; run the same git push again (it sends that commit too)"},
 	FormatOld:             {class: ClassMigrate, desc: "the project is on an older lore format; only lore migrate run upgrades it, and this lore writes nothing there until then"},
 	MigrateRollbackLoses:  {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},

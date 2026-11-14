@@ -12,7 +12,7 @@ alice (work/website)$ lore memory add --to notes --body 'The staging database is
 lore: committed locally to store notes; lore sync sends it
 lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe984c9b495744c0217776765a28f2.json (store notes)
 ✓ mem_54fe984c9b495744c0217776765a28f2 [notes]
-  scope: [master]
+  scope: [project]
 
 ### the store clone
 alice$ find ~/.lore/stores -maxdepth 3 -not -path '*/.git/*' | sort

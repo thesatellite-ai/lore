@@ -826,8 +826,10 @@ func (o ops) storeOf(ctx context.Context, id ids.AnyID, requested store.Source) 
 // mark is v0.1.17's success mark (style.Success("✓"), uncoloured here).
 const mark = "✓"
 
-// badgeMaster is v0.1.17's scope badge text for a project-wide memory.
-const badgeMaster = "master"
+// badgeMaster is the scope badge text for a project-wide memory: project
+// (the --scope value of that place), not v0.1.17's "master", which read as
+// the git branch (plainfiles:4).
+const badgeMaster = "project"
 
 // withLine sets out's human form to v0.1.17's "✓ <id> <verb>" line when
 // the write succeeded; an error passes through untouched.

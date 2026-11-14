@@ -69,6 +69,12 @@ const SkipNoStoreURL = "pick or paste the repo URL first"
 // personal_store choice (local, none) has no store url to check (W-6).
 const SkipNoStoreNeeded = "not needed: this choice has no store url to check"
 
+// SkipJoinedAlready is the detail of a join-step check of a member setup
+// that already joined its team, checked or saved again with no invite (an
+// edit): the invite line is used once and never kept, so there is nothing
+// to check, and `lore doctor --all` checks the team store itself.
+const SkipJoinedAlready = "joined already: the invite was used when this setup joined; lore doctor --all checks the team store"
+
 // StoreURLMissing reports a personal store step answered "use an existing
 // repo" with an empty repo url: its store checks must not run (they would
 // probe a url the person cannot see, e.g. one saved earlier, while the

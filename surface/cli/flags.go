@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
 
@@ -81,3 +83,33 @@ func typeWord(t op.FieldType) string {
 
 // boolNoValue is what a bool flag given without "=value" means.
 const boolNoValue = "true"
+
+// negPrefix starts the off spelling of a switch: --no-<switch>.
+const negPrefix = "no-"
+
+// negFlag is the --no-<switch> spelling of a switch (mac:named-no-pairs):
+// every switch can be turned off by name, so a script writes `--no-live`
+// instead of `--live=false`. It hands the switch's own value the opposite
+// (to: a field's rawFlag, or --yes / --json's bool), so the decoder sees
+// one field; set records that it was typed, for contradictingSwitch.
+type negFlag struct {
+	to  func(on bool) error
+	set bool
+}
+
+// String implements pflag.Value.
+func (f *negFlag) String() string { return "" }
+
+// Set implements pflag.Value: `--no-x` (pflag passes "true") turns x off,
+// `--no-x=false` turns it on, any other word is not a bool.
+func (f *negFlag) Set(s string) error {
+	on, err := strconv.ParseBool(s)
+	if err != nil {
+		return errs.New(UsageCode, "a --no- switch takes true or false, got "+strconv.Quote(s))
+	}
+	f.set = true
+	return f.to(!on)
+}
+
+// Type implements pflag.Value.
+func (f *negFlag) Type() string { return wordBool }

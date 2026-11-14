@@ -20,7 +20,7 @@ In a repo without a remote, nothing is ever pushed. Tasks are still live by defa
 $ lore init --name=scratch >/dev/null 2>&1 && lore rule add --body 'use pnpm, never npm'
 lore: wrote ~/work/scratch/.lore/data/rules/rul_7a67…9504.json
 ✓ rul_7a67…9504
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore task add --title 'write the README'
 lore: wrote task_lists/tlt_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/scratch/.lore/data/task_lists/tlt_2ad3…f891.json is unchanged)
 lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/scratch/.lore/data/tasks/tsk_162d…9666.json is unchanged)

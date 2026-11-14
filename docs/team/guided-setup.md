@@ -256,7 +256,7 @@ This folder: no org, no attached store, written as Tomas Weber <tomas@agency.exa
 ```
 <!-- /example -->
 
-Outside a git repo the line is `This folder: not a git repo`, and in a git repo without `.lore/` it says that `lore init` sets it up. Nothing in the repo is changed by these lines.
+Outside a git repo the line is `This folder: not a git repo`, and in a git repo without `.lore/` it says that `lore init` sets it up. In a client repo of an org (a hosted remote the org claims) it names the org link instead (`lore org link --org <org> --project <folder>`, kept only in the org's store), never `lore init`, which would write into the client's repository; the This folder step's `repo.init` check is skipped there with that step. Nothing in the repo is changed by these lines.
 
 For every command, lore picks the active setup with the first rule that answers:
 

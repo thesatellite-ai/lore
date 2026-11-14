@@ -56,7 +56,7 @@ alice (work/website)$ lore memory add --body 'the API keys rotate every 90 days'
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store agency)
 ✓ mem_162df51b7f78b785c97c26b41ea89666 [agency/client]
-  scope: [master]
+  scope: [project]
 alice (work/website)$ lore sync
 lore: pushed store agency/client, agency/org: commit 601d285 to branch main
 store me: sent 0, received 0, merged 0, refused 0

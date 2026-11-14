@@ -170,6 +170,12 @@ func Ops(env Env) []op.Entry {
 func List(ctx context.Context, h Host, interactive bool) (ListOut, error) {
 	rows, err := h.ListSessions(ctx, ListLimit)
 	if err != nil {
+		if errs.Has(err, errs.NotAStore) {
+			// Outside a repository the refusal is the same bytes every repo
+			// command prints (run:tests:q-session-outside), not a "list
+			// sessions:" variant of it.
+			return ListOut{}, err
+		}
 		return ListOut{}, errs.Prefix("list sessions", err)
 	}
 	reveal := interactive && h.RevealToolSessions(ctx)

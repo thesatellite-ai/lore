@@ -117,7 +117,7 @@ func (u Updater) Run(ctx context.Context, out io.Writer, f Flags) error {
 		return werr
 	}
 	if method == installBrew && f.Version != "" {
-		return errs.New(errs.Unsupported, "--version is not available for a Homebrew install: the tap keeps only the newest formula").
+		return errs.New(errs.Unsupported, "--version is not available for a Homebrew install: the tap keeps only the newest release").
 			WithHint("run `" + BinaryName + " upgrade` for the newest release")
 	}
 	root, meta, inProject, err := findProjectMeta(u.Dir)

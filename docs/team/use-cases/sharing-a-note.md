@@ -22,7 +22,7 @@ lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
 ✓ mem_f147…5139 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
-  scope: [master]
+  scope: [project]
 $ lore move --id mem_f147…5139 --to repo
 This becomes visible to everyone with access to repo (client):
   "checkout must support INR and USD" (mem_f147…5139, id kept), now in agency

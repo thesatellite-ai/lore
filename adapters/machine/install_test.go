@@ -11,6 +11,10 @@ func TestDetectInstall(t *testing.T) {
 	}{
 		{"/opt/homebrew/Cellar/lore/0.1.18/bin/lore", "0.1.18", InstallHomebrew},
 		{"/home/linuxbrew/.linuxbrew/Cellar/lore/0.1.18/bin/lore", "0.1.0-dev", InstallHomebrew},
+		// GR-1: releases ship a Homebrew cask; brew links its bin/lore to
+		// the Caskroom copy.
+		{"/opt/homebrew/Caskroom/lore/0.1.19/lore", "0.1.19", InstallHomebrew},
+		{"/home/linuxbrew/.linuxbrew/Caskroom/lore/0.1.19/lore", "0.1.19", InstallHomebrew},
 		{"/usr/local/bin/lore", "0.1.18", InstallScript},
 		{`C:\Users\a\AppData\Local\lore\lore.exe`, "0.1.18", InstallScript},
 		{"/usr/local/bin/lore", "0.1.0-dev", InstallSource},

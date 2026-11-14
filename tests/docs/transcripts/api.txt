@@ -13,7 +13,7 @@ HTTP 401
 
 ### api calls
 alice$ curl -s -X POST -H "Authorization: Bearer $(cat ~/.lore/api-token)" -d '{"body": "Run the tests before you push"}' -w "\nHTTP %{http_code}\n" http://127.0.0.1:$PORT/v1/rules
-{"id":"rul_7a670ae8548ed05bf57ad29ad0759504","store":"repo","scope":"master","severity":"must"}
+{"id":"rul_7a670ae8548ed05bf57ad29ad0759504","store":"repo","scope":"project","severity":"must"}
 
 HTTP 201
 alice$ curl -s -H "Authorization: Bearer $(cat ~/.lore/api-token)" http://127.0.0.1:$PORT/v1/rules

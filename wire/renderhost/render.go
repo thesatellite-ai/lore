@@ -449,7 +449,7 @@ func (h *Host) planCommitted(ctx context.Context, projectID, root string, values
 	// 6.13 (RES-OQ3b) and META 3.14 (FA-META-10): the resource index and
 	// the metadata keys block of the committed sources, after the core and
 	// only when they fit (FA-CTX-7).
-	if in.Tails, err = h.renderTails(ctx); err != nil {
+	if in.Tails, err = h.renderTails(ctx, projectID); err != nil {
 		return nil, err
 	}
 	dirBodies, dirReps := buildDirFiles(dirs, in.Settings.EntryMax)

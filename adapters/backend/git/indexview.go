@@ -58,11 +58,14 @@ func (b *Backend) indexView(ctx context.Context, scope string) (rowfs.IndexView,
 	if !ok {
 		return rowfs.IndexView{}, false
 	}
-	// -o without --exclude-standard: an ignored row file is read too, as a
-	// walk of the folder reads it
-	other, err := b.git.run(ctx, call{dir: dir, args: []string{"ls-files", "--others", "-z", "--", spec}})
-	if err != nil {
-		return rowfs.IndexView{}, false
+	// Untracked and ignored row files are read too, as a walk of the folder
+	// reads them: the whole-folder status lists them ("??", "!!"); a table
+	// read asks ls-files -o (without --exclude-standard) for its folder.
+	var other []byte
+	if scope != "" {
+		if other, err = b.git.run(ctx, call{dir: dir, args: []string{"ls-files", "--others", "-z", "--", spec}}); err != nil {
+			return rowfs.IndexView{}, false
+		}
 	}
 	for _, rel := range append(changed, splitZ(other)...) {
 		if rel == "" {
@@ -169,7 +172,11 @@ type indexStat struct {
 // same question in one command, and git answers it by checking the stat
 // of every tracked row file (perf3).
 func (b *Backend) repoStatus(ctx context.Context) ([]byte, error) {
-	args := append([]string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames", "--"}, b.root.Layout().Pathspecs(b.folder.Name())...)
+	// --ignored: the read's IndexView takes ignored row files from this
+	// one walk too (lines "!! path"), instead of a second walk of the data
+	// folder (ls-files --others) on every read (D-110: each walk lstats
+	// every row file, slow on macOS); HandChanges skips "!!" lines.
+	args := append([]string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--ignored", "--no-renames", "--"}, b.root.Layout().Pathspecs(b.folder.Name())...)
 	m := statusMemoFor(b.work + "\x00" + strings.Join(args, "\x00"))
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -184,8 +191,45 @@ func (b *Backend) repoStatus(ctx context.Context) ([]byte, error) {
 		m.ok = false
 		return nil, err
 	}
+	if out, err = b.workRelative(ctx, out); err != nil {
+		m.ok = false
+		return nil, err
+	}
 	m.ok, m.gen, m.scope, m.index, m.out = true, gen, scope, idx, out
 	return out, nil
+}
+
+// workRelative rewrites the porcelain -z status out so each path is
+// relative to b.work, as every caller reads it (IndexView, HandChanges):
+// git prints porcelain paths relative to the repo's top, and a project in
+// a sub-folder of the repo (lore init in web/) works from that folder, so
+// its "web/.lore/data/…" lines matched nothing and a read of its rows came
+// back empty. A line outside b.work is dropped (the pathspecs already keep
+// to it). At the repo's top it returns out as is.
+func (b *Backend) workRelative(ctx context.Context, out []byte) ([]byte, error) {
+	b.workPrefixOnce.Do(func() {
+		pre, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", "--show-prefix"}})
+		b.workPrefix, b.workPrefixErr = trimmed(pre), err
+	})
+	if b.workPrefixErr != nil {
+		return nil, b.workPrefixErr
+	}
+	if b.workPrefix == "" {
+		return out, nil
+	}
+	var rel []byte
+	for _, f := range splitZ(out) {
+		if len(f) < len("XY ")+1 {
+			continue
+		}
+		p, ok := strings.CutPrefix(f[3:], b.workPrefix)
+		if !ok {
+			continue
+		}
+		rel = append(rel, f[:3]+p...)
+		rel = append(rel, 0)
+	}
+	return rel, nil
 }
 
 // indexFileStat is the stat of the repo's index file (zero when unknown:

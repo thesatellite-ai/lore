@@ -322,6 +322,7 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 		return fail(err)
 	}
 	res, err := opsstores.SyncAll(ctx, x, string(one.Name))
+	a.forgetStoreChecks(ctx, res.Stores)
 	detail := "" // git's text of the call that did not reach the remote
 	// this pass syncs the whole store: every folder's rows count for it,
 	// the folder reports SyncAll splits off (Unattached, W-5) included;

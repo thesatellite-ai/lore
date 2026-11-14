@@ -67,6 +67,7 @@ var internalDDL = []string{
 	`CREATE INDEX IF NOT EXISTS "ix_row_refs_ref" ON "` + tblRefs + `" (ref_id)`,
 	`CREATE TABLE IF NOT EXISTS "` + tblExpanded + `" (entity_table TEXT NOT NULL, entity_id TEXT NOT NULL, field TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (entity_table, entity_id, field))`,
 	mirrorDDL,
+	mirrorTableIndexDDL,
 }
 
 // Cache is one SQLite cache file. It is safe for concurrent use; writes are
@@ -215,6 +216,16 @@ func (c *Cache) init(ctx context.Context) error {
 			return err
 		}
 	}
+	if ver == layoutVersion {
+		st, ok, err := c.initRead(ctx) // openread.go: a current file needs no write lock (devco:D-159)
+		if err != nil {
+			return err
+		}
+		if ok {
+			c.st = st
+			return nil
+		}
+	}
 	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
 		ddl, err := withoutCurrentViews(ctx, tx, append(slices.Clone(internalDDL), taskTreeDDL...))
@@ -234,6 +245,15 @@ func (c *Cache) init(ctx context.Context) error {
 			// header page, so a read changed the cache file each command (B1-16)
 			if _, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(layoutVersion)); err != nil {
 				return dbErr("stamp layout version", err)
+			}
+		}
+		var app int64
+		if err := tx.QueryRowContext(ctx, "PRAGMA application_id").Scan(&app); err != nil {
+			return dbErr("read layout stamp", err)
+		}
+		if int32(app) != ddlStamp { // stamped once per DDL change, like user_version (B1-16)
+			if _, err := tx.ExecContext(ctx, qStampDDL); err != nil {
+				return dbErr("stamp layout", err)
 			}
 		}
 		if st, err = c.loadState(ctx, tx); err != nil {

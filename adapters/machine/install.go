@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/formatgate"
@@ -23,9 +24,13 @@ const (
 	InstallOther InstallMethod = "other"
 )
 
-// brewCellarMarker is the path piece of a Homebrew-installed lore
-// (<prefix>/Cellar/lore/<version>/bin/lore, every prefix).
-const brewCellarMarker = "/Cellar/lore/"
+// brewMarkers are the path pieces of a Homebrew-installed lore, every
+// prefix: a formula's <prefix>/Cellar/lore/<version>/bin/lore (releases up
+// to 0.1.18) and a cask's <prefix>/Caskroom/lore/<version>/lore (the
+// release tool moved the tap entry to a cask, GR-1). Without the cask
+// path a brew install looked like a script install, and `lore upgrade`
+// overwrote the file brew owns instead of running brew.
+var brewMarkers = []string{"/Cellar/lore/", "/Caskroom/lore/"}
 
 // versionManagerMarkers are folders of tools that own the binary themselves
 // (the same list `lore upgrade` uses, 8.1).
@@ -36,14 +41,15 @@ var versionManagerMarkers = []string{"/.asdf/", "/mise/installs/", "/.local/shar
 var gitDescribe = regexp.MustCompile(`-[0-9]+-g[0-9a-f]{4,}(-dirty)?$|-dirty$`)
 
 // DetectInstall decides the install method from the resolved binary path
-// and the stamped version (8.1): a Cellar path is Homebrew, a dev or
+// and the stamped version (8.1): a Cellar or Caskroom path is Homebrew, a dev or
 // snapshot version (or none) a source build, a version manager's folder
 // other, anything else the install script or a downloaded archive.
 func DetectInstall(exe, version string) InstallMethod {
 	p := filepath.ToSlash(exe)
-	switch {
-	case strings.Contains(p, brewCellarMarker):
+	if slices.ContainsFunc(brewMarkers, func(m string) bool { return strings.Contains(p, m) }) {
 		return InstallHomebrew
+	}
+	switch {
 	// formatgate.DevBuild (FMT-DEV) also covers the bare "dev" stamp of an
 	// unstamped `go build ./cmd/lore`: seen as a script install, `lore
 	// upgrade` swapped such a build for the newest release without asking,

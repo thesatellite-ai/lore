@@ -33,7 +33,12 @@ type Op[In, Out any] struct {
 	spec Spec
 	run  func(context.Context, In) (Out, error)
 	in   []FieldInfo
-	out  []FieldInfo
+	// out is read from Out's tags on first use (outFields), not in Define:
+	// only an invoked operation and the OpenAPI document need it, and
+	// reading every operation's output types was ~half of the registry
+	// build every lore process pays at startup (fastgate:G1a).
+	outOnce sync.Once
+	out     []FieldInfo
 	// ask builds the operation's own confirm question (Asks); nil = the
 	// Runner's generic question.
 	ask func(context.Context, In) (string, error)
@@ -47,9 +52,12 @@ type Op[In, Out any] struct {
 var _ Entry = (*Op[struct{}, struct{}])(nil)
 
 // Define builds an operation from its spec and typed run function. It reads
-// In's and Out's struct tags once (arg, flag, json, desc, ui) and panics on
-// an invalid name or tag: those are programmer errors that must stop the
-// binary at startup, never surface to a user at run time.
+// In's struct tags once (arg, flag, json, desc, ui) and panics on an
+// invalid name or input tag: those are programmer errors that must stop
+// the binary at startup, never surface to a user at run time. Out's tags
+// are read on first use (OutputFields, Invoke) and panic the same way;
+// wire's TestRegistryOutputShapes reads every registered operation's
+// output so a bad output tag still fails the build, not a user's run.
 func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) *Op[In, Out] {
 	if !ValidName(spec.Name) {
 		panic(tagError{fmt.Sprintf("op.Define: invalid operation name %q (want noun.verb, snake_case)", spec.Name)})
@@ -62,15 +70,15 @@ func Define[In, Out any](spec Spec, run func(context.Context, In) (Out, error)) 
 		spec: spec,
 		run:  run,
 		in:   slices.Clone(sh.in),
-		out:  slices.Clone(sh.out),
 		page: sh.page,
 	}
 }
 
-// opShape is what Define reads from an operation's In and Out types.
+// opShape is what Define reads from an operation's In and Out types (the
+// output fields are read later, by outShapeOf).
 type opShape struct {
-	in, out []FieldInfo
-	page    *pageShape
+	in   []FieldInfo
+	page *pageShape
 }
 
 // shapeKey names one Define shape: the operation and its two types.
@@ -98,9 +106,36 @@ func shapeOf(name string, in, out reflect.Type) *opShape {
 	fields := fieldsOf(name, in, dirInput)
 	checkGroups(name, fields)
 	namePositionals(name, fields)
-	sh := &opShape{in: fields, out: fieldsOf(name, out, dirOutput), page: pageShapeOf(name, in, out)}
+	sh := &opShape{in: fields, page: pageShapeOf(name, in, out)}
 	shapes.Store(k, sh)
 	return sh
+}
+
+// outShapes keeps each operation's output fields read once per process,
+// for the same reason as shapes.
+var outShapes sync.Map // shapeKey → []FieldInfo
+
+// outShapeOf is the output fields of the operation name with output out,
+// read from the tags the first time (panicking on a bad tag) and from
+// outShapes after that.
+func outShapeOf(name string, out reflect.Type) []FieldInfo {
+	k := shapeKey{name: name, out: out}
+	if v, ok := outShapes.Load(k); ok {
+		if fs, ok := v.([]FieldInfo); ok {
+			return fs
+		}
+	}
+	fs := fieldsOf(name, out, dirOutput)
+	outShapes.Store(k, fs)
+	return fs
+}
+
+// outFields is o's output fields, read on the first call.
+func (o *Op[In, Out]) outFields() []FieldInfo {
+	o.outOnce.Do(func() {
+		o.out = slices.Clone(outShapeOf(o.spec.Name, reflect.TypeFor[Out]()))
+	})
+	return o.out
 }
 
 // Spec implements Entry.
@@ -110,7 +145,7 @@ func (o *Op[In, Out]) Spec() Spec { return o.spec }
 func (o *Op[In, Out]) InputFields() []FieldInfo { return o.in }
 
 // OutputFields implements Entry.
-func (o *Op[In, Out]) OutputFields() []FieldInfo { return o.out }
+func (o *Op[In, Out]) OutputFields() []FieldInfo { return o.outFields() }
 
 // Decode implements Entry.
 func (o *Op[In, Out]) Decode(d Decoder) (Input, error) {
@@ -147,7 +182,7 @@ func (o *Op[In, Out]) Invoke(ctx context.Context, in Input) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	res := Result{v: reflect.ValueOf(&out).Elem(), fields: o.out}
+	res := Result{v: reflect.ValueOf(&out).Elem(), fields: o.outFields()}
 	if o.page != nil {
 		if line := o.page.cut(pf, res.v); line != "" {
 			res = res.WithTextEdit(func(s string) string {

@@ -37,6 +37,10 @@ Each script:
 
 `tests/stories/REGRESSIONS.md` lists every scenario, incident and finding of the 0.1.18 effort with the Go test(s) that guard it. The plain `go test` in `tests/stories/regressguard` reads it on every `go test ./...`: a row naming a test that no longer exists fails the build. A fix lands with its regression test and its row in the same commit.
 
+## Temp folders
+
+A suite leaves nothing in the shared temp folder (`os.TempDir()`): leftover worlds once filled its inodes and later runs failed. Every folder a test makes goes in `t.TempDir()` or is removed when the test or `TestMain` ends. A world that may hold read-only folders (a 0500 `~/.lore`, a locked code folder) is removed with `tmpworld.RemoveAll` (package `tests/tmpworld`), since `os.RemoveAll` cannot empty a read-only folder; a suite whose worlds are named by a fixed prefix calls `tmpworld.SweepStale(prefix, age)` in `TestMain`, so the worlds of a run that was killed before its cleanup are removed by the next run (`tests/machines` does both).
+
 ## Adding a new scenario
 
 1. Pick the next free number (e.g., SC-31)

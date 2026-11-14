@@ -79,7 +79,7 @@ Add a rule. lore writes the row file at once and reminds you that it is not comm
 $ lore rule add --body 'Run the tests before you push.'
 lore: wrote ~/work/website/.lore/data/rules/rul_162d…9666.json
 ✓ rul_162d…9666
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ git status --short
 ?? .lore/data/rules/
 $ cat .lore/data/rules/rul_162d…9666.json
@@ -182,7 +182,7 @@ Here Alice adds a memory with sync off. A memory is something worth remembering,
 $ LORE_SYNC=0 lore memory add --body 'The client replies faster on WhatsApp than email.'
 lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 ✓ mem_05e9…4603
-  scope: [master]
+  scope: [project]
 $ git status --short
 ?? .lore/data/memories/
 $ lore sync
@@ -201,10 +201,10 @@ $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin mai
 $ lore rule add --body 'Run the tests before you push'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
 ✓ rul_05e9…4603
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
 ✓ mem_c0f3…b5b8
-  scope: [master]
+  scope: [project]
 ```
 <!-- /example -->
 
@@ -255,7 +255,7 @@ $ lore memory add --not-a-secret --reason 'example value, not a real password' -
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913
-  scope: [master]
+  scope: [project]
 $ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 ```

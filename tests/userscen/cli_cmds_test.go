@@ -146,6 +146,7 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"inbox"}, {"render"},
 		{"sql", "run", "SELECT 1"}, {"sql", "SELECT 1"}, {"lint"}, {"trash"}, {"batch", "list"},
 		{"policy", "show"}, {"vars", "list"}, {"tag", "list"}, {"machine", "list"}, {"land"},
+		{"session", "list"}, // run:tests:q-session-outside
 	}
 	for _, args := range needRepo {
 		r := a.Lore(dir, args...)

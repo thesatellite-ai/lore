@@ -103,41 +103,72 @@ func (s *liveSession) hooksInWorkTree(dir string) bool {
 	return first != ".git"
 }
 
-// trackedNewHooks are the hooks of names with no file yet in dir, a hooks
-// folder in the work tree that the repo commits (git tracks a file in it),
-// that git would not ignore there: creating them adds files to the repo's
-// tree. A folder git ignores (husky 9's .husky/_) or one holding no
-// tracked file (a person's own, not shared) is an untracked place, and
-// nothing is listed.
-func (s *liveSession) trackedNewHooks(ctx context.Context, dir string, names []string) []string {
+// hookWrite is one lore block a command would put into a hook file.
+type hookWrite struct {
+	name, marker string
+	lines        []string
+}
+
+// teamHookWrites splits writes into the hook files of dir that are the
+// team's (H-19, stories H-1): dir is a hooks folder in the work tree that
+// the repo commits (git tracks a file in it), and writing lore's block
+// would create a file there git would not ignore (created) or change the
+// bytes of one already there (changed). Either reaches every teammate
+// with the next commit, so only an install step that asked first writes
+// them. A folder git ignores (husky 9's .husky/_), one holding no tracked
+// file (a person's own, not shared), or a file whose block is already
+// current lists nothing.
+func (s *liveSession) teamHookWrites(ctx context.Context, dir string, writes []hookWrite) (created, changed []string) {
 	if !s.hooksInWorkTree(dir) {
-		return nil
+		return nil, nil
 	}
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-files", "--", dir}}); err != nil || strings.TrimSpace(string(out)) == "" {
-		return nil // nothing of the folder is committed: not the team's
+		return nil, nil // nothing of the folder is committed: not the team's
 	}
-	var out []string
-	for _, n := range names {
-		p := filepath.Join(dir, n)
-		if _, err := os.Stat(p); err == nil || !errors.Is(err, os.ErrNotExist) {
-			continue // there already: lore only adds its block to it
+	for _, w := range writes {
+		p := filepath.Join(dir, w.name)
+		cur, err := os.ReadFile(filepath.Clean(p))
+		exists := err == nil
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			continue // unreadable: ensureHookBlock reports it
+		}
+		if exists && hookBlockNext(string(cur), w.marker, w.lines) == string(cur) {
+			continue // lore's block is there as it would write it
 		}
 		if _, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"check-ignore", "-q", "--no-index", "--", p}}); err == nil {
 			continue // ignored: never part of the tree
 		}
-		out = append(out, n)
+		if exists {
+			changed = append(changed, w.name)
+		} else {
+			created = append(created, w.name)
+		}
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(created)
+	sort.Strings(changed)
+	return created, changed
 }
 
-// trackedHooksSkipped is a write's line when it left hooks uncreated in a
-// tracked hooks folder (H-19).
-const trackedHooksSkipped = "lore did not create %s in %s: that folder is in the work tree and committed with the repo, so a new file there reaches every teammate; `lore fix` creates them after asking (then commit them), or add lore's lines to your own hook files"
+// teamHookNames joins what teamHookWrites found for the notices: "create
+// a, b" and/or "add its block to c".
+func teamHookNames(created, changed []string) string {
+	var parts []string
+	if len(created) > 0 {
+		parts = append(parts, "create "+strings.Join(created, ", "))
+	}
+	if len(changed) > 0 {
+		parts = append(parts, "add its block to "+strings.Join(changed, ", "))
+	}
+	return strings.Join(parts, " or ")
+}
 
-// trackedHooksCreated follows the set-up line of `lore fix` when it created
-// new files in a tracked hooks folder (H-19).
-const trackedHooksCreated = "; new files in %s, a folder committed with the repo: %s (commit them to share lore's checks with the team, they run lore only where it is installed; or delete them to keep them out)"
+// trackedHooksSkipped is a write's line when it left hook files of a
+// tracked hooks folder alone (H-19, stories H-1): "%s" is teamHookNames.
+const trackedHooksSkipped = "lore did not %s in %s: that folder is in the work tree and committed with the repo, so a new or changed file there reaches every teammate; `lore fix` writes them after asking (then commit them), or add lore's lines to your own hook files"
+
+// trackedHooksCreated follows the set-up line of `lore fix` when it
+// created or changed files in a tracked hooks folder (H-19).
+const trackedHooksCreated = "; new or changed files in %s, a folder committed with the repo: %s (commit them to share lore's checks with the team, they run lore only where it is installed; or undo them to keep them out)"
 
 // trackedNoticeSuffix keys the read-notice memory of trackedHooksSkipped.
 const trackedNoticeSuffix = ".tracked"

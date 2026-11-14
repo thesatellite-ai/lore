@@ -306,6 +306,46 @@ func clearOtherDefaults(seq *yaml.Node, name string) {
 	}
 }
 
+// retryJoinIdentity brings the org entry an earlier join of this person
+// left behind up to the Identity step's answers (run:onboarding:open-4). A
+// join refused at its roster write (its handle was taken) has already
+// imported the org entry, with that handle; the Identity step cannot
+// change it (the setup has no org until the join succeeds), so the next
+// join registered the same taken handle again and the person was stuck.
+// Only an entry for the same key (human:<the first email>) is touched: the
+// answers name the same person, and a different key is another identity
+// that this step never overwrites. No entry yet: the join imports one
+// from the answers.
+func (ap setupApplier) retryJoinIdentity(ctx context.Context, org string, emails []string, name, handle string) error {
+	if len(emails) == 0 || (name == "" && handle == "") {
+		return nil
+	}
+	mc, err := readMachineConfig(ap.a.opts.Home)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(mc.Orgs, func(o identity.Org) bool { return o.Name == org })
+	if i < 0 {
+		return nil
+	}
+	have := mc.Orgs[i].Identity
+	if have.Key != identity.KindHuman+":"+emails[0] {
+		return nil
+	}
+	want := have
+	if name != "" {
+		want.Name = name
+	}
+	if handle != "" {
+		want.Handle = handle
+	}
+	if want == have {
+		return nil
+	}
+	_, err = ap.a.SetOrgIdentity(ctx, org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle})
+	return err
+}
+
 // applyIdentity is 4.2's Apply.
 func (ap setupApplier) applyIdentity(ctx context.Context, e onboard.SetupEntry, req opssetup.ApplyRequest) (opssetup.ApplyResult, error) {
 	email := answerText(req.Answers, onboard.QIDEmail)
@@ -621,6 +661,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{url, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
+		if err = ap.retryJoinIdentity(ctx, org, emails, name, handle); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
 		res, err = team.ApplyJoinMember(withApplyingSetup(ctx, e.Name, org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.MemberJoinRequest{Org: org, Store: url, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 		if err == nil && res.OrgRole == team.OrgRoleAdmin {
@@ -638,6 +681,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{inv.Store, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
+		if err = ap.retryJoinIdentity(ctx, inv.Org, emails, name, handle); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
 		res, err = team.ApplyJoin(withApplyingSetup(ctx, e.Name, inv.Org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
 			team.JoinRequest{Invite: inv, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	} else {
@@ -653,14 +699,20 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		teamOrg, teamURL = org, url
 		e.Kind, e.Org = onboard.KindAdmin, org
 		e.Identity = onboard.SetupIdentity{} // as for join: the identity lives in orgs[<org>].identity
+		// An agent saving the team step is not refused up front by the
+		// key's default (owner decision 2026-11-11): the org store it
+		// creates has no policy rows, so agents.may_manage_people is true
+		// at the roster write (profileWriter), and a store that already
+		// holds the team's false still refuses there. This machine's own
+		// false (config.yaml policies:) decides that write too, so it
+		// refuses here, before the store and the org entry are written
+		// (agentpol 4).
+		if err = ap.a.agentMayCreateTeam(ctx); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{url, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
-		// An agent saving the team step is not refused up front (owner
-		// decision 2026-11-11): the org store it creates has no policy
-		// rows, so agents.may_manage_people has its default, true, at the
-		// roster write (profileWriter). A store that already holds the
-		// team's false still refuses there.
 		actx := withApplyingSetup(ctx, e.Name, org)
 		if len(emails) > 0 {
 			// F-16: the new org's store is signed by this step's identity

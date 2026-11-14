@@ -86,7 +86,7 @@ Each setup gets one block: a line per group (identity, GitHub, each store, secre
 | `--fresh` | probe again instead of reusing results from the last minute |
 | `--json` | the full report as JSON ([Step 4](#step-4--read-the-report-as-json)) |
 
-Results of ssh, git and `gh` checks are kept for 60 seconds, so the setup page and a doctor run right after it do not probe twice; `--fresh` skips that. Each probe stops after `doctor.probe_timeout_s` (default 20 seconds, at most 300), at most four run at once, and a probe that times out counts as "could not run", never as broken.
+Results of ssh, git and `gh` checks are kept for 60 seconds, so the setup page and a doctor run right after it do not probe twice; `--fresh` skips that. A `lore sync` that reaches a store drops that store's kept results, so a doctor run right after it probes the store again instead of showing a failure from before the sync. Each probe stops after `doctor.probe_timeout_s` (default 20 seconds, at most 300), at most four run at once, and a probe that times out counts as "could not run", never as broken.
 
 To find which alias logs in as which account, `github.key_matches` asks every `Host` alias in `~/.ssh/config` at once, each with its own 3-second limit, and reuses those answers for a minute. An alias that did not answer in 3 seconds is named in the result ("did not answer in 3s"); one still being asked when the check had to answer is listed as "still asking", and running the check again fills it in. A personal store that is a local folder (`file://…`, not a git repo) gets its own read, write and marker checks: lore lists the folder, creates and removes one temporary file, and looks for `lore-store.yaml`, instead of the git probes.
 
@@ -240,7 +240,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `identity.invite_email` | error | a member's email is the invite's | use the invite's address, or ask for a new invite |
 | `identity.git_email` | warn | git commits here carry this email (for a member or admin setup, the org entry's identity email) | `git config --global user.email <email>` (shown, never run) |
 | `identity.roster` | warn | your email is on the team roster, read from the org store that holds it (the rows `lore actor show` reads); the identity line shows `roster @<handle>` | finish the join step, or `lore actor contact add --actor …` |
-| `identity.period` | warn | you are an active team member, not marked as left: the identity line shows the open period (`employee since 2025-03-01`) | ask an admin to run `lore actor rejoin` |
+| `identity.period` | warn | you are an active team member, not marked as left: the identity line shows the open period (`employee since 2025-03-01`) | ended stint: ask an admin to run `lore actor rejoin`; no period yet (`no period in <org> yet`): ask an admin to record your first one with `lore actor period add --actor <you> --type employee --started-on <day>` |
 | `identity.top_level` | warn | no old top-level `identity:` is left beside a solo setup's identity (the setup is the one source) | `lore identity migrate --keep setup --setup <name>` (Run it) |
 | `identity.top_level_keep` | warn | only when the top-level `identity:` and the setup's differ: the other choice | `lore identity migrate --keep top --setup <name>` (Run it) |
 | `github.ssh_key` | error | the key file the setup records exists, private key or `.pub` (skipped when none is recorded) | `ssh-keygen -t ed25519 …`, then add its `.pub` on GitHub |

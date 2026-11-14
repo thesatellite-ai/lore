@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
@@ -202,6 +203,10 @@ func Listen(port int) (net.Listener, error) {
 	}
 	var lc net.ListenConfig
 	ln, err := lc.Listen(context.Background(), "tcp", net.JoinHostPort(BindHost, strconv.Itoa(port)))
+	if errors.Is(err, syscall.EADDRINUSE) {
+		return nil, errs.Wrap(errs.PortInUse, "port "+strconv.Itoa(port)+" on "+BindHost+" is already in use by another program", err).
+			WithHint("--port <another port>, or --port 0 for a free one")
+	}
 	if err != nil {
 		return nil, errs.Wrap(errs.Unsupported, "rest: listen on port "+strconv.Itoa(port), err)
 	}

@@ -675,12 +675,17 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 	if ferr := a.checkTarget(to); ferr != nil {
 		return engine.Written{}, ferr
 	}
-	if aerr := a.ensureActor(ctx, st, to); aerr != nil {
-		return engine.Written{}, aerr
-	}
-	w, err := st.eng.Move(ctx, ref, to)
-	a.wroteTo(to, err)
-	return w, err
+	// batch leftover-3: the actor row is staged with the copy (the engine
+	// writes both before the source tombstone), so a refused move writes
+	// nothing, not even the caller's first actor row in to.
+	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if aerr := a.ensureActor(ctx, st, to); aerr != nil {
+			return engine.Written{}, aerr
+		}
+		w, err := st.eng.Move(ctx, ref, to)
+		a.wroteTo(to, err)
+		return w, err
+	})
 }
 
 // CreateWithID is engine.CreateWithID behind the same write path as every

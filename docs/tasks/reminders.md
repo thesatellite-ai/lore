@@ -35,7 +35,7 @@ $ lore reminder list
 ```
 <!-- /example -->
 
-Reminders are listed by date, soonest first. A `!` at the start of the line means the date has passed. A repeating reminder shows how often it repeats, here `(1y)`. Dates are shown where you are: a due with a clock time (`tomorrow 20:00`) is listed on the day it falls in your time zone, and a due without one is that calendar day wherever you are, so its `!` appears once that day has begun for you, not at midnight UTC. Overdue reminders and the ones due today also show in `lore inbox` (with the `lore reminder done` command for each) until they are marked done; `--ack` does not hide them.
+Reminders are listed by date, soonest first. A `!` at the start of the line means the date has passed. A repeating reminder shows how often it repeats, here `(1y)`. Dates are shown where you are: a due with a clock time (`tomorrow 20:00`) is listed on the day it falls in your time zone, and a due without one is that calendar day wherever you are, so its `!` appears once that day has begun for you, not at midnight UTC. Overdue reminders and the ones due today also show in `lore inbox` (with the `lore reminder done` command for each) until they are marked done; `--ack` does not hide them. `lore doctor` adds a note naming the ones that are due, and `lore render` lists every pending reminder with its date in a "Reminders" block of `.lore/LORE.md`, so an agent reading that file sees them too (the block names dates, not "overdue", so the same reminders give the same file on any day).
 
 ## Step 2 — Mark reminders done
 

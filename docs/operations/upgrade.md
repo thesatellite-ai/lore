@@ -46,7 +46,7 @@ $ lore upgrade
 
 On a script install it prints the old and new version and where the program lives, the archive it downloaded and its size, `sha256 ok`, then `Done. Running lore processes keep 0.1.18 until they exit.` Inside a project it also runs the new program's `lore setup --schema-only`, which brings the local cache's schema up to date, and then the new program's `lore fix` for that project (next section; `--no-fix` skips it, outside a project it says it skipped it, and a program built from source installs nothing, so `lore upgrade` there prints its one line and runs no `lore fix`). Only one upgrade runs at a time on a machine: a second one waits for the lock in `~/.lore/state/upgrade.lock` and then finds the new version already there.
 
-`lore upgrade --version v0.1.18` installs exactly that release, older ones included. Homebrew keeps only the newest formula, so `--version` is refused for a Homebrew install (`E_UNSUPPORTED`).
+`lore upgrade --version v0.1.18` installs exactly that release, older ones included. Homebrew keeps only the newest release, so `--version` is refused for a Homebrew install (`E_UNSUPPORTED`).
 
 Going back to an older version that could not write this project (it is below the project's `min_lore_version`, or older than a feature the project uses) asks first: `E_NEEDS_CONFIRM` without a terminal, answered with `lore upgrade --version <tag> --yes`. An older 0.1.18 build can still read such a project; it refuses writes until you upgrade again. lore 0.1.17 is the exception: it cannot read a project on the 0.1.18 format at all (see "A project's format" below).
 

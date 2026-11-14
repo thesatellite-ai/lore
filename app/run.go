@@ -83,6 +83,7 @@ func WithSetupUI(ui setupweb.UI) Option { return func(o *options) { o.ui = ui } 
 // cancelled context, Run over os.Args, and os.Exit with its status. It
 // never returns.
 func Main(opts ...Option) {
+	gcDefaults() // gcdefaults.go: a short-lived CLI collects less often (fastgate:G1a)
 	if isSessionEndHook(os.Args[1:]) {
 		os.Exit(runSessionEnd(os.Args[1:])) // sessionend.go: always 0, silent, time-bounded
 	}

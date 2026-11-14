@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
+	"github.com/thesatellite-ai/lore/tests/tmpworld"
 )
 
 const (
@@ -53,7 +54,18 @@ var (
 	oldBinOnce sync.Once
 	oldBinPath string
 	oldBinErr  error
+	// oldBinDir is the temp folder of the build (source export and
+	// binary, ~1,500 files); runMain removes it when the suite ends. It
+	// used to stay in the shared temp folder after every run.
+	oldBinDir string
 )
+
+// removeOldLore deletes the v0.1.17 build folder (runMain, after the run).
+func removeOldLore() {
+	if oldBinDir != "" {
+		_ = tmpworld.RemoveAll(oldBinDir) // best effort: a temp folder
+	}
+}
 
 // oldLore returns the v0.1.17 binary: LORE_OLD_BIN, else built once from
 // the tag. It never skips: a binary that cannot be had fails the test.
@@ -77,6 +89,7 @@ func buildOldLore() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	oldBinDir = dir
 	src := filepath.Join(dir, "src")
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		return "", err

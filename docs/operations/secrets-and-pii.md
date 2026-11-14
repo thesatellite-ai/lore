@@ -44,7 +44,7 @@ $ lore memory add --not-a-secret --reason 'AWS documentation example key' --yes 
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913
-  scope: [master]
+  scope: [project]
 $ grep -rl AKIA .lore/data || echo 'not in .lore/data'
 .lore/data/memories/mem_3b62…e913.json
 ```
@@ -73,7 +73,7 @@ The best answer for a real credential is a reference. You store the value in you
 $ lore memory add --secret-ref 'gopass://acme/website/staging-deploy' --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
 lore: wrote ~/work/website/.lore/data/memories/mem_7a67…9504.json
 ✓ mem_7a67…9504
-  scope: [master]
+  scope: [project]
 $ lore memory list
 mem_7a67…9504 [retrieved] Deploy key for staging: ${secret:gopass://acme/website/staging-deploy}
 $ grep -rh staging .lore/data/memories
@@ -100,7 +100,7 @@ $ lore memory add --secret-unstored --body "Mail relay password=$RELAY_PASSWORD"
 lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 lore: wrote 2 row file(s) in ~/work/website/.lore/data
 ✓ mem_2ad3…f891
-  scope: [master]
+  scope: [project]
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore secrets list --unstored
 REF	HOLDER	USED IN	STATE
@@ -139,7 +139,7 @@ gopass://acme/website/mail-relay?holder=mch_017941fe53b8eca065d80ff150a20e9fa70f
 $ lore memory add --secret-ref 'env://STAGING_DB_PASSWORD' --body "Staging database password=$DB_PASSWORD"
 lore: wrote ~/work/website/.lore/data/memories/mem_b4f4…a5b0.json
 ✓ mem_b4f4…a5b0
-  scope: [master]
+  scope: [project]
 $ lore secrets check
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/staging-deploy	-	mem_7a67…9504 body	not_checked
@@ -237,7 +237,7 @@ lore: wrote ~/work/website/.lore/data/secret_allows/sal_28f8…03df.json
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913
-  scope: [master]
+  scope: [project]
 $ lore secrets allow list
 ID	ROW	FIELD	RULE	REASON
 sal_28f8…03df	mem_3b62…e913	body	github_token	fixture in tests (confirmed not a secret by alice (memory add))
@@ -386,7 +386,7 @@ In a repo with lore set up, save a note whose secret is a reference, then list t
 $ lore memory add --secret-ref 'gopass://acme/website/staging-deploy' --body 'Deploy key for staging: AKIA''IOSFODNN7EXAMPLE'
 lore: wrote ~/work/website/.lore/data/memories/mem_7a67…9504.json
 ✓ mem_7a67…9504
-  scope: [master]
+  scope: [project]
 $ lore secrets list
 REF	HOLDER	USED IN	STATE
 gopass://acme/website/staging-deploy	-	mem_7a67…9504 body	-

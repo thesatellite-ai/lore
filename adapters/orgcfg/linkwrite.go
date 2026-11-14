@@ -58,6 +58,12 @@ var (
 	ErrStoreOffline = errors.New("orgcfg: store is offline")
 	// ErrNoStoreBranch: the store has no such branch (never created here).
 	ErrNoStoreBranch = errors.New("orgcfg: store branch does not exist")
+	// ErrStoreEmpty: the store repo has no branch at all (a brand-new
+	// empty repo): it becomes a lore store with `lore store init` or a
+	// first link, and holds no org entry to read yet. It also wraps
+	// ErrNoStoreBranch (an empty repo has no branch), so callers that
+	// handle that error keep working.
+	ErrStoreEmpty = errors.New("orgcfg: store repo is empty")
 	// ErrNotAStore: the branch has no lore-store.yaml (a code repo).
 	ErrNotAStore = errors.New("orgcfg: not a lore store")
 	// ErrFolderElsewhere: --store names one store, the folder is in another.
@@ -186,7 +192,13 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		tip, ok := branchTip(ctx, dir, branch)
 		first := false // the store's first commit, into an empty repo
 		if !ok {
-			if !c.FirstCommit || c.NewMarker == nil || !cloneHasNoBranches(ctx, dir) {
+			empty := cloneHasNoBranches(ctx, dir)
+			if empty && (!c.FirstCommit || c.NewMarker == nil) {
+				// an empty repo that this write may not start (org create):
+				// name the step that does, not the branch (plainfiles:4)
+				return res, fmt.Errorf("%w (%w): %s has no commits yet", ErrStoreEmpty, ErrNoStoreBranch, target)
+			}
+			if !empty || !c.FirstCommit || c.NewMarker == nil {
 				return res, fmt.Errorf("%w: %s has no branch %s", ErrNoStoreBranch, target, branch)
 			}
 			first = true

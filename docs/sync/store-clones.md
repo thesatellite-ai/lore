@@ -31,7 +31,7 @@ $ lore memory add --to notes --body 'The staging database is reset every Monday.
 lore: committed locally to store notes; lore sync sends it
 lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json (store notes)
 ✓ mem_54fe…28f2 [notes]
-  scope: [master]
+  scope: [project]
 ```
 <!-- /example -->
 
@@ -200,6 +200,7 @@ The example section `files` runs every step on this page in a throwaway world: [
 - **Deleting the clone while commits wait loses them.** A clone with nothing unpushed is safe to delete (lore clones it again when needed); `lore store forget` removes it cleanly and refuses while work waits.
 - **Do not put your own project files in a store.** lore leaves them alone, but your teammates get them too if you commit them; `lore doctor` lists them.
 - **A folder named like a kind of row is refused.** `lore store folder add --store notes --folder tasks` names the reserved names; pick another name.
+- **A folder another store of the org already holds is refused.** Folder names are unique across an org's stores (as `lore org link` refuses a duplicate): `lore store folder add --store <store> --folder acme` on one of the org's stores when the org's client store already has `acme/` answers `E_INVALID_INPUT` naming that store; write there with `--to <that store>/acme`, or pick another name.
 
 ## Related
 

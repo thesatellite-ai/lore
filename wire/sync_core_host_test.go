@@ -365,3 +365,50 @@ func TestSyncPurgePointer(t *testing.T) {
 		t.Fatal("the purged row kept its content")
 	}
 }
+
+// TestSyncHandMadeMarkersListed: a row file the reader leaves out as a
+// merge conflict although its markers are not git's exact shape (an
+// indented start line, as a hand edit leaves it) is in `sync conflicts`
+// and in the sync report's conflicts, so the reader's hint "lore sync
+// conflicts lists it" and sync --json agree (run:tests:q-sync-json-
+// conflicts); resolve refuses it with the fix-the-file next step.
+func TestSyncHandMadeMarkersListed(t *testing.T) {
+	t.Parallel()
+	var notes []string
+	a, repo := coreHostApp(t, coreStub{unsupported: true}, &notes)
+	id := addMemory(t, a, "base")
+	p := memPath(repo, id)
+	b := mustRead(t, p)
+	m := bodyLine.FindSubmatch(b)
+	if m == nil {
+		t.Fatalf("fixture: no body line in %s", b)
+	}
+	ind, comma := string(m[1]), string(m[2])
+	repl := ind + "<<<<<<< HEAD\n" + ind + `"body": "mine"` + comma + "\n=======\n" + ind + `"body": "theirs"` + comma + "\n>>>>>>> feat"
+	if err := os.WriteFile(p, bodyLine.ReplaceAll(b, []byte(repl)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := openWith(t, repo, Options{Sync: coreStub{unsupported: true}, Notice: func(string) {},
+		RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
+	env := c.syncEnv()
+	list, err := env.SyncConflicts(background(), opssync.ConflictsIn{})
+	if err != nil || list.Count != 1 || list.Data[0].RowID != id {
+		t.Fatalf("conflicts = %+v %v", list, err)
+	}
+	out, err := env.SyncRun(background(), opssync.RunIn{})
+	if len(out.Data.Conflicts) != 1 || !strings.Contains(out.Data.Conflicts[0].Path, id) {
+		t.Fatalf("sync report conflicts = %+v %v", out.Data.Conflicts, err)
+	}
+	// show never prints the marked body as if it were the row.
+	for _, git := range []bool{false, true} {
+		if git {
+			if err := os.WriteFile(p, b, 0o600); err != nil { // back to the base file
+				t.Fatal(err)
+			}
+			markLines(t, p, `"mine"`, `"theirs"`) // git's exact shape
+		}
+		if got := showMemBody(t, c, id); got != "" {
+			t.Fatalf("show of a marked file (git shape %v) printed %q", git, got)
+		}
+	}
+}

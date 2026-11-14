@@ -322,10 +322,13 @@ func Or(s, def string) string {
 	return s
 }
 
-// ScopeLabel is v0.1.17's scope badge text: repo:<mount> or master.
+// ScopeLabel is the scope badge an add prints: repo:<mount>, or project
+// for a row of the whole project. v0.1.17 printed "master" there, which a
+// newcomer read as the git branch (plainfiles:4); "project" is also the
+// --scope value that means the same place.
 func ScopeLabel(repo string) string {
 	if repo == "" {
-		return "master"
+		return "project"
 	}
 	return "repo:" + repo
 }

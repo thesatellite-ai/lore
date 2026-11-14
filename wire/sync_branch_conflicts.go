@@ -89,7 +89,12 @@ func (a *App) BranchConflicts(ctx context.Context) ([]BranchConflict, error) {
 	var out []BranchConflict
 	for _, p := range probs {
 		b, rerr := root.ReadFile(filepath.FromSlash(p.Path))
-		if rerr != nil || !fileHasMarkers(b) {
+		// The reader's own verdict counts too: a file rowfs leaves out as
+		// a merge conflict (a lone or indented marker line, a hand-made
+		// block) is listed, so its "lore sync conflicts lists it" hint and
+		// sync --json never disagree with this list (run:tests:q-sync-json-
+		// conflicts). Resolve refuses such a file with "fix the file".
+		if rerr != nil || (p.Cause != rowfs.CauseConflict && !fileHasMarkers(b)) {
 			continue
 		}
 		c := BranchConflict{Path: p.Path, Place: d.DataPath() + "/" + p.Path}

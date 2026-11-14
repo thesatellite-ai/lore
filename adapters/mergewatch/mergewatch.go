@@ -133,6 +133,14 @@ func (c Checker) tip(ctx context.Context) (string, error) {
 	return tip, nil
 }
 
+// Tip is the commit the target names now, for a host that remembers a
+// sweep's outcome by it (ok false when the target is missing or cannot be
+// resolved).
+func (c Checker) Tip(ctx context.Context) (string, bool) {
+	tip, err := c.tip(ctx)
+	return tip, err == nil && tip != ""
+}
+
 // checkAt is Check against a resolved tip, with the trailer check given
 // (one git log per candidate for Check, one shared index for Sweep).
 func (c Checker) checkAt(ctx context.Context, cand Candidate, tip string, trailer func(id string) (Finding, bool, string, error)) (Finding, bool, []Step, error) {

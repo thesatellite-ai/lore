@@ -309,3 +309,26 @@ func TestNeedsDone(t *testing.T) {
 		t.Errorf("MissingNeeds no progress = %v", miss)
 	}
 }
+
+// TestEmailsQuestionSaysWhereTheMainEmailIs pins realmac #17: the saved
+// emails list leaves out the main Email by design (it is the identity
+// key), so the identity step's "Other addresses" help says where it is.
+func TestEmailsQuestionSaysWhereTheMainEmailIs(t *testing.T) {
+	for _, k := range []Kind{KindSolo, KindMember} {
+		found := false
+		for _, st := range PlanFor(k, false) {
+			for _, q := range st.Questions {
+				if q.ID != QIDEmails {
+					continue
+				}
+				found = true
+				if q.Help != EmailsHelp || !strings.Contains(q.Help, "identity key") || !strings.Contains(q.Help, "not repeated") {
+					t.Errorf("%s: emails help = %q, want it to say the main Email is the identity key", k, q.Help)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s: no emails question in the plan", k)
+		}
+	}
+}

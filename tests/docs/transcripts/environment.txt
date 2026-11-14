@@ -63,10 +63,10 @@ trace: git for-each-ref --format=%(objectname) %(refname) -- refs/lore/live (<ti
 alice (work/website)$ lore rule add --body 'Run the tests before you push'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e99e22e9e86e96fe4daa7777994603.json
 ✓ rul_05e99e22e9e86e96fe4daa7777994603
-  scope: [master] severity: must
+  scope: [project] severity: must
 alice (work/website)$ LORE_SYNC_QUIET=1 lore memory add --body 'The client replies faster on WhatsApp than email.'
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8
-  scope: [master]
+  scope: [project]
 
 ### sync git off
 alice (work/shop)$ LORE_SYNC_GIT=0 lore init --name=shop
@@ -107,7 +107,7 @@ alice (work/website)$ lore memory add --not-a-secret --reason 'example value, no
 lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c590afb2a0cc7ae1b97b7e4e62d6c38.json
 lore: wrote ~/work/website/.lore/data/memories/mem_3b6283bc4392c556bbae5f094246e913.json
 ✓ mem_3b6283bc4392c556bbae5f094246e913
-  scope: [master]
+  scope: [project]
 alice (work/website)$ ls .lore/data/memories | grep -c mem_3b6283bc4392c556bbae5f094246e913 || true
 1
 

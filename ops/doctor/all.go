@@ -195,6 +195,18 @@ func (c *MemCache) Put(k CacheKey, r onboard.CheckResult) {
 	c.m[k.slot()] = memEntry{r: r, stamp: k.Stamp}
 }
 
+// ForgetTarget drops every setup's results about target (TargetStore of a
+// store that just synced): they are older than what lore now knows.
+func (c *MemCache) ForgetTarget(target string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.m {
+		if k.Target == target {
+			delete(c.m, k)
+		}
+	}
+}
+
 // Results are the unexpired results cached for setup, ordered by check id
 // then target (map order is random; the Health cell and tests want a
 // stable list). setup.list's Health cell reads them through

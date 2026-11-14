@@ -32,6 +32,7 @@ func TestMain(m *testing.M) { os.Exit(runMain(m)) }
 
 func runMain(m *testing.M) int {
 	flag.Parse()
+	defer removeOldLore() // the v0.1.17 build some tests make (fin_compat)
 	if os.Getenv(envTeamBin) != "" || testing.Short() {
 		return m.Run()
 	}

@@ -289,3 +289,29 @@ func TestReplaceMe(t *testing.T) {
 		t.Fatalf("replace wrong: %+v (input %+v)", g, f)
 	}
 }
+
+// TestAliasesAcceptedNotListed: a closed value named by an alias (its
+// label or val_ id) binds, while a value outside the set is refused with a
+// message listing only the value names, never the internal ids
+// (run:tests:q-val-ids).
+func TestAliasesAcceptedNotListed(t *testing.T) {
+	fd := Field{Kind: value.KindText, Values: []string{"hetzner", "amazon"}, Aliases: []string{"val_01a1aaaa", "Amazon Web Services"}}
+	resolve := func(Key) (Field, error) { return fd, nil }
+	for _, ok := range []string{"provider=amazon", "provider=val_01a1aaaa", "provider=Amazon Web Services"} {
+		f, err := Parse([]string{ok})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Bind(resolve); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	f, err := Parse([]string{"provider=nope"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.Bind(resolve)
+	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), `"nope" is not one of hetzner, amazon`) || strings.Contains(err.Error(), "val_") || strings.Contains(err.Error(), "Amazon Web Services") {
+		t.Fatalf("refusal %v: want the names only", err)
+	}
+}

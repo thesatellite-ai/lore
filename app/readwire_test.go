@@ -125,8 +125,11 @@ func TestReadsNeverWireGit(t *testing.T) {
 	if c != 0 {
 		t.Fatalf("memory add: exit %d\n%s\n%s", c, out, errOut)
 	}
+	// .githooks is committed with the repo: a new or changed file there
+	// reaches every teammate, so the write leaves it alone and says which
+	// hooks it did not write (`lore fix` writes them after asking)
 	hooks := filepath.Join(repo, ".githooks")
-	for _, want := range []string{"lore memory add: set up git for lore's row files in this clone:", "hook blocks in " + hooks} {
+	for _, want := range []string{"lore memory add: set up git for lore's row files in this clone:", "add its block to pre-commit in " + hooks, "`lore fix`"} {
 		if !strings.Contains(errOut, want) {
 			t.Fatalf("the write does not say %q:\n%s", want, errOut)
 		}
@@ -135,8 +138,11 @@ func TestReadsNeverWireGit(t *testing.T) {
 		t.Fatalf("the write's set-up line names lore sync:\n%s", errOut)
 	}
 	pc, err := os.ReadFile(filepath.Join(hooks, "pre-commit"))
-	if err != nil || !strings.Contains(string(pc), "lore-sync") || !strings.Contains(string(pc), "the project's own check") {
-		t.Fatalf("the write did not chain lore's block into .githooks/pre-commit (keeping the project's lines): %v\n%s", err, pc)
+	if err != nil || strings.Contains(string(pc), "lore-sync") || string(pc) != "#!/bin/sh\necho the project's own check\n" {
+		t.Fatalf("the write changed the committed .githooks/pre-commit: %v\n%s", err, pc)
+	}
+	if st := strings.TrimSpace(w.git(t, repo, "status", "--porcelain", "--", ".githooks")); st != "" {
+		t.Fatalf("the write left new or changed files in the committed .githooks:\n%s", st)
 	}
 	// and the store clone got its git identity with the write, said as
 	// the write

@@ -13,7 +13,7 @@ lore installs a **merge driver**: a small helper git calls to combine two edits 
 |---|---|
 | different fields (one the strength, one the text) | both changes kept, no conflict |
 | the same field to the same value | that value |
-| the same choice-type field (status, priority, an archive date, a link to another row), or a task's one-value text field (who finished or approved it, its done commit, its work branch, its team, its role) | the side changed last wins |
+| the same choice-type field (status, priority, an archive date, a link to another row), or a task's one-value text field (who finished or approved it, its done commit, its work branch, its team, its role) or a one-value text field that is never prose (who approved or finished a task, its commit, its branch, its role) | the side changed last wins |
 | the same free-text field (title, body) | a real conflict: both versions are written into the value, and you choose |
 | a list that works like a set (labels, approvers) | additions from both sides kept, removals honoured |
 
@@ -156,13 +156,13 @@ Alice and Bob each wrote "Send the invoice reminder before the demo on Friday" o
 $ lore memory add --body 'Send the invoice reminder before the demo on Friday.' && git add -A && git commit -qm 'lore: invoice' && git push -q origin main
 lore: wrote ~/work/website/.lore/data/memories/mem_4c59…6c38.json
 ✓ mem_4c59…6c38
-  scope: [master]
+  scope: [project]
 
 # bob, in website
 $ lore memory add --body 'send the invoice reminder before the demo on friday.' && git add -A && git commit -qm 'lore: invoice (bob)'
 lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ✓ mem_3b62…e913
-  scope: [master]
+  scope: [project]
 $ git pull -q --no-rebase origin main
 $ lore memory list | grep -i invoice
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
@@ -219,11 +219,11 @@ Merges, folds and deletes can leave a note pointing at a row that is gone. `lore
 $ lore memory add --body 'The client signs off every release on Fridays.'
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 ✓ mem_9a34…b418
-  scope: [master]
+  scope: [project]
 $ lore rule add --body 'Ship only after the client sign-off, see ${row:mem_9a34…b418}.'
 lore: wrote ~/work/website/.lore/data/rules/rul_bfed…eeea.json
 ✓ rul_bfed…eeea
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore memory delete --id mem_9a34…b418 --yes
 lore: wrote ~/work/website/.lore/data/memories/mem_9a34…b418.json
 ✓ mem_9a34…b418 moved to the trash (restore: lore trash restore --id mem_9a34…b418)

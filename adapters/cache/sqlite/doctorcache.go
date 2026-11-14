@@ -40,7 +40,8 @@ const (
 		ON CONFLICT (setup, check_id, target) DO UPDATE SET stamp = excluded.stamp, checked_at = excluded.checked_at, doc = excluded.doc`
 	// checked_at is RFC 3339 in UTC with a fixed width (doctorCacheTime), so
 	// text order is time order and the prune compares strings.
-	doctorCachePrune = `DELETE FROM doctor_cache WHERE checked_at < ?`
+	doctorCachePrune  = `DELETE FROM doctor_cache WHERE checked_at < ?`
+	doctorCacheForget = `DELETE FROM doctor_cache WHERE target = ?`
 )
 
 // doctorCacheTime is the stored time format: UTC, fixed-width nanoseconds,
@@ -138,6 +139,17 @@ func (d *DoctorCache) Put(ctx context.Context, k DoctorCacheKey, e DoctorCacheEn
 	}
 	if err = tx.Commit(); err != nil {
 		return dbErr("doctor cache: commit put", err)
+	}
+	return nil
+}
+
+// ForgetTarget drops every setup's cached results about target (a store's
+// "store <name>"): newer evidence than any of them exists, such as a sync
+// of that store that just reached its remote, so a doctor run within the
+// TTL must probe again instead of showing the older failure.
+func (d *DoctorCache) ForgetTarget(ctx context.Context, target string) error {
+	if _, err := d.db.ExecContext(ctx, doctorCacheForget, target); err != nil {
+		return d.writes.explain(dbErr("doctor cache: forget", err))
 	}
 	return nil
 }

@@ -120,7 +120,7 @@ lore: wrote ~/stores/agency-notes/golang/actors/act_162d…9666.json (store note
 lore: wrote ~/stores/agency-notes/golang/memories/mem_54fe…28f2.json (store notes/golang)
 lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3…f891.json (store notes/golang)
 ✓ mem_54fe…28f2 [notes/golang]
-  scope: [master]
+  scope: [project]
 $ cat .lore/stores.yaml
 stores:
     - name: notes
@@ -147,7 +147,7 @@ Alice wrote a rule into the repo that belongs in her store. `lore row move --id 
 $ lore rule add --body 'Keep the agency hourly rate out of the client repo.'
 lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
 ✓ rul_05e9…4603
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore row move --id rul_05e9…4603 --to notes
 ERROR: [E_NEEDS_CONFIRM] This becomes visible to everyone with access to notes (internal):
   "Keep the agency hourly rate out of the c…" (rul_05e9…4603, id kept), now in repo
@@ -222,7 +222,7 @@ rul_05e9…4603 [must/always] Keep the agency hourly rate out of the client repo
 
 ## Sync every store from anywhere
 
-`lore sync` in a code repo syncs that repo's stores. Run it where there is no code repo (your home folder, the plain parent folder of your client repos) and it syncs every store the setup of that folder sees, the same set `lore store list` shows there: one line per store (`up to date`, `pulled`, `pushed`, `pulled and pushed`, with the counts), and the push lines of each store on stderr. `lore sync --json` lists them under `data.stores` (each with `store`, `url`, `status`, and for a store that failed `error` and `next`). Inside a store checkout (`cd ~/.lore/stores/<owner>/<repo>/<folder>`) it syncs that store only. `lore sync status` there shows the same stores: each one's commits ahead and behind of its remote as of the last fetch, its last push and push mode, and any refused push (no network is used). A store whose address now answers that there is no repository (it was moved, renamed or deleted, or your access was removed) is not called offline, in a code repo or outside one: its line says so with git's reason, the command exits non-zero (`E_STORE_UNREACHABLE`), and it names the way out for each case: `lore store set-url --name <store> --url <new-url>` for a move, an empty repository at the old address and then `lore store push --store <store> --restore --yes` from the clone with the most work for a deletion, and an admin of the store for lost access. `lore doctor`, `lore doctor --all` and `lore org refresh` name the same steps, never an ssh alias, `lore store init` or "retry".
+`lore sync` in a code repo syncs that repo's stores, then pushes the waiting commits of any org store your `~/.lore/config.yaml` lists that the repo does not attach (a note written there with `--to <store>/<folder>`), one line each. Run it where there is no code repo (your home folder, the plain parent folder of your client repos) and it syncs every store the setup of that folder sees, the same set `lore store list` shows there: one line per store (`up to date`, `pulled`, `pushed`, `pulled and pushed`, with the counts), and the push lines of each store on stderr. `lore sync --json` lists them under `data.stores` (each with `store`, `url`, `status`, and for a store that failed `error` and `next`). Inside a store checkout (`cd ~/.lore/stores/<owner>/<repo>/<folder>`) it syncs that store only. `lore sync status` there shows the same stores: each one's commits ahead and behind of its remote as of the last fetch, its last push and push mode, and any refused push (no network is used). A store whose address now answers that there is no repository (it was moved, renamed or deleted, or your access was removed) is not called offline, in a code repo or outside one: its line says so with git's reason, the command exits non-zero (`E_STORE_UNREACHABLE`), and it names the way out for each case: `lore store set-url --name <store> --url <new-url>` for a move, an empty repository at the old address and then `lore store push --store <store> --restore --yes` from the clone with the most work for a deletion, and an admin of the store for lost access. `lore doctor`, `lore doctor --all` and `lore org refresh` name the same steps, never an ssh alias, `lore store init` or "retry".
 
 A store that cannot be reached or fails does not stop the others: its line says why, and when any store failed `lore sync` ends with an error naming each failed store and its next step (exit non-zero, `E_STORE_UNREACHABLE` for a store it could not reach).
 

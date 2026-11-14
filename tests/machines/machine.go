@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/tests/e2eenv"
+	"github.com/thesatellite-ai/lore/tests/tmpworld"
 )
 
 // Shape names, the closed set Build accepts.
@@ -175,15 +176,30 @@ func (m *Machine) env() []string {
 	return append(env, m.ExtraEnv...)
 }
 
+// worldPrefix names every machine folder in the shared temp folder, so the
+// next run can sweep the ones a killed run left (runMain).
+const worldPrefix = "lm-"
+
+// worldMaxAge is longer than any run of the suite: a machine folder older
+// than this belongs to a run that was killed before its cleanup.
+const worldMaxAge = 12 * time.Hour
+
 // Build makes a machine of the shape under a fresh short directory
 // (unix socket paths are limited to ~100 bytes) removed when t ends.
 func Build(t testing.TB, shape, bin string) *Machine {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "lm-")
+	dir, err := os.MkdirTemp("", worldPrefix)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	// tmpworld.RemoveAll: a shape with a read-only folder (a 0500 ~/.lore,
+	// a locked code folder) defeated os.RemoveAll, and the world stayed in
+	// the shared temp folder.
+	t.Cleanup(func() {
+		if rerr := tmpworld.RemoveAll(dir); rerr != nil {
+			t.Errorf("remove the machine's folder: %v", rerr)
+		}
+	})
 	// The real path: on macOS the temp folder /var/... is /private/var/...,
 	// and lore and PlacesBefore name files by their resolved paths, so a
 	// /var root made every write of a linked file look foreign.

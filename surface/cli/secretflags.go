@@ -41,7 +41,9 @@ func secretFlags(c *cobra.Command, s op.Spec, values map[string]*rawFlag) secret
 	// P3-MISC-2: a Local operation writes no row, so it never asks about a
 	// secret; its MayAsk is only its own yes/no question.
 	// NoSecretFindings: the op asks only its own question (store init).
-	if !s.Confirm.MayAsk || s.Local || s.Confirm.NoSecretFindings {
+	// batch not-built: a read (every show, whose question is --reveal or
+	// --show-sensitive) writes no row, so no secret finding can come up.
+	if !s.Confirm.MayAsk || s.Local || s.Confirm.NoSecretFindings || s.OnlyReads() {
 		return sf
 	}
 	taken := func(name string) bool { _, ok := values[name]; return ok }

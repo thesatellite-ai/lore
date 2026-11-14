@@ -1188,6 +1188,14 @@ func (a *App) AddFolder(ctx context.Context, in opsstores.FolderAddIn) (opsstore
 	if err != nil {
 		return opsstores.FolderAddOut{}, err
 	}
+	// Folder names are unique across an org's stores (LORE_TEAM_SPEC F13):
+	// a name another store of the org already holds would make --to
+	// <folder>, links and project lookups ambiguous, so it is refused as
+	// org link refuses it (team matrix F13).
+	if f, other := a.otherOrgStoreFolder(ctx, src, in.Folder); other {
+		return opsstores.FolderAddOut{}, errs.New(errs.InvalidInput, "store folder add: folder "+in.Folder+" is already in "+f.Org+"'s store "+f.Label+"; folder names are unique across an org's stores").
+			WithHint("write to that folder with --to " + f.Label + "/" + in.Folder + ", or pick another name: lore store folder add --store " + in.Store + " --folder <other name>")
+	}
 	// team and an org store's url are shown as the store they resolved to
 	out := opsstores.FolderAddOut{Store: a.storeLabel(in.Store, src), Folder: in.Folder}
 	err = a.withStoreDir(ctx, src, folderAddSubject+in.Folder, func(dir string) (paths []string, ferr error) {

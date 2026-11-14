@@ -276,13 +276,33 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	} else if moved, err = there.Decode(); err != nil {
 		return Written{}, err
 	}
+	// batch leftover-3: in a stage (wire withActorRows), the rows staged
+	// for to (the caller's first actor row there, the copy, a client
+	// repo's kind rows) are written now as one batch, before the old copy
+	// is removed: a refusal above discarded them with the stage, so a
+	// refused move leaves no actor row in to; and the copy is in to before
+	// its source tombstone is staged (a stage writes one store).
+	if pre := absorbStaged(ctx, to); len(pre.changes) > 0 {
+		bc, bev := pre.withDirect(nil, nil)
+		if err = e.writeChanges(ctx, dst, bc, bev); err != nil {
+			return Written{}, err
+		}
+		fd, fev := pre.finishDirect(nil, nil)
+		aw, ferr := e.finishW(unstaged(ctx), to, fd, fev...)
+		dropped = append(dropped, aw...)
+		if ferr != nil {
+			return Written{Row: moved, Warnings: dropped}, ferr
+		}
+	}
 	h := e.clock.Now(cur.HLC)
 	tomb := row.Row{Table: cur.Table, ID: cur.ID, HLC: h, Deleted: true, UpdatedAt: h.Wall, UpdatedBy: actor}
 	// PROVENANCE 5.4: the source place's commit records where the row went
 	// (Lore-Moved-To: the target's place id; for a client repo its rep_
 	// id), so the history our side keeps can be stitched across a hop the
 	// client file never names. Per write: only this tombstone's commit.
-	mctx := store.WithCommitTrailers(ctx, MovedToTrailer+": "+e.placeOf(to))
+	// Written directly even in a stage (its own commit carries the
+	// trailer; a stage writes one store and the copy is in to already).
+	mctx := store.WithCommitTrailers(unstaged(ctx), MovedToTrailer+": "+e.placeOf(to))
 	got, err := e.put(mctx, srcSt, tomb, cur.HLC)
 	if err != nil {
 		return Written{Row: moved}, errs.Prefix(""+cur.ID.String()+" is now in "+string(to)+" but its old copy in "+string(src)+" could not be removed", err).
@@ -290,7 +310,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	}
 	ev := Event{Op: cl.op, Action: ActionDelete, Store: src, Table: cur.Table, ID: cur.ID, HLC: h, Actor: actor}
 	w := Written{Row: moved, Warnings: dropped}
-	aw, err := e.finishW(ctx, src, []store.Row{got.doc}, ev)
+	aw, err := e.finishW(unstaged(ctx), src, []store.Row{got.doc}, ev)
 	w.Warnings = append(w.Warnings, aw...)
 	if err != nil {
 		return w, err

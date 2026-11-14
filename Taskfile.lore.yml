@@ -327,29 +327,9 @@ tasks:
         echo "✓ go mod tidy: no changes"
 
   check:docs:
-    desc: "Docs cite code through docsync: every citation still matches (ds check). Command/flag drift is TestDocsMatchCLI in test:all"
+    desc: "Docs cite code through docsync: every citation still matches (ds check). Command/flag drift is TestDocsMatchCLI in test:all. Leaves .ds/ exactly as it was (tests/lib/check-docs.sh)"
     cmds:
-      - |
-        # `go install` puts ds in $(go env GOPATH)/bin, which a gate's PATH
-        # (a non-login shell, the after-land runner) may not hold: look there too.
-        if ! command -v ds >/dev/null 2>&1; then
-          PATH="$PATH:$(go env GOPATH)/bin"
-        fi
-        if ! command -v ds >/dev/null 2>&1; then
-          echo "✘ ds (docsync) is not installed (not on PATH, nor in \$(go env GOPATH)/bin), so doc citations cannot be checked"
-          exit 1
-        fi
-        # ds scan rewrites .ds/ledger.tsv and refs.tsv (their header records
-        # the commit and time of every scan). A gate must not change tracked
-        # files, so they are put back after checking; refresh them on purpose
-        # with `ds scan` and commit when docs or citations change.
-        keep=$(mktemp -d)
-        cp .ds/ledger.tsv .ds/refs.tsv "$keep"/
-        status=0
-        ds scan >/dev/null && ds check || status=$?
-        cp "$keep/ledger.tsv" "$keep/refs.tsv" .ds/
-        rm -rf "$keep"
-        exit $status
+      - tests/lib/check-docs.sh
 
   check:gocache:
     desc: "Empty Go's build cache (go clean -cache) when it is over LORE_GOCACHE_MAX_GB (default 50); LORE_GOCACHE_TRIM=dry only reports, =off skips. The first step of lore:check; touches no tracked file (tests/lib/gocache-trim.sh)"
@@ -502,7 +482,7 @@ tasks:
         set -o pipefail
         # -parallel: how many team tests run at once (the gate passes its share of the load
         # budget; a manual run uses 24).
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$)' ./tests/teame2e/ {{.CLI_ARGS}} \
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$)' ./tests/teame2e/ {{.CLI_ARGS}} \
           | go run ./tests/teame2e/teamharness/matrix
 
   test:setupe2e:

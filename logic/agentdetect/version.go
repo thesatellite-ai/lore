@@ -23,9 +23,9 @@ const (
 )
 
 // pathVersionRe finds a version folder in an install path: Homebrew
-// Cellar/<tool>/<ver>/, a mise/asdf installs/<tool>/<ver>/, an nvm-style
+// Cellar/<tool>/<ver>/ (a formula) or Caskroom/<tool>/<ver>/ (a cask), a mise/asdf installs/<tool>/<ver>/, an nvm-style
 // versions/<tool>/<ver>/.
-var pathVersionRe = regexp.MustCompile(`/(?:Cellar|installs|versions)/[^/]+/v?([0-9]+\.[0-9]+(?:\.[0-9]+)?[^/]*)/`)
+var pathVersionRe = regexp.MustCompile(`/(?:Cellar|Caskroom|installs|versions)/[^/]+/v?([0-9]+\.[0-9]+(?:\.[0-9]+)?[^/]*)/`)
 
 // VersionFromPath parses a version out of an install path ("" if none).
 func VersionFromPath(p string) string {

@@ -77,6 +77,12 @@ ERROR: [E_SETUP_STEP_ORDER] step identity needs kind first
 
 ## Invites
 
+### `E_INVALID_INPUT` "handle @<h> is taken" on the join step
+
+**Cause:** someone on the org's roster already has the handle you answered on the Identity step. The join had already added the org's entry on this machine with that handle when the roster refused it.
+
+**Fix:** change the handle on the Identity step and save the join step again: the join takes the new handle into the org entry it added before and registers you with it (`lore setup apply --setup <setup> --step identity --answers '{"email":"<your email>","name":"<your name>","handle":"<another handle>"}'`, then the join step again, or the same on the setup page).
+
 ### `E_JOIN_ORG_UNKNOWN` (exit 27)
 
 **Cause:** `lore setup join --invite <name>` names an org this machine has no entry for. A member an admin added with `lore member add` joins from a fresh machine, where the org's name means nothing yet.

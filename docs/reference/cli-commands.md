@@ -2,6 +2,8 @@
 
 This file is generated from the operation registry of the 0.1.18 core (the `op.Define` specs in `ops/`). Do not edit the text between the `lore:spec` markers: run `lore spec docs` (and `lore spec openapi` for `openapi.json`) after changing an operation, and the drift test in `wire/docs_test.go` fails until you do. Only the commands already migrated to the new core appear here; the rest of the CLI is described in the hand-written reference.
 
+Every switch (a flag that takes no value, such as `--force`) also has an off form `--no-<switch>` (`--no-force`), so a script can name either state; it is not listed per command. Giving both forms in one command is refused (E_INVALID_INPUT, exit 20), and so is a word right after a switch (`--yes false`): give the switch alone to turn it on, or its `--no-` form to turn it off.
+
 ## Commands
 
 <!-- lore:spec:begin commands -->
@@ -630,6 +632,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `E_PARENT_PURGED` | 23 | `refused` | 409 | restore of a child whose parent was purged |
 | `E_PERIOD_OVERLAP` | 23 | `refused` | 409 | a period or membership date overlaps another stint, ends before it starts, or falls before the open period's start; see lore actor period list <actor> |
 | `E_POLICY_DENIED` | 23 | `refused` | 409 | a team policy refuses this |
+| `E_PORT_IN_USE` | 23 | `refused` | 409 | the --port is held by another program (or another lore api / setup page); pick another --port, or --port 0 for a free one |
 | `E_PROJECT_NAME_COLLISION` | 23 | `refused` | 409 | multiple projects share that name; specify by opaque ID |
 | `E_PURGED` | 23 | `refused` | 409 | the row was purged; only a tombstone is left |
 | `E_PUSH_AGAIN` | 23 | `refused` | 409 | lore's pre-push hook added a commit of finished live rows to the branch being pushed, so this push stopped once; run the same git push again (it sends that commit too) |
@@ -648,7 +651,7 @@ This file is generated from the operation registry of the 0.1.18 core (the `op.D
 | `E_REF_SYNTAX` | 20 | `bad_input` | 400 | a reference is malformed: an unknown option, a reference inside a path, or more than 3 secret alternates |
 | `E_REPO_URL` | 20 | `bad_input` | 400 | a repo address the normaliser refuses |
 | `E_RESOURCE_AMBIGUOUS` | 21 | `ambiguous` | 409 | a bare resource name matches rows at two levels or in two kinds |
-| `E_RESOURCE_ARCHIVED` | 23 | `refused` | 409 | a new ref to an archived resource; ref its replaced_by or unarchive it |
+| `E_RESOURCE_ARCHIVED` | 23 | `refused` | 409 | a new ref to an archived resource; ref its replaced_by or another resource (archive is one way) |
 | `E_RESOURCE_BATCH` | 23 | `refused` | 409 | the import failed validation as a whole; nothing written |
 | `E_RESOURCE_CONFLICT` | 23 | `refused` | 409 | a store push hit a strict or kind/field conflict; settle it first |
 | `E_RESOURCE_INTERNAL` | 19 | `guard` | 403 | an internal resource field would be written in a client repo; write it in the store or an own repo, or move with --drop-internal |

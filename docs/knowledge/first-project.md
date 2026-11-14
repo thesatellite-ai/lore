@@ -91,7 +91,7 @@ A *rule* is a hard "always" or "never", like a sign on the office wall. Give the
 $ lore rule add --body 'Run the tests before you push'
 lore: wrote ~/work/website/.lore/data/rules/rul_162d…9666.json
 ✓ rul_162d…9666
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore rule list
 rul_162d…9666 [must/always] Run the tests before you push
 ```
@@ -164,7 +164,6 @@ Notes:
   - live: last fetch 40s ago
   - live: post-commit and pre-push hook blocks installed
   - Team versions (newest save per writer and machine):
-  -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 Context (information, nothing to fix):

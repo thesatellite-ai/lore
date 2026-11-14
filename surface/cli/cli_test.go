@@ -342,3 +342,36 @@ func TestUsageErrorBytes(t *testing.T) {
 		}
 	}
 }
+
+// TestHelpTopicUnknown: `lore help <word>` with a word that names no
+// command is refused like the word typed on its own (E_INVALID_INPUT, exit
+// 20) instead of printing the root help with exit 0; a known topic, at any
+// depth, still prints that command's help (run:tests:q-help-topic).
+func TestHelpTopicUnknown(t *testing.T) {
+	t.Parallel()
+	f := newFake(t)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"help", "zznosuchword"}, "ERROR: [E_INVALID_INPUT] unknown command \"zznosuchword\" for \"" + RootName + "\"\n  hint: " + RootName + " --help lists its commands\n"},
+		{[]string{"help", "memory", "bogus"}, "ERROR: [E_INVALID_INPUT] unknown command \"bogus\" for \"" + RootName + " memory\"\n  hint: " + RootName + " memory --help lists its commands\n"},
+	} {
+		r := execute(Build(f.reg, f, WithArgs(tc.args)), "", tc.args...)
+		if r.exit != ExitUsage || r.stderr != tc.want || r.stdout != "" {
+			t.Errorf("%v: exit %d stderr %q stdout %q; want exit %d stderr %q", tc.args, r.exit, r.stderr, r.stdout, ExitUsage, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"help"}, "Available Commands:"},
+		{[]string{"help", "memory", "add"}, "add --body <body>"},
+	} {
+		r := execute(Build(f.reg, f, WithArgs(tc.args)), "", tc.args...)
+		if r.exit != 0 || !strings.Contains(r.stdout, tc.want) {
+			t.Errorf("%v: exit %d stdout %q stderr %q; want exit 0 and %q", tc.args, r.exit, r.stdout, r.stderr, tc.want)
+		}
+	}
+}

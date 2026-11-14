@@ -270,7 +270,7 @@ func TestSideEffect04_TwoLinksNeedADefault(t *testing.T) {
 // F13 / cookbook 14: one store per client; the link says which store; folder
 // names are unique across an entry's stores.
 func TestRecipe14_OneStorePerClient(t *testing.T) {
-	w := newTeamWorld(t, append(append([]th.Cap{}, agencyCaps...), th.Flag("store", "org", "link"))...)
+	w := newTeamWorld(t, append(append([]th.Cap{}, agencyCaps...), th.Flag("store", "org", "link"), th.Cmd("store", "folder", "add"))...)
 	orgStore, acmeStore := w.Remote("github.com/northwind/lore-org"), w.Remote("github.com/northwind/lore-acme")
 	alice := w.Human("alice", "alice@northwind.example")
 	org := northwindOrg(aliceKey, aliceName, "alice")
@@ -302,6 +302,13 @@ func TestRecipe14_OneStorePerClient(t *testing.T) {
 		t.Fatal("the company store must never get the client note")
 	}
 	c.Lore("org", "link", orgNorthwind, "--project", folderAcme, "--store", orgStore.URL(), "--yes").Refused(t, folderAcme)
+	// store folder add refuses the name too, and writes nothing to the
+	// company store (team matrix F13)
+	before := orgStore.Files(refMain)
+	c.Lore("store", "folder", "add", "--store", orgStore.URL(), "--folder", folderAcme).Refused(t, "E_INVALID_INPUT", folderAcme, "unique across an org's stores")
+	if after := orgStore.Files(refMain); strings.Join(after, ",") != strings.Join(before, ",") {
+		t.Fatalf("a refused folder add changed the company store: %v -> %v", before, after)
+	}
 }
 
 // Cookbook 4: a contractor listing only the company store and Acme's store

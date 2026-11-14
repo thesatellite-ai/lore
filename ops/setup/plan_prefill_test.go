@@ -626,4 +626,24 @@ func TestJoinedMemberJoinStepResave(t *testing.T) {
 	if len(f.applier.calls) != 0 {
 		t.Fatalf("the join was applied again: %v", f.applier.calls)
 	}
+	// run:life:rest-kinds-open: each check the step lists shows as skipped
+	// with the reason, never as "not checked" on the step and Summary.
+	var step onboard.Step
+	for _, st := range (onboardCatalog{}).Plan(onboard.KindMember) {
+		if st.ID == onboard.StepJoin {
+			step = st
+		}
+	}
+	if len(step.Checks) == 0 {
+		t.Fatal("the join step lists no checks: the test proves nothing")
+	}
+	for name, got := range map[string][]onboard.CheckResult{"check": c.Checks, "save": out.Checks} {
+		for _, id := range step.Checks {
+			if !slices.ContainsFunc(got, func(r onboard.CheckResult) bool {
+				return r.Check == id && r.Status == onboard.StatusSkip && r.Detail == onboard.SkipJoinedAlready
+			}) {
+				t.Errorf("%s of a joined setup's join step: no skipped result for %s (Summary: not checked): %+v", name, id, got)
+			}
+		}
+	}
 }

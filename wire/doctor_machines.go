@@ -136,7 +136,21 @@ func (a *App) DoctorTeamVersions(ctx context.Context) ([]DoctorFinding, error) {
 // (CLI_REFERENCE 3.7).
 func teamVersionFindings(tvs []sqlite.TeamVersion, floor string, name, machineName func(string) string) []DoctorFinding {
 	out := []DoctorFinding{{Check: DoctorCheckTeamVersions, Level: DoctorNote, Plain: true, Message: teamVersionsHeader}}
+	// A code-repo save carries no machine id, so a person who wrote to the
+	// repo and to a store with one lore showed twice ("ana on (code repo,
+	// no machine id)" and "ana on laptop", plainfiles:4): that line says
+	// nothing the machine line does not. It stays when its version is one
+	// no machine line of that writer has (another lore, another machine).
+	onMachine := map[string]bool{}
 	for _, tv := range tvs {
+		if tv.Machine != "" {
+			onMachine[tv.Actor+"\x00"+tv.Version] = true
+		}
+	}
+	for _, tv := range tvs {
+		if tv.Machine == "" && onMachine[tv.Actor+"\x00"+tv.Version] {
+			continue
+		}
 		machine := codeRepoMachine
 		if tv.Machine != "" {
 			machine = machineName(tv.Machine)

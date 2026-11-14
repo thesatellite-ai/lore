@@ -37,11 +37,11 @@ The client pays invoices on the first Monday of the month.
 $ lore rule add --body 'Ask the client before changing any price.'
 lore: wrote ~/work/website/.lore/data/rules/rul_4bfb…19ce.json
 ✓ rul_4bfb…19ce
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore memory add --body 'The client pays invoices on the first Monday of the month.'
 lore: wrote ~/work/website/.lore/data/memories/mem_2e0c…0b6d.json
 ✓ mem_2e0c…0b6d
-  scope: [master]
+  scope: [project]
 $ rm .ai/notes.md && git status --short
 ?? .lore/data/memories/mem_2e0c…0b6d.json
 ?? .lore/data/rules/rul_4bfb…19ce.json

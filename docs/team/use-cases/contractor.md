@@ -73,12 +73,12 @@ lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3…b5b8.jso
 lore: wrote ~/.lore/stores/agency/notes-client/client/memories/mem_76bd…3f10.json (store agency)
 ✓ mem_76bd…3f10 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
-  scope: [master]
+  scope: [project]
 $ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
 lore: committed locally to store agency/.; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/_store/rules/rul_d431…313a.json (store agency/.)
 ✓ rul_d431…313a [agency/.]
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore sync
 lore: pushed store notes-client/client (here: agency): commit 601d285 to branch main
 lore: pushed store agency/.: commit 86dbae4 to branch main

@@ -55,17 +55,17 @@ lore: wrote ~/stores/client2/_store/actors/act_28f8…03df.json (store client2)
 lore: wrote ~/stores/client2/_store/rules/rul_4c59…6c38.json (store client2)
 lore: wrote ~/stores/client2/_store/machines/mch_3b62…e913.json (store client2)
 ✓ rul_4c59…6c38 [client2]
-  scope: [master] severity: must
+  scope: [project] severity: must
 
 # alice, in api
 $ lore rule add --to client2 --body 'Every change comes with a test.'
 lore: wrote ~/stores/client2/_store/rules/rul_f147…5139.json (store client2)
 ✓ rul_f147…5139 [client2]
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore rule add --body 'The API answers in JSON only.'
 lore: wrote ~/work/api/.lore/data/rules/rul_2537…6bbb.json
 ✓ rul_2537…6bbb
-  scope: [master] severity: must
+  scope: [project] severity: must
 $ lore rule list
 rul_2537…6bbb [must/always] The API answers in JSON only.
 rul_4c59…6c38 [must/always] Every screen works on a phone. [client2]
