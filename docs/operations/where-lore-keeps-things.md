@@ -1,6 +1,6 @@
 # Where lore keeps things: `lore where` and lore's home
 
-**In short:** lore keeps its own files in one folder per machine (`~/.lore`), in a `.lore/` folder in each code repo, in a few marked blocks of files it shares with you (`.gitignore`, `.gitattributes`, `CLAUDE.md`, git hooks) and in a few git config entries. `lore where` (also spelled `lore files`) lists every one of them on this machine and in the repo you run it in, one line each, with what it is. `~/.lore/README.md` explains the home folder in plain words. Nothing is hidden: when lore writes into your repo or its git config for the first time it says what and where.
+**In short:** lore keeps its own files in one folder per machine (`~/.lore`, or the absolute folder `LORE_HOME` names; the first line of `lore where` says which and why), in a `.lore/` folder in each code repo, in a few marked blocks of files it shares with you (`.gitignore`, `.gitattributes`, `CLAUDE.md`, git hooks) and in a few git config entries. `lore where` (also spelled `lore files`) lists every one of them on this machine and in the repo you run it in, one line each, with what it is. `~/.lore/README.md` explains the home folder in plain words. Nothing is hidden: when lore writes into your repo or its git config for the first time it says what and where.
 
 ## What it is and when you want it
 
@@ -14,6 +14,7 @@ Run it anywhere; inside a repo it adds that repo's files:
 ```console
 # alice, in website
 $ lore where
+lore home: ~/.lore (default; set LORE_HOME to an absolute folder to move it)
 lore's home: ~/.lore
   README.md
       this map of lore's home, written by lore and rewritten when the layout changes

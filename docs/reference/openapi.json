@@ -15489,6 +15489,9 @@
                         "source"
                       ]
                     },
+                    "lore_home": {
+                      "type": "string"
+                    },
                     "machine": {
                       "type": "object",
                       "properties": {
@@ -112237,6 +112240,9 @@
                     "home": {
                       "type": "string"
                     },
+                    "home_source": {
+                      "type": "string"
+                    },
                     "readme": {
                       "type": "string"
                     },
@@ -112252,6 +112258,7 @@
                   },
                   "required": [
                     "home",
+                    "home_source",
                     "entries"
                   ]
                 }

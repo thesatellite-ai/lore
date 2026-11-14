@@ -447,6 +447,9 @@ func plural(n int, word string) string {
 func (r Report) allText() string {
 	var b strings.Builder
 	var ok, warns, errors, couldNot int
+	if l := r.homeLine(); l != "" {
+		b.WriteString(l + "\n")
+	}
 	tally := func(rs []onboard.CheckResult) {
 		for _, c := range rs {
 			switch {

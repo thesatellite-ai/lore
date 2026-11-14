@@ -31,9 +31,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
@@ -57,7 +57,7 @@ var setupUI setupweb.UI
 // unresolvedHome is the lore home used when the user's home cannot be read
 // (a container with no HOME): a temp folder, so nothing is written into the
 // working directory by accident.
-const unresolvedHome = "lore-home-unresolved"
+const unresolvedHome = lorehome.UnresolvedDir
 
 // Option composes the binary: what the importing main hands in (its
 // version, an optional setup page UI). Options are applied in order; a
@@ -128,6 +128,9 @@ func run(ctx context.Context, args []string) int {
 	if err := refuseRelativeHome(); err != nil { // home.go: E_INVALID_INPUT for a relative HOME (E-GAPS-1 S2)
 		return printHostError(err)
 	}
+	if _, err := lorehome.Resolve(); err != nil { // E_INVALID_INPUT for an empty, relative or ~ LORE_HOME
+		return printHostError(err)
+	}
 	defer offlineFixDryRun(args)() // fixoffline.go: lore fix --dry-run reaches no remote (owner bug 14) and writes nothing
 	capDoctorProcs(args)           // doctorprocs.go: doctor runs on at most min(4, CPUs) cores
 	cleanOldBinary()               // winold.go: an upgrade's lore.exe.old, on Windows (8.3)
@@ -140,6 +143,7 @@ func run(ctx context.Context, args []string) int {
 	}
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
+	base.HomeSource = homeSource()
 	if isInitRun(args) {
 		initScope(&base) // init.go: init opens no org store (TestE8, TestE10)
 	}
@@ -327,17 +331,29 @@ func (h *host) markPrinted(c *cobra.Command) {
 }
 
 // dirs is the working directory ("." when unreadable) and the lore home
-// (<user home>/.lore; a temp fallback when the user home is unknown).
+// (lorehome.Resolve: LORE_HOME, else <user home>/.lore; a temp fallback
+// when the user home is unknown). run refuses a bad LORE_HOME before it
+// gets here; a caller that skipped that check gets the temp fallback,
+// never a folder lore did not mean.
 func dirs() (wd, home string) {
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = "."
 	}
-	uh, err := os.UserHomeDir()
+	h, err := lorehome.Resolve()
 	if err != nil {
 		return wd, filepath.Join(os.TempDir(), unresolvedHome)
 	}
-	return wd, filepath.Join(uh, rowfs.LoreDir)
+	return wd, h.Dir
+}
+
+// homeSource is where dirs' lore home came from (`lore where`, doctor).
+func homeSource() lorehome.Source {
+	h, err := lorehome.Resolve()
+	if err != nil {
+		return lorehome.FromFallback
+	}
+	return h.Source
 }
 
 // syncCommand is the first word of `lore sync`.

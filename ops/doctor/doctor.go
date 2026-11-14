@@ -255,6 +255,10 @@ type Report struct {
 	Notes         []string `json:"notes,omitempty"`
 	Errors        []string `json:"errors,omitempty"`
 	BinaryVersion string   `json:"binary_version"`
+	// LoreHome is the lore home when LORE_HOME moved it ("" for the default
+	// ~/.lore): two builds on one machine each keep their own home, and
+	// doctor says which one it checked.
+	LoreHome string `json:"lore_home,omitempty"`
 	// Sync is the [sync] section (absent outside a project).
 	Sync RawJSON `json:"sync,omitempty"`
 	// RepoAddresses is the "Repo addresses" check (PROV2, Q5).
@@ -355,10 +359,27 @@ func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
 	if err := addSetups(ctx, env, in, &r); err != nil {
 		return Report{}, err
 	}
+	if lh, ok := env.(movedHome); ok {
+		r.LoreHome = lh.MovedLoreHome()
+	}
 	r.finalize()
 	r.OK = r.Status == StatusHealthy
 	r.Exit = exitOf(r.Status)
 	return r, nil
+}
+
+// movedHome is the optional Env method naming the lore home when LORE_HOME
+// set it ("" for the default home).
+type movedHome interface {
+	MovedLoreHome() string
+}
+
+// homeLine is the "Lore home:" line shown when LORE_HOME moved the home.
+func (r Report) homeLine() string {
+	if r.LoreHome == "" {
+		return ""
+	}
+	return "Lore home: " + r.LoreHome + " (from LORE_HOME)\n"
 }
 
 // runRepo is the report's repo part: this binary's base checks and the
@@ -500,7 +521,7 @@ func (r Report) Text() string {
 		return r.allText()
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Status: %s\nBinary: %s\n\n", strings.ToUpper(string(r.Status)), r.BinaryVersion)
+	fmt.Fprintf(&b, "Status: %s\nBinary: %s\n%s\n", strings.ToUpper(string(r.Status)), r.BinaryVersion, r.homeLine())
 	if len(r.Steps) > 0 {
 		// the status stays the first line (scripts read it); the steps follow
 		b.WriteString(lineFixIsFix + "\n" + StepsText(r.Steps))

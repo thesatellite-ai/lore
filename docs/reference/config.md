@@ -501,7 +501,7 @@ v0.1.17 could point a project at a database somewhere else, shared by several pr
 
 | Key | Default | What it means |
 |---|---|---|
-| `db_path` | required | where the shared database is. You may write `${HOME}`, `${LORE_HOME}` (the value of `LORE_HOME`, else `~/.lore`) and `${PROJECT_ROOT}` (this project's folder). A `..` part is refused unless `LORE_ALLOW_DB_PATH_OUTSIDE=1` |
+| `db_path` | required | where the shared database is. You may write `${HOME}`, `${LORE_HOME}` (lore's home: `LORE_HOME`, else `~/.lore`; `LORE_V017_HOME` overrides it here only) and `${PROJECT_ROOT}` (this project's folder). A `..` part is refused unless `LORE_ALLOW_DB_PATH_OUTSIDE=1` |
 | `project_id` | required | which project inside that database this folder is |
 
 ## Your settings (`lore config`)
@@ -532,7 +532,7 @@ not set
 - `1d12h` is refused; write `36h`.
 - `personal.push`, `push_every`, `compact` and `compact_after` apply to your personal store only. An org store keeps its own in its `lore-store.yaml`, set by the org admin with `lore store set`.
 - An ssh alias of yours in lore-org.yaml or `.lore/stores.yaml` works on your machine only: teammates cannot reach the store. Put the canonical url there and the alias in your own `access:`; `lore doctor` names every such url.
-- `LORE_HOME` does not move `~/.lore`: lore always keeps its config (your identity included) and caches under `~/.lore` in your home folder. `LORE_HOME` only fills in `${LORE_HOME}` in `db_path`.
+- `LORE_HOME` moves lore's whole home (`~/.lore`): config (your identity included), store clones, caches and state all go there, and `${LORE_HOME}` in `db_path` is that folder. To point `${LORE_HOME}` in `db_path` at another folder without moving the home, set `LORE_V017_HOME` for the `lore migrate run`.
 
 ## Related
 

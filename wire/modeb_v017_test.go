@@ -212,14 +212,16 @@ func TestExpandModeBPath(t *testing.T) {
 	home := t.TempDir()
 	testenv.SetHome(t, home)
 	cases := []struct {
-		name, in, loreHome, allow, want string
-		bad                             bool
+		name, in, loreHome, v017Home, allow, want string
+		bad                                       bool
 	}{
 		{name: "plain", in: "/data/lore.db", want: "/data/lore.db"},
 		{name: "relative kept", in: "db/lore.db", want: "db/lore.db"},
 		{name: "home", in: "${HOME}/s/lore.db", want: home + "/s/lore.db"},
 		{name: "lore home default", in: "${LORE_HOME}/lore.db", want: filepath.Join(home, ".lore") + "/lore.db"},
 		{name: "lore home set", in: "${LORE_HOME}/lore.db", loreHome: "/lh", want: "/lh/lore.db"},
+		{name: "v017 home fills it only", in: "${LORE_HOME}/lore.db", loreHome: "/lh", v017Home: "/shared", want: "/shared/lore.db"},
+		{name: "v017 home with no lore home", in: "${LORE_HOME}/lore.db", v017Home: "/shared", want: "/shared/lore.db"},
 		{name: "project root", in: "${PROJECT_ROOT}/x.db", want: "/repo/x.db"},
 		{name: "dot dot refused", in: "/a/../b.db", bad: true},
 		{name: "dot dot via placeholder refused", in: "${PROJECT_ROOT}/../b.db", bad: true},
@@ -229,6 +231,10 @@ func TestExpandModeBPath(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(modeBLoreHomeEnv, tc.loreHome)
+			if tc.loreHome == "" {
+				_ = os.Unsetenv(modeBLoreHomeEnv) // unset, not empty: an empty LORE_HOME is refused (t.Setenv restores it)
+			}
+			t.Setenv(modeBV017HomeEnv, tc.v017Home)
 			t.Setenv(modeBAllowOutsideEnv, tc.allow)
 			got, err := expandModeBPath(tc.in, "/repo")
 			if tc.bad {
