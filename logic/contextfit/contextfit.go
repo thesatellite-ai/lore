@@ -203,25 +203,86 @@ func FirstSentence(body string) (string, bool) {
 	return out, true
 }
 
-// ShortForm picks an entry's one-line text: the summary, else the first
-// sentence of body (rules), else the title (hotfixes), else NoShortForm
-// with the id filled in (6.4, CQ3, CQ4).
+// ShortForm picks an entry's one-line text: the summary, else the title
+// (hotfixes), else the first sentence of body (rules), else the start of
+// the body cut at a word to LineCut characters, else NoShortForm with the
+// id filled in (6.4, CQ3). A must rule written without --summary as one
+// long sentence still says what it requires (bug hunt G-6: it used to be
+// a bare id that nobody reads).
 func ShortForm(id, summary, title, body string) string {
-	if s := oneLine(summary); s != "" {
+	return ShortFormMax(id, summary, title, body, 0)
+}
+
+// LineCut is the default length of a line cut from a body with no short
+// sentence: long enough to say what the rule is about.
+const LineCut = 120
+
+// ShortFormMax is ShortForm with the text cut at a word to at most max
+// characters (0: no extra cut). A render over its budget shortens every
+// line this way before it gives up (bug hunt G-6).
+func ShortFormMax(id, summary, title, body string, max int) string {
+	s := oneLine(summary)
+	if s == "" {
+		s = oneLine(title)
+	}
+	if s == "" {
+		if fs, ok := FirstSentence(body); ok {
+			s = oneLine(fs)
+		} else {
+			s = Cut(oneLine(body), LineCut)
+		}
+	}
+	if s == "" {
+		return strings.Replace(NoShortForm, "<id>", id, 1)
+	}
+	if max > 0 {
+		s = Cut(s, max)
+	}
+	return s
+}
+
+// ellipsis ends a cut text, so a reader sees it is not the whole entry.
+const ellipsis = "…"
+
+// Cut shortens s to at most max characters (ellipsis included), ending at
+// a word boundary when one is in the second half; s itself when it fits.
+func Cut(s string, max int) string {
+	if max <= 0 || utf8.RuneCountInString(s) <= max {
 		return s
 	}
-	if title != "" {
-		return oneLine(title)
+	all := []rune(s)
+	r := all[:max-1]
+	// The last word is whole when a space follows it; otherwise go back
+	// to the last space so no word is split.
+	if all[max-1] != ' ' {
+		if i := lastSpace(r); i > len(r)/2 {
+			r = r[:i]
+		}
 	}
-	if s, ok := FirstSentence(body); ok {
-		return oneLine(s)
+	return strings.TrimRight(string(r), " ,;:.-") + ellipsis
+}
+
+// lastSpace is the index of r's last space, -1 when none.
+func lastSpace(r []rune) int {
+	for i := len(r) - 1; i >= 0; i-- {
+		if r[i] == ' ' {
+			return i
+		}
 	}
-	return strings.Replace(NoShortForm, "<id>", id, 1)
+	return -1
 }
 
 // oneLine folds line breaks so a line form stays one markdown bullet.
 func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// BriefLine is a line form without the per-line `lore show` pointer, for
+// a file that says once, in its footer, how to see the full text (LORE.md
+// and the folder files; bug hunt G-6: the pointer repeated on every line
+// cost more bytes than the rule text).
+func BriefLine(id, short string) string {
+	return "- `" + id + "` " + short + "\n"
 }
 
 // LineForm is the 6.4 line: - `<id>` <short> Full: `lore show <id>`.

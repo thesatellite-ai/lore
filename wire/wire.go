@@ -209,6 +209,15 @@ type Options struct {
 	// under ~/.lore, its repo store is read-only, and its git is never
 	// wired (no hooks, .gitignore or .gitattributes lines).
 	RepoLinkedByRemote func(ctx context.Context) string
+	// ClientRepo says whether this checkout is a client repo by a match
+	// (a hosted remote an org's repos: pattern or a client link claims):
+	// the org's name and the folder it is linked to, zero when it is not
+	// one. Unlike RepoIsClient it never fails closed: a repo with no
+	// hosted remote, or no org, is no client repo here. Why: every hint
+	// that would send the person to `lore init` asks it first, so a client
+	// repo gets the org link instead of lore files in the client's
+	// repository (I-13). Nil: no org concept, hints stay as they are.
+	ClientRepo func(ctx context.Context) ClientRepo
 	// OrgStores lists the store folders the repo's org brings (CONFIG_GUIDE
 	// section 4 step 5b: the org's stores plus the folder this repo is
 	// linked to), attached for this process beside stores.yaml and never
@@ -970,6 +979,11 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	ctx = a.TeamContext(ctx) // P3-COORD-3: --assign @h, --mine, STATE without a host Team (wire/coord_standalone.go)
 	// P3-CFG-1: a Local operation opens nothing, not even the
 	// agent detection's repo state (wire/localops.go).
+	if e.Spec().Name == opsrepoinit.OpRepoInit {
+		if err := a.ConfirmClientRepoInit(ctx, c.Yes); err != nil { // I-13 (clientrepo_hint.go)
+			return op.Result{}, err
+		}
+	}
 	if e.Spec().Local {
 		return a.runLocal(ctx, e, d, c)
 	}
@@ -995,7 +1009,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// anything opens the repo (the agent detection below would): from
 	// the plain parent folder of an org's client folders, or in a repo it
 	// does not change, which it must leave as it was (wire/storefolders.go).
-	if a.setupOnlyHere(ctx, e.Spec().Name) {
+	if a.setupOnlyHere(ctx, e.Spec().Name) || a.setURLWithoutRepo(ctx, e.Spec().Name) {
 		return a.runSetupOnly(ctx, e, d, c)
 	}
 	// a write naming its store (--to acme/org) outside any repo runs on
@@ -1011,6 +1025,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// `lore sync` with no code repo here syncs every store of the setup,
 	// or the store checkout it runs in, each on its own App (syncsetup.go)
 	if e.Spec().Name == opssync.OpRun && a.opts.Sync != nil && a.setupSyncHere(ctx) {
+		return runDirect(ctx, e, d)
+	}
+	// `lore sync status` there reads the same stores (H-10: it refused
+	// E_NOT_A_STORE from ~ while `lore sync` worked); a store checkout
+	// keeps the repo path, which already answers there
+	if e.Spec().Name == opssync.OpStatus && a.opts.Sync != nil && a.setupStatusHere(ctx) {
 		return runDirect(ctx, e, d)
 	}
 	// AGENT_IDENTITY 8.2 (#7): the CLI caller carries the detected agent, so

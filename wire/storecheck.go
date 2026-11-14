@@ -21,8 +21,10 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
@@ -46,9 +48,42 @@ func (a *App) CheckStores(ctx context.Context) []opsstores.StoreCheck {
 		own, _ = splitHeldRecords(list)
 	}
 	now := a.Now()
+	// a store's push mode, read only for a cloned store with waiting
+	// commits (PushViews would open, and so clone, every store: doctor
+	// only reads)
+	modeOf := func(name string) string {
+		v, err := a.StorePush(ctx, name)
+		if err != nil {
+			return ""
+		}
+		return v.Push
+	}
+	cloneOf := map[string]string{} // clone worktree -> the first store checked with it
 	var out []opsstores.StoreCheck
 	for _, s := range a.storeStandings(ctx) {
-		c := a.checkStore(ctx, s, now)
+		if s.git && s.cloned && s.err == "" {
+			if first, ok := cloneOf[s.dir]; ok {
+				// H-16: a folder of a store shares its clone; its commits
+				// and remote are the store's, checked once on its line
+				// (one waiting commit was counted for the store, the folder
+				// and the url)
+				c := opsstores.StoreCheck{Store: s.entry.Name, Source: s.entry.Source, Kind: opsstores.StoreKindGit, URL: s.entry.URL,
+					Clone: string(gitbackend.CloneWhole), Reachable: true, Notes: []string{sameCloneText(first)}, Shown: repourl.Mask(s.entry.URL)}
+				out = append(out, c)
+				continue
+			}
+			cloneOf[s.dir] = s.entry.Name
+		}
+		c := a.checkStore(ctx, s, now, modeOf)
+		if s.git && s.cloned && s.err == "" {
+			// G-19: a clone left at the store's old address (after
+			// `lore store set-url`) is named, with what removes it
+			if m, merr := rowfs.ReadMarker(s.dir); merr == nil && !m.ID.IsZero() {
+				if line := leftClonesLine(leftClones(ctx, a.opts.Home, m.ID.String(), s.entry.URL), nil); line != "" {
+					c.Notes = append(c.Notes, line)
+				}
+			}
+		}
 		if r, ok := refusals[s.entry.Name]; ok && r.HeldBy != "" {
 			// decision 7: another folder's refusal held this push; the
 			// refusal itself is that folder's problem
@@ -65,8 +100,9 @@ func (a *App) CheckStores(ctx context.Context) []opsstores.StoreCheck {
 	return out
 }
 
-// checkStore checks one store (refusals aside).
-func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) opsstores.StoreCheck {
+// checkStore checks one store (refusals aside); modeOf reads a store's
+// push mode ("" when push modes do not apply to it).
+func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time, modeOf func(string) string) opsstores.StoreCheck {
 	c := opsstores.StoreCheck{Store: s.entry.Name, Source: s.entry.Source, Kind: opsstores.StoreKindFolder, URL: s.entry.URL}
 	if !s.git {
 		if _, ok := markerVisibility(s.dir); ok && s.err == "" {
@@ -131,7 +167,10 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 	if !st.LastPush.IsZero() {
 		c.LastPush = st.LastPush.UTC().Format(time.RFC3339)
 	}
-	if gitbackend.RemoteResetAt(s.dir) {
+	if gitbackend.RewoundAt(s.dir) {
+		// H-9: someone rewound the store branch; say what sync says.
+		c.Problems = append(c.Problems, fmt.Sprintf("the store at %s was rewritten by someone (its branch moved back); this clone %s still holds %d commit(s) that are no longer on it and lore will not push them back on its own: put them back with `lore store push --restore --store %s`, or take the rewrite with `lore store forget --url %s --yes`, then `lore sync`", s.entry.URL, s.dir, st.Ahead, s.entry.URL, s.entry.URL))
+	} else if gitbackend.RemoteResetAt(s.dir) {
 		// B2-29: say what sync says; the waiting commits are not pushed
 		// by the next command while the store stays reset.
 		c.Problems = append(c.Problems, fmt.Sprintf("the store at %s was reset (deleted and made again); this clone %s still holds the old store (%d commit(s) not pushed) and lore will not push it there on its own: put it back with `lore store push --restore --store %s`, or start fresh with `lore store forget --url %s --yes`, then `lore store init --name <name> --url %s`", s.entry.URL, s.dir, st.Ahead, s.entry.URL, s.entry.URL, s.entry.URL))
@@ -140,10 +179,28 @@ func (a *App) checkStore(ctx context.Context, s storeStanding, now time.Time) op
 		if !st.OldestUnpushed.IsZero() {
 			age = ", the oldest " + storeAge(now.Sub(st.OldestUnpushed)) + " old"
 		}
-		c.Problems = append(c.Problems, fmt.Sprintf("%d commit(s) not pushed%s; the next lore command that reaches the store pushes them, or run `lore sync`", st.Ahead, age))
+		mode := modeOf(s.entry.Name)
+		switch {
+		case heldMode(mode) && c.Reachable:
+			// H-16: under push manual or batch, waiting commits are the
+			// mode working as set (the write said "lore sync sends it"),
+			// not a problem; nothing else pushes them soon, so say what does
+			c.Notes = append(c.Notes, fmt.Sprintf("%d commit(s) not sent yet%s; push %s: `lore sync` sends them", st.Ahead, age, mode))
+		case heldMode(mode):
+			c.Problems = append(c.Problems, fmt.Sprintf("%d commit(s) not sent yet%s; push %s: `lore sync` sends them once the store answers", st.Ahead, age, mode))
+		default:
+			c.Problems = append(c.Problems, fmt.Sprintf("%d commit(s) not pushed%s; the next lore command that reaches the store pushes them, or run `lore sync`", st.Ahead, age))
+		}
 	}
 	c.Notes = append(c.Notes, standingText(s, time.Time{})) // no relative ages: the same text on every run
 	return c
+}
+
+// heldMode reports whether a store's push mode holds commits until a
+// sync (manual) or until its interval passed (batch): no write's push
+// sends them at once, so "the next command pushes them" would be false.
+func heldMode(mode string) bool {
+	return mode == string(storepush.ModeManual) || mode == string(storepush.ModeBatch)
 }
 
 // cloneNotCloned is StoreCheck.Clone for a git store with no clone here.

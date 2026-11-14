@@ -572,10 +572,12 @@ func (r *Ref) setTracking(ctx context.Context, oid string) error {
 	if err != nil {
 		return err
 	}
-	if cur == oid {
-		return nil
+	if cur != oid {
+		if err = r.Repo.UpdateRef(ctx, trk, oid, cur); err != nil {
+			return err
+		}
 	}
-	return r.Repo.UpdateRef(ctx, trk, oid, cur)
+	return r.markTracked() // the remote at RemoteURL now holds oid
 }
 
 // Fetch runs one fetch of every refs/lore/* ref (and the named branches)
@@ -585,10 +587,14 @@ func (r *Ref) Fetch(ctx context.Context, branches ...string) error {
 	if r.Remote == nil {
 		return nil
 	}
-	return r.Remote.Fetch(ctx, gitremote.FetchRequest{
+	if err := r.Remote.Fetch(ctx, gitremote.FetchRequest{
 		Refspecs: gitremote.TrackingRefspecs(r.remoteName(), branches...),
 		Prune:    true,
-	})
+	}); err != nil {
+		return err
+	}
+	r.markFetched() // in memory: a read fetches and writes nothing in .git (C-8)
+	return nil
 }
 
 // ForcePush replaces the remote ref with the local one if the remote still

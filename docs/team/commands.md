@@ -423,7 +423,7 @@ Flags:
 ```
 <!-- /help -->
 
-A store whose remote does not answer fails the check with `E_STORE_UNREACHABLE` (exit 15), not `E_INVALID_INPUT`. The line names the store's url (credentials masked) and git's own reason, and tells "cannot reach" (no network: lore keeps working and the commits go out once it answers) from "no git repository at" (a wrong or deleted address: `lore store set-url` fixes it), "cannot read … (permission denied)" (a local folder that exists but this user may not read: the address is right, fix the permissions) and "refused this machine's credentials".
+A store whose remote does not answer fails the check with `E_STORE_UNREACHABLE` (exit 15), not `E_INVALID_INPUT`. The line names the store's url (credentials masked) and git's own reason, and tells "cannot reach" (no network: lore keeps working and the commits go out once it answers) from "no git repository at" (a wrong or deleted address: `lore store set-url` fixes it), "cannot read … (permission denied)" (a local folder that exists but this user may not read: the address is right, fix the permissions) and "refused this machine's credentials". A store's unsent commits are a problem only when its push mode sends each write at once (`push now`): under `push manual` (the default) or `push batch` they are the mode working as set, so they are a note (`1 commit(s) not sent yet, the oldest 2m old; push manual: `lore sync` sends them`) and the command exits 0. A folder of a store (`<org>/org`) shares the store's clone and is not counted again.
 
 ## Live rows and landing
 
@@ -840,7 +840,7 @@ Flags:
       --assign stringArray       assign to @handle or an actor; repeatable: the assignees, the first is the lead (a team sets the assigned team)
       --assigned-to string       actor_id (act_*) the task is assigned to
       --body string              longer description
-      --commitment string        accepted | proposed | someday (default accepted)
+      --commitment string        accepted | proposed | someday (default accepted for a person; an agent must pass it, a sub-task inherits its parent's)
       --defer-until string       snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM); hides from active list until then
       --dry-run                  with --template: show the tasks that would be added, write nothing
       --due string               due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)

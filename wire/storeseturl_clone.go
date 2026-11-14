@@ -195,3 +195,48 @@ func strandedList(s []strandedClone) string {
 	}
 	return strings.Join(parts, "; ")
 }
+
+// leftClones lists the whole clones on this machine of store id whose
+// origin is not the address addr and that hold no unpushed work: after
+// set-url nothing reads or writes them, and nothing said so (H-12: each
+// person kept ~/.lore/stores/<org>/<old-name> beside the new clone). It
+// only reads; set-url names them with the command that removes each.
+func leftClones(ctx context.Context, home, id, addr string) []gitbackend.CloneFound {
+	found, err := gitbackend.ScanClones(home)
+	if err != nil {
+		return nil
+	}
+	var out []gitbackend.CloneFound
+	for _, c := range found {
+		if c.State != gitbackend.CloneWhole || c.Origin == "" || storeaddr.Same(c.Origin, addr) {
+			continue
+		}
+		if m, merr := rowfs.ReadMarker(c.Paths.Dir); merr != nil || m.ID.String() != id {
+			continue
+		}
+		if len(unpushedIn(ctx, cloneDirs{git: c.Paths.Dir, work: c.Paths.Dir})) == 0 {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// leftClonesLine is set-url's line for leftClones ("" when none): each
+// old clone, that it is no longer used, and how to remove it.
+func leftClonesLine(left []gitbackend.CloneFound, old []string) string {
+	if len(left) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(left))
+	for _, c := range left {
+		u := c.Origin
+		for _, o := range old {
+			if storeaddr.Same(o, c.Origin) {
+				u = o // the spelling the person knows
+				break
+			}
+		}
+		parts = append(parts, "the old clone "+c.Paths.Dir+" is no longer used (it holds nothing the store lacks); `lore store forget --url "+u+" --yes` removes it")
+	}
+	return strings.Join(parts, "; ")
+}

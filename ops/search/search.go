@@ -234,8 +234,8 @@ type Env interface {
 type RunIn struct {
 	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"`
 	Tables          []string `json:"tables,omitempty" flag:"tables" desc:"restrict to these entity types (e.g. memory,rule,decision; repeatable)"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max total hits after merge (default 20)"`
-	PerTable        int      `json:"per_table,omitempty" flag:"per-table" desc:"per-entity top-K before merge (default 10)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max total hits after merge (default 20)"`
+	PerTable        int      `json:"per_table,omitempty" flag:"per-table" min:"1" desc:"per-entity top-K before merge (default 10)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	IncludeDeleted  bool     `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also list matching rows in the trash, after the live hits"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search every repo (ignore --repo)"`

@@ -42,8 +42,8 @@ const (
 	ProblemUnpushedUnknown = "cannot list unpushed work: "
 	// ProblemUnreachable is a doctor fetch that could not reach the store.
 	ProblemUnreachable = "unreachable (using the last fetched state)"
-	// problemUnpushed prefixes the refs doctor found waiting.
-	problemUnpushed = "unpushed work: "
+	// ProblemUnpushed prefixes the refs doctor found waiting.
+	ProblemUnpushed = "unpushed work: "
 )
 
 // Ref namespaces the unpushed check compares (local, tracking).
@@ -192,7 +192,7 @@ func (c Clones) Doctor(ctx context.Context, norm, url string, branches []string)
 	info.Problems = append(info.Problems, base.Problems...)
 	if len(base.Unpushed) > 0 {
 		info.Unpushed = base.Unpushed
-		info.Problems = append(info.Problems, problemUnpushed+strings.Join(base.Unpushed, ", "))
+		info.Problems = append(info.Problems, ProblemUnpushed+strings.Join(base.Unpushed, ", "))
 	}
 	return info
 }

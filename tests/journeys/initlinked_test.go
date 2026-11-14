@@ -111,7 +111,10 @@ func TestJourneyInitLinkedRepo(t *testing.T) {
 		// cached": init had dropped the store its own leak check reads
 		other := lee.Clone(client, "client-web-two")
 		lee.MoveClone(t, other, filepath.Join(parent, "client-web-two"))
-		lee.LoreIn(other, "init", "--non-interactive", "--name=client-web").OK(t).Never(t, "E_LEAK_BLOCKED")
+		// I-13: in a client repo init asks first (it writes lore's files into
+		// the client's repository); --yes is the deliberate choice
+		lee.LoreIn(other, "init", "--non-interactive", "--name=client-web").Fails(t, 26, "client repo of "+tlOrg)
+		lee.LoreIn(other, "init", "--yes", "--non-interactive", "--name=client-web").OK(t).Never(t, "E_LEAK_BLOCKED")
 		lee.LoreIn(other, "memory", "list").OK(t).Says(t, ilClientNote)
 	})
 }

@@ -544,7 +544,10 @@ func TestStoreWriteFixVariant(t *testing.T) {
 		{probe.ClassHostKey, "", onboard.FixNoRead},
 		{probe.ClassUnreachable, "", onboard.FixUnreachable},
 		{probe.ClassFailed, "", onboard.FixWriteUnknown},
-		{probe.ClassNoAccess, onboard.FixNotGitHub, onboard.FixNotGitHub},
+		// H-11: on a host that is not GitHub a refused read still means
+		// the write was never tested ("ask for push access" was wrong)
+		{probe.ClassNoAccess, onboard.FixNotGitHub, onboard.FixNoRead},
+		{probe.ClassNoWrite, onboard.FixNotGitHub, onboard.FixNotGitHub},
 	}
 	for _, c := range cases {
 		v := map[string]string{onboard.VarOwner: "octo-personal", onboard.VarRepo: "lore-me"}

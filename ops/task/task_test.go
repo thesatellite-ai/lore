@@ -61,7 +61,13 @@ func TestTextMatchesV017(t *testing.T) {
 	fourth := add(h, "Fourth", "")
 	check("done", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+fourth+`"}`)),
 		"✓ tsk_ID done\n  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)\n")
-	check("done --no-lesson", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+fourth+`","no_lesson":true}`)), "✓ tsk_ID done\n")
+	// Delta (G-10): v0.1.17 finished a task again; a second done is a no-op
+	// that names who finished it.
+	if got := lines(opstest.Text(h.Must(opstask.OpDone, `{"id":"`+fourth+`","no_lesson":true}`))); !strings.HasPrefix(got, "· tsk_ID was already done by ") || !strings.HasSuffix(got, "; nothing changed\n") {
+		t.Errorf("second done: %q, want the no-op line naming who finished it", got)
+	}
+	fourthDone := addID(h, h.Must(opstask.OpAdd, `{"title":"Fourth b"}`))
+	check("done --no-lesson", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+fourthDone+`","no_lesson":true}`)), "✓ tsk_ID done\n")
 	fifth := add(h, "Fifth", "")
 	check("cancel", opstest.Text(h.Must(opstask.OpCancel, `{"id":"`+fifth+`"}`)), "✓ tsk_ID cancelled\n")
 	check("edit", opstest.Text(h.Must(opstask.OpEdit, `{"id":"`+fifth+`","priority":"low"}`)), "✓ tsk_ID updated\n")

@@ -17,7 +17,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -67,33 +66,31 @@ func (e *Engine) Archived(ctx context.Context, cutoff time.Time) (TrashResult, e
 
 // PurgeArchived purges every row Archived lists (DEL-ARCH); with dryRun it
 // only lists them. The caller has already asked for --confirm (DQ2). A row
-// an earlier row's cascade already tombstoned is skipped, so a run twice
-// purges nothing the second time.
+// already tombstoned is skipped, so a run twice purges nothing the second
+// time. The rows go through purgeRows: ONE write per store, as `purge
+// --older-than` (bug hunt G-8: a write, a live-ref commit and a plan over
+// every store per row made 50 archived rows take 12 s).
 func (e *Engine) PurgeArchived(ctx context.Context, cutoff time.Time, dryRun bool) (TrashResult, error) {
 	res, err := e.Archived(ctx, cutoff)
 	if err != nil || dryRun || len(res.Rows) == 0 {
 		return res, err
 	}
-	ctx = withPurgeTrailer(ctx, e.clock.Now(hlc.HLC{}).Wall, "") // DELETION 2.6: the purge commit trailer
-	var out TrashResult
+	var todo TrashResult
 	for _, t := range res.Rows {
 		sr, err := e.stores[t.Store].Backend.Get(ctx, t.Row.Table, t.Row.ID)
 		if err != nil {
-			return out, err
+			return TrashResult{}, err
 		}
 		if sr.Deleted {
-			continue // tombstoned by the cascade of a row purged before it
+			continue // tombstoned since it was listed
 		}
 		cur, err := sr.Decode()
 		if err != nil {
-			return out, err
+			return TrashResult{}, err
 		}
-		if _, err := e.remove(ctx, t.Store, cur, true); err != nil {
-			return out, err
-		}
-		out.Rows = append(out.Rows, t)
+		todo.Rows = append(todo.Rows, Trashed{Store: t.Store, Row: cur, Info: t.Info})
 	}
-	return out, nil
+	return e.purgeRows(ctx, todo)
 }
 
 // archivedAt reads an archived_at value: a DateTime or Date, or the RFC

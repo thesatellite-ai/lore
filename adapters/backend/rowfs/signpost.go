@@ -21,6 +21,7 @@ package rowfs
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -31,6 +32,13 @@ const SignpostFile = ".0-needs-lore-0.1.18-or-newer"
 
 // SignpostText is the signpost's one line.
 const SignpostText = "this store needs lore 0.1.18 or newer: upgrade lore, then run lore fix\n"
+
+// IsSignpost reports whether the slash path p (from any top: a store's, a
+// code repo's .lore/data, relative or absolute) names the signpost: a
+// plain-text note, never a row file, that every walker of row files must
+// skip (D-154: the commit hook checked it as JSON and refused every
+// migration commit).
+func IsSignpost(p string) bool { return path.Base(p) == SignpostFile }
 
 // HasSignpost reports whether the store at dir has the signpost file.
 func HasSignpost(dir string) bool {

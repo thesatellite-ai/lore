@@ -154,7 +154,7 @@ alice (work/website)$ lore pin set --id rul_54fe984c9b495744c0217776765a28f2 --c
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2 pinned: context line (lore render to apply)
 alice (work/website)$ lore render >/dev/null && grep -n 'price change' .lore/LORE.md
-42:- `rul_54fe984c9b495744c0217776765a28f2` Every price change needs the client written OK Full: `lore show --id rul_54fe984c9b495744c0217776765a28f2`
+42:- `rul_54fe984c9b495744c0217776765a28f2` Every price change needs the client written OK
 alice (work/website)$ lore pin set --id rul_54fe984c9b495744c0217776765a28f2 --context full
 lore: wrote ~/work/website/.lore/data/rules/rul_54fe984c9b495744c0217776765a28f2.json
 ✓ rul_54fe984c9b495744c0217776765a28f2 pinned: context full (lore render to apply)

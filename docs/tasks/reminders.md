@@ -16,7 +16,7 @@ Alice (an agency developer) keeps the dates for the client's website, `github.co
 
 ## Step 1 — Add reminders
 
-`--due` is required. It reads dates the way every lore date flag does: a day (`YYYY-MM-DD`), a full time (RFC 3339), or a phrase such as `tomorrow`, `fri`, `in 3d` or `eom` (lore prints the day it stored for a phrase). `--recurrence` makes it repeat.
+`--due` is required. It reads dates the way every lore date flag does: a day (`YYYY-MM-DD`), a full time (RFC 3339), or a phrase such as `tomorrow`, `fri`, `in 3d` or `eom`, with a clock time if you want one (`tomorrow 09:00`; `tomorrow + 09:00` reads the same) (lore prints the day it stored for a phrase). `--recurrence` makes it repeat.
 
 <!-- example: tasks#reminder -->
 ```console
@@ -35,7 +35,7 @@ $ lore reminder list
 ```
 <!-- /example -->
 
-Reminders are listed by date, soonest first. A `!` at the start of the line means the date has passed. A repeating reminder shows how often it repeats, here `(1y)`.
+Reminders are listed by date, soonest first. A `!` at the start of the line means the date has passed. A repeating reminder shows how often it repeats, here `(1y)`. Dates are shown where you are: a due with a clock time (`tomorrow 20:00`) is listed on the day it falls in your time zone, and a due without one is that calendar day wherever you are, so its `!` appears once that day has begun for you, not at midnight UTC. Overdue reminders and the ones due today also show in `lore inbox` (with the `lore reminder done` command for each) until they are marked done; `--ack` does not hide them.
 
 ## Step 2 — Mark reminders done
 

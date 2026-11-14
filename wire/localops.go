@@ -21,7 +21,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
@@ -183,5 +186,25 @@ func (a *App) DoctorClones(ctx context.Context) (opsstores.ClonesOut, error) {
 	if a.opts.Local.Clones == nil {
 		return opsstores.ClonesOut{}, unsupported("store doctor")
 	}
-	return a.opts.Local.Clones.DoctorClones(ctx)
+	out, err := a.opts.Local.Clones.DoctorClones(ctx)
+	if err != nil {
+		return out, err
+	}
+	// H-16: a clone of a store the first half of store doctor checks
+	// (CheckStores) has its waiting commits reported there, with its push
+	// mode; the bare "unpushed work: refs/heads/main" counted them again
+	checked := map[string]bool{}
+	for _, s := range a.storeStandings(ctx) {
+		if k, ok := storeKey(s.entry.URL); ok && s.git && s.cloned {
+			checked[k] = true
+		}
+	}
+	for i := range out.Stores {
+		v := &out.Stores[i]
+		if k, ok := storeKey(v.URL); !ok || !checked[k] {
+			continue
+		}
+		v.Problems = slices.DeleteFunc(v.Problems, func(p string) bool { return strings.HasPrefix(p, orgcfg.ProblemUnpushed) })
+	}
+	return out, nil
 }

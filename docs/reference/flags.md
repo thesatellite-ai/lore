@@ -47,8 +47,11 @@ A few commands use `--project` for something of their own: `lore org link`, `org
 |---|---|
 | `--json` | print the result as JSON for scripts instead of text. List, show and search commands take it, plus `doctor`, `errors list`, `version`, `whoami`, `context`, `sync` and more. Errors are still printed as text (see [error codes](errors.md)) |
 | `--limit <n>` | at most this many results (search commands: default 20; `lore audit log`: default 50, 0 means all) |
+| `--page <n>` | page number, from 1, of a list (with `--limit`; 50 rows a page when only `--page` is given) |
 | `--include-archived` | also show archived rows (search commands) |
 | `--column <name>` | search only in this field, such as the title (search commands; repeat the flag for more) |
+
+A number flag whose default you get by leaving it out (`--limit`, `--page`, `--days`, `--depth`, `--jobs`, `--number`, `--per-table`, `--max-bytes`) takes 1 or more: `--days 0` is refused with `--days must be 1 or more`, never run as the default. `lore audit log --limit 0` (every entry) is the one exception.
 
 ## Repo scope in a multi-repo project
 

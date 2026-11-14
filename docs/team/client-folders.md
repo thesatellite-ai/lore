@@ -52,7 +52,7 @@ store agency folders:
 
 ## Step 3 — What needs a repo
 
-Store names from `.lore/stores.yaml` exist only inside the repo that lists them, and `lore store init|add|remove|set-url` edit that file. Outside a repo they say so and name what works here:
+Store names from `.lore/stores.yaml` exist only inside the repo that lists them, and `lore store init|add|remove|set-url` edit that file. Outside a repo they say so and name what works here (`lore store set-url` of an org's store, `me` or a `sto_` id works anywhere: it edits no repo file):
 
 <!-- example: client-folders#names-that-need-a-repo -->
 ```console
@@ -92,7 +92,7 @@ store agency folders:
 
 ## Step 5 — A client repo that holds no lore files
 
-A client's repo must never hold lore files. Link it without `lore init`: the link is made for the repo's remote (with several remotes, `--remote` picks one) and kept only in the store, so nothing is written into the repo: no `.lore/`, no `.gitignore` lines, no `.gitattributes`, no git hooks. Every later command in that repo finds the link from the store by the remote; its rows go to the linked folder, and its cache lives under `~/.lore`. `lore doctor` there says so. If someone later runs `lore init` in that repo (an own repo that should hold lore files after all), the project keeps the link's id (`prj_…` above) instead of minting a new one, and init says `the org store already links <remote>`, so the folder's notes still reach the repo. Commands run there keep it so: `lore render` writes nothing and says the repo is a client repo (agents read its notes with `lore context --for-file <path>` or the agent hook), a write refused there (a secret prompt) leaves no `.lore/` behind, and a package folder set up as its own project uses the repo's link. A teammate's first command after the admin's `lore org link` fetches the org's stores once, so the new link is seen at once.
+A client's repo must never hold lore files. Link it without `lore init`: the link is made for the repo's remote (with several remotes, `--remote` picks one) and kept only in the store, so nothing is written into the repo: no `.lore/`, no `.gitignore` lines, no `.gitattributes`, no git hooks. Every later command in that repo finds the link from the store by the remote; its rows go to the linked folder, and its cache lives under `~/.lore`. `lore doctor` there says so. If someone later runs `lore init` in that repo (an own repo that should hold lore files after all), the project keeps the link's id (`prj_…` above) instead of minting a new one, and init says `the org store already links <remote>`, so the folder's notes still reach the repo. Commands run there keep it so: `lore render` writes nothing and says the repo is a client repo (agents read its notes with `lore context --for-file <path>` or the agent hook), a write refused there (a secret prompt) leaves no `.lore/` behind, and a package folder set up as its own project uses the repo's link. A teammate's first command after the admin's `lore org link` fetches the org's stores once, so the new link is seen at once. In a repo the org's `repos:` pattern claims (whoami: `client repo (guards on)`), no hint ever points at `lore init`: a refused write, `lore doctor` and the setup page's "This folder" line name `lore org link --org <org> --project <folder>` (or `--to <org>/<folder>` per write) instead, and `lore init` itself refuses with `E_NEEDS_CONFIRM` (it would write `.lore/`, `.gitattributes`, git hooks and its pointer into the client's `CLAUDE.md`/`AGENTS.md`) until you pass `--yes`. `lore where` lists such a clone as using its store caches, and `lore cache prune` keeps them while the clone is on the machine.
 
 <!-- example: client-folders#a-client-repo-with-no-lore-files -->
 ```console
@@ -204,7 +204,7 @@ A list or search with `--store <store>` reads that store and every folder of it:
 | `lore store adopt --target <store>/<folder> --from <repo>` | same names (without `--from`, the repo you run it in) |
 | `lore store visibility`, `lore store set`, `lore store compact` | same names |
 | `lore store show`, `open`, `forget`, `doctor` | always (they read this machine's clones) |
-| `lore store init --name <name>`, `add`, `remove`, `set-url` | need a repo: they edit its `.lore/stores.yaml` (`lore store init --name me` works anywhere) |
+| `lore store init --name <name>`, `add`, `remove`, `set-url` | need a repo: they edit its `.lore/stores.yaml` (`lore store init --name me` works anywhere, and so does `lore store set-url` of an org's store, `me` or a `sto_` id) |
 | `lore org link`, `unlink`, `set`, `use` | need a git repo: they are about that repo (`lore org link` needs no `lore init`) |
 | `lore org create`, `import`, `rename`, `refresh`, `lore team invite --email …` | always |
 | a write with `--to <store>` or `--to <store>/<folder>` (`lore rule add --to acme/org …`, `lore memory add --to me …`) | the same names: it lands in that store folder (a new folder asks first, or `--create`); a write with no `--to` needs a repo, and in the home folder the hint names `--to` instead of `git init` |

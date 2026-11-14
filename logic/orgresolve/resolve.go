@@ -518,6 +518,24 @@ func setupMismatch(hint SetupHint, repoOrg string, step Step) *SetupMismatch {
 			repoOrg, step, hint.Name, hint.Why, hint.Org, repoOrg, step)}
 }
 
+// ClientByMatch reports whether o names the repo as a client's on purpose:
+// a client link (not --own) of o, or a remote o's repos: patterns match.
+// Why (I-13): the role is client also by default (a repo nobody declared
+// own, fail closed), which is right for the leak guards but not for
+// steering a person away from lore init: an org's own repo it just never
+// listed under own: must still set up with lore init.
+func ClientByMatch(o *orgconf.Org, links []Link, remotes []string) bool {
+	if o == nil {
+		return false
+	}
+	for _, l := range linksFor(links, o.Name) {
+		if !l.Own {
+			return true
+		}
+	}
+	return matchesAny(o.Repos, remotes)
+}
+
 // explicitRole is the role for an entry chosen on purpose (rules 1 and 2):
 // a link decides; else the patterns; else client, because a repo nobody
 // has declared as the org's own is treated as a client's (fail closed).

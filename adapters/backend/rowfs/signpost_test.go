@@ -46,3 +46,20 @@ func TestEnsureSignpost(t *testing.T) {
 		t.Fatalf("second write over a changed file: %v %v", wrote, err)
 	}
 }
+
+// TestIsSignpost: every walker of row files names the signpost the same
+// way, from a store's top, a repo's .lore/data or an absolute path (D-154).
+func TestIsSignpost(t *testing.T) {
+	t.Parallel()
+	for p, want := range map[string]bool{
+		SignpostFile:                             true,
+		".lore/data/" + SignpostFile:             true,
+		"/home/x/app/.lore/data/" + SignpostFile: true,
+		".lore/data/_meta.json":                  false,
+		"tasks/" + SignpostFile + ".json":        false,
+	} {
+		if got := IsSignpost(p); got != want {
+			t.Errorf("IsSignpost(%q) = %v, want %v", p, got, want)
+		}
+	}
+}

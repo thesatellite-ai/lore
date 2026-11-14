@@ -29,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 	"github.com/thesatellite-ai/lore/store"
@@ -96,8 +97,37 @@ func refreshOrgSources(ctx context.Context, home string) {
 				continue // the person decides: doctor, lore org refresh
 			}
 		}
-		_ = writeOrgSource(home, orgRefreshLockWait, o.Name, sg.Shared(), sg.Source()) // best effort, see above
+		sh, _ := keepMovedStores(home, orgconf.SharedOf(o), sg.Shared())
+		_ = writeOrgSource(home, orgRefreshLockWait, o.Name, sh, sg.Source()) // best effort, see above
 	}
+}
+
+// keepMovedStores is sh (lore-org.yaml's copy) with each store url that
+// `lore store set-url` moved on this machine kept: before's url stays
+// when this machine's address record (state/store-addresses.json) names
+// it as where that store (by its sto_ id) is now and the file still names
+// another address. A member's set-url leaves lore-org.yaml to an admin
+// (H-12), so until the admin records the move, the file names the old
+// address; copying it back undid the member's move (G-16). kept lists
+// the "<file url> → <kept url>" pairs.
+func keepMovedStores(home string, before, sh orgconf.Shared) (orgconf.Shared, []string) {
+	rec := readStoreAddrRecord(home)
+	var kept []string
+	stores := append([]orgconf.Store{}, sh.Stores...)
+	for i := range stores {
+		if i >= len(before.Stores) || storeaddr.Same(before.Stores[i].URL, stores[i].URL) {
+			continue
+		}
+		mine := before.Stores[i].URL
+		id := storeIDOnDisk(home, mine, before.Stores[i].Branch)
+		if e, ok := rec.Stores[id]; id == "" || !ok || !storeaddr.Same(e.URL, mine) {
+			continue
+		}
+		kept = append(kept, stores[i].URL+" → "+mine)
+		stores[i].URL = mine
+	}
+	sh.Stores = stores
+	return sh, kept
 }
 
 // writeOrgSource writes the copied fields and the stamp into org entry
@@ -256,14 +286,19 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 	}
 	before := orgconf.SharedOf(o)
 	state := orgconf.StateOf(o, sg.StoreID, sg.Version)
-	if state == orgconf.SourceCurrent && before.Equal(sg.Shared()) {
-		return opsorgcmd.Report{Lines: []string{"org entry " + in.Org + " already matches " + orgFileShown(sg) + " (version " + short(sg.Version) + "); nothing changed"}}, nil
+	after, kept := keepMovedStores(h.home, before, sg.Shared())
+	keptLines := make([]string, 0, len(kept))
+	for _, k := range kept {
+		keptLines = append(keptLines, "  kept "+k+": lore store set-url moved it on this machine; lore-org.yaml still names the old address until an admin of "+in.Org+" runs lore store set-url --name "+in.Org+" --url <new-url>")
 	}
-	if err := writeOrgSource(h.home, configLockWait, in.Org, sg.Shared(), sg.Source()); err != nil {
+	if state == orgconf.SourceCurrent && before.Equal(after) {
+		return opsorgcmd.Report{Lines: append([]string{"org entry " + in.Org + " already matches " + orgFileShown(sg) + " (version " + short(sg.Version) + "); nothing changed"}, keptLines...)}, nil
+	}
+	if err := writeOrgSource(h.home, configLockWait, in.Org, after, sg.Source()); err != nil {
 		return opsorgcmd.Report{}, err
 	}
 	lines := []string{"✓ org entry " + in.Org + " now copies " + orgFileShown(sg) + " (version " + short(sg.Version) + ")"}
-	after := sg.Shared()
+	lines = append(lines, keptLines...)
 	for i := range after.Stores {
 		if i >= len(before.Stores) || before.Stores[i].URL != after.Stores[i].URL {
 			lines = append(lines, "  store "+after.Stores[i].URL+" (was "+urlAt(before.Stores, i)+")")

@@ -39,7 +39,7 @@ type AddIn struct {
 	Title      string `json:"title,omitempty" arg:"0" rest:"true" desc:"the task title (several words are joined; omitted with --template)"`
 	Body       string `json:"body,omitempty" flag:"body" desc:"longer description" ui:"widget=markdown"`
 	Priority   string `json:"priority,omitempty" flag:"priority" desc:"low | medium | high | urgent (default medium)"`
-	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday (default accepted)"`
+	Commitment string `json:"commitment,omitempty" flag:"commitment" desc:"accepted | proposed | someday (default accepted for a person; an agent must pass it, a sub-task inherits its parent's)"`
 	DeferUntil string `json:"defer_until,omitempty" flag:"defer-until" desc:"snooze until date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM); hides from active list until then"`
 	Due        string `json:"due,omitempty" flag:"due" desc:"due date (YYYY-MM-DD or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM)"`
 	Mission    string `json:"mission,omitempty" flag:"mission" nonempty:"a mission id (msn_…)" desc:"mission_id (msn_*) to attach to"`
@@ -539,7 +539,11 @@ type DoneOut struct {
 	OpenItemsAtClose int `json:"open_items_at_close,omitempty"`
 	// Recur is the next instance of a recurring task (TASK 10.3).
 	Recur RecurNext `json:"recur,omitzero"`
-	Human string    `json:"-"`
+	// AlreadyDone: the task was finished before this call (G-10); nothing
+	// was written and DoneBy names who finished it.
+	AlreadyDone bool   `json:"already_done,omitempty"`
+	DoneBy      string `json:"done_by,omitempty"`
+	Human       string `json:"-"`
 }
 
 // SearchIn is the input of task.search.
@@ -547,7 +551,7 @@ type SearchIn struct {
 	Query string `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
 	// All includes proposed/someday/deferred/done/cancelled hits.
 	All             bool   `json:"all,omitempty" flag:"all" desc:"include proposed/someday/deferred/done/cancelled hits (default: active only)"`
-	Limit           int    `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit           int    `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	Repo            string `json:"repo,omitempty" flag:"repo" desc:"include this repo's tasks (mount name or rep_ id)"`
 	NoInherit       bool   `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope: --repo only, no master inheritance"`
 	MasterOnly      bool   `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`

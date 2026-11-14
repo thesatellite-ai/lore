@@ -25,9 +25,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/dataignore"
@@ -118,45 +121,25 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	if err != nil {
 		return errs.Wrap(errs.Internal, "pre-commit: core registry", err)
 	}
-	var bad []string
-	for _, p := range changed {
-		full := filepath.Clean(filepath.Join(root, filepath.FromSlash(p))) // p is a path git listed under .lore/data
-		b, rerr := os.ReadFile(full)
-		if errors.Is(rerr, os.ErrNotExist) {
-			if p == metaFilePath {
-				// H-3: the project marker (format and project id) is
-				// tracked and only ever rewritten, never deleted
-				bad = append(bad, p+" ("+brokenMetaDeleted+p+")")
-			}
-			continue // a deletion of a row file: staging records it
-		}
-		if rerr != nil {
-			bad = append(bad, p+" ("+unreadableWhy(full, rerr)+")") // H-2: was E_INTERNAL "pre-commit: read <path>"
-			continue
-		}
-		if row.HasBOM(b) {
-			// I-15: an editor's byte order mark; strip it so the committed
-			// file is plain UTF-8 every lore (and every older one) reads
-			b = row.TrimBOM(b)
-			if werr := os.WriteFile(full, b, 0o644); werr != nil { // a tracked row file
-				bad = append(bad, p+" (starts with a UTF-8 byte order mark that could not be removed: "+werr.Error()+")")
-				continue
-			}
-			h.line("lore: removed the UTF-8 byte order mark from " + p + " (lore row files are plain UTF-8)")
-		}
-		if why := brokenLoreFile(b); why != "" {
-			bad = append(bad, p+" ("+why+")")
-		} else if why := wrongRowID(root, p, b); why != "" {
-			bad = append(bad, p+" ("+why+")") // H-6: reads leave such a file out on every clone
-		} else if line, why := invalidRepoRow(reg, p, b, headVersion(ctx, repo, root, p)); why != "" {
-			bad = append(bad, p+":"+strconv.Itoa(line)+" ("+why+")") // D-18: what the hand-edit pick-up refused
-		}
+	bad, notes := checkChangedFiles(ctx, repo, root, reg, changed)
+	for _, n := range notes {
+		h.line(n)
 	}
 	if len(bad) > 0 {
 		// one line per file (H-6), so a long list stays readable
 		return errs.New(errs.InvalidInput, "refusing to commit broken lore files:\n  "+strings.Join(bad, "\n  ")).WithHint(brokenFilesHint)
 	}
-	if len(changed) > 0 {
+	if len(changed) > 0 && !stagedDiffers(ctx, repo, root, hookIndexEnv(ctx, repo, root)) {
+		// H-15: nothing else is staged. git decides whether a commit has
+		// anything in it before it runs this hook, so a plain `git commit`
+		// or `git commit -a` stops at "nothing added to commit" whatever
+		// is staged here (and -a then drops its index): staging would only
+		// print a claim the failed commit contradicts. The rows are left
+		// as they are, for the next commit, and the line says how to
+		// commit them now.
+		wire.HookIndexBegin(ctx, root)
+		h.line(leftOutLine(ctx, repo, root, len(changed)))
+	} else if len(changed) > 0 {
 		before := wire.HookIndexBegin(ctx, root) // the index as the person staged it
 		staged := indexEntries(ctx, repo, root)  // L-3: what the person staged themselves
 		inv := gitref.Invocation{Dir: root, Args: []string{"add", "-A", "--", loreDataPathspec}, Env: hookIndexEnv(ctx, repo, root)}
@@ -315,16 +298,21 @@ func unreadableWhy(full string, err error) string {
 // out; when the file named after the id it holds exists too, two files
 // claim one id. "" = fine, or not a row file.
 func wrongRowID(root, p string, b []byte) string {
+	r, err := row.Decode(b)
+	if err != nil {
+		return ""
+	}
+	return wrongDecodedRowID(root, p, r)
+}
+
+// wrongDecodedRowID is wrongRowID with the file already decoded as r.
+func wrongDecodedRowID(root, p string, r row.Row) string {
 	rel, ok := strings.CutPrefix(p, loreDataPathspec+"/")
 	if !ok {
 		return ""
 	}
 	table, id, isRow := rowfs.ParseRowPath(rel)
-	if !isRow {
-		return ""
-	}
-	r, err := row.Decode(b)
-	if err != nil || (r.Table == table && r.ID == id) {
+	if !isRow || (r.Table == table && r.ID == id) {
 		return ""
 	}
 	why := "holds the row " + r.ID.String() + " of table " + string(r.Table) + ", but its file name says " + id.String() + " of table " + string(table)
@@ -362,12 +350,158 @@ func (h *liveHost) deletedProject(ctx context.Context) error {
 		WithHint("put it back: git checkout HEAD -- " + strings.Join(gone, " ") + "; to take lore out of this repo on purpose, commit with git commit --no-verify")
 }
 
-// headVersion is HEAD's copy of the file p (relative to root), nil when
-// HEAD has none (a new file, a first commit).
-func headVersion(ctx context.Context, repo *gitref.Repo, root, p string) []byte {
-	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"show", "HEAD:./" + p}})
+// checkChangedFiles is why each of the changed files (relative to root,
+// under .lore/data) cannot be committed, in their order: broken (not JSON,
+// conflict markers, an unsettled metadata conflict, unreadable, a deleted
+// project marker, a row under another row's file name) or a hand edit the
+// pick-up refuses (invalidRepoRow); notes are the lines to print (a byte
+// order mark removed). Every file is read once and decoded once, HEAD's
+// copies come from one git process (headVersions), and the files are
+// checked in parallel: a migration commit carries every row file of the
+// project (perf4: 5,458 files took 25 s, one `git show` each).
+func checkChangedFiles(ctx context.Context, repo *gitref.Repo, root string, reg *schema.Registry, changed []string) (bad, notes []string) {
+	rows := make([]string, 0, len(changed))
+	for _, p := range changed {
+		if !rowfs.IsSignpost(p) {
+			rows = append(rows, p) // the note for lore 0.1.17 a migration writes is plain text, staged as it is (D-154)
+		}
+	}
+	heads := headVersions(ctx, repo, root, rows)
+	why := make([]string, len(rows))
+	noteAt := make([]string, len(rows))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(rows)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := int(next.Add(1) - 1); i < len(rows); i = int(next.Add(1) - 1) {
+				why[i], noteAt[i] = checkChangedFile(reg, root, rows[i], heads[rows[i]])
+			}
+		}()
+	}
+	wg.Wait()
+	for i := range rows {
+		if noteAt[i] != "" {
+			notes = append(notes, noteAt[i])
+		}
+		if why[i] != "" {
+			bad = append(bad, why[i])
+		}
+	}
+	return bad, notes
+}
+
+// checkChangedFile is checkChangedFiles for one file p with HEAD's copy
+// head (nil when HEAD has none): "" when it may be committed, else the
+// refusal's entry ("<path> (<why>)" or "<path>:<line> (<why>)"); note is a
+// line to print about the file ("" = none).
+func checkChangedFile(reg *schema.Registry, root, p string, head []byte) (bad, note string) {
+	full := filepath.Clean(filepath.Join(root, filepath.FromSlash(p))) // p is a path git listed under .lore/data
+	b, err := os.ReadFile(full)
+	if errors.Is(err, os.ErrNotExist) {
+		if p == metaFilePath {
+			// H-3: the project marker (format and project id) is
+			// tracked and only ever rewritten, never deleted
+			return p + " (" + brokenMetaDeleted + p + ")", ""
+		}
+		return "", "" // a deletion of a row file: staging records it
+	}
 	if err != nil {
-		return nil
+		return p + " (" + unreadableWhy(full, err) + ")", "" // H-2: was E_INTERNAL "pre-commit: read <path>"
+	}
+	if row.HasBOM(b) {
+		// I-15: an editor's byte order mark; strip it so the committed
+		// file is plain UTF-8 every lore (and every older one) reads
+		b = row.TrimBOM(b)
+		if werr := os.WriteFile(full, b, 0o644); werr != nil { // a tracked row file
+			return p + " (starts with a UTF-8 byte order mark that could not be removed: " + werr.Error() + ")", ""
+		}
+		note = "lore: removed the UTF-8 byte order mark from " + p + " (lore row files are plain UTF-8)"
+	}
+	if why := brokenLoreText(b); why != "" {
+		return p + " (" + why + ")", note
+	}
+	r, derr := row.Decode(b)
+	if derr != nil {
+		return "", note // valid JSON that is not a row (a folder's _meta.json): nothing more to check
+	}
+	if ks := merge.MetaConflicts(r); len(ks) > 0 {
+		return p + " (" + brokenMetaConflict + strings.Join(ks, ", ") + ")", note
+	}
+	if why := wrongDecodedRowID(root, p, r); why != "" {
+		return p + " (" + why + ")", note // H-6: reads leave such a file out on every clone
+	}
+	if line, why := invalidDecodedRow(reg, p, r, b, head); why != "" {
+		return p + ":" + strconv.Itoa(line) + " (" + why + ")", note // D-18: what the hand-edit pick-up refused
+	}
+	return "", note
+}
+
+// headVersions is HEAD's copy of each of paths (relative to root) that HEAD
+// has, from one `git cat-file --batch` (a migration commit changes every
+// row file; one `git show` each took most of the hook). A path HEAD lacks
+// (a new file, a first commit) is absent, as is everything when git fails:
+// the hand-edit check then has nothing to compare with, as before.
+func headVersions(ctx context.Context, repo *gitref.Repo, root string, paths []string) map[string][]byte {
+	out := map[string][]byte{}
+	if len(paths) == 0 {
+		return out
+	}
+	top, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--show-prefix"}})
+	if err != nil {
+		return out
+	}
+	prefix := strings.TrimSpace(string(top)) // root relative to the top, "" or "sub/"
+	// blob ids from one tree listing, then the blobs by id: naming each as
+	// HEAD:<path> made git walk the tree again for every one of them
+	ls, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"-c", "core.quotePath=false", "ls-tree", "-r", "-z", "--full-tree", "HEAD", "--", prefix + loreDataPathspec}})
+	if err != nil {
+		return out // no HEAD yet (a first commit)
+	}
+	oid := map[string]string{} // path relative to root → blob id
+	for _, ent := range strings.Split(string(ls), "\x00") {
+		meta, rel, ok := strings.Cut(ent, "\t")
+		f := strings.Fields(meta)
+		if ok && len(f) == 3 && f[1] == "blob" {
+			oid[strings.TrimPrefix(rel, prefix)] = f[2]
+		}
+	}
+	var in bytes.Buffer
+	var asked []string
+	for _, p := range paths {
+		if id, ok := oid[p]; ok {
+			in.WriteString(id + "\n")
+			asked = append(asked, p)
+		}
+	}
+	if len(asked) == 0 {
+		return out
+	}
+	raw, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"cat-file", "--batch"}, Stdin: in.Bytes()})
+	if err != nil {
+		return out
+	}
+	paths = asked
+	for _, p := range paths {
+		// "<oid> <type> <size>\n<content>\n", or "<name> missing\n"
+		nl := bytes.IndexByte(raw, '\n')
+		if nl < 0 {
+			break
+		}
+		f := strings.Fields(string(raw[:nl]))
+		raw = raw[nl+1:]
+		if len(f) != 3 {
+			continue // missing (or ambiguous): HEAD has no such file
+		}
+		n, err := strconv.Atoi(f[2])
+		if err != nil || n+1 > len(raw) {
+			break
+		}
+		if f[1] == "blob" {
+			out[p] = raw[:n]
+		}
+		raw = raw[n+1:]
 	}
 	return out
 }
@@ -380,6 +514,15 @@ func headVersion(ctx context.Context, repo *gitref.Repo, root, p string) []byte 
 // keeps HEAD's _hlc (lore restamps every row it writes), HEAD's copy is on
 // the current format, and only the changed fields are checked.
 func invalidRepoRow(reg *schema.Registry, p string, b, head []byte) (int, string) {
+	r, err := row.Decode(b)
+	if err != nil {
+		return 0, ""
+	}
+	return invalidDecodedRow(reg, p, r, b, head)
+}
+
+// invalidDecodedRow is invalidRepoRow with the file already decoded as r.
+func invalidDecodedRow(reg *schema.Registry, p string, r row.Row, b, head []byte) (int, string) {
 	rel, ok := strings.CutPrefix(p, loreDataPathspec+"/")
 	if !ok || head == nil {
 		return 0, ""
@@ -389,9 +532,8 @@ func invalidRepoRow(reg *schema.Registry, p string, b, head []byte) (int, string
 		return 0, ""
 	}
 	def, known := reg.Table(table)
-	r, err := row.Decode(b)
 	base, berr := row.Decode(head)
-	if !known || err != nil || berr != nil || r.Deleted || r.HLC != base.HLC || base.SourceVersion != row.FormatVersion {
+	if !known || berr != nil || r.Deleted || r.HLC != base.HLC || base.SourceVersion != row.FormatVersion {
 		return 0, "" // not a hand edit lore can check here: the pick-up says why
 	}
 	changed := map[string]value.Value{}
@@ -546,6 +688,21 @@ func stagedLine(before, after map[string]string) string {
 		shown, more = shown[:stagedListMax], fmt.Sprintf(" and %d more", len(paths)-stagedListMax)
 	}
 	return fmt.Sprintf("lore: added %d lore row file(s) to this commit: %s%s (lore's rows travel with your commits)", len(paths), strings.Join(shown, ", "), more)
+}
+
+// rowsLeftOut is the pre-commit line when the commit stages nothing but
+// lore row files (H-15): they are not added, and the line says how to
+// commit them on their own.
+const rowsLeftOut = "lore: %d lore row file(s) left out of this commit: nothing else is staged, and git decides whether a commit has anything in it before its hooks run; to commit them: git add %s && git commit -m \"<message>\""
+
+// leftOutLine is rowsLeftOut for n files, the row folder spelled from the
+// repository top (where `git add` is usually typed).
+func leftOutLine(ctx context.Context, repo *gitref.Repo, root string, n int) string {
+	rel := loreDataPathspec
+	if out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--show-prefix"}}); err == nil {
+		rel = strings.TrimSpace(string(out)) + loreDataPathspec
+	}
+	return fmt.Sprintf(rowsLeftOut, n, rel)
 }
 
 // CommitRender renders the project at root for the commit being made and

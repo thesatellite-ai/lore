@@ -698,7 +698,7 @@ To run it yourself, start from an org you can throw away (Step 9 makes one) and 
 
 A person may commit from several emails and use several GitHub accounts. Mark each of them as an identity contact (`--identity`), and lore treats all of them as the same actor:
 
-- **Writing rows.** When your git email or org identity is one of a person's identity contacts, lore writes your rows as that person, never as a second actor. `lore whoami` says so with a line like "identity contact: mira.patel@example.com is an identity contact of Mira Patel (act_7a67…9504)".
+- **Writing rows.** When your git email or org identity is one of a person's identity contacts, lore writes your rows as that person, never as a second actor. `lore whoami` says so with a line like "identity contact: mira.patel@example.com is an identity contact of Mira Patel (act_7a67…9504)", and its identity line shows that same act_ id, the one your rows carry.
 - **Naming people.** `email:<address>`, `github:<login>`, `gitlab:<login>` (or `<type>:<value>` for any identity type) and a bare email work wherever a command takes a person: `lore actor show --id mira.patel@example.com`, `lore task add --title … --assign github:mirap`.
 - **Registering.** `lore actor register` by someone whose identity matches an existing person's identity contact refreshes that person ("already registered as Mira Patel via identity contact") instead of adding a second one.
 

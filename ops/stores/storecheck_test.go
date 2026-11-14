@@ -23,7 +23,7 @@ func TestStoreDoctorChecksUsedStores(t *testing.T) {
 		"✓ notes (stores.yaml, folder) file:///placeholder/notes\n" +
 		"✓ me (personal, git) https://example.test/acme/me.git\n" +
 		"    ahead 0, behind 0 of origin/main as of the last fetch; last push 2026-01-02 03:04 UTC\n" +
-		"v0.1.17 org stores (orgs[].stores in ~/.lore/config.yaml):\n  none\n"
+		"clones of the org stores in ~/.lore/config.yaml (orgs[].stores):\n  none\n"
 	if err != nil || txt != want {
 		t.Fatalf("clean doctor:\n got %q %v\nwant %q", txt, err, want)
 	}

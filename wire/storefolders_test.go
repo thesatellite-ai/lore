@@ -116,12 +116,17 @@ func TestStoreFoldersWithoutRepo(t *testing.T) {
 		{opsstores.OpInit, `{"name":"foo","url":"` + url + `"}`},
 		{opsstores.OpAdd, `{"name":"foo","url":"` + url + `"}`},
 		{opsstores.OpRemove, `{"name":"foo"}`},
-		{opsstores.OpSetURL, `{"name":"foo","url":"` + url + `"}`},
 	} {
 		_, err = run(t, a, c.name, c.input, true)
 		if !errs.Has(err, errs.NotAStore) || !strings.Contains(err.Error(), "edits a repo's .lore/stores.yaml") {
 			t.Errorf("%s outside a repo: %v, want E_NOT_A_STORE naming stores.yaml", c.name, err)
 		}
+	}
+	// H-12: set-url runs on the setup outside a repo (an org's store, me,
+	// a sto_ id); a .lore/stores.yaml name is not found, and the error
+	// says where it is named
+	if _, err = run(t, a, opsstores.OpSetURL, `{"name":"foo","url":"`+url+`"}`, true); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "outside a repo set-url takes an org's name, me or a sto_ id") {
+		t.Errorf("set-url of a stores.yaml name outside a repo: %v, want E_NOT_FOUND naming what works here", err)
 	}
 	if entries, _ := os.ReadDir(plain); len(entries) != 0 {
 		t.Fatalf("the plain folder got %v", entries)

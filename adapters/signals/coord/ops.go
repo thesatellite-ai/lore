@@ -235,6 +235,12 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if !claimable(mission, doc.Status()) {
 			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
 		}
+		// G-10: finished elsewhere, and this row has not seen the done yet.
+		if !mission {
+			if err := AlreadyDone(v, env.Folder, id, doc); err != nil {
+				return signals.Change{}, nil, err
+			}
+		}
 		// 6.9: a parent with open children is coordinated, never worked.
 		lease := false
 		if !mission && opts.OpenChildren != nil {
@@ -309,7 +315,11 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		next.touch(now)
 		out.Doc = next
-		return signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}, []RowWrite{{ID: id, Doc: next}}, nil
+		ch := signals.Change{Put: map[string]signals.Signal{plan.Path: plan.Signal}}
+		if _, marked := v.Board[signals.DonePath(env.Folder, id)]; marked {
+			ch.Delete = []string{signals.DonePath(env.Folder, id)} // reopened since the done: the marker is spent
+		}
+		return ch, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	if err != nil {
 		return ClaimResult{}, err
@@ -547,6 +557,9 @@ func HolderWrite(ctx context.Context, env Env, id string, dropClaim bool, mutate
 		if dropClaim {
 			ch.Delete = []string{signals.ClaimPath(env.Folder, id)}
 		}
+		if ch, err = withDoneMarker(ch, env, v, id, next); err != nil {
+			return signals.Change{}, nil, err
+		}
 		return ch, rows, nil
 	})
 	if errors.Is(err, signals.ErrNotHeld) {
@@ -655,6 +668,9 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 			}
 		}
 		next.touch(v.Now)
+		if ch, err = withDoneMarker(ch, env, v, id, next); err != nil {
+			return signals.Change{}, nil, err
+		}
 		return ch, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	return removed, err

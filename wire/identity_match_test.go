@@ -164,6 +164,11 @@ func TestCanonicalActorRebindsSecondEmail(t *testing.T) {
 	if err != nil || line != "identity contact: "+imMiraEmail+" is an identity contact of Mira Patel ("+mira.String()+")" {
 		t.Fatalf("whoami line = %q %v", line, err)
 	}
+	// G-14: whoami's identity line names the same actor, never the id the
+	// second email would derive (an actor no row uses).
+	if got := (&standaloneWhoami{app: fixedApp{b}}).reboundActor(background()); got != mira.String() {
+		t.Fatalf("whoami actor = %q, want Mira %s (not %s)", got, mira, imActorID(t, imMiraSecond))
+	}
 }
 
 // 6.5 target 1 and the fail-closed cases: a contact not flagged for
@@ -197,6 +202,9 @@ func TestCanonicalActorNoRebind(t *testing.T) {
 			line, err := b.IdentityContactLine(background())
 			if err != nil {
 				t.Fatal(err)
+			}
+			if got := (&standaloneWhoami{app: fixedApp{b}}).reboundActor(background()); got != "" {
+				t.Fatalf("no rebind, yet whoami names actor %s", got)
 			}
 			if tc.name == "held by two people" {
 				if !strings.Contains(line, "Mira Patel") || !strings.Contains(line, "Omar") {

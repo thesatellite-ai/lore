@@ -66,7 +66,7 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 | learned something others need | `lore memory add --body "…"` | every agent finds it with `lore search` |
 | about to do something risky | `lore gate request --id <id>`, then stop | a person approves with `lore gate approve`; a `LORE_ACTOR` session never can |
 | need the shared test suite alone | `lore hold claim --name full-suite --ttl 30m --push`, then `lore hold release --name full-suite` | one heavy run at a time |
-| finished | `lore task done --id <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged |
+| finished | `lore task done --id <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged; a task is finished once: no other session is handed it again, and a second done prints who finished it and changes nothing |
 | giving up the task | `lore task release --id <id>` | frees it at once instead of after the lease |
 | handing to someone specific | `lore handoff add --for @agent-frontend-2 --task <id> --body "…"` | the handoff waits in their inbox |
 | writing anything in a client repo | pass `--to repo` or `--to <org>` for rules and decisions | agents are refused without an explicit target there |

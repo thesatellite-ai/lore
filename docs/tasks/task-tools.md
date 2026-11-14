@@ -491,7 +491,7 @@ tsk_71f0…c07d Back up the shop database
 
 ## Step 10 — Sweep out stale tasks
 
-Three months later, many of the launch tasks have not been touched. `lore task stale` lists open tasks with no change for 60 days (`--days N`, or the `tasks.stale_days` setting). It leaves out tasks that are claimed, in an active mission, due in the future, with open sub-tasks, or repeating. `--close --dry-run` shows what would be cancelled, and `--close --yes` cancels them with close reason `stale`, as one batch you can look at with `lore batch show`:
+Three months later, many of the launch tasks have not been touched. `lore task stale` lists open tasks with no change for 60 days (`--days N` with N 1 or more, or the `tasks.stale_days` setting; `--days 0` is refused, never read as the default). It leaves out tasks that are claimed, in an active mission, due in the future, with open sub-tasks, or repeating. `--close --dry-run` shows what would be cancelled, and `--close --yes` cancels them with close reason `stale`, as one batch you can look at with `lore batch show`:
 
 <!-- example: task-tools#stale -->
 ```console

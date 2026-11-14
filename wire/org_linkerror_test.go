@@ -43,6 +43,15 @@ func TestLinkErrorMatrix(t *testing.T) {
 			}
 		})
 	}
+	// G-16: a store that answers "no repository" moved or was deleted:
+	// the hint names set-url and the restore, never "retry"
+	gone := linkError(fmt.Errorf("%w: git.example.test/acme/notes ('/srv/notes.git' does not appear to be a git repository)", orgcfg.ErrStoreOffline))
+	if h := errs.EnvelopeOf(gone).Error.Hint; !strings.Contains(h, "lore store set-url --name <org>") || !strings.Contains(h, "--restore --yes") || strings.Contains(h, "retry") {
+		t.Fatalf("gone store hint: %q", h)
+	}
+	if strings.Contains(gone.Error(), "is offline") {
+		t.Fatalf("a gone store is called offline: %v", gone)
+	}
 	// org create goes through orgFileError first: its own sentinels, then linkError.
 	if c := errs.CodeOf(orgFileError(wrap(orgcfg.ErrStoreRefused), orgTestStoreURL)); c != errs.PolicyDenied {
 		t.Fatalf("org create on a declining store: %s", c)

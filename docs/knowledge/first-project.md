@@ -167,7 +167,7 @@ Notes:
   -   alice on (code repo, no machine id): lore dev (last save 2026-11-02)
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md 2693 of 16000 bytes (16%, profile codex); warn at 80%
 ```
 <!-- /example -->

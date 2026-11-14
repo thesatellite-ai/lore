@@ -35,6 +35,10 @@ type FileStat struct {
 	Size   int64  `json:"size"`
 	MTime  int64  `json:"mtime"` // unix nanoseconds
 	SHA256 string `json:"sha256"`
+	// Blob is the file's git blob id when git reported it unchanged in the
+	// work tree at that Read (IndexView); a later Read under the same blob
+	// id knows the file without touching it. Empty otherwise.
+	Blob string `json:"blob,omitempty"`
 }
 
 // ParseStatCursor reads c; ok is false for the empty cursor and for

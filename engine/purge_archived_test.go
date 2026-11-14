@@ -111,26 +111,16 @@ func TestPurgeArchived(t *testing.T) {
 			t.Fatalf("_purged.json does not list %s", id)
 		}
 	}
+	// The value the key's cascade also reaches is one step of the merged
+	// plan (removeMany): written once and listed once.
 	seen := map[ids.AnyID]int{}
-	keyAt, valAt := -1, -1
-	for i, r := range done.Rows {
+	for _, r := range done.Rows {
 		seen[r.Row.ID]++
-		switch r.Row.ID {
-		case key:
-			keyAt = i
-		case val:
-			valAt = i
-		}
 	}
 	for id, n := range seen {
 		if n != 1 {
 			t.Fatalf("%s purged %d times", id, n)
 		}
-	}
-	// The value is purged on its own only if it came before its key; after
-	// the key's cascade tombstoned it, it is skipped.
-	if keyAt >= 0 && valAt > keyAt {
-		t.Fatalf("the cascade-tombstoned value was purged again (key %d, value %d)", keyAt, valAt)
 	}
 	for _, id := range []ids.AnyID{archivedRecent, notArchived, nullArchived, actor} {
 		if sr, gerr := b.Get(ctx, tableOfID(t, id), id); gerr != nil || sr.Deleted {

@@ -119,7 +119,9 @@ func (a *App) syncStoreStates(ctx context.Context, out *opssync.StatusOut) {
 		st, line := stateOf(s), "  "+s.entry.Name+": "+standingText(s, now)
 		if v, ok := modes[s.entry.Name]; ok { // store push modes, 2026-11-09
 			st.Push, st.PushSummary, st.Epoch, st.PushProblem = v.Push, v.Summary, v.Epoch, v.Problem
-			line += "; " + v.Summary
+			if v.Summary != "" { // a folder store has no push settings to name
+				line += "; " + v.Summary
+			}
 			if v.Problem != "" {
 				line += " (problem: " + v.Problem + "; pushing as now)"
 			} else if st.Ahead > 0 && v.Push != string(storepush.ModeNow) {

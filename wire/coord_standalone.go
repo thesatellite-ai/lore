@@ -30,6 +30,7 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -296,7 +297,7 @@ var _ opstask.Team = standaloneTeam{}
 // ResolveHandle implements opstask.Team: an active person @h on the repo
 // roster, else (allowTeam) an active team @h; v0.1.17's miss texts.
 func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowTeam bool) (opstask.Assignee, error) {
-	h := strings.TrimPrefix(strings.TrimSpace(handle), rosterHandleMark)
+	h := handleKey(handle)
 	if h == "" {
 		return opstask.Assignee{}, errs.New(errs.InvalidInput, "empty handle")
 	}
@@ -331,12 +332,18 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 			return opstask.Assignee{TeamID: x.ID}, nil
 		}
 	}
+	if gone, ok := removedTeam(teams, h); ok {
+		return opstask.Assignee{}, removedTeamErr(gone, teams, r.where)
+	}
 	// An org roster's miss keeps its sync hint (the store copy may predate
 	// a teammate's registration, v0.1.17 rosterMissHint); the repo's own
 	// roster has no copy to be stale, so it only says to register.
 	hint := "people join with `lore actor register`"
 	if r.src != store.SourceRepo {
 		hint = r.missHint()
+	}
+	if near, found := t.a.nearHandle(ctx, r, h); found {
+		hint = nearHandleHint(near, h)
 	}
 	return opstask.Assignee{}, errs.New(errs.NotFound, "no person or team with handle @"+h).WithHint(hint)
 }
@@ -543,4 +550,37 @@ func gateState(t opstask.View) string {
 		return "needs approval"
 	}
 	return "approval requested"
+}
+
+// removedTeam is the removed team holding handle h, ok false when none.
+func removedTeam(teams []RosterTeam, h string) (RosterTeam, bool) {
+	for _, x := range teams {
+		if !x.Active && x.Handle == h {
+			return x, true
+		}
+	}
+	return RosterTeam{}, false
+}
+
+// removedTeamErr refuses an @handle of a removed team (G-15: the task went
+// to a team nobody sees in lore team list). It names the team list and,
+// when an active team has the same members (the team was recreated under
+// another handle), that team.
+func removedTeamErr(gone RosterTeam, teams []RosterTeam, where string) error {
+	hint := "lore team list shows the teams; lore team add --handle " + rosterHandleMark + gone.Handle + " brings it back"
+	for _, x := range teams {
+		if x.Active && len(x.Members) > 0 && sameMembers(x.Members, gone.Members) {
+			hint = rosterHandleMark + x.Handle + " has the same members (--assign " + rosterHandleMark + x.Handle + "); " + hint
+			break
+		}
+	}
+	return errs.New(errs.NotFound, "team "+rosterHandleMark+gone.Handle+" was removed from the roster in "+where).WithHint(hint)
+}
+
+// sameMembers reports whether a and b hold the same actor ids.
+func sameMembers(a, b []string) bool {
+	x, y := slices.Clone(a), slices.Clone(b)
+	slices.Sort(x)
+	slices.Sort(y)
+	return slices.Equal(slices.Compact(x), slices.Compact(y))
 }

@@ -55,7 +55,7 @@ type FetchIn struct {
 	Hook         string `json:"hook,omitempty" flag:"hook" desc:"answer a tool hook (claude_code, codex, gemini_cli)"`
 	HookStdin    bool   `json:"hook_stdin,omitempty" flag:"hook-stdin" desc:"with --hook: read the hook input JSON from stdin"`
 	SessionStart bool   `json:"session_start,omitempty" flag:"session-start" desc:"with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)"`
-	MaxBytes     int    `json:"max_bytes,omitempty" flag:"max-bytes" desc:"cap the output in bytes (default 16000; hooks: context.hook_cap)"`
+	MaxBytes     int    `json:"max_bytes,omitempty" flag:"max-bytes" min:"1" desc:"cap the output in bytes (default 16000; hooks: context.hook_cap)"`
 	Meta         bool   `json:"meta,omitempty" flag:"meta" desc:"also print each returned row's metadata (sensitive values masked)"`
 	Internal     bool   `json:"internal,omitempty" flag:"internal" desc:"internal, global and personal rows (outside this checkout)"`
 	Table        string `json:"table,omitempty" flag:"table" desc:"with --internal: only this table (rules, memories, decisions, tasks, …)"`

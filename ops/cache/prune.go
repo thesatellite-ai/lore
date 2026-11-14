@@ -62,6 +62,11 @@ const (
 	v017MetaProjectKey = "project_id"
 	// repoMarkerRel is the folder whose presence makes a recorded repo live.
 	repoMarkerRel = ".lore"
+	// gitMarkerRel is the git entry of a checkout's top: a folder, or a
+	// file in a linked worktree. A client repo a store link names holds no
+	// .lore/ (lore never writes there), so its git entry is what says the
+	// checkout is still on this machine.
+	gitMarkerRel = ".git"
 )
 
 // v017Sidecars are a v0.1.17 cache file and its WAL files ("" = the file).
@@ -251,7 +256,7 @@ func MakePlan(root string) (Plan, error) {
 	keepProjects := map[string]bool{}
 	for _, rf := range records {
 		rec := rf.Record
-		if !repoAlive(rec.Repo) {
+		if !RepoAlive(rec.Repo) {
 			plan.Dead = append(plan.Dead, rf)
 			continue
 		}
@@ -303,13 +308,23 @@ func MakePlan(root string) (Plan, error) {
 	return plan, nil
 }
 
-// repoAlive reports whether top is still a lore repo on this machine.
-func repoAlive(top string) bool {
+// RepoAlive reports whether the checkout a cache use record names is still
+// on this machine: its top holds .lore/ (a lore repo) or a .git entry (a
+// client repo a store link names, which holds no .lore/ by design).
+//
+// Why exported: `lore where` labels a record whose checkout fails this as
+// gone, and prune drops it; both must use the one rule. Checking .lore/
+// alone called every live client repo gone (I-12), and prune then dropped
+// the caches it was still using.
+func RepoAlive(top string) bool {
 	if top == "" || !filepath.IsAbs(top) {
 		return false
 	}
-	fi, err := os.Stat(filepath.Join(top, repoMarkerRel))
-	return err == nil && fi.IsDir()
+	if fi, err := os.Stat(filepath.Join(top, repoMarkerRel)); err == nil && fi.IsDir() {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(top, gitMarkerRel))
+	return err == nil
 }
 
 // committedStoreNames is the set of store names top's .lore/stores.yaml

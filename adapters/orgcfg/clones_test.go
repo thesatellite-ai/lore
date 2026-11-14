@@ -136,7 +136,7 @@ func TestDoctorAndUnpushed(t *testing.T) {
 	if !slices.Equal(info.Unpushed, []string{"refs/heads/main", "refs/lore/live"}) {
 		t.Fatalf("unpushed = %v", info.Unpushed)
 	}
-	if d := c.Doctor(ctx, testNorm, origin, []string{"main"}); !hasPrefix(d.Problems, problemUnpushed) {
+	if d := c.Doctor(ctx, testNorm, origin, []string{"main"}); !hasPrefix(d.Problems, ProblemUnpushed) {
 		t.Fatalf("doctor must name unpushed work: %v", d.Problems)
 	}
 	gone := filepath.Join(t.TempDir(), "gone.git")

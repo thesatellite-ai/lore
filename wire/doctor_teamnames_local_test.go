@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -103,5 +104,24 @@ func TestTeamMachineNamer(t *testing.T) {
 	unknown := "mch_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	if got := name(unknown); got != "mch_01234567" {
 		t.Errorf("unknown machine = %q, want mch_01234567", got)
+	}
+}
+
+// TestTeamVersionsNameUnscopedIdentity (I-3): a row a setup step saved
+// outside every setup's folders carries the identity this machine resolves
+// there (no org, no setup), which no store holds an actors row for; doctor
+// names it "<name> (<step>, outside any setup)" instead of a raw act_ id.
+func TestTeamVersionsNameUnscopedIdentity(t *testing.T) {
+	a := openWith(t, gitRepo(t), Options{})
+	withProject(t, a)
+	ctx := background()
+	t.Setenv(identity.EnvActor, "human:hostuser@box.example")
+	id, err := identity.ActorID("human:hostuser@box.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := a.teamActorNamer(ctx)(id.String())
+	if got == id.String() || !strings.Contains(got, "hostuser") || !strings.HasSuffix(got, unscopedNote+")") {
+		t.Fatalf("name = %q, want the unscoped identity named", got)
 	}
 }

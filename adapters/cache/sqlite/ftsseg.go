@@ -3,6 +3,8 @@ package sqlite
 import (
 	"strings"
 	"unicode"
+
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 )
 
 // FTS segmentation (I-5): the unicode61 tokenizer splits words at spaces
@@ -87,11 +89,13 @@ func ftsSegment(s string) string {
 	return b.String()
 }
 
-// ftsIndexText is a field value as the FTS table stores it.
-func ftsIndexText(s string) string { return ftsSegment(s) }
+// ftsIndexText is a field value as the FTS table stores it: the Turkish
+// dotless ı as i (textnorm.SearchFold, I-9; one rune for one rune, so
+// unfoldSnippet can give a snippet its letters back), then segmented.
+func ftsIndexText(s string) string { return ftsSegment(textnorm.SearchFold(s)) }
 
 // ftsQueryText is a MATCH expression in the form that finds ftsIndexText.
-func ftsQueryText(match string) string { return ftsSegment(match) }
+func ftsQueryText(match string) string { return ftsSegment(textnorm.SearchFold(match)) }
 
 // ftsSnippetText is an FTS snippet with the segment marks removed, so the
 // person reads the row's own text.

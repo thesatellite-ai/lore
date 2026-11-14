@@ -36,6 +36,12 @@ func TestPreCommitSkipsOSJunk(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// the person's own change: with nothing but row files staged the hook
+	// stages none (H-15)
+	if err := os.WriteFile(filepath.Join(top, "other.txt"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, top, "add", "other.txt")
 	t.Chdir(top)
 	if err := f.s.h.preCommit(context.Background()); err != nil {
 		t.Fatalf("pre-commit with OS clutter beside a good row: %v", err)

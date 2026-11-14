@@ -112,6 +112,11 @@ func (e *Engine) purgedWith(ctx context.Context, table row.Table, id ids.AnyID) 
 // purgedWithAll lists the rows a purge of rows would take with them
 // (recursively: a comment on one of those links too), for a dry run.
 func (e *Engine) purgedWithAll(ctx context.Context, rows []Trashed) ([]Changed, error) {
+	// One read of each store for the whole list: purgedWith read every
+	// store again per row (bug hunt G-8: a dry run over 65 trashed rows
+	// took twice the delete that trashed them). It writes nothing, so the
+	// snapshot never goes stale here.
+	ctx = EnsureReadSnapshot(ctx)
 	var out []Changed
 	seen := map[ids.AnyID]bool{}
 	type item struct {

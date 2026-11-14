@@ -116,6 +116,12 @@ func TestJourneyTeamLeadStoreConflict(t *testing.T) {
 		t.Logf("explain:\n%s", ex)
 		ex.Says(t, "store "+tlOrg+"/"+tlProject, "CONFLICT", "lore sync conflicts").Never(t, "not found")
 		tt.lore(tlAnn, "sync", "status").OK(t).Says(t, taskID, "lore sync conflicts")
+		// I-1: doctor counts the open store conflict (DEGRADED, not
+		// HEALTHY with "open conflicts: 0") and the inbox lists it, each
+		// with the commands that settle it, never "lore sync pushes them"
+		doc := tt.lore(tlAnn, "doctor").Fails(t, 1, "Status: DEGRADED", "open sync conflict", "lore sync resolve --id <n>")
+		doc.Never(t, "open conflicts:   0", "; `lore sync` pushes them)")
+		tt.lore(tlAnn, "inbox").OK(t).Says(t, "conflict", taskID, "lore sync conflicts").Never(t, "(inbox empty)")
 		// the folder lore names in its hand-edit hints answers too
 		tt.m[tlAnn.Email].Lore(storeFolder, "sync", "conflicts").OK(t).Says(t, taskID, `"Title by LEE"`)
 		tt.m[tlAnn.Email].Lore(storeFolder, "sync", "status").OK(t).Says(t, taskID)

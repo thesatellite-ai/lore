@@ -29,7 +29,7 @@ This repo, warnings:
 
 2 setups · 22 ok · 6 warnings · 0 errors → degraded (exit 1)
 
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
 
@@ -50,7 +50,7 @@ This repo, warnings:
 
 1 setup · 6 ok · 4 warnings · 0 errors → degraded (exit 1)
 
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
 
@@ -80,7 +80,7 @@ This repo, warnings:
 
 1 setup · 15 ok · 4 warnings · 2 errors → broken (exit 2)
 
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 

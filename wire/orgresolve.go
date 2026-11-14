@@ -167,6 +167,9 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.RepoLinkedByRemote == nil {
 		o.RepoLinkedByRemote = r.LinkedByRemote
 	}
+	if o.ClientRepo == nil {
+		o.ClientRepo = r.ClientRepo
+	}
 	if o.OrgEntryStore == nil {
 		o.OrgEntryStore = r.OrgEntryStore
 	}
@@ -182,6 +185,33 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.GuardRepoWrite == nil {
 		o.GuardRepoWrite = r.GuardRepoWrite
 	}
+}
+
+// ClientRepo is Options.ClientRepo: the org this checkout is a client repo
+// of by a match (a client link, or the org's repos: pattern), and its
+// linked folder (the default link, else the first client link). Zero for a
+// plain folder, a repo with no hosted remote, a repo that is client only
+// by the fail-closed default (nothing lists it as own), an own repo, no
+// org, or an org that cannot be resolved.
+func (r *OrgResolution) ClientRepo(ctx context.Context) ClientRepo {
+	s, err := r.Situation(ctx)
+	if err != nil || s == nil || s.ResolveErr != nil || s.NotGitRepo || len(s.Remotes) == 0 {
+		return ClientRepo{}
+	}
+	res := s.Result
+	if res.Role != orgresolve.RoleClient || !orgresolve.ClientByMatch(res.Org, res.Links, s.Remotes) {
+		return ClientRepo{} // not a client by default alone (an own repo never listed under own:)
+	}
+	out := ClientRepo{Org: res.Org.Name}
+	for _, l := range res.Links {
+		if l.Own {
+			continue
+		}
+		if out.Folder == "" || l.Default {
+			out.Folder = l.Folder
+		}
+	}
+	return out
 }
 
 // LinkedByRemote is Options.RepoLinkedByRemote: the remote a store link

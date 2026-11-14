@@ -36,6 +36,15 @@ type Folder struct {
 	// memo keeps the rows Read decoded (readmemo.go); a Folder is only
 	// used through its pointer, so the memo is never copied.
 	memo readMemo
+	// index, when set, tells Read and Missing which row files git saw
+	// change, so a warm read touches only those (SetIndexSource).
+	index IndexSource
+	// viewMu guards the IndexView remembered for one command (indexView).
+	viewMu    sync.Mutex
+	view      IndexView
+	viewOK    bool
+	viewScope *store.ReadScope
+	viewGen   uint64
 	// badMu guards bad: the files the last Read left out because they are
 	// not usable rows (ReadProblems).
 	badMu sync.Mutex
@@ -203,7 +212,11 @@ type entry struct {
 
 // scan lists every row file of the data dir without following links, and
 // every entry that is not one. A data dir that does not exist yet is empty.
-func (f *Folder) scan() (map[string]entry, []Problem, error) {
+func (f *Folder) scan() (map[string]entry, []Problem, error) { return f.scanAll(true) }
+
+// scanAll is scan; with stat false the entries carry no size or mtime (no
+// lstat per file: Problems under an IndexView, perf3).
+func (f *Folder) scanAll(stat bool) (map[string]entry, []Problem, error) {
 	files := map[string]entry{}
 	var problems []Problem
 	if err := checkChain(f.root.dir, f.rel); err != nil {
@@ -241,7 +254,7 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 			problems = append(problems, Problem{Path: name, Reason: "not a table name"})
 			continue
 		}
-		p, err := f.scanTable(name, files)
+		p, err := f.scanTable(name, files, stat)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -251,7 +264,7 @@ func (f *Folder) scan() (map[string]entry, []Problem, error) {
 }
 
 // scanTable adds the row files of one table folder to files.
-func (f *Folder) scanTable(table string, files map[string]entry) ([]Problem, error) {
+func (f *Folder) scanTable(table string, files map[string]entry, stat bool) ([]Problem, error) {
 	dir := filepath.Join(f.dataDir, table)
 	list, err := os.ReadDir(dir)
 	if err != nil {
@@ -276,6 +289,10 @@ func (f *Folder) scanTable(table string, files map[string]entry) ([]Problem, err
 		}
 		if _, _, ok := ParseRowPath(rel); !ok {
 			problems = append(problems, Problem{Path: rel, Reason: "file name is not <valid id>.json"})
+			continue
+		}
+		if !stat {
+			files[rel] = entry{size: -1}
 			continue
 		}
 		info, err := e.Info()
@@ -306,6 +323,12 @@ func (f *Folder) Read(ctx context.Context, cursor store.Cursor) ([]store.Row, st
 	}
 	at := nanos(f.root.now())
 	prev, _ := ParseStatCursor(cursor)
+	if view, ok := f.indexView(ctx); ok {
+		if err := checkChain(f.root.dir, f.rel); err != nil {
+			return nil, "", err
+		}
+		return f.readIndexed(ctx, cursor, prev, view, at)
+	}
 	seen := prev.byPath()
 	files, _, err := f.scan()
 	if err != nil {
@@ -377,7 +400,7 @@ func (f *Folder) readTables(ctx context.Context, tables []row.Table) ([]store.Ro
 		if err != nil {
 			return nil, "", errs.Wrap(errs.Internal, "rowfs: stat a table folder", err)
 		}
-		if _, err := f.scanTable(string(t), files); err != nil {
+		if _, err := f.scanTable(string(t), files, true); err != nil {
 			return nil, "", err
 		}
 	}
@@ -456,13 +479,26 @@ func (f *Folder) check(rel string, st entry, p FileStat, known bool, prevAt, at 
 // stray files, links, bad names, files over the cap, and documents that do
 // not decode or do not match their path. For `lore doctor`.
 func (f *Folder) Problems(ctx context.Context) ([]Problem, error) {
-	files, problems, err := f.scan()
+	view, indexed := f.indexView(ctx)
+	files, problems, err := f.scanAll(!indexed)
 	if err != nil {
 		return nil, err
 	}
 	for _, rel := range sortedKeys(files) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		// perf3: a file git reports clean under the blob id it last decoded
+		// well under is a usable row, without reading it again
+		if indexed && f.knownGood(rel, view.Clean[rel]) {
+			continue
+		}
+		if files[rel].size < 0 { // scanned without stat: stat it now for the memo
+			info, err := os.Lstat(filepath.Join(f.dataDir, filepath.FromSlash(rel)))
+			if err != nil {
+				continue // gone since the scan
+			}
+			files[rel] = entry{size: info.Size(), mtime: nanos(info.ModTime())}
 		}
 		// A file this process already decoded and that has not changed
 		// since is a usable row (readmemo.go): doctor asks for problems
@@ -480,6 +516,8 @@ func (f *Folder) Problems(ctx context.Context) ([]Problem, error) {
 		}
 		if err != nil {
 			problems = append(problems, f.problem(rel, err))
+		} else if indexed {
+			f.markGoodBlob(rel, view.Clean[rel]) // the next Problems in this process skips it
 		}
 	}
 	return problems, nil
@@ -489,10 +527,16 @@ func (f *Folder) Problems(ctx context.Context) ([]Problem, error) {
 // a tombstone (paths relative to the data dir, sorted). They are never
 // treated as deletes; doctor reports them (spec 6.2 Change detection).
 // An unreadable cursor has seen nothing, so nothing is missing.
-func (f *Folder) Missing(cursor store.Cursor) ([]string, error) {
+func (f *Folder) Missing(ctx context.Context, cursor store.Cursor) ([]string, error) {
 	prev, ok := ParseStatCursor(cursor)
 	if !ok {
 		return nil, nil
+	}
+	if view, ok := f.indexView(ctx); ok {
+		if err := checkChain(f.root.dir, f.rel); err != nil {
+			return nil, err
+		}
+		return f.missingIndexed(prev, view)
 	}
 	files, _, err := f.scan()
 	if err != nil {

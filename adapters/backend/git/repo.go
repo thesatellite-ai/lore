@@ -42,7 +42,9 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 	if err != nil {
 		return nil, err
 	}
-	return &Backend{cfg: cfg, git: g, mode: modeRepo, readOnly: o.ReadOnly, root: root, folder: f, work: root.Dir()}, nil
+	b := &Backend{cfg: cfg, git: g, mode: modeRepo, readOnly: o.ReadOnly, root: root, folder: f, work: root.Dir()}
+	f.SetIndexSource(b.indexView) // perf3: a warm read asks git what changed instead of stat-ing every row file
+	return b, nil
 }
 
 // MarkReadOnly makes the handle refuse every write from now on

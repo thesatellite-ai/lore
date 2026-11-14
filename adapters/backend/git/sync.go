@@ -113,7 +113,8 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		if rerr != nil {
 			return rep, rerr
 		}
-		if _, refusedEpoch, aerr := b.adoptEpoch(ctx, remote); aerr != nil {
+		adopted, refusedEpoch, aerr := b.adoptEpoch(ctx, remote)
+		if aerr != nil {
 			return rep, aerr
 		} else if len(refusedEpoch) > 0 {
 			rep.Refused = append(rep.Refused, refusedEpoch...)
@@ -126,6 +127,11 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 			}
 			if rerr := b.checkRemoteReset(ctx, tracked, remote, h0); rerr != nil {
 				return rep, rerr // remotereset.go: never push the old store into a reset remote
+			}
+			if !adopted { // a compaction's rewrite was adopted: not someone's rewind
+				if rerr := b.checkRewound(ctx, tracked, remote, h0); rerr != nil {
+					return rep, rerr // H-9: never push back what someone's force-push dropped
+				}
 			}
 		}
 		merged, refused, merr := b.mergeRemote(ctx, remote)
@@ -238,7 +244,7 @@ func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushe
 	if err != nil {
 		return rep, err
 	}
-	rep.Folder = b.folder.Name()
+	rep.Folder, rep.Clone = b.folder.Name(), b.work
 	received, err := b.countRows(ctx, before, after)
 	if err != nil {
 		return rep, err

@@ -235,7 +235,23 @@ const storeNamePlaceholder = "<store>"
 // LostAccessHint is the next step after LostAccessText: ask, and the way
 // for a store that only moved.
 func LostAccessHint(storeName string) string {
-	return "ask an admin of the store whether you still have access; nothing written here is lost (it stays in the local copy, but cannot be delivered without access); if the store moved: lore store set-url --name " + storeName + " --url <url>"
+	return "nothing written here is lost (it stays in the local copy until the store takes it); " + GoneSteps(storeName, "")
+}
+
+// GoneSteps names the way out for each reason a store that served this
+// clone can now answer "no repository" (H-11: sync blamed the network and
+// doctor an ssh alias, and nobody named these): moved or renamed →
+// set-url; deleted → an empty repository at the old address, then
+// --restore from the clone with the most work; access removed → ask.
+// shown is the store's address (masked); "" says "its address".
+func GoneSteps(storeName, shown string) string {
+	at := "its address"
+	if shown != "" {
+		at = shown
+	}
+	return "if the store moved or was renamed: lore store set-url --name " + storeName + " --url <new-url>; " +
+		"if it was deleted: create an empty repository at " + at + ", then run lore store push --store " + storeName + " --restore --yes from the clone with the most work; " +
+		"if your access was removed: ask an admin of the store"
 }
 
 // ProbeHint is the next step for a store remote that failed a probe, by
@@ -244,7 +260,7 @@ func LostAccessHint(storeName string) string {
 func ProbeHint(k gitfault.Kind, shown string) string {
 	switch k {
 	case gitfault.Missing:
-		return "check the store's address (" + shown + "): `lore store set-url --name <store> --url <url>` fixes a wrong one; local commits stay in the clone meanwhile"
+		return "the host answers, but holds no repository at " + shown + " (a wrong address, or the store moved or was deleted); local commits stay in the clone meanwhile; " + GoneSteps(storeNamePlaceholder, shown)
 	case gitfault.Unreadable:
 		return "the address is right; check the permissions of the folder it names (`ls -ld`); local commits stay in the clone meanwhile"
 	case gitfault.Denied:

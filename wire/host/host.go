@@ -39,6 +39,7 @@ import (
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
+	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -147,6 +148,7 @@ var migratePrefix = opsmigrate.OpRun[:strings.Index(opsmigrate.OpRun, ".")+1]
 
 // Run implements op.Runner.
 func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+	ctx = store.WithReadScope(ctx) // perf3: one command asks git which row files changed once
 	if r.State.Pending != nil {
 		return op.Result{}, r.State.Pending
 	}
@@ -166,7 +168,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 				err = h.OnError(ctx, run, err)
 			}
 		}
-		return op.Result{}, err
+		return op.Result{}, r.app.ClientRepoHints(ctx, err)
 	}
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun || e.Spec().Name == opsfix.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		// a read never sets a repo up (wire/doctor_nocreate.go), hooks
@@ -256,6 +258,8 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			err = h.OnError(ctx, run, err)
 		}
 	}
+	// I-13: in a client repo no refusal sends the person to lore init
+	err = r.app.ClientRepoHints(ctx, err)
 	return res, undo(err)
 }
 

@@ -246,7 +246,7 @@ func orNone(s string) string {
 
 // LogIn is the input of live.log.
 type LogIn struct {
-	Number int `json:"number,omitempty" flag:"number" short:"n" desc:"commits to show (default 20)"`
+	Number int `json:"number,omitempty" flag:"number" min:"1" short:"n" desc:"commits to show (default 20)"`
 }
 
 // LogOut is the output of live.log.

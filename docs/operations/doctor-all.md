@@ -71,7 +71,7 @@ This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
 2 setups · 22 ok · 6 warnings · 0 errors → degraded (exit 1)
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
 ```
@@ -110,7 +110,7 @@ This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
 1 setup · 6 ok · 4 warnings · 0 errors → degraded (exit 1)
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 1)
 ```
@@ -147,7 +147,7 @@ This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
 1 setup · 15 ok · 4 warnings · 2 errors → broken (exit 2)
-Context:
+Context (information, nothing to fix):
   - context: .lore/LORE.md not rendered yet (lore render)
 (exit 2)
 ```

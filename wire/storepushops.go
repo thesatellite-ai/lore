@@ -519,14 +519,20 @@ func (a *App) FlushBatches(ctx context.Context) {
 const SessionEndBudget = piggybackTimeout
 
 // pushModeLine is one store's line in `lore doctor` and `lore sync status`.
-func pushModeLine(v opsstores.PushView) string {
+// waits is what the store's push waits for ("" none): sync refuses until
+// that is settled, so the line names it instead (I-1).
+func pushModeLine(v opsstores.PushView, waits string) string {
 	s := "store " + v.Store + ": " + v.Summary
 	if v.Unpushed > 0 {
 		age := ""
 		if v.WaitingFor != "" {
 			age = ", the oldest " + v.WaitingFor + " old"
 		}
-		s += " (" + strconv.Itoa(v.Unpushed) + " local commit(s) waiting" + age + "; `lore sync` pushes them)"
+		next := "`lore sync` pushes them"
+		if waits != "" {
+			next = waits
+		}
+		s += " (" + strconv.Itoa(v.Unpushed) + " local commit(s) waiting" + age + "; " + next + ")"
 	}
 	if v.Problem != "" {
 		s += "; problem: " + v.Problem + " (pushing as now)"
@@ -535,20 +541,22 @@ func pushModeLine(v opsstores.PushView) string {
 }
 
 // doctorPushModes adds each store's push mode to `lore doctor`: a note, or
-// a warning when a setting does not read.
-func (a *App) doctorPushModes(ctx context.Context, warn, note func(string)) {
+// a warning when a setting does not read. waits is what each store's
+// push waits for (doctorStoreConflicts).
+func (a *App) doctorPushModes(ctx context.Context, warn, note func(string), waits map[string]string) {
 	views, err := a.PushViews(ctx)
 	if err != nil {
 		return
 	}
 	for _, v := range views {
+		w := waits[v.Store]
 		switch {
 		case v.Problem != "":
-			warn(pushModeLine(v))
-		case v.Stale:
-			warn(pushModeLine(v) + "; nothing has pushed it for over a day: run `lore sync`")
+			warn(pushModeLine(v, w))
+		case v.Stale && w == "":
+			warn(pushModeLine(v, w) + "; nothing has pushed it for over a day: run `lore sync`")
 		default:
-			note(pushModeLine(v))
+			note(pushModeLine(v, w)) // a conflict's warning is doctorStoreConflicts'
 		}
 	}
 }

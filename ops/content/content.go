@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -117,6 +118,8 @@ type WriteOut struct {
 	ID       string    `json:"id"`
 	Store    string    `json:"store"`
 	Warnings []Warning `json:"warnings,omitempty"`
+	// Rows are the rows an archive --where matched, each with its store.
+	Rows []wheredel.Row `json:"rows,omitempty"`
 	// Human is the v0.1.17 line the op set (CLI only, never JSON).
 	Human string `json:"-"`
 }
@@ -323,6 +326,24 @@ func (o Ops) Create(ctx context.Context, target string, fields map[string]value.
 func (o Ops) Archive(ctx context.Context, raw string) (WriteOut, error) {
 	return o.Patch(ctx, raw, map[string]value.Value{FieldArchivedAt: value.DateTimeFrom(opclock.Now(o.Env))},
 		func(id string) string { return Mark + " " + id + " archived\n" })
+}
+
+// ArchiveMany is `<noun> archive`: the one id (Archive), or with --where
+// every live, not-archived match as one batch (wheredel.Archive, bug hunt
+// G-7).
+func (o Ops) ArchiveMany(ctx context.Context, raw string, f wheredel.ArchiveFlags) (WriteOut, error) {
+	bulkForm, err := wheredel.ArchiveForm(o.Noun, raw, f.Where, f.DryRun)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if !bulkForm {
+		return o.Archive(ctx, raw)
+	}
+	res, err := wheredel.Archive(ctx, o.Env, wheredel.Spec{Noun: o.Noun, Table: o.Table}, f.Where, f.DryRun, value.DateTimeFrom(opclock.Now(o.Env)))
+	if err != nil {
+		return WriteOut{}, err
+	}
+	return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, Human: res.Human}, nil
 }
 
 // Unarchive clears archived_at ("✓ <id> unarchived").

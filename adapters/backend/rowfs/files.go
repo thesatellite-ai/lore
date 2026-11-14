@@ -113,11 +113,12 @@ func writeAtomic(full string, b []byte, m fileModes) error {
 // folder for a batch (Apply), which is what makes the rename itself
 // durable. It returns the folder of full.
 func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
+	writeGen.Add(1) // any remembered IndexView is out of date (indexview.go)
 	if info, lerr := os.Lstat(full); lerr == nil && info.Mode()&fs.ModeSymlink != 0 {
 		return "", refuseSymlink(filepath.Base(full))
 	}
 	dir = filepath.Dir(full)
-	if err = os.MkdirAll(dir, m.dir); err != nil {
+	if err = mkdirModes(dir, m); err != nil {
 		return "", errs.FileIO("create the table folder", dir, err)
 	}
 	suffix := make([]byte, tmpSuffixBytes)
@@ -145,6 +146,9 @@ func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
 	if err = f.Close(); err != nil {
 		return "", errs.Wrap(errs.Internal, "rowfs: close a tmp file", err)
 	}
+	if err = groupWiden(tmp, dir, m.file, groupFileBits); err != nil {
+		return "", errs.Wrap(errs.Internal, "rowfs: give a row file its group's access", err)
+	}
 	if err = osrename.Rename(tmp, full); err != nil {
 		return "", errs.Wrap(errs.Internal, "rowfs: rename a row file into place", err)
 	}
@@ -153,6 +157,7 @@ func writeRenamed(full string, b []byte, m fileModes) (dir string, err error) {
 
 // removeIfExists removes path; a path already gone is not an error.
 func removeIfExists(path string) error {
+	writeGen.Add(1) // any remembered IndexView is out of date (indexview.go)
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -227,4 +232,57 @@ func (r *Root) WriteFile(rel string, b []byte) error {
 	}
 	sweepTmp(filepath.Dir(full))
 	return nil
+}
+
+// mkdirModes is os.MkdirAll(dir, m.dir) that also gives each folder it
+// creates its group's access in a setgid parent (groupWiden): a new table
+// folder of a group's shared checkout is 2770/2775, never 2700 (I-11).
+func mkdirModes(dir string, m fileModes) error {
+	var made []string
+	for cur := dir; ; cur = filepath.Dir(cur) {
+		if _, err := os.Lstat(cur); err == nil || !errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		made = append(made, cur)
+		if filepath.Dir(cur) == cur {
+			break
+		}
+	}
+	if err := os.MkdirAll(dir, m.dir); err != nil {
+		return err
+	}
+	for i := len(made) - 1; i >= 0; i-- { // parents first: a child checks its parent's bit
+		if err := groupWiden(made[i], filepath.Dir(made[i]), m.dir, groupDirBits); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// groupWiden adds bits (group read/write) to path when the write meant
+// group access (want holds group read: a shared work-tree mode, never an
+// owner-only one) and parent is setgid, the mark of a folder a group
+// shares (git's core.sharedRepository=group sets it; so does `chmod g+s`).
+// Elsewhere the umask alone decides, as for git's own checkout.
+func groupWiden(path, parent string, want, bits fs.FileMode) error {
+	if want&0o040 == 0 {
+		return nil
+	}
+	pi, err := os.Stat(parent)
+	if err != nil || pi.Mode()&fs.ModeSetgid == 0 {
+		return nil //nolint:nilerr // no setgid parent (or none to read): the umask decides
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	have := info.Mode()
+	if have.Perm()&bits == bits {
+		return nil
+	}
+	keep := have.Perm() | bits
+	if have&fs.ModeSetgid != 0 {
+		keep |= fs.ModeSetgid
+	}
+	return os.Chmod(path, keep)
 }

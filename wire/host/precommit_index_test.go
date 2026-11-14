@@ -43,6 +43,14 @@ func TestPreCommitStagesIntoTheHooksIndex(t *testing.T) {
 			if err := os.WriteFile(full, []byte(`{"a":2}`+"\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
+			// the person's own change in the commit: with nothing but row
+			// files the hook stages none (H-15)
+			if err := os.WriteFile(filepath.Join(top, "other.txt"), []byte("x\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if c.index == "" {
+				gitT(t, top, "add", "other.txt")
+			}
 			t.Chdir(top)
 			index := filepath.Join(top, ".git", "index")
 			if c.index != "" {
@@ -57,6 +65,10 @@ func TestPreCommitStagesIntoTheHooksIndex(t *testing.T) {
 				// git builds the temporary index from HEAD, as commit -a does.
 				if _, err := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: top,
 					Args: []string{"read-tree", "HEAD"}, Env: []string{"GIT_INDEX_FILE=" + abs}}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: top,
+					Args: []string{"update-index", "--add", "other.txt"}, Env: []string{"GIT_INDEX_FILE=" + abs}}); err != nil {
 					t.Fatal(err)
 				}
 				// The main index is locked while git runs the hook.
@@ -75,8 +87,8 @@ func TestPreCommitStagesIntoTheHooksIndex(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.TrimSpace(string(out)) != row {
-				t.Fatalf("staged in %s: %q, want %s", index, out, row)
+			if strings.TrimSpace(string(out)) != row+"\nother.txt" {
+				t.Fatalf("staged in %s: %q, want %s and other.txt", index, out, row)
 			}
 		})
 	}

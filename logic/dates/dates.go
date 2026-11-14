@@ -71,7 +71,9 @@ func (e *Error) Error() string {
 }
 
 var (
-	reClock = regexp.MustCompile(`^(.*?)\s+([01]?\d|2[0-3]):([0-5]\d)$`)
+	// the flag help writes "…, + HH:MM", and people type the plus
+	// (`tomorrow + 09:00`, I-8): it is optional
+	reClock = regexp.MustCompile(`^(.*?)\s+(?:\+\s*)?([01]?\d|2[0-3]):([0-5]\d)$`)
 	reIn    = regexp.MustCompile(`^in\s*(\d{1,4})\s*(d|w|m|y|days?|weeks?|months?|years?)$`)
 	reSlash = regexp.MustCompile(`^\d{1,4}[/.]\d{1,2}([/.]\d{1,4})?$`)
 	reDay   = regexp.MustCompile(`^\d{1,2}$`)
@@ -279,4 +281,40 @@ func AddMonths(t time.Time, n int) time.Time {
 		d = last
 	}
 	return time.Date(first.Year(), first.Month(), d, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+}
+
+// IsDay reports whether a stored date value is a calendar day: Parse
+// stores a day as midnight UTC (Result.At), an instant as itself. A clock
+// time that falls exactly on midnight UTC reads as that day.
+func IsDay(t time.Time) bool {
+	u := t.UTC()
+	return u.Hour() == 0 && u.Minute() == 0 && u.Second() == 0 && u.Nanosecond() == 0
+}
+
+// DayIn is a stored date value as the YYYY-MM-DD the viewer in loc means:
+// a calendar day stays that day, an instant is the day it falls on in loc
+// (I-8: an LA user's "tomorrow 20:00" is Sat 11-14 there, not the UTC
+// date 11-15 it is stored as). "" for the zero time.
+func DayIn(t time.Time, loc *time.Location) string {
+	if t.IsZero() {
+		return ""
+	}
+	if loc == nil || IsDay(t) {
+		return t.UTC().Format(DayLayout)
+	}
+	return t.In(loc).Format(DayLayout)
+}
+
+// DueBy reports whether a stored due value has come at now for the viewer
+// in loc: an instant once now reaches it, a calendar day once that day has
+// begun in loc (I-8: a date-only due flagged west of UTC from UTC
+// midnight, a day early there).
+func DueBy(due, now time.Time, loc *time.Location) bool {
+	if loc == nil {
+		loc = time.UTC
+	}
+	if IsDay(due) {
+		return now.In(loc).Format(DayLayout) >= due.UTC().Format(DayLayout)
+	}
+	return due.Before(now)
 }

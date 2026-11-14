@@ -230,7 +230,7 @@ func (o ForgetOut) Text() string {
 const (
 	doctorUsedHead   = "stores this repo and machine use:"
 	doctorNoneUsed   = "  none (no .lore/stores.yaml entry, no org store, no personal store)"
-	doctorOrgHead    = "v0.1.17 org stores (orgs[].stores in ~/.lore/config.yaml):"
+	doctorOrgHead    = "clones of the org stores in ~/.lore/config.yaml (orgs[].stores):" // G-19: a fresh setup's stores were filed under "v0.1.17 org stores"
 	doctorNoOrgStore = "  none"
 )
 

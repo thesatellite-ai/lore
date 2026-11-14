@@ -142,7 +142,8 @@ func Ops(env Env) []op.Entry {
 		}, o.search),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a memory (hidden from list and search; kept)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore memory archive --id mem_<id>", Want: "archived"}},
+			Examples: []op.Example{{Title: "archive one", CLI: "lore memory archive --id mem_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore memory archive --where 'body~=month 1' --dry-run", Want: "would archive"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrors,
 		}, o.archive),
 		op.Define(op.Spec{
@@ -744,8 +745,20 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	return out, nil
 }
 
-// archive sets archived_at to now.
-func (o ops) archive(ctx context.Context, in IDIn) (WriteOut, error) {
+// archive sets archived_at to now; --where archives every match as one
+// batch (wheredel.Archive).
+func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
+	bulkForm, err := wheredel.ArchiveForm(Noun, in.ID, in.Where, in.DryRun)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if bulkForm {
+		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: Noun, Table: table}, in.Where, in.DryRun, value.DateTimeFrom(opclock.Now(o.env)))
+		if werr != nil {
+			return WriteOut{}, werr
+		}
+		return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, Human: res.Human}, nil
+	}
 	return withLine(o.stamp(ctx, in.ID, fieldArchivedAt, value.DateTimeFrom(opclock.Now(o.env))))("archived")
 }
 

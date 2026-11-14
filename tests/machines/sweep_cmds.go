@@ -495,7 +495,7 @@ var notUserRun = map[string]string{
 	"org create": whyTeam, "org link": whyTeam, "org unlink": whyTeam, "org rename": whyTeam, "org set": whyTeam, "org store add": whyTeam,
 	"project member add": whyTeam, "project member edit": whyTeam, "project member list": whyTeam, "project member remove": whyTeam,
 	"project shared-init": whyTeam, "team invite list": whyTeam, "team invite resend": whyTeam, "team invite revoke": whyTeam,
-	"team add": whyTeam, "team list": whyTeam, "team show": whyTeam, "team remove": whyTeam, "team member add": whyTeam, "team member remove": whyTeam,
+	"team add": whyTeam, "team list": whyTeam, "team show": whyTeam, "team remove": whyTeam, "team rename": whyTeam, "team member add": whyTeam, "team member remove": whyTeam,
 	"member add": whyTeam, "member list": whyTeam, "member show": whyTeam, "member edit": whyTeam, "member remove": whyTeam, // journey TestJourneyStaff runs them
 	"handoff add": whyTeam, "handoff ack": whyTeam, "handoff show": whyTeam, "handoff delete": whyTeam, "machine label": whyTeam,
 	"setup suggest-again": whyTeam,

@@ -191,7 +191,7 @@ func workDefs() []TableDef {
 			Ref("assigned_to_actor_id", TableActors),
 			// Team fields (LORE_TEAM_SPEC 7, 10 C14); all optional so rows
 			// written before the team feature stay valid.
-			Text("assigned_team", Describe("team id (tem_…) when --assign named a team")),
+			Text("assigned_team", MergeBy(MergeNewest), Describe("team id (tem_…) when --assign named a team")),
 			// RQ5 / OV12 leftover: concurrent edits of these sets union instead of newest-wins.
 			JSON("blocked_by", MergeBy(MergeSetUnion), Describe("--after edges: [{task_id, project_id?, until}]")),
 			Number("claim_epoch", Internal()),
@@ -214,16 +214,16 @@ func workDefs() []TableDef {
 			JSON("time_totals", Describe("time totals carried into a client repo: {from, to, workers: [{label, kind, seconds}], effort_seconds}")),
 			Number("timebox_seconds"),
 			Text("gate", OneOf(TaskGates()...)),
-			Text("approved_by"),
+			Text("approved_by", MergeBy(MergeNewest)),
 			DateTime("approved_at"),
-			Text("approved_hash", Internal()),
-			Text("done_by"),
-			Text("done_commit"),
+			Text("approved_hash", Internal(), MergeBy(MergeNewest)),
+			Text("done_by", MergeBy(MergeNewest)),
+			Text("done_commit", MergeBy(MergeNewest)),
 			Number("done_pr"),
 			DateTime("merged_at"),
-			Text("work_branch"),
-			Text("idempotency_key"),
-			Text("role"),
+			Text("work_branch", MergeBy(MergeNewest)),
+			Text("idempotency_key", MergeBy(MergeNewest)),
+			Text("role", MergeBy(MergeNewest)),
 			// Sub-tasks (DQ5, TASK 6.2): the parent is stored on the child
 			// only (T1: children are a query), rank orders siblings.
 			Ref(FieldTaskParent, TableTasks, Describe("the parent task (tsk_…); empty = top level")),

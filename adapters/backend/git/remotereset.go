@@ -16,6 +16,14 @@ package git
 //	          lore store push --restore <store>   put this copy back
 //	          lore store forget <url>, then init  start fresh
 //
+// A remote rewound by a force-push (H-9: an admin drops a leaked secret
+// or a wrong row by pushing an older commit) is refused the same way: the
+// branch moved to a commit that does not contain the tip the clone last
+// saw there, and the clone still holds the dropped commits, so a plain
+// push would quietly undo the rewrite (checkRewound). Its mark records
+// "rewound <old tip>": shared history does not clear it (it always
+// shares), only a remote that holds the old tip again does.
+//
 // Only RestoreRemote (`store push --restore`) clears the mark; forgetting
 // the clone removes it with the folder.
 //
@@ -113,8 +121,92 @@ func (b *Backend) remoteResetError(ctx context.Context, why, remote, h string) e
 		return errs.Wrap(errs.Refused, "git: the store at "+shown+" was started fresh by someone (it is now store "+newID+"); this machine's clone "+b.work+" still holds the old store "+oldID+", which lore will not push there", ErrRemoteReset).
 			WithHint("drop this machine's old copy with lore store forget --url " + shown + " --yes, then run lore sync to clone the new store (or ask whoever reset it)")
 	}
+	// H-9: every command in the hint takes named flags (store init takes
+	// --url, and it runs in a repo that uses the store).
 	return errs.Wrap(errs.Refused, "git: the store at "+shown+" was reset ("+why+"), but this machine's clone "+b.work+" still holds the old store; lore will not push it there on its own", ErrRemoteReset).
-		WithHint("put this copy back: lore store push --restore " + shown + "; or start fresh: lore store forget --url " + shown + ", then lore store init --name <name> " + shown)
+		WithHint("put this copy back: lore store push --restore --store " + shown + "; or start fresh: lore store forget --url " + shown + " --yes, then lore store init --name <name> --url " + shown + " in a repo that uses the store")
+}
+
+// rewoundMark starts the content of a mark written for a rewound remote
+// ("rewound <old remote tip>").
+const rewoundMark = "rewound "
+
+// rewoundTip is the old remote tip a rewound mark of the clone at dir
+// records ("" when the mark is absent or is a reset's).
+func rewoundTip(dir string) string {
+	b, err := os.ReadFile(remoteResetPath(dir))
+	if err != nil {
+		return ""
+	}
+	tip, ok := strings.CutPrefix(strings.TrimSpace(string(b)), rewoundMark)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(tip)
+}
+
+// RewoundAt reports whether the clone at dir is marked because its
+// remote branch was rewound by someone (H-9), not reset.
+func RewoundAt(dir string) bool { return rewoundTip(dir) != "" }
+
+// rewoundError is the refusal of a sync into a remote whose branch was
+// rewound: n commits the remote had at oldTip are no longer on it.
+func (b *Backend) rewoundError(ctx context.Context, oldTip, remote string) error {
+	shown := b.git.remote
+	if o, err := OriginOf(shown); err == nil {
+		shown = o
+	}
+	n := ""
+	if remote != "" {
+		if out, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-list", "--count", remote + ".." + oldTip}}); err == nil {
+			n = trimmed(out) + " "
+		}
+	}
+	return errs.Wrap(errs.Refused, "git: the store at "+shown+" was rewritten by someone: its branch "+b.branch+" moved back, and "+n+"commit(s) it had ("+shortTip(oldTip)+") are no longer on it; this machine's clone "+b.work+" still holds them and lore will not push them back on its own", ErrRemoteReset).
+		WithHint("put them back: lore store push --restore --store " + shown + "; or take the rewrite: lore store forget --url " + shown + " --yes, then lore sync (this machine's copy is cloned again, and its commits that are not on the store are dropped)")
+}
+
+// shortTip is a commit id's first 7 characters.
+func shortTip(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
+// markedError is the refusal of a clone already marked: a rewind's or a
+// reset's.
+func (b *Backend) markedError(ctx context.Context, remote, h string) error {
+	if tip := rewoundTip(b.work); tip != "" {
+		return b.rewoundError(ctx, tip, remote)
+	}
+	return b.remoteResetError(ctx, "found when lore last reached it", remote, h)
+}
+
+// checkRewound refuses, after a fetch, a sync into a remote whose branch
+// moved back (H-9): before (the tip the clone last saw, the tracking ref
+// or the noted remote tip) is not in remote, and the clone's head h still
+// holds it, so a push would put the dropped commits back. A compaction's
+// rewrite is adopted before (adoptEpoch) and never comes here. The rewind
+// is marked, so every later sync refuses until store push --restore or a
+// forget.
+func (b *Backend) checkRewound(ctx context.Context, before, remote, h string) error {
+	if before == "" {
+		before = knownRemoteTip(b.work)
+	}
+	if before == "" || remote == "" || h == "" || before == remote {
+		return nil
+	}
+	if ff, err := b.isAncestor(ctx, before, remote); err != nil || ff {
+		return err // the remote moved forward (or holds the tip): no rewrite
+	}
+	if held, err := b.isAncestor(ctx, before, h); err != nil || !held {
+		return err // this clone does not hold the dropped commits: nothing to push back
+	}
+	if err := os.WriteFile(remoteResetPath(b.work), []byte(rewoundMark+before+"\n"), 0o600); err != nil {
+		return errs.FileIO("write", remoteResetPath(b.work), err)
+	}
+	return b.rewoundError(ctx, before, remote)
 }
 
 // checkRemoteReset decides, after a fetch, whether the remote was reset:
@@ -125,11 +217,17 @@ func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string
 	if RemoteResetAt(b.work) {
 		// B2-30: someone put the store back (store push --restore on
 		// another machine): the remote shares history with this clone
-		// again, so the mark goes and the sync runs as usual.
-		if back, err := b.sharesHistory(ctx, h, remote); err != nil {
+		// again, so the mark goes and the sync runs as usual. A rewound
+		// remote (H-9) always shares history: it is back only when it
+		// holds the old tip again.
+		back, err := b.sharesHistory(ctx, h, remote)
+		if tip := rewoundTip(b.work); tip != "" && err == nil && back {
+			back, err = b.isAncestor(ctx, tip, remote)
+		}
+		if err != nil {
 			return err
 		} else if !back {
-			return b.remoteResetError(ctx, "found when lore last reached it", remote, h)
+			return b.markedError(ctx, remote, h)
 		}
 		if err := RestoreRemote(b.work); err != nil {
 			return err
@@ -298,7 +396,7 @@ func GuardPushAt(ctx context.Context, dir, branch, h string) error {
 	if RemoteResetAt(dir) {
 		// no "came back" here: this push path may not have fetched, so a
 		// stale tracking ref must not clear the mark (only a sync does)
-		return b.remoteResetError(ctx, "found when lore last reached it", "", h)
+		return b.markedError(ctx, "", h)
 	}
 	remote, err := b.resolve(ctx, dir, trackingRefNS+branch)
 	if err != nil {
@@ -342,7 +440,7 @@ func GuardPushGone(ctx context.Context, dir, branch, h string, noHeads bool) err
 	b := &Backend{git: runner{bin: bin, owned: true}, work: dir, branch: branch, headsKnown: true, noHeads: noHeads}
 	b.git.remote = OriginAt(dir)
 	if RemoteResetAt(dir) {
-		return b.remoteResetError(ctx, "found when lore last reached it", "", h)
+		return b.markedError(ctx, "", h)
 	}
 	return b.checkRemoteReset(ctx, "", "", h)
 }

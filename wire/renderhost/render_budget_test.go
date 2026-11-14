@@ -64,8 +64,16 @@ func TestBuildBudgetedFileMatrix(t *testing.T) {
 				if !strings.Contains(body, hotfixFull(crit)) {
 					t.Fatal("a critical hotfix must be in full")
 				}
-				if !strings.Contains(body, hotfixLine(high)) || strings.Contains(body, hotfixFull(high)) {
+				if strings.Contains(body, hotfixFull(high)) {
+					t.Fatal("a high hotfix must never be in full")
+				}
+				// G-6: a high hotfix is one line, or, when the budget is too
+				// tight, left out and named once in the footer.
+				if rep.HighLine == 1 && !strings.Contains(body, hotfixBrief(high, 0)) && !strings.Contains(body, "- `"+high.ID+"` ") {
 					t.Fatal("a high hotfix must be one line")
+				}
+				if rep.HighLine == 0 && !strings.Contains(body, "1 high hotfix is left out to fit the budget: `lore hotfix list` lists them") {
+					t.Fatal("a left-out high hotfix is not named in the footer")
 				}
 				if budget == 1<<20 && rep.MustLine != 0 {
 					t.Fatalf("an unlimited budget shortened %d rules", rep.MustLine)

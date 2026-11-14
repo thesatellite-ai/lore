@@ -33,7 +33,7 @@ func TestWhoamiJoinHintOnANewLaptop(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			s := c.s
-			got, ok := lineOf(whoamiLines(&s, identity.Resolved{DisplayName: "Ana", StableKey: "human:ana@example.test"}, nil, false, whoamiRedactor{}, nil, testMachine, ""), "join")
+			got, ok := lineOf(whoamiLines(&s, identity.Resolved{DisplayName: "Ana", StableKey: "human:ana@example.test"}, "", nil, false, whoamiRedactor{}, nil, testMachine, ""), "join")
 			switch {
 			case c.want == "" && ok:
 				t.Fatalf("join line %q, want none", got)

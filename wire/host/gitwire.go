@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -325,7 +326,14 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if b, rerr := os.ReadFile(filepath.Clean(stamp)); mode != wireInstall && rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
 	}
+	// H-18: lore's commit and push checks gone from a clone lore wired
+	// before (removed by hand, or a hook manager took the hooks over)
+	wasWired := !s.neverWired(ctx, dir)
+	guardBefore := missingGuardHooks(dir)
 	if mode == wireRead {
+		if wasWired && len(guardBefore) > 0 && !wire.ProjectFormatOld(root) {
+			s.sayGuardOff(ctx, dir, guardBefore, false, fp, stamp+gitWiringReadSuffix)
+		}
 		// A read wires nothing (owner bug 6): it looks, and says once
 		// what is missing and which command sets it up.
 		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, stamp+gitWiringReadSuffix, fp)
@@ -363,8 +371,24 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			return
 		}
 	}
+	// H-19: a hooks folder in the work tree (husky's .husky) is committed
+	// with the repo. A write never creates a new hook file there; an
+	// install step (lore fix asks first, init is asked for) does and says
+	// which files are new.
+	newTracked := s.trackedNewHooks(ctx, dir, names)
+	skip := map[string]bool{}
+	var skipped []string
+	if mode != wireInstall {
+		for _, n := range newTracked {
+			skip[n] = true
+		}
+		skipped, newTracked = newTracked, nil
+	}
 	for _, n := range names {
 		b := blocks[n]
+		if skip[n] {
+			continue
+		}
 		if err := ensureHookBlock(dir, n, b.marker, b.lines); err != nil {
 			s.warn("git wiring: " + err.Error())
 			return
@@ -377,7 +401,22 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		if shared {
 			note = "; " + dir + " is the hooks folder of every repo (core.hooksPath in your global git config): lore's blocks there run lore only in repos lore is set up in"
 		}
+		if len(newTracked) > 0 {
+			note += fmt.Sprintf(trackedHooksCreated, dir, strings.Join(newTracked, ", "))
+		}
 		s.cmdNotice(ctx, "set up git for lore's row files in this clone: "+strings.Join(changed, "; ")+note+" (`lore where` lists everything lore keeps here)")
+	}
+	if len(skipped) > 0 && !wire.ReadNoticeSaid(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp) {
+		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, strings.Join(skipped, ", "), dir))
+		wire.MarkReadNotice(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp)
+	}
+	if wasWired && len(guardBefore) > 0 && !formatOld {
+		after := missingGuardHooks(dir)
+		if len(after) == 0 {
+			s.sayGuardOff(ctx, dir, guardBefore, true, fp, stamp+gitWiringReadSuffix)
+		} else {
+			s.sayGuardOff(ctx, dir, after, false, fp, stamp+gitWiringReadSuffix)
+		}
 	}
 	// Row files git would not commit (OWNERQ-9): re-include them, once
 	// per state of .gitignore; `lore sync` refuses while some stay hidden.
@@ -386,6 +425,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if !wire.HoldsLoreData(root) {
 		// no row files to re-include, and no tracked file of a client
 		// repo is changed (plain files sweep 3.8)
+		if len(skipped) > 0 {
+			return // not wired in full: the next write looks again
+		}
 		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
 		return
 	}
@@ -400,6 +442,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		s.cmdNotice(ctx, "a .gitignore rule hid lore files; re-included "+dataRel+" in .gitignore — commit it")
 	case len(still) > 0:
 		s.warn("git ignores lore data, so teammates will not receive it (`lore sync` refuses until it is fixed):\n  " + strings.Join(still, "\n  "))
+	}
+	if len(skipped) > 0 {
+		return // not wired in full: the next write looks again (its notice is said once per state)
 	}
 	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
 }

@@ -18,6 +18,7 @@ package wire
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -91,6 +92,7 @@ func namedActorRow(ctx context.Context, st *state, id ids.ID[ids.Actor]) string 
 // row, so without this its id was the one writer doctor could not name.
 func (a *App) localActorNames(ctx context.Context, st *state) map[string]string {
 	out := map[string]string{}
+	defer a.addUnscopedActorName(ctx, out)
 	person := st.who
 	if person.Owner != nil {
 		person = *person.Owner
@@ -135,6 +137,40 @@ func (a *App) localActorNames(ctx context.Context, st *state) map[string]string 
 		}
 	}
 	return out
+}
+
+// unscopedNote marks the identity this machine writes as outside every
+// setup's folders and org: lore setup steps run there (in the home folder,
+// before the folders step) stamp their machine-local rows with it, and no
+// store holds an actors row for it, so doctor names it instead of showing
+// an id `lore actor show` cannot find (I-3).
+const unscopedNote = ", outside any setup"
+
+// addUnscopedActorName adds to out (when absent) the identity this machine
+// resolves outside any setup or org: the chain with no org entry and no
+// setup, run in the folder holding the lore home, named "<name> (<step>,
+// outside any setup)". A chain that does not resolve adds nothing.
+func (a *App) addUnscopedActorName(ctx context.Context, out map[string]string) {
+	mc, err := readMachineConfig(a.opts.Home)
+	if err != nil {
+		return
+	}
+	r, err := identity.Resolve(ctx, identity.Inputs{Home: a.opts.Home, Config: mc.Config, Dir: filepath.Dir(a.opts.Home)})
+	if err != nil || r.StableKey == "" {
+		return
+	}
+	id, err := r.ActorID()
+	if err != nil {
+		return
+	}
+	if _, ok := out[id.String()]; ok {
+		return
+	}
+	name := r.DisplayName
+	if name == "" {
+		name = r.StableKey
+	}
+	out[id.String()] = name + " (" + string(r.Step) + unscopedNote + ")"
 }
 
 // teamMachineNamer returns the machine-name function of one doctor run:

@@ -34,3 +34,22 @@ func TestAttributeFolders(t *testing.T) {
 		t.Errorf("unattached folder = %+v, want acme/sync sent 1 received 1", got[2])
 	}
 }
+
+// TestAttributeFoldersByClone (I-2): every store's root folder is ".", so
+// the root rows the org folder's sync carried go to the org root store of
+// the same clone, never to the personal store whose root is "." too.
+func TestAttributeFoldersByClone(t *testing.T) {
+	t.Parallel()
+	synced := []folderSync{
+		{name: "me", rep: store.SyncReport{Folder: ".", Clone: "/stores/personal", Received: 2}},
+		{name: "acme", rep: store.SyncReport{Folder: ".", Clone: "/stores/team"}},
+		{name: "acme/org", rep: store.SyncReport{Folder: "org", Clone: "/stores/team", Others: map[string]store.FolderCount{
+			".": {Received: 2},
+		}}},
+	}
+	reports := []Report{{Store: "me", Received: 2}, {Store: "acme"}, {Store: "acme/org"}}
+	got := attributeFolders(reports, synced)
+	if len(got) != 3 || got[0].Received != 2 || got[1].Received != 2 || got[2].Received != 0 {
+		t.Fatalf("reports = %+v, want me 2, acme 2, acme/org 0", got)
+	}
+}

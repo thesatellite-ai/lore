@@ -226,6 +226,17 @@ func (c *caches) Cursor(ctx context.Context, source store.Source) (store.Cursor,
 	return f.Cursor(ctx, source)
 }
 
+// Mirror implements store.MirrorCache (perf3): source's row mirror in the
+// file that caches source; nil when that file cannot be opened, and a read
+// then opens the row files as before.
+func (c *caches) Mirror(source store.Source) store.RowMirror {
+	f, err := c.of(source)
+	if err != nil {
+		return nil
+	}
+	return f.Mirror(source)
+}
+
 // Rebuild implements store.Cache.
 func (c *caches) Rebuild(ctx context.Context, source store.Source) error {
 	f, err := c.of(source)

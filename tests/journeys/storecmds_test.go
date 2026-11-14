@@ -204,8 +204,11 @@ func TestJourneyStoreCommands(t *testing.T) {
 			t.Fatal(err)
 		}
 		r := lee.Lore(parent, "sync").Refused(t)
-		r.Says(t, "store "+tlOrg+": up to date", "store notes-two: offline", "store me: up to date",
-			"1 of 3 stores failed: notes-two", "notes-two: check the network and your access to "+two.SSHURL())
+		// the repo is gone from its address (a rename): H-11 says so and
+		// names set-url, never "offline: check the network"
+		r.Says(t, "store "+tlOrg+": up to date", "store notes-two: FAILED: no git repository at "+two.SSHURL(), "store me: up to date",
+			"1 of 3 stores failed: notes-two", "notes-two: if the store moved or was renamed: lore store set-url --name notes-two --url <new-url>").
+			Never(t, "check the network")
 		var e struct {
 			Error struct{ Code string } `json:"error"`
 		}

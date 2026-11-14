@@ -102,6 +102,29 @@ func TestURLSet(t *testing.T) {
 	}
 }
 
+// TestURLSetConfirmedBeatsSeen (G-17): one clone records the moved remote
+// as "seen, unconfirmed" after the admin's `lore repo set-url` made it the
+// primary; whichever side is newer, the merge keeps the confirmed entry,
+// so the repo still has an open primary address.
+func TestURLSetConfirmedBeatsSeen(t *testing.T) {
+	t.Parallel()
+	base := `[{"url":"git@git.example.test:acme/app.git","kind":"primary","how":"init","from":"2026-11-01"}]`
+	seen := `[{"url":"git@git.example.test:acme/app.git","kind":"primary","how":"init","from":"2026-11-01","to":"2026-11-14"},{"url":"git@git.example.test:acme/app-api.git","kind":"unconfirmed","how":"seen","from":"2026-11-14","by":"act_b"}]`
+	setURL := `[{"url":"git@git.example.test:acme/app.git","kind":"primary","how":"init","from":"2026-11-01","to":"2026-11-14"},{"url":"git@git.example.test:acme/app-api.git","kind":"primary","how":"set-url","from":"2026-11-14","by":"act_a"}]`
+	want := `[{"from":"2026-11-01","how":"init","kind":"primary","to":"2026-11-14","url":"git@git.example.test:acme/app.git"},{"by":"act_a","from":"2026-11-14","how":"set-url","kind":"primary","url":"git@git.example.test:acme/app-api.git"}]`
+	for _, newer := range []side{newerOurs, newerTheirs} {
+		for name, sides := range map[string][2]string{"seen ours": {seen, setURL}, "seen theirs": {setURL, seen}} {
+			got, err := StrategyURLSet(js(t, base), js(t, sides[0]), js(t, sides[1]), newer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if raw(t, got) != want {
+				t.Errorf("%s newer=%v:\ngot  %s\nwant %s", name, newer, raw(t, got), want)
+			}
+		}
+	}
+}
+
 // TestEntriesByID: RESOURCES 3.13 snippet and the strict clash.
 func TestEntriesByID(t *testing.T) {
 	t.Parallel()

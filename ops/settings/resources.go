@@ -179,7 +179,7 @@ type ResListIn struct {
 
 // ResStaleIn is the input of resource.stale.
 type ResStaleIn struct {
-	Days int `json:"days,omitempty" flag:"days" desc:"older than this many days (default 60)"`
+	Days int `json:"days,omitempty" flag:"days" min:"1" desc:"older than this many days (default 60)"`
 }
 
 // defaultStaleDays is resource.stale's --days default (the samples' 60;

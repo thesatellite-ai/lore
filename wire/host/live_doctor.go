@@ -18,6 +18,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -95,7 +96,10 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		// credentials, so doctor names the remote rather than "offline"
 		warn("live writes cannot be pushed: " + why + " (fix the remote's address with `git remote set-url " + s.ref.RemoteName + " <url>`, its folder's permissions or its credentials, as the reason says; the writes wait here)")
 	}
-	if s.blocked != nil {
+	switch {
+	case errors.Is(s.blocked, live.ErrRemoteGoneURLUnknown):
+		warn(liveGoneURLUnknownText + "; writes are stopped: " + liveGoneURLUnknownHint)
+	case s.blocked != nil:
 		warn("the remote live ref was deleted or rewritten; writes are stopped until `lore live restore`")
 	}
 	now := s.clk.Now()
@@ -153,6 +157,14 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
 	}
 	s.doctorHooks(ctx, branch, fix, warn, note)
+	if g := s.doctorGuard(ctx); len(g) > 0 {
+		// H-18: the leak guard being off is what a person must read
+		// first, before rows riding along or fetch times
+		base.Warnings = append(g, base.Warnings...)
+		if base.Status == opsdoctor.StatusHealthy {
+			base.Status = opsdoctor.StatusDegraded
+		}
+	}
 	if out, serr := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--is-shallow-repository"}}); serr == nil && strings.TrimSpace(string(out)) == "true" {
 		// F-7: a shallow clone is the normal CI checkout (GitHub Actions'
 		// fetch-depth: 1), not damage: a note, so doctor stays HEALTHY there
@@ -254,10 +266,27 @@ func (s *liveSession) clientHooksInWorkTree(ctx context.Context, dir string) boo
 	if err != nil || strings.TrimSpace(string(out)) != "true" {
 		return false
 	}
-	rel, rerr := filepath.Rel(s.top, dir)
-	if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return false // outside the work tree (a folder of the person's own)
+	return s.hooksInWorkTree(dir)
+}
+
+// doctorGuard is the leak-guard warnings of doctor (H-18): lore's
+// commit-msg, pre-commit or pre-push block missing in a clone lore wired
+// before, with `lore fix`, then what a scan of the commits no remote has
+// found. Nil when the guard is in place, in a fresh clone (the set-up
+// note covers it), in a client repo whose hooks are tracked files lore
+// never changes (doctorHooks says so), and on the 0.1.17 format.
+func (s *liveSession) doctorGuard(ctx context.Context) []string {
+	dir, _, err := s.hooksFolder(ctx)
+	if err != nil || wire.ProjectFormatOld(s.top) {
+		return nil
 	}
-	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
-	return first != ".git"
+	missing := missingGuardHooks(dir)
+	if len(missing) == 0 || s.neverWired(ctx, dir) || s.clientHooksInWorkTree(ctx, dir) {
+		return nil
+	}
+	out := []string{liveDoctorPrefix + s.guardOffText(ctx, dir, missing) + "; run `lore fix` to restore them"}
+	if found := s.unguardedLeaks(ctx); found != "" {
+		out = append(out, liveDoctorPrefix+found)
+	}
+	return out
 }

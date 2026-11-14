@@ -37,8 +37,10 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -53,6 +55,9 @@ const aliasPlaceholder = "<your-ssh-alias>"
 // it and where it is configured.
 type accessTarget struct {
 	Label, URL, Branch, Where string
+	// Name is what `lore store set-url --name` takes for this store (the
+	// org's name for its org-folder store); "" falls back to Label.
+	Name string
 }
 
 // DoctorStoreAccess runs the check (see the file comment) without fixing.
@@ -94,9 +99,14 @@ func (a *App) accessTargets(ctx context.Context) []accessTarget {
 	var out []accessTarget
 	if cfg, _, err := orgcfg.LoadConfig(a.opts.Home); err == nil && cfg != nil {
 		for _, o := range cfg.Orgs {
+			main := o.OrgFolderStore()
 			for _, sc := range o.Stores {
+				name := sc.ShortName()
+				if main != nil && main.URL == sc.URL {
+					name = o.Name
+				}
 				out = append(out, accessTarget{Label: sc.ShortName(), URL: sc.URL, Branch: sc.Branch,
-					Where: "org " + o.Name + "'s " + orgconf.OrgFileName})
+					Where: "org " + o.Name + "'s " + orgconf.OrgFileName, Name: name})
 			}
 		}
 	}
@@ -300,9 +310,20 @@ func (a *App) unreachableFinding(ctx context.Context, t accessTarget) (DoctorFin
 	if perr == nil {
 		return DoctorFinding{}, false
 	}
+	fix := accessFixText(t.URL, accessRules(a.opts.Home), sshAliasesFor(ctx, t.URL))
+	if gitbackend.ProbeFault(perr) == gitfault.Missing {
+		// H-11: the host answered "no repository": the route works, so an
+		// ssh alias is not the fix; the store moved, was deleted, or this
+		// machine lost access
+		name := t.Name
+		if name == "" {
+			name = t.Label
+		}
+		fix = gitbackend.GoneSteps(name, repourl.Mask(t.URL))
+	}
 	return DoctorFinding{Check: DoctorCheckStoreAccess, Level: DoctorWarning,
 		Message: "store " + t.Label + " (from " + t.Where + "): " + reasonOf(perr), // reasonOf names the masked url and git's telling line
-		Fix:     accessFixText(t.URL, accessRules(a.opts.Home), sshAliasesFor(ctx, t.URL))}, true
+		Fix:     fix}, true
 }
 
 // accessFixText is the fix for an unreachable canonical url: the access

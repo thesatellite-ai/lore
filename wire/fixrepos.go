@@ -56,7 +56,10 @@ const (
 	// skipNoLoreData is a repo a store link names that holds no .lore/:
 	// its notes live in the store folder, and lore fix creates nothing in
 	// a repo lore was never set up in.
-	skipNoLoreData = "no lore data (a store link names it, but it has no .lore folder; lore fix leaves it as it is, lore init sets it up)"
+	// It does not advise lore init: a client repo's link is how lore is
+	// set up there, and init would write into the client's repository
+	// (I-13).
+	skipNoLoreData = "no lore data (a store link names it, but it has no .lore folder; its rows live in the linked store folder, and lore fix leaves it as it is)"
 )
 
 // FixRepos are the repo roots of --all and the folders passed over

@@ -91,11 +91,17 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		w.hookModel(ctx, agent)
 	}
 	m, personal := whoamiMachine(w.opts.Home), whoamiPersonal(ctx, w.opts.Home, optsProjectDir(w.opts))
-	d := whoamiData(s, id, red, agent, m, personal)
+	actor := whoamiActorID(id.ActorKey())
+	if fail == nil {
+		if a := w.reboundActor(ctx); a != "" {
+			actor = a
+		}
+	}
+	d := whoamiData(s, id, actor, red, agent, m, personal)
 	if fail != nil {
 		d.Error = red.str(errs.EnvelopeOf(fail).Error.Message) // the code is in the exit status and the CLI's error line
 	}
-	lines := whoamiLines(s, id, idErr, in.Explain, red, agent, m, personal)
+	lines := whoamiLines(s, id, actor, idErr, in.Explain, red, agent, m, personal)
 	if fail == nil {
 		if l := w.identityContact(ctx); l != "" {
 			d.IdentityContact = red.str(strings.TrimPrefix(l, identityContactPrefix))
@@ -129,6 +135,27 @@ func (w *standaloneWhoami) identityContact(ctx context.Context) string {
 		return ""
 	}
 	return l
+}
+
+// reboundActor is the actor this machine writes as when its key is an
+// identity contact of another actor (TEAM_PROFILES 6.3: an admin added the
+// person's new email to their roster entry), "" otherwise. Before it,
+// whoami printed the id derived from the new email, an actor no row uses,
+// next to the identity-contact line naming the real one (G-14). Best
+// effort, like the other whoami store reads.
+func (w *standaloneWhoami) reboundActor(ctx context.Context) string {
+	if w.app == nil {
+		return ""
+	}
+	app := w.app.boundApp()
+	if app == nil {
+		return ""
+	}
+	st, err := app.rowState(ctx)
+	if err != nil || !st.rebound() {
+		return ""
+	}
+	return st.actor.String()
 }
 
 // movedIdentity is id after an email change made on another machine, as
@@ -291,12 +318,14 @@ func whoamiWarnings(s *orgcfg.Situation, id identity.Resolved) []string {
 }
 
 // whoamiData is the --json data (v0.1.17 whoamiJSON keys).
-func whoamiData(s *orgcfg.Situation, id identity.Resolved, red whoamiRedactor, agent *agentdetect.Result, m, personal string) opswhoami.Data {
+// whoamiData is whoami's --json data; actor is the act_ id writes carry
+// (whoamiActorID of the key, or the rebound actor).
+func whoamiData(s *orgcfg.Situation, id identity.Resolved, actor string, red whoamiRedactor, agent *agentdetect.Result, m, personal string) opswhoami.Data {
 	r := s.Result
 	d := opswhoami.Data{Org: r.OrgName(), MatchedBy: red.str(r.MatchedBy), Rule: int(r.Step), RepoRole: string(r.Role),
 		ProjectID: s.ProjectID, Remotes: nonNilStrs(s.Remotes), Personal: personal,
 		LinkStatus: r.LinkStatus.String(), Warnings: []string{}, Stores: []opswhoami.Store{}, Trace: []opswhoami.Rule{}, Machine: m,
-		Identity: opswhoami.Identity{StableKey: id.StableKey, Name: id.DisplayName, Kind: id.Kind, ActorID: whoamiActorID(id.ActorKey()), Source: id.Source(), Session: os.Getenv(identity.EnvSession)}}
+		Identity: opswhoami.Identity{StableKey: id.StableKey, Name: id.DisplayName, Kind: id.Kind, ActorID: actor, Source: id.Source(), Session: os.Getenv(identity.EnvSession)}}
 	for _, warn := range whoamiWarnings(s, id) {
 		d.Warnings = append(d.Warnings, red.str(warn))
 	}
@@ -416,7 +445,7 @@ func whoamiRepoRow(s *orgcfg.Situation) string {
 // whoamiLines are the human lines (v0.1.17 printWhoami without colour).
 // idErr is the identity error ("missing" line); a refused org
 // (s.ResolveErr) prints "refused" and no identity or repo role.
-func whoamiLines(s *orgcfg.Situation, id identity.Resolved, idErr error, explain bool, red whoamiRedactor, agent *agentdetect.Result, m, personal string) []string {
+func whoamiLines(s *orgcfg.Situation, id identity.Resolved, actor string, idErr error, explain bool, red whoamiRedactor, agent *agentdetect.Result, m, personal string) []string {
 	var out []string
 	row := func(label, value string) { out = append(out, fmt.Sprintf("%-*s %s", whoamiLabelWidth, label, value)) }
 	r := s.Result
@@ -441,7 +470,7 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, idErr error, explain
 	case idErr != nil:
 		row("identity", "missing  "+red.str(idErr.Error()))
 	default:
-		v := fmt.Sprintf("%s <%s>   %s", id.DisplayName, id.StableKey, whoamiActorID(id.ActorKey()))
+		v := fmt.Sprintf("%s <%s>   %s", id.DisplayName, id.StableKey, actor)
 		if id.Handle != "" {
 			v += "  @" + id.Handle
 		}

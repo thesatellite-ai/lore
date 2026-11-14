@@ -181,7 +181,7 @@ type Record struct {
 // accepted and change nothing.
 type SearchIn struct {
 	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these FTS5 columns (repeatable; comments have: body)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows (comments are never archived)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts; comments have no repo scope"`

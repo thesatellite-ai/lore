@@ -98,7 +98,8 @@ func Ops(env kn.Env) []op.Entry {
 		}, o.edit),
 		op.Define(op.Spec{
 			Name: OpArchive, Summary: "Archive a rule (hidden from list, render and search; kept)",
-			Examples:   []op.Example{{Title: "archive one", CLI: "lore rule archive --id rul_<id>", Want: "archived"}},
+			Examples: []op.Example{{Title: "archive one", CLI: "lore rule archive --id rul_<id>", Want: "archived"},
+				{Title: "archive many as one batch (check first with --dry-run)", CLI: "lore rule archive --where 'created_at<2026-01-01' --dry-run", Want: "would archive"}},
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
 		}, o.archive),
 		op.Define(op.Spec{
@@ -293,6 +294,14 @@ type IDIn struct {
 	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
 }
 
+// ArchiveIn is the input of rule.archive: one id, or --where for many as
+// one batch (bug hunt G-7).
+type ArchiveIn struct {
+	ID      string `json:"id,omitempty" arg:"0" desc:"the rule id (rul_…); leave out with --where"`
+	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
+	wheredel.ArchiveFlags
+}
+
 // DeleteIn is the input of rule.delete.
 type DeleteIn struct {
 	ID      string `json:"id,omitempty" arg:"0" desc:"the rule id (rul_…); leave out with --where"`
@@ -359,7 +368,7 @@ type SearchIn struct {
 	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"only master-scoped rows (repo_id IS NULL)"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"search across every repo (ignore --repo)"`
 	Project         string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only rules of this store and its folders, <store>/<folder> (default every attached store)"`
 }
@@ -520,7 +529,18 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 }
 
 // archive sets archived_at.
-func (o ops) archive(ctx context.Context, in IDIn) (WriteOut, error) {
+func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
+	bulkForm, err := wheredel.ArchiveForm(noun.Name, in.ID, in.Where, in.DryRun)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if bulkForm {
+		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun, kn.Now(o.env))
+		if werr != nil {
+			return WriteOut{}, werr
+		}
+		return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, bulk: res.Human}, nil
+	}
 	return o.stamp(ctx, in.ID, kn.Now(o.env), "archived")
 }
 

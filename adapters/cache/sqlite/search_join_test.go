@@ -136,6 +136,28 @@ func TestSearchHitsTokenizer(t *testing.T) {
 	}
 }
 
+// TestSearchTurkishI pins I-9: the dotted and dotless i meet I and İ, so
+// a word is found whichever form the writer and the searcher typed.
+func TestSearchTurkishI(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	c := f.open("c.db")
+	prj := newPrj()
+	tr := newMem()
+	f.apply(c, store.SourceRepo, "1", f.memory(tr, prj, "İSTANBUL ıspanak Iğdır DİYARBAKIR"))
+	for _, q := range []string{"istanbul", "İstanbul", "ISTANBUL", "ıspanak", "ISPANAK", "ispanak", "diyarbakır", "DIYARBAKIR", "ığdır", "igdir"} {
+		hits := must(c.SearchHits(f.ctx, schema.TableMemories, q, 10))
+		if len(hits) != 1 || hits[0].ID != tr {
+			t.Errorf("%q: %v", q, hits)
+			continue
+		}
+		// the snippet shows the row's own letters, not the folded index
+		if plain := strings.NewReplacer(snippetOpen, "", snippetClose, "").Replace(hits[0].Snippet); plain != "İSTANBUL ıspanak Iğdır DİYARBAKIR" {
+			t.Errorf("%q: snippet %q", q, hits[0].Snippet)
+		}
+	}
+}
+
 // TestSearchAcrossSourcesOneFile: one cache file holding two sources
 // searches both and orders by score over all of them (a global bm25 order
 // within the file); the engine merges separate store files itself.

@@ -84,7 +84,7 @@ func PolicyFor(def schema.TableDef) Policy {
 	text := map[string]bool{}
 	strategies := map[string]schema.MergeStrategy{}
 	for _, f := range def.Fields {
-		if f.Kind == value.KindText && len(f.Values) == 0 {
+		if f.Kind == value.KindText && len(f.Values) == 0 && f.Merge != schema.MergeNewest {
 			text[f.Name] = true
 		}
 		if f.Merge != schema.MergeDefault {

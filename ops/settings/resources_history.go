@@ -407,7 +407,7 @@ func shortCommit(c string) string {
 // ResReportIn is the input of resource.report.
 type ResReportIn struct {
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"only this kind (name or knd_ id)"`
-	Days int    `json:"days,omitempty" flag:"days" desc:"stale when last_checked is older than this many days (default 60)"`
+	Days int    `json:"days,omitempty" flag:"days" min:"1" desc:"stale when last_checked is older than this many days (default 60)"`
 	// Offboarding (RES 3.22, OV49-R1): one place's resources, or the ones
 	// whose metadata matches, across every attached store, with the
 	// inbound refs from resources outside that set.

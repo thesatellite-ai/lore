@@ -149,7 +149,7 @@ func strategyMerge(s schema.MergeStrategy, base, ours, theirs value.Value, newer
 	case schema.MergeEntriesByID:
 		v, conflicts, err = StrategyEntriesByID(base, ours, theirs, newer)
 		return v, conflicts, true, err
-	case schema.MergeDefault:
+	case schema.MergeDefault, schema.MergeNewest: // the row rule: the newer side
 	}
 	return nil, nil, false, nil
 }

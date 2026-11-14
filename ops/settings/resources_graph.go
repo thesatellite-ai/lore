@@ -33,7 +33,7 @@ type GraphIn struct {
 	Name       string   `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	Down       bool     `json:"down,omitempty" flag:"down" desc:"follow refs forward: what it depends on (the default)"`
 	Up         bool     `json:"up,omitempty" flag:"up" desc:"follow refs backward: what depends on it"`
-	Depth      int      `json:"depth,omitempty" flag:"depth" desc:"hops to follow (default 3, at most 10)"`
+	Depth      int      `json:"depth,omitempty" flag:"depth" min:"1" desc:"hops to follow (default 3, at most 10)"`
 	Fields     []string `json:"fields,omitempty" flag:"fields" desc:"only these ref fields (repeatable or comma separated)"`
 	NoArchived bool     `json:"no_archived,omitempty" flag:"no-archived" desc:"hide archived resources"`
 }
@@ -41,7 +41,7 @@ type GraphIn struct {
 // ImpactIn is the input of resource.impact (graph --up with links).
 type ImpactIn struct {
 	Name       string   `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
-	Depth      int      `json:"depth,omitempty" flag:"depth" desc:"hops to follow (default 3, at most 10)"`
+	Depth      int      `json:"depth,omitempty" flag:"depth" min:"1" desc:"hops to follow (default 3, at most 10)"`
 	Fields     []string `json:"fields,omitempty" flag:"fields" desc:"only these ref fields (repeatable or comma separated)"`
 	NoArchived bool     `json:"no_archived,omitempty" flag:"no-archived" desc:"hide archived resources"`
 	AllLinks   bool     `json:"all_links,omitempty" flag:"all-links" desc:"also list done tasks and resolved incidents"`

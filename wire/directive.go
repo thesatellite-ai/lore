@@ -56,6 +56,12 @@ func (p repoProbe) Matches(pattern string) []string {
 	return toolprofile.GlobFiles(os.DirFS(p.root), pattern)
 }
 
+// Read implements toolprofile.Reader (a tool file importing another).
+func (p repoProbe) Read(rel string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(p.root, filepath.FromSlash(rel)))
+	return string(data), err == nil
+}
+
 // State implements toolprofile.Probe.
 func (p repoProbe) State(rel string) toolprofile.FileState {
 	data, err := os.ReadFile(filepath.Join(p.root, filepath.FromSlash(rel)))
@@ -196,6 +202,9 @@ func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) [
 		}
 		out = append(out, "· context targets: "+strings.Join(parts, ", ")+" ("+why+")")
 	case toolprofile.ReasonWired, toolprofile.ReasonSetting:
+	}
+	for _, v := range sel.ViaImport { // I-14
+		out = append(out, "· "+v.Note())
 	}
 	key := string(policy.KeyContextTargets)
 	for _, p := range sel.Unwired {

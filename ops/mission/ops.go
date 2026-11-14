@@ -9,6 +9,7 @@ package mission
 import (
 	"context"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/dates"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
@@ -17,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -324,10 +326,10 @@ func (o ShowOut) baseText() string {
 	var b strings.Builder
 	b.WriteString(m.ID + "\n  title:  " + m.Title + "\n  status: " + m.Status + "\n")
 	if !m.StartsAt.IsZero() {
-		b.WriteString("  starts: " + m.StartsAt.UTC().Format(work.DateLayout) + "\n")
+		b.WriteString("  starts: " + dates.DayIn(m.StartsAt, time.Local) + "\n")
 	}
 	if !m.TargetDate.IsZero() {
-		b.WriteString("  target: " + m.TargetDate.UTC().Format(work.DateLayout) + "\n")
+		b.WriteString("  target: " + dates.DayIn(m.TargetDate, time.Local) + "\n")
 	}
 	b.WriteString(m.Estimate.Lines())
 	if m.Body != "" {

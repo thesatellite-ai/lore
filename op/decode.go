@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -288,11 +289,19 @@ func setField(fv reflect.Value, f FieldInfo, vals []string) error {
 		if err != nil {
 			return bad("an integer")
 		}
+		if err := belowMin(f, label, n); err != nil {
+			return err
+		}
 		fv.SetInt(n)
 	case TypeUint:
 		n, err := strconv.ParseUint(s, 10, fv.Type().Bits())
 		if err != nil {
 			return bad("a non-negative integer")
+		}
+		if n <= math.MaxInt64 {
+			if err := belowMin(f, label, int64(n)); err != nil {
+				return err
+			}
 		}
 		fv.SetUint(n)
 	case TypeFloat:
@@ -408,4 +417,16 @@ func jsonKindName(t reflect.Type) string {
 		reflect.Interface, reflect.Pointer, reflect.UnsafePointer:
 	}
 	return "a " + t.String()
+}
+
+// belowMin refuses a given int flag under the field's min tag (G-20): its
+// zero value means "use the default", so a typed 0 must not silently become
+// that default.
+func belowMin(f FieldInfo, label string, n int64) error {
+	if !f.HasMin || n >= f.Min {
+		return nil
+	}
+	m := strconv.FormatInt(f.Min, 10)
+	return errs.New(errs.InvalidInput, label+" must be "+m+" or more").
+		WithHint("pass " + label + " " + m + " or more, or leave " + label + " out for its default")
 }

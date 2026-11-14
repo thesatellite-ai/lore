@@ -239,7 +239,10 @@ func Ops(env Env) []op.Entry {
 			// first rows before any project exists to open (setup.run is the
 			// same shape).
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true,
-			Errors:   []errs.Code{errs.InvalidInput, errs.AlreadyInitialized, errs.AmbiguousID, errs.BadPath, errs.Unsupported, errs.Internal},
+			// MayAsk (I-13): in a client repo it answers E_NEEDS_CONFIRM before
+			// writing lore's files into the client's repository (--yes).
+			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
+			Errors:   []errs.Code{errs.InvalidInput, errs.AlreadyInitialized, errs.AmbiguousID, errs.BadPath, errs.Unsupported, errs.NeedsConfirm, errs.Internal},
 			Examples: []op.Example{{Title: "set up lore in this repository", CLI: "lore repo init --non-interactive --name app"}},
 		}, func(ctx context.Context, in InitIn) (InitOut, error) {
 			h, err := env.RepoInitHost(ctx)

@@ -24,10 +24,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/yamlfmt"
@@ -389,6 +391,11 @@ func linkError(err error) error {
 	case errors.Is(err, orgcfg.ErrNoStoreBranch):
 		return errs.New(errs.InvalidInput, err.Error()).WithHint(hintNoBranch)
 	case errors.Is(err, orgcfg.ErrStoreOffline):
+		if k := gitfault.Classify(err.Error()); k == gitfault.Missing {
+			// G-16: the host answers that there is no repository: the
+			// store moved or was deleted; "retry" never succeeds
+			return errs.New(errs.Offline, strings.Replace(err.Error(), "store is offline", "the store answers that there is no repository", 1)).WithHint(gitbackend.GoneSteps("<org>", ""))
+		}
 		return errs.New(errs.Offline, err.Error()).WithHint("retry when the store is reachable")
 	case errors.Is(err, orgcfg.ErrFolderElsewhere):
 		// --store named one store and the folder lives in another (F13):

@@ -275,7 +275,10 @@ func agWeek1(t *testing.T, j *agJ) {
 	w.AdvanceDays(7)
 	w.Step("week1/second-client", func() {
 		j.globex = m.Clone(j.globexR, "api")
-		m.LoreIn(j.globex, "init", "--non-interactive", "--name=api").OK(t)
+		// I-13: globex is a client repo by the org's repos: pattern, so init
+		// asks first; Dana sets lore up in it on purpose
+		m.LoreIn(j.globex, "init", "--non-interactive", "--name=api").Fails(t, 26, "client repo of "+agOrg)
+		m.LoreIn(j.globex, "init", "--yes", "--non-interactive", "--name=api").OK(t)
 		m.LoreIn(j.globex, "org", "link", agOrg, "--project", agFolderGlobex, "--yes").OK(t)
 		m.LoreIn(j.globex, "memory", "add", "--body", agGlobexNote).OK(t).Says(t, "["+agOrg+"/"+agFolderGlobex+"]")
 		m.LoreIn(j.globex, "task", "add", agGlobexTask, "--to", agOrg).OK(t)

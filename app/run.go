@@ -253,6 +253,7 @@ func run(ctx context.Context, args []string) int {
 	// git's merge.lore.driver calls it (P3-MODEB-4: a host command, not an op).
 	root.AddCommand(hosthooks.MergeDriverCommand(os.Stderr))
 	// The git hook blocks call `lore sync hook <name>` (F6 ride-along).
+	liveRows.OnRewrite(linkRemapHook(runner)) // linkremap.go: commit links follow a rebase (H-8)
 	if sync := find(root, opssync.Noun); sync != nil {
 		sync.AddCommand(liveRows.SyncHookCommand(os.Stdin, refreshHook(rend.h, wd), commitScopeHook(rend.h, wd), commitRenderHook(rend.h)))
 	}

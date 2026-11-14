@@ -358,6 +358,64 @@ type Finder interface {
 	Matches(pattern string) []string
 }
 
+// Reader is the optional upgrade of a Probe that returns the text of a
+// file relative to the repo root (ok false when it cannot be read).
+// Resolve and FromSetup use it to see one tool file importing another
+// (ImportsFile); a Probe without it never drops a target for that.
+type Reader interface {
+	Read(rel string) (text string, ok bool)
+}
+
+// ImportsFile reports whether text has an `@rel` import line (Claude
+// Code's CLAUDE.md starting with `@AGENTS.md`). doctor's double-load check
+// and target selection read imports the same way.
+func ImportsFile(text, rel string) bool {
+	for _, l := range strings.Split(text, "\n") {
+		if strings.TrimSpace(l) == "@"+rel {
+			return true
+		}
+	}
+	return false
+}
+
+// dropImporters splits ps into the profiles to wire and those whose
+// pointer file already imports another kept profile's pointer file. Why
+// (I-14): CLAUDE.md that imports @AGENTS.md loads AGENTS.md's pointer
+// already; a second pointer in CLAUDE.md made Claude Code load LORE.md
+// twice, the state doctor's double-load check warns about.
+func dropImporters(probe Probe, ps []Profile) (kept []Profile, viaImport []ViaImport) {
+	rd, ok := probe.(Reader)
+	if !ok || len(ps) < 2 {
+		return ps, nil
+	}
+	imports := func(a Profile) string {
+		if !a.HasPointerFile() {
+			return ""
+		}
+		text, ok := rd.Read(a.PointerFile)
+		if !ok {
+			return ""
+		}
+		for _, b := range ps {
+			if b.Name != a.Name && b.HasPointerFile() && b.PointerFile != a.PointerFile && ImportsFile(text, b.PointerFile) {
+				return b.PointerFile
+			}
+		}
+		return ""
+	}
+	for _, p := range ps {
+		if via := imports(p); via != "" {
+			viaImport = append(viaImport, ViaImport{Profile: p, Via: via})
+		} else {
+			kept = append(kept, p)
+		}
+	}
+	if len(kept) == 0 { // a cycle of imports: keep them all, doctor says so
+		return ps, nil
+	}
+	return kept, viaImport
+}
+
 // GlobFiles is the regular files in fsys matching the slash pattern
 // (fs.Glob). Probes implement Finder with it over os.DirFS(root), so this
 // package itself touches no file system.
@@ -439,6 +497,47 @@ type Selection struct {
 	// stripped); the caller says so, so the gap is never silent
 	// (DECISION P2-OLDCLI-2, r3-targets).
 	Unlisted []Profile
+	// ViaImport are detected or setup tools left out because their pointer
+	// file imports a chosen target's file, so they load lore's pointer
+	// from there (I-14); the caller says so.
+	ViaImport []ViaImport
+}
+
+// ViaImport is a tool left out of the targets because its pointer file
+// imports Via, a chosen target's pointer file.
+type ViaImport struct {
+	Profile Profile
+	Via     string
+}
+
+// Note is the line init and render print for v.
+func (v ViaImport) Note() string {
+	return v.Profile.PointerFile + " imports @" + v.Via + ", so " + v.Profile.Name + " reads lore's pointer from " + v.Via + "; no second pointer written (it would load LORE.md twice)"
+}
+
+// notImporting is the profiles of ps whose pointer file imports none of
+// targets' pointer files: a tool file found but not wired is offered for
+// wiring only when wiring it would not load lore's pointer twice (I-14).
+func notImporting(probe Probe, ps, targets []Profile) []Profile {
+	rd, ok := probe.(Reader)
+	if !ok {
+		return ps
+	}
+	var out []Profile
+	for _, p := range ps {
+		text, ok := rd.Read(p.PointerFile)
+		imp := false
+		for _, t := range targets {
+			if ok && t.HasPointerFile() && t.PointerFile != p.PointerFile && ImportsFile(text, t.PointerFile) {
+				imp = true
+				break
+			}
+		}
+		if !imp {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // Resolve returns the repo's context targets (see the package doc). TOOL
@@ -470,9 +569,10 @@ func (r *Registry) Resolve(probe Probe) Selection {
 	}
 	switch {
 	case len(wired) > 0:
-		return Selection{Profiles: wired, Reason: ReasonWired, Unwired: present}
+		return Selection{Profiles: wired, Reason: ReasonWired, Unwired: notImporting(probe, present, wired)}
 	case len(detected) > 0:
-		return Selection{Profiles: detected, Reason: ReasonDetected}
+		kept, via := dropImporters(probe, detected)
+		return Selection{Profiles: kept, Reason: ReasonDetected, ViaImport: via}
 	default:
 		return Selection{Profiles: []Profile{r.Fallback()}, Reason: ReasonFallback}
 	}
@@ -577,12 +677,15 @@ func (r *Registry) FromSetup(names []string, base Selection, probe Probe) Select
 			sel.Profiles = append(sel.Profiles, p)
 		}
 	}
+	kept, via := dropImporters(probe, sel.Profiles)
+	sel.Profiles, sel.ViaImport = kept, via
 	unwired := slices.Clone(base.Unwired)
 	if base.Reason == ReasonDetected {
 		unwired = append(unwired, base.Profiles...)
 	}
 	for _, p := range unwired {
-		if !slices.ContainsFunc(sel.Profiles, func(q Profile) bool { return q.Name == p.Name }) && p.HasPointerFile() && probe.State(p.PointerFile) == FilePresent {
+		if !slices.ContainsFunc(sel.Profiles, func(q Profile) bool { return q.Name == p.Name }) && !slices.ContainsFunc(sel.ViaImport, func(q ViaImport) bool { return q.Profile.Name == p.Name }) &&
+			p.HasPointerFile() && probe.State(p.PointerFile) == FilePresent && len(notImporting(probe, []Profile{p}, sel.Profiles)) == 1 {
 			sel.Unwired = append(sel.Unwired, p)
 		}
 	}

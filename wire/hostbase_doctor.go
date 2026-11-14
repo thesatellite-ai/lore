@@ -94,8 +94,9 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	// its own.
 	fixCtx := ctx
 	ctx = engine.WithReadSnapshot(ctx)
-	b.Sync = a.doctorSync(ctx, warn, note) // hostbase_doctor_sync.go (E-GAPS-1 G4)
-	a.doctorPushModes(ctx, warn, note)     // storepushops.go: each store's push mode
+	b.Sync = a.doctorSync(ctx, warn, note)             // hostbase_doctor_sync.go (E-GAPS-1 G4)
+	waits := a.doctorStoreConflicts(ctx, b.Sync, warn) // doctor_store_conflicts.go (I-1)
+	a.doctorPushModes(ctx, warn, note, waits)          // storepushops.go: each store's push mode
 	b.RepoAddresses = a.doctorRepoAddresses(ctx, warn, note)
 	a.doctorDuplicateImports(ctx, warn)
 	a.doctorTaskTree(ctx, warn)
@@ -103,6 +104,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
+	a.doctorStaleLinks(ctx, warn)    // hostbase_doctor_links.go: links on rewritten commits (H-8)
 	a.doctorSignals(ctx, warn, note) // hostbase_doctor_signals.go: expired files only report (a note: they do not change the status)
 	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
 		b.Errors = append(b.Errors, floorErr)

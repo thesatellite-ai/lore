@@ -431,6 +431,9 @@ func (ap setupApplier) applyPersonalStore(ctx context.Context, e onboard.SetupEn
 	if prevNote != "" && !req.DryRun {
 		ap.a.notice(prevNote)
 	}
+	if !req.DryRun && choice == onboard.PersonalStoreLocal {
+		ap.a.notice("setup apply personal_store: " + opssetup.LocalPersonalWarning) // H-17
+	}
 	if !req.DryRun && initURL != "" {
 		if res, err = ap.initPersonalStore(ctx, res, initURL); err != nil {
 			return res, err
@@ -620,6 +623,11 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		}
 		res, err = team.ApplyJoinMember(withApplyingSetup(ctx, e.Name, org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.MemberJoinRequest{Org: org, Store: url, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
+		if err == nil && res.OrgRole == team.OrgRoleAdmin {
+			// I-17: the org's admin joining from another machine gets an
+			// admin setup of the org (member add, team invites work there)
+			e.Kind = onboard.KindAdmin
+		}
 	} else if req.Apply == onboard.ApplyJoin {
 		inv, derr := onboard.DecodeInvite(answerText(ans, onboard.QIDInvite))
 		if derr != nil {

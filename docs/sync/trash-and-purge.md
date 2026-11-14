@@ -10,11 +10,11 @@ The files in `.lore/data` are the truth; the database follows them ([How notes t
 |---|---|
 | `git checkout HEAD -- <file>` | a note's file disappeared and you want it back |
 | `lore trash list`, `lore trash show --id <id>`, then `lore trash restore --id <id>` | a note was deleted (or folded by `lore sync merge-rows`) with a lore command |
-| `lore batch list`, then `lore batch undo --id <bat_id>` | a bulk command (`delete --where`, a bulk edit, an import) did more than you wanted |
+| `lore batch list`, then `lore batch undo --id <bat_id>` | a bulk command (`delete --where`, `archive --where`, a bulk edit, an import) did more than you wanted |
 | `git checkout HEAD -- .lore/data` | the `.lore/data` folder was deleted, or files went missing |
 | `lore trash purge --archived-before <date-or-age> --confirm` | archived notes should be deleted for good, everywhere |
 
-Archiving (`lore memory archive --id <id>`, `lore rule archive --id <id>`, ...) is the normal way to retire a note: it stays in its file with an archive date and stops showing up. Purge is the step after that, for notes that must not come back.
+Archiving (`lore memory archive --id <id>`, `lore rule archive --id <id>`, ...) is the normal way to retire a note: it stays in its file with an archive date and stops showing up. To retire many at once, give a filter instead of an id: `lore memory archive --where 'body~=month 1' --dry-run` counts and lists the matches, and the same command without `--dry-run` archives them all as one batch (`lore batch undo --id <bat_id>` brings them back). Memories, rules, decisions, hotfixes, patterns, prompts, playbooks and snapshots all take `--where` the same way, with the filter keys of `delete --where`. Purge is the step after that, for notes that must not come back.
 
 ## Before you start
 
@@ -39,7 +39,11 @@ $ git add -A && git status --short
 ```
 <!-- /example -->
 
-When the deleting commit is already older, take the file from the commit before it: `git log --diff-filter=D -- .lore/data/memories/<id>.json` names that commit. Notes missing because you switched branches ([Branches: peek and promote](branches-peek-promote.md)) come back by themselves when you switch back, because their files are still on that branch.
+When the deleting commit is already older, take the file from the commit before it: `git log --diff-filter=D -- .lore/data/memories/<id>.json` names that commit. lore names it for you: `lore memory show --id <id>` (any kind's `show`) and `lore trash restore --id <id>` answer an id whose file a commit removed with that commit, its author and the line that brings the file back (`git checkout <commit>^ -- :/.lore/data/memories/<id>.json`, then commit), and `lore trash list --from-history` lists such a note as `removed <date> by <author>` with the same line under it. A purged note never comes back; a removed one does.
+
+A note whose commit a force-push or a rebase dropped (the commit is on no branch any more) is missing the same way. When this clone still has that commit in its reflog (you pulled it before the force-push), the `show` answer names it and the way back: `git cherry-pick <commit>` (or only the file: `git checkout <commit> -- :/<path>`). The author's clone usually still has it too, ahead of the remote. See [Rewriting history](hooks-and-merge-driver.md#rewriting-history-rebase-amend-force-push) for what lore says before and after such a rewrite.
+
+Notes missing because you switched branches ([Branches: peek and promote](branches-peek-promote.md)) come back by themselves when you switch back, because their files are still on that branch.
 
 ## Step 2 — Get back a deleted `.lore/data`
 
@@ -147,7 +151,7 @@ mem_2537…6bbb [retrieved] The demo is on Friday at 10.
 
 ## Step 5 — Undo a bulk delete
 
-Every command that changes many rows at once (`delete --where`, task bulk edits, metadata bulk set, imports, `lore secrets move`) records a **batch** with an id `bat_…`. Alice deletes every memory whose body holds "deploys", checks the trash with `lore trash stats`, finds the batch with `lore batch list`, looks at it with `lore batch show`, and undoes it with `lore batch undo`. Undo restores a delete batch, puts back the rows an edit batch changed, and moves the rows a create batch added to the trash:
+Every command that changes many rows at once (`delete --where`, `archive --where`, task bulk edits, metadata bulk set, imports, `lore secrets move`) records a **batch** with an id `bat_…`. Alice deletes every memory whose body holds "deploys", checks the trash with `lore trash stats`, finds the batch with `lore batch list`, looks at it with `lore batch show`, and undoes it with `lore batch undo`. Undo restores a delete batch, puts back the rows an edit batch changed, and moves the rows a create batch added to the trash:
 
 <!-- example: sync#bulk-delete-and-undo -->
 ```console
@@ -207,7 +211,7 @@ this machine only: local safety copies of rows sync removed (never shared)
 
 ## Pitfalls
 
-- **A removed file is not in the trash.** `lore trash list` shows notes deleted with a lore command (`lore <kind> delete`, `lore sync merge-rows`), and `lore trash restore --id <id>` brings one back with the same id. A file removed with git comes back from git. Prefer `archive` for notes you may still want to read.
+- **A removed file is not in the trash.** `lore trash list` shows notes deleted with a lore command (`lore <kind> delete`, `lore sync merge-rows`), and `lore trash restore --id <id>` brings one back with the same id. A file removed with git comes back from git: `lore trash restore --id <id>` prints the `git checkout` line for it. Prefer `archive` for notes you may still want to read.
 - **`lore trash list --local` is only for copies from v0.1.17.** It lists the safety copies an older lore kept in this machine's `lore.db` when a file disappeared; 0.1.18 adds no new ones. Numbers there (`#4`) are per machine, not row ids.
 - **`lore sync trash` is the old spelling.** It still works in 0.1.18, prints a note that names `lore trash --local`, and goes away in the next release.
 - **Purge only touches archived rows.** A row that is not archived is never purged, however old it is.

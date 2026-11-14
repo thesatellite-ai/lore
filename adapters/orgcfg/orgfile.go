@@ -19,11 +19,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
@@ -141,6 +143,11 @@ func (g *GitLinks) openClone(ctx context.Context, url string, refuseOffline bool
 		return "", "", err
 	}
 	if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil && (refuseOffline || lastFetch(dir).IsZero()) {
+		// git's reason rides along (G-16): a store that answers "no
+		// repository" moved or was deleted, and waiting never fixes it
+		if why := gitfault.Reason(gitStderrOf(ferr)); why != "" {
+			return "", "", fmt.Errorf("%w: %s (%s)", ErrStoreOffline, norm, why)
+		}
 		return "", "", fmt.Errorf("%w: %s", ErrStoreOffline, norm)
 	}
 	return norm, dir, nil
@@ -261,4 +268,21 @@ func (g *GitLinks) ReadSuggestion(ctx context.Context, url, branch string) (Sugg
 		return Suggestion{}, err
 	}
 	return g.suggestionAt(ctx, dir, norm, branch) // orgsource.go
+}
+
+// gitStderrOf is the part of a gitRunEnv error that git itself wrote (from
+// its first "fatal: ", "error: ", "ERROR: " or "remote: " on): the command
+// line before it would push git's reason past gitfault's length bound.
+func gitStderrOf(err error) string {
+	msg := err.Error()
+	at := -1
+	for _, p := range []string{"fatal: ", "error: ", "ERROR: ", "remote: "} {
+		if i := strings.Index(msg, p); i >= 0 && (at < 0 || i < at) {
+			at = i
+		}
+	}
+	if at < 0 {
+		return msg
+	}
+	return msg[at:]
 }

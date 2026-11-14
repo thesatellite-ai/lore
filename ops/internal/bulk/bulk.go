@@ -36,11 +36,14 @@ const (
 	KindResource Kind = "resource"
 	KindImport   Kind = "import"
 	KindSecrets  Kind = "secrets"
+	// KindArchive is `<noun> archive --where` (bug hunt G-7): every
+	// matching row archived as one batch, undone by `lore batch undo`.
+	KindArchive Kind = "archive"
 )
 
 // Kinds lists every kind in CLI_REFERENCE order.
 func Kinds() []Kind {
-	return []Kind{KindTask, KindMeta, KindDelete, KindResource, KindImport, KindSecrets}
+	return []Kind{KindTask, KindMeta, KindDelete, KindResource, KindImport, KindSecrets, KindArchive}
 }
 
 // Valid reports whether k is one of Kinds.

@@ -285,6 +285,10 @@ type dirReport struct {
 	Over     bool   `json:"budget_exceeded"`
 }
 
+// dirShowNote says once how to see a one-line entry in full (the lines
+// carry no pointer of their own, bug hunt G-6).
+const dirShowNote = "_A one-line entry is shortened: `lore show --id <id>` prints its full text._\n"
+
 // buildDirFile renders one folder's text within budget (the folder
 // LORE.md's or the Codex block's), with the same tiers as the root
 // (critical hotfixes full, must rules full then lines, high hotfixes
@@ -312,7 +316,7 @@ func buildDirFile(g dirGroup, plan dirPlan, budget, entryMax int) (string, dirRe
 	if len(high) > 0 {
 		tail.WriteString("## Hotfixes\n\n")
 		for _, h := range high {
-			tail.WriteString(hotfixLine(h))
+			tail.WriteString(hotfixBrief(h, 0))
 		}
 		tail.WriteString("\n")
 	}
@@ -340,11 +344,14 @@ func buildDirFile(g dirGroup, plan dirPlan, budget, entryMax int) (string, dirRe
 	}
 	entries := make([]contextfit.Entry, 0, len(g.Rules))
 	for _, r := range g.Rules {
-		entries = append(entries, contextfit.Entry{ID: r.ID, Full: ruleFull(r), Line: ruleLine(r),
+		entries = append(entries, contextfit.Entry{ID: r.ID, Full: ruleFull(r), Line: ruleBrief(r, 0),
 			Always: r.Activation == schema.RuleActivationAlways, HasSummary: r.Summary != "", Updated: r.Updated, Pin: r.Pin, PinnedAt: r.PinnedAt})
 	}
 	contextfit.Rank(entries)
 	fixed := len(head) + critText.Len() + len(mustHead) + tail.Len() + 1
+	if len(entries)+len(high) > 0 {
+		fixed += len(dirShowNote) // worst case: some entry is a line
+	}
 	res := contextfit.Fit(contextfit.Plan{Budget: budget, EntryMax: entryMax, Fixed: fixed, Must: entries})
 	var b strings.Builder
 	b.WriteString(head)
@@ -367,6 +374,9 @@ func buildDirFile(g dirGroup, plan dirPlan, budget, entryMax int) (string, dirRe
 		b.WriteString("\n")
 	}
 	b.WriteString(tail.String())
+	if rep.MustLine+len(high) > 0 {
+		b.WriteString(dirShowNote)
+	}
 	body := b.String()
 	rep.Bytes = len(body)
 	rep.Over = budget > 0 && rep.Bytes > budget

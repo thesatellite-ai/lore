@@ -4684,6 +4684,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -5104,6 +5122,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -5592,6 +5628,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -6045,10 +6099,10 @@
             "name": "kind",
             "in": "query",
             "required": false,
-            "description": "only batches of this kind: task | meta | delete | resource | import | secrets",
+            "description": "only batches of this kind: task | meta | delete | resource | import | secrets | archive",
             "schema": {
               "type": "string",
-              "description": "only batches of this kind: task | meta | delete | resource | import | secrets"
+              "description": "only batches of this kind: task | meta | delete | resource | import | secrets | archive"
             }
           },
           {
@@ -6945,6 +6999,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -7365,6 +7437,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -7838,6 +7928,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -11189,6 +11297,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -11613,6 +11739,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -12085,6 +12229,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -12854,6 +13016,191 @@
         }
       }
     },
+    "/v1/decisions/archive": {
+      "post": {
+        "operationId": "decision.archive.bulk",
+        "summary": "Archive a decision (hidden from render and search; kept)",
+        "tags": [
+          "decision"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the decision id (dec_…); leave out with --where"
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "accepted for v0.1.17 scripts; the id already names its project"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/decisions/search": {
       "post": {
         "operationId": "decision.search",
@@ -13175,6 +13522,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -13762,6 +14127,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -13891,10 +14274,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the decision id (dec_…)",
+            "description": "the decision id (dec_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the decision id (dec_…)"
+              "description": "the decision id (dec_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -13906,9 +14289,20 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
                   "project": {
                     "type": "string",
                     "description": "accepted for v0.1.17 scripts; the id already names its project"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "additionalProperties": false
@@ -13926,6 +14320,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -14091,6 +14503,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -16009,6 +16439,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -16168,6 +16616,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -16326,6 +16792,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -17439,6 +17923,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -17859,6 +18361,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -18307,6 +18827,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -19313,6 +19851,191 @@
         }
       }
     },
+    "/v1/hotfixes/archive": {
+      "post": {
+        "operationId": "hotfix.archive.bulk",
+        "summary": "Archive a hotfix (hidden from render and search; kept)",
+        "tags": [
+          "hotfix"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the hotfix id (hfx_…); leave out with --where"
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "accepted for v0.1.17 scripts; the id already names its project"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/hotfixes/search": {
       "post": {
         "operationId": "hotfix.search",
@@ -19630,6 +20353,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -20185,6 +20926,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -20314,10 +21073,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the hotfix id (hfx_…)",
+            "description": "the hotfix id (hfx_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the hotfix id (hfx_…)"
+              "description": "the hotfix id (hfx_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -20329,9 +21088,20 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
                   "project": {
                     "type": "string",
                     "description": "accepted for v0.1.17 scripts; the id already names its project"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "additionalProperties": false
@@ -20349,6 +21119,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -20514,6 +21302,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -21695,6 +22501,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -22115,6 +22939,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -22633,6 +23475,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -23342,6 +24202,173 @@
                     "sha",
                     "entity_table",
                     "entity_id"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/links/remap": {
+      "post": {
+        "operationId": "link.remap",
+        "summary": "Move commit links from rewritten commits to their new shas (a rebase or an amend; the post-rewrite hook runs it)",
+        "tags": [
+          "link"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pairs": {
+                    "type": "array",
+                    "description": "a rewritten commit: \u003cold\u003e=\u003cnew\u003e (repeatable; the post-rewrite hook passes git's map)",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "pairs"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "entity_id": {
+                            "type": "string"
+                          },
+                          "entity_table": {
+                            "type": "string"
+                          },
+                          "from": {
+                            "type": "string"
+                          },
+                          "new_sha": {
+                            "type": "string"
+                          },
+                          "old_sha": {
+                            "type": "string"
+                          },
+                          "to": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to",
+                          "entity_table",
+                          "entity_id",
+                          "old_sha",
+                          "new_sha"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "count"
                   ]
                 }
               }
@@ -27466,6 +28493,193 @@
         }
       }
     },
+    "/v1/memories/archive": {
+      "post": {
+        "operationId": "memory.archive.bulk",
+        "summary": "Archive a memory (hidden from list and search; kept)",
+        "tags": [
+          "memory"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the memory id (mem_…); leave out with --where"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "carried_meta": {
+                      "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memories/search": {
       "post": {
         "operationId": "memory.search",
@@ -28542,10 +29756,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the memory id (mem_…)",
+            "description": "the memory id (mem_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the memory id (mem_…)"
+              "description": "the memory id (mem_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -28556,6 +29770,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -39431,6 +40658,205 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/patterns/archive": {
+      "post": {
+        "operationId": "pattern.archive.bulk",
+        "summary": "Archive a pattern (soft-delete via archived_at)",
+        "tags": [
+          "pattern"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the pattern id (pat_…); leave out with --where"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -39851,6 +41277,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -40367,6 +41811,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -40496,10 +41958,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the pattern id (pat_…)",
+            "description": "the pattern id (pat_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the pattern id (pat_…)"
+              "description": "the pattern id (pat_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -40510,6 +41972,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -40525,6 +42000,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -40684,6 +42177,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -43858,6 +45369,205 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/playbooks/archive": {
+      "post": {
+        "operationId": "playbook.archive.bulk",
+        "summary": "Archive a playbook (soft-delete via archived_at)",
+        "tags": [
+          "playbook"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the playbook id (pbk_…); leave out with --where"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -44278,6 +45988,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -44780,6 +46508,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -44909,10 +46655,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the playbook id (pbk_…)",
+            "description": "the playbook id (pbk_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the playbook id (pbk_…)"
+              "description": "the playbook id (pbk_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -44923,6 +46669,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -44938,6 +46697,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -45097,6 +46874,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -48261,6 +50056,205 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/prompts/archive": {
+      "post": {
+        "operationId": "prompt.archive.bulk",
+        "summary": "Archive a prompt (soft-delete via archived_at)",
+        "tags": [
+          "prompt"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the prompt id (prm_…); leave out with --where"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -48681,6 +50675,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -49172,6 +51184,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -49301,10 +51331,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the prompt id (prm_…)",
+            "description": "the prompt id (prm_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the prompt id (prm_…)"
+              "description": "the prompt id (prm_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -49315,6 +51345,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -49330,6 +51373,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -49489,6 +51550,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -51473,6 +53552,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "additionalProperties": false
@@ -51561,6 +53644,16 @@
           },
           "409": {
             "description": "E_ALREADY_INITIALIZED, E_AMBIGUOUS_ID, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -62130,6 +64223,191 @@
         }
       }
     },
+    "/v1/rules/archive": {
+      "post": {
+        "operationId": "rule.archive.bulk",
+        "summary": "Archive a rule (hidden from list, render and search; kept)",
+        "tags": [
+          "rule"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the rule id (rul_…); leave out with --where"
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "accepted for v0.1.17 scripts; the id already names its project"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/rules/search": {
       "post": {
         "operationId": "rule.search",
@@ -63220,10 +65498,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the rule id (rul_…)",
+            "description": "the rule id (rul_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the rule id (rul_…)"
+              "description": "the rule id (rul_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -63235,9 +65513,20 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
                   "project": {
                     "type": "string",
                     "description": "accepted for v0.1.17 scripts; the id already names its project"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "additionalProperties": false
@@ -68195,6 +70484,9 @@
                     "here": {
                       "type": "object",
                       "properties": {
+                        "client_org": {
+                          "type": "string"
+                        },
                         "detail": {
                           "type": "string"
                         },
@@ -74920,6 +77212,205 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_SECRET_DETECTED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/snapshots/archive": {
+      "post": {
+        "operationId": "snapshot.archive.bulk",
+        "summary": "Archive a snapshot (soft-delete via archived_at)",
+        "tags": [
+          "snapshot"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "the snapshot id (snp_…); leave out with --where"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -75340,6 +77831,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -75774,10 +78283,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the snapshot id (snp_…)",
+            "description": "the snapshot id (snp_…); leave out with --where",
             "schema": {
               "type": "string",
-              "description": "the snapshot id (snp_…)"
+              "description": "the snapshot id (snp_…); leave out with --where"
             },
             "x-lore-field": "id"
           }
@@ -75788,6 +78297,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --where: count and list what would be archived, write nothing"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "bulk archive: every live row matching this filter (field=value, field~=text, created_at\u003c2026-06-01; repeatable, all must match), one batch",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -75803,6 +78325,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -75962,6 +78502,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -80026,6 +82584,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -80450,6 +83026,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -80926,6 +83520,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -93578,7 +96190,7 @@
                   },
                   "commitment": {
                     "type": "string",
-                    "description": "accepted | proposed | someday (default accepted)"
+                    "description": "accepted | proposed | someday (default accepted for a person; an agent must pass it, a sub-task inherits its parent's)"
                   },
                   "defer_until": {
                     "type": "string",
@@ -99018,6 +101630,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "already_done": {
+                      "type": "boolean"
+                    },
+                    "done_by": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -99403,6 +102021,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "already_done": {
+                      "type": "boolean"
+                    },
+                    "done_by": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -99675,6 +102299,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "already_done": {
+                      "type": "boolean"
+                    },
+                    "done_by": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -102359,6 +104989,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -102779,6 +105427,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -103248,6 +105914,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -103853,6 +106537,9 @@
                         "type": "string"
                       }
                     },
+                    "from": {
+                      "type": "string"
+                    },
                     "pending": {
                       "type": "array",
                       "items": {
@@ -104094,6 +106781,9 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "from": {
+                      "type": "string"
                     },
                     "pending": {
                       "type": "array",
@@ -104569,6 +107259,9 @@
                         "type": "string"
                       }
                     },
+                    "from": {
+                      "type": "string"
+                    },
                     "pending": {
                       "type": "array",
                       "items": {
@@ -105002,6 +107695,251 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "team": {
+                      "type": "object",
+                      "properties": {
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "created_by": {
+                          "type": "string"
+                        },
+                        "display_name": {
+                          "type": "string"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "left_at": {
+                          "type": "string"
+                        },
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "display_name": {
+                                "type": "string"
+                              },
+                              "handle": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "expires_on": {
+                                "type": "string"
+                              },
+                              "invite": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "invite",
+                              "expires_on"
+                            ]
+                          }
+                        },
+                        "updated_by": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "handle",
+                        "members"
+                      ]
+                    },
+                    "unchanged": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "verb": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "where": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "team",
+                    "verb",
+                    "where"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_EMPTY_BODY, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STATUS_CHANGE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/teams/rename": {
+      "post": {
+        "operationId": "team.rename",
+        "summary": "Change a team's @handle; tasks assigned to it and pending invites naming it follow",
+        "tags": [
+          "team"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "description": "the team's @handle now (or its tem_ id)"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "the new @handle"
+                  }
+                },
+                "required": [
+                  "handle",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "from": {
+                      "type": "string"
                     },
                     "pending": {
                       "type": "array",
@@ -105779,6 +108717,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -106203,6 +109159,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -106804,6 +109778,9 @@
                           "dependent": {
                             "type": "boolean"
                           },
+                          "git_restore": {
+                            "type": "string"
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -106815,6 +109792,9 @@
                           },
                           "reason": {
                             "type": "string"
+                          },
+                          "removed_by_commit": {
+                            "type": "boolean"
                           },
                           "store": {
                             "type": "string"
@@ -107081,6 +110061,9 @@
                           "dependent": {
                             "type": "boolean"
                           },
+                          "git_restore": {
+                            "type": "string"
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -107092,6 +110075,9 @@
                           },
                           "reason": {
                             "type": "string"
+                          },
+                          "removed_by_commit": {
+                            "type": "boolean"
                           },
                           "store": {
                             "type": "string"
@@ -107221,7 +110207,7 @@
                 "properties": {
                   "from_history": {
                     "type": "boolean",
-                    "description": "refused: a purged row never comes back; read it with trash show --from-history"
+                    "description": "refused: a purged row never comes back (read it with trash show --from-history); a row a commit removed gets the git command that brings it back"
                   },
                   "local": {
                     "type": "boolean",
@@ -107378,6 +110364,9 @@
                           "dependent": {
                             "type": "boolean"
                           },
+                          "git_restore": {
+                            "type": "string"
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -107389,6 +110378,9 @@
                           },
                           "reason": {
                             "type": "string"
+                          },
+                          "removed_by_commit": {
+                            "type": "boolean"
                           },
                           "store": {
                             "type": "string"
@@ -107749,6 +110741,9 @@
                         "dependent": {
                           "type": "boolean"
                         },
+                        "git_restore": {
+                          "type": "string"
+                        },
                         "id": {
                           "type": "string"
                         },
@@ -107760,6 +110755,9 @@
                         },
                         "reason": {
                           "type": "string"
+                        },
+                        "removed_by_commit": {
+                          "type": "boolean"
                         },
                         "store": {
                           "type": "string"
@@ -110230,6 +113228,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -110650,6 +113666,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -111123,6 +114157,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -111629,6 +114681,24 @@
                     "id": {
                       "type": "string"
                     },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
+                    },
                     "store": {
                       "type": "string"
                     },
@@ -112049,6 +115119,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"
@@ -112522,6 +115610,24 @@
                   "properties": {
                     "id": {
                       "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "store"
+                        ]
+                      }
                     },
                     "store": {
                       "type": "string"

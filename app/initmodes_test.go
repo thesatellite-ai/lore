@@ -4,7 +4,7 @@ package app
 // AGENTS.md and .gitignore at -rw------- and .lore at drwxr-x---, though
 // every one of them is committed and read by whoever clones the repo; and
 // the setup's chosen tool (Claude Code) got AGENTS.md instead of CLAUDE.md.
-// Pins: what init writes in the repo is 0644 (folders 0755), and
+// Pins: what init writes in the repo is at least 0644 (folders 0755), and
 // `lore init --target claude_code` (the setup page's fix for a setup that
 // chose Claude Code) writes CLAUDE.md, not AGENTS.md.
 
@@ -16,7 +16,9 @@ import (
 	"testing"
 )
 
-// committedFileMode and committedDirMode are git's usual work-tree modes.
+// committedFileMode and committedDirMode are the least of git's usual
+// work-tree modes: lore writes 0666/0777 less the umask, as git checks
+// files out (I-11), so under umask 002 a file is 0664; never fewer bits.
 const (
 	committedFileMode fs.FileMode = 0o644
 	committedDirMode  fs.FileMode = 0o755
@@ -33,13 +35,13 @@ func TestInitWritesCommittedFilesShareable(t *testing.T) {
 	files = append(files, relAll(t, root, rowFiles(t, root, "projects"))...)
 	files = append(files, relAll(t, root, rowFiles(t, root, "repos"))...)
 	for _, f := range files {
-		if got := modeOf(t, filepath.Join(root, f)); got != committedFileMode {
-			t.Errorf("%s mode %v, want %v (committed: everyone who clones reads it)", f, got, committedFileMode)
+		if got := modeOf(t, filepath.Join(root, f)); got&committedFileMode != committedFileMode || got&0o111 != 0 {
+			t.Errorf("%s mode %v, want at least %v and no x bit (committed: everyone who clones reads it)", f, got, committedFileMode)
 		}
 	}
 	for _, d := range []string{".lore", ".lore/data", ".lore/data/projects"} {
-		if got := modeOf(t, filepath.Join(root, d)); got != committedDirMode {
-			t.Errorf("%s mode %v, want %v", d, got, committedDirMode)
+		if got := modeOf(t, filepath.Join(root, d)); got&committedDirMode != committedDirMode {
+			t.Errorf("%s mode %v, want at least %v", d, got, committedDirMode)
 		}
 	}
 }

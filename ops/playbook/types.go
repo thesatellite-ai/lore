@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/content"
+	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -113,6 +114,13 @@ type IDIn struct {
 	ID string `json:"id" arg:"0" desc:"the playbook id (pbk_…)"`
 }
 
+// ArchiveIn is the input of playbook.archive: one id, or --where for many as
+// one batch (bug hunt G-7).
+type ArchiveIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the playbook id (pbk_…); leave out with --where"`
+	wheredel.ArchiveFlags
+}
+
 // DeleteIn is the input of playbook.delete.
 type DeleteIn struct {
 	ID     string `json:"id" arg:"0" desc:"the playbook id (pbk_…)"`
@@ -162,7 +170,7 @@ type EditIn struct {
 type SearchIn struct {
 	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT"`
 	Columns         []string `json:"columns,omitempty" flag:"column" desc:"restrict MATCH to these full-text fields (repeatable)"`
-	Limit           int      `json:"limit,omitempty" flag:"limit" desc:"max hits to return (default 20)"`
+	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max hits to return (default 20)"`
 	IncludeArchived bool     `json:"include_archived,omitempty" flag:"include-archived" desc:"include archived rows"`
 	AllRepos        bool     `json:"all_repos,omitempty" flag:"all-repos" desc:"accepted for v0.1.17 scripts (playbooks are project-wide)"`
 	MasterOnly      bool     `json:"master_only,omitempty" flag:"master-only" desc:"accepted for v0.1.17 scripts (playbooks are project-wide)"`

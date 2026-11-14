@@ -9,8 +9,10 @@ package trash
 //	    --by, --to)
 //	show <id> --from-history ─► the same rows ─► the last content, decoded
 //	    (sensitive fields hidden unless --show-sensitive, 3.11)
-//	restore <id> --from-history ─► E_PURGED, always (DQ4: a purged id never
-//	    comes back; add what you need as a new row, which is scanned)
+//	restore <id> --from-history ─► E_PURGED for a purged row (DQ4: a purged
+//	    id never comes back; add what you need as a new row, which is
+//	    scanned); E_NOT_FOUND naming the git checkout for a row a commit
+//	    removed (H-14: a git rm is no purge, git brings the file back)
 
 import (
 	"context"
@@ -48,6 +50,13 @@ type HistoryRow struct {
 	// Uncommitted: the purge or delete is in the working tree, not
 	// committed yet; Commit is HEAD, which still holds the content.
 	Uncommitted bool
+	// Removed: the row file was removed by a commit (a git rm, or an
+	// older lore's hard delete), not purged (H-14). RemovedBy is that
+	// commit's author name and GitRestore the git command that puts the
+	// file back.
+	Removed    bool
+	RemovedBy  string
+	GitRestore string
 }
 
 // HistoryReader is the optional Env upgrade --from-history reads through
@@ -73,7 +82,11 @@ func (o ops) historyRows(ctx context.Context) ([]HistoryRow, error) {
 
 // historyItem is one listed history row; r is its decoded last content.
 func historyItem(h HistoryRow) (Item, row.Row, bool) {
-	it := Item{ID: h.ID, Table: h.Table.String(), Store: string(h.Store), DeletedBy: h.PurgedBy, at: h.PurgedAt}
+	it := Item{ID: h.ID, Table: h.Table.String(), Store: string(h.Store), DeletedBy: h.PurgedBy, at: h.PurgedAt,
+		Removed: h.Removed, GitRestore: h.GitRestore}
+	if h.Removed && h.RemovedBy != "" {
+		it.DeletedBy = h.RemovedBy // the commit's author (H-14: never "by ?")
+	}
 	if it.DeletedBy == "" {
 		it.DeletedBy = unknownBy
 	}
@@ -99,7 +112,7 @@ func historyItem(h HistoryRow) (Item, row.Row, bool) {
 	}
 	it.Title = titleOf(r)
 	if h.PurgedBy == "" && it.Title == "" {
-		it.Title = "(hard-deleted by an older lore)"
+		it.Title = "(removed by a commit)"
 	}
 	return it, r, true
 }
@@ -158,9 +171,42 @@ func (o ops) showHistory(ctx context.Context, in ShowIn) (ShowOut, error) {
 		WithHint("lore trash list --from-history")
 }
 
-// purgedForever is restore --from-history: always E_PURGED (DQ4).
-func purgedForever(id string) error {
+// restoreHistory is restore --from-history: E_PURGED for a purged row
+// (DQ4), the git command for a row a commit removed (H-14).
+func (o ops) restoreHistory(ctx context.Context, id string) error {
 	id = strings.TrimSpace(id)
+	if err := o.removedByCommit(ctx, id); err != nil {
+		return err
+	}
 	return errs.New(errs.Purged, "trash: "+id+" was purged; purged rows never come back (DQ4)").
 		WithHint("read it: lore trash show --id " + id + " --from-history; then add what you still need as a new row")
+}
+
+// removedByCommit is the answer for an id whose row file a commit
+// removed (a git rm, not a lore delete, so it is not in the trash): a
+// not-found that names the commit and the git command that brings the
+// file back (H-14). nil when the history has no such row, or cannot be
+// read here (the caller's own answer stands).
+func (o ops) removedByCommit(ctx context.Context, id string) error {
+	h, ok := upgrade.As[HistoryReader](o.env)
+	if !ok {
+		return nil
+	}
+	hs, err := h.PurgedHistory(ctx)
+	if err != nil {
+		return nil // no readable history (a shallow clone, no checkout): nothing to add
+	}
+	for _, r := range hs {
+		if r.ID != id || !r.Removed || r.GitRestore == "" {
+			continue
+		}
+		it, _, _ := historyItem(r)
+		sha := r.Commit
+		if len(sha) > shortSHA {
+			sha = sha[:shortSHA]
+		}
+		return errs.New(errs.NotFound, "trash: "+id+" is not in the trash: its file was removed by commit "+sha+" by "+it.DeletedBy+" (a git rm, not a lore delete)").
+			WithHint("bring it back: " + r.GitRestore + ", then commit")
+	}
+	return nil
 }

@@ -23,7 +23,7 @@ import (
 // edited its .gitignore before being refused).
 var storeOnlyOps = []string{opssetup.OpTeamInvite, opssetup.OpTeamInviteList, opssetup.OpTeamInviteRevoke, opssetup.OpTeamInviteResend,
 	profilestore.OpStaffAdd, profilestore.OpStaffList, profilestore.OpStaffShow, profilestore.OpStaffEdit, profilestore.OpStaffRemove,
-	profilestore.OpTeamAdd, profilestore.OpTeamList, profilestore.OpTeamShow, profilestore.OpTeamRemove, profilestore.OpTeamMemberAdd, profilestore.OpTeamMemberRemove}
+	profilestore.OpTeamAdd, profilestore.OpTeamList, profilestore.OpTeamShow, profilestore.OpTeamRemove, profilestore.OpTeamRename, profilestore.OpTeamMemberAdd, profilestore.OpTeamMemberRemove}
 
 // leavesWorkRepo reports whether the operation name changes only a store
 // or this machine's files, never the repo it runs in: every store

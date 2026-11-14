@@ -41,3 +41,21 @@ func TestRewrittenErrorNamesTheBackup(t *testing.T) {
 		})
 	}
 }
+
+// TestRewrittenErrorURLUnknownNamesTheMove (G-1): when the url of the last
+// sync was not recorded, the refusal says the repo may have moved and the
+// hint names `lore live restore` to publish the rows on the new remote.
+func TestRewrittenErrorURLUnknownNamesTheMove(t *testing.T) {
+	cause := fmt.Errorf("%w (local copy kept as %s)", live.ErrRemoteGoneURLUnknown, live.RefBackupPrefix+"20261106T051000Z")
+	err := rewrittenError(errs.ReadOnly, cause)
+	var e *errs.Error
+	if !errors.As(err, &e) || !errors.Is(err, live.ErrRemoteRewritten) {
+		t.Fatalf("%v", err)
+	}
+	if !strings.Contains(e.Message, "moved to a new remote url") || !strings.Contains(e.Message, "kept as "+live.RefBackupPrefix) || !strings.Contains(e.Hint, "lore live restore") {
+		t.Fatalf("message %q hint %q", e.Message, e.Hint)
+	}
+	if e := errLiveBlocked(cause); !strings.Contains(e.Error(), "moved to a new remote url") {
+		t.Fatalf("errLiveBlocked: %v", e)
+	}
+}

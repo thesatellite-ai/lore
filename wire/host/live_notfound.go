@@ -195,6 +195,12 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 					}
 					return explained
 				}
+				// H-7, H-14: a row file git still has off this branch's
+				// tip (a git rm, a force-push or a rebase that dropped
+				// it) gets the git command that brings it back.
+				if why := rowFileHint(ctx, repo, id, mainDataPath(folder, table+"/"+id+rowFileExt)); why != "" {
+					return e.WithHint(why)
+				}
 				remote, branch = s.ref.RemoteName, s.defaultBranch(ctx)
 				upToDate = holdsBranch(ctx, repo, remote, branch)
 			}

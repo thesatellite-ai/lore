@@ -59,7 +59,7 @@ func TestSyncStatus_StoreDoctorChecksAttachedStores(t *testing.T) {
 	c.MustLore("store", "init", "notes", w.Remote(syncSlugStore).URL(), "--yes")
 	c.MustLore("memory", "list", "--store", "notes")
 	doc := c.MustLore("store", "doctor")
-	doc.Says(t, "stores this repo and machine use:", "✓ notes (stores.yaml, git)", "ahead 0, behind 0 of origin/", "v0.1.17 org stores")
+	doc.Says(t, "stores this repo and machine use:", "✓ notes (stores.yaml, git)", "ahead 0, behind 0 of origin/", "clones of the org stores in ~/.lore/config.yaml")
 	if strings.Contains(doc.Stdout, "direct pushes") || strings.Contains(doc.Stdout, "no org stores configured") {
 		t.Fatalf("store doctor still prints the old lines:\n%s", doc.Stdout)
 	}

@@ -214,7 +214,11 @@ func (b *storePush) sayWaiting(ctx context.Context) {
 	if gitbackend.RemoteResetAt(gb.Dir()) {
 		// B2-32: a reset store's commits are not pushed by a sync or write
 		// (gitbackend remotereset.go): say so, with the two ways out.
-		_, _ = fmt.Fprintln(b.notes, ResetWaitingLine(cloneStoreName(b.name), n, gitbackend.OriginAt(gb.Dir())))
+		line := ResetWaitingLine(cloneStoreName(b.name), n, gitbackend.OriginAt(gb.Dir()))
+		if gitbackend.RewoundAt(gb.Dir()) {
+			line = RewoundWaitingLine(cloneStoreName(b.name), n, gitbackend.OriginAt(gb.Dir()))
+		}
+		_, _ = fmt.Fprintln(b.notes, line)
 	} else {
 		_, _ = fmt.Fprintln(b.notes, WaitingLine(cloneStoreName(b.name), n))
 	}
@@ -295,6 +299,13 @@ func (w *waitedClones) first(dir string, req requestID) bool {
 // WaitingLine is what a read says about commits that wait to be pushed.
 func WaitingLine(storeName string, n int) string {
 	return "lore: store " + storeName + ": " + strconv.Itoa(n) + " local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)"
+}
+
+// RewoundWaitingLine is WaitingLine for a store whose remote branch
+// someone rewound (H-9): the commits it dropped stay here and no sync
+// pushes them back until the person picks a way out.
+func RewoundWaitingLine(storeName string, n int, url string) string {
+	return "lore: store " + storeName + ": the store at " + url + " was rewritten by someone (its branch moved back); " + strconv.Itoa(n) + " local commit(s) are not on it and lore will not push them back on its own: put them back with `lore store push --restore --store " + url + "`, or take the rewrite with `lore store forget --url " + url + " --yes`, then `lore sync`"
 }
 
 // ResetWaitingLine is WaitingLine for a store whose remote lore found
