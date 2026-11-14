@@ -49,7 +49,7 @@ func TestJourneyArgShapes(t *testing.T) {
 	w.Step("day2/done-with-a-commit-says-if-it-is-linked", func() {
 		sha := repo.Git("rev-parse", "--short=7", "HEAD")
 		lap.LoreIn(repo, "task", "done", "--id", id, "--commit", sha, "--no-lesson").OK(t).
-			Says(t, "not linked to the task; link it with: lore link add --entity "+id+" --commit "+sha)
+			Says(t, "not linked to the task; link it with: lore link add --entity "+id+" --commit "+repo.Head()) // devco:M-5: the full sha --commit names
 		lap.LoreIn(repo, "link", "add", "--entity", id, "--commit", sha).OK(t)
 		lap.LoreIn(repo, "commit", "show", sha).OK(t).Says(t, "tasks/"+id)
 	})

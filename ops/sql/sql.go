@@ -34,6 +34,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -279,7 +280,7 @@ func (o RunOut) tableText() string {
 	for _, line := range cells {
 		for i, c := range line {
 			if i < len(widths) {
-				widths[i] = max(widths[i], utf8.RuneCountInString(c))
+				widths[i] = max(widths[i], textwidth.Width(c))
 			}
 		}
 	}
@@ -291,7 +292,7 @@ func (o RunOut) tableText() string {
 			}
 			b.WriteString(c)
 			if i < len(line)-1 && i < len(widths) {
-				b.WriteString(strings.Repeat(" ", widths[i]-utf8.RuneCountInString(c)))
+				b.WriteString(strings.Repeat(" ", widths[i]-textwidth.Width(c)))
 			}
 		}
 		b.WriteString("\n")

@@ -3,6 +3,8 @@ package task_test
 import (
 	"encoding/json"
 	"github.com/thesatellite-ai/lore/ops/content/contenttest"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -56,8 +58,10 @@ func TestTextMatchesV017(t *testing.T) {
 	check("done --pr", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+second+`","pr":12}`)),
 		"✓ tsk_ID done (pr #12); waiting for merge\n  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)\n")
 	third := add(h, "Third", "")
-	check("done --commit --lesson", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+third+`","commit":"abcdef1234567","lesson":"learned x"}`)),
-		"✓ tsk_ID done (commit abcdef1, not linked to the task; link it with: lore link add --entity tsk_ID --commit abcdef1234567); waiting for merge\n  lesson → mem_ID\n") // A-11: says the commit is not linked
+	// Delta (devco:M-5): --commit HEAD is recorded as the full sha it names.
+	sha := repoCommit(t, h.Repo)
+	check("done --commit --lesson", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+third+`","commit":"HEAD","lesson":"learned x"}`)),
+		"✓ tsk_ID done (commit "+sha[:7]+", not linked to the task; link it with: lore link add --entity tsk_ID --commit "+sha+"); waiting for merge\n  lesson → mem_ID\n") // A-11: says the commit is not linked
 	fourth := add(h, "Fourth", "")
 	check("done", opstest.Text(h.Must(opstask.OpDone, `{"id":"`+fourth+`"}`)),
 		"✓ tsk_ID done\n  learned something? `lore memory add --body \"…\"` (or pass --lesson next time)\n")
@@ -481,9 +485,10 @@ func TestStartDoneStamps(t *testing.T) {
 		t.Errorf("start: %v", r.Fields)
 	}
 	h.Fails(opstask.OpDone, `{"id":"`+id+`","pr":-1}`, errs.InvalidInput)
-	h.Must(opstask.OpDone, `{"id":"`+id+`","pr":7,"commit":" abc123 "}`)
+	sha := repoCommit(t, h.Repo)
+	h.Must(opstask.OpDone, `{"id":"`+id+`","pr":7,"commit":" `+sha[:7]+` "}`)
 	_, r = get(h, schema.TableTasks, id)
-	if field(r, "status") != "done" || field(r, "completed_at") == "" || field(r, "done_pr") != "7" || field(r, "done_commit") != "abc123" || field(r, "done_by") != opstest.Actor {
+	if field(r, "status") != "done" || field(r, "completed_at") == "" || field(r, "done_pr") != "7" || field(r, "done_commit") != sha || field(r, "done_by") != opstest.Actor {
 		t.Errorf("done: %v", r.Fields)
 	}
 	org := addID(h, h.Must(opstask.OpAdd, `{"title":"o","to":"`+orgStore+`"}`))
@@ -506,4 +511,25 @@ func sortedCopy(s []string) []string {
 		}
 	}
 	return out
+}
+
+// repoCommit makes one commit in the harness repo and returns its full sha
+// (task done --commit resolves the value in that repo, devco:M-5).
+func repoCommit(t *testing.T, repo string) string {
+	t.Helper()
+	if err := os.WriteFile(repo+"/work.txt", []byte(t.Name()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.test"}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("add", "work.txt")
+	run("commit", "-q", "--no-verify", "-m", "work")
+	return run("rev-parse", "HEAD")
 }

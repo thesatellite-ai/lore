@@ -32,6 +32,7 @@ import (
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -454,6 +455,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	// 6.2.3 / D10: --scope picks the store, repo and folder; --overrides
 	// names the wider rule this one replaces in its scope.
+	if err := opsscope.RefuseLive(in.Scope, in.Live, in.NoLive); err != nil {
+		return AddOut{}, err
+	}
 	scopeLabel, sw, err := knscope.ForAdd(ctx, o.env, noun, in.Scope, in.Overrides, &c)
 	if err != nil {
 		return AddOut{}, err

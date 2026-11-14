@@ -36,7 +36,7 @@ Sometimes lore cannot tell whether the repo is a client repo: the store cannot b
 
 In a client repo, `lore sync` and reads write nothing into the checkout: the repo gets no repo id in `.lore/data/_meta.json` and no repos row file (they would carry the client's remote into the client's history), and a committed `.lore/LORE.md` is not rendered again behind your back. Your private context goes to `~/.lore/render`, imported through the ignored `CLAUDE.local.md`; `lore render` still writes `.lore/LORE.md` when you ask for it.
 
-In your own repo, reads never write into `.lore/data`, and neither does a `lore sync` while `.lore/data` has nothing waiting for your commit: a repo without a repo id yet (one upgraded from lore 0.1.17) gets it, with its repos row and your actor row, from the first sync that finds rows of yours waiting for a commit, and that commit carries them. So a teammate committing the repo id never makes `git pull` in your clone stop over copies lore left there.
+In your own repo, reads never write into `.lore/data`, and neither does a `lore sync` while `.lore/data` has nothing waiting for your commit: a repo without a repo id yet (one upgraded from lore 0.1.17) gets it, with its repos row and your actor row, from the first sync that finds rows of yours waiting for a commit, or from your first `--scope repo` or `--scope dir:<path>` write (the id is derived from the project and the remote, so every clone that writes it writes the same one), and that commit carries them. So a teammate committing the repo id never makes `git pull` in your clone stop over copies lore left there.
 
 ## Lookup: which copy of a row wins
 
@@ -349,7 +349,7 @@ Claims for tasks of a linked client repo sit on the **store's** signals list, ne
 
 ## Done, then merged
 
-A task is finished once. The holder's `lore task done` drops its claim and, in the same push, leaves a done marker on the signals ref (`<folder>/done/<task>.json`, kept 7 days): a clone whose copy of the row still says todo (not synced yet) cannot claim the task again, `task next` skips it and moves on, and a second `lore task done` on a finished task changes nothing and prints who finished it (`· <id> was already done by <who> at <time>; nothing changed`, `already_done` and `done_by` in `--json`). A task reopened after the done (its row edited later) is claimable again. `lore sync resolve --take kept|other` keeps the same side of nested conflict blocks at every level.
+A task is finished once. The holder's `lore task done` drops its claim and, in the same push, leaves a done marker on the signals ref (`<folder>/done/<task>.json`, kept 7 days): a clone whose copy of the row still says todo (not synced yet) cannot claim the task again, `task next` skips it and moves on, and a second `lore task done` on a finished task changes nothing and prints who finished it (`· <id> was already done by <who> at <time>; nothing changed`, `already_done` and `done_by` in `--json`). A claim of a finished task is refused with one message whether the done reached the signals ref, the row or both (`E_REFUSED <id> was already done by <who> at <time>`, hint `lore task next`). A task reopened after the done (its row edited later) is claimable again. `lore sync resolve --take kept|other` keeps the same side of nested conflict blocks at every level.
 
 `lore task done` records that the work is finished. Whether the code reached `main` is checked later and separately. Any later `task next`, `task list`, `mission status` or `inbox` in a checkout of the task's repo does the check:
 

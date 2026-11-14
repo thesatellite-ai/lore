@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -46,5 +47,20 @@ func TestCoordRuleRefusalsAreRefused(t *testing.T) {
 	}
 	if got := errs.CodeOf(coordErr(signals.ErrBadName)); got != errs.InvalidInput {
 		t.Errorf("bad name: %s, want E_INVALID_INPUT", got)
+	}
+}
+
+// TestNotOpenRefusalIsPlain (devco:M-9): a claim of a task that is not
+// open is refused without the coord package's "coord:" text and with a
+// next step; an already-done task keeps who and when.
+func TestNotOpenRefusalIsPlain(t *testing.T) {
+	for name, in := range map[string]error{
+		"cancelled": fmt.Errorf("%w: tsk_1 is cancelled", coord.ErrNotOpen),
+		"done":      &coord.AlreadyDoneError{Task: "tsk_1", By: "agent:finisher"},
+	} {
+		got := errs.EnvelopeOf(coordErr(in)).Error
+		if got.Code != errs.Refused || strings.Contains(got.Message, "coord:") || !strings.Contains(got.Message, "tsk_1") || !strings.Contains(got.Hint, "lore task next") {
+			t.Errorf("%s: %+v, want a plain E_REFUSED naming tsk_1 with a task next hint", name, got)
+		}
 	}
 }

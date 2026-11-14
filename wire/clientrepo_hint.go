@@ -89,6 +89,13 @@ func (a *App) ClientRepoHints(ctx context.Context, err error) error {
 	return &out
 }
 
+// clientInitWrites names every file lore init writes in a client's
+// repository: the tracked ones (.lore/, .gitattributes, a "# lore" block
+// of its local-file lines appended to .gitignore, the tool pointer) and
+// the clone's own git hooks and merge drivers. devco:N-10: the .gitignore
+// block was written but named neither here nor in the docs.
+const clientInitWrites = ".lore/, .gitattributes, a \"# lore\" block in .gitignore (lore's local files: lock, state, backups), its pointer into CLAUDE.md/AGENTS.md, and git hooks and merge drivers in .git"
+
 // ConfirmClientRepoInit is I-13's guard of lore init (and its registry
 // op repo.init) in a client repo with no .lore/ yet: init writes .lore/,
 // .gitattributes, git hooks and its pointer into CLAUDE.md/AGENTS.md, all
@@ -107,7 +114,7 @@ func (a *App) ConfirmClientRepoInit(ctx context.Context, yes bool) error {
 	if cr.Org == "" {
 		return nil
 	}
-	return errs.New(errs.NeedsConfirm, "this is a client repo of "+cr.Org+": lore init would write .lore/, .gitattributes, git hooks and its pointer into CLAUDE.md/AGENTS.md of the client's repository; nothing written").
+	return errs.New(errs.NeedsConfirm, "this is a client repo of "+cr.Org+": lore init would write "+clientInitWrites+" of the client's repository; nothing written").
 		WithQuestion("set lore up inside this client's repository anyway?").
 		WithHint(clientRepoStep(cr) + "; to set lore up inside the client's repository anyway: lore init --yes")
 }

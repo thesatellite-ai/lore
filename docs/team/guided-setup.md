@@ -247,7 +247,7 @@ route:
 ```console
 # tomas, in agency/site
 $ lore setup list | tail -1
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
 
 # tomas, in lab
 $ lore setup list | tail -2

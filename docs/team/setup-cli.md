@@ -43,7 +43,7 @@ setups:
   agency    admin  agency  true     ~/work/agency/**    not checked yet (lore doctor --all)
   personal  solo           false    ~/work/personal/**  not checked yet (lore doctor --all)
 active: agency (folder: ~/work/agency/**)
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
 
 # tomas, in personal/dotfiles
 $ lore setup list
@@ -110,7 +110,7 @@ $ lore setup use --name personal --here
 pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
 $ lore setup list | tail -2
 active: personal (repo: rep_2ad3…f891)
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3…f891)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3…f891)
 $ lore setup use --here --clear
 cleared this repo's setup pin; lore setup list shows the setup lore picks here now
 $ lore --setup nope task add --title 'check the sitemap'

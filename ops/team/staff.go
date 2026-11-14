@@ -48,6 +48,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -199,19 +200,31 @@ func (o StaffListOut) Text() string {
 	if len(o.Members) == 0 {
 		return "no members on " + o.Where + "'s roster (lore member add --email <email>)\n"
 	}
-	var b strings.Builder
-	for _, m := range o.Members {
-		line := fmt.Sprintf("%s  %-28s %-20s %-12s", m.ID, m.Email, m.Name, orDash(m.Role))
-		if m.Handle != "" {
-			line += " @" + m.Handle
-		}
+	// N-2: every column is as wide as its widest cell, counted in terminal
+	// cells (a CJK name takes two a character), never a fixed width a long
+	// name runs over.
+	rows := make([][]string, len(o.Members))
+	for i, m := range o.Members {
+		row := []string{m.ID, m.Email, m.Name, orDash(m.Role), atOrEmpty(m.Handle), "", ""}
 		if len(m.Teams) > 0 {
-			line += "  teams @" + strings.Join(m.Teams, ", @")
+			row[5] = "teams @" + strings.Join(m.Teams, ", @")
 		}
 		if m.Status != "" && m.Status != schema.ActorStatusActive {
-			line += "  [" + m.Status + "]"
+			row[6] = "[" + m.Status + "]"
 		}
-		b.WriteString(strings.TrimRight(line, " ") + "\n")
+		rows[i] = row
+	}
+	ws := textwidth.Columns(rows)
+	var b strings.Builder
+	for _, row := range rows {
+		var line strings.Builder
+		for i, c := range row {
+			if i > 0 {
+				line.WriteString("  ")
+			}
+			line.WriteString(textwidth.PadRight(c, ws[i]))
+		}
+		b.WriteString(strings.TrimRight(line.String(), " ") + "\n")
 	}
 	return b.String()
 }

@@ -130,7 +130,7 @@ route:
 
 ### this folder
 tomas (work/agency/site)$ lore setup list | tail -1
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
 tomas (work/lab)$ lore setup list | tail -2
 active: agency (default: true)
 This folder: no org, no attached store, written as Tomas Weber <tomas@agency.example> — no setup matches (the default setup agency is for org agency, this repo is no org); lore setup offers a solo setup lab from this repo

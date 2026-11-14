@@ -254,3 +254,19 @@ func TestAddTrailer(t *testing.T) {
 		}
 	}
 }
+
+// TestSymbolicDoneCommitIsNeverResolved (devco:M-5): a row an older task
+// done stored with done_commit "HEAD" (or a branch name) is not merged
+// although HEAD in the checking clone is on the target: the work branch
+// was never merged. Before the fix the watch resolved HEAD in the
+// observer's clone and reported the task merged by ancestry.
+func TestSymbolicDoneCommitIsNeverResolved(t *testing.T) {
+	f := newFixture(t)
+	f.work(false)
+	for _, sym := range []string{"HEAD", "main", "origin/main"} {
+		got, ok, steps := f.check(Candidate{TaskID: "tsk_30", DoneCommit: sym}, nil)
+		if ok {
+			t.Fatalf("done_commit %q: found %+v, want not merged; steps %+v", sym, got, steps)
+		}
+	}
+}

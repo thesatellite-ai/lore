@@ -260,7 +260,7 @@ lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, no
 
 ## Step 7 — Read a task's history
 
-`lore task history --id <id>` lists each change with its time and who made it: status changes, field changes and claims. Older entries are folded; `--git` also reads earlier versions of the row from git history for the full detail.
+`lore task history --id <id>` lists each change with its time and who made it: status changes, field changes and claims. People are named, never by act_ id: a lead, assignee or watcher change reads `lead Ann Lee → Bo Kim`, and a revoked claim `(from Ann Lee)`; `--json` keeps the act_ ids. Older entries are folded; `--git` also reads earlier versions of the row from git history for the full detail.
 
 <!-- example: task-tools#history -->
 ```console

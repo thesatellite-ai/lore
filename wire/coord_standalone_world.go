@@ -1082,7 +1082,9 @@ func coordErr(err error) error {
 			msg = fmt.Sprintf("%s is coordinated by %s (until %s)", he.By.Task, holderName(he.By), he.By.Expires.UTC().Format(time.Kitchen))
 		}
 		if he.SameActor {
-			return errs.New(errs.Refused, msg) // P2-TASK-3: waiting will not help
+			// P2-TASK-3: waiting will not help. devco:M-8: the other session
+			// keeps it; this one picks other work or works under its own name.
+			return errs.New(errs.Refused, msg).WithHint("lore task next picks other work; the other session finishes or releases this one")
 		}
 		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or pick other work with `lore task next`")
 	case errors.As(err, &we):
@@ -1116,7 +1118,14 @@ func coordErr(err error) error {
 		}
 		return e
 	case errors.Is(err, coord.ErrNotOpen):
-		return errs.New(errs.Refused, err.Error())
+		// devco:M-9: one plain refusal, never the package's "coord:" text;
+		// the next step is the next ready task.
+		const hint = "lore task next claims the next ready task; lore task list shows the open ones"
+		if ad, ok := coord.IsAlreadyDone(err); ok {
+			return errs.New(errs.Refused, ad.Error()).WithHint(hint)
+		}
+		msg := strings.TrimPrefix(err.Error(), coord.ErrNotOpen.Error()+": ")
+		return errs.New(errs.Refused, msg+"; only an open task can be claimed").WithHint(hint)
 	case errors.Is(err, coord.ErrNotGated):
 		// devco:L-3: approving a task nobody asked a gate for is a refusal
 		// by the data's state, not an internal error; the next step is to

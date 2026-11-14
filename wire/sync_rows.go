@@ -332,6 +332,17 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			out.Lines = []string{line}
 		}
 	}
+	// devco O-12: a done task whose merge lore can no longer find (its
+	// commit squash-merged without the Lore-Task trailer, the branch
+	// deleted) is named here, after the push that usually follows such a
+	// merge, with the command that settles it.
+	if lost, lerr := s.app.DoctorLostMerges(ctx); lerr == nil {
+		for _, f := range lost {
+			line := "lore: " + f.Message + "; next: " + f.Fix
+			out.Lines = append(out.Lines, line)
+			out.Data.Warnings = append(out.Data.Warnings, line)
+		}
+	}
 	return out, nil
 }
 

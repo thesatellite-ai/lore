@@ -57,11 +57,7 @@ func guardsOffRepoLine(ctx context.Context, s *orgcfg.Situation, lines []string)
 	}
 	fix := "lore fix"
 	if s.LinkedByRemote != "" {
-		org := "<org>"
-		if s.Result.Org != nil {
-			org = s.Result.Org.Name
-		}
-		fix = "lore org link --org " + org + " --project <folder> --yes"
+		fix = guardLinkFix(s)
 	}
 	for i, l := range lines {
 		if strings.Contains(l, guardsOnText) && strings.Contains(strings.TrimSpace(l), "repo") {
@@ -69,4 +65,23 @@ func guardsOffRepoLine(ctx context.Context, s *orgcfg.Situation, lines []string)
 		}
 	}
 	return lines
+}
+
+// guardLinkFix is the command that installs the commit guard in a client
+// repo linked by its remote: `lore org link` with the org and the folder
+// of the link that names this repo (devco:N-9: it said `--project
+// <folder>` though the link was printed two lines below). A placeholder
+// stays only for what lore does not know.
+func guardLinkFix(s *orgcfg.Situation) string {
+	org, folder := "<org>", "<folder>"
+	if s.Result.Org != nil {
+		org = s.Result.Org.Name
+	}
+	for _, l := range s.Result.Links {
+		if l.Entry == org || org == "<org>" {
+			org, folder = l.Entry, l.Folder
+			break
+		}
+	}
+	return "lore org link --org " + org + " --project " + folder + " --yes"
 }

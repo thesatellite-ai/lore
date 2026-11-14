@@ -301,7 +301,10 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 	case excludeMigration:
 		reason = "a migration changes no tracked file but .lore/data: " + reason
 	case excludeTeammate:
-		reason = "this project was migrated in another clone, whose commit brings these lines to " + filepath.Join(root, gitignoreName) + "; your git pull is never blocked by them (`lore doctor --fix` adds them here instead)"
+		// devco:M-3: the migration commit carries only .lore/data, so the
+		// note never says it brings these lines; the migrating clone's next
+		// write adds them to .gitignore, for its owner to commit
+		reason = "this project was migrated in another clone; its migration commit holds only .lore/data, and that clone's next lore write adds these lines to " + filepath.Join(root, gitignoreName) + " for its owner to commit; until that commit reaches you they stay here, so your git pull of it is never blocked (`lore doctor --fix` adds them to " + gitignoreName + " here instead; commit it)"
 	}
 	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",
 		strings.Join(added, ", "), reason)

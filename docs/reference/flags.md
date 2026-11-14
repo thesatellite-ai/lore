@@ -79,6 +79,8 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--live` | share this row with everyone at once on the live list, before any commit | the `add` and `edit` commands of most row kinds |
 | `--no-live` | keep this row with the code: it travels with this branch's next commit | the same commands as `--live` |
 
+A `--live` or `--no-live` choice applies to rows of the repo. `--scope global` puts the row in your personal store, which is neither this branch's code nor the live list, so `rule add` and `memory add` refuse either flag next to it (E_INVALID_INPUT, naming the flag); the add line of a global row says `scope: [global]`.
+
 A note for yourself that should follow you into every repo is a plain `--to me` row. `lore store init --name me` makes the personal store first (here a folder store under `~/.lore/stores/_me`); the note written in `website` is listed in `landing` too:
 
 <!-- example: reference#personal-everywhere -->

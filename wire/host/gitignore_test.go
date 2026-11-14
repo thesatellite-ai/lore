@@ -171,3 +171,23 @@ func TestNeedsGitignore(t *testing.T) {
 		}
 	}
 }
+
+// TestAnnounceExcludeTeammateNoFalseClaim pins devco:M-3: a teammate's
+// first write after a migration said the migration commit "brings these
+// lines to .gitignore", which it never does (a migration commits only
+// .lore/data). The note now says what the migration commit holds and which
+// step writes the tracked lines.
+func TestAnnounceExcludeTeammateNoFalseClaim(t *testing.T) {
+	t.Parallel()
+	var b strings.Builder
+	announceExclude(&b, filepath.Join("work", "shopkit"), []string{".lore/lock"}, excludeTeammate)
+	got := b.String()
+	if strings.Contains(got, "whose commit brings") {
+		t.Fatalf("the note claims the migration commit brings the lines: %s", got)
+	}
+	for _, want := range []string{"migration commit holds only .lore/data", "next lore write adds these lines to " + filepath.Join("work", "shopkit", ".gitignore"), "`lore doctor --fix` adds them to .gitignore here instead; commit it"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the note %q lacks %q", got, want)
+		}
+	}
+}

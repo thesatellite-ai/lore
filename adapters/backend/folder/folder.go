@@ -145,6 +145,15 @@ func ignoreStateDir(dir string) error {
 	if st, err := os.Lstat(filepath.Join(dir, ".git")); err != nil || st == nil {
 		return nil
 	}
+	return IgnoreState(dir)
+}
+
+// IgnoreState adds the store's state folder to dir's .gitignore, once,
+// whether or not dir is a git work tree yet. Why: lore's own personal
+// folder store (~/.lore/stores/_me) is the one plain folder a person is
+// told may end up in a git repo; with the line there, a `git add -A` of
+// the folder never commits lore's lock (devco N-13).
+func IgnoreState(dir string) error {
 	p := filepath.Join(dir, gitignoreName)
 	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {

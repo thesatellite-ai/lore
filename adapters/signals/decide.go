@@ -68,7 +68,11 @@ func (e *WIPError) Error() string {
 		}
 		ids += h.Signal.Task
 	}
-	return fmt.Sprintf("you already hold %s (max_claims_per_agent %d); finish or `lore task release` it first", ids, e.Max)
+	first := ""
+	if len(e.Held) > 0 {
+		first = e.Held[0].Signal.Task
+	}
+	return fmt.Sprintf("this session already holds %s (max_claims_per_agent %d); finish it (lore task done --id %s) or release it (lore task release --id %s) first", ids, e.Max, first, first)
 }
 
 // Unwrap lets errors.Is(err, ErrWIPLimit) match.

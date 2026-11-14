@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -255,12 +256,7 @@ const (
 )
 
 // padRight pads s with spaces to width (fmt's %-Ns).
-func padRight(s string, width int) string {
-	if n := len([]rune(s)); n < width {
-		return s + strings.Repeat(" ", width-n)
-	}
-	return s
-}
+func padRight(s string, width int) string { return textwidth.PadRight(s, width) }
 
 // MissionStatusIn is the input of mission.status.
 type MissionStatusIn struct {

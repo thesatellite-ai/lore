@@ -33,7 +33,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/storeaddr"
@@ -61,15 +60,22 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		return opsstores.SetURLOut{}, err
 	}
 	out := opsstores.SetURLOut{Name: in.Name, URL: raw, Previous: src.URL}
-	newID, err := a.storeIDAt(ctx, attach.Store{Name: src.Name, URL: raw, Branch: src.Branch})
+	// N-13: an empty clone of raw from an earlier check is opened again
+	// without a fetch, so it would still say "empty" after the person
+	// pushed; it holds nothing, so it goes before the check.
+	cloneDir, hadClone := a.setURLClone(raw, src.Branch)
+	if hadClone && dropEmptyClone(ctx, cloneDir) {
+		hadClone = false
+	}
+	newID, seeded, err := a.newStoreID(ctx, src, raw, cloneDir)
 	if err != nil {
+		if !hadClone {
+			dropNewClone(ctx, cloneDir) // a refused set-url leaves no clone that blocks the retry
+		}
 		return opsstores.SetURLOut{}, err
 	}
-	if newID.IsZero() {
-		return opsstores.SetURLOut{}, errs.New(errs.NotAStore, verb+": "+raw+" holds no lore store with an id ("+rowfs.MarkerFile+")").
-			WithHint("check the url; a v0.1.17 store needs lore fix first")
-	}
 	out.ID = newID.String()
+	out.Clone = seeded
 	if !storeaddr.Same(raw, src.URL) {
 		// PROV 11.9 "same rules as 10.4": the store keeps its permanent id,
 		// so an old address that still opens must name the same store (a
@@ -125,7 +131,7 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		if cerr != nil {
 			return out, errs.Prefix(verb+": the places moved, but the clone "+carry.from+" holding unpushed work was not carried (run this command again)", cerr)
 		}
-		out.Clone, out.Changed = line, true
+		out.Clone, out.Changed = joinLines(out.Clone, line), true
 	}
 	if line := leftClonesLine(leftClones(ctx, a.opts.Home, out.ID, raw), old); line != "" {
 		if out.Clone != "" {
@@ -144,6 +150,36 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		out.OrgFiles = append(out.OrgFiles, a.moveOrgFile(ctx, org, old, raw))
 	}
 	return out, nil
+}
+
+// newStoreID is the store id at raw: its marker's, or, for an empty repo
+// and a folder store being moved, the folder's after set-url copied it
+// there (seeded is then the line saying so). A url holding no store is
+// E_NOT_A_STORE with the step that fits.
+func (a *App) newStoreID(ctx context.Context, src attach.Store, raw, cloneDir string) (ids.ID[ids.Store], string, error) {
+	newID, err := a.storeIDAt(ctx, attach.Store{Name: src.Name, URL: raw, Branch: src.Branch})
+	if err != nil || !newID.IsZero() {
+		return newID, "", err
+	}
+	id, seeded, ok, err := a.seedFromFolder(ctx, src, raw, cloneDir)
+	if err != nil {
+		return ids.ID[ids.Store]{}, "", err
+	}
+	if ok && !id.IsZero() {
+		return id, seeded, nil
+	}
+	return ids.ID[ids.Store]{}, "", notAStoreAt(string(src.Name), raw, emptyClone(ctx, cloneDir))
+}
+
+// joinLines joins two set-url lines with "; ", skipping an empty one.
+func joinLines(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	}
+	return a + "; " + b
 }
 
 // setURLSource is the store set-url names: a sto_ id (any place naming

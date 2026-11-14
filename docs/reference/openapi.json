@@ -2457,6 +2457,9 @@
                     "from": {
                       "type": "string"
                     },
+                    "handover": {
+                      "type": "string"
+                    },
                     "has_period": {
                       "type": "boolean"
                     },
