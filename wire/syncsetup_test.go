@@ -34,6 +34,11 @@ func TestSyncSetupHelpers(t *testing.T) {
 	if len(lines) != 1 || lines[0] != "store acme: pulled (sent 0, received 2, merged 0)" {
 		t.Errorf("pulled lines: %q", lines)
 	}
+	// devco J-4: a push of commits with no row is said, not "up to date"
+	lines = syncStoreLines(opssync.StoreReport{Store: "client-store", Status: opssync.StoreStatusPushed, Pushed: true})
+	if len(lines) != 1 || lines[0] != "store client-store: pushed (sent 0, received 0, merged 0)"+syncPushedNoRows {
+		t.Errorf("pushed-no-rows lines: %q", lines)
+	}
 }
 
 // TestStoreIdentityFix: the fix names the clone and the identity, quoted

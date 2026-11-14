@@ -643,6 +643,10 @@ type Report struct {
 	// with --to <org>/<folder>): reported under that folder's name, never
 	// added to another folder's counts (bug hunt W-5).
 	Unattached bool `json:"unattached,omitempty"`
+	// Pushed is true when this sync pushed local commits of the store
+	// (store.SyncReport.Pushed), so a push of commits with no row (a
+	// store link, the org file) is not reported as nothing sent.
+	Pushed bool `json:"pushed,omitempty"`
 }
 
 // folderSync is one synced store's name and report, for attributeFolders.
@@ -753,7 +757,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	pushRefused := true // every refusal is a push the remote refused (not a merge refusal)
 	for _, d := range done {
 		n, rep := d.name, d.rep
-		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail}
+		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail, Pushed: rep.Pushed}
 		var held []store.Refusal
 		for _, x := range rep.Refused {
 			if x.Held {

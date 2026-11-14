@@ -584,7 +584,23 @@ func importError(err error, url string) error {
 		return errs.New(errs.Offline, strings.Replace(err.Error(), "store is offline", "the store answers that there is no repository", 1)).
 			WithHint(importMissingHint(url))
 	}
+	if errors.Is(err, orgcfg.ErrStoreEmpty) {
+		// devco:K-1: importing (or joining) a store with no commits is
+		// the same day-one case as a store with no lore-org.yaml: the
+		// admin made the org and has not sent it; "make it a lore store
+		// first" (hintEmptyStore) is the admin's step, not the joiner's.
+		return orgNotSentError(url)
+	}
 	return orgFileError(err, url)
+}
+
+// orgNotSentError is the refusal for a store that holds no org yet (no
+// lore-org.yaml, or no commits at all): the admin's lore org create / team
+// step writes the org on their machine and their first lore sync sends it,
+// so the way on is that sync, never a hand-made file (devco:K-1).
+func orgNotSentError(url string) error {
+	return errs.New(errs.InvalidInput, "the store holds no org yet: the admin who made the org has not sent it (it stays on their machine until their first lore sync)").
+		WithHint("ask the org's admin to run lore sync, then run this again")
 }
 
 // importMissingHint is the way on from importError's missing repository.
@@ -600,8 +616,7 @@ func orgFileError(err error, url string) error {
 		return errs.New(errs.InvalidInput, err.Error()).
 			WithHint("that store already suggests an org: adopt it with `lore org import --url " + url + "`")
 	case errors.Is(err, orgcfg.ErrNoOrgFile):
-		return errs.New(errs.InvalidInput, err.Error()).
-			WithHint("ask the team to commit <org_folder>/lore-org.yaml, or add the entry to ~/.lore/config.yaml by hand")
+		return orgNotSentError(url)
 	}
 	return linkError(err)
 }

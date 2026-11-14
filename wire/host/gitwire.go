@@ -516,7 +516,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		sort.Strings(stale)
 		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
 	}
-	if len(missing) > 0 && !wire.ProjectFormatOld(root) { // fmt1: lore sync and writes set nothing up there before lore migrate run
+	if len(missing) > 0 && !s.ci && !wire.ProjectFormatOld(root) { // live_still.go: a CI job never runs lore sync; fmt1: lore sync and writes set nothing up there before lore migrate run
 		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
 	}
 	if data {

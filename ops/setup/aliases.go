@@ -22,6 +22,7 @@ package setup
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -204,6 +205,9 @@ func (e engine) validateStep(ctx context.Context, step onboard.Step, kind onboar
 	if step.ID == onboard.StepPersonalStore {
 		return withoutUnusedStoreURL(fe, answers)
 	}
+	if step.ID == onboard.StepTools {
+		return append(fe, e.toolChoiceErrors(ctx, answers)...)
+	}
 	if step.ID != onboard.StepGitHub {
 		return fe
 	}
@@ -332,4 +336,37 @@ func aliasPub(t AliasesOut, alias string) string {
 		}
 	}
 	return ""
+}
+
+// toolChoiceErrors refuses a tools answer outside the tools the step
+// offers (the Prober's detected-tools choices): the catalog cannot check
+// a prefill-backed list, and before (devco:J-1) an unknown tool such as
+// "claude" reached the config writer and came back as a broken
+// ~/.lore/config.yaml (E_CONFIG_INVALID) that lore config check called
+// valid. A Prober that cannot be had or answers no choices checks
+// nothing here; the config validation still refuses the write.
+func (e engine) toolChoiceErrors(ctx context.Context, answers onboard.Answers) []onboard.FieldError {
+	ans, ok := answers[onboard.QIDTools]
+	if !ok || len(ans.List) == 0 {
+		return nil
+	}
+	pr, err := e.env.SetupProber(ctx)
+	if err != nil {
+		return nil
+	}
+	pre, err := pr.Prefill(ctx, onboard.PrefillToolsDetected, onboard.SetupEntry{})
+	if err != nil || len(pre.Choices) == 0 {
+		return nil
+	}
+	allowed := make([]string, 0, len(pre.Choices))
+	for _, c := range pre.Choices {
+		allowed = append(allowed, c.Value)
+	}
+	for _, v := range ans.List {
+		if v = strings.TrimSpace(v); v != "" && !slices.Contains(allowed, v) {
+			return []onboard.FieldError{{Question: onboard.QIDTools, Rule: onboard.FieldRuleChoice,
+				Message: strconv.Quote(v) + " is not one of " + strings.Join(allowed, ", ")}}
+		}
+	}
+	return nil
 }

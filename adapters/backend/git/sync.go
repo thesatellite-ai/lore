@@ -244,7 +244,7 @@ func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushe
 	if err != nil {
 		return rep, err
 	}
-	rep.Folder, rep.Clone = b.folder.Name(), b.work
+	rep.Folder, rep.Clone, rep.Pushed = b.folder.Name(), b.work, pushed
 	received, err := b.countRows(ctx, before, after)
 	if err != nil {
 		return rep, err

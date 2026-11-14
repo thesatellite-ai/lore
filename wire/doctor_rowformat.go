@@ -15,6 +15,10 @@ package wire
 //	migrated
 //	format 1 (_meta.json) but _v: 2 files    ──▶ warning: a reverted migration
 //	or the signpost (E-7)                        (formats disagree); lore migrate run
+//	v1 rows, repo migrated, every v1 file    ──▶ note: they came from a branch
+//	last updated before _meta.json's            made before the migration
+//	migrated_at                                 (rebase, merge, cherry-pick);
+//	                                            lore fix --migrate
 //	v1 rows, repo migrated (min_lore_version ──▶ warning: a lore older than
 //	set; finished here, or no journal: a        0.1.18 still writes here
 //	teammate's checkout)
@@ -31,6 +35,14 @@ package wire
 // cause and the wrong fix; a migration this checkout knows did not finish
 // is named as such.
 //
+// devco K-3: a branch made before the migration and rebased, merged or
+// cherry-picked onto it brings its v1 files with it, written before the
+// migration by a lore that has since been upgraded; blaming "a lore older
+// than 0.1.18" sent the person to upgrade a machine that already runs the
+// new lore. Such files are told apart by time: each was last updated
+// before the migration (_meta.json migrated_at), while a lore 0.1.17 still
+// writing here stamps rows after it.
+//
 // Why: after a migration a _v: 1 file can only come from a machine still on
 // 0.1.17 (it commits past its hook, or from before the pull). That machine
 // cannot read the migrated files and cannot commit beside them, and the
@@ -40,11 +52,13 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -61,6 +75,8 @@ const (
 	rowFormatAfterWarn  = "row files at _v: 1 after this repo's migration (min_lore_version %s): a lore older than 0.1.18 still writes here, cannot read the migrated rows and cannot commit beside them (%s)"
 	rowFormatAfterFix   = "upgrade lore on the machine that wrote them (lore upgrade), then run lore fix --migrate"
 	rowFormatLeftBefore = "row files an earlier lore migrate run left at _v: 1 (%s): this lore's migration rewrites them too"
+	rowFormatFromBranch = "row files at _v: 1 (%s) were last written before this repo's migration (%s), so they came from a branch made before it (a rebase, merge or cherry-pick of that branch), not from an older lore"
+	rowFormatBranchFix  = "lore fix --migrate" // upgrades exactly those files; commit them after
 	rowFormatUnfinished = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s); the last migration of this repo did not finish or was rolled back (min_lore_version %s)"
 )
 
@@ -100,8 +116,75 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorNote,
 			Message: fmt.Sprintf(rowFormatLeftBefore, pending), Fix: rowFormatBeforeFix}}, nil
 	}
+	if at, ok := a.v1BeforeMigration(ctx); ok {
+		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+			Message: fmt.Sprintf(rowFormatFromBranch, pending, at), Fix: rowFormatBranchFix}}, nil
+	}
 	return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
 		Message: fmt.Sprintf(rowFormatAfterWarn, st.MinLoreVersion, pending), Fix: rowFormatAfterFix}}, nil
+}
+
+// v1BeforeMigration reports whether every `_v: 1` row file in the repo's
+// .lore/data was last updated (updated_at, else created_at) no later than
+// the migration recorded in _meta.json (migrated_at), and returns that
+// time. False when the time is not recorded, when no v1 file is found, or
+// when any v1 file is newer or carries no time: then a lore older than
+// 0.1.18 may still write here and the warning says so.
+func (a *App) v1BeforeMigration(ctx context.Context) (string, bool) {
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return "", false
+	}
+	pf, err := ProjectFormatAt(top)
+	if err != nil || pf.MigratedAt == "" {
+		return "", false
+	}
+	migrated, err := time.Parse(time.RFC3339Nano, pf.MigratedAt)
+	if err != nil {
+		return "", false
+	}
+	data := filepath.Join(top, rowfs.LoreDir, rowfs.DataDir)
+	tables, err := os.ReadDir(data)
+	if err != nil {
+		return "", false
+	}
+	found := 0
+	for _, t := range tables {
+		if !t.IsDir() || strings.HasPrefix(t.Name(), ".") {
+			continue
+		}
+		files, rerr := os.ReadDir(filepath.Join(data, t.Name()))
+		if rerr != nil {
+			return "", false
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
+				continue
+			}
+			b, rerr := os.ReadFile(filepath.Join(data, t.Name(), f.Name()))
+			if rerr != nil {
+				return "", false
+			}
+			var stamp struct {
+				V         int    `json:"_v"`
+				CreatedAt string `json:"created_at"`
+				UpdatedAt string `json:"updated_at"`
+			}
+			if json.Unmarshal(b, &stamp) != nil || stamp.V != 1 {
+				continue // not a v1 row file: not this check's
+			}
+			at := stamp.UpdatedAt
+			if at == "" {
+				at = stamp.CreatedAt
+			}
+			when, perr := time.Parse(time.RFC3339Nano, at)
+			if perr != nil || when.After(migrated) {
+				return "", false
+			}
+			found++
+		}
+	}
+	return pf.MigratedAt, found > 0
 }
 
 // onlyLeftBefore reports whether every pending line names a table that a

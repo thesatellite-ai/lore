@@ -189,21 +189,43 @@ func validate(s string, want Prefix) error {
 	return nil
 }
 
+// MalformedError is the cause of an id that has a registered prefix and
+// the right length but whose 32 hex characters are not an id lore makes
+// (not hex, or not a UUIDv7). A caller words it as a malformed id of that
+// kind, never as a wrong kind (devco:L-9: msn_000… was "not a msn_ id").
+type MalformedError struct {
+	// Text is the tail of the id error's message ("is not a UUIDv7"), so
+	// errs.Error prints the reason once.
+	Text string
+	// Plain says what is wrong in a person's words, for a caller's message.
+	Plain string
+	// Prefix is the id's own (registered) prefix.
+	Prefix Prefix
+}
+
+// Error implements error.
+func (e *MalformedError) Error() string { return e.Text }
+
+// malformed is the E_INVALID_ID of id s with a MalformedError cause.
+func malformed(s, text, plain string) error {
+	return errs.Wrap(errs.InvalidID, "ids: "+quote(s)+" "+text, &MalformedError{Text: text, Plain: plain, Prefix: Prefix(s[:prefixLen])})
+}
+
 // parseUUID rebuilds the UUID from the hex tail and checks it is version 7.
 func parseUUID(s string) (uuid.UUID, error) {
 	h := s[prefixLen+1:]
 	for i := range len(h) {
 		c := h[i]
 		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
-			return uuid.Nil, errs.New(errs.InvalidID, "ids: "+quote(s)+" tail is not lowercase hex")
+			return uuid.Nil, malformed(s, "tail is not lowercase hex", "the 32 characters after the underscore are not all lowercase hex (0-9, a-f)")
 		}
 	}
 	u, err := uuid.Parse(h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32])
 	if err != nil {
-		return uuid.Nil, errs.Wrap(errs.InvalidID, "ids: "+quote(s)+" tail is not a uuid", err)
+		return uuid.Nil, malformed(s, "tail is not a uuid", "the 32 hex characters after the underscore are not an id lore made")
 	}
 	if u.Version() != uuidV7 {
-		return uuid.Nil, errs.New(errs.InvalidID, "ids: "+quote(s)+" is not a UUIDv7")
+		return uuid.Nil, malformed(s, "is not a UUIDv7", "the 32 hex characters after the underscore are not an id lore made (a real id starts with its creation time)")
 	}
 	return u, nil
 }

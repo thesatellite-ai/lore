@@ -126,6 +126,9 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		// results would be lost with it.
 		s.prior, _ = hs.SetupHealth(ctx, name)
 	}
+	// Judged before the write: the applier hands back the entry it would
+	// save (res.Setup) even while the setup's own entry step is pending.
+	out.Warnings = append(out.Warnings, pendingEntryWarnings(s, step)...)
 	if step.Apply != onboard.ApplyNone {
 		ap, err := e.env.SetupApplier(ctx)
 		if err != nil {
@@ -531,4 +534,29 @@ func folderRepeatWarnings(repeated []string) []string {
 		out = append(out, "folder "+quote(f)+" was given more than once; it is saved once")
 	}
 	return out
+}
+
+// pendingEntryWarnings says that a step saved on an org setup whose
+// config entry is not written yet (the member's join step, the admin's
+// team step writes it) only takes effect with that step: before
+// (devco:K-1) the folders step after a refused join printed status done
+// and nothing else, and lore whoami then found no org at all.
+func pendingEntryWarnings(s stepState, step onboard.Step) []string {
+	if s.exists {
+		return nil
+	}
+	var entryStep onboard.StepID
+	switch s.kind {
+	case onboard.KindMember:
+		entryStep = onboard.StepJoin
+	case onboard.KindAdmin:
+		entryStep = onboard.StepTeam
+	default:
+		return nil
+	}
+	if step.ID == entryStep || step.ID == onboard.StepKind {
+		return nil
+	}
+	return []string{"saved for later: setup " + quote(s.name) + " takes effect once its " + string(entryStep) +
+		" step is done (lore setup apply --setup " + s.name + " --step " + string(entryStep) + ")"}
 }

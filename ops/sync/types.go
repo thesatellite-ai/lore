@@ -135,6 +135,10 @@ type StoreReport struct {
 	// the folder's push was its own.
 	HeldBy string `json:"held_by,omitempty"`
 	Held   string `json:"held,omitempty"`
+	// Pushed is true when this sync pushed local commits of the store,
+	// also ones that carry no row (a store link, the org file), which
+	// Sent does not count.
+	Pushed bool `json:"pushed,omitempty"`
 	// URL, Status, Error and Next are set by `lore sync` run outside a
 	// code repo (every store of the setup, or the store checkout it runs
 	// in): the store's url, what happened (StoreStatus*), and for a store

@@ -210,6 +210,11 @@ type Full struct {
 	Lead      string   `json:"lead,omitempty"`
 	Assignees []string `json:"assignees,omitempty"`
 	Watchers  []string `json:"watchers,omitempty"`
+	// Team is the team the task is assigned to (tem_…, --assign @team) and
+	// TeamHandle its current @handle (devco:J-13: show printed neither, so
+	// nobody could see who owns a team task).
+	Team       string `json:"assigned_team,omitempty"`
+	TeamHandle string `json:"assigned_team_handle,omitempty"`
 	// Checklist is the live checklist (7.3).
 	Checklist []ChecklistItemOut `json:"checklist,omitempty"`
 	// SLA is ok | at_risk | breached when the priority has an SLA (18.4);

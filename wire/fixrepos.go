@@ -147,7 +147,7 @@ func (a *App) fixNamedDirs(dirs []string) ([]string, error) {
 }
 
 // fixNoSetupFolders is --all's note when no setup has folders.
-const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; for repos elsewhere name their folders (lore fix --all ~/code ~/work) or add them to a setup (`lore setup`)"
+const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; for repos elsewhere name their folders (lore fix --all --dirs ~/code --dirs ~/work) or add them to a setup (`lore setup`)"
 
 // fixHomeDepth is how deep --all looks below the home folder when no
 // setup has folders (~/work/client/repo is three levels).

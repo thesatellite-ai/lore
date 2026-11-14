@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -519,12 +520,15 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return o.purgeArchived(ctx, before, in.DryRun, in.Confirm)
 	}
 	if target != "" {
+		// devco:L-8: read what the purge would take before asking for
+		// --confirm, so a live row, a purged id or an unknown one gets its
+		// own answer instead of a confirmation to destroy it for good.
+		plan, err := o.env.PurgePlan(ctx, target)
+		if err != nil {
+			return ResultOut{}, err
+		}
 		if in.DryRun {
-			res, err := o.env.PurgePlan(ctx, target)
-			if err != nil {
-				return ResultOut{}, err
-			}
-			return resultOf("would purge", res, true), nil
+			return resultOf("would purge", plan, true), nil
 		}
 		if !in.Confirm {
 			return ResultOut{}, needsConfirm(ctx, "purge removes "+target+" (its dependents in the trash, its comments and links too) for good; only a tombstone stays", "trash", "purge", "--id", target, "--confirm")
@@ -934,6 +938,9 @@ func (it Item) when() string {
 func (it Item) deleter() string {
 	if it.byLabel != "" {
 		return it.byLabel
+	}
+	if name, ok := auditfill.NameOf(it.DeletedBy); ok {
+		return name
 	}
 	return it.DeletedBy
 }

@@ -244,6 +244,7 @@ func TestFixRunnableOutward(t *testing.T) {
 		{CheckToolsSkillVersion, StepTools, FixNoVersionLine, true, false, "lore", "no version line"},
 		{CheckToolsHooks, StepTools, FixDefault, true, false, "lore", "lore setup --agent-hooks --yes"},
 		{CheckToolsPointerFile, StepTools, FixDefault, true, false, "lore", "adds {tool} to the repo's context.targets"},
+		{CheckToolsPointerFile, StepTools, FixGenerated, false, false, "", "the source that generates the file"}, // devco J-17
 		{CheckRepoInit, StepThisFolder, FixDefault, true, false, "lore", "this sets it up"},
 		{CheckRepoInit, StepThisFolder, FixInitTargets, true, false, "lore", "the files {targets} read"},
 		{CheckInviteGitHubAccess, StepTeam, FixDefault, true, true, "gh", "permission=push"},

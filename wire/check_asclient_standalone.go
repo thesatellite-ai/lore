@@ -515,3 +515,8 @@ func inCIEnv() bool {
 	}
 	return false
 }
+
+// InCIEnv reports a CI run (any of the CI marker variables set non-empty):
+// the host's live hook then reads the checkout only, fetching nothing and
+// writing nothing in .git (wire/host/live_still.go).
+func InCIEnv() bool { return inCIEnv() }

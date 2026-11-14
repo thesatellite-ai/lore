@@ -2016,8 +2016,14 @@ func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
 		return "", errs.New(errs.InvalidInput, "actor "+work.Quote(ref)+" is ambiguous: "+strings.Join(slices.Compact(byName), ", ")).
 			WithHint("pass the actor id")
 	}
-	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).
-		WithHint("pass an actor id (act_*), " + actorMe + ", an @handle or email on the roster, a stable_key or a display name")
+	hint := "pass an actor id (act_*), " + actorMe + ", an @handle or email on the roster, a stable_key or a display name"
+	if strings.Contains(ref, "@") && !strings.HasPrefix(ref, "@") {
+		// devco:J-14: an email nobody has here is often one a person added
+		// since this machine's last sync (an email change); the hint named
+		// no sync, and after one the same command worked.
+		hint = "no one on the roster here has that email; if it is new (an email change), the roster here may be older than the store: run `lore sync`, then retry; or " + hint
+	}
+	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).WithHint(hint)
 }
 
 // repoByName prefixes a search's wanted repo when --repo names no repo of

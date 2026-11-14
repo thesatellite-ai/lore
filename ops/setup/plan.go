@@ -135,9 +135,15 @@ type stepState struct {
 	// done: at load, the entry existed with no progress rows (its summary
 	// ran, 4.11). Fixed at load so a kind-step apply that creates the
 	// entry does not make the half-made setup look finished.
-	done     bool
-	kind     onboard.Kind
-	plan     []onboard.Step
+	done bool
+	kind onboard.Kind
+	plan []onboard.Step
+	// unset: no entry, no saved kind step and no kind answer, so kind is
+	// solo only by default; owners maps every kind whose plan has a step
+	// to that step's kinds, so a step of another kind's plan (join on a
+	// fresh machine, devco:L-1) names that plan, not the solo one.
+	unset    bool
+	owners   map[onboard.StepID][]onboard.Kind
 	progress map[onboard.StepID]onboard.Progress
 	// prior is a finished setup's kept results as they stood before this
 	// apply's write (HealthSource), read before the write changes the
@@ -174,6 +180,15 @@ func (s stepState) step(id string) (onboard.Step, error) {
 		if string(st.ID) == id {
 			return st, nil
 		}
+	}
+	if kinds := s.owners[onboard.StepID(id)]; s.unset && len(kinds) > 0 {
+		k := string(kinds[0])
+		e := errs.New(errs.InvalidInput, "setup "+quote(s.name)+" has no kind yet on this machine, and step "+quote(id)+" is in the "+k+" plan; apply the kind step first: lore setup apply --setup "+s.name+" --step kind --answers '{\"kind\":\""+k+"\"}'")
+		if onboard.StepID(id) == onboard.StepJoin {
+			return onboard.Step{}, e.WithHint("lore setup join --invite \"<the org's store url>\" prints every step of the member plan, filled in").
+				WithNext("lore", "setup", "join", "--invite", "<the org's store url>")
+		}
+		return onboard.Step{}, e.WithNext("lore", "setup", "apply", "--setup", s.name, "--step", string(onboard.StepKind), "--answers", `{"kind":"`+k+`"}`)
 	}
 	return onboard.Step{}, errs.New(errs.InvalidInput, "step "+quote(id)+" is not in the "+string(s.kind)+" plan").
 		WithNext("lore", "setup", "plan", "--kind", string(s.kind))
@@ -223,11 +238,20 @@ func (e engine) load(ctx context.Context, st Store, name string, answers onboard
 		s.kind = answerKind(answers)
 	default:
 		s.kind = onboard.KindSolo
+		s.unset = !s.exists
 	}
 	if !s.exists {
 		s.entry = onboard.SetupEntry{Name: name, Kind: s.kind}
 	}
 	s.plan = e.cat.Plan(s.kind)
+	if s.unset {
+		s.owners = map[onboard.StepID][]onboard.Kind{}
+		for _, k := range onboard.Kinds() {
+			for _, st := range e.cat.Plan(k) {
+				s.owners[st.ID] = append(s.owners[st.ID], k)
+			}
+		}
+	}
 	return s, nil
 }
 

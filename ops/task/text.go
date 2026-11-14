@@ -202,6 +202,15 @@ func (o ShowOut) baseText() string {
 	if t.PeopleLine != "" {
 		b.WriteString("  " + t.PeopleLine + "\n")
 	}
+	if t.Team != "" {
+		// devco:J-13: the team a task is assigned to, by its current handle
+		// (a rename shows the new one), else its id.
+		team := t.Team
+		if t.TeamHandle != "" {
+			team = "@" + t.TeamHandle
+		}
+		b.WriteString("  team:     " + team + "\n")
+	}
 	if len(t.Checklist) > 0 {
 		done := 0
 		for _, it := range t.Checklist {

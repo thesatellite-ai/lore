@@ -214,6 +214,9 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 	var old ids.AnyID
 	var oldSrc store.Source
 	var carry metalist.Carry
+	if err := metalist.NoMetaNeedsSupersedes(c.NoMeta, c.Supersedes); err != nil {
+		return "", engine.Written{}, 0, err
+	}
 	if c.Supersedes != "" {
 		var oldRow row.Row
 		if old, oldSrc, oldRow, err = checkSupersedes(ctx, env, n, project, c.Supersedes); err != nil {

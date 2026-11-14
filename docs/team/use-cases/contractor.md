@@ -25,7 +25,7 @@ orgs:
 
 Alice does not write the `stores:` list by hand. After she creates a client store with `lore store init`, `lore org store add --org agency --url git@github.com:agency/notes-client --push --yes` adds it to the org's `lore-org.yaml` (a commit in the company store; without `--push` the commit stays in her clone of the store until the next write to it) and to her own entry, so `lore org link --store` takes it at once.
 
-Bob's entry lists only the company store and the client's store. GitHub gives Bob access to only those two repos:
+Bob's entry lists only the company store and the client's store. GitHub gives Bob access to only those two repos, and he needs read and write on both: his join reads the roster in the company store and records his accept there, and his sessions read the company rules from it. lore has no client-only join, so a contractor cannot be limited to the client store alone (every invite prints this access line); keep what a contractor must not read out of the company store, in the stores of the other clients:
 
 ```yaml
 orgs:

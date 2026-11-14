@@ -217,7 +217,12 @@ type liveRun struct {
 	// doctor: the run is `lore doctor`, whose report carries the
 	// leak-guard warning itself (doctorGuard): the wiring's notice of it
 	// would print it twice.
-	doctor   bool
+	doctor bool
+	// still: a dry run or a CI-form run (stillRun): its sessions take no
+	// lock, fetch nothing and integrate nothing, so .git stays as it was.
+	still bool
+	// ci: a CI-form run (ciRun): no "lore sync sets up …" wiring note.
+	ci       bool
 	sessions map[string]*liveSession
 	// storeWrites counts the store writes this run asked a liveBackend for
 	// (Write, WriteAudited, WritePurge with at least one change or purged
@@ -289,6 +294,8 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 			s.agent = r.agent
 			s.read = r.read
 			s.asked = r.asked
+			s.still = r.still
+			s.ci = r.ci
 			s.cache = cache
 			r.addCache(cache)
 		}
@@ -849,9 +856,12 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 	if liveDisabled() || skipLiveRun(run) {
 		return next(ctx)
 	}
-	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun}
+	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun, still: stillRun(run), ci: ciRun(run)}
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
+	}
+	if r.still {
+		stillGit(run)
 	}
 	if !r.read {
 		ctx = wire.WithWriteFetch(ctx) // its store clones fetch at orgconf.WriteFetchTTL (M-4)

@@ -166,11 +166,35 @@ func (a *App) addUnscopedActorName(ctx context.Context, out map[string]string) {
 	if _, ok := out[id.String()]; ok {
 		return
 	}
+	out[id.String()] = unscopedName(r)
+}
+
+// unscopedName is how doctor names r, this machine's identity outside any
+// setup: "<name> (<step>, outside any setup)", or beforeIdentityName when
+// r names the machine, not a person (devco J-12: the OS login is how the
+// setup steps stamped their rows before the identity step; listed by that
+// name it read as a stranger on the team and put the OS account name in
+// a team-facing list).
+func unscopedName(r identity.Resolved) string {
+	if machineFallbackStep(r.Step) {
+		return beforeIdentityName
+	}
 	name := r.DisplayName
 	if name == "" {
 		name = r.StableKey
 	}
-	out[id.String()] = name + " (" + string(r.Step) + unscopedNote + ")"
+	return name + " (" + string(r.Step) + unscopedNote + ")"
+}
+
+// beforeIdentityName is how doctor names this machine's own identity when
+// it resolves only from the machine (OS user, machine id, salt) outside
+// every setup: the stamp of the setup steps run before the identity step.
+const beforeIdentityName = "you on this machine, before the identity step"
+
+// machineFallbackStep reports an identity step that names the machine
+// rather than a person (the chain's last resorts).
+func machineFallbackStep(s identity.Step) bool {
+	return s == identity.StepOSUser || s == identity.StepMachine || s == identity.StepSalt
 }
 
 // teamMachineNamer returns the machine-name function of one doctor run:

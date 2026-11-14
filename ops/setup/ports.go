@@ -642,6 +642,13 @@ type TeamInviteOut struct {
 // inviteSyncFirst is the line TeamInviteOut.Text prints when SyncFirst.
 const inviteSyncFirst = "⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)\n"
 
+// inviteAccess is the access line every invite prints (devco:J-5): the
+// join reads the roster in the org store and records the accept there,
+// so a contractor meant to see one client store only still needs read and
+// write on the org store; lore has no client-only join, and the line says
+// so before the person is sent a line that would fail on store.read.
+const inviteAccess = "access: %s needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone\n"
+
 // githubPending is TeamInviteOut.GitHubAccess while the person has no
 // access yet (ops/team.GitHubPending, same value).
 const githubPending = "pending"
@@ -678,6 +685,7 @@ func (o TeamInviteOut) Text() string {
 	if o.SyncFirst {
 		b.WriteString(inviteSyncFirst)
 	}
+	fmt.Fprintf(&b, inviteAccess, o.Email)
 	fmt.Fprintf(&b, "Send this to %s (it holds no secret):\n  lore setup join --invite %s\n", o.Email, o.Line)
 	return b.String()
 }

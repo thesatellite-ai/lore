@@ -110,13 +110,16 @@ func TestCommentTargets(t *testing.T) {
 		{"tasks", "garbage", errs.InvalidID},
 		{"tasks", "", errs.InvalidInput}, // required field
 		{"Not A Table", task, errs.InvalidInput},
-		{"", task, errs.InvalidInput},
 		{"memory", mem, errs.InvalidInput}, // misspelt core table (INTEG-KNOWLEDGE-1)
 		{"nonsense", task, errs.InvalidInput},
 		{"bench_runs", "run_01a1a67b1b617dc7acc5f1af36e0e979", errs.InvalidInput}, // run_ names the core runs table
 	}
 	for _, c := range cases {
 		h.Fails("comment.add", `{"on_table":`+opstest.Quote(c.table)+`,"on_id":`+opstest.Quote(c.id)+`,"body":"hi"}`, c.code)
+	}
+	// devco:J-8: no --on-table takes the table from the id's prefix.
+	if got := opstest.Text(h.Must("comment.add", `{"on_table":"","on_id":"`+task+`","body":"hi"}`)); !strings.Contains(got, " on tasks/"+task+" ") {
+		t.Errorf("no --on-table: %q", got)
 	}
 	missing := "run_01a1a67b1b617dc7acc5f1af36e0e979"
 	h.Fails("comment.add", `{"on_table":"runs","on_id":"`+missing+`","body":"hi"}`, errs.NotFound)

@@ -301,11 +301,11 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Sett
 	}
 	out = addSettings(out, opsmigrate.Settings{Steps: machineSteps, Rows: n})
 	// actor copies stale under the 0.1.18 identity (migrate_actorcopies.go)
-	copySteps, n, err := a.migrateActorCopies(ctx, dryRun)
+	copies, err := a.migrateActorCopies(ctx, dryRun)
 	if err != nil {
 		return opsmigrate.Settings{}, err
 	}
-	out = addSettings(out, opsmigrate.Settings{Steps: copySteps, Rows: n})
+	out = addSettings(out, copies)
 	// actor copies in the repo trimmed to {id, display name, kind}, after
 	// every step that writes one (migrate_actorprojection.go)
 	projOut, err := a.migrateActorProjection(ctx, dryRun)

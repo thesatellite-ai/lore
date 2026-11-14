@@ -269,6 +269,9 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	var old ids.ID[ids.Memory]
 	var oldSrc store.Source
 	var carry metalist.Carry // 3.19: --supersedes carries the metadata over unless --no-meta
+	if err := metalist.NoMetaNeedsSupersedes(in.NoMeta, in.Supersedes); err != nil {
+		return WriteOut{}, err
+	}
 	if in.Supersedes != "" {
 		var oldRow row.Row
 		if old, oldSrc, oldRow, err = o.checkSupersedes(ctx, project, in.Supersedes); err != nil {

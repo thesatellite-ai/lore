@@ -35,7 +35,7 @@ Words used below:
    │ exit 11 → every claim lost a race; wait a little, then try again
    ▼
  work ─┬─ lore task heartbeat --daemon --id <id> &         keeps the lease alive (alive, not progress)
-       ├─ lore task note --id <id> --text "<checkpoint>"   progress; also pushes your work branch
+       ├─ lore task note --id <id> --text "<checkpoint>"   progress (a live row; sync or push sends it)
        ├─ lore memory add --body "<fact>"                  something every agent should know (lore search finds it)
        ├─ lore gate request --id <id>                      a step needs a person's go-ahead
        └─ lore check pr-body --file <file|->               before posting any PR text or comment

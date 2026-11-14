@@ -19,6 +19,8 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -1203,15 +1205,21 @@ func (f MetaFlags) Write(table row.Table, id ids.AnyID, unset []string) (MetaWri
 	for _, a := range f.MetaJSON {
 		t, err := meta.ParseWrite(a)
 		if err != nil {
-			return MetaWrite{}, err
+			return MetaWrite{}, metaJSONTermErr(a, err)
 		}
+		from := "the value"
 		switch {
 		case t.Value == metaStdinMark:
 			t.Value, err = readStdin()
+			from = "stdin"
 		case strings.HasPrefix(t.Value, "@"):
+			from = t.Value[1:]
 			t.Value, err = readMetaFile(t.Value[1:])
 		}
 		if err != nil {
+			return MetaWrite{}, err
+		}
+		if err := checkMetaJSON(metaTermKey(t, a), from, t.Value); err != nil {
 			return MetaWrite{}, err
 		}
 		mw.JSON = append(mw.JSON, t)
@@ -1228,6 +1236,52 @@ func (f MetaFlags) Write(table row.Table, id ids.AnyID, unset []string) (MetaWri
 		mw.Set = append(mw.Set, t)
 	}
 	return mw, nil
+}
+
+// metaJSONHint is the --meta-json form every --meta-json error names.
+const metaJSONHint = `--meta-json 'key={"name":"value"}', key=@file.json or key=- for stdin`
+
+// metaJSONTermErr words a --meta-json argument that is not key=<json> in
+// --meta-json's own grammar (devco:L-5: `--meta-json '{bad'` answered with
+// the --meta "has no operator / write key=value" line). A bare JSON text
+// (it starts with { or [) is named as a value with no key.
+func metaJSONTermErr(arg string, err error) error {
+	if s := strings.TrimSpace(arg); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
+		return errs.New(errs.MetaOp, "--meta-json "+strconv.Quote(arg)+" has no key: it takes key=<json>, not a bare JSON value").WithHint(metaJSONHint)
+	}
+	msg := "is not key=<json>"
+	var e *errs.Error
+	if errors.As(err, &e) {
+		msg += " (" + strings.TrimPrefix(e.Message, "meta: ") + ")"
+	}
+	return errs.New(errs.MetaOp, "--meta-json "+strconv.Quote(arg)+" "+msg).WithHint(metaJSONHint)
+}
+
+// checkMetaJSON refuses a --meta-json value that is not JSON, naming the
+// parser's reason and byte offset (devco:L-5; the shared coercion only
+// says "invalid json"). from is "the value", "stdin" or the file read.
+func checkMetaJSON(key, from, raw string) error {
+	var v json.RawMessage
+	err := json.Unmarshal([]byte(raw), &v)
+	if err == nil {
+		return nil
+	}
+	why := "it ends before the JSON is complete"
+	var se *json.SyntaxError
+	if errors.As(err, &se) && !strings.Contains(se.Error(), "unexpected end") {
+		why = se.Error() + " at byte " + strconv.FormatInt(se.Offset, 10)
+	}
+	return errs.New(errs.MetaValue, "--meta-json "+key+": "+from+" is not valid JSON ("+why+")").WithHint(metaJSONHint)
+}
+
+// metaTermKey is the key a term names as typed: the part of arg before
+// the first '=' (the key, its type or scope words); the parsed key when
+// arg has none.
+func metaTermKey(t meta.Term, arg string) string {
+	if k, _, ok := strings.Cut(arg, "="); ok && k != "" {
+		return k
+	}
+	return t.Key
 }
 
 // readMetaFile reads a --meta-json @file value.
