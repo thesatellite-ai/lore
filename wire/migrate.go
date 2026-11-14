@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/locktrace"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -203,8 +204,8 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Sett
 		// OWNERQ-8: the old file is moved aside as identity.yaml.migrated,
 		// never deleted (never delete user config, as Q-MODEB and
 		// `lore identity set|unset`); the step line names where it went.
-		aside := "; old file kept as ~/.lore/" + identity.LegacyFile + LegacyMigratedSuffix
-		step := "identity: ~/.lore/" + identity.LegacyFile + " moved into ~/.lore/" + ConfigFile + aside
+		aside := "; old file kept as " + lorehome.Shown() + "/" + identity.LegacyFile + LegacyMigratedSuffix
+		step := "identity: " + lorehome.Shown() + "/" + identity.LegacyFile + " moved into " + lorehome.Shown() + "/" + ConfigFile + aside
 		if mc.Identity.Key != "" {
 			step = "identity: " + ConfigFile + " already sets identity: (kept)" + aside
 		}
@@ -343,7 +344,7 @@ func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, in
 		return nil, 0, nil
 	}
 	if err != nil {
-		return nil, 0, errs.Wrap(errs.ConfigInvalid, "migrate: read ~/.lore/"+piiPatternsFile, err)
+		return nil, 0, errs.Wrap(errs.ConfigInvalid, "migrate: read "+lorehome.Shown()+"/"+piiPatternsFile, err)
 	}
 	type pat struct{ id, re string }
 	var pats []pat
@@ -353,7 +354,7 @@ func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, in
 			continue
 		}
 		if _, cerr := regexp.Compile(line); cerr != nil {
-			return nil, 0, errs.New(errs.ConfigInvalid, "migrate: ~/.lore/"+piiPatternsFile+" line "+strconv.Itoa(i+1)+" is not a valid pattern").
+			return nil, 0, errs.New(errs.ConfigInvalid, "migrate: "+lorehome.Shown()+"/"+piiPatternsFile+" line "+strconv.Itoa(i+1)+" is not a valid pattern").
 				WithHint("fix or remove that line, then run lore migrate run again")
 		}
 		pats = append(pats, pat{id: piiRulePrefix + strconv.Itoa(i+1), re: line})
@@ -365,7 +366,7 @@ func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, in
 	personal := store.Source(opsstores.PersonalName)
 	b, ok := st.byName[personal]
 	if !ok {
-		return []string{StepPIIPatterns + ": ~/.lore/" + piiPatternsFile + " kept: no personal store is attached to receive its " + strconv.Itoa(len(pats)) + " rule(s)"}, 0, nil
+		return []string{StepPIIPatterns + ": " + lorehome.Shown() + "/" + piiPatternsFile + " kept: no personal store is attached to receive its " + strconv.Itoa(len(pats)) + " rule(s)"}, 0, nil
 	}
 	have := map[string]bool{}
 	rows, _, err := b.Read(ctx, "")
@@ -382,7 +383,7 @@ func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, in
 			}
 		}
 	}
-	steps := []string{StepPIIPatterns + ": ~/.lore/" + piiPatternsFile + " → " + strconv.Itoa(len(pats)) + " personal secret rule(s); file kept as " + piiPatternsFile + migratedSuffix}
+	steps := []string{StepPIIPatterns + ": " + lorehome.Shown() + "/" + piiPatternsFile + " → " + strconv.Itoa(len(pats)) + " personal secret rule(s); file kept as " + piiPatternsFile + migratedSuffix}
 	written := 0
 	for _, p := range pats {
 		if have[p.id] {
@@ -393,7 +394,7 @@ func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, in
 			continue
 		}
 		fields := map[string]value.Value{}
-		for k, v := range map[string]string{"rule_id": p.id, "regex": p.re, "state": schema.SecretRuleOn, "description": "converted from ~/.lore/" + piiPatternsFile} {
+		for k, v := range map[string]string{"rule_id": p.id, "regex": p.re, "state": schema.SecretRuleOn, "description": "converted from " + lorehome.Shown() + "/" + piiPatternsFile} {
 			t, terr := value.TextOf(v)
 			if terr != nil {
 				return nil, 0, terr
@@ -407,7 +408,7 @@ func (a *App) migratePIIPatterns(ctx context.Context, dryRun bool) ([]string, in
 	}
 	if !dryRun {
 		if err = os.Rename(path, path+migratedSuffix); err != nil {
-			return nil, 0, errs.Wrap(errs.Internal, "migrate: keep ~/.lore/"+piiPatternsFile+" as "+piiPatternsFile+migratedSuffix, err)
+			return nil, 0, errs.Wrap(errs.Internal, "migrate: keep "+lorehome.Shown()+"/"+piiPatternsFile+" as "+piiPatternsFile+migratedSuffix, err)
 		}
 	}
 	return steps, written, nil

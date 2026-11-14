@@ -4,7 +4,7 @@
 
 ## Before you start
 
-- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. The member commands run outside any repo too, and their reads (`lore member show`, `lore team show`) work in a clone with no lore project yet.
+- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. Without one, the member commands also run in a repo of an org whose roster gives you org role admin: `lore org create` gives its creator that role, so `lore member add` works right after it with no setup step. The member commands run outside any repo too, and their reads (`lore member show`, `lore team show`) work in a clone with no lore project yet.
 - The teams you name exist (`lore team add --handle @web`, see [Teams](teams.md)).
 
 ## Step 1 — Add people

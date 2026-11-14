@@ -10,15 +10,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // File names the lines name (spec 8).
 const (
 	storesFileShown = ".lore/stores.yaml"
-	configFileShown = "~/.lore/config.yaml"
 	markerShown     = "lore-store.yaml"
 )
+
+// configFileShown is config.yaml in the lore home this run uses, as the
+// lines name it (devco P-1: under LORE_HOME, never ~/.lore).
+func configFileShown() string { return lorehome.Shown() + "/config.yaml" }
 
 // folderSep joins a store and a folder in the name of a folder entry of
 // stores.yaml ("<store>/<folder>", the name --to and store list use;
@@ -115,7 +119,7 @@ func (o RemoveOut) Text() string {
 func (o InitOut) Text() string {
 	where := storesFileShown + "; commit it to share"
 	if o.Personal {
-		where = configFileShown + " (personal.store, the target of --to me)"
+		where = configFileShown() + " (personal.store, the target of --to me)"
 	}
 	line := "✓ created store " + o.Name + " (" + o.ID + ") at " + o.URL + "; recorded in " + where + "\n"
 	if o.Already {
@@ -123,17 +127,17 @@ func (o InitOut) Text() string {
 	}
 	if o.Org != "" {
 		if o.Already {
-			return "✓ " + o.URL + " is already a lore store (" + o.ID + "): it is org " + o.Org + "'s store, so it stays attached through the org entry in ~/.lore/config.yaml (not this repo's " + storesFileShown + ")\n"
+			return "✓ " + o.URL + " is already a lore store (" + o.ID + "): it is org " + o.Org + "'s store, so it stays attached through the org entry in " + lorehome.Shown() + "/config.yaml (not this repo's " + storesFileShown + ")\n"
 		}
 		verb := "created store"
 		setup := o.OrgSetup
 		if setup == "" {
 			setup = "<your admin setup>"
 		}
-		return "✓ " + verb + " " + o.ID + " at " + o.URL + ": it is org " + o.Org + "'s store, so it stays attached through the org entry in ~/.lore/config.yaml (not this repo's " + storesFileShown + ")\n  the org's file (lore-org.yaml) and roster were in the old store: write them again with your setup's team step, `lore setup apply --setup " + setup + " --step team --answers '{\"org\":\"" + o.Org + "\",\"store_url\":\"" + o.URL + "\"}'` (it puts you back on the roster), then `lore member add --email <email>` for each teammate\n"
+		return "✓ " + verb + " " + o.ID + " at " + o.URL + ": it is org " + o.Org + "'s store, so it stays attached through the org entry in " + lorehome.Shown() + "/config.yaml (not this repo's " + storesFileShown + ")\n  the org's file (lore-org.yaml) and roster were in the old store: write them again with your setup's team step, `lore setup apply --setup " + setup + " --step team --answers '{\"org\":\"" + o.Org + "\",\"store_url\":\"" + o.URL + "\"}'` (it puts you back on the roster), then `lore member add --email <email>` for each teammate\n"
 	}
 	if len(o.Following) > 0 {
-		line += "  your setups " + strings.Join(o.Following, ", ") + " were on ~/.lore/stores/_me and now use it too (one personal store per person)\n"
+		line += "  your setups " + strings.Join(o.Following, ", ") + " were on " + lorehome.Shown() + "/stores/_me and now use it too (one personal store per person)\n"
 	}
 	return line
 }

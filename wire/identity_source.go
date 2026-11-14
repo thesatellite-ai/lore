@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/yamlfmt"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -183,7 +184,7 @@ func migrateTopIdentity(home, name string, keep identity.Keep) (identityMigratio
 	err := editSetups(home, func(root *yaml.Node) error {
 		var d setupsDoc
 		if err := root.Decode(&d); err != nil {
-			return errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid: "+err.Error(), err)
+			return errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not valid: "+err.Error(), err)
 		}
 		s, ok := d.config().Setup(name)
 		if !ok {
@@ -236,7 +237,7 @@ func setSetupIdentity(home, name string, e identity.Entry) error {
 	return editSetups(home, func(root *yaml.Node) error {
 		ent := setupNode(root, name)
 		if ent == nil {
-			return errs.New(errs.NotFound, "setup "+strconv.Quote(name)+" is not in ~/.lore/"+ConfigFile).WithHint("lore setup list shows the setups")
+			return errs.New(errs.NotFound, "setup "+strconv.Quote(name)+" is not in "+lorehome.Shown()+"/"+ConfigFile).WithHint("lore setup list shows the setups")
 		}
 		idn := identityNode(ent)
 		keepOldKeyAsAlias(idn, e.Key)

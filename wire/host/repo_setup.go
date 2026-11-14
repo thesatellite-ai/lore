@@ -133,6 +133,21 @@ func (f *freshRepo) restore() {
 	}
 }
 
+// settle runs after a set-up command that succeeded: a .lore/ this run
+// made and left with no file in it goes again (devco D-282). Such a run
+// set nothing up here: `lore store init --name me` writes only
+// ~/.lore/config.yaml and the store, yet the repo's full open made the
+// folder (wire/open.go), so a repo with no lore data was left with an
+// empty .lore/ and was no longer byte-identical (standing rule 2). A .lore/
+// holding any file (lore init's rows, store add's stores.yaml) is the
+// command's job and stays.
+func (f *freshRepo) settle() {
+	if f == nil || f.lore == "" {
+		return
+	}
+	removeEmptyFolders(f.lore)
+}
+
 // removeEmptyFolders removes dir and every folder under it that holds
 // nothing, deepest first.
 func removeEmptyFolders(dir string) {

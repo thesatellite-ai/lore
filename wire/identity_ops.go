@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
@@ -109,7 +110,7 @@ func (a *App) SetOrgIdentity(_ context.Context, org string, e opsidentity.Entry)
 	err := editMachineConfig(a.opts.Home, func(root *yaml.Node) error {
 		entry := orgEntry(root, org)
 		if entry == nil {
-			return errs.New(errs.ConfigInvalid, "identity set: ~/.lore/"+ConfigFile+" has no org entry named "+strconv.Quote(org)).
+			return errs.New(errs.ConfigInvalid, "identity set: "+lorehome.Shown()+"/"+ConfigFile+" has no org entry named "+strconv.Quote(org)).
 				WithHint("lore org create or lore org import adds the entry first")
 		}
 		if old := mapGet(entry, configKeyIdentity); old != nil && old.Kind == yaml.MappingNode {
@@ -215,15 +216,15 @@ func (a *App) ShowIdentity(ctx context.Context) (opsidentity.Shown, error) {
 func oldIdentityFileNotes(home string) ([]string, error) {
 	var notes []string
 	for _, f := range []struct{ name, note string }{
-		{identity.LegacyFile, "is from v0.1.17 and is read only while identity: in ~/.lore/" + ConfigFile + " is unset: `lore migrate run` moves it into identity:"},
+		{identity.LegacyFile, "is from v0.1.17 and is read only while identity: in " + lorehome.Shown() + "/" + ConfigFile + " is unset: `lore migrate run` moves it into identity:"},
 		{legacyIdentityTOML, "is from before v0.1.17 and is not read: set who you are with `lore identity set --identity <email>`; `lore identity unset` removes the old file"},
 	} {
 		switch _, err := os.Stat(filepath.Join(home, f.name)); {
 		case err == nil:
-			notes = append(notes, "~/.lore/"+f.name+" "+f.note)
+			notes = append(notes, lorehome.Shown()+"/"+f.name+" "+f.note)
 		case errors.Is(err, fs.ErrNotExist):
 		default:
-			return nil, errs.Wrap(errs.Internal, "wire: check ~/.lore/"+f.name, err)
+			return nil, errs.Wrap(errs.Internal, "wire: check "+lorehome.Shown()+"/"+f.name, err)
 		}
 	}
 	return notes, nil

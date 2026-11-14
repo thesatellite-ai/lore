@@ -3,6 +3,7 @@ package stores
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -264,5 +265,17 @@ func TestWithOrgStores(t *testing.T) {
 	}
 	if err != nil || strings.Join(names, ",") != "kit,a,me" {
 		t.Fatalf("order %v %v, want kit,a,me", names, err)
+	}
+}
+
+// TestStoreInitNamesLoreHome (devco P-1): under LORE_HOME (a second build
+// run as lore-dev with its own home) the personal store line names the
+// config.yaml really written, never ~/.lore/config.yaml.
+func TestStoreInitNamesLoreHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("LORE_HOME", home)
+	line := InitOut{Name: "me", URL: "file:///m", ID: "sto_2", Personal: true}.Text()
+	if strings.Contains(line, "~/.lore/") || !strings.Contains(line, filepath.ToSlash(home)+"/config.yaml") {
+		t.Fatalf("store init under LORE_HOME=%s: %q", home, line)
 	}
 }

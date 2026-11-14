@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -305,7 +306,7 @@ func authenticate(token string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !bearerMatches(r, want) {
 			refuseBearer(w, errs.New(errs.Unauthorized, "missing or wrong bearer token").
-				WithHint("send Authorization: Bearer <the token in ~/.lore/api-token>"))
+				WithHint("send Authorization: Bearer <the token in "+lorehome.Shown()+"/api-token>"))
 			return
 		}
 		next.ServeHTTP(w, r)

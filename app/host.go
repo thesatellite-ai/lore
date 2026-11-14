@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/surface/docs"
@@ -60,7 +61,7 @@ func (h *host) apiCommand() *cobra.Command {
 	port := apiDefaultPort
 	cmd := &cobra.Command{
 		Use:   "api",
-		Short: "Serve the local REST API (127.0.0.1, bearer token in ~/.lore/api-token)",
+		Short: "Serve the local REST API (127.0.0.1, bearer token in " + lorehome.Shown() + "/api-token)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()

@@ -25,6 +25,22 @@ import (
 
 var _ opsmigrate.Aborter = (*App)(nil)
 
+// markModeBWriting records in the running journal that the Mode B
+// conversion is about to write (migrateJournal.ModeBWriting). No running
+// journal (a caller outside migrate run) records nothing.
+func (a *App) markModeBWriting(ctx context.Context) error {
+	_, path, err := a.journalPath(ctx)
+	if err != nil {
+		return err
+	}
+	j, ok, err := readJournal(path)
+	if err != nil || !ok || j.Phase != phaseRunning || j.ModeBWriting {
+		return err
+	}
+	j.ModeBWriting = true
+	return writeJournal(path, j)
+}
+
 // AbortRun implements opsmigrate.Aborter. A run that converted Mode B is
 // left as it is (that conversion has no undo, BUGFIX-07): it says so.
 func (a *App) AbortRun(ctx context.Context) ([]string, error) {
@@ -36,8 +52,8 @@ func (a *App) AbortRun(ctx context.Context) ([]string, error) {
 	if err != nil || !ok || j.Phase != phaseRunning {
 		return nil, err
 	}
-	if j.ModeBPointer != "" {
-		return []string{"the run's shared-database conversion stays (it has no undo); run lore migrate run again once the cause is fixed"}, nil
+	if j.ModeBPointer != "" && j.ModeBWriting {
+		return []string{"except the shared-database conversion, which has no undo and stays; run lore migrate run again once the cause is fixed"}, nil
 	}
 	snaps, err := git.NewSnapshots()
 	if err != nil {

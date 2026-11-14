@@ -30,6 +30,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -212,14 +213,14 @@ var setErrors = append(slices.Clone(readErrors), errs.Stale, errs.StoreLocked)
 func Ops(p Port) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpGet, Summary: "Get a key of ~/.lore/config.yaml (a dotted path, e.g. live.autopush)",
+			Name: OpGet, Summary: "Get a key of " + lorehome.Shown() + "/config.yaml (a dotted path, e.g. live.autopush)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Local: true,
 			Examples: []op.Example{{Title: "read one key", CLI: "lore config get --key live.autopush", Want: ""}},
 		}, func(ctx context.Context, in KeyIn) (Entry, error) {
 			return get(ctx, p, in.Key)
 		}),
 		op.Define(op.Spec{
-			Name: OpSet, Summary: "Set a key of ~/.lore/config.yaml (keeps comments and order)",
+			Name: OpSet, Summary: "Set a key of " + lorehome.Shown() + "/config.yaml (keeps comments and order)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: setErrors, Local: true,
 			Examples: []op.Example{
 				{Title: "turn autopush off", CLI: "lore config set --key live.autopush --value false", Want: "live.autopush"},
@@ -229,14 +230,14 @@ func Ops(p Port) []op.Entry {
 			return set(ctx, p, in)
 		}),
 		op.Define(op.Spec{
-			Name: OpList, Summary: "List every key set in ~/.lore/config.yaml",
+			Name: OpList, Summary: "List every key set in " + lorehome.Shown() + "/config.yaml",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Local: true,
 			Examples: []op.Example{{Title: "every key", CLI: "lore config list", Want: ""}},
 		}, func(ctx context.Context, _ ListIn) (ListOut, error) {
 			return list(ctx, p)
 		}),
 		op.Define(op.Spec{
-			Name: OpCheck, Summary: "Validate ~/.lore/config.yaml (orgs, stores, live settings) and list every problem",
+			Name: OpCheck, Summary: "Validate " + lorehome.Shown() + "/config.yaml (orgs, stores, live settings) and list every problem",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrors, Local: true,
 			Examples: []op.Example{{Title: "validate", CLI: "lore config check", Want: "✓"}},
 		}, func(ctx context.Context, _ CheckIn) (CheckOut, error) {
@@ -253,7 +254,7 @@ func Ops(p Port) []op.Entry {
 			return out, nil
 		}),
 		op.Define(op.Spec{
-			Name: OpUnset, Summary: "Remove a key of ~/.lore/config.yaml (keeps comments and order); --dry-run shows what would go",
+			Name: OpUnset, Summary: "Remove a key of " + lorehome.Shown() + "/config.yaml (keeps comments and order); --dry-run shows what would go",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: setErrors, Local: true,
 			Examples: []op.Example{
 				{Title: "preview removing the personal store", CLI: "lore config unset --key personal.store --dry-run", Want: ""},
@@ -263,7 +264,7 @@ func Ops(p Port) []op.Entry {
 			return unset(ctx, p, in)
 		}),
 		op.Define(op.Spec{
-			Name: OpFmt, Summary: "Rewrite ~/.lore/config.yaml in block style when a list or mapping sits on one line (keeps comments and order)",
+			Name: OpFmt, Summary: "Rewrite " + lorehome.Shown() + "/config.yaml in block style when a list or mapping sits on one line (keeps comments and order)",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: setErrors, Local: true,
 			Examples: []op.Example{
 				{Title: "preview", CLI: "lore config fmt --dry-run", Want: ""},
@@ -322,7 +323,7 @@ func set(ctx context.Context, p Port, in SetIn) (SetOut, error) {
 	// name now that config check knows `policies:` (P3-CFG-6).
 	if parts[0] == policiesKey {
 		return SetOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("config key %q is a policy key; lore config set does not edit policies:", in.Key)).
-			WithHint("nothing written; edit policies: in ~/.lore/config.yaml by hand (it only tightens), or set a team rule with `lore policy set`")
+			WithHint("nothing written; edit policies: in " + lorehome.Shown() + "/config.yaml by hand (it only tightens), or set a team rule with `lore policy set`")
 	}
 	f, err := p.ReadConfigFile(ctx)
 	if err != nil {
@@ -407,7 +408,7 @@ func unset(ctx context.Context, p Port, in UnsetIn) (UnsetOut, error) {
 	}
 	if parts[0] == policiesKey && len(parts) > 1 {
 		return UnsetOut{}, errs.New(errs.InvalidInput, fmt.Sprintf("config key %q is a policy key; lore config unset does not edit inside policies:", in.Key)).
-			WithHint("nothing written; edit policies: in ~/.lore/config.yaml by hand, or remove the whole block with lore config unset policies")
+			WithHint("nothing written; edit policies: in " + lorehome.Shown() + "/config.yaml by hand, or remove the whole block with lore config unset policies")
 	}
 	f, err := p.ReadConfigFile(ctx)
 	if err != nil {

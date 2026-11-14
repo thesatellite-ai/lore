@@ -160,8 +160,15 @@ func noProjectErr(ctx context.Context, top string) error {
 		return UntouchedError(ctx, top)
 	}
 	return orBeforeLore(ctx, top, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
-		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
+		WithHint(noProjectHint))
 }
+
+// noProjectHint is the next step of a command refused in a git repo
+// with no lore data. `lore init` adds .lore/ and an agent-file pointer,
+// which a repo that must stay free of lore files (a docs or skills repo
+// published as is) cannot take; linking it to an org store folder keeps
+// it clean, and personal notes read there with neither (devco P-4).
+const noProjectHint = "lore init sets this repo up (or the This folder step of `lore setup`); to keep it free of lore files, link it to an org store folder instead: lore org link --org <org> --project <folder> (personal notes, --to me, are listed and searched here without either)"
 
 // doctorNoProjectNote is DoctorChecks' one line for a git repo with no
 // lore project (instead of every store check failing to run).
@@ -240,5 +247,5 @@ func UntouchedRepo(ctx context.Context, dir string) string {
 // lore, a sparse cone) gets beforeLoreErr's line instead of "lore init".
 func UntouchedError(ctx context.Context, top string) error {
 	return orBeforeLore(ctx, top, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
-		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
+		WithHint(noProjectHint))
 }

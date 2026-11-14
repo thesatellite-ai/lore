@@ -48,6 +48,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
@@ -372,7 +373,7 @@ func resolveChain(ctx context.Context, in Inputs) (Resolved, error) {
 	}
 	rnd := randHex(ephemeralBytes)
 	r := Resolved{StableKey: KindAuto + kindSep + "ephemeral-" + rnd, DisplayName: "ephemeral-" + rnd, Kind: KindAuto, Step: StepEphemeral,
-		Notes: []string{"no stable identity found; set one with `lore identity set` (identity: in ~/.lore/config.yaml)"}}
+		Notes: []string{"no stable identity found; set one with `lore identity set` (identity: in " + lorehome.Shown() + "/config.yaml)"}}
 	return withSkipNote(r, skipped), nil
 }
 
@@ -412,7 +413,7 @@ func withSkipNote(r Resolved, skipped []Step) Resolved {
 	for i, s := range skipped {
 		names[i] = string(s)
 	}
-	r.Notes = append(r.Notes, "skipped "+strings.Join(names, " and ")+" (an org identity); set a top-level identity: in ~/.lore/config.yaml")
+	r.Notes = append(r.Notes, "skipped "+strings.Join(names, " and ")+" (an org identity); set a top-level identity: in "+lorehome.Shown()+"/config.yaml")
 	return r
 }
 

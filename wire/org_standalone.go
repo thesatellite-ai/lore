@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -286,6 +287,9 @@ func linkPlanLines(plan orgresolve.LinkPlan) []string {
 	var lines []string
 	if plan.Own {
 		lines = []string{fmt.Sprintf("This marks %s as one of %s's OWN repos: %s.", plan.Remote, plan.Entry, notes)}
+		if plan.OwnByPattern {
+			lines = append(lines, fmt.Sprintf("  (it matches %s's own: patterns, so the client leak guards stay off)", plan.Entry))
+		}
 	} else {
 		lines = []string{fmt.Sprintf("This marks %s as a CLIENT repo of %s: %s,", plan.Remote, plan.Entry, notes),
 			fmt.Sprintf("and the leak guards turn on for everyone in %s.", plan.Entry)}
@@ -332,7 +336,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 		if names := s.Config.OrgNames(); len(names) > 0 {
 			hint = "name one of the org entries: " + strings.Join(names, ", ")
 		}
-		return opsorgcmd.Report{}, errs.New(errs.NotFound, fmt.Sprintf("no org entry named %q in ~/.lore/config.yaml", in.Org)).WithHint(hint)
+		return opsorgcmd.Report{}, errs.New(errs.NotFound, fmt.Sprintf("no org entry named %q in "+lorehome.Shown()+"/config.yaml", in.Org)).WithHint(hint)
 	}
 	if s.ProjectID == "" {
 		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "no store links this repo: it has no project id (.lore/data/_meta.json) and no link names its remote").

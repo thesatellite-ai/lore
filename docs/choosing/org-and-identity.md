@@ -20,7 +20,7 @@ Each org entry sorts repos by their address:
 | Role | Set by | What changes |
 |---|---|---|
 | **Own repo** | `own:` patterns, or `lore org link --org agency --project tools --own` | no leak guards (checks that stop private notes reaching a client); the company's notes may live in the repo |
-| **Client repo** | `repos:` patterns, or `lore org link --org agency --project client` (no `--own`) | leak guards on: private kinds go to the store by default, and commits and pull request text are checked for private notes |
+| **Client repo** | `repos:` patterns, or `lore org link --org agency --project client` (no `--own`, and no `own:` pattern matches the repo: one that does links as an own repo) | leak guards on: private kinds go to the store by default, and commits and pull request text are checked for private notes |
 | **No org** | nothing matched | no guards; only your personal `everywhere/` notes load |
 
 A folder that an org answers for but no pattern or link marks as its own is treated as a client repo, so the guards stay on (fail closed). That includes a folder that is not a git repo at all (under a setup's `folders:`) and a clone whose only remote is a local path. `lore whoami` says so on its `repo` line: `not a git repo  (treated as a client repo: guards on)` or `git repo with no hosted remote  (treated as a client repo: guards on)`, where a matched repo shows `client repo  (guards on)`, or `client repo  (guards OFF in this clone: …)` with the command that installs the missing commit leak check.

@@ -38,9 +38,11 @@ const joinFallbackName = "work"
 const joinPlaceholderEmail = "<your email>"
 
 // joinSetupName is the setup name a join answer suggests: an invite's or
-// a named org, else the store url's owner (acme for
-// git@git.acme.example:acme/team-store.git), else its repo name; "" when
-// none is a valid setup name.
+// a named org, else the store url's owner when the url is a forge's
+// owner/repo (acme for git@git.acme.example:acme/team-store.git), else
+// its repo name; "" when none is a valid setup name. A deeper path is a
+// folder on a self-hosted server (ssh://git.example.com/srv/git/team.git),
+// whose first segment (srv) names a disk, never the org (devco P-8).
 func joinSetupName(org, storeURL string) string {
 	if onboard.ValidSetupName(org) {
 		return org
@@ -49,7 +51,7 @@ func joinSetupName(org, storeURL string) string {
 		return ""
 	}
 	cands := []string{}
-	if g, _, ok := onboard.ParseGitURL(storeURL); ok {
+	if g, _, ok := onboard.ParseGitURL(storeURL); ok && g.Owner != "" && urlPathDepth(storeURL) == 2 {
 		cands = append(cands, g.Owner, g.Repo)
 	}
 	cands = append(cands, strings.TrimSuffix(path.Base(strings.TrimRight(storeURL, "/")), ".git"))
@@ -59,6 +61,18 @@ func joinSetupName(org, storeURL string) string {
 		}
 	}
 	return ""
+}
+
+// urlPathDepth is the number of path segments of a store url
+// (2 for git@host:acme/store.git and https://host/acme/store).
+func urlPathDepth(storeURL string) int {
+	p := storeURL
+	if _, rest, ok := strings.Cut(p, "://"); ok {
+		_, p, _ = strings.Cut(rest, "/")
+	} else if _, rest, ok := strings.Cut(p, ":"); ok {
+		p = rest
+	}
+	return len(strings.FieldsFunc(p, func(r rune) bool { return r == '/' }))
 }
 
 // joinCommandSkip are the plan steps the join lines leave out: the folder

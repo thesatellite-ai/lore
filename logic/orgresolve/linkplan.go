@@ -39,7 +39,10 @@ type LinkPlan struct {
 	ProjectID string
 	Remote    string // normalised
 	Own       bool
-	Default   bool
+	// OwnByPattern is true when Own comes from the org's own: patterns
+	// matching Remote, not from --own (the plan lines name the match).
+	OwnByPattern bool
+	Default      bool
 	// StoreExplicit is true when --store named the store, so the writer
 	// refuses a folder that lives in another store instead of following
 	// it (F13, cookbook 14).
@@ -161,8 +164,13 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 		return LinkPlan{}, refuse(fmt.Sprintf("store url %q of org entry %s is not valid: %v", st.URL, o.Name, err),
 			"fix it in "+configFile+" (lore config check lists every problem)")
 	}
+	// devco P-6: a repo matching the org's own: patterns is one of its
+	// own repos whether or not --own was typed; linking it as a client
+	// repo would turn the leak guards on for the org's own code and keep
+	// lore files out of it. OwnByPattern lets the plan lines say why.
+	byPattern := !req.Own && matchesAny(o.Own, []string{remote})
 	return LinkPlan{Entry: o.Name, StoreURL: storeURL, Branch: st.EffectiveBranch(), Folder: req.Folder,
-		ProjectID: pid, Remote: remote, Own: req.Own, Default: req.Default, StoreExplicit: req.StoreURL != "", FromRemote: fromRemote}, nil
+		ProjectID: pid, Remote: remote, Own: req.Own || byPattern, OwnByPattern: byPattern, Default: req.Default, StoreExplicit: req.StoreURL != "", FromRemote: fromRemote}, nil
 }
 
 // storeURLs lists o's store urls for a refusal's next step.

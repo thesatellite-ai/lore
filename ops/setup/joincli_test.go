@@ -17,6 +17,12 @@ func TestJoinSetupName(t *testing.T) {
 		{"", "https://git.acme.example/Acme/team-store.git", "acme"},
 		{"agency", "git@git.acme.example:acme/team-store.git", "agency"},
 		{"", "/srv/git/team-store.git", "team-store"},
+		// devco P-8: a self-hosted folder path never names the setup
+		// after its first segment (a disk), but after the repo
+		{"", "ssh://githost/srv/tmp/co/remotes/team-store.git", "team-store"},
+		{"", "ssh://git.example.com/srv/git/initrode.git", "initrode"},
+		{"", "git@git.example.com:srv/git/initrode.git", "initrode"},
+		{"", "https://git.acme.example/acme/team-store", "acme"},
 		{"", "", ""},
 	} {
 		if got := joinSetupName(c.org, c.url); got != c.want {

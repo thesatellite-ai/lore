@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -193,6 +194,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	missing := missingRideHooks(dir)
 	if len(missing) == 0 {
 		note("post-commit and pre-push hook blocks installed")
+		s.doctorHookBuild(dir, shared, warn, note)
 		return
 	}
 	what := "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + ")"
@@ -218,7 +220,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		return
 	}
 	for _, h := range missing {
-		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared)); ierr != nil {
+		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))); ierr != nil {
 			warn(what + "; installing it failed: " + ierr.Error())
 			return
 		}
@@ -226,6 +228,38 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	// the fixing run's line, which the re-check no longer gives: the
 	// doctor lists it as fixed
 	warn(what + "; installed now in " + dir)
+}
+
+// doctorHookBuild says which lore the clone's hook blocks run when it is
+// not this build (devco P-2): a pinned build that is gone (the blocks then
+// run the first lore on PATH, which may be too old for this clone's rows)
+// is a warning; another build, pinned or first on PATH, is a note. Both
+// name the step that points the blocks at this build.
+func (s *liveSession) doctorHookBuild(dir string, shared bool, warn, note func(string)) {
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, hookPrePush)))
+	if err != nil {
+		return
+	}
+	want := hookPinFor(s.top, dir, shared)
+	fix := "; `doctor --fix` run with the build you want points them at it"
+	got, pinned := pinnedHookProgram(string(b))
+	switch {
+	case pinned && !executableHookFile(filepath.FromSlash(got.prog)):
+		warn("git hooks in " + dir + " run " + got.prog + ", which is gone: they run the first lore on PATH (" + pathLore() + ") instead" + fix)
+	case pinned && got.line() != want:
+		note("git hooks in " + dir + " run " + got.describe() + ", not this build" + fix)
+	case !pinned && want != "" && !shared && !hooksDirInWorkTree(s.top, dir):
+		note("git hooks in " + dir + " run the first lore on PATH (" + pathLore() + "), not this build" + fix)
+	}
+}
+
+// pathLore is the first lore on PATH, for doctor's lines.
+func pathLore() string {
+	p, err := exec.LookPath(binaryName)
+	if err != nil {
+		return "none found"
+	}
+	return p
 }
 
 // missingRideHooks are the ride-along hooks (post-commit, pre-push) in

@@ -29,10 +29,16 @@ const (
 type fakeModeB struct {
 	exp   ModeBExport
 	asked []string
+	// err, when set, is returned instead of exp (the shared lore.db not
+	// found, devco P-3).
+	err error
 }
 
 func (f *fakeModeB) ExportModeB(_ context.Context, pointer string) (ModeBExport, error) {
 	f.asked = append(f.asked, pointer)
+	if f.err != nil {
+		return ModeBExport{}, f.err
+	}
 	return f.exp, nil
 }
 
@@ -332,5 +338,39 @@ func TestModeBProjectAfterConversion(t *testing.T) {
 	}
 	if pid, err := open().Project(ctx); err != nil || pid.String() != modeBProject {
 		t.Fatalf("a new process: project %q, %v; want %s", pid, err, modeBProject)
+	}
+}
+
+// TestModeBRefusedRunLeavesNoJournal (devco P-3): a Mode B run refused
+// before it writes a row (the shared lore.db not found) leaves no journal
+// and no backup ref, and its error does not say a conversion stays; the
+// next run is a fresh run, not "resuming the interrupted migration".
+// Before the fix every Mode B abort kept the journal ("the conversion has
+// no undo"), so the run after the refused one said it was resuming.
+func TestModeBRefusedRunLeavesNoJournal(t *testing.T) {
+	t.Parallel()
+	repo, _, _, open, fake := modeBRepo(t)
+	fake.err = errs.New(errs.NotFound, "migrate: the shared lore.db is not there")
+	_, err := run(t, open(), opsmigrate.OpRun, `{}`, false)
+	if !errs.Has(err, errs.NotFound) {
+		t.Fatalf("run with the shared db missing: %v, want E_NOT_FOUND", err)
+	}
+	if strings.Contains(err.Error(), "conversion") {
+		t.Fatalf("nothing was converted, but the error says a conversion stays: %v", err)
+	}
+	if _, serr := os.Stat(filepath.Join(repo, MigrateJournalFile)); !os.IsNotExist(serr) {
+		t.Fatalf("the refused run left its journal: %v", serr)
+	}
+	if refs := gitIn(t, repo, nil, "for-each-ref", "refs/lore-backup"); strings.TrimSpace(refs) != "" {
+		t.Fatalf("the refused run left a backup ref: %q", refs)
+	}
+	fake.err = nil
+	raw, err := run(t, open(), opsmigrate.OpRun, `{}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := migrateOut(t, raw)
+	if strings.Contains(raw, "resuming") || got.Count != 3 {
+		t.Fatalf("the run after the refused one: %s, want a fresh run of 3 rows (the project and its two memories)", raw)
 	}
 }

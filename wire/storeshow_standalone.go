@@ -27,6 +27,7 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -49,7 +50,7 @@ func (c *standaloneClones) clonesFor() orgcfg.Clones {
 func (c *standaloneClones) configuredStores() ([]*configuredStore, error) {
 	cfg, _, err := orgcfg.LoadConfig(c.home)
 	if err != nil {
-		return nil, errs.Prefix("read ~/.lore/config.yaml", err)
+		return nil, errs.Prefix("read "+lorehome.Shown()+"/config.yaml", err)
 	}
 	if cfg == nil {
 		return nil, nil

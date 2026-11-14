@@ -23,6 +23,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -373,7 +374,7 @@ func DiscoverOps(env Onboard) []op.Entry {
 			Examples: []op.Example{{Title: "what can lore fill in", CLI: "lore setup discover --json", Want: ""}}},
 			e.Discover),
 		op.Define(op.Spec{Name: OpSuggestAgain, Local: true, RESTNoun: restNoun, Permission: op.PermWrite, Access: op.AccessRead,
-			Summary:  "Suggest a setup again for a GitHub account Home stopped suggesting because its setup was purged (remembered in ~/.lore/state)",
+			Summary:  "Suggest a setup again for a GitHub account Home stopped suggesting because its setup was purged (remembered in " + lorehome.Shown() + "/state)",
 			Errors:   with(errs.NotFound),
 			Examples: []op.Example{{Title: "suggest a setup for alice again", CLI: "lore setup suggest-again --login alice", Want: ""}}},
 			e.SuggestAgain),

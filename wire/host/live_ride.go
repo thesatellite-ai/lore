@@ -74,12 +74,13 @@ var rideHookLines = map[string][]string{
 }
 
 // rideBlockLines are rideHookLines[hook], guarded when the hooks folder
-// is shared by every repo (sharedHookLines, D-21).
-func rideBlockLines(hook string, shared bool) []string {
+// is shared by every repo (sharedHookLines, D-21), else led by pin
+// (hookbin.go).
+func rideBlockLines(hook string, shared bool, pin string) []string {
 	if shared {
 		return sharedHookLines("", rideHookLines[hook])
 	}
-	return rideHookLines[hook]
+	return withHookPin(pin, rideHookLines[hook])
 }
 
 // rideInProgressMarkers are files in the git dir that mean the user's
@@ -633,9 +634,10 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		return
 	}
 	hooks := []string{hookPostCommit, hookPrePush}
+	pin := hookPinFor(s.top, dir, shared)
 	writes := make([]hookWrite, 0, len(hooks))
 	for _, hook := range hooks {
-		writes = append(writes, hookWrite{name: hook, marker: rideHookMarker, lines: rideBlockLines(hook, shared)})
+		writes = append(writes, hookWrite{name: hook, marker: rideHookMarker, lines: rideBlockLines(hook, shared, pin)})
 	}
 	// stories H-1: never a new or changed file in a hooks folder the repo
 	// commits (husky's .husky) without asking; `lore fix` writes those
@@ -651,7 +653,7 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		if team[hook] {
 			continue
 		}
-		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared)); err != nil {
+		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared, pin)); err != nil {
 			s.warn("ride-along hooks: " + err.Error())
 			return
 		}

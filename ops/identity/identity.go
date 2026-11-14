@@ -23,6 +23,7 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -309,7 +310,7 @@ var migrateErrorCodes = append(append([]errs.Code{}, errorCodes...), errs.Refuse
 func Ops(m Manager) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpSet, Summary: "Persist an identity: the active setup's in ~/.lore/config.yaml (top-level identity: with no setup), or one org's (--org)",
+			Name: OpSet, Summary: "Persist an identity: the active setup's in " + lorehome.Shown() + "/config.yaml (top-level identity: with no setup), or one org's (--org)",
 			Permission: op.PermWrite, Access: op.AccessRead, Errors: errorCodes, Local: true,
 			Examples: []op.Example{
 				{Title: "your email", CLI: "lore identity set --identity alice@example.com", Want: "identity persisted"},
@@ -365,7 +366,7 @@ func Ops(m Manager) []op.Entry {
 			return MigrateOut{Setup: r.Setup, Verdict: r.Verdict, Top: r.Top, Before: r.Before, After: r.After, Changed: r.Changed, File: r.Path}, nil
 		}),
 		op.Define(op.Spec{
-			Name: OpUnset, Summary: "Clear the active setup's identity and the top-level identity: in ~/.lore/config.yaml (or one org's with --org)",
+			Name: OpUnset, Summary: "Clear the active setup's identity and the top-level identity: in " + lorehome.Shown() + "/config.yaml (or one org's with --org)",
 			Permission: op.PermWrite, Access: op.AccessRead, Errors: errorCodes, Local: true,
 			Examples: []op.Example{{Title: "clear the top-level identity", CLI: "lore identity unset", Want: ""}},
 		}, func(ctx context.Context, in UnsetIn) (WriteOut, error) {

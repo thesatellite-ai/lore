@@ -102,8 +102,10 @@ Then each new person runs one command with their own email, from any folder: no 
 # bob, in ~
 $ lore org import --url git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
 lore: committed locally to store agency/org; lore sync sends it
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_7a67…9504.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_162d…9666.json (store agency/org)
 This adds to ~/.lore/config.yaml:
     name: agency
     identity:
@@ -119,6 +121,7 @@ This adds to ~/.lore/config.yaml:
         - github.com/client/*
 ✓ added org entry agency
 ✓ act_2ad3…f891 Bob Roe (@bob) registered in agency org/
+✓ you are agency's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
 $ cat ~/.lore/config.yaml
 orgs:
   - name: agency
@@ -134,7 +137,7 @@ orgs:
     repos:
       - github.com/client/*
     source:
-      store: sto_162d…9666
+      store: sto_54fe…28f2
       version: 601d2850ffd0
 
 # bob, in website
@@ -144,7 +147,7 @@ identity   Bob Roe <human:bob@agency.example>   act_2ad3…f891  @bob  (from: or
 repo       client repo  (guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; lore fix here installs it)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
-project    prj_54fe…28f2
+project    prj_05e9…4603
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
@@ -152,7 +155,7 @@ personal   not set
 $ lore sync
 lore: pushed store agency/org: commit 86dbae4 to branch main
 store agency: up to date
-store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/org: pushed (sent 3, received 0, merged 0, refused 0)
 ```
 <!-- /example -->
 
@@ -185,18 +188,18 @@ Alice wrote a note into the client's repo by mistake, where the client can read 
 ```console
 # alice, in website
 $ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
-lore: wrote ~/work/website/.lore/data/actors/act_05e9…4603.json
-lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
-✓ mem_c0f3…b5b8
+lore: wrote ~/work/website/.lore/data/actors/act_c0f3…b5b8.json
+lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
+✓ mem_76bd…3f10
   scope: [project]
-$ lore move --id mem_c0f3…b5b8 --to agency --yes
+$ lore move --id mem_76bd…3f10 --to agency --yes
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
-lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
-✓ mem_c0f3…b5b8 moved to store agency (same id; the old copy is tombstoned)
+lore: wrote ~/.lore/stores/agency/notes/client/actors/act_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency)
+lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
+✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
-mem_c0f3…b5b8 [retrieved] the client replies faster on WhatsApp than email [agency/client]
+mem_76bd…3f10 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 ```
 <!-- /example -->
 

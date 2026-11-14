@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -77,7 +78,7 @@ func (e engine) trashStore(ctx context.Context) (Store, TrashStore, error) {
 	}
 	ts, ok := st.(TrashStore)
 	if !ok {
-		return nil, nil, errs.New(errs.Unsupported, "this lore keeps no setup trash").WithHint("edit ~/.lore/config.yaml by hand")
+		return nil, nil, errs.New(errs.Unsupported, "this lore keeps no setup trash").WithHint("edit " + lorehome.Shown() + "/config.yaml by hand")
 	}
 	return st, ts, nil
 }
@@ -105,7 +106,7 @@ func (o ToggleOut) Text() string {
 		return "setup " + o.Name + " is already " + state + "\n"
 	}
 	if o.Disabled {
-		return "disabled setup " + o.Name + ": it stays in ~/.lore/config.yaml but matches no folder, --setup or default; lore setup enable --name " + o.Name + " turns it back on\n"
+		return "disabled setup " + o.Name + ": it stays in " + lorehome.Shown() + "/config.yaml but matches no folder, --setup or default; lore setup enable --name " + o.Name + " turns it back on\n"
 	}
 	return "enabled setup " + o.Name + "\n"
 }
@@ -355,15 +356,15 @@ func purgePreview(cfg onboard.Config, t onboard.TrashedSetup, identity string, i
 		Deletes: []string{"the trashed setup " + t.Setup.Name + " (removed " + t.RemovedAt + ") and its unfinished-step progress"}}
 	keepID, keepStore := identity, cfg.SharedStore
 	if in.ClearIdentity && identity != "" {
-		out.Deletes = append(out.Deletes, "your lore identity ("+identity+") from ~/.lore/config.yaml")
+		out.Deletes = append(out.Deletes, "your lore identity ("+identity+") from "+lorehome.Shown()+"/config.yaml")
 		keepID = ""
 	}
 	if in.ClearPersonalStore && cfg.SharedStore != "" {
-		out.Deletes = append(out.Deletes, "personal.store ("+cfg.SharedStore+") from ~/.lore/config.yaml; the store repo itself stays")
+		out.Deletes = append(out.Deletes, "personal.store ("+cfg.SharedStore+") from "+lorehome.Shown()+"/config.yaml; the store repo itself stays")
 		keepStore = ""
 	}
 	if at := onboard.NewestTrashed(cfg.Trash, t.Setup.Name); onboard.OrgFreedByPurge(cfg, at) {
-		out.Deletes = append(out.Deletes, "the org "+t.Setup.Org+"'s entry (orgs[] in ~/.lore/config.yaml): no other setup uses it, so the team name is free again")
+		out.Deletes = append(out.Deletes, "the org "+t.Setup.Org+"'s entry (orgs[] in "+lorehome.Shown()+"/config.yaml): no other setup uses it, so the team name is free again")
 		if u := cfg.OrgStores[t.Setup.Org]; u != "" {
 			// The team's notes stay readable on this machine in its clone
 			// and caches until the person drops them: say so and how
@@ -372,7 +373,7 @@ func purgePreview(cfg onboard.Config, t onboard.TrashedSetup, identity string, i
 			out.Stays = append(out.Stays, "this machine's copy of the org "+t.Setup.Org+"'s store, with the team's notes: lore store forget --url "+u+" deletes it")
 		}
 	} else if t.Setup.Org != "" {
-		out.Stays = append(out.Stays, "the org "+t.Setup.Org+" (orgs[] in ~/.lore/config.yaml): another setup uses it")
+		out.Stays = append(out.Stays, "the org "+t.Setup.Org+" (orgs[] in "+lorehome.Shown()+"/config.yaml): another setup uses it")
 	}
 	out.Stays = append(out.Stays, onboard.PurgeKeeps(t, keepID, keepStore)...)
 	return out
@@ -446,7 +447,7 @@ func lifecycleOps(e engine, local func(op.Spec) op.Spec) []op.Entry {
 			Permission: op.PermWrite, Errors: with(errs.SetupNameTaken),
 			Examples: []op.Example{{Title: "rename a setup", CLI: "lore setup rename --name old-client --to client-archive", Want: ""}}}),
 			e.Rename),
-		op.Define(local(op.Spec{Name: OpImportDismiss, Summary: "Hide Home's import banner for the values it names (remembered in ~/.lore/state)",
+		op.Define(local(op.Spec{Name: OpImportDismiss, Summary: "Hide Home's import banner for the values it names (remembered in " + lorehome.Shown() + "/state)",
 			Permission: op.PermWrite, Errors: errsPort,
 			Examples: []op.Example{{Title: "dismiss the import banner", CLI: "lore setup import-dismiss --key 0123456789abcdef", Want: ""}}}),
 			e.ImportDismiss),

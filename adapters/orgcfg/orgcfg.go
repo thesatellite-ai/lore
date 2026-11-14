@@ -30,6 +30,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
@@ -149,7 +150,7 @@ func LoadConfig(home string) (cfg *orgconf.Config, exists bool, err error) {
 	}
 	c, perr := orgconf.Parse(b)
 	if perr != nil {
-		return nil, true, errs.Wrap(errs.ConfigInvalid, "~/.lore/config.yaml is not valid: "+perr.Error(), perr).
+		return nil, true, errs.Wrap(errs.ConfigInvalid, lorehome.Shown()+"/config.yaml is not valid: "+perr.Error(), perr).
 			WithHint("run `lore config check` for every problem with its location")
 	}
 	return c, true, nil

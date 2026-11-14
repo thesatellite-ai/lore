@@ -10,6 +10,7 @@ package wire
 import (
 	"context"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -24,7 +25,7 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	}
 	o := cfg.FindOrg(in.Org)
 	if o == nil {
-		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in ~/.lore/config.yaml").
+		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in "+lorehome.Shown()+"/config.yaml").
 			WithHint("entries: lore config check lists them; start one with lore org create --org <org> --store <url>")
 	}
 	want, err := repourl.NormalizeStore(in.URL)
