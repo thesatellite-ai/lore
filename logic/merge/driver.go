@@ -28,6 +28,12 @@ type Driver struct {
 	// OursFirst is Policy.OursFirst for every table (the git merge
 	// driver of a worktree merge).
 	OursFirst bool
+	// TextNewerWins is Policy.TextNewerWins for every table: a text field
+	// both sides changed keeps the newer edit and Result.Replaced names the
+	// value it replaced, never conflict markers in the row (devco O-10: a
+	// force-pushed branch made the git merge driver write markers into a
+	// task title, and every read then showed them).
+	TextNewerWins bool
 }
 
 // Merge implements the git backend's Merger. An empty or whitespace-only
@@ -58,6 +64,7 @@ func (d Driver) Merge(base, ours, theirs []byte) (merged []byte, conflict bool, 
 		}
 	}
 	p.OursFirst = d.OursFirst
+	p.TextNewerWins = p.TextNewerWins || d.TextNewerWins
 	res, err := Rows(p, b, o, t)
 	if err != nil {
 		return nil, false, err

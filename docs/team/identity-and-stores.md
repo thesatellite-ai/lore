@@ -149,8 +149,8 @@ links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
 $ lore sync
 lore: pushed store agency/org: commit 86dbae4 to branch main
-store agency: sent 0, received 0, merged 0, refused 0
-store agency/org: sent 2, received 0, merged 0, refused 0
+store agency: up to date
+store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 ```
 <!-- /example -->
 
@@ -293,9 +293,9 @@ me: push batch every 10m, compact off
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 $ lore sync
 lore: pushed store me: commit 601d285 to branch main
-store me: sent 4, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store me: pushed (sent 4, received 0, merged 0, refused 0)
+store agency/client (here: agency): up to date
+store agency/org: up to date
 $ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
 actors act_7a67…9504
@@ -340,9 +340,9 @@ agency: push batch every 15m, compact off
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
 lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store me: up to date
+store agency/client (here: agency): up to date
+store agency/org: up to date
 
 # bob, in website
 $ lore sync >/dev/null && lore store show --store agency
@@ -451,8 +451,8 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (st
   scope: [project]
 $ lore sync
 lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
-store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/org: up to date
 $ lore memory list
 mem_76bd…3f10 [retrieved] the client signs off designs on Thursdays [agency/client]
 mem_d431…313a [retrieved] staging resets every Sunday night [agency/client]

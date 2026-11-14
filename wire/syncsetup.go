@@ -479,10 +479,8 @@ func syncStoreLines(r opssync.StoreReport) []string {
 		line = head + "FAILED: " + r.Error
 	case opssync.StoreStatusOffline:
 		line = head + "offline: " + r.Error
-	case opssync.StoreStatusUpToDate:
-		line = head + "up to date"
 	default:
-		line = fmt.Sprintf("%s%s (sent %d, received %d, merged %d)", head, r.Status, r.Sent, r.Received, r.Merged)
+		line = storeCountsLine(r.Store, r.Status, r.Sent, r.Received, r.Merged, r.Refused)
 		if r.Pushed && r.Sent == 0 {
 			line += syncPushedNoRows
 		}

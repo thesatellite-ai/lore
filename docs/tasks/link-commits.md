@@ -39,6 +39,8 @@ $ git pull -q --rebase origin main && git push -q origin main
 ```
 <!-- /example -->
 
+If you run `lore sync` instead of the second `git push`, it does not land those rows a second time on the remote: it says they wait in your unpushed commit and names `git push origin main`, so your main never diverges from the remote's.
+
 ## Step 2 — Link the commit to the task
 
 `--commit HEAD` means "my last commit". lore fills in the commit's message, author and time from git.

@@ -94,4 +94,29 @@ func TestJourneyLivePushOptIn(t *testing.T) {
 			t.Fatal("local main and the remote main diverged")
 		}
 	})
+
+	w.Step("day3/lore-sync-after-push-again-never-lands-a-second-copy", func() {
+		// devco O-11: after E_PUSH_AGAIN Robin runs lore sync instead of
+		// git push; it used to push its own land commit of the same row to
+		// main, so local main diverged (ahead 2, behind 1)
+		w.AdvanceDays(1)
+		id := add("string the reel")
+		lap.LoreIn(c, "task", "done", id).OK(t)
+		c.WriteFile("reel.txt", "long\n")
+		c.Git("add", "reel.txt")
+		c.Git("commit", "-q", "-m", "reel")
+		mainBefore := remote.Rev("refs/heads/main")
+		c.TryGit("push", "-q").Says(t, "E_PUSH_AGAIN")
+		lap.LoreIn(c, "sync").OK(t).Says(t, "git push origin main").Never(t, "landed on main")
+		if remote.Rev("refs/heads/main") != mainBefore {
+			t.Fatal("lore sync landed a second copy of the row on main")
+		}
+		c.TryGit("push", "-q").OK(t)
+		if c.Git("rev-parse", "HEAD") != remote.Rev("refs/heads/main") {
+			t.Fatal("local main and the remote main diverged")
+		}
+		if f := remote.FilesMatching("refs/heads/main", "tasks/"); len(f) != 3 {
+			t.Fatalf("main holds %v, want the three finished tasks", f)
+		}
+	})
 }

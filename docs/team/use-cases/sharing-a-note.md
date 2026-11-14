@@ -33,8 +33,6 @@ lore: wrote ~/work/website/.lore/data/memories/mem_f147…5139.json
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
 ✓ mem_f147…5139 moved to store repo (same id; the old copy is tombstoned)
 $ git status --short
-?? .lore/LORE.full.md
-?? .lore/LORE.md
 ?? .lore/data/memories/
 ```
 <!-- /example -->

@@ -273,6 +273,14 @@ type landOutcome struct {
 	Detail     string
 	// Conflicts are named rows that cannot land (conflict markers).
 	Conflicts []string
+	// WaitPush counts finished rows the local Branch already holds in a
+	// commit not pushed yet (the pre-push hook's land commit, E_PUSH_AGAIN):
+	// they wait for the person's git push of WaitCommit instead of landing
+	// a second copy straight onto the remote (devco O-11).
+	WaitPush   int
+	WaitCommit string
+	// Remote is the remote WaitCommit's push goes to (landLines' hint).
+	Remote string
 }
 
 // liveNoteProtected records that the branch refused a direct landing.
@@ -317,6 +325,8 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		}
 	}
 	items = withoutLoneSupporting(items)
+	items, out.WaitPush, out.WaitCommit = s.heldByLocalBranch(ctx, out.Branch, items)
+	out.Remote = s.ref.RemoteName
 	exact := map[live.RowKey]live.File{}
 	// Rows the branch already holds leave live before the landing push, so
 	// a push that carries the live ref (landLive) takes their removal too.
@@ -381,6 +391,39 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 	return out, nil
 }
 
+// heldByLocalBranch splits off the items the local branch already holds
+// in commits its remote does not have yet: the land commit lore's pre-push
+// hook adds to the person's main before it stops the push (E_PUSH_AGAIN).
+// Landing them again would build a second land commit of the same rows on
+// the remote's tip, beside the person's unpushed one, and leave local main
+// diverged (devco O-11); they go with the person's git push instead. It
+// returns the items still to land, how many wait and the local tip they
+// wait in. Anything it cannot read lands as before.
+func (s *liveSession) heldByLocalBranch(ctx context.Context, branch string, items []live.LandItem) ([]live.LandItem, int, string) {
+	if len(items) == 0 || branch == "" || s.ref.RemoteName == "" {
+		return items, 0, ""
+	}
+	local, ok, err := s.repo.ResolveRef(ctx, "refs/heads/"+branch)
+	if err != nil || !ok {
+		return items, 0, ""
+	}
+	tracking, ok, err := s.repo.ResolveRef(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch)
+	if err != nil || !ok || local == tracking {
+		return items, 0, ""
+	}
+	if pushed, aerr := s.repo.IsAncestor(ctx, local, tracking); aerr != nil || pushed {
+		return items, 0, "" // nothing of the local branch waits to be pushed
+	}
+	_, changed, err := live.BuildLanding(ctx, func(p string) ([]byte, bool, error) { return s.repo.ReadFile(ctx, local, p) }, items, s.layout())
+	if err != nil {
+		return items, 0, ""
+	}
+	if len(changed) == len(items) {
+		return items, 0, ""
+	}
+	return changed, len(items) - len(changed), local
+}
+
 // withoutLoneSupporting drops companion rows when no other row lands with
 // them: a plain `lore task add` must not move the branch (F2).
 func withoutLoneSupporting(items []live.LandItem) []live.LandItem {
@@ -391,6 +434,11 @@ func withoutLoneSupporting(items []live.LandItem) []live.LandItem {
 	}
 	return nil
 }
+
+// landWaitPushLine is landLines' line for rows that wait in a land commit
+// on the local default branch (landOutcome.WaitPush): prefix, count,
+// branch, short commit, remote, branch.
+const landWaitPushLine = "%s%d finished row(s) wait in your unpushed %s commit %s (lore's pre-push hook added it); not landed again: send it with `git push %s %s`"
 
 // shortSHALen is how much of a commit id output shows.
 const shortSHALen = 7
@@ -422,6 +470,13 @@ func landLines(out landOutcome) []string {
 	case live.LandRefused:
 		lines = append(lines, liveLogPrefix+branch+" refused the landing: "+out.Detail)
 	case live.LandNothing, live.LandNoRemote:
+	}
+	if out.WaitPush > 0 {
+		sha := out.WaitCommit
+		if len(sha) > shortSHALen {
+			sha = sha[:shortSHALen]
+		}
+		lines = append(lines, fmt.Sprintf(landWaitPushLine, liveLogPrefix, out.WaitPush, branch, sha, out.Remote, branch))
 	}
 	if out.Left > 0 {
 		lines = append(lines, fmt.Sprintf("%s%d row(s) left live (%s holds them)", liveLogPrefix, out.Left, branch))

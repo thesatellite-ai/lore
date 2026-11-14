@@ -283,6 +283,7 @@ alice (work/website)$ cat .lore/data/_meta.json
     "policy",
     "trash"
   ],
+  "format": 2,
   "min_lore_version": "0.1.18",
   "project_id": "prj_c0f3c11a5724b0cfd74b256190d9b5b8",
   "repo_id": "rep_05e99e22e9e86e96fe4daa7777994603",

@@ -630,7 +630,7 @@ func (b *Backend) replayOnto(ctx context.Context, remote, h, base string) (bool,
 	if err := b.resetTo(ctx, ours); err != nil {
 		return false, nil, err
 	}
-	_, refused, err := b.threeWayResolve(ctx, theirs, env)
+	_, refused, _, err := b.threeWayResolve(ctx, theirs, env)
 	if err != nil || len(refused) > 0 {
 		return false, refused, joinKeep(err, b.resetTo(ctx, h))
 	}

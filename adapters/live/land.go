@@ -55,6 +55,14 @@ type LandDecision struct {
 	Reason string
 }
 
+// OnMain reports whether the row stays live only because the default
+// branch already holds this exact version: an open row at live.max_age
+// whose copy landed (devco N-14: lore doctor kept calling such rows "not
+// copied to main yet", and no lore sync could clear it).
+func (d LandDecision) OnMain() bool {
+	return d.Action == LandStay && d.Reason == reasonOnMain
+}
+
 // Reasons, as printed.
 const (
 	reasonConflict     = "conflict markers: settle it with `lore sync resolve` first"

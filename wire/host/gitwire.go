@@ -415,9 +415,13 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			return
 		}
 	default:
+		attrsBefore, _ := os.ReadFile(filepath.Clean(attrs)) // missing reads as empty: the block is then new
 		if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
 			s.warn("git wiring: " + err.Error())
 			return
+		}
+		if attrsAfter, _ := os.ReadFile(filepath.Clean(attrs)); string(attrsAfter) != string(attrsBefore) {
+			wire.HostWiringOf(ctx).Note(gitAttributesFile) // devco N-5: lore fix names it
 		}
 		if err := dropFileBlock(localAttrs, gitBlockMarker); err != nil {
 			s.warn("git wiring: " + err.Error())

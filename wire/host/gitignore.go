@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -55,7 +56,12 @@ const gitignoreMode = 0o644
 // command runs in.
 func GitignoreHook(workDir string) Hook {
 	var once sync.Once
-	return Hook{Name: HookGitignore, Before: func(ctx context.Context, run *Run) error {
+	var wrote []string // tracked files Before wrote (devco N-5: lore fix names them)
+	return Hook{Name: HookGitignore, Around: func(ctx context.Context, run *Run, next Next) (op.Result, error) {
+		hw := &wire.HostWiring{Rewire: rewireTracked}
+		hw.Note(wrote...)
+		return next(wire.WithHostWiring(ctx, hw))
+	}, Before: func(ctx context.Context, run *Run) error {
 		if !NeedsGitignore(run) || dryRun(run) {
 			return nil // a dry run writes nothing, info/exclude included
 		}
@@ -99,6 +105,7 @@ func GitignoreHook(workDir string) Hook {
 			added, e := ensureGitignore(ctx, root)
 			if len(added) > 0 {
 				announceGitignore(os.Stderr, root, added)
+				wrote = append(wrote, gitignoreName)
 			}
 			if e != nil {
 				err = errs.Wrap(errs.Internal, "update "+gitignoreName, e)
@@ -308,4 +315,33 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 	}
 	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",
 		strings.Join(added, ", "), reason)
+}
+
+// rewireTracked writes lore's tracked wiring of the project at root now:
+// the .gitignore lines and the .gitattributes merge block, each announced
+// as the hooks announce them. It returns the files (relative to root) it
+// changed. lore fix calls it (wire.HostWiring.Rewire) right after its
+// migrate step raised the project's format, so the run that migrated also
+// leaves the wiring for the same commit (devco N-5). A repo with no lore
+// data, or one still on the 0.1.17 format, gets nothing.
+func rewireTracked(ctx context.Context, root string) []string {
+	if !wire.HoldsLoreData(root) || wire.ProjectFormatOld(root) || os.Getenv(EnvSyncGit) == envOff {
+		return nil
+	}
+	var out []string
+	if added, err := ensureGitignore(ctx, root); err == nil && len(added) > 0 {
+		announceGitignore(os.Stderr, root, added)
+		out = append(out, gitignoreName)
+	}
+	attrs := filepath.Join(root, gitAttributesFile)
+	before, _ := os.ReadFile(filepath.Clean(attrs)) // a missing file reads as empty: the block is then new
+	if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "lore: git wiring: "+err.Error()) // stderr gone: nothing left to report to
+		return out
+	}
+	if after, _ := os.ReadFile(filepath.Clean(attrs)); string(after) != string(before) {
+		_, _ = fmt.Fprintf(os.Stderr, "lore fix: set up git for lore's row files in this clone: lore's merge rules in %s (`lore where` lists everything lore keeps here)\n", attrs)
+		out = append(out, gitAttributesFile)
+	}
+	return out
 }

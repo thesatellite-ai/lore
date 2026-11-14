@@ -96,6 +96,13 @@ func dropSettledTrashFields(res *Result) {
 		}
 	}
 	res.NewerWins = kept
+	var replaced []FieldConflict
+	for _, r := range res.Replaced {
+		if !isTrashField(r.Field) {
+			replaced = append(replaced, r)
+		}
+	}
+	res.Replaced = replaced // the Trash outcome names them, not "replaced" (devco O-10)
 }
 
 // edited reports whether side changed a field other than the delete and

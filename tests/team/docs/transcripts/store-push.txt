@@ -34,9 +34,9 @@ me: push batch every 10m, compact off
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 alice (work/website)$ lore sync
 lore: pushed store me: commit 601d285 to branch main
-store me: sent 4, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store me: pushed (sent 4, received 0, merged 0, refused 0)
+store agency/client (here: agency): up to date
+store agency/org: up to date
 alice (work/website)$ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
 
@@ -79,9 +79,9 @@ agency: push batch every 15m, compact off
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
 lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store me: up to date
+store agency/client (here: agency): up to date
+store agency/org: up to date
 bob (work/website)$ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin)
@@ -106,8 +106,8 @@ alice (work/website)$ lore store compact --store agency --before 30d --yes
   pushed store agency: commit 05513aa to branch main
 bob (work/website)$ lore sync
 lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
-store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/org: up to date
 bob (work/website)$ lore memory list
 mem_76bd560aff0771fab8457dbfa9823f10 [retrieved] the client signs off designs on Thursdays [agency/client]
 mem_d4314eba822f1bf5908b2b8ded5f313a [retrieved] staging resets every Sunday night [agency/client]
