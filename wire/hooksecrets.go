@@ -391,6 +391,9 @@ func scanDocs(sc scan.Scanner, allows hookAllows, paths []string, docs map[strin
 // A hit a .gitleaksignore fingerprint names (path, rule, line) is dropped
 // last, on the hits as the refusal would print them.
 func scanDoc(sc scan.Scanner, allows hookAllows, p string, b []byte, inStore bool) []leakcheck.SecretHit {
+	if isBinaryDoc(b) {
+		return nil // devco:Q-8: a binary file is not scanned (git's rule, as gitleaks)
+	}
 	content := string(b)
 	if strings.Contains("/"+p, "/"+loreDataMark) || (inStore && isStoreRowPath(p)) {
 		if r, err := row.Decode(b); err == nil && !r.ID.IsZero() {

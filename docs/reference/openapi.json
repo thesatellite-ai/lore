@@ -9284,6 +9284,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "commit_missing": {
+                      "type": "boolean"
+                    },
                     "count": {
                       "type": "integer"
                     },

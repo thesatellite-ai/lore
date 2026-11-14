@@ -276,6 +276,17 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		return nil
 	}
 
+	// devco:Q-15: while a rebase, merge, cherry-pick, revert or bisect is
+	// stopped in this work tree, an explicit render leaves the tracked
+	// render and pointer files as they are: a changed tracked file makes
+	// `git rebase --continue` refuse and survives `git merge --abort`.
+	// (The quiet renders have their own rule: rerenderStaleQuiet, and the
+	// hooks skip while history is in progress.)
+	if gop, busy := wire.GitOpRunning(ctx, root); busy && !f.quiet && renderTracked(ctx, root) {
+		fmt.Fprintf(f.out(), "%s lore render: nothing written: %s\n", h.decor.muted("·"), gitOpHeldLine(gop))
+		return nil
+	}
+
 	// Generated content goes to the out file (default .lore/LORE.md), never
 	// into a tool's own file — so hand-written content there is never
 	// clobbered. Each tool file only receives an idempotent pointer block

@@ -189,7 +189,7 @@ func TestDoctorBreak_BrokenRowFiles(t *testing.T) {
 			rep, res := p.doctor(t)
 			s := rep.Sync
 			if rep.Status != "broken" || s == nil || len(s.FileErrors) != 1 || s.FileErrors[0].Path != rel || s.FileErrors[0].Kind != tc.kind ||
-				s.OpenConflicts != tc.conflicts || !hasLine(rep.Errors, "store repo: "+rel+" is not a usable row file", tc.cause, tc.next, "(every read leaves it out)") {
+				s.OpenConflicts != tc.conflicts || !hasLine(rep.Errors, "this repo: "+rel+" is not a usable row file", tc.cause, tc.next, "(every read leaves it out)") {
 				t.Fatalf("broken row file %q: %s", tc.name, res)
 			}
 			// Reads leave it out, and say so on stderr pointing at doctor.

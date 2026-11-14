@@ -43,8 +43,16 @@ func TestLiveDoctorFixInstallsRideHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := hookLines(read.Warnings); len(w) != 1 || !strings.Contains(w[0], "run `lore fix`") {
-		t.Fatalf("a read: warnings %q, want the missing-block warning pointing at lore fix", read.Warnings)
+	// devco:Q-16: one warning names the missing blocks (the leak guard's,
+	// the pre-push block is one of its hooks) with one next step.
+	var blockLines []string
+	for _, l := range read.Warnings {
+		if strings.Contains(l, "hook block") {
+			blockLines = append(blockLines, l)
+		}
+	}
+	if len(blockLines) != 1 || !strings.Contains(blockLines[0], "run `lore fix` to restore them") || strings.Contains(blockLines[0], "lore sync") {
+		t.Fatalf("a read: warnings %q, want one missing-block warning pointing at lore fix", read.Warnings)
 	}
 	if got := missingRideHooks(dir); len(got) != 2 {
 		t.Fatalf("a read installed hook blocks: still missing %v", got)

@@ -825,6 +825,11 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	for _, t := range slices.Sorted(maps.Keys(pending)) {
 		out.Pending = append(out.Pending, t.String()+": "+plural(pending[t], "row")+" at v1")
 	}
+	// devco P-9: the v1 rows of the attached stores' folders this repo
+	// does not attach count too, each folder its own place and line
+	if err := a.statusUnattached(ctx, st, out); err != nil {
+		out.Notes = append(out.Notes, err.Error())
+	}
 	for _, t := range slices.Sorted(maps.Keys(left)) {
 		out.Notes = append(out.Notes, t.String()+": "+plural(left[t], "row")+" at v1 that lore migrate run leaves as they are (it says why)")
 	}

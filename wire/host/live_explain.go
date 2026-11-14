@@ -257,7 +257,7 @@ func (s *liveSession) findTableInTree(folder, id string) string {
 // findTableAt is the table of id in rev's .lore/data of folder ("" when
 // rev has no such row file; one ls-tree).
 func (s *liveSession) findTableAt(ctx context.Context, rev, folder, id string) string {
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", "--name-only", rev, "--", mainDataPath(folder, "")}})
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", rev, "--", mainDataPath(folder, "")}})
 	if err != nil {
 		return ""
 	}

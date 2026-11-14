@@ -58,7 +58,15 @@ var ErrWIPLimit = errors.New("signals: work-in-progress limit reached")
 type WIPError struct {
 	Held []Held
 	Max  int
+	// PerCheckout is true for a person (devco:Q-1): the limit counts the
+	// claims held in this checkout (one worktree), not a session, so the
+	// message says "this worktree" and offers another worktree.
+	PerCheckout bool
 }
+
+// maxClaimsKey is the config key of the WIP limit, spelled out in the
+// refusal so `lore config set --key` takes it as printed.
+const maxClaimsKey = "agents.max_claims_per_agent"
 
 func (e *WIPError) Error() string {
 	ids := ""
@@ -72,7 +80,12 @@ func (e *WIPError) Error() string {
 	if len(e.Held) > 0 {
 		first = e.Held[0].Signal.Task
 	}
-	return fmt.Sprintf("this session already holds %s (max_claims_per_agent %d); finish it (lore task done --id %s) or release it (lore task release --id %s) first", ids, e.Max, first, first)
+	holder, other := "this session", "start another agent session"
+	if e.PerCheckout {
+		holder, other = "this worktree", "claim it from another worktree (git worktree add)"
+	}
+	return fmt.Sprintf("%s already holds %s (%s %d); finish it (lore task done --id %s) or release it (lore task release --id %s) first; or %s; or raise the limit (lore config set --key %s --value %d)",
+		holder, ids, maxClaimsKey, e.Max, first, first, other, maxClaimsKey, e.Max+1)
 }
 
 // Unwrap lets errors.Is(err, ErrWIPLimit) match.
@@ -139,6 +152,10 @@ type ClaimRequest struct {
 	Exempt func(task string) bool
 	// MaxClaims is agents.max_claims_per_agent (0 = unlimited).
 	MaxClaims int
+	// PerCheckout marks a person's claim (devco:Q-1): Exempt already drops
+	// the claims held in other checkouts, and the refusal names the
+	// worktree instead of a session.
+	PerCheckout bool
 	// MaxAttempts is agents.max_attempts (0 = unlimited).
 	MaxAttempts int
 	Row         RowState
@@ -210,7 +227,7 @@ func DecideClaim(v View, req ClaimRequest) (ClaimPlan, error) {
 			}
 		}
 		if len(held) >= req.MaxClaims {
-			return ClaimPlan{}, &WIPError{Held: held, Max: req.MaxClaims}
+			return ClaimPlan{}, &WIPError{Held: held, Max: req.MaxClaims, PerCheckout: req.PerCheckout}
 		}
 	}
 	plan.Attempts = req.Row.Attempts

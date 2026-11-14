@@ -112,3 +112,21 @@ func TestEOFEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestRowScreenEscapesControls is devco:R-3 (and I-16 for the browser): a
+// row that reached the store by plain git holding an ESC sequence, a
+// right-to-left override or a zero-width space prints them as escapes on
+// the rows and row screens, never raw.
+func TestRowScreenEscapesControls(t *testing.T) {
+	src := fakeSource{rows: map[row.Table][]row.Row{"memories": {memRow(t, "safe \u202eetirw\u202c x\u200by \x1b[2Jcleared", "s3cr3t")}}}
+	out, err := run(t, src, Options{Kind: "memory"}, "1", "q")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(out, "\u202e\u202c\u200b\x1b") {
+		t.Fatalf("raw control reached the terminal:\n%+q", out)
+	}
+	if !strings.Contains(out, `safe \u202eetirw\u202c x\u200by \x1b[2Jcleared`) {
+		t.Fatalf("escaped text missing:\n%s", out)
+	}
+}

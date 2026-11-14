@@ -75,6 +75,11 @@ const (
 	// them and what to do.
 	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`) and in the folders you name; name the folders holding your repos (lore fix --all --dirs ~/code --dirs ~/work), run `lore fix` inside each repo, or add the folder to a setup"
 	LineStepsFailed = "Not everything is current: these steps failed, see their lines above: "
+	// LineLeftForYou replaces LineCurrent when every step ran clean but
+	// errors remain that no step repairs (devco R-8: "Everything is
+	// current." followed by errors and Status: BROKEN read as two verdicts);
+	// each error line names its own next step.
+	LineLeftForYou = "Every step is done, but lore fix cannot repair the errors below; each names its next step."
 )
 
 // Env is what fix.run needs; *wire.App implements it.
@@ -401,6 +406,8 @@ func (o Out) Text() string {
 		}
 	case o.DryRun:
 		b.WriteString(LineDryRun + "\n")
+	case !doctor.Changed(o.Steps) && (len(o.Errors) > 0 || o.Status == doctor.StatusBroken):
+		b.WriteString(LineLeftForYou + "\n")
 	case !doctor.Changed(o.Steps):
 		b.WriteString(LineCurrent + "\n")
 	}

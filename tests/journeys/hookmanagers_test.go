@@ -80,6 +80,11 @@ func TestJourneyHookManagers(t *testing.T) {
 		if i < 0 || !strings.HasPrefix(strings.TrimSpace(out[i+len("Warnings:"):]), "- live: leak guard off in this clone") || !strings.Contains(out, "run `lore fix` to restore them") {
 			t.Fatalf("doctor's first warning is not the leak guard with lore fix:\n%s", r)
 		}
+		// devco:Q-16: one cause, one line, one next step: no "git is not
+		// set up for lore's row files … lore sync" opener and no second
+		// "git hook block missing … (or lore sync)" warning.
+		r.Never(t, "git is not set up for lore's row files", "git hook block missing").
+			Says(t, "core.hooksPath=.husky", "run `lore fix` again after it reinstalls its hooks")
 	})
 
 	w.Step("day2/a-key-slips-through-and-the-next-command-names-it", func() {

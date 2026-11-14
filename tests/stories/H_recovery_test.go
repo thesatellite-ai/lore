@@ -276,8 +276,9 @@ func TestStoryHRewrites(t *testing.T) {
 		la.CommitAll("pagination cursor work")
 		lead.LoreIn(la, "link", "add", "--entity", task, "--commit", "HEAD").OK(t)
 		la.CommitAll("link the work")
-		la.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)")
-		lead.LoreIn(la, "commit", "show", "--id", la.Git("rev-parse", "HEAD~1")).OK(t).Says(t, "tasks/"+task)
+		la.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)", "committed them as")
+		// devco:Q-5: lore's own commit on top carries the moved link
+		lead.LoreIn(la, "commit", "show", "--id", la.Git("rev-parse", "HEAD~2")).OK(t).Says(t, "tasks/"+task)
 		lead.LoreIn(la, "doctor").Never(t, "commit_links:")
 	})
 

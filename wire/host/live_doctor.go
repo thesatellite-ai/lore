@@ -210,6 +210,9 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		note(what + "; this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it")
 		return
 	}
+	if !fix && len(s.guardOff(ctx, dir)) > 0 {
+		return // devco:Q-16: the leak-guard warning names these blocks and `lore fix` (doctorGuard)
+	}
 	if !fix {
 		warn(what + "; run `lore fix` (or `lore sync`) to install it; a read never does")
 		return
@@ -290,14 +293,14 @@ func (s *liveSession) clientHooksInWorkTree(ctx context.Context, dir string) boo
 // never changes (doctorHooks says so), and on the 0.1.17 format.
 func (s *liveSession) doctorGuard(ctx context.Context) []string {
 	dir, _, err := s.hooksFolder(ctx)
-	if err != nil || wire.ProjectFormatOld(s.top) {
+	if err != nil {
 		return nil
 	}
-	missing := missingGuardHooks(dir)
-	if len(missing) == 0 || s.neverWired(ctx, dir) || s.clientHooksInWorkTree(ctx, dir) {
+	missing := s.guardOff(ctx, dir)
+	if len(missing) == 0 {
 		return nil
 	}
-	out := []string{liveDoctorPrefix + s.guardOffText(ctx, dir, missing) + "; run `lore fix` to restore them"}
+	out := []string{liveDoctorPrefix + s.guardOffText(ctx, dir, missing) + s.guardNextStep(ctx)}
 	if found := s.unguardedLeaks(ctx); found != "" {
 		out = append(out, liveDoctorPrefix+found)
 	}

@@ -19,6 +19,10 @@ import (
 	"testing"
 )
 
+// exitNotAStore is E_NOT_A_STORE's exit code: every refusal for a
+// checkout of a lore repo without .lore/ here (devco:Q-4).
+const exitNotAStore = 19
+
 func TestJourneyCheckoutsOfALoreRepo(t *testing.T) {
 	t.Parallel()
 	w := NewWorld(t)
@@ -41,10 +45,27 @@ func TestJourneyCheckoutsOfALoreRepo(t *testing.T) {
 		det := filepath.Join(filepath.Dir(repo.Dir), "checkouts-old")
 		repo.Git("worktree", "add", "-q", "--detach", det, "HEAD~1")
 		old := repo.In(filepath.Join("..", "checkouts-old"))
-		lap.LoreIn(old, "task", "list").Refused(t, "from before lore was added", "git switch").Never(t, "lore init sets this repo up")
-		lap.LoreIn(old, "task", "add", "--title", "x", "--commitment", "accepted").Refused(t, "from before lore was added").Never(t, "run `lore init`")
+		// devco:Q-4: a read and a write refuse with one exit code.
+		lap.LoreIn(old, "task", "list").Fails(t, exitNotAStore, "from before lore was added", "git switch").Never(t, "lore init sets this repo up")
+		lap.LoreIn(old, "task", "add", "--title", "x", "--commitment", "accepted").Fails(t, exitNotAStore, "from before lore was added").Never(t, "run `lore init`")
 		if _, err := os.Stat(filepath.Join(det, ".lore")); err == nil {
 			t.Fatal("a refused command made .lore in the old checkout")
+		}
+	})
+
+	w.Step("day2/sparse-cone-without-lore-one-refusal", func() {
+		// devco:Q-4: a read said E_NOT_A_STORE (19) and a write E_NOT_FOUND
+		// (27) for the same sparse cone; both now give one code and words.
+		repo.Git("push", "-q", "origin", "HEAD")
+		sp := lap.Clone(app, "checkouts-sparse")
+		sp.Git("sparse-checkout", "set", "--cone", "src")
+		if _, err := os.Stat(filepath.Join(sp.Dir, ".lore")); err == nil {
+			t.Fatal("the cone still holds .lore; the step tests nothing")
+		}
+		read := lap.LoreIn(sp, "task", "list").Fails(t, exitNotAStore, "sparse checkout leaves .lore/ out", "git sparse-checkout add .lore")
+		write := lap.LoreIn(sp, "memory", "add", "--body", "x", "--no-live").Fails(t, exitNotAStore, "sparse checkout leaves .lore/ out", "git sparse-checkout add .lore")
+		if !strings.Contains(read.Out(), "[E_NOT_A_STORE]") || !strings.Contains(write.Out(), "[E_NOT_A_STORE]") {
+			t.Fatalf("one code for one cause:\nread: %s\nwrite: %s", read, write)
 		}
 	})
 

@@ -384,7 +384,8 @@ const renderSkippedNoProject = "skipped: nothing to render: "
 
 // noProjectToRender reports whether err is Project's "no lore project".
 func noProjectToRender(err error) bool {
-	return errs.Has(err, errs.NotFound) && strings.Contains(err.Error(), noLoreProject)
+	// checkoutNoLoreCode: a checkout without .lore/ here (devco:Q-4)
+	return (errs.Has(err, errs.NotFound) || errs.Has(err, checkoutNoLoreCode)) && strings.Contains(err.Error(), noLoreProject)
 }
 
 // dryNeedsStores reports a dry run's migrate step stopped only because a

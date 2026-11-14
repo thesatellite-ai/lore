@@ -10,8 +10,6 @@ package wire
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -19,26 +17,8 @@ import (
 // gitOpInProgress names the git operation a stopped work tree is in ("" when
 // none): the marker file or folder git keeps in the git dir.
 func gitOpInProgress(ctx context.Context, dir string) string {
-	for _, op := range []struct{ path, name string }{
-		{"rebase-merge", "rebase"}, {"rebase-apply", "rebase"}, {"MERGE_HEAD", "merge"},
-		{"CHERRY_PICK_HEAD", "cherry-pick"}, {"REVERT_HEAD", "revert"},
-	} {
-		out, err := gitRun{dir: dir, args: []string{"rev-parse", "--git-path", op.path}}.output(ctx)
-		if err != nil {
-			continue
-		}
-		p := strings.TrimSpace(string(out))
-		if p == "" {
-			continue
-		}
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(dir, p)
-		}
-		if _, serr := os.Stat(p); serr == nil {
-			return op.name
-		}
-	}
-	return ""
+	op, _ := GitOpRunning(ctx, dir)
+	return op.Name
 }
 
 // unmergedLoreFiles lists the unmerged paths under dataRel, each once, in

@@ -28,7 +28,7 @@ func ErrSymlink(err error) bool { return errors.Is(err, errSymlink) }
 
 // refuseSymlink is the error for a symlink found at rel.
 func refuseSymlink(rel string) error {
-	return errs.Wrap(errs.BadPath, "rowfs: "+quote(rel)+" is a symlink; lore never follows links inside a store", errSymlink)
+	return errs.Wrap(errs.BadPath, "rowfs: "+quote(rel)+" is a symlink; lore never follows links in its data (a store or a repo's .lore/data)", errSymlink)
 }
 
 // checkChain Lstats every existing component of rel (slash-separated,

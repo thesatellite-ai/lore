@@ -119,6 +119,16 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 	// (the result is then written even when it equals the upcast ours,
 	// so the file lands at `_v: 2` beside the migrated rows)
 	oursFile := ours
+	// devco Q-6: git's add/add (no copy at the merge base) is still true
+	// for the rule below, but the field diff runs against the copy both
+	// histories share (a cherry-picked row), so an edit to a field the
+	// other side never touched is kept (mergedriver_base.go).
+	addAdd := len(bytes.TrimSpace(base)) == 0
+	if addAdd {
+		if hb := historyBase(ctx, repoPath, theirsPath); len(bytes.TrimSpace(hb)) > 0 {
+			base = hb
+		}
+	}
 	up := wire.UpcastForMerge(base, ours, theirs)
 	base, ours, theirs = up[0], up[1], up[2]
 	var res merge.Result
@@ -128,7 +138,6 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 	// replaced value is named below, never markers in the row. A clash
 	// over a common base keeps the documented manual settle (markers,
 	// lore sync conflicts / resolve).
-	addAdd := len(bytes.TrimSpace(base)) == 0
 	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }, OursFirst: true, TextNewerWins: addAdd}.Merge(base, ours, theirs)
 	if err != nil {
 		// Not a core row on some side (a hand edit, a file of another

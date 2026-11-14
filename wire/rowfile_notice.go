@@ -37,11 +37,19 @@ type problemer interface {
 func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // rowFilePlace is how a line names a file: its path from the store's top
-// prefixed by its store ("store repo: .lore/data/rules/x.json", "store
-// team: acme/rules/x.json").
+// prefixed by its store ("store team: acme/rules/x.json"), or by "this
+// repo" for the repo's own .lore/data, which is no store (devco R-8:
+// "this repo: .lore/data/rules/x.json").
 func rowFilePlace(b store.Backend, src store.Source, folder, rel string) string {
+	if src == store.SourceRepo {
+		return rowFileRepoPrefix + rowFileRel(b, src, folder, rel)
+	}
 	return "store " + string(src) + ": " + rowFileRel(b, src, folder, rel)
 }
+
+// rowFileRepoPrefix starts a doctor line about a file of the repo's own
+// .lore/data.
+const rowFileRepoPrefix = "this repo: "
 
 // What a left-out row file's line says about reads. A file that does not
 // decode is in no read at all; a row whose text field or meta holds a
@@ -81,7 +89,7 @@ func rowFileNext(p rowfs.Problem) string {
 // rowFileNotices hands Options.Notice one line per row file the open's
 // refresh left out. Called once per opened state from App.state, with
 // a.mu held: it reads st only, never an App method (that would deadlock).
-func (a *App) rowFileNotices(st *state) {
+func (a *App) rowFileNotices(ctx context.Context, st *state) {
 	if a.opts.Notice == nil || st == nil {
 		return
 	}
@@ -97,7 +105,7 @@ func (a *App) rowFileNotices(st *state) {
 		}
 		for _, p := range rp.ReadProblems() {
 			a.opts.Notice("lore: " + rowFileNoticePlace(st.byName[n], n, st.folders[n], p.Path) + " is not a usable row file: " + plainReason(p) + "; " + leftOutNote(p, rowFileNoticeLeftOut) +
-				"\n  next: " + rowFileNext(p))
+				"\n  next: " + rowFileStep(ctx, st.byName[n], n, st.folders[n], p.Path, rowFileNext(p)))
 		}
 	}
 }
@@ -158,7 +166,7 @@ func (a *App) DoctorRowFiles(ctx context.Context) ([]DoctorFinding, error) {
 			return out, perr
 		}
 		for _, p := range probs {
-			next := rowFileNext(p)
+			next := rowFileStep(ctx, st.byName[src], src, st.folders[src], p.Path, rowFileNext(p))
 			out = append(out, DoctorFinding{Check: DoctorCheckRowFile, Level: DoctorError, Store: src, Plain: true,
 				Message: rowFilePlace(st.byName[src], src, st.folders[src], p.Path) + " is not a usable row file: " + oneLine(p.Reason) + "; " + next + " (" + leftOutNote(p, rowFileDoctorLeftOut) + ")"})
 		}

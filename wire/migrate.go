@@ -1248,6 +1248,19 @@ func (a *App) RewriteAllV1(ctx context.Context, tables []row.Table, repoOnly, dr
 			return nil, err
 		}
 	}
+	if repoOnly {
+		return found, nil
+	}
+	// devco P-9: the folders of these stores this repo does not attach
+	// (a 0.1.17 `--to <org>/<folder> --create`) are converted with them,
+	// never left at v1 with nothing naming them
+	more, err := a.rewriteUnattached(ctx, st, tables, dryRun)
+	if err != nil {
+		return nil, err
+	}
+	for t, list := range more {
+		found[t] = append(found[t], list...)
+	}
 	return found, nil
 }
 

@@ -58,7 +58,7 @@ func TestErrorMessages(t *testing.T) {
 		{"held resource without label", &HeldError{By: res}, []string{"e2e is held by act_b"}, nil},
 		{"same actor other session", &HeldError{By: held, SameActor: true}, []string{"another session s-2 (box)", "LORE_ACTOR"}, nil},
 		{"same actor no host", &HeldError{By: res, SameActor: true}, []string{"another session s-3;"}, nil},
-		{"wip", &WIPError{Held: []Held{{Signal: Signal{Task: "tsk_1"}}, {Signal: Signal{Task: "tsk_2"}}}, Max: 2}, []string{"tsk_1, tsk_2", "max_claims_per_agent 2", "lore task release"}, ErrWIPLimit},
+		{"wip", &WIPError{Held: []Held{{Signal: Signal{Task: "tsk_1"}}, {Signal: Signal{Task: "tsk_2"}}}, Max: 2}, []string{"tsk_1, tsk_2", "agents.max_claims_per_agent 2", "lore task release", "lore config set --key agents.max_claims_per_agent --value 3"}, ErrWIPLimit},
 		{"wip none", &WIPError{Max: 1}, []string{"max_claims_per_agent 1"}, ErrWIPLimit},
 		{"not held, no current", &NotHeldError{Reason: "lease expired"}, []string{"lease expired"}, ErrNotHeld},
 		{"not held, current claim", &NotHeldError{Current: &held, Reason: "claim epoch 3 ≠ row epoch 4"}, []string{"tsk_1 is held by agent:a", "epoch 3"}, ErrNotHeld},

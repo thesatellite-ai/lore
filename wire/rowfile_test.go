@@ -105,7 +105,7 @@ func TestBrokenRowFileIsReported(t *testing.T) {
 			if derr != nil {
 				t.Fatal(derr)
 			}
-			if r.Status != opsdoctor.StatusBroken || r.Exit != 2 || !strings.Contains(strings.Join(r.Errors, "\n"), "store repo: "+rel+" is not a usable row file") {
+			if r.Status != opsdoctor.StatusBroken || r.Exit != 2 || !strings.Contains(strings.Join(r.Errors, "\n"), "this repo: "+rel+" is not a usable row file") {
 				t.Fatalf("doctor must be broken naming the file: %s %d %q", r.Status, r.Exit, r.Errors)
 			}
 

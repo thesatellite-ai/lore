@@ -16,6 +16,23 @@ import (
 	"github.com/thesatellite-ai/lore/ops/doctor"
 )
 
+// TestTextNoCurrentWithErrors is devco:R-8: when every step is current but
+// errors remain that no step repairs (a row file a teammate pushed), the
+// text gives one verdict: never "Everything is current." above the errors
+// and Status: BROKEN.
+func TestTextNoCurrentWithErrors(t *testing.T) {
+	broken := Out{Repo: "/w/app", Status: doctor.StatusBroken, Exit: 2,
+		Steps:  []doctor.FixStep{{Step: doctor.StepDoctorFix, Result: doctor.ResultCurrent}},
+		Errors: []string{"this repo: .lore/data/memories/m.json is not a usable row file: symlink ignored; it came in commit abc1234 by Kim Example <kim@example.test>: ask them to fix it, or undo that commit: git -C /w/app revert abc1234 (then lore sync)"}}
+	txt := broken.Text()
+	if strings.Contains(txt, LineCurrent) || !strings.Contains(txt, LineLeftForYou) || !strings.HasSuffix(txt, "Status: BROKEN\n") {
+		t.Fatalf("one verdict expected:\n%s", txt)
+	}
+	if strings.Index(txt, LineLeftForYou) > strings.Index(txt, "error: ") {
+		t.Fatalf("the verdict line comes before the errors it introduces:\n%s", txt)
+	}
+}
+
 // TestTextOneRepo pins the one-repo text: each step on its line, the
 // "Everything is current." line when no step changed, the status last.
 func TestTextOneRepo(t *testing.T) {
