@@ -340,6 +340,12 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		}
 	}
 
+	// N-7: a teammate's first render must not leave untracked render files
+	// that the owner's commit of the same files makes `git pull` abort on.
+	if err = h.keepRenderLocal(ctx, f.out(), root, f.quiet, resolvedOut, fullPath); err != nil {
+		return err
+	}
+
 	if !f.noPointer {
 		if !f.quiet {
 			h.printTargetPick(f.out(), pick)

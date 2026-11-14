@@ -51,14 +51,14 @@ func TestSyncRunPushesStoreCommits(t *testing.T) {
 	if len(out.Data.Stores) != 1 || out.Data.Stores[0].Store != "kb" || out.Data.Stores[0].Sent < 1 || out.Data.Stores[0].Offline {
 		t.Fatalf("store report %+v", out.Data.Stores)
 	}
-	if len(out.Lines) != 1 || !strings.HasPrefix(out.Lines[0], "store kb: sent ") || strings.HasPrefix(out.Lines[0], "store kb: sent 0") {
+	if len(out.Lines) != 1 || !strings.HasPrefix(out.Lines[0], "store kb: pushed (sent ") || strings.HasPrefix(out.Lines[0], "store kb: pushed (sent 0") {
 		t.Fatalf("lines %q", out.Lines)
 	}
 	if tree := gitIn(t, kbDir, nil, "ls-tree", "-r", "--name-only", "main"); !strings.Contains(tree, id) {
 		t.Fatalf("the remote does not hold %s after lore sync:\n%s", id, tree)
 	}
 	again, err := a.syncEnv().SyncRun(background(), opssync.RunIn{})
-	if err != nil || len(again.Lines) != 1 || again.Lines[0] != "store kb: sent 0, received 0, merged 0, refused 0" {
+	if err != nil || len(again.Lines) != 1 || again.Lines[0] != "store kb: up to date" {
 		t.Fatalf("second sync = %q %v", again.Lines, err)
 	}
 }

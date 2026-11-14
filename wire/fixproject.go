@@ -88,6 +88,16 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		}
 	}
 	mig := a.fixMigrate(ctx, top, dry, true)
+	if mig.Changed && !mig.Failed && !dry {
+		a.stampMigratedIdentity(ctx)
+	}
+	hw := HostWiringOf(ctx)
+	if mig.Changed && !mig.Failed && !dry && hw != nil && hw.Rewire != nil {
+		// devco N-5: the hooks ran while the project was on the 0.1.17
+		// format and kept the rules local; lore fix is an install step, so
+		// the tracked lines come now, not with the next command
+		hw.Note(hw.Rewire(ctx, top)...)
+	}
 	scopes := a.fixScopes(ctx, top, dry, mig.Failed)
 	if !mig.Changed && !mig.Failed && !hasLoreProject(top) {
 		// B1-7, B1-8: a repo --all reached by a store link, or one whose
@@ -112,7 +122,41 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		// cannot tell yet), lore 0.1.17's database and backups go
 		steps = append(steps, a.fixOldFiles(ctx, top, dry))
 	}
+	if st, ok := gitWiringStep(top, hw.Wrote()); ok {
+		steps = append(steps, st)
+	}
 	return steps
+}
+
+// stampMigratedIdentity gives a project lore fix just migrated its repo id
+// in _meta.json (devco N-15): before, only a later lore sync stamped it, so
+// the render step that follows named the private render folder
+// ~/.lore/render/<repo>-prj_… after the project id, and every repo inited
+// by this lore (and a migrated one after its first sync) used the repo id
+// (<repo>-rep_…). The migration's files are uncommitted here, so its commit
+// carries the id too (I-7: no teammate clone writes its own copy). A client
+// repo never gets one (B-8); a failure leaves the project id, as before.
+func (a *App) stampMigratedIdentity(ctx context.Context) {
+	if client, err := a.ClientRepo(ctx); err != nil || client {
+		return
+	}
+	_, _, _ = a.EnsureRepoIdentity(ctx) // best effort, see above
+}
+
+// gitWiringCommitF is the git wiring step's Next: the files to commit.
+const gitWiringCommitF = "lore's lines in %s wait for your commit: git add %s && git commit -m \"lore: git wiring\""
+
+// gitWiringStep is the step naming the tracked wiring files this run wrote
+// (devco N-5); ok is false when it wrote none.
+func gitWiringStep(top string, wrote []string) (opsdoctor.FixStep, bool) {
+	if len(wrote) == 0 {
+		return opsdoctor.FixStep{}, false
+	}
+	return opsdoctor.FixStep{
+		Step: opsdoctor.StepGitWiring, Where: top, Changed: true,
+		Result: "wrote lore's lines to " + strings.Join(wrote, " and ") + " (the merge rules and lore's local files git must ignore)",
+		Next:   fmt.Sprintf(gitWiringCommitF, strings.Join(wrote, " and "), strings.Join(wrote, " ")),
+	}, true
 }
 
 // skippedNoLoreProject is the render and agent hooks steps' result in a

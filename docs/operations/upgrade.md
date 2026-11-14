@@ -68,6 +68,7 @@ $ cat .lore/data/_meta.json
     "policy",
     "trash"
   ],
+  "format": 2,
   "min_lore_version": "0.1.18",
   "project_id": "prj_c0f3…b5b8",
   "repo_id": "rep_05e9…4603",

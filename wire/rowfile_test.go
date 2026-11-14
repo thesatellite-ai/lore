@@ -78,7 +78,7 @@ func TestBrokenRowFileIsReported(t *testing.T) {
 			rel := ".lore/data/memories/" + id + ".json"
 			n := 0
 			for _, m := range notes {
-				if strings.Contains(m, "invalid-file store repo: "+rel) {
+				if strings.HasPrefix(m, "lore: "+rel+" is not a usable row file: ") && !strings.Contains(m, "rowfs") && !strings.Contains(m, "[E_") {
 					n++
 				}
 			}

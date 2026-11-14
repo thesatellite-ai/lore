@@ -22,6 +22,7 @@ package wire
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/store/localstate"
 )
 
 // rowSettler is a store backend that can show and settle a row both
@@ -310,9 +312,78 @@ func (a *App) ResolveStoreConflict(ctx context.Context, c StoreConflict, takeThe
 		return err
 	}
 	if _, err := a.SyncStores(ctx, ""); err != nil {
+		if settleable(string(errs.CodeOf(err))) && !a.storeConflictOpen(ctx, c.ID) {
+			// devco O-6: another row of the store still clashes; this one
+			// is settled, which is what was asked (resolveStore names the
+			// rows still open)
+			return nil
+		}
 		return errs.Prefix("resolve: settled "+c.ID.String()+", but the sync", err)
 	}
 	return nil
+}
+
+// storeConflictOpen reports whether row id is still a store conflict here
+// (true when the list cannot be read: the caller then keeps its error).
+func (a *App) storeConflictOpen(ctx context.Context, id ids.AnyID) bool {
+	cs, err := a.StoreConflicts(ctx)
+	if err != nil {
+		return true
+	}
+	for _, c := range cs {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// conflictListKey is the checkout a printed conflict list belongs to.
+func conflictListKey() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return wd
+}
+
+// saveConflictList records the row ids of a printed conflict list in
+// order (localstate.ConflictLists), best effort: a list that cannot be
+// saved only leaves resolve --id positional.
+func (a *App) saveConflictList(ctx context.Context, cs []opssync.Conflict) {
+	key := conflictListKey()
+	if key == "" {
+		return
+	}
+	st, err := a.LocalState(ctx)
+	if err != nil {
+		return
+	}
+	defer func() { _ = st.Close() }() // one small row; a close error loses nothing written
+	rows := make([]string, 0, len(cs))
+	for _, c := range cs {
+		rows = append(rows, c.RowID)
+	}
+	_ = localstate.PutJSON(ctx, st, localstate.ConflictLists, key, rows)
+}
+
+// conflictList is the row ids of the conflict list last printed in this
+// checkout (nil when none).
+func (a *App) conflictList(ctx context.Context) []string {
+	key := conflictListKey()
+	if key == "" || !localStateExists(a.opts.Home) {
+		return nil
+	}
+	st, err := a.LocalState(ctx)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = st.Close() }() // read-only use
+	rows, ok, err := localstate.GetJSON[[]string](ctx, st, localstate.ConflictLists, key)
+	if err != nil || !ok {
+		return nil
+	}
+	return rows
 }
 
 // explainStore adds the attached store's copy of id to a host answer that

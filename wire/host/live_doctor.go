@@ -121,7 +121,9 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		if p.File.Deleted() {
 			continue
 		}
-		only++
+		if !p.Decision.OnMain() { // devco N-14: main holds this version too
+			only++
+		}
 		if p.File.Block.Conflict || isConflict(p) {
 			conflicts++
 		}
@@ -132,7 +134,9 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		if since.IsZero() {
 			since = p.File.Block.LiveSince
 		}
-		if !since.IsZero() && now.Sub(since) > s.cfg.MaxAge && !p.Leave {
+		// devco N-14: a row main already holds (its max-age copy landed)
+		// is copied, whatever its live block's copy time says
+		if !since.IsZero() && now.Sub(since) > s.cfg.MaxAge && !p.Leave && !p.Decision.OnMain() {
 			old++
 		}
 	}

@@ -413,6 +413,8 @@ func whereGitConfig(ctx context.Context, dir, cfg, area string) []opswhere.Entry
 			what = "the merge driver git runs for lore's row files (lore merges them field by field)"
 		case key == ClientRepoGitKey:
 			what = "marks this clone as a client repo, so its commit hook refuses when no lore can check a commit for internal notes"
+		case key == InitedHereGitKey || key == MigratedHereGitKey:
+			what = "this clone ran lore init or the migration, so its commit brings the repo's first render and wiring files (teammates' clones keep theirs out of git status until then)"
 		case strings.HasPrefix(key, "lore."):
 			what = "a lore setting for this clone"
 		case key == gitbackend.ConfigUserName || key == gitbackend.ConfigUserEmail:

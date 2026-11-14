@@ -138,13 +138,25 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 				}
 			}
 		}
-		merged, refused, merr := b.mergeRemote(ctx, remote)
+		merged, refused, partial, merr := b.mergeRemote(ctx, remote)
 		if merr != nil {
 			return rep, merr
 		}
 		rep.Merged = appendNew(rep.Merged, merged)
 		if len(refused) > 0 {
 			rep.Refused = append(rep.Refused, refused...)
+			if !o.NoPush && !b.pushHeld(ctx, remote) {
+				// devco O-5: the rows that did not clash go out now; the
+				// clashing ones stay held and named (sendPartial)
+				sentTip, perr := b.sendPartial(ctx, remote, partial)
+				if perr != nil {
+					return rep, perr
+				}
+				if sentTip != "" {
+					b.markHeld(rep.Refused)
+					return b.countSent(ctx, rep, before, remote, sentTip)
+				}
+			}
 			break
 		}
 		h, herr := b.head(ctx)
@@ -328,24 +340,24 @@ func (b *Backend) isAncestor(ctx context.Context, a, c string) (bool, error) {
 // branch has nothing new, else a three-way merge whose row conflicts go
 // through the Merger. Any row that cannot be merged aborts the whole merge
 // and is returned as a refusal (fail closed: the local commits stay).
-func (b *Backend) mergeRemote(ctx context.Context, remote string) ([]ids.AnyID, []store.Refusal, error) {
+func (b *Backend) mergeRemote(ctx context.Context, remote string) ([]ids.AnyID, []store.Refusal, string, error) {
 	if remote == "" {
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 	h, err := b.head(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if h != "" {
 		contained, aerr := b.isAncestor(ctx, remote, h)
 		if aerr != nil || contained {
-			return nil, nil, aerr
+			return nil, nil, "", aerr
 		}
 	}
 	ff := h == ""
 	if !ff {
 		if ff, err = b.isAncestor(ctx, h, remote); err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 	}
 	// FLAG4: git merge asks for a committer identity before it starts,
@@ -353,13 +365,13 @@ func (b *Backend) mergeRemote(ctx context.Context, remote string) ([]ids.AnyID, 
 	// commit environment (lore's identity only when git has none).
 	env, err := b.commitEnv(ctx, Signature{})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if ff {
 		if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"merge", "--ff-only", "--quiet", remote}, env: env}); err != nil {
-			return nil, nil, errs.Wrap(errs.Internal, "git: fast-forward to the remote", err)
+			return nil, nil, "", errs.Wrap(errs.Internal, "git: fast-forward to the remote", err)
 		}
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 	return b.threeWay(ctx, remote, env)
 }
@@ -367,39 +379,45 @@ func (b *Backend) mergeRemote(ctx context.Context, remote string) ([]ids.AnyID, 
 // threeWay runs the three-way merge of remote. Row files are marked
 // -merge (rowAttributes), so every row both sides changed is left
 // conflicted with ours in the worktree, and resolved here.
-func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]ids.AnyID, []store.Refusal, error) {
-	merged, refused, err := b.threeWayResolve(ctx, remote, env)
+// partial is, when rows were refused, the tree of the merge with every
+// refused row at the remote's copy (threeWayResolve): what can be sent
+// while those rows wait.
+func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]ids.AnyID, []store.Refusal, string, error) {
+	merged, refused, partial, err := b.threeWayResolve(ctx, remote, env)
 	if err != nil || len(refused) > 0 {
-		return nil, refused, err
+		return nil, refused, partial, err
 	}
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(mergeSubject)}, env: env}); err != nil {
-		return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: commit the merge", err), b.abortMerge(ctx))
+		return nil, nil, "", errors.Join(errs.Wrap(errs.Internal, "git: commit the merge", err), b.abortMerge(ctx))
 	}
 	b.clearOwnMerge(ctx)
 	b.clearSettlements(ctx)
-	return merged, nil, nil
+	return merged, nil, "", nil
 }
 
 // threeWayResolve is threeWay up to the commit: the merge is resolved in
 // the index and worktree (MERGE_HEAD still set); a refusal or an error has
-// already aborted it.
-func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []string) ([]ids.AnyID, []store.Refusal, error) {
+// already aborted it. With refusals, partial is the tree of the resolved
+// merge with each refused row at the remote's copy ("" when it could not
+// be built): every change that did not clash, and nothing of the rows
+// that did.
+func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []string) (_ []ids.AnyID, _ []store.Refusal, partial string, _ error) {
 	attrs, err := b.mergeAttributes()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if err := b.markOwnMerge(ctx); err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	_, err = b.git.run(ctx, call{dir: b.work, args: []string{"-c", "core.attributesFile=" + attrs, "merge", "--no-ff", "--no-commit", "--no-verify", "--quiet", "-s", "ort", "-X", "no-renames", remote}, env: env})
 	if err != nil {
 		if code, ran := exitCode(err); !ran || code != 1 {
-			return nil, nil, errors.Join(errs.Wrap(errs.Internal, "git: merge the remote", err), b.abortMerge(ctx))
+			return nil, nil, "", errors.Join(errs.Wrap(errs.Internal, "git: merge the remote", err), b.abortMerge(ctx))
 		}
 	}
 	paths, err := b.unmerged(ctx)
 	if err != nil {
-		return nil, nil, errors.Join(err, b.abortMerge(ctx))
+		return nil, nil, "", errors.Join(err, b.abortMerge(ctx))
 	}
 	var merged []ids.AnyID
 	var refused []store.Refusal
@@ -407,13 +425,13 @@ func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []stri
 	for _, p := range paths {
 		if rowfs.IsFolderFile(p) {
 			if ferr := b.resolveFolderFile(ctx, p); ferr != nil {
-				return nil, nil, errors.Join(ferr, b.abortMerge(ctx))
+				return nil, nil, "", errors.Join(ferr, b.abortMerge(ctx))
 			}
 			continue
 		}
 		id, refusal, rerr := b.resolveRow(ctx, p)
 		if rerr != nil {
-			return nil, nil, errors.Join(rerr, b.abortMerge(ctx))
+			return nil, nil, "", errors.Join(rerr, b.abortMerge(ctx))
 		}
 		if refusal != nil {
 			refused = append(refused, *refusal)
@@ -424,9 +442,130 @@ func (b *Backend) threeWayResolve(ctx context.Context, remote string, env []stri
 	}
 	if len(refused) > 0 {
 		b.markSeen(ctx, refusedPaths) // a later local edit of these rows settles them (settle.go)
-		return nil, refused, b.abortMerge(ctx)
+		partial = b.treeWithTheirs(ctx, refusedPaths)
+		return nil, refused, partial, b.abortMerge(ctx)
 	}
-	return merged, nil, nil
+	return merged, nil, "", nil
+}
+
+// treeWithTheirs writes the index of a merge in progress as a tree, each
+// of paths (the refused rows, still conflicted) staged at the remote's
+// copy first. "" when it cannot (the caller then sends nothing early).
+func (b *Backend) treeWithTheirs(ctx context.Context, paths []string) string {
+	// a copy of the index: the real one must stay as the merge left it,
+	// or git merge --abort cannot put the worktree back
+	ip, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", "--path-format=absolute", "--git-path", "index"}})
+	if err != nil {
+		return ""
+	}
+	src, err := os.ReadFile(trimmed(ip))
+	if err != nil {
+		return ""
+	}
+	tmp := trimmed(ip) + ".lore-partial"
+	if err := os.WriteFile(tmp, src, partialIndexMode); err != nil {
+		return ""
+	}
+	defer func() { _ = os.Remove(tmp) }() // scratch copy; a leftover is overwritten next time
+	env := []string{"GIT_INDEX_FILE=" + tmp}
+	for _, p := range paths {
+		blob := b.stageBlob(ctx, stageTheirs+p)
+		if blob == "" {
+			return "" // the remote has no copy: nothing to hold back alone
+		}
+		if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"update-index", "--cacheinfo", rowFileMode + "," + blob + "," + p}, env: env}); err != nil {
+			return ""
+		}
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"write-tree"}, env: env})
+	if err != nil {
+		return ""
+	}
+	return trimmed(out)
+}
+
+// partialIndexMode is the scratch index copy's file mode.
+const partialIndexMode = 0o600
+
+// pushHeld reports a push hold (pushHoldOf) that keeps local commits
+// made after its time on this machine; a hold that cannot be checked
+// holds.
+func (b *Backend) pushHeld(ctx context.Context, remote string) bool {
+	holdOf := pushHoldOf(ctx)
+	if holdOf == nil {
+		return false
+	}
+	hold, ok := holdOf(ctx)
+	if !ok {
+		return false
+	}
+	h, err := b.head(ctx)
+	if err != nil {
+		return true
+	}
+	n, err := b.commitsAfter(ctx, remote, h, hold.After)
+	return err != nil || n > 0
+}
+
+// rowFileMode is the git file mode of a row file.
+const rowFileMode = "100644"
+
+// sendPartial pushes, while rows of the store clash, one commit on the
+// remote tip that carries every local change that did not clash (partial,
+// threeWayResolve's tree); the clashing rows stay at the remote's copy in
+// it and keep waiting in the local commits, which are not moved (devco
+// O-5: one clashing row held back every other offline edit of the store,
+// and nothing said so). It returns the pushed commit, or "" when nothing
+// went out (no tree, nothing that differs from the remote, offline, a
+// lost race or a refusal: the next sync tries again). The next merge of
+// the local branch meets the sent changes on both sides, so only the
+// clashing rows conflict again.
+func (b *Backend) sendPartial(ctx context.Context, remote, partial string) (string, error) {
+	if partial == "" || remote == "" {
+		return "", nil
+	}
+	rt, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", remote + "^{tree}"}})
+	if err != nil || trimmed(rt) == partial {
+		return "", nil
+	}
+	env, err := b.commitEnv(ctx, Signature{})
+	if err != nil {
+		return "", err
+	}
+	c, err := b.commitTree(ctx, partial, []string{remote}, b.cfg.withTrailers(partialSubject), env)
+	if err != nil {
+		return "", err
+	}
+	verdict, _, err := b.push(ctx, c)
+	if err != nil || verdict != pushApplied {
+		return "", err
+	}
+	return c, nil
+}
+
+// partialSubject is the subject of sendPartial's commit.
+const partialSubject = "lore: send the rows that did not clash; clashing rows wait"
+
+// countSent is count for a sync that sent sendPartial's commit (sent) over
+// remote while the local branch kept its commits: Received as count,
+// Sent the rows sent carried.
+func (b *Backend) countSent(ctx context.Context, rep store.SyncReport, before, remote, sent string) (store.SyncReport, error) {
+	rep, err := b.count(ctx, rep, before, "", false)
+	if err != nil {
+		return rep, err
+	}
+	rep.Pushed = true
+	n, err := b.countRows(ctx, remote, sent)
+	if err != nil {
+		return rep, err
+	}
+	rep.Sent = n[rep.Folder]
+	for f, c := range n {
+		if f != rep.Folder {
+			rep.Others = addFolderCount(rep.Others, f, store.FolderCount{Sent: c})
+		}
+	}
+	return rep, nil
 }
 
 // abortMerge puts the worktree back to the local tip after a failed merge.

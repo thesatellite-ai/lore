@@ -76,10 +76,10 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store a
 ✓ act_2ad3…f891 Alice Doe (@alice) registered in agency org/
 $ lore sync
 lore: pushed store agency/org: commit 601d285 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 2, received 0, merged 0, refused 0
+store me: up to date
+store me/everywhere: up to date
+store agency/client (here: agency): up to date
+store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 
 # bob, in website
 $ lore actor register && lore sync
@@ -90,10 +90,10 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_05e9…4603.json (store agency/org)
 ✓ act_05e9…4603 Bob Roe (@bob) registered in agency org/
 lore: pushed store agency/org: commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 1, received 0, merged 0, refused 0
+store me: up to date
+store me/everywhere: up to date
+store agency/client (here: agency): up to date
+store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 ```
 <!-- /example -->
 
@@ -139,10 +139,10 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
   created tasklist tlt_d431…313a "default" for tasks added without --tasklist
 lore: pushed store agency/client (here: agency): commit 05513aa to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store me: up to date
+store me/everywhere: up to date
+store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/org: up to date
 
 # bob, in website
 $ lore sync >/dev/null; git switch -q -c feat/login && lore task list
@@ -161,7 +161,7 @@ $ git status --short
 
 The `[agency/client]` label says where each row lives. `lore task done` found the task in the store's live rows and landed it on the store's `main`.
 
-For coding agents, `lore render` writes the internal context (the private notes the agent should know) outside the checkout: one private file per internal store under `~/.lore/render/<repo id>/`, with an `index.md` listing them. The checkout gets nothing new besides `.lore/LORE.md`; agents read the private files through `lore context` and the hooks:
+For coding agents, `lore render` writes the internal context (the private notes the agent should know) outside the checkout: one private file per internal store under `~/.lore/render/<repo id>/`, with an `index.md` listing them. The checkout gets nothing new besides `.lore/LORE.md` and `.lore/LORE.full.md`, which a clone that did not run `lore init` keeps out of `git status` (in `.git/info/exclude`) until the repo commits them, so a teammate's commit of them never makes your `git pull` abort; agents read the private files through `lore context` and the hooks:
 
 <!-- example: agency#render -->
 ```console
@@ -169,6 +169,7 @@ For coding agents, `lore render` writes the internal context (the private notes 
 $ lore render
 ✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
+lore render: .lore/LORE.md and .lore/LORE.full.md not committed in this repo yet; added to this clone's .git/info/exclude so a git pull of a teammate's commit that adds them works (to commit them from this clone: git add -f .lore/LORE.md .lore/LORE.full.md)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/app-rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
@@ -177,8 +178,6 @@ repo app (rep_28f8…03df)
 - agency-sto_7a67…9504.md  store agency, agency/org  -  internal
 - me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 $ git status --short
-?? .lore/LORE.full.md
-?? .lore/LORE.md
 ```
 <!-- /example -->
 

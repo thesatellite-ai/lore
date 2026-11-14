@@ -81,6 +81,9 @@ const (
 	// (B3-5), before render so the rules land in the new folder's file.
 	StepScopes    = "folder scopes"
 	StepDoctorFix = "doctor fixes"
+	// StepGitWiring is lore fix's step naming the tracked git wiring files
+	// (.gitignore, .gitattributes) the run wrote (devco N-5).
+	StepGitWiring = "git wiring"
 )
 
 // ResultCurrent is a step's result when nothing was needed.

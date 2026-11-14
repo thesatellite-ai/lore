@@ -420,7 +420,7 @@ func v017DocQuery(def schema.TableDef, cols map[string]bool, where string) (stri
 	pairs := make([]string, 0, len(def.Fields)+len(v017EnvelopeColumns))
 	for _, c := range v017EnvelopeColumns {
 		if cols[c] {
-			pairs = append(pairs, "'"+c+`', "`+c+`"`)
+			pairs = append(pairs, "'"+c+"', "+v017CellText(c)) // devco N-5: BLOB cells read as text (M-1's helper)
 		}
 	}
 	for _, f := range def.Fields {
@@ -428,7 +428,7 @@ func v017DocQuery(def schema.TableDef, cols map[string]bool, where string) (stri
 			continue
 		}
 		fields = append(fields, f)
-		pairs = append(pairs, "'"+f.Name+`', "`+f.Name+`"`)
+		pairs = append(pairs, "'"+f.Name+"', "+v017CellText(f.Name))
 	}
 	return "SELECT json_object(" + strings.Join(pairs, ", ") + `) FROM "` + string(def.Name) + `" WHERE ` + where + " ORDER BY id", fields
 }

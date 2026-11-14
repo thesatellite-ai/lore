@@ -45,10 +45,17 @@ const (
 	// key = store name, doc = the rows that wait, the reason and when.
 	// `lore sync status` lists it; a later push that lands clears it.
 	StorePushRefusals Table = "store_push_refusals"
+	// ConflictLists keeps the last list `lore sync conflicts` printed per
+	// checkout: key = the checkout's folder, doc = the row ids in printed
+	// order, so `lore sync resolve --id <n>` keeps meaning the row printed
+	// as #n while that list is worked through (devco O-6).
+	ConflictLists Table = "conflict_lists"
 )
 
 // Tables is every machine-local table, created at open.
-func Tables() []Table { return []Table{Usage, SecretChecks, TimeOutbox, StorePushRefusals} }
+func Tables() []Table {
+	return []Table{Usage, SecretChecks, TimeOutbox, StorePushRefusals, ConflictLists}
+}
 
 // Valid reports whether t is one of Tables.
 func (t Table) Valid() bool {

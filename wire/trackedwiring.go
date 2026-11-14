@@ -27,6 +27,8 @@ package wire
 import (
 	"context"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 )
 
 // MigratedHereGitKey is the clone-local git config key lore migrate run
@@ -60,4 +62,47 @@ func TrackedWiringHere(ctx context.Context, root string) bool {
 	}
 	out, err := gitRun{dir: root, args: []string{"config", "--local", "--get", MigratedHereGitKey}}.output(ctx)
 	return err == nil && strings.TrimSpace(string(out)) == migratedHereOn
+}
+
+// InitedHereGitKey is the clone-local git config key `lore init` sets in
+// the clone where it created the project's _meta.json (N-7). Like
+// MigratedHereGitKey it is never committed, so it names the one clone
+// whose commits are expected to bring the project's first render.
+const InitedHereGitKey = "lore.initedhere"
+
+// markInitedHere records in the git config of the clone holding top that
+// lore init made the project here. Best effort: without the mark this
+// clone's renders stay local like a teammate's until the render is
+// committed (RenderOwnerHere), and the render line says how to commit it.
+func markInitedHere(ctx context.Context, top string) {
+	_, _ = gitRun{dir: top, args: []string{"config", "--local", InitedHereGitKey, migratedHereOn}}.output(ctx) // best effort, see above
+}
+
+// RenderOwnerHere reports whether a render in the clone of the project at
+// root may leave a new, untracked .lore/LORE.md (and LORE.full.md) in
+// git status for the next `git add -A` (N-7, the render side of A-1):
+//
+//	_meta.json not committed yet (the project is being made here) ─▶ yes
+//	this clone ran lore init or lore migrate run (lore.initedhere,
+//	   lore.migratedhere) ─▶ yes: its commit carries the first render
+//	any other clone ─▶ no: the render files go to the clone's own
+//	   .git/info/exclude, so the git pull of the owner's commit that adds
+//	   them overwrites them instead of aborting ("untracked working tree
+//	   files would be overwritten by merge")
+//
+// Not a git checkout (nothing to pull) answers yes.
+func RenderOwnerHere(ctx context.Context, root string) bool {
+	if _, err := (gitRun{dir: root, args: []string{"rev-parse", "--git-dir"}}).output(ctx); err != nil {
+		return true
+	}
+	if _, err := (gitRun{dir: root, args: []string{"ls-files", "--error-unmatch", "--", rowfs.RepoMetaPath}}).output(ctx); err != nil {
+		return true
+	}
+	for _, key := range []string{InitedHereGitKey, MigratedHereGitKey} {
+		out, err := gitRun{dir: root, args: []string{"config", "--local", "--get", key}}.output(ctx)
+		if err == nil && strings.TrimSpace(string(out)) == migratedHereOn {
+			return true
+		}
+	}
+	return false
 }

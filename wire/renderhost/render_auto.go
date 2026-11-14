@@ -20,10 +20,14 @@ package renderhost
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // rowsDirRel is the project's row files folder, relative to the root.
@@ -102,4 +106,59 @@ func rowsUncommitted(ctx context.Context, root string) bool {
 func tracked(ctx context.Context, root, rel string) bool {
 	out, err := runGit(ctx, false, "-C", root, "ls-files", "--", rel)
 	return err == nil && len(bytes.TrimSpace(out)) > 0
+}
+
+// renderLocalComment is the .git/info/exclude comment above a render file
+// keepRenderLocal kept out of git status.
+const renderLocalComment = "# lore: render not committed yet; kept local so git pull of the commit that adds it works (lore render)"
+
+// renderKeptLocalLine is the line keepRenderLocal prints when it kept the
+// render files of a teammate's clone out of git status: what happened,
+// why, and the exact command for the person who wants to commit them here.
+const renderKeptLocalLine = "lore render: %s not committed in this repo yet; added to this clone's .git/info/exclude so a git pull of a teammate's commit that adds them works (to commit them from this clone: git add -f %s)\n"
+
+// keepRenderLocal is the render side of stories A-1 (N-7): in a clone that
+// did not make the project (wire.RenderOwnerHere is false), each render
+// file in paths that git neither tracks nor ignores goes to the clone's
+// .git/info/exclude. git overwrites an ignored untracked file on merge, so
+// the owner's commit that adds the render no longer makes this clone's
+// `git pull` abort ("untracked working tree files would be overwritten by
+// merge"). Once the file is tracked the exclude line changes nothing. A
+// quiet render (sync, a hook) keeps them local without the line.
+func (h *Host) keepRenderLocal(ctx context.Context, w io.Writer, root string, quiet bool, paths ...string) error {
+	if len(paths) == 0 || wire.RenderOwnerHere(ctx, root) {
+		return nil
+	}
+	top, err := gitOutput(ctx, root, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil // not a git checkout: nothing to pull
+	}
+	var kept []string
+	for _, p := range paths {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(root, p) // the out paths are relative to the project root
+		}
+		rel, rerr := filepath.Rel(top, p)
+		if rerr != nil || strings.HasPrefix(rel, "..") {
+			continue // outside this checkout (an --out elsewhere)
+		}
+		rel = filepath.ToSlash(rel)
+		if _, serr := os.Stat(p); serr != nil || tracked(ctx, top, rel) || ignored(ctx, top, rel) {
+			continue
+		}
+		if xerr := excludeInGitAs(ctx, top, rel, renderLocalComment); xerr != nil {
+			return xerr
+		}
+		kept = append(kept, rel)
+	}
+	if len(kept) > 0 && w != nil && !quiet {
+		_, _ = fmt.Fprintf(w, renderKeptLocalLine, strings.Join(kept, " and "), strings.Join(kept, " ")) // report line: the output writer has no error worth failing the render for
+	}
+	return nil
+}
+
+// ignored reports whether git ignores rel (slash-separated, under root).
+func ignored(ctx context.Context, root, rel string) bool {
+	_, err := runGit(ctx, false, "-C", root, "check-ignore", "-q", "--", rel)
+	return err == nil
 }

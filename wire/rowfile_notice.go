@@ -10,6 +10,7 @@ package wire
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -80,13 +81,53 @@ func (a *App) rowFileNotices(st *state) {
 			continue
 		}
 		for _, p := range rp.ReadProblems() {
-			line := "lore: invalid-file " + rowFilePlace(st.byName[n], n, st.folders[n], p.Path) + ": " + oneLine(p.Reason) + "; " + leftOutNote(p, rowFileNoticeLeftOut)
+			line := "lore: " + rowFileNoticePlace(st.byName[n], n, st.folders[n], p.Path) + " is not a usable row file: " + plainReason(p) + "; " + leftOutNote(p, rowFileNoticeLeftOut)
 			if p.Hint != "" {
 				line += "\n  next: " + p.Hint
 			}
 			a.opts.Notice(line)
 		}
 	}
+}
+
+// rowFileNoticePlace is how the per-command notice names a file: its path
+// in this repo for the repo's own rows, "<path> in store <name>" for an
+// attached store's (devco O-10: "invalid-file store repo: …" used lore's
+// internal words for the repo).
+func rowFileNoticePlace(b store.Backend, src store.Source, folder, rel string) string {
+	p := rowFileRel(b, src, folder, rel)
+	if src == store.SourceRepo {
+		return p
+	}
+	return p + " in store " + string(src)
+}
+
+// plainReason is a row file problem's reason without lore's internals:
+// no "[E_…]" code, no "rowfs:" package prefix, no repeat of the path the
+// line already names, no trailing step the line's own note replaces
+// (devco O-10).
+func plainReason(p rowfs.Problem) string {
+	r := oneLine(p.Reason)
+	if strings.HasPrefix(r, "[E_") {
+		if _, rest, ok := strings.Cut(r, "] "); ok {
+			r = rest
+		}
+	}
+	r = strings.TrimPrefix(r, "rowfs: ")
+	for _, q := range []string{strconv.Quote(p.Path), p.Path} {
+		if rest, ok := strings.CutPrefix(r, q+": "); ok {
+			r = rest
+			break
+		}
+		if rest, ok := strings.CutPrefix(r, q+" "); ok {
+			r = "the file " + rest
+			break
+		}
+	}
+	if p.FieldMarkers {
+		r, _, _ = strings.Cut(r, "; resolve them in the file")
+	}
+	return strings.TrimRight(r, "; ")
 }
 
 // DoctorRowFiles names every entry of an attached store's data folder that

@@ -25,6 +25,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // Keys of the project format (file format: they must not change).
@@ -165,6 +166,13 @@ func WriteProjectFormat(top string, f int, m ProjectMigration) (string, error) {
 		return "", unreadableDoc(RepoMetaPath, doc)
 	}
 	o[MetaKeyFormat] = json.RawMessage(strconv.Itoa(f))
+	if f == ProjectFormatCurrent {
+		// devco N-15: the file's own "_v" follows the format too, so a
+		// migrated project reads `_v: 2, format: 2` like an inited one, and a
+		// reader of "_v" alone (0.1.17 tooling, a script) never sees it as
+		// format 1. Readers still accept both shapes.
+		o[metaKeyVersion] = json.RawMessage(strconv.Itoa(row.FormatVersion))
+	}
 	for key, v := range map[string]string{MetaKeyMigratedBy: m.By, MetaKeyMigratedVia: m.Via, MetaKeyMigratedAt: m.At} {
 		if v == "" {
 			delete(o, key)

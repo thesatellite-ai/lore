@@ -28,3 +28,26 @@ func TestPushedNoRowsCountsTheWholeClone(t *testing.T) {
 		}
 	}
 }
+
+// TestSiblingFolderPushIsUpToDate (devco N-15): a folder that sent nothing
+// while a sibling folder's rows rode the shared clone's push says "up to
+// date", not "pushed (sent 0, received 0, merged 0, refused 0)".
+func TestSiblingFolderPushIsUpToDate(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name            string
+		pushed          bool
+		sent, cloneSent int
+		want            string
+	}{
+		{"sibling's rows pushed", true, 0, 2, "store s: up to date"},
+		{"own rows pushed", true, 2, 2, "store s: pushed (sent 2, received 0, merged 0, refused 0)"},
+		{"push with no rows at all", true, 0, 0, "store s: pushed (sent 0, received 0, merged 0, refused 0)"},
+		{"no push", false, 0, 0, "store s: up to date"},
+	} {
+		p := folderPushed(c.pushed, c.sent, c.cloneSent)
+		if got := storeCountsLine("s", storeStatusOf(c.sent, 0, 0, 0, p), c.sent, 0, 0, 0); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}

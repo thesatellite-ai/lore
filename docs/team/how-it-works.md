@@ -527,6 +527,7 @@ The guards catch copy-paste mistakes; they are not a wall. See [Cleaning up afte
 $ lore render
 ✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
+lore render: .lore/LORE.md and .lore/LORE.full.md not committed in this repo yet; added to this clone's .git/info/exclude so a git pull of a teammate's commit that adds them works (to commit them from this clone: git add -f .lore/LORE.md .lore/LORE.full.md)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/app-rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
@@ -535,8 +536,6 @@ repo app (rep_28f8…03df)
 - agency-sto_7a67…9504.md  store agency, agency/org  -  internal
 - me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 $ git status --short
-?? .lore/LORE.full.md
-?? .lore/LORE.md
 ```
 <!-- /example -->
 

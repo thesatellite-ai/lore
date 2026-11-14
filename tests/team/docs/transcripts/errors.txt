@@ -59,10 +59,10 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c
   scope: [project]
 alice (work/website)$ lore sync
 lore: pushed store agency/client, agency/org: commit 601d285 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 4, received 0, merged 0, refused 0
-store agency/org: sent 2, received 0, merged 0, refused 0
+store me: up to date
+store me/everywhere: up to date
+store agency/client (here: agency): pushed (sent 4, received 0, merged 0, refused 0)
+store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 
 ### store branch missing
 alice (work/website)$ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
