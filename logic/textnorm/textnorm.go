@@ -15,7 +15,7 @@
 // Flow:
 //
 //	Clean      valid UTF-8? no NUL? ─► drop leading BOM ─► CRLF/CR → LF
-//	           ─► drop bidi controls and zero-width chars ─► NFC
+//	           ─► drop bidi controls, ZWSP and a mid-text BOM ─► NFC
 //	Normalize  Clean ─► trim ─► refuse empty (v0.1.17 Normalize, for a body)
 //	ValidateIdentifier  Normalize ─► only [a-z0-9._-]
 //	ValidatePath        refuse NUL and control characters (tab allowed)
@@ -55,10 +55,13 @@ const (
 )
 
 // stripChars are removed wherever they appear: the bidirectional
-// embedding, override and isolate controls, and the zero-width characters
-// (ZWSP, ZWNJ, ZWJ, and ZWNBSP, the BOM used mid-text). v0.1.17's exact
-// list; dropping ZWJ also splits joined emoji sequences into their parts,
-// which v0.1.17 accepted.
+// embedding, override and isolate controls, ZWSP and ZWNBSP (the BOM used
+// mid-text). ZWNJ (U+200C) and ZWJ (U+200D) are kept: they are part of
+// the spelling (Persian می‌خواهم, Devanagari and Malayalam conjuncts) and
+// of joined emoji (👩‍💻, 👨‍👩‍👧‍👦), so dropping them, as v0.1.17's list did,
+// changed what the person wrote (I-4). They cannot reorder text the way a
+// bidi control can. The FTS index relies on ZWSP never being stored
+// (adapters/cache/sqlite/ftsseg.go).
 var stripChars = map[rune]bool{
 	'\u202a': true, // LRE
 	'\u202b': true, // RLE
@@ -70,8 +73,6 @@ var stripChars = map[rune]bool{
 	'\u2068': true, // FSI
 	'\u2069': true, // PDI
 	'\u200b': true, // ZWSP
-	'\u200c': true, // ZWNJ
-	'\u200d': true, // ZWJ
 	'\ufeff': true, // ZWNBSP / BOM
 }
 
@@ -148,4 +149,38 @@ func ValidatePath(p string) error {
 // isIdentChar is one character an identifier may hold.
 func isIdentChar(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.'
+}
+
+// EscapeControls is s as it may be shown on a terminal or written into a
+// rendered file a person views (I-16): every C0 control character other
+// than tab and line feed, DEL and every C1 control (U+0080..U+009F) is
+// replaced by its escape, \x1b for ESC, \u009b for CSI. Stored text keeps
+// those bytes (a row is not changed by being read); only what is printed
+// is escaped, so a teammate's row holding ESC[2J, an OSC hyperlink or the
+// conceal attribute cannot clear, recolour or relabel the reader's
+// terminal or hide text from a person while an agent reads it. --json
+// output needs none of this: JSON encodes every control as \u00XX. Text
+// with no such character is returned as is (no allocation).
+func EscapeControls(s string) string {
+	if strings.IndexFunc(s, escaped) < 0 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 16)
+	for _, r := range s {
+		switch {
+		case !escaped(r):
+			b.WriteRune(r)
+		case r < 0x80:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			fmt.Fprintf(&b, `\u%04x`, r)
+		}
+	}
+	return b.String()
+}
+
+// escaped reports whether EscapeControls replaces r.
+func escaped(r rune) bool {
+	return r < 0x20 && r != '\t' && r != '\n' || r == 0x7f || r >= 0x80 && r <= 0x9f
 }

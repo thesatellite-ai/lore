@@ -191,7 +191,7 @@ note: the core rebuilds a store's whole cache; --kind memory included
 - **No word forms.** `invoice` and `invoices` are different words to the index. Use `invoic*` when you are not sure.
 - **Quote what the shell would change.** `lore search --query 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
 - <!-- ds:block id=search-defaults-z8rpj5sv --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`). A common word in a big project can push the row you want off the list: add a second word or narrow with `--tables`.
-- **Emoji are not searchable.** The index treats emoji and other symbols as spaces between words, so `lore search --query 😀` finds nothing; search for the words around it.
+- **Chinese, Japanese, Korean and emoji.** Every Chinese, Japanese or Korean character is a word of its own in the index, so a word inside a sentence with no spaces is found (`lore search --query 迁移` finds 数据库迁移规则), and so is a Korean word with a particle attached. Each emoji is a word too: `lore search --query 🚀` finds rows holding it, 👍 also finds 👍🏽, and 👩‍💻 finds that joined emoji. A cache built by an older lore is rebuilt on the first search after the upgrade.
 - **"(no matches)" is not an error.** The command exits 0; check the words, or add `--include-archived` or `--all-repos`.
 
 ## Related

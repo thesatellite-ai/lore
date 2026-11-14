@@ -80,7 +80,11 @@ func (a *App) rowFileNotices(st *state) {
 			continue
 		}
 		for _, p := range rp.ReadProblems() {
-			a.opts.Notice("lore: invalid-file " + rowFilePlace(st.byName[n], n, st.folders[n], p.Path) + ": " + oneLine(p.Reason) + "; " + leftOutNote(p, rowFileNoticeLeftOut))
+			line := "lore: invalid-file " + rowFilePlace(st.byName[n], n, st.folders[n], p.Path) + ": " + oneLine(p.Reason) + "; " + leftOutNote(p, rowFileNoticeLeftOut)
+			if p.Hint != "" {
+				line += "\n  next: " + p.Hint
+			}
+			a.opts.Notice(line)
 		}
 	}
 }
@@ -104,8 +108,12 @@ func (a *App) DoctorRowFiles(ctx context.Context) ([]DoctorFinding, error) {
 			return out, perr
 		}
 		for _, p := range probs {
+			next := "fix or remove it"
+			if p.Hint != "" {
+				next = p.Hint
+			}
 			out = append(out, DoctorFinding{Check: DoctorCheckRowFile, Level: DoctorError, Store: src, Plain: true,
-				Message: rowFilePlace(st.byName[src], src, st.folders[src], p.Path) + " is not a usable row file: " + oneLine(p.Reason) + "; fix or remove it (" + leftOutNote(p, rowFileDoctorLeftOut) + ")"})
+				Message: rowFilePlace(st.byName[src], src, st.folders[src], p.Path) + " is not a usable row file: " + oneLine(p.Reason) + "; " + next + " (" + leftOutNote(p, rowFileDoctorLeftOut) + ")"})
 		}
 	}
 	return out, nil

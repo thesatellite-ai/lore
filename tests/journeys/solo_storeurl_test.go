@@ -12,8 +12,9 @@ package journeys
 //	         waiting note: the next sync pushes it to lore-personal, the
 //	         note stays in every list, doctor is quiet
 //	day 2    a repo first set up with a local-path remote is cloned from
-//	         GitHub on a new laptop: its first sync records that address
-//	         silently (no "remote changed", no fork offer)
+//	         GitHub on a new laptop: a sync with nothing to commit writes
+//	         nothing (I-7); the first sync after a note records that
+//	         address silently (no "remote changed", no fork offer)
 //
 // Named TestJourneySolo… so the solo persona's gate step runs it.
 
@@ -120,6 +121,11 @@ func TestJourneySoloNewLaptopFirstAddress(t *testing.T) {
 	w.Step("day2/new-laptop-first-sync-is-quiet", func() {
 		desk := sam.NewLaptop("desk")
 		site := desk.Clone(repo, "site")
+		desk.LoreIn(site, "sync").OK(t).Never(t, "remote changed", "lore repo fork", "no confirmed address")
+		if st := site.Status(); st != "" {
+			t.Fatalf("a sync with nothing to commit changed files:\n%s", st)
+		}
+		desk.LoreIn(site, "memory", "add", "--body", "a note from the desk").OK(t)
 		r := desk.LoreIn(site, "sync").OK(t)
 		r.Never(t, "remote changed", "lore repo fork", "no confirmed address")
 		desk.LoreIn(site, "sync").OK(t).Never(t, "remote changed")

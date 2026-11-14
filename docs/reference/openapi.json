@@ -64850,7 +64850,7 @@
                   },
                   "query": {
                     "type": "string",
-                    "description": "full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Emoji are not indexed: a search for one finds nothing"
+                    "description": "full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"
                   },
                   "repo": {
                     "type": "string",

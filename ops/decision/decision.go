@@ -437,7 +437,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err = rowref.Save(ctx, o.env, src, noun.Table, kn.Field(w.Row, kn.FieldProject), w.Row.ID, rel, refs); err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: in.Title, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	// The reply echoes the stored title (after the write path's text
+	// cleanup), so --json shows what show and the row file hold (I-4).
+	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // addRefs writes --ref pointers of an existing decision it (parse, F15

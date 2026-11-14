@@ -84,9 +84,8 @@ var campOddValues = []campOdd{
 	{"long10k", strings.Repeat("lorem ipsum ", 834)[:10000], strings.Repeat("lorem ipsum ", 834)[:10000]},
 	{"rtl", "שלום עולם — مرحبا بالعالم", "שלום עולם — مرحبا بالعالم"},
 	{"emoji", "deploy 🚀 then ✅", "deploy 🚀 then ✅"},
-	// ZWJ is dropped on purpose (logic/textnorm stripChars, v0.1.17's list),
-	// so a joined emoji comes back as its parts.
-	{"emoji-zwj", "dev 👩\u200d💻", "dev 👩💻"},
+	// ZWJ is kept (I-4): a joined emoji comes back joined.
+	{"emoji-zwj", "dev 👩\u200d💻", "dev 👩\u200d💻"},
 	{"reserved", "true", "true"},
 	{"reserved-sql", "DROP TABLE memories; --", "DROP TABLE memories; --"},
 	{"spaces-slashes", "src/api handlers/v2 \\ path with spaces", "src/api handlers/v2 \\ path with spaces"},

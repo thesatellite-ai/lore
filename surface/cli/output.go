@@ -16,6 +16,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/listcap"
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -51,10 +52,15 @@ const (
 	floatBits = 64
 )
 
-// shownText is text as a person reads it: session tokens masked, and every
-// list of ids capped to listcap.Shown items, the rest named with where the
-// full list is (listcap.Text; jsonHint). --json output never comes here.
-func shownText(text, where string) string { return listcap.Text(masked(text), where) }
+// shownText is text as a person reads it: session tokens masked, control
+// characters escaped (I-16: a teammate's row holding ESC sequences must not
+// drive the reader's terminal; lore's own colours are added after, by the
+// Palette), and every list of ids capped to listcap.Shown items, the rest
+// named with where the full list is (listcap.Text; jsonHint). --json
+// output never comes here: JSON encodes controls itself.
+func shownText(text, where string) string {
+	return listcap.Text(textnorm.EscapeControls(masked(text)), where)
+}
 
 // jsonHint is where a capped list is printed whole: "`<cmd> --json` lists
 // all" (cmd is the command path, e.g. "lore doctor"; "" names --json).

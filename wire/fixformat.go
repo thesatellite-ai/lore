@@ -99,3 +99,13 @@ func (a *App) fixFormatOldSteps(ctx context.Context, top string, dry bool) []ops
 func (a *App) FixNoLoreData(ctx context.Context) bool {
 	return a.gitRepoWithoutLore(ctx)
 }
+
+// FixLoreGone is opsfix.LoreGoneGate: beforeLoreErr's refusal when the
+// repo's .lore/ was deleted or is out of this checkout, nil otherwise.
+func (a *App) FixLoreGone(ctx context.Context) error {
+	top := gitTopLevel(ctx, a.projectDir())
+	if top == "" {
+		return nil
+	}
+	return beforeLoreErr(ctx, top, errs.NotAStore)
+}

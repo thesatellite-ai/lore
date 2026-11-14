@@ -89,8 +89,9 @@ The commit is refused while the markers are there. The pre-commit hook (a small 
 ```console
 # alice, in website
 $ git commit -qam 'merge'
-ERROR: [E_INVALID_INPUT] refusing to commit broken lore files: .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in a value)
-  hint: fix the file by hand (a row file is one JSON object; settle a conflict with the row's edit command), or restore it with `git checkout -- <path>`; then commit again
+ERROR: [E_INVALID_INPUT] refusing to commit broken lore files:
+  .lore/data/rules/rul_b4f4…a5b0.json (conflict markers in a value: an unresolved git merge conflict; lore sync conflicts lists it, keep one side and delete the marker lines)
+  hint: fix the file by hand (a row file is one JSON object named after its own id; settle a conflict with the row's edit command), or restore it with `git checkout HEAD -- <path>`; then commit again
 (exit 1)
 $ lore rule edit --id rul_b4f4…a5b0 --body 'Buttons are blue.'
 lore: invalid-file store repo: .lore/data/rules/rul_b4f4…a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4…a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)

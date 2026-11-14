@@ -101,8 +101,13 @@ func (o ShowOut) baseText() string {
 	return b.String()
 }
 
-// Text prints one "<id> <body>" line per hit.
+// Text prints one "<id> <body>" line per hit, or "(no matches)" with
+// where else to look, like every other search: an empty output could not
+// be told from a command that did not run (G-4).
 func (o SearchOut) Text() string {
+	if len(o.Data) == 0 {
+		return "(no matches)\n  hint: lore search --query <words> looks in every kind of row, not only memories\n"
+	}
 	var b strings.Builder
 	for _, h := range o.Data {
 		fmt.Fprintf(&b, "%s %s\n", h.ID, h.Row.Body)

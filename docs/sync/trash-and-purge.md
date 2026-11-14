@@ -57,6 +57,8 @@ $ git checkout -q HEAD -- .lore/data && git status --short
 ```
 <!-- /example -->
 
+When the whole `.lore` folder is deleted, every command says so instead of reading nothing: `the .lore folder of <repo> is deleted from the work tree (N tracked files are deleted, git status lists them)`, with the hint `put it back: git -C <repo> checkout HEAD -- .lore`. `lore doctor` reports it as an error (never `HEALTHY`), and the pre-commit hook refuses to commit the deletion. If a commit on the branch already deleted it, commands name that commit and the line that brings the folder back in a new commit (`git checkout <commit>~1 -- .lore`), never `lore init` (that would start a second project). A deleted `.lore/data/_meta.json` (the project's id and format) is a `project_marker` error in `lore doctor` with the `git checkout HEAD -- .lore/data/_meta.json` line, and `lore doctor --fix` puts it back from HEAD.
+
 ## Step 3 — Purge archived notes for good
 
 Alice archives a memory and commits that. Later the team decides archived notes older than a cutoff should be gone. `--archived-before` takes a date (`2026-01-31`) or an age back from now (`90d`, `720h`; `0d` means "archived before now"). Preview with `--dry-run`; the real run needs `--confirm`, because purge cannot be undone by git alone:

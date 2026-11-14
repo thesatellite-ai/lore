@@ -52,11 +52,23 @@ const (
 // A client repo is skipped (B-8, B-11): minting its id writes the tracked
 // _meta.json (with the client's remote) and a repos row file into the
 // client's checkout, which a sync must never do there.
+//
+// I-7: in an own repo whose .lore/data matches the commit, the pass only
+// reads (RepoAddressStatus): minting the id or recording a new address
+// writes _meta.json, a repos row and the person's actor row, and every
+// clone of a repo without an id writes the same ones; once one teammate
+// commits them, every other clone's `git pull` aborts over its own copies.
+// The writes wait for a sync that finds rows waiting for a commit, which
+// then carries them.
 func (a *App) SyncRepoAddresses(ctx context.Context, w io.Writer, in io.Reader, terminal bool) {
 	if client, cerr := a.ClientRepo(ctx); cerr == nil && client {
 		return
 	}
-	rep, err := a.CheckRepoAddresses(ctx)
+	check := a.CheckRepoAddresses
+	if pending, ok := a.uncommittedData(ctx); ok && len(pending) == 0 {
+		check = a.RepoAddressStatus
+	}
+	rep, err := check(ctx)
 	if err != nil {
 		if !errs.Has(err, errs.NotFound) { // no `lore init` yet: nothing to identify
 			_, _ = fmt.Fprintln(w, "warning: repo addresses not checked: "+err.Error()) // stderr gone: nothing left to report to

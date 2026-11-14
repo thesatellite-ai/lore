@@ -108,8 +108,16 @@ type tableSQL struct {
 	// first source's copy when two sources hold the id; references are
 	// tracked per id, see deleteTyped).
 	selectText map[string]string
-	// search takes (match, limit).
+	// search takes (match, limit) and returns (id, rank, snippet or NULL
+	// for a row over snippetMaxChars, FTS rowid).
 	search string
+	// big-row snippets (I-6, bigRowSnippet): bigText[i] takes an FTS rowid
+	// and returns the row's FTS field i; snipCreate makes the
+	// connection's temp FTS table (same columns and tokenizer), snipClear
+	// empties it, snipInsert[i] takes (rowid, text) for FTS field i, and
+	// snipSearch takes (match) and returns the first chunk's snippet.
+	snipCreate, snipClear, snipSearch string
+	bigText, snipInsert               []string
 }
 
 // joinPlan is the cache-only join table of one many-to-many relation
@@ -312,13 +320,26 @@ func indexStatements(def schema.TableDef) ([]string, error) {
 // FTS settings, v0.1.17 parity (saas/pkg/aicoder/fts5): porter stemming
 // over unicode61 with diacritics folded ("running" finds "run", "cafe"
 // finds "café"), and the snippet v0.1.17 printed: matches in <b>…</b>,
-// "..." where text is cut, about 32 tokens.
+// "..." where text is cut, about 32 tokens. The tokenizer also keeps
+// symbols (category So: emoji) and the skin-tone modifiers as token
+// characters, so an emoji is found (I-5; ftsseg.go makes each one, and
+// each CJK character, a token of its own). Changing it changes every FTS
+// table's DDL and so its fingerprint: an older cache is refilled.
 const (
-	ftsTokenizer    = "porter unicode61 remove_diacritics 2"
+	ftsTokenizer    = "porter unicode61 remove_diacritics 2 categories ''L* N* Co So'' tokenchars ''\U0001F3FB\U0001F3FC\U0001F3FD\U0001F3FE\U0001F3FF''"
 	snippetOpen     = "<b>"
 	snippetClose    = "</b>"
 	snippetEllipsis = "..."
 	snippetTokens   = 32
+	// snippetMaxChars is the largest row (characters over all its
+	// full-text fields) whose snippet FTS5's snippet() makes over the whole
+	// row; a larger row's snippet comes from snippetChunk-sized chunks
+	// (I-6: snippet() over 1 MB took seconds, over 64K about 10 ms).
+	snippetMaxChars = 64 << 10
+	snippetChunk    = 4 << 10
+	// snipPrefix names the per-connection temp FTS table of big-row
+	// snippets (never in the cache file).
+	snipPrefix = "_snip_"
 )
 
 // typedRowidCol names a typed table's rowid in the FTS statements (addFTS).
@@ -368,11 +389,37 @@ func (p *plan) addFTS() error {
 	p.sql.ftsDeleteID = "DELETE FROM " + fq + " WHERE rowid = (" + typedRowid + ")"
 	p.sql.ftsClearSource = "DELETE FROM " + fq + ` WHERE rowid IN (SELECT ` + typedRowidCol + ` FROM ` + tq + ` WHERE "` + colSource + `" = ?)`
 	rank := "bm25(" + fq + ", " + strings.Join(weights, ", ") + ")"
-	p.sql.search = `SELECT "` + colID + `", ` + rank + ", snippet(" + fq + ", -1, '" + snippetOpen + "', '" + snippetClose + "', '" + snippetEllipsis + "', " + strconv.Itoa(snippetTokens) + ") FROM " + fq +
+	// I-6: FTS5's snippet() and highlight() cost about (matches in the row)
+	// x (tokens in the row), so a 1 MB body holding the word thousands of
+	// times took seconds per search. A row whose full-text fields are longer
+	// than snippetMaxChars gets no snippet() here; bigRowSnippet makes its
+	// snippet from small chunks of the text in a temp FTS table.
+	var lens, fcols []string
+	for _, f := range p.def.FTS {
+		lens = append(lens, `length(coalesce("`+ftsColPrefix+f+`", ''))`)
+		fcols = append(fcols, `"`+ftsColPrefix+f+`"`)
+	}
+	snip := func(table string) string {
+		return "snippet(" + table + ", -1, '" + snippetOpen + "', '" + snippetClose + "', '" + snippetEllipsis + "', " + strconv.Itoa(snippetTokens) + ")"
+	}
+	small := "(" + strings.Join(lens, " + ") + ") <= " + strconv.Itoa(snippetMaxChars)
+	p.sql.search = `SELECT "` + colID + `", ` + rank + ", CASE WHEN " + small + " THEN " + snip(fq) + " END, rowid FROM " + fq +
 		" WHERE " + fq + " MATCH ? ORDER BY " + rank + " LIMIT ?"
-	// The cells are (id, _source, fields…) in one JSON parameter; the FTS
-	// rowid is the typed row's, and a row the typed table does not hold
-	// gets no FTS entry (it could never be found again to be removed).
+	p.sql.bigText = make([]string, len(fcols))
+	for i, fc := range fcols {
+		p.sql.bigText[i] = "SELECT " + fc + " FROM " + fq + " WHERE rowid = ?"
+	}
+	sq, err := ident(snipPrefix + p.def.Name.String())
+	if err != nil {
+		return err
+	}
+	p.sql.snipCreate = "CREATE VIRTUAL TABLE IF NOT EXISTS temp." + sq + " USING fts5(" + strings.Join(cols, ", ") + ", tokenize='" + ftsTokenizer + "')"
+	p.sql.snipClear = "DELETE FROM temp." + sq
+	p.sql.snipInsert = make([]string, len(fcols))
+	for i, fc := range fcols {
+		p.sql.snipInsert[i] = "INSERT INTO temp." + sq + " (rowid, " + fc + ") VALUES (?, ?)"
+	}
+	p.sql.snipSearch = "SELECT " + snip(sq) + " FROM temp." + sq + " WHERE " + sq + " MATCH ? ORDER BY rowid LIMIT 1"
 	p.sql.ftsInsert = "INSERT INTO " + fq + " (rowid, " + strings.Join(names, ", ") + ") SELECT t." + typedRowidCol + ", " + extractList(len(names)) +
 		" FROM " + tq + ` AS t WHERE t."` + colSource + `" = json_extract(?1, '$[1]') AND t."` + colID + `" = json_extract(?1, '$[0]')`
 	p.objects = append(p.objects, dbObject{Type: objFTS, Name: p.fts})

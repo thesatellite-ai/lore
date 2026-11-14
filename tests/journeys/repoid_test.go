@@ -3,8 +3,9 @@
 package journeys
 
 // repoid_test.go — two machines upgrade one 0.1.17 repo (B2-7): Dana runs
-// `lore fix` and pushes; Sam clones; both run `lore sync` before either
-// commits what it left. Each mints the repo's id on its own, and before
+// `lore fix` and pushes; Sam clones; both add a rule and run `lore sync`
+// before either commits what it left (a sync with nothing waiting for a
+// commit mints nothing, I-7). Each mints the repo's id on its own, and before
 // the id was derived from the project and the address they minted two, so
 // after a normal pull the repo had two repos rows. Now both mint one id:
 // after the merge the repo has one row and `lore repo list` one repo.
@@ -50,7 +51,9 @@ func TestJourneyTwoMachinesMintOneRepoID(t *testing.T) {
 	})
 
 	w.Step("day1/both-sync-before-either-commits", func() {
+		dana.Laptop().LoreIn(dc, "rule", "add", "--body", "Rule from dana").OK(t)
 		dana.Laptop().LoreIn(dc, "sync").OK(t)
+		sam.Laptop().LoreIn(sc, "rule", "add", "--body", "Rule from sam").OK(t)
 		sam.Laptop().LoreIn(sc, "sync").OK(t)
 		if d, s := repoRows(t, dc), repoRows(t, sc); strings.Join(d, ",") != strings.Join(s, ",") || len(d) != 1 {
 			t.Fatalf("the two machines minted different repo ids: dana %v, sam %v", d, s)

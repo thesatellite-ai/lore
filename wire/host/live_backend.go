@@ -322,9 +322,12 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	if err != nil {
 		return nil, "", err
 	}
+	// seen: the live ref's commit and the fetched default branch's (the
+	// read-through rows, G-3); either moving makes this a full read.
+	seenNow := oid + s.landedCursorPart(ctx)
 	innerCur := store.Cursor("")
 	if rest, ok := strings.CutPrefix(string(cursor), liveCursorPrefix); ok {
-		if seen, ic, ok := strings.Cut(rest, liveCursorSep); ok && seen == oid {
+		if seen, ic, ok := strings.Cut(rest, liveCursorSep); ok && seen == seenNow {
 			innerCur = store.Cursor(ic)
 		}
 	}
@@ -381,7 +384,7 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		}
 		out = append(out, b.landedRows(ctx, s, have)...)
 	}
-	return out, store.Cursor(liveCursorPrefix + oid + liveCursorSep + string(next)), nil
+	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
 }
 
 // readNoSession is Read in a run with no live session (a git hook, live

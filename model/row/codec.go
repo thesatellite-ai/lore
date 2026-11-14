@@ -1,6 +1,7 @@
 package row
 
 import (
+	"bytes"
 	"strconv"
 	"strings"
 	"time"
@@ -97,13 +98,26 @@ func (r Row) check() error {
 	return nil
 }
 
-// Decode parses a row document. It refuses a "_v" newer than FormatVersion
+// utf8BOM is the byte order mark editors such as Windows Notepad put at the
+// start of a UTF-8 file.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// TrimBOM is b without a leading UTF-8 byte order mark (I-15: a row file
+// saved by Notepad was refused as "not a JSON object" everywhere, an
+// invisible byte nobody could find). HasBOM reports whether b has one.
+func TrimBOM(b []byte) []byte { return bytes.TrimPrefix(b, utf8BOM) }
+
+// HasBOM reports whether b starts with a UTF-8 byte order mark.
+func HasBOM(b []byte) bool { return bytes.HasPrefix(b, utf8BOM) }
+
+// Decode parses a row document (a leading UTF-8 BOM is ignored). It refuses a "_v" newer than FormatVersion
 // with E_OLD_LORE (writes must never round-trip data this binary cannot
 // represent) and upcasts older versions in memory through the step
 // registry (steps.go): v1 gets "_hlc" from updated_at, counter 0 and
 // updated_by (spec 12). The same bytes decoded again in one process are
 // answered from a memo (decodememo.go) with their own copies of the maps.
 func Decode(b []byte) (Row, error) {
+	b = TrimBOM(b)
 	if len(b) < decodeMemoMinBytes {
 		return decode(b)
 	}
