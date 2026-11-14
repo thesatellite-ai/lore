@@ -16,7 +16,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | not-a-bug | 29 |
 | docs-only | 15 |
 | process | 41 |
-| needs a test | 30 |
+| needs a test | 28 |
 
 ## bughunt
 
@@ -240,8 +240,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:track-E | scenario | track E: mixed formats, migration across branches, 0.1.17 stores, big history | fixed | NONE | story pending (tests/stories) |
 | devco:track-F | scenario | track F: client repo and contractor, CI variants, people changes, secrets everywhere | fixed | NONE | story pending (tests/stories) |
 | devco:track-G | scenario | track G: months of use: volume, accented search, lifecycle, renames and moved urls, 10 agents, docs-only repo | fixed | NONE | story pending (tests/stories) |
-| devco:track-H | scenario | track H: corruption, force-push and history rewrites, lost store remotes, recovery, replaced hooks | fixed | NONE | story pending (tests/stories) |
-| devco:track-I | scenario | track I: one person on two machines, Unicode/CRLF/huge text, autocrlf, time zones, locales, paths with spaces | fixed | NONE | story pending (tests/stories) |
+| devco:track-H | scenario | track H: corruption, force-push and history rewrites, lost store remotes, recovery, replaced hooks | fixed | TestStoryHCorruption, TestStoryHRewrites, TestStoryHLostRemotes | story tests/stories |
+| devco:track-I | scenario | track I: one person on two machines, Unicode/CRLF/huge text, autocrlf, time zones, locales, paths with spaces | fixed | TestStoryITwoMachines, TestStoryIText, TestStoryIEnvironment | story tests/stories |
 | devco:D-1 | finding | setup in a 0.1.17-format repo fails every step (E_FORMAT_OLD "stored but audit failed") (A-1, B-1) | fixed | TestMachineRowEditsPassInAnOldFormatProject, TestJourneyUpgraderFormatOneStaysClean | pkg wire, tests/journeys |
 | devco:D-2 | finding | render/doctor --fix write tracked files in a format-1 repo; render_history WARN; doctor gives conflicting next steps (C-1, C-2, C-3) | fixed | TestJourneyUpgraderFormatOneStaysClean | pkg tests/journeys |
 | devco:D-3 | finding | setup store probes replace the person's GIT_SSH_COMMAND (A-2) | fixed | TestRemoteProbesKeepPersonSSHCommand, TestSkippedGitHubStepIsNeverProbed, TestJourneySetupEarlySteps | pkg adapters/probe, wire, tests/journeys |
@@ -351,21 +351,21 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-107 | finding | after-land on main: TeamLead journeys, env_lore_home_ro, SotRender row11_private, CampaignSetup schema-only outside a repo, OrgActorRefusals show_unknown_store fail | fixed | TestJourneyTeamLeadStoreWipedEmpty, TestOrgActorRefusals, TestCampaignSetup_MoreRefusals | pkg tests/journeys, tests/userscen, tests/machines |
 | devco:D-108 | finding | the web page build setup page after core's manual push default: page e2e push-manual flows fail (pagewalk looks for 'Manual'), help text still says Now is the default | process | - | fixed in the web page build (setup page wording and its page tests) |
 | devco:D-109 | finding | after-land FAIL on 094f7b14 (1112 s): setupe2e, teame2e, docs-examples, docsync, journey-agents/folders/land/rest, life-objects, scenarios — batches 8-14 landed on check:fast while the old after-land loop was dead | fixed | TestOutsideRepoLeavesALinkedRepoAlone, TestOpenDuringInitIgnoresTheRemoteLink, TestLiveLeakCheckNamesCheckoutPaths, TestRepoTopProjectIDAsksNoGitAtTheTop | pkg wire, wire/host, adapters/orgcfg |
-| devco:D-111 | finding | deleted .lore folder blamed on a sparse checkout; doctor HEALTHY (r3 H-1) | fixed | TestJourneyDamagedLoreFiles | pkg tests/journeys |
-| devco:D-112 | finding | chmod 000 row file: E_INTERNAL with no cause (r3 H-2) | fixed | TestUnreadableFileSaysChmod, TestUnreadableWhy | pkg adapters/backend/rowfs, wire/host |
-| devco:D-113 | finding | deleted _meta.json: doctor HEALTHY, --fix does not restore (r3 H-3) | fixed | TestJourneyDamagedLoreFiles | pkg tests/journeys |
-| devco:D-114 | finding | conflict markers in a row file reported as plain invalid JSON (r3 H-4) | fixed | TestBadFileSaysCauseAndNextStep | pkg adapters/backend/rowfs |
-| devco:D-115 | finding | broken row file: show error names no file; every read warns hand edit refused (r3 H-5) | fixed | TestBadFileSaysCauseAndNextStep | pkg adapters/backend/rowfs |
-| devco:D-116 | finding | pre-commit lets wrong/duplicate ids and a deleted .lore/_meta.json be committed (r3 H-6) | fixed | TestWrongRowID, TestJourneyDamagedLoreFiles | pkg wire/host, tests/journeys |
-| devco:D-117 | finding | write path strips ZWJ/ZWNJ: emoji split, Indic/Persian spelling changed (r3 I-4) | fixed | TestJoinersKept, TestJourneyTextSafety | pkg logic/textnorm, tests/journeys |
-| devco:D-118 | finding | search misses CJK words inside sentences; --help wrong about emoji (r3 I-5) | fixed | TestSearchCJKAndEmoji, TestJourneyTextSafety | pkg adapters/cache/sqlite, tests/journeys |
-| devco:D-119 | finding | search takes ~10 s when a hit is a 1 MB body (r3 I-6) | fixed | TestSearchBigBodyFast | pkg adapters/cache/sqlite |
+| devco:D-111 | finding | deleted .lore folder blamed on a sparse checkout; doctor HEALTHY (r3 H-1) | fixed | TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg tests/journeys |
+| devco:D-112 | finding | chmod 000 row file: E_INTERNAL with no cause (r3 H-2) | fixed | TestUnreadableFileSaysChmod, TestUnreadableWhy, TestStoryHCorruption | pkg adapters/backend/rowfs, wire/host |
+| devco:D-113 | finding | deleted _meta.json: doctor HEALTHY, --fix does not restore (r3 H-3) | fixed | TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg tests/journeys |
+| devco:D-114 | finding | conflict markers in a row file reported as plain invalid JSON (r3 H-4) | fixed | TestBadFileSaysCauseAndNextStep, TestStoryHCorruption | pkg adapters/backend/rowfs |
+| devco:D-115 | finding | broken row file: show error names no file; every read warns hand edit refused (r3 H-5) | fixed | TestBadFileSaysCauseAndNextStep, TestStoryHCorruption | pkg adapters/backend/rowfs |
+| devco:D-116 | finding | pre-commit lets wrong/duplicate ids and a deleted .lore/_meta.json be committed (r3 H-6) | fixed | TestWrongRowID, TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg wire/host, tests/journeys |
+| devco:D-117 | finding | write path strips ZWJ/ZWNJ: emoji split, Indic/Persian spelling changed (r3 I-4) | fixed | TestJoinersKept, TestJourneyTextSafety, TestStoryIText | pkg logic/textnorm, tests/journeys |
+| devco:D-118 | finding | search misses CJK words inside sentences; --help wrong about emoji (r3 I-5) | fixed | TestSearchCJKAndEmoji, TestJourneyTextSafety, TestStoryIText | pkg adapters/cache/sqlite, tests/journeys |
+| devco:D-119 | finding | search takes ~10 s when a hit is a 1 MB body (r3 I-6) | fixed | TestSearchBigBodyFast, TestStoryIText | pkg adapters/cache/sqlite |
 | devco:D-132 | finding | every git pull --rebase that brings rows leaves LORE.md modified; next pull refuses (r3 G-2) | fixed | TestRefreshHookHoldsTrackedRender, TestJourneyPullNeverBlocked | pkg app, tests/journeys |
-| devco:D-133 | finding | a read on a fresh clone writes tracked rows; teammates' git pull aborts (r3 I-7) | fixed | TestSyncRepoAddressesCleanCloneWritesNothing, TestJourneyPullNeverBlocked | pkg wire, tests/journeys |
+| devco:D-133 | finding | a read on a fresh clone writes tracked rows; teammates' git pull aborts (r3 I-7) | fixed | TestSyncRepoAddressesCleanCloneWritesNothing, TestJourneyPullNeverBlocked, TestStoryIEnvironment | pkg wire, tests/journeys |
 | devco:D-134 | finding | rows read through from the fetched default branch never found by search (r3 G-3) | fixed | TestLiveBackend_FetchMovesTheReadCursor | pkg wire/host |
 | devco:D-135 | finding | memory search with no hits prints nothing; emoji-only search (r3 G-4) | fixed | TestSearchTextNoMatches | pkg ops/memory |
-| devco:D-149 | finding | a row file with a UTF-8 BOM is refused everywhere; doctor --fix does not strip it (r3 I-15) | fixed | TestDecodeIgnoresBOM, TestJourneyDamagedLoreFiles | pkg model/row, tests/journeys |
-| devco:D-150 | finding | SECURITY: control characters in a row drive the reader's terminal (show/list/search) (r3 I-16) | fixed | TestEscapeControls, TestJourneyTextSafety | pkg logic/textnorm, tests/journeys |
+| devco:D-149 | finding | a row file with a UTF-8 BOM is refused everywhere; doctor --fix does not strip it (r3 I-15) | fixed | TestDecodeIgnoresBOM, TestJourneyDamagedLoreFiles, TestStoryHCorruption | pkg model/row, tests/journeys |
+| devco:D-150 | finding | SECURITY: control characters in a row drive the reader's terminal (show/list/search) (r3 I-16) | fixed | TestEscapeControls, TestJourneyTextSafety, TestStoryIText | pkg logic/textnorm, tests/journeys |
 | devco:D-161 | finding | STORIES round (owner 09:35): every track and every fixed finding becomes a replayable story + test, REGRESSIONS.md index + guard, stories step in the full gate | process | - | the stories round itself (this index, the story tests, the guard) |
 
 ## lore-adoptfix
@@ -1023,34 +1023,34 @@ Every new scenario or finding lands with its test and its row here in the same c
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
 | devco:D-110 | finding | owner Mac: warm task list 5-6 s (2.9 s system time), doctor 22 s, commit hook 31 s on 5.5k rows: every command touches all row files | open | - |  |
-| devco:D-120 | finding | doctor HEALTHY with two open store sync conflicts; wrong next step (r3 I-1) | open | - |  |
-| devco:D-121 | finding | sync received/sent counts wrong (r3 I-2) | open | - |  |
-| devco:D-122 | finding | doctor Team versions names an actor id show cannot find (r3 I-3) | open | - |  |
+| devco:D-120 | finding | doctor HEALTHY with two open store sync conflicts; wrong next step (r3 I-1) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
+| devco:D-121 | finding | sync received/sent counts wrong (r3 I-2) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
+| devco:D-122 | finding | doctor Team versions names an actor id show cannot find (r3 I-3) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
 | devco:D-123 | finding | repo moved to a new remote: writes blocked as live ref deleted or rewritten (r3 G-1) | open | - |  |
-| devco:D-124 | finding | force-push dropping a notes commit: pre-push silent, no recovery route (r3 H-7) | open | - |  |
-| devco:D-125 | finding | rebase + force-push leaves commit links on old shas (r3 H-8) | open | - |  |
-| devco:D-126 | finding | store remote rewound by force-push: next sync silently re-pushes dropped commits (r3 H-9) | open | - |  |
-| devco:D-127 | finding | trash restore of an org-store row refused E_FORMAT_OLD in a format-1 repo (r3 H-13) | open | - |  |
-| devco:D-128 | finding | git rm'd row: trash says 'purged by ?', no git restore line (r3 H-14) | open | - |  |
-| devco:D-129 | finding | lore sync status outside a repo fails (r3 H-10) | open | - |  |
-| devco:D-130 | finding | deleted/moved store remote reported as offline; nobody names set-url (r3 H-11) | open | - |  |
-| devco:D-131 | finding | store set-url: wrong refusal outside a repo; a member rewrites the org url; old clone left (r3 H-12) | open | - |  |
-| devco:D-136 | finding | reminder/task lists show UTC dates, not the viewer's (r3 I-8) | open | - |  |
-| devco:D-137 | finding | search case folding not Turkish-aware (r3 I-9) | open | - |  |
-| devco:D-138 | finding | member add --handle chloé stores @chlo; @chloe does not resolve (r3 I-10) | open | - |  |
-| devco:D-139 | finding | umask: 0600 rows / 2700 folders under 077; group never readable under 002 (r3 I-11) | open | - |  |
-| devco:D-140 | finding | git commit -a with a new row: 'added 1 file' then 'nothing added' (r3 H-15) | open | - |  |
-| devco:D-141 | finding | hooks removed or taken over by husky/pre-commit: doctor never says the leak guard is off (r3 H-18) | open | - |  |
-| devco:D-142 | finding | with husky, lore adds 5 hook files to tracked .husky without asking (r3 H-19) | open | - |  |
-| devco:D-143 | finding | store doctor: unsent org commits as an error ×3 with a false 'next command pushes' (r3 H-16) | open | - |  |
-| devco:D-144 | finding | new laptop: a local personal store lost silently; join picks 'local' without saying machine-only (r3 H-17) | open | - |  |
-| devco:D-145 | finding | lore where labels a live client repo's caches 'gone' (r3 I-12) | open | - |  |
-| devco:D-146 | finding | client repo: refused write hints lore init, which writes .lore/hooks/pointer files there (r3 I-13) | open | - |  |
-| devco:D-147 | finding | init writes its pointer into CLAUDE.md and AGENTS.md although CLAUDE.md imports @AGENTS.md (r3 I-14) | open | - |  |
+| devco:D-124 | finding | force-push dropping a notes commit: pre-push silent, no recovery route (r3 H-7) | open | - | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-125 | finding | rebase + force-push leaves commit links on old shas (r3 H-8) | open | - | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-126 | finding | store remote rewound by force-push: next sync silently re-pushes dropped commits (r3 H-9) | open | - | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-127 | finding | trash restore of an org-store row refused E_FORMAT_OLD in a format-1 repo (r3 H-13) | open | - | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-128 | finding | git rm'd row: trash says 'purged by ?', no git restore line (r3 H-14) | open | - | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-129 | finding | lore sync status outside a repo fails (r3 H-10) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-130 | finding | deleted/moved store remote reported as offline; nobody names set-url (r3 H-11) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-131 | finding | store set-url: wrong refusal outside a repo; a member rewrites the org url; old clone left (r3 H-12) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-136 | finding | reminder/task lists show UTC dates, not the viewer's (r3 I-8) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-137 | finding | search case folding not Turkish-aware (r3 I-9) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-138 | finding | member add --handle chloé stores @chlo; @chloe does not resolve (r3 I-10) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-139 | finding | umask: 0600 rows / 2700 folders under 077; group never readable under 002 (r3 I-11) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-140 | finding | git commit -a with a new row: 'added 1 file' then 'nothing added' (r3 H-15) | open | - | story step TestStoryHRewrites (skipped until fixed) |
+| devco:D-141 | finding | hooks removed or taken over by husky/pre-commit: doctor never says the leak guard is off (r3 H-18) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-142 | finding | with husky, lore adds 5 hook files to tracked .husky without asking (r3 H-19) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-143 | finding | store doctor: unsent org commits as an error ×3 with a false 'next command pushes' (r3 H-16) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-144 | finding | new laptop: a local personal store lost silently; join picks 'local' without saying machine-only (r3 H-17) | open | - | story step TestStoryHLostRemotes (skipped until fixed) |
+| devco:D-145 | finding | lore where labels a live client repo's caches 'gone' (r3 I-12) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-146 | finding | client repo: refused write hints lore init, which writes .lore/hooks/pointer files there (r3 I-13) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
+| devco:D-147 | finding | init writes its pointer into CLAUDE.md and AGENTS.md although CLAUDE.md imports @AGENTS.md (r3 I-14) | open | - | story step TestStoryIEnvironment (skipped until fixed) |
 | devco:D-148 | finding | overdue reminders only in reminder list; inbox/render/doctor silent (r3 G-5) | open | - |  |
 | devco:D-151 | finding | LORE.md over budget renders must rules as bare ids (r3 G-6) | open | - |  |
 | devco:D-152 | finding | no bulk archive (archive takes only --id) (r3 G-7) | open | - |  |
-| devco:D-153 | finding | the org admin's second laptop can only join as a member (r3 I-17) | open | - |  |
+| devco:D-153 | finding | the org admin's second laptop can only join as a member (r3 I-17) | open | - | story step TestStoryITwoMachines (skipped until fixed) |
 | devco:D-154 | finding | URGENT: pre-commit refuses every migration commit: the .0-needs-lore-0.1.18-or-newer signpost is checked as a row file (found by perf3) | open | - |  |
 | devco:D-155 | finding | trash purge slow: 50 rows 12 s, dry-run 4.6 s (r3 G-8) | open | - |  |
 | devco:D-156 | finding | doctor lists an 8%-of-budget LORE.md under Warnings (r3 G-9) | open | - |  |
@@ -1075,4 +1075,4 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 ## Needs a test
 
-Fixed items with no guarding test yet (the backfill adds one each): bughunt:J1, bughunt:J2, bughunt:J3, devco:track-A, devco:track-B, devco:track-C, devco:track-D, devco:track-E, devco:track-F, devco:track-G, devco:track-H, devco:track-I, agentpol:5, agentpol2:6, agentpol2:7, agentpol2:8, fastgate:C7, folders:1d, mergefix:2-perf, migfix:g1, outfix:1-sla, outfix:hook-scanner, pagewalk:home-budget, pagewalk:fresh/home-details, plainfiles:D-n, plainfiles:D-ai, plainfiles:D-am, plainfiles:D-aq, team:SC-28, mac:named-yes-false.
+Fixed items with no guarding test yet (the backfill adds one each): bughunt:J1, bughunt:J2, bughunt:J3, devco:track-A, devco:track-B, devco:track-C, devco:track-D, devco:track-E, devco:track-F, devco:track-G, agentpol:5, agentpol2:6, agentpol2:7, agentpol2:8, fastgate:C7, folders:1d, mergefix:2-perf, migfix:g1, outfix:1-sla, outfix:hook-scanner, pagewalk:home-budget, pagewalk:fresh/home-details, plainfiles:D-n, plainfiles:D-ai, plainfiles:D-am, plainfiles:D-aq, team:SC-28, mac:named-yes-false.
