@@ -10,8 +10,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1382 |
-| open | 69 |
+| fixed | 1383 |
+| open | 68 |
 | on-hold | 12 |
 | owner | 5 |
 | not-reproduced | 109 |
@@ -405,6 +405,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-160 | finding | task add --help says --commitment defaults to accepted but agents are refused without it (r3 G-13) | fixed | TestAddCommitmentHelpNamesAgents, TestStoryGManyAgents | pkg ops/task |
 | devco:D-161 | finding | STORIES round (owner 09:35): every track and every fixed finding becomes a replayable story + test, REGRESSIONS.md index + guard, stories step in the full gate | process | - | the stories round itself (this index, the story tests, the guard) |
 | devco:D-162 | finding | after-land FAIL on 0999e1d2: machines row15_repo_urls, userscen DoctorBreak broken files, docs-examples, life-teams, race (search timing under -race) | fixed | TestTempBareFolderRemovedMeanwhile, TestDoctorBreak_BrokenRowFiles, TestSotRightRows, TestSearchBigBodyFast | pkg adapters/probe, tests/userscen, tests/machines, adapters/cache/sqlite (gate5, batch 19) |
+| stories:A-1 | finding | a teammate's first lore sync in a freshly migrated repo leaves lore's wiring (.gitignore, .gitattributes, and LORE.md/LORE.full.md when it renders) uncommitted; once the migrator commits the same files, the teammate's git pull aborts (would be overwritten by merge) | fixed | TestStoryABranches, TestJourneyTeammatePullAfterMigration, TestTeammateWriteKeepsWiringLocal | D-164; story tests/stories (A) |
 
 ## lore-adoptfix
 
@@ -1982,7 +1983,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 | plainfiles:4 | scenario | Look as a user: fresh home, solo setup, org with three stores, hand edits, plain git, lore edit, then judge the trees as a newcomer | open | - | no "AS A USER" section with trees was ever written in the status file; the owner's own machine runs and the docs agent's run stood in and found the B1-B5 bugs |
 | plainfiles:open-tmp-test-worlds | finding | Some test suites leave their worlds in the shared temp folder (filled its inodes) | open | - | suites named in the note are not in this tree (likely the commercial edition); no cleanup fix found |
 | team:BUG-ASSIGN-HANDLE | finding | --add-assignee @handle is E_NOT_FOUND on a second clone after a teammate assigned that handle | open | TestTask_AssignHandleAfterTeammateAssigned | th.Bug Open: true; the test skips PENDING on that defect; outside the gate's team -run filter |
-| stories:A-1 | finding | a teammate's first lore sync in a freshly migrated repo leaves lore's wiring (.gitignore, .gitattributes, and LORE.md/LORE.full.md when it renders) uncommitted; once the migrator commits the same files, the teammate's git pull aborts (would be overwritten by merge) | open | - | Pending(st1) step in TestStoryABranches; repro in tests/stories/A-daily-dev.md |
 | devco:D-148-render | finding | an overdue reminder shows in lore inbox but render (LORE.md) and doctor still say nothing of it (the rest of r3 G-5) | open | TestStoryGMonthsOfUse | story step overdue-reminders-in-render (skipped until fixed) |
 | stories:H-1 | finding | with husky, a lore write still appends lore's block to the team's own tracked .husky/pre-commit without asking (D-142 stopped only the new files) | open | TestStoryHLostRemotes | story step D-142/stories:H-1 (skipped until fixed) |
 
