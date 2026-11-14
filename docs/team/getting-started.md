@@ -147,6 +147,7 @@ warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: 
 $ lore migrate run
 lore: wrote ~/work/notes-app/.lore/data/actors/act_162d…9666.json
 Upgraded 1 row
+  actors: 1 row (act_162d…9666)
   identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
   actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time

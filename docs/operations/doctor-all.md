@@ -10,7 +10,7 @@ Plain [`lore doctor`](doctor.md) checks the repo you are in: hooks, cache, sync.
 
 You want it after you set up a new machine, after you change `~/.ssh/config` or log in to `gh` as someone else, when a push to a store suddenly fails, and before you ask a teammate why lore "does not work". It writes nothing.
 
-It finds your repos through the setups' folders. On a machine with no setup it checks no repo and says so, with the next steps: `lore doctor` inside one repo, `lore fix --all --dirs <folder> --dry-run` for every repo under a folder, or `lore setup` to make a setup.
+It finds your repos through the setups' folders: the setup checks run over the repos lore knows on this machine, and a `repos in the setups' folders` block after the setups names what else the folders hold, the way `lore fix --all` finds it: each repo on the lore 0.1.17 format with its next step (`cd <repo> && lore fix --migrate`, or `git pull` when a teammate already migrated it), each repo with lore data the checks did not cover (`lore fix --all` checks it), and a count of the repos with no lore data. `lore doctor --all --verbose` also lists the repos it checked and each repo with no lore data; `--json` has them all under `repos_found`. The block is information and never changes the status. On a machine with no setup it checks no repo and says so, with the next steps: `lore doctor` inside one repo, `lore fix --all --dirs <folder> --dry-run` for every repo under a folder, or `lore setup` to make a setup.
 
 ## Before you start
 
@@ -67,6 +67,8 @@ setup personal (solo) ─ ~/work/personal/**
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
+repos in the setups' folders: 2 with lore data (1 checked above), 0 without lore data
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
@@ -106,6 +108,9 @@ setup personal (solo) ─ ~/work/personal/**
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
+repos in the setups' folders: 2 with lore data (0 checked above), 0 without lore data
+  ~/work/agency/site  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
@@ -143,6 +148,8 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
   ℹ store.private  agency: gh is not logged in, so lore cannot check whether agency/notes is private
       fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
       repair: lore setup repair --name agency
+repos in the setups' folders: 2 with lore data (1 checked above), 0 without lore data
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)

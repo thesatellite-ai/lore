@@ -126,7 +126,8 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 		who = in.To
 	}
 	if strings.TrimSpace(who) == "" {
-		return content.WriteOut{}, errs.New(errs.InvalidInput, "--for @handle is required")
+		return content.WriteOut{}, errs.New(errs.InvalidInput, "handoff add: --for @handle is required (a handoff is always for someone)").
+			WithHint("name who picks it up: lore handoff add --for @handle --body \"<text>\"; lore member list shows the handles")
 	}
 	text := in.Text
 	if text == "" {

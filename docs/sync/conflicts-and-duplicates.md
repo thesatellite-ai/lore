@@ -103,13 +103,15 @@ $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin m
 
 You can also edit the value in the file by hand; the next lore command reads it in.
 
-Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (tasks shared before they land, each clashing field with the text `kept` and `other` would leave; kept is the first section, the edit of the machine that merged the two), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve --id <number> --take kept` keeps the first side of every marker block in that row (for a live row, the edit of the machine that merged the two, which is not always yours: check the two versions `lore sync conflicts` prints; for a git merge, the branch you are on), `--take other` keeps the second (for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
+Or let lore pick one side for you. `lore sync conflicts` lists every row that still holds conflict markers, numbered: first the live rows (only rows written with markers by an older lore: a live row two people edit at once no longer gets markers, see below; each clashing field with the text `kept` and `other` would leave; kept is the first section, the edit of the machine that merged the two), then the row files of this repo that a git merge left with markers (with the file path; for those `kept` reads "both" until you choose). `lore sync status` counts the conflicted files too. `lore sync resolve --id <number> --take kept` keeps the first side of every marker block in that row (for a live row, the edit of the machine that merged the two, which is not always yours: check the two versions `lore sync conflicts` prints; for a git merge, the branch you are on), `--take other` keeps the second (for a git merge, the branch you merged in). It only ever chooses between texts already there, never writes new text:
 
 - A row file is written back in place and the local cache refreshed; you still `git add` and commit the merge yourself, lore never commits it for you.
 - A live row gets a new live version, pushed like any other live edit.
 - If the result would still hold markers (nested or hand-made blocks), or a file would not be a valid row afterwards, resolve refuses with `E_INVALID_INPUT` and writes nothing: edit that row by hand. An unknown number is `E_NOT_FOUND`.
 
-`lore sync` itself names every row that waits on you this way (a live row it merged with markers, or a marked row file), with its number, and exits with `E_STALE` (exit 23) until each is settled, so a script or a person never misses one.
+`lore sync` itself names every row that waits on you this way, with its number. A marked row file of this clone makes it exit with `E_STALE` (exit 23) until it is settled, so a script or a person never misses one. A conflict on a live row (a strict metadata key set to different values on two machines, or markers an older lore wrote) is named with its cause and next step, but never fails the sync: the live list is shared by every clone, so it would stop the sync of people who never touched the row. Such a row does not land until it is settled; for a strict key the line names the command, for example `conflict #1 live tasks/tsk_…: a strict metadata key was set to different values on two machines; … (lore meta set --id tsk_… --pair cost=<value>, or lore sync resolve --id 1 --take kept|other)`.
+
+A live row (a task shared on `refs/lore/live` before it lands) that two people edit at once never gets conflict markers: every clone reads the live list, so markers there would show up in everyone's lists and stop everyone's sync. The newer edit (by hybrid logical clock) is kept for each field both changed, text included, and the sync that settles it names the row and what it replaced, for example `lore live: tsk_…: both sides edited body, title; kept the newer edit (hlc …), replaced: body was "…"; title was "Fixture task (Mei)"`. The sync exits 0, and nobody else's sync is held up. To bring the other text back, edit the row again (`lore task edit --id <id> --title "…"`).
 
 ## Step 2b — The same row of a team store changed on two machines
 
@@ -144,7 +146,7 @@ $ lore sync conflicts
 ```
 <!-- /example -->
 
-Lore 0.1.18 keeps no second copy in its cache that could disagree with the file, so this kind of conflict cannot happen any more. The only conflicts left are conflict markers inside a row, from Step 2 or from a live row two people edited at once; `lore sync conflicts` and `lore sync resolve` settle those.
+Lore 0.1.18 keeps no second copy in its cache that could disagree with the file, so this kind of conflict cannot happen any more. The only conflicts left are conflict markers inside a row file, from Step 2; `lore sync conflicts` and `lore sync resolve` settle those.
 
 ## Step 4 — The same fact written twice
 

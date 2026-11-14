@@ -486,6 +486,7 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 - **The default setup answers last, wherever you are.** In a repo no glob covers, the default is active (`active: agency (default: …)`) even when it belongs to another org, and the This folder line says "no setup matches". Give such repos their own setup (the line offers one) or a glob, so their notes are not written as the default's identity.
 - **`lore setup use --here` needs a lore project id.** Run `lore init` in the repo first.
 - **`personal_store: none` is strict.** Every `--to me` write fails in that setup; that is the point of choosing it.
+- **A setup saved on the page is used at once.** The page re-reads `~/.lore/config.yaml` before each call after it changed, so right after an admin setup's team step `whoami` on the same page shows the new org and its person, and an invite can be sent without restarting `lore setup`.
 - **A script's `lore setup` opens nothing.** Without a terminal (and without `--web`) it only updates the database schema and exits 0.
 
 ## Related

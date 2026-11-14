@@ -236,6 +236,9 @@ type RunIn struct {
 	// [setup] section): REST body only; the CLI passes the global --setup
 	// (op.SetupOf), never a per-op flag, which would clash with it.
 	Setup string `json:"setup,omitempty" desc:"the setup to check (default: every setup with --all, else the active one)"`
+	// Verbose (K-10) names every repo --all found, the checked ones and
+	// those with no lore data too; without it they are counted.
+	Verbose bool `json:"verbose,omitempty" flag:"verbose" desc:"with --all: list every repo found in the setups' folders, the ones checked and those with no lore data too (default: counted)"`
 }
 
 // Report is the output of doctor.run: v0.1.17's report keys, plus
@@ -292,6 +295,12 @@ type Report struct {
 	all bool
 	// disabled are --all's one-line notes about skipped disabled setups (alltext prints them).
 	disabled []string
+	// Found are the repos --all found in the setups' folders (K-10: it
+	// was silent about a 0.1.17-format repo and eight repos with no lore
+	// data beside the one repo it checked); zero without --all or setups.
+	Found Fleet `json:"repos_found,omitzero"`
+	// verbose: the text lists every found repo (RunIn.Verbose).
+	verbose bool
 	// unchecked are --all's info lines about known repos no setup applies
 	// to, whose stores were not checked (alltext prints them).
 	unchecked []string

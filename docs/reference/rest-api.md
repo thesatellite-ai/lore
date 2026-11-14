@@ -176,7 +176,7 @@ ERROR: [E_NOT_FOUND] docs: api-docs/cli-commands.md does not exist
 - A missing or unusable token file refuses every request, also on a running server; `lore api token rotate` fixes it.
 - A store moved while the server runs (`lore store set-url`, from the CLI or through the API) needs no restart: before each request the server checks the files that say where stores live (`~/.lore/config.yaml`, the clone and address records under `~/.lore/state/`, the repo's `.lore/stores.yaml`) and reopens its stores when one changed.
 - A `GET` takes query parameters only and refuses a body; a `POST` or `PATCH` takes a JSON body only and refuses query parameters. A request body over 4 MB is refused.
-- Every request is made as the person the server resolved when it started. Start a separate `lore api` (on another port) for another setup or another repo.
+- Every request is made as the person the server resolves for the folder it was started in. A setup or org saved in `~/.lore/config.yaml` while it runs (a `lore setup apply` on the CLI, say) is used from the next request, no restart needed. Start a separate `lore api` (on another port) for another setup or another repo.
 - `lore spec docs` needs the page with its marker blocks; it never creates `cli-commands.md` from nothing.
 
 ## Related

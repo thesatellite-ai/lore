@@ -60,6 +60,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -322,6 +323,12 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		byKey[key] = len(internal)
 		internal = append(internal, privateStore{stem: stem, sources: []store.Source{si.Name}, url: urls[string(si.Name)]})
 	}
+	// K-12: the stores come in the engine's attach order, which differs
+	// between opens of one repo (lore fix --dry-run attached the org store
+	// before me, lore render after it), so the index and the import lines
+	// read stale on one run and current on the next; the files go in the
+	// order of their names, whatever the open
+	slices.SortFunc(internal, func(x, y privateStore) int { return strings.Compare(x.stem, y.stem) })
 
 	p := &privatePlan{stores: internal}
 	pid, err := h.app.Project(ctx)
@@ -729,7 +736,7 @@ func prunePrivate(p *privatePlan) error {
 	}
 	for _, e := range others {
 		name := e.Name()
-		if !e.IsDir() || name == p.dirName || (name != p.repoKey && !strings.HasSuffix(name, "-"+p.repoKey)) {
+		if !e.IsDir() || name == p.dirName || !p.ownsFolder(name) {
 			continue
 		}
 		if err := removeOwnFiles(filepath.Join(filepath.Dir(p.dir), name)); err != nil {
@@ -741,6 +748,44 @@ func prunePrivate(p *privatePlan) error {
 		return errs.Wrap(errs.Internal, "remove the v0.1.17 internal render", err)
 	}
 	return nil
+}
+
+// ownsFolder reports whether a folder of ~/.lore/render is this repo's
+// under another name: keyed by its repo id, or (K-16) by its prj_ project
+// id from before the repo id reached this checkout by git pull (the render
+// fell back to the project id until then, and the old folder stayed beside
+// the new one with stale files).
+func (p *privatePlan) ownsFolder(name string) bool {
+	for _, key := range []string{p.repoKey, p.projectID} {
+		if key != "" && (name == key || strings.HasSuffix(name, "-"+key)) {
+			return true
+		}
+	}
+	return false
+}
+
+// leftoverFolders are this repo's render folders under another name that
+// still hold lore's own files (prunePrivate removes them on the next
+// render): the doctor names them, so lore fix renders and they go even
+// when every current file is up to date (K-16).
+func (p *privatePlan) leftoverFolders() []string {
+	parent := filepath.Dir(p.dir)
+	others, err := os.ReadDir(parent)
+	if err != nil {
+		return nil // no render folder yet: nothing left over
+	}
+	var out []string
+	for _, e := range others {
+		name := e.Name()
+		if !e.IsDir() || name == p.dirName || !p.ownsFolder(name) {
+			continue
+		}
+		files, ferr := os.ReadDir(filepath.Join(parent, name))
+		if ferr == nil && slices.ContainsFunc(files, func(f os.DirEntry) bool { return !f.IsDir() && privateOwnFile(f.Name()) }) {
+			out = append(out, filepath.Join(parent, name))
+		}
+	}
+	return out
 }
 
 // privateName is "<readable>-<id>": the name says which repo or store the

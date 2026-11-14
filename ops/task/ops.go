@@ -479,6 +479,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 			return AddOut{}, perr
 		}
 	}
+	if ctx, err = o.importedState(ctx, in, fields); err != nil {
+		return AddOut{}, err
+	}
 	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
 	if err != nil {
 		return AddOut{}, err

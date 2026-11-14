@@ -419,7 +419,14 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 	case onboard.CheckIdentityRoster, onboard.CheckIdentityPeriod:
 		return sp.rosterCheck(ctx, r) // setupprobe_roster.go
 	case onboard.CheckInviteFound:
+		if res, ok := sp.inviteJoinCheck(ctx, r); ok {
+			return res // setupprobe_invitejoin.go: a join by invite line (J-9)
+		}
 		return sp.memberJoinFound(ctx, r) // setupprobe_memberjoin.go: a join by org name or store url (B2-13)
+	case onboard.CheckInviteStatus, onboard.CheckInviteEmail:
+		if res, ok := sp.inviteJoinCheck(ctx, r); ok {
+			return res // setupprobe_invitejoin.go (J-9)
+		}
 	case onboard.CheckSecretsBackendPresent:
 		return sp.secretsBackend(ctx, r)
 	case onboard.CheckFoldersExist:

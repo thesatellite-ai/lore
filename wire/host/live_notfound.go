@@ -212,10 +212,16 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		// branch as last fetched, so "while this branch is older" is
 		// wrong; the usual cause is a row of another repo, and a row
 		// pushed since that fetch is the other (peek fetches).
-		return e.WithHint("this branch has everything on " + branch + " as last fetched: the row may belong to another repo (a row lives in one repo's notes: run the command there), or be newer than that fetch: `" + peek + "`")
+		return e.WithHint("this branch has everything on " + branch + " as last fetched: the row may belong to another repo (a row lives in one repo's notes: run the command there), or be newer than that fetch: `" + peek + "`" + storeRowNotYetHint)
 	}
-	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`")
+	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`" + storeRowNotYetHint)
 }
+
+// storeRowNotYetHint ends a not-found hint (devco D-221): a row a teammate
+// wrote to a store stays committed on their machine until their `lore
+// sync`, and reaches this one with this machine's `lore sync`; the hint
+// named only the code branch, so a store row looked lost.
+const storeRowNotYetHint = "; a row a teammate wrote to a store arrives once they and you run `lore sync`"
 
 // holdsBranch reports whether HEAD already contains remote/branch as
 // last fetched (that tip is an ancestor of HEAD, or HEAD itself). False

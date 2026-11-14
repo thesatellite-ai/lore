@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -374,7 +375,7 @@ func editText(in EditIn) ([]byte, string, error) {
 	case file != "":
 		b, err := os.ReadFile(file)
 		if err != nil {
-			return nil, "", errs.Wrap(errs.InvalidInput, "edit: cannot read "+file, err).
+			return nil, "", fromfile.Unreadable("edit", file, err).
 				WithHint("name the Markdown view file to write back (lore row markdown --id <id> > view.md makes one)")
 		}
 		return b, file, nil

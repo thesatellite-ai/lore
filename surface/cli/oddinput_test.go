@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/thesatellite-ai/lore/op"
 )
 
@@ -72,6 +74,33 @@ func TestBadFlagValuePlainWords(t *testing.T) {
 		r := execute(Build(f.reg, f, WithArgs(c.args)), "", c.args...)
 		if r.exit != ExitUsage || !strings.Contains(r.stderr+r.stdout, c.want) || strings.Contains(r.stderr+r.stdout, "strconv") {
 			t.Errorf("%v: exit %d stderr %q stdout %q; want %q", c.args, r.exit, r.stderr, r.stdout, c.want)
+		}
+	}
+}
+
+// TestBadFlagValueKeepsLoreWords: a flag value type lore defines (the
+// root's --color) refuses in its own words, naming the accepted values;
+// only pflag's built-in types are reworded (after-land 29e8d071:
+// --color=purple printed "takes a valid value" without them).
+func TestBadFlagValueKeepsLoreWords(t *testing.T) {
+	cmd := &cobra.Command{Use: "list"}
+	var color ColorFlag
+	cmd.Flags().Var(&color, FlagColor, "color output")
+	cmd.Flags().Bool("json", false, "json")
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--color=purple"}, `--color must be auto, always or never, not "purple"`},
+		{[]string{"--json=maybe"}, `--json takes true or false, not "maybe"`},
+	} {
+		err := cmd.Flags().Parse(c.args)
+		if err == nil {
+			t.Fatalf("%v: parsed", c.args)
+		}
+		e := badFlagValue(cmd, err)
+		if e == nil || !strings.Contains(e.Error(), c.want) || strings.Contains(e.Error(), "strconv") {
+			t.Errorf("%v: %v; want %q", c.args, e, c.want)
 		}
 	}
 }

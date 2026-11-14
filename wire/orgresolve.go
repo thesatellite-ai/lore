@@ -22,7 +22,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -80,9 +83,17 @@ type OrgResolution struct {
 	// the "filed: <rule>" line (Routed).
 	routed string
 
-	once sync.Once
+	// mu guards the gathered answer below. A plain mutex, not a sync.Once:
+	// a following resolution (FollowConfig) gathers again after the config
+	// changed, and a Once cannot be re-armed safely.
+	mu   sync.Mutex
+	done bool
 	sit  *orgcfg.Situation
 	err  error
+	// follow: gather again when config.yaml changed since the last gather
+	// (FollowConfig); stamp is that file's size and time at that gather.
+	follow bool
+	stamp  string
 }
 
 // now is r.Now, or the wall clock.
@@ -119,14 +130,67 @@ func (r *OrgResolution) FetchLinksAlways() {
 	}
 }
 
+// FollowConfig makes this resolution gather again whenever
+// ~/.lore/config.yaml changed since its last gather, re-reading the org
+// entries the store links come from. A server that outlives the config
+// it started with calls it: the setup page saves a whole setup, its team
+// step creates the org, and the next call on that same page must resolve
+// that org and its person, not the empty answer read before the setup
+// (devco J-16: team.invite refused "this repo has no org" until the page
+// was restarted). A CLI command keeps its one answer for its whole run.
+func (r *OrgResolution) FollowConfig() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.follow = true
+}
+
 // Situation is the gathered inputs and F10's decision, computed once (it
-// may fetch the org stores).
+// may fetch the org stores); with FollowConfig, again after config.yaml
+// changed.
 func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error) {
-	r.once.Do(func() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	stamp := ""
+	if r.follow {
+		stamp = configStamp(r.home)
+		if r.done && stamp != r.stamp {
+			r.done = false
+			r.reloadLinkConfig()
+		}
+	}
+	if !r.done {
+		// the stamp is taken before the gather: a write made during it is
+		// seen as a change on the next call
 		r.sit, r.err = r.gatherWithSetup(ctx)
 		r.err = maskOrgErr(r.err)
-	})
+		r.done, r.stamp = true, stamp
+	}
 	return r.sit, r.err
+}
+
+// configStamp is config.yaml's size and modification time under home
+// ("-" when it does not exist): a stat, no read.
+func configStamp(home string) string {
+	st, err := os.Stat(filepath.Join(home, ConfigFile))
+	if err != nil {
+		return "-"
+	}
+	return strconv.FormatInt(st.Size(), 10) + " " + strconv.FormatInt(st.ModTime().UnixNano(), 10)
+}
+
+// reloadLinkConfig gives the store link reader the config as it is now
+// (StandaloneOrgResolution loaded it once at start). A config that does
+// not read gives it none, as at start; Gather then reports the error.
+func (r *OrgResolution) reloadLinkConfig() {
+	g, ok := r.links.(*orgcfg.GitLinks)
+	if !ok {
+		return
+	}
+	cfg, _, err := orgcfg.LoadConfig(r.home)
+	if err != nil {
+		cfg = nil
+	}
+	g.Config = cfg
 }
 
 // maskOrgErr masks only the credentials in a lore error's message, hint

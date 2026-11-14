@@ -59,7 +59,10 @@ func TestJourneyOfflineCalm(t *testing.T) {
 		}
 		// sync says what waits once, in its own words
 		s := lap.LoreIn(repo, "sync").OK(t)
-		s.Says(t, "live: 1 write(s) not pushed (offline): kept here, sent on the next sync").Never(t, offlineWaiting)
+		// devco L-10: the line names the remote and git's reason, and the
+		// --json says it too, so a script can tell a failed sync
+		s.Says(t, "live: 1 write(s) not pushed (offline: git push to origin (", "): kept here, sent on the next sync").Never(t, offlineWaiting)
+		lap.LoreIn(repo, "sync", "--json").OK(t).Says(t, `"live_offline": true`, `"live_error": "git push to origin (`)
 		// a second write changes the count: said again, once
 		lap.LoreIn(repo, "task", "add", "second on the train").OK(t).Says(t, offlineWaiting+" 2 waiting; offline")
 	})

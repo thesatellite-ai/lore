@@ -74,3 +74,22 @@ func LiveChoiceFrom(ctx context.Context) LiveChoice {
 	c, _ := ctx.Value(liveChoiceKey{}).(LiveChoice)
 	return c
 }
+
+type supportingRefreshKey struct{}
+
+// WithSupportingRefresh marks ctx as lore's own refresh of a supporting row
+// that already exists (the writer's actor copy brought in line with its
+// source on its first write to a store), never an edit a person asked for.
+// The engine marks the change it builds under ctx (Change.Upkeep); the
+// live overlay holds such an update with the run's content row, so a live
+// write leaves the branch's .lore/data alone (devco:K-6); an explicit edit
+// of the same row is written and checked at once.
+func WithSupportingRefresh(ctx context.Context) context.Context {
+	return context.WithValue(ctx, supportingRefreshKey{}, true)
+}
+
+// SupportingRefreshFrom reports whether ctx carries WithSupportingRefresh.
+func SupportingRefreshFrom(ctx context.Context) bool {
+	v, _ := ctx.Value(supportingRefreshKey{}).(bool)
+	return v
+}

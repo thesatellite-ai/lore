@@ -227,7 +227,7 @@ func (h standaloneCoord) TaskMerged(ctx context.Context, in opscoord.MergedIn) (
 	at := h.a.Now().UTC()
 	if _, err = coord.Update(ctx, env, in.ID, func(d coord.Doc, _ time.Time) error {
 		if d.Status() != schema.TaskStatusDone {
-			return errs.New(errs.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", in.ID, d.Status()))
+			return notMergeable(in.ID, d.Status())
 		}
 		if d.Str(fieldMergedAt) == "" {
 			d.SetTime(fieldMergedAt, at)
@@ -453,4 +453,16 @@ func (h standaloneCoord) checkApprover(ctx context.Context, id, actorID string) 
 			WithHint("ask one of: " + strings.Join(approvers, ", "))
 	}
 	return nil
+}
+
+// notMergeable is the refusal of task merged on a task that is not done,
+// with the next step for its status: an open task is finished first, a
+// cancelled one never shipped code (L-16: the cause alone left the person
+// without a step).
+func notMergeable(id, status string) *errs.Error {
+	e := errs.New(errs.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", id, status))
+	if status == schema.TaskStatusCancelled {
+		return e.WithHint("a cancelled task has no code to merge; lore task show --id " + id + " shows why it was cancelled")
+	}
+	return e.WithHint("finish it first with lore task done --id " + id + ", then re-run lore task merged --id " + id)
 }

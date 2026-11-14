@@ -15303,6 +15303,10 @@
                     "type": "string",
                     "description": "the setup to check (default: every setup with --all, else the active one)"
                   },
+                  "verbose": {
+                    "type": "boolean",
+                    "description": "with --all: list every repo found in the setups' folders, the ones checked and those with no lore data too (default: counted)"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -15607,6 +15611,43 @@
                       }
                     },
                     "repo_addresses": {},
+                    "repos_found": {
+                      "type": "object",
+                      "properties": {
+                        "no_lore": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "repos": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "checked": {
+                                "type": "boolean"
+                              },
+                              "format_old": {
+                                "type": "boolean"
+                              },
+                              "next": {
+                                "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "repos"
+                      ]
+                    },
                     "schema_version": {
                       "type": "integer"
                     },
@@ -16964,6 +17005,10 @@
                     "type": "boolean",
                     "description": "also migrate a project still on the lore 0.1.17 format (runs lore migrate run; teammates then need lore 0.1.18); without it such a project is refused, or listed by --all"
                   },
+                  "verbose": {
+                    "type": "boolean",
+                    "description": "with --all: also list each repo found with no lore data (the summary always counts them)"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -17008,6 +17053,12 @@
                     },
                     "jobs": {
                       "type": "integer"
+                    },
+                    "no_lore": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "note": {
                       "type": "string"
@@ -35116,7 +35167,7 @@
             }
           },
           "409": {
-            "description": "E_MIGRATE_LOCKED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_MIGRATE_LOCKED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -85302,6 +85353,12 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "live_error": {
+                          "type": "string"
+                        },
+                        "live_offline": {
+                          "type": "boolean"
                         },
                         "live_pending": {
                           "type": "integer"

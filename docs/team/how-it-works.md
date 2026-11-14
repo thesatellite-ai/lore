@@ -128,7 +128,7 @@ Offline, reads use the last fetched state. A **hook** is a small script git runs
 
 Step 2 uses a **private index**: a scratch staging area of lore's own, so your `git add` work is not touched. Step 5 is a **compare-and-swap**: lore moves the list only if it still points where lore last saw it, like saving a document only if nobody saved over it meanwhile.
 
-Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. By default a live write is not pushed by itself: `live.autopush` is off, so lore keeps the write here, says so once per repo (`lore live: (live, kept here: …)`), and sends it on your next `lore sync` or `git push` (the pre-push hook pushes the live list with it). With `live.autopush: true` each write is pushed at once, and lore says once per repo that `lore config set --key live.autopush --value false` turns that off. Sometimes the push cannot happen: you are offline, `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. The next command pushes it. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
+Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. The one exception is a row a live write names that only your working folder holds (a plan you added and have not committed, then `lore mission add --plan`): it moves to the live list with that write, so teammates can read it, and lore says so in one line (`lore: moved plans/pln_… to this clone's refs/lore/live with the live row that names it, so teammates can read it; <file> is no longer in your working folder (it lands with that row)`); a table folder the move leaves empty is removed. Lore's own upkeep of your actor row (its origin stamp, a name that follows its source) rides the live list with the write too, so the committed actor file is not rewritten. By default a live write is not pushed by itself: `live.autopush` is off, so lore keeps the write here, says so once per repo (`lore live: (live, kept here: …)`), and sends it on your next `lore sync` or `git push` (the pre-push hook pushes the live list with it). With `live.autopush: true` each write is pushed at once, and lore says once per repo that `lore config set --key live.autopush --value false` turns that off. Sometimes the push cannot happen: you are offline, `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. The next command pushes it. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
 
 <!-- example: errors#refs-refused-by-the-host only=1,2 -->
 ```console
@@ -236,11 +236,15 @@ Two people can edit the same live row at the same time. A branch can also merge 
  field level:  status, priority, dates, numbers → the newer edit (by hybrid logical clock)
                one-value text (done_by, done_commit, work_branch, approved_by, role)
                                                 → the newer edit, never conflict markers
-               text fields                      → both edits kept, with conflict markers
+               text fields, live row (refs/lore/live)
+                                                → the newer edit, never conflict markers;
+                                                  the sync names the text it replaced
+               text fields, git merge of a row file
+                                                → both edits kept, with conflict markers
                sets (labels, links)             → union
 ```
 
-The order of edits comes from a **hybrid logical clock** (HLC, `hlc` in the live file): a timestamp that also counts edits, so two edits made in the same second still have an order. It holds the wall time, a counter and the writer, so a laptop with a wrong clock does not win by accident. A row with conflict markers stays visible and is never landed. `lore sync conflicts` lists it until `lore sync resolve` settles it.
+The order of edits comes from a **hybrid logical clock** (HLC, `hlc` in the live file): a timestamp that also counts edits, so two edits made in the same second still have an order. It holds the wall time, a counter and the writer, so a laptop with a wrong clock does not win by accident. A live row never gets conflict markers: the live list is read by every clone, so markers there would reach everyone and stop the sync of people who never touched the row. A row file with conflict markers (from a git merge, or a live row an older lore merged) stays visible and is never landed. `lore sync conflicts` lists it until `lore sync resolve` settles it.
 
 ## Compaction and the epoch
 
@@ -530,8 +534,8 @@ $ lore render
 $ cat ~/.lore/render/*/index.md
 <!-- generated by lore; private: never quote this content in committed files, client files, commits, PRs or chat -->
 repo app (rep_28f8…03df)
-- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 - agency-sto_7a67…9504.md  store agency, agency/org  -  internal
+- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 $ git status --short
 ?? .lore/LORE.full.md
 ?? .lore/LORE.md

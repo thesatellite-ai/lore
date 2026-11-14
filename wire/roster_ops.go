@@ -102,6 +102,14 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 			return opsinfra.ActorRegisterOut{}, oerr
 		}
 		sp = RosterActor{Kind: schema.ActorKindAgent, StableKey: agentStableKeyPrefix + in.Label, Name: in.Label, Label: in.Label, OwnerID: owner.ID}
+		if owner.StableKey == who.StableKey {
+			// J-15: a contractor's own agent (lore agent start) is part of
+			// their identity on the roster, like their own register; an
+			// agent for someone else stays refused
+			ctx = withOwnRosterRow(ctx)
+		}
+	} else {
+		ctx = withOwnRosterRow(ctx) // J-15: a contractor still registers themselves
 	}
 	return x.registerSpec(ctx, r, sp, in.Kind)
 }

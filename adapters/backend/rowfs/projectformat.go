@@ -91,6 +91,27 @@ func ReadProjectFormat(top string) (ProjectFormat, error) {
 	if err != nil || !exists {
 		return ProjectFormat{}, err
 	}
+	return projectFormatOf(d, doc)
+}
+
+// ParseProjectFormat is ReadProjectFormat over the bytes of a _meta.json
+// read from somewhere other than the work tree: the copy a fetched branch
+// holds (`git show origin/main:.lore/data/_meta.json`), so a stale
+// checkout can tell that its team already migrated (K-11).
+func ParseProjectFormat(doc []byte) (ProjectFormat, error) {
+	o, err := decodeObject(doc)
+	if err != nil {
+		return ProjectFormat{}, unreadableDoc(RepoMetaPath, doc)
+	}
+	d, err := decodeFormat(o, RepoMetaPath)
+	if err != nil {
+		return ProjectFormat{}, err
+	}
+	return projectFormatOf(d, doc)
+}
+
+// projectFormatOf reads the format keys of a decoded _meta.json.
+func projectFormatOf(d formatgate.Declared, doc []byte) (ProjectFormat, error) {
 	o, err := decodeObject(doc)
 	if err != nil {
 		return ProjectFormat{}, err

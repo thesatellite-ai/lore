@@ -35,6 +35,9 @@ const (
 type host struct {
 	app  *wire.App
 	home string
+	// org is the process's org resolution (nil in tests that build none):
+	// `lore api` makes it follow config.yaml (followConfig).
+	org *wire.OrgResolution
 	// live is the live-rows wiring (init primes the fetch stamp with it).
 	live *hosthooks.Live
 	// render is the render machinery (init wires the tool files with it).
@@ -65,6 +68,7 @@ func (h *host) apiCommand() *cobra.Command {
 			// agent is the client's (X-Lore-Agent), never the tool that
 			// started this server.
 			h.app.ServeAsPerson()
+			followConfig(h.app, h.org)
 			if _, err := h.app.Engine(ctx); err != nil {
 				return err
 			}

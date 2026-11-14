@@ -103,28 +103,36 @@ func TestCompactOrNull(t *testing.T) {
 	}
 }
 
-// A clash on a non-string field is made visible as marked text; a field
-// that already carries markers is left alone.
-func TestMarkNonTextConflicts(t *testing.T) {
+// Every clash takes the newer side and names what it replaced; no value
+// becomes marked text (L-19), and a newer side that already held markers
+// (written before L-19) is kept as it is.
+func TestTakeNewerOnClash(t *testing.T) {
 	marked := merge3.MarkConflict("a", "b")
 	tags := canonjson.Array(canonjson.String("x"))
-	body := canonjson.Object{"priority": canonjson.Number("2"), "title": canonjson.String(marked), "tags": tags}
-	markNonTextConflicts(body, []merge3.Conflict{
+	body := canonjson.Object{"priority": canonjson.Number("2"), "title": canonjson.String("a"), "tags": tags, "body": canonjson.String(marked)}
+	got := takeNewerOnClash(body, []merge3.Conflict{
 		{Key: "priority", Ours: canonjson.Number("2"), Theirs: canonjson.Number("4")},
 		{Key: "title", Ours: canonjson.String("a"), Theirs: canonjson.String("b")},
 		{Key: "tags", Ours: tags, Theirs: canonjson.Null()},
-	})
-	if body.Str("title") != marked {
-		t.Fatalf("already-marked text must not be re-marked: %q", body.Str("title"))
+		{Key: "body", Ours: canonjson.String("x"), Theirs: canonjson.String(marked)},
+	}, merge3.SideTheirs, canonjson.Object{"priority": canonjson.Number("4"), "title": canonjson.String("b"), "body": canonjson.String(marked)})
+	if body.Str("title") != "b" || body.Str("body") != marked {
+		t.Fatalf("the newer side wins: title %q body %q", body.Str("title"), body.Str("body"))
 	}
-	for _, k := range []string{"priority", "tags"} {
-		s, ok := body[k].AsString()
-		if !ok || !merge3.ContainsConflictMarkers(s) {
-			t.Fatalf("%s must become marked text: %#v", k, body[k])
+	if n, _ := canonjson.CompactValue(body["priority"]); n != "4" {
+		t.Fatalf("priority = %s, want 4", n)
+	}
+	if _, ok := body["tags"]; ok {
+		t.Fatalf("the newer side removed tags: %#v", body["tags"])
+	}
+	want := []ReplacedField{{Field: "priority", Older: "2"}, {Field: "tags", Older: `["x"]`}, {Field: "title", Older: "a"}}
+	if len(got) != len(want) {
+		t.Fatalf("replaced = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("replaced[%d] = %#v, want %#v", i, got[i], want[i])
 		}
-	}
-	if !strings.Contains(body.Str("tags"), "null") || !strings.Contains(body.Str("priority"), "4") {
-		t.Fatalf("both sides are visible: %q %q", body.Str("tags"), body.Str("priority"))
 	}
 }
 
@@ -142,6 +150,7 @@ func TestMergeNoteDescribe(t *testing.T) {
 		{"field merge clean", MergeNote{Key: k, Decision: merge3.DecisionFieldMerge, OursHLC: ours, TheirsHLC: theirs}, []string{"merged both edits", theirs.String()}},
 		{"field merge clean ours newer", MergeNote{Key: k, Decision: merge3.DecisionFieldMerge, OursHLC: theirs, TheirsHLC: ours}, []string{theirs.String()}},
 		{"field merge conflict", MergeNote{Key: k, Decision: merge3.DecisionFieldMerge, Conflict: true, ConflictKeys: []string{"body", "title"}}, []string{"both sides edited body, title", "lore sync conflicts"}},
+		{"strict meta key conflict (D-220)", MergeNote{Key: k, Decision: merge3.DecisionFieldMerge, Conflict: true, ConflictKeys: []string{"meta.cost"}}, []string{"meta.cost was set to different values", "strict key", "lore sync conflicts"}},
 		{"both deleted", MergeNote{Key: k, Decision: merge3.DecisionBothDeleted}, []string{"deleted on both sides"}},
 		{"other decision", MergeNote{Key: k, Decision: merge3.DecisionOursOnly}, []string{"tsk_1: ours-only"}},
 	}

@@ -102,6 +102,7 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		d.Error = red.str(errs.EnvelopeOf(fail).Error.Message) // the code is in the exit status and the CLI's error line
 	}
 	lines := whoamiLines(s, id, actor, idErr, in.Explain, red, agent, m, personal)
+	lines = guardsOffRepoLine(ctx, s, lines) // whoami_guards.go: never 'guards on' without the hook (J-11)
 	if fail == nil {
 		if l := w.identityContact(ctx); l != "" {
 			d.IdentityContact = red.str(strings.TrimPrefix(l, identityContactPrefix))

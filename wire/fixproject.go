@@ -769,7 +769,7 @@ func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 		// D15: a repo on an older format is listed with its command, never
 		// migrated by --all without --migrate and never a failure
 		res.FormatOld, res.Exit = true, 0
-		res.Text = "  " + line + "\n  " + formatOldMigrateHint(root) + "\n"
+		res.Text = "  " + line + "\n  " + formatOldMigrateHint(ctx, root) + "\n"
 		return res
 	}
 	if jerr := json.Unmarshal(raw, &out); jerr != nil || out.Repo == "" {

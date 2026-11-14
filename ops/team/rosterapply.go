@@ -100,19 +100,9 @@ type RosterResult struct {
 // ApplyJoin is the member join write (4.5 Apply 1–5).
 func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, error) {
 	inv := req.Invite
-	email := ""
-	for _, e := range req.Emails {
-		if onboard.SameEmail(e, inv.Email) {
-			email = strings.TrimSpace(e)
-		}
-	}
-	if email == "" {
-		return RosterResult{}, errs.New(errs.InviteEmail, "invite "+inv.ID+" is for "+inv.Email+"; use that address or ask for a new invite").
-			WithHint("add " + inv.Email + " to the identity step's emails")
-	}
-	inviteID, err := ids.ParseAny(inv.ID)
-	if err != nil || inviteID.Prefix() != ids.PrefixInvite {
-		return RosterResult{}, errs.New(errs.InviteInvalid, "this is not a lore invite; copy the whole line starting with "+onboard.InvitePrefix)
+	email, inviteID, err := inviteEmail(inv, req.Emails)
+	if err != nil {
+		return RosterResult{}, err
 	}
 	var res RosterResult
 	// The invite check comes before anyone is registered (owner item 19):
@@ -120,7 +110,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	// mismatched invite writes no actor row, no commit and no push; an
 	// entry that was already here is checked before the write-mode open.
 	admit := func(ctx context.Context, _ string) error {
-		return checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email)
+		return checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email, false)
 	}
 	// SkipRegister (W-12): the joining person's actor row is written below,
 	// in the join's one store commit, not as a commit of its own first.
@@ -128,7 +118,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 		return RosterResult{}, err
 	}
 	if !res.Imported {
-		if err = checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email); err != nil {
+		if err = checkInvite(ctx, d.Profiles, inv, inviteID, req.Emails, email, true); err != nil {
 			return RosterResult{}, err
 		}
 	}
@@ -176,7 +166,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 	}
 	res.Actor = actor.ID.String()
 	today := r.Today()
-	verdict, err := onboard.DecideInvite(x.record(), inv.By, today, onboard.Acceptor{Actor: res.Actor, Email: email})
+	verdict, err := onboard.DecideInvite(x.record(), inv.By, today, onboard.Acceptor{Actor: res.Actor, Email: email, Rerun: !res.Imported})
 	if err != nil {
 		return RosterResult{}, err
 	}
@@ -247,14 +237,46 @@ func readInvite(ctx context.Context, r profilestore.Roster, inv onboard.Invite, 
 	return inviteOf(invRow)
 }
 
+// inviteEmail is the address an invite join writes as: the person's
+// primary identity email (emails[0]), which must be the invite's, and
+// the invite's id. Why (J-9): any address of the identity step used to
+// match, so a second person listing the invitee's email as an "other
+// address" joined as the invitee; the hint even told them to.
+func inviteEmail(inv onboard.Invite, emails []string) (string, ids.AnyID, error) {
+	primary := ""
+	if len(emails) > 0 {
+		primary = strings.TrimSpace(emails[0])
+	}
+	if !onboard.SameEmail(primary, inv.Email) {
+		ask := "ask " + cmpOr(inv.By, "the org admin")
+		return "", ids.AnyID{}, errs.New(errs.InviteEmail, "invite "+inv.ID+" is for "+inv.Email+", not your identity email "+cmpOr(primary, "(none)")+"; it is joined only with "+inv.Email+" as the identity email").
+			WithHint(ask + " to run lore team invite --email " + cmpOr(primary, "<your email>") + " (an invite is for one person)")
+	}
+	inviteID, err := ids.ParseAny(inv.ID)
+	if err != nil || inviteID.Prefix() != ids.PrefixInvite {
+		return "", ids.AnyID{}, errs.New(errs.InviteInvalid, "this is not a lore invite; copy the whole line starting with "+onboard.InvitePrefix)
+	}
+	return primary, inviteID, nil
+}
+
+// cmpOr is s, or def when s is blank (messages only).
+func cmpOr(s, def string) string {
+	if strings.TrimSpace(s) == "" {
+		return def
+	}
+	return s
+}
+
 // checkInvite is the invite join's check before anyone is registered,
 // on a read-only open of the roster: the row exists and DecideInvite
-// accepts it (not revoked, not used by someone else, not expired, for
-// this email). The acceptor is the caller's actor when it is on the
-// roster, else the actor one of emails names (a rejoin, a re-run: the
-// same actor is Already), else nobody, so an accepted invite is used. The full decision runs
-// again on the write-mode open, as the registered actor.
-func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, id ids.AnyID, emails []string, email string) error {
+// accepts it (not revoked, not used, not expired, for this email), and
+// no other address of emails is someone else's identity contact. rerun
+// is true when this machine held the org entry before the join ran:
+// only then is the actor the invite's address names the acceptor (the
+// same actor is Already). On a fresh join nobody is, so an accepted
+// invite is used (J-9). The full decision runs again on the write-mode
+// open, as the registered actor.
+func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, id ids.AnyID, emails []string, email string, rerun bool) error {
 	r, done, err := profiles.Roster(ctx, false)
 	defer done()
 	if err != nil {
@@ -264,19 +286,79 @@ func checkInvite(ctx context.Context, profiles profilestore.Store, inv onboard.I
 	if err != nil {
 		return err
 	}
-	who := onboard.Acceptor{Email: email}
-	if a, gerr := r.Get(ctx, schema.TableActors, r.Caller().Any()); gerr == nil && !a.Deleted {
-		who.Actor = a.ID.String() // a re-run: the caller is on the roster already
+	who := onboard.Acceptor{Email: email, Rerun: rerun}
+	self := ""
+	if a, ok := actorByEmail(ctx, r, email); ok {
+		self = a.ID.String() // a rejoin or a re-run: the invite's address is on the roster
 	}
-	for _, e := range memberEmails(emails) {
-		for _, ref := range []string{"email:" + e, humanKeyPrefix + e} {
-			if a, rerr := r.ResolveActor(ctx, ref); rerr == nil && who.Actor == "" {
-				who.Actor = a.ID.String()
-			}
+	if rerun {
+		// a re-run of a join done here: the entry's caller is the acceptor
+		who.Actor = self
+		if a, gerr := r.Get(ctx, schema.TableActors, r.Caller().Any()); gerr == nil && !a.Deleted {
+			who.Actor = a.ID.String()
 		}
 	}
-	_, err = onboard.DecideInvite(x.record(), inv.By, r.Today(), who)
-	return err
+	if _, err = onboard.DecideInvite(x.record(), inv.By, r.Today(), who); err != nil {
+		return err
+	}
+	if who.Actor != "" {
+		self = who.Actor
+	}
+	return addressClash(ctx, r, emails, self)
+}
+
+// CheckInviteJoin is the invite join's whole check on a read-only open of
+// the roster (no write): the primary email is the invite's, the invite
+// is pending (or Already on a re-run here), and no other address is
+// someone else's. setup check passes it as org.import's Admit, so the
+// check answers what apply would (J-9: invite.status and invite.email
+// were "not checked here yet" and said ready for an invite apply refuses).
+func CheckInviteJoin(ctx context.Context, profiles profilestore.Store, inv onboard.Invite, emails []string, rerun bool) error {
+	email, id, err := inviteEmail(inv, emails)
+	if err != nil {
+		return err
+	}
+	return checkInvite(ctx, profiles, inv, id, emails, email, rerun)
+}
+
+// actorByEmail is the roster actor an address names (an email identity
+// contact, or the human:<email> key).
+func actorByEmail(ctx context.Context, r profilestore.Roster, email string) (row.Row, bool) {
+	n, err := teamprofile.Normalize(schema.ContactKindEmail, email)
+	if err != nil || n == "" {
+		return row.Row{}, false
+	}
+	for _, ref := range []string{"email:" + n, humanKeyPrefix + n} {
+		if a, rerr := r.ResolveActor(ctx, ref); rerr == nil && !a.Deleted {
+			return a, true
+		}
+	}
+	return row.Row{}, false
+}
+
+// addressClash refuses a join whose identity step lists an address that
+// is already another actor's (self is the joining actor, "" for a new
+// person), naming the address. Why (J-9): an "other address" decided who
+// the joiner was; now only the primary does, and an address of someone
+// else is a mistake or a takeover, never merged quietly.
+func addressClash(ctx context.Context, r profilestore.Roster, emails []string, self string) error {
+	for _, e := range memberEmails(emails) {
+		a, ok := actorByEmail(ctx, r, e)
+		if !ok || a.ID.String() == self {
+			continue
+		}
+		return errs.New(errs.ContactTaken, "email "+e+" is already the address of "+actorLabel(a)+" on the roster; a join never takes another person's address; nothing was written").
+			WithHint("take " + e + " out of the identity step's emails (lore setup edit), or ask the org admin if it is yours: lore actor show --id email:" + e)
+	}
+	return nil
+}
+
+// actorLabel is an actor's display name and id, for messages.
+func actorLabel(a row.Row) string {
+	if n := strings.TrimSpace(fieldText(a, actorFieldName)); n != "" {
+		return n + " (" + a.ID.String() + ")"
+	}
+	return a.ID.String()
 }
 
 // ensureImported runs org.import unless the orgs[] entry exists for the
@@ -1045,10 +1127,11 @@ func CheckMember(ctx context.Context, profiles profilestore.Store, org string, e
 	if err != nil {
 		return err
 	}
-	if _, matched := findMember(ctx, r, emails); matched == "" {
+	a, matched := findMember(ctx, r, emails)
+	if matched == "" {
 		return notMember(org, r.Where(), emails)
 	}
-	return nil
+	return addressClash(ctx, r, emails, a.ID.String())
 }
 
 // memberEmails are the normalized, distinct addresses of emails.
@@ -1062,11 +1145,13 @@ func memberEmails(in []string) []string {
 	return emails
 }
 
-// findMember is the member actor one of emails names (its email identity
+// findMember is the member actor the primary email (emails[0]) names (its email identity
 // contact, else the human:<email> key member add writes) and the address
 // that matched; "" when none is a member.
 func findMember(ctx context.Context, r profilestore.Roster, emails []string) (row.Row, string) {
-	for _, e := range emails {
+	// J-9: only the primary address (emails[0]) says who joins; an "other
+	// address" naming a member made a second person that member.
+	for _, e := range emails[:min(1, len(emails))] {
 		for _, ref := range []string{"email:" + e, humanKeyPrefix + e} {
 			if a, err := r.ResolveActor(ctx, ref); err == nil && isMember(ctx, r, a) {
 				return a, e

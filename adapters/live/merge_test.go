@@ -77,7 +77,7 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 		deleted  bool
 		title    string
 		priority string
-		conflict bool
+		replaced string // the field the note names as replaced
 		decision merge3.FileDecision
 	}
 	cases := []struct {
@@ -89,7 +89,8 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 		{"add on ours only", absent, same, absent, 1, 0, want{present: true, title: "base", priority: "medium"}},
 		{"add on theirs only", absent, absent, same, 0, 1, want{present: true, title: "base", priority: "medium"}},
 		{"add on both, same", absent, same, same, 1, 1, want{present: true, title: "base", priority: "medium"}},
-		{"add on both, different text → markers", absent, editTitle, editTitle, 1, 2, want{present: true, conflict: true, priority: "medium", decision: merge3.DecisionFieldMerge}},
+		{"add on both, different text → newer wins, no markers (L-19)", absent, editTitle, editTitle, 1, 2, want{present: true, title: "title by B", priority: "medium", replaced: "title", decision: merge3.DecisionFieldMerge}},
+		{"both edit title, ours newer → ours, no markers (L-19)", same, editTitle, editTitle, 3, 2, want{present: true, title: "title by A", priority: "medium", replaced: "title", decision: merge3.DecisionFieldMerge}},
 		{"edit title vs edit priority → both kept", same, editTitle, editPriority, 1, 2, want{present: true, title: "title by A", priority: "high-B", decision: merge3.DecisionFieldMerge}},
 		{"both edit priority, theirs newer", same, editPriority, editPriority, 1, 2, want{present: true, title: "base", priority: "high-B", decision: merge3.DecisionFieldMerge}},
 		{"both edit priority, ours newer (pushed later irrelevant)", same, editPriority, editPriority, 3, 2, want{present: true, title: "base", priority: "high-A", decision: merge3.DecisionFieldMerge}},
@@ -128,11 +129,10 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 				return
 			}
 			title, _ := f.Body["title"].AsString()
-			if c.want.conflict {
-				if !strings.Contains(title, "title by A") || !strings.Contains(title, "title by B") || !f.Block.Conflict {
-					t.Fatalf("text clash must keep both with markers and flag conflict: %q %+v", title, f.Block)
-				}
-			} else if title != c.want.title {
+			if f.Block.Conflict || strings.Contains(string(raw), "<<<<<<<") || strings.Contains(string(raw), `\u003c\u003c`) {
+				t.Fatalf("a live merge never writes conflict markers (L-19): %s", raw)
+			}
+			if title != c.want.title {
 				t.Fatalf("title %q, want %q", title, c.want.title)
 			}
 			if p, _ := f.Body["priority"].AsString(); p != c.want.priority {
@@ -145,6 +145,9 @@ func TestMergeTreesFileMatrix(t *testing.T) {
 			if c.want.decision != 0 {
 				if len(notes) != 1 || notes[0].Decision != c.want.decision {
 					t.Fatalf("notes %+v, want decision %v", notes, c.want.decision)
+				}
+				if c.want.replaced != "" && (len(notes[0].Replaced) != 1 || notes[0].Replaced[0].Field != c.want.replaced || !strings.Contains(notes[0].Describe(), "kept the newer edit")) {
+					t.Fatalf("note %+v (%s), want %s named as replaced", notes[0], notes[0].Describe(), c.want.replaced)
 				}
 			}
 		})

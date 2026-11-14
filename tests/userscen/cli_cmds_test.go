@@ -124,7 +124,7 @@ func TestCLI_ColourMatrix(t *testing.T) {
 	// words.
 	for _, v := range []string{"purple", "", "ALWAYS", "yes"} {
 		r := c.Lore("memory", "list", "--color="+v)
-		r.Fails(t, cliExitUsage, `invalid argument "`+v+`" for "--color" flag`, "must be auto, always or never", "hint: lore memory list --help lists its flags")
+		r.Fails(t, cliExitUsage, `--color must be auto, always or never, not "`+v+`"`, "hint: give --color <value>; lore memory list --help lists its flags")
 		if n := strings.Count(r.Stderr, "[E_INVALID_INPUT]"); n != 1 || strings.Count(r.Stderr, "\n") != 2 || r.Stdout != "" {
 			t.Errorf("--color=%s: want the tagged line and the hint line, got %d tags: %s", v, n, r)
 		}
@@ -432,7 +432,7 @@ func TestCLI_SQLFormatsAndInput(t *testing.T) {
 	}{
 		{[]string{"sql", "run", "   "}, []string{"[E_INVALID_INPUT] sql: a query is required", `hint: lore sql run --query "SELECT name, ip FROM res_server"`}},
 		{[]string{"sql", "run", "SELECT 1", "--format", "xml"}, []string{`[E_INVALID_INPUT] sql: unknown --format "xml"`, "hint: one of table, csv, json"}},
-		{[]string{"sql", "run", "SELECT 1", "--timeout", "-1s"}, []string{"[E_INVALID_INPUT] sql: --timeout must be positive"}},
+		{[]string{"sql", "run", "SELECT 1", "--timeout", "-1s"}, []string{"[E_INVALID_INPUT] --timeout must be more than 0", "positive duration"}},
 		{[]string{"sql", "run", "SELECT 1", "--timeout", "soon"}, []string{"[E_INVALID_INPUT]"}},
 		{[]string{"sql", "run", "SELECT nope FROM rules"}, []string{"[E_INVALID_INPUT]", "no such column: nope"}},
 		{[]string{"sql", "run", "SELECT * FROM no_such_table"}, []string{"[E_INVALID_INPUT]", "no such table"}},

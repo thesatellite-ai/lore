@@ -65,6 +65,12 @@ type Cursor string
 type Change struct {
 	Row    Row
 	Expect hlc.HLC
+	// Upkeep marks lore's own refresh of a row that exists (the write ran
+	// under WithSupportingRefresh), never an edit a person asked for. A
+	// staged batch writes under another context, so the mark rides on the
+	// change itself; the live overlay holds such a change with the run's
+	// content row (devco:K-6).
+	Upkeep bool
 }
 
 // Capabilities are optional features; the core uses one only when the

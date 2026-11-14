@@ -44,6 +44,11 @@ type Attached struct {
 	// WriteRefused, when set, is returned for every write to this store
 	// (SOURCE_OF_TRUTH row 7: a second address of a store id; wire sets it).
 	WriteRefused error
+	// WriteRefusedLifted, when set, lets a write through WriteRefused when
+	// it answers true for the write's ctx (RefuseWritesUnless). Why
+	// (J-15): a contractor's org folder refuses their writes, but their
+	// own roster row (lore actor register) is still theirs to write.
+	WriteRefusedLifted func(context.Context) bool
 	// Level is the settings level this store's policies, secret_rules and
 	// secret_allows rows count at (logic/policy, O1). Empty: the repo
 	// store counts at policy.LevelRepo, any other store at
@@ -420,7 +425,7 @@ func (e *Engine) attached(name store.Source) (Attached, error) {
 
 // writable returns the named store when a write may go to it (spec 9.2
 // permission, 0.1.18: attached and not read_only).
-func (e *Engine) writable(name store.Source) (Attached, error) {
+func (e *Engine) writable(ctx context.Context, name store.Source) (Attached, error) {
 	a, err := e.attached(name)
 	if err != nil {
 		return Attached{}, err
@@ -429,7 +434,7 @@ func (e *Engine) writable(name store.Source) (Attached, error) {
 		return Attached{}, errs.Wrap(errs.StoreReadOnly, "store "+string(name)+" is attached read-only", store.ErrReadOnly).
 			WithHint("write to another store with --to")
 	}
-	if a.WriteRefused != nil {
+	if a.WriteRefused != nil && (a.WriteRefusedLifted == nil || !a.WriteRefusedLifted(ctx)) {
 		return Attached{}, a.WriteRefused
 	}
 	return a, nil

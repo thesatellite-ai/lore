@@ -122,6 +122,7 @@ alice (work/website)$ lore tasklist add --title 'Launch week' --body 'Everything
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ tlt_b4f4765e593d51fd1352985e8af3a5b0
 alice (work/website)$ lore task add --title 'Check every link on the home page' --tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0
+lore: moved task_lists/tlt_b4f4765e593d51fd1352985e8af3a5b0 to this clone's refs/lore/live with the live row that names it, so teammates can read it; ~/work/website/.lore/data/task_lists/tlt_b4f4765e593d51fd1352985e8af3a5b0.json is no longer in your working folder (it lands with that row)
 lore: wrote tasks/tsk_28f8d32584b2db54ffb146bede5b03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json is unchanged)
 ✓ tsk_28f8d32584b2db54ffb146bede5b03df — Check every link on the home page [medium]
 alice (work/website)$ lore task edit --id tsk_76bd560aff0771fab8457dbfa9823f10 --tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0

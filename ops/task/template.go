@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -249,7 +250,8 @@ const tplNameHint = "a template name is snake_case: a-z, 0-9 and _, starting wit
 func readTemplateFile(path string) (TemplateFile, error) {
 	raw, err := os.ReadFile(filepath.Clean(path)) // a path the caller names (like split --from)
 	if err != nil {
-		return TemplateFile{}, errs.Wrap(errs.InvalidInput, "task template: read "+path, err)
+		return TemplateFile{}, fromfile.Unreadable("task template", path, err).
+			WithHint("check the path of --from-file, then re-run the same command with --from-file <template.yaml>")
 	}
 	// Strict: a template's keys are all lore's, so a typo is refused with
 	// its line and key path (yamlerr), never yaml's Go type names.

@@ -535,7 +535,8 @@ func placeRank(f forest, parent, self string, in EditIn) (string, error) {
 		return "", nil
 	}
 	if n > 1 {
-		return "", errs.New(errs.InvalidInput, "task edit: give one of --before, --after-sibling, --first, --last")
+		return "", errs.New(errs.InvalidInput, "task edit: --before, --after-sibling, --first and --last each place the task; give only one").
+			WithHint("keep one: --first, --last, --before <tsk_id> or --after-sibling <tsk_id>")
 	}
 	sibs := f.tree.Roots()
 	if parent != "" {

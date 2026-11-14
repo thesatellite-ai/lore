@@ -65,7 +65,7 @@ func (e *Engine) PreviewDelete(ctx context.Context, refs ...Ref) (DeletePreview,
 		if err = refuseActorDelete(cur); err != nil {
 			return DeletePreview{}, err
 		}
-		st, err := e.writable(src)
+		st, err := e.writable(ctx, src)
 		if err != nil {
 			return DeletePreview{}, err
 		}
@@ -80,7 +80,7 @@ func (e *Engine) PreviewDelete(ctx context.Context, refs ...Ref) (DeletePreview,
 	}
 	out := DeletePreview{Rows: make([]Changed, 0, len(plan))}
 	for _, it := range plan {
-		if _, werr := e.writable(it.src); werr != nil {
+		if _, werr := e.writable(ctx, it.src); werr != nil {
 			return DeletePreview{}, werr // the delete checks every store before writing any
 		}
 		out.Rows = append(out.Rows, Changed{Store: it.src, Row: it.row})

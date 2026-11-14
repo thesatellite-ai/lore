@@ -46,7 +46,7 @@ The line after "Send this to" is what the person pastes. Their join reads the in
 | `--role <r>` | a role name, applied on each `--project` (repeat it, or comma-separate) |
 | `--project <p>` | a project to join, by name or `prj_` id (repeat it); needs at least one `--role` |
 | `--team @t` | a team to join on accept (repeat it); the team must exist and be active |
-| `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact`: the kind of stint opened on join |
+| `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact`: the kind of stint opened on join. A `contractor` writes only to their projects' folders: writes to the org's own folder (company rules, teams, the roster) are refused with `E_REFUSED`, except `lore actor register` of themselves and `lore agent start` of their own agents |
 | `--expires <n>d` | lifetime in days, 1 to 90; default `14d` |
 | `--grant` | also give `--github` push access to the store on GitHub with `gh` (asks first) |
 | `--yes` | answer the confirmation without a terminal |
@@ -87,9 +87,9 @@ Send it in chat or email; the person runs `lore setup join --invite <line>` (see
 
 ## Single use, 14 days
 
-- An invite is **accepted once**. After that, the same line answers `E_INVITE_USED` for anyone else; running the join again as the same person is harmless.
+- An invite is **accepted once**. After that, the same line answers `E_INVITE_USED` on every fresh join, whoever runs it; only running the join again on the machine that already joined is harmless. Someone already on the roster who joins again (a new machine, a purged setup) answers the join step with the org's store url instead of the line. `lore setup check --step join` says so before the join is saved.
 - It **expires** after its last day (14 days by default, `--expires` up to 90). An expired invite answers `E_INVITE_EXPIRED`; send a new one.
-- The **email must match**: the person joining must give the invite's email (as their main address or one of their other addresses), or the join is refused with `E_INVITE_EMAIL`.
+- The **email must match**: the person joining must give the invite's email as their main identity email, or the join is refused with `E_INVITE_EMAIL`. Listing it only among "other addresses" is not enough, and any other address that already belongs to someone on the roster is refused with `E_CONTACT_TAKEN`, naming the address.
 - A **revoked** invite answers `E_INVITE_REVOKED`.
 
 ## Step 3 — List, resend and revoke
@@ -203,7 +203,7 @@ Run the same from a folder covered by your own admin setup, with `person@example
 
 - **Invites are written from an admin setup.** If `lore team invite` says no setup is active, add `--setup <your admin setup>`.
 - **The line is not access.** If the person cannot read the store, the join stops at the `store.read` check; grant access on GitHub (or with `--grant`) and they run the join again.
-- **Use the email the person will join with.** Their join is refused if neither their main address nor one of their other addresses is the invite's.
+- **Use the email the person will join with.** Their join is refused unless their main identity email is the invite's.
 
 ## Related
 

@@ -814,7 +814,7 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	}
 	// rows only the v0.1.17 live ref holds (MigrateLive brings them in):
 	// counted in their store's place and named
-	if live, lerr := pendingLiveRows(ctx, st, false); lerr == nil {
+	if live, lerr := pendingOldLiveRows(ctx, st); lerr == nil {
 		n := map[store.Source]int{}
 		for _, x := range live {
 			if x.live.row.SourceVersion < row.FormatVersion && !x.has {

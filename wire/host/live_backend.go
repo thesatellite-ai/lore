@@ -73,6 +73,17 @@ var companionTables = map[row.Table]bool{
 	schema.TableTasklists: true, schema.TableScopes: true,
 }
 
+// refreshRidesLive are companion tables whose UPDATE of a row already in
+// the branch's .lore/data is held like a new row when it is lore's own
+// refresh (store.Change.Upkeep; devco:K-6). The writer's
+// own actor copy is refreshed on its first write to a store (its origin
+// stamp, a name that follows the source: wire/actor_source.go); on a live
+// write that refresh rode to the branch and left ` M .lore/data/actors/…`
+// after `lore task add`, which is documented to leave the working folder
+// alone. Held, it rides live with the content row (landing with it later)
+// or, when the run writes nothing live, goes to the branch as before.
+var refreshRidesLive = map[row.Table]bool{schema.TableActors: true}
+
 // liveBackend wraps the repo store's backend.
 type liveBackend struct {
 	inner store.Backend
@@ -209,6 +220,27 @@ type liveDecoded struct {
 	// one clone queue for seconds behind each other (D-159). Same lifetime
 	// as folders: a new commit drops it.
 	stored map[live.RowKey]store.Row
+	// purgedAt / purged are the purged-id list of commit purgedAt (D-217):
+	// engine.Get asks for it on every row read, and each ask read every
+	// blob of the live tree again (task search on 2,400 live tasks: 3 s of
+	// a 3.4 s run). A commit names fixed content, so it never goes stale.
+	purgedAt string
+	purged   map[string]bool
+}
+
+// purgedOf returns commit oid's purged ids, when held. The map is shared
+// and read-only.
+func (d *liveDecoded) purgedOf(oid string) (map[string]bool, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.purged, d.purgedAt == oid && d.purged != nil
+}
+
+// putPurged records commit oid's purged ids, dropping another commit's.
+func (d *liveDecoded) putPurged(oid string, set map[string]bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.purgedAt, d.purged = oid, set
 }
 
 // get returns folder's rows decoded from commit oid, when held.
@@ -321,7 +353,7 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 	if s == nil || !readsLive(s, table) {
 		return b.inner.Get(ctx, table, id)
 	}
-	_, files, err := b.liveFiles(ctx, s)
+	oid, files, err := b.liveFiles(ctx, s)
 	if err != nil {
 		return store.Row{}, err
 	}
@@ -336,7 +368,10 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 		}
 		return branchRow, berr
 	}
-	lr, err := liveStoreRow(k, f)
+	// D-217: converted once per live commit (a doctor or fix that reads
+	// every row by id converted each again: ~0.8 s of lore fix on 2,400
+	// live tasks).
+	lr, err := s.decoded.storeRow(oid, k, f)
 	if err != nil {
 		return store.Row{}, err
 	}
@@ -367,6 +402,15 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		if seen, ic, ok := strings.Cut(rest, liveCursorSep); ok && seen == seenNow {
 			innerCur = store.Cursor(ic)
 		}
+	}
+	if innerCur != "" {
+		// D-215/D-217: neither the live ref nor the fetched default branch
+		// moved since the cache's last read, so the cache already holds
+		// every live row: only the branch rows changed since then are read,
+		// each with its own live copy. Converting every live row again here
+		// was the floor of every command on a big repo (2,400 live tasks:
+		// most of a `lore memory add`, ~4 s under load).
+		return b.readSince(ctx, s, oid, files, innerCur, seenNow)
 	}
 	// A one-table read (store.WithTables, a full read only) converts and
 	// returns only the live rows of those tables: the policy and actor
@@ -432,6 +476,32 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	}
 	if hinted {
 		return out, "", nil
+	}
+	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
+}
+
+// readSince is Read for a cursor whose live part is current (the live ref
+// and the landed read-through unchanged): the wrapped backend's rows
+// changed since innerCur, each shown with its live copy when it has one
+// (as a full read shows it); the live rows themselves are not returned
+// again, the cache holds them from the read that wrote the cursor.
+func (b *liveBackend) readSince(ctx context.Context, s *liveSession, oid string, files map[live.RowKey]live.File, innerCur store.Cursor, seenNow string) ([]store.Row, store.Cursor, error) {
+	rows, next, err := b.inner.Read(ctx, innerCur)
+	if err != nil {
+		return nil, "", err
+	}
+	out := make([]store.Row, 0, len(rows))
+	for _, r := range rows {
+		f, ok := files[keyOf(r)]
+		if !ok || !readsLive(s, r.Table) {
+			out = append(out, r)
+			continue
+		}
+		lr, err := s.decoded.storeRow(oid, keyOf(r), f)
+		if err != nil {
+			return nil, "", err
+		}
+		out = append(out, newer(lr, r))
 	}
 	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
 }
@@ -648,8 +718,9 @@ func envelopeOnly(doc canonjson.Object) canonjson.Object {
 
 // ---------------------------------------------------------------- companions (FLAG6)
 
-// holdCompanions takes every NEW row of a companion table out of changes and
-// holds it on the session until the run's next content write carries it
+// holdCompanions takes every NEW row of a companion table (and lore's own
+// refresh of a refreshRidesLive row) out of changes and holds it on the
+// session until the run's next content write carries it
 // (the same live commit, or the same branch write); finish writes what no
 // content row took. An explicitly live supporting row is written on its own.
 func (b *liveBackend) holdCompanions(ctx context.Context, s *liveSession, files map[live.RowKey]live.File, changes []store.Change) ([]store.Change, error) {
@@ -670,8 +741,10 @@ func (b *liveBackend) holdCompanions(ctx context.Context, s *liveSession, files 
 			continue
 		}
 		if _, err := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID); err == nil {
-			kept = append(kept, ch)
-			continue
+			if !refreshRidesLive[ch.Row.Table] || !ch.Upkeep {
+				kept = append(kept, ch)
+				continue
+			}
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return nil, err
 		}
@@ -948,13 +1021,16 @@ func (b *liveBackend) Purged(ctx context.Context) (map[string]bool, error) {
 	if err != nil || !ok {
 		return out, err
 	}
-	tree, err := s.ref.ReadTree(ctx, oid)
-	if err != nil {
-		return nil, err
-	}
-	set, err := tree.Purged()
-	if err != nil {
-		return nil, err
+	set, hit := s.decoded.purgedOf(oid)
+	if !hit {
+		tree, err := s.ref.ReadTree(ctx, oid)
+		if err != nil {
+			return nil, err
+		}
+		if set, err = tree.Purged(); err != nil {
+			return nil, err
+		}
+		s.decoded.putPurged(oid, set)
 	}
 	for id := range set {
 		out[id] = true

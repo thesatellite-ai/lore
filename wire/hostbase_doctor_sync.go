@@ -67,7 +67,7 @@ const (
 // that a store links by its remote: lore writes nothing into it, so no
 // merge driver, hooks or ignore lines are installed (by design).
 func doctorLinkedByRemoteNote(remote string) string {
-	return "this repo holds no lore data: a store links it by its remote " + remote + ", its rows live in that store folder, and lore writes nothing into it (no .lore/, hooks, merge driver or .gitignore lines)"
+	return "this repo holds no lore data: a store links it by its remote " + remote + ", its rows live in that store folder, and lore writes no file into it (no .lore/, merge driver or .gitignore lines); only lore org link puts lore's commit-msg leak check into the clone it runs in (lore whoami says when it is missing)"
 }
 
 // doctor [sync] lines.

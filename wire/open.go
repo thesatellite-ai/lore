@@ -352,6 +352,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
+	st.refuseOrgFolderIfContractor(ctx, attached)   // contractorgate.go: a contractor writes only to their client folders (J-15)
 	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
@@ -1301,6 +1302,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		return fail(err)
 	}
 	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: inside a store clone too (B2-25)
+	st.refuseOrgFolderIfContractor(ctx, attached)   // contractorgate.go (J-15)
 	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	// rowState: App.finishOpen reads the formats before the first write
 	if !st.refreshPending {

@@ -14,6 +14,60 @@ import (
 // reached: Name's url is read from the repo's config only then, so a run
 // without --trace costs nothing extra (issue 15).
 func (g *Git) run(ctx context.Context, args []string) ([]byte, error) {
+	out, err := g.runOnce(ctx, args)
+	if err == nil || !neverConnected(err) {
+		return out, err
+	}
+	// L-12 / L-10: one dropped connection (a flaky link, a timed-out ssh
+	// handshake) failed the whole claim or sync. The connection never
+	// opened, so the remote saw nothing and a second try is safe even for
+	// a push or a lease; one retry only, after a short pause, so a remote
+	// that is really down still fails fast with git's own words.
+	select {
+	case <-ctx.Done():
+		return out, err
+	case <-time.After(RetryPause):
+	}
+	return g.runOnce(ctx, args)
+}
+
+// RetryPause is the wait before the one retry of a call that never
+// connected (run here, and the store clones' runner, which shares
+// NeverConnected).
+const RetryPause = 300 * time.Millisecond
+
+// connectFailures are git's and ssh's words (lower case, LC_ALL=C) for a
+// call whose connection never opened: nothing reached the remote. "connection
+// reset" and "closed by remote" are left out on purpose: those can come
+// after the remote applied a push.
+var connectFailures = []string{"ssh: connect to host", "could not resolve host", "could not resolve hostname",
+	"connection refused", "connection timed out", "network is unreachable", "no route to host",
+	"temporary failure in name resolution", "failed to connect to"}
+
+// neverConnected reports whether err is git exiting because its
+// connection to the remote never opened (connectFailures in its stderr).
+func neverConnected(err error) bool {
+	if _, isExit := gitref.ExitCode(err); !isExit {
+		return false
+	}
+	return NeverConnected(gitref.Stderr(err))
+}
+
+// NeverConnected reports whether git's stderr of a failed remote call says
+// the connection never opened (connectFailures): the remote saw nothing, so
+// one more try is safe for any call, a push included.
+func NeverConnected(stderr string) bool {
+	low := strings.ToLower(stderr)
+	for _, m := range connectFailures {
+		if strings.Contains(low, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// runOnce is one try of run.
+func (g *Git) runOnce(ctx context.Context, args []string) ([]byte, error) {
 	inv := g.invocation(args)
 	trace := gitref.TracerFrom(ctx)
 	if trace == nil {

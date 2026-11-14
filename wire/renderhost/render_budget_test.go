@@ -153,3 +153,23 @@ func TestBuildBudgetedFileEmpty(t *testing.T) {
 		t.Fatalf("empty render: %+v", rep)
 	}
 }
+
+// TestEmptyStateNamesOnlyWhatPins (devco L-18): the empty-state line names
+// the writes that put something in LORE.md (a must rule, a critical or
+// high hotfix) and never memory add, whose rows stay search-only.
+func TestEmptyStateNamesOnlyWhatPins(t *testing.T) {
+	t.Parallel()
+	body, _ := buildBudgetedFile("c", renderInput{Settings: contextSettings{Budget: 4000, Profile: toolprofile.NameCodex, EntryMax: fallbackEntryMax, WarnPct: fallbackWarnPct}})
+	_, line, ok := strings.Cut(body, "_No pinned knowledge yet.")
+	if !ok {
+		t.Fatalf("no empty-state line: %q", body)
+	}
+	for _, w := range []string{"lore rule add --body", "lore hotfix add --title", "memories stay search-only"} {
+		if !strings.Contains(line, w) {
+			t.Errorf("empty-state line lacks %q: %q", w, line)
+		}
+	}
+	if strings.Contains(line, "memory add") {
+		t.Errorf("empty-state line tells people a memory pins: %q", line)
+	}
+}

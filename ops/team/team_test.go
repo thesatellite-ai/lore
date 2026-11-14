@@ -487,7 +487,7 @@ func TestJoinWritesRosterRows(t *testing.T) {
 	out := x.invite(setup.TeamInviteIn{Email: "tomas@agency.example", GitHub: "tomas-dev", Roles: []string{"dev"}, Projects: []string{"acme-hub", "northwind"}, Type: schema.PeriodTypeContractor})
 	delete(x.e.origins, "agency") // a fresh machine: no orgs[] entry yet
 	tomas := x.joiner()
-	res, err := x.join(out.Line, "tomas.home@mail.example", "Tomas@agency.example")
+	res, err := x.join(out.Line, "Tomas@agency.example", "tomas.home@mail.example") // J-9: the invite's address is the primary
 	if err != nil {
 		t.Fatal(err)
 	}

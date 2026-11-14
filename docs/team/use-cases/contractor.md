@@ -97,7 +97,7 @@ Bob, in the same client repo, sees the link, the client's note and the company s
 $ lore whoami
 org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_b4f4…a5b0  @bob  (from: org entry (config.yaml orgs[agency].identity))
-repo       client repo  (guards on)
+repo       client repo  (guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; lore fix here installs it)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2

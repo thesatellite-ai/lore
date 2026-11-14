@@ -26,6 +26,19 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 )
 
+// FollowPlaces makes this App check, on each request, whether a place file
+// (config.yaml, the clone and address records, the repo's stores.yaml)
+// changed since its state was opened, and open again from the files as
+// they are now: the watch ServeAsPerson turns on, without its person-only
+// identity. The setup page serves a person through it, so the setup the
+// page itself just saved (a new org, its identity, its stores) is what the
+// page's next call runs as (devco J-16).
+func (a *App) FollowPlaces() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.watchPlaces = true
+}
+
 // placeFiles are the files that say where this machine's stores live, as
 // seen from the repo at top ("" = none).
 func placeFiles(home, top string) []string {

@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/surface/setupweb"
@@ -186,6 +187,11 @@ func run(ctx context.Context, args []string) int {
 		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
 		// F-9: a removed person's later writes stay local, as in the store clones.
 		PushHold: func(ctx context.Context) (time.Time, string, bool) { return app.LivePushHold(ctx) },
+		// J-11: a link of a client repo with no .lore/ installs the leak guard there.
+		ClientRepo: func(ctx context.Context) bool {
+			sit, err := org.Situation(ctx)
+			return err == nil && sit != nil && sit.ResolveErr == nil && sit.Result.Role == orgresolve.RoleClient
+		},
 		// P3-MODEB-2: the resolved org entry's live: block overrides the top level.
 		OrgLive: func(ctx context.Context) *orgconf.Live {
 			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {
@@ -237,12 +243,12 @@ func run(ctx context.Context, args []string) int {
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	// setupweb.go: setup.run / join / repair returning a WebStart open the page (ONB 5.1).
-	root := cli.Build(app.Registry(), newPageRunner(app, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer))
+	root := cli.Build(app.Registry(), newPageRunner(app, org, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer))
 	root.Version = version
 	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)
 	withMigrateContext(root, app) // migratehooks.go: team lock; crash/pause points in test builds only
-	h := &host{app: app, home: home, live: liveRows, render: rend.h, runner: runner}
+	h := &host{app: app, org: org, home: home, live: liveRows, render: rend.h, runner: runner}
 	repoInit.ih = h.initHost(wd, hasLocalState(home, wd))
 	h.markPrinted(root)
 	mountShortcuts(root)

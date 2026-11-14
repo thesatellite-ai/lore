@@ -293,6 +293,11 @@ type fitStep struct {
 // its id and some text, and a critical hotfix is never shortened (CQ3).
 var fitSteps = []fitStep{{}, {DropHigh: true}, {Cut: 80, DropHigh: true}, {Cut: 48, DropHigh: true}}
 
+// noPinnedHint is LORE.md's empty-state line: the two writes that put
+// something in this file (a must rule, a critical or high hotfix), never
+// memory add, whose rows stay search-only.
+const noPinnedHint = "\n_No pinned knowledge yet. A must rule (`lore rule add --body \"<rule>\"`) or a critical or high hotfix (`lore hotfix add --title \"<title>\" --body \"<fix>\"`) shows here; memories stay search-only._\n"
+
 // renderInput is everything one budgeted render reads.
 type renderInput struct {
 	Settings contextSettings
@@ -464,7 +469,9 @@ func buildBudgetedStep(canary string, in renderInput, st fitStep) (string, rende
 	if len(in.Rules)+len(in.Hotfixes) == 0 {
 		// A paragraph of its own: right after the footer's last bullet
 		// markdown would read it as that bullet's continuation.
-		b.WriteString("\n_No pinned knowledge yet. Run `lore rule add` or `lore memory add` to add some._\n")
+		// Only must rules and critical/high hotfixes land here; memories
+		// are search-only, so naming memory add was a false step (L-18).
+		b.WriteString(noPinnedHint)
 	}
 	// FA-CTX-7: tails never displace a core entry; a tail that does not
 	// fit what is left of the budget is left out whole and reported.

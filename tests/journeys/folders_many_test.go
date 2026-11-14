@@ -206,9 +206,25 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 	w.Step("day3/a-client-repo-with-no-lore-files", func() {
 		w.AdvanceDays(1)
 		hub = jPlainRepo(t, lee, w.Remote(jManyHubSlug), filepath.Join(parent, "hub"))
-		hubBefore = jRepoSnapshot(t, hub.Dir)
+		plain := jRepoSnapshot(t, hub.Dir)
 		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--dry-run").OK(t).Says(t, "nothing written")
+		if after := jRepoSnapshot(t, hub.Dir); after != plain {
+			t.Errorf("org link --dry-run changed the client repo:\nbefore %s\nafter  %s", plain, after)
+		}
 		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--yes").OK(t).Says(t, "nothing was written to this repo")
+		// devco J-11: the link installs only the commit leak check in
+		// .git/hooks (no tracked file, no ignore); from here on nothing
+		// lore runs in the repo changes it
+		guard, err := os.ReadFile(filepath.Join(hub.Dir, ".git", "hooks", "commit-msg"))
+		if err != nil {
+			t.Errorf("org link left the client repo without the commit leak check: %v", err)
+		}
+		hubBefore = jRepoSnapshot(t, hub.Dir)
+		// the snapshot minus that one hook must be the plain repo's: same
+		// tree, same ignores, every other hook untouched
+		if without := strings.Replace(hubBefore, "hook:commit-msg="+string(guard)+";", "", 1); without != plain {
+			t.Errorf("org link changed the client repo beyond the commit-msg hook:\nbefore %s\nafter  %s", plain, hubBefore)
+		}
 		lee.LoreIn(hub, "task", "add", jManyTaskTitle).OK(t).Says(t, "client_a")
 		lee.LoreIn(hub, "sync").OK(t) // C5: the link and the task reach the store with Lee's sync
 		lee.LoreIn(hub, "task", "list").OK(t).Says(t, jManyTaskTitle)
@@ -231,7 +247,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 			t.Error("lore made .lore/ in the client repo")
 		}
 		if after := jRepoSnapshot(t, hub.Dir); after != hubBefore {
-			t.Errorf("link and task add changed the client repo (tree, ignores or hooks):\nbefore %s\nafter  %s", hubBefore, after)
+			t.Errorf("task add, sync and doctor changed the linked client repo (tree, ignores or hooks):\nbefore %s\nafter  %s", hubBefore, after)
 		}
 	})
 

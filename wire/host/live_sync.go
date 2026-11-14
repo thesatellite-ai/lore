@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -77,6 +76,11 @@ func (l liveSync) here(ctx context.Context) (*liveSession, string, error) {
 // remote, refused credentials, refused refs/lore/*.
 const syncLiveWaiting = "live: %d write(s) not pushed (%s): kept here, sent on the next sync"
 
+// syncLiveNotFetched is the sync report line when the live fetch failed
+// though nothing waited to be pushed (devco L-10); %s is the cause
+// (liveSession.fetchCause: the step, the remote, git's reason).
+const syncLiveNotFetched = "live: not fetched (%s): teammates' new live writes are not here yet; the next sync tries again"
+
 // syncWaitWhyDefault is syncLiveWaiting's reason when the push named none.
 const syncWaitWhyDefault = "offline, or the remote refused refs/lore/*"
 
@@ -88,61 +92,64 @@ const syncLiveRefused = "live: %d write(s) not pushed: the remote refused refs/l
 
 // pushAndLand pushes the waiting live writes, then lands what is due.
 // waiting is the number of live writes still not on the remote after the
-// push (0 when every write was delivered or there is no remote); moved is
-// the session's moved (rows brought in, sent or landed by this run).
-func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int, moved bool, err error) {
+// push (0 when every write was delivered or there is no remote); fault
+// is why the live rows were not fetched or sent ("" when they were).
+func (l liveSync) pushAndLand(ctx context.Context) (lines []string, waiting int, fault string, err error) {
 	s, folder, err := l.here(ctx)
 	if err != nil || s == nil {
-		return nil, 0, false, err
+		return nil, 0, "", err
 	}
-	defer func() { moved = s.moved }()
-	if _, serr := os.Stat(filepath.Join(s.stateDir, liveNoteRenderDue)); serr == nil {
-		// a write since the last sync (pushed at once or waiting): its
-		// rows are not in a committed render yet
-		s.moved = true
-		if werr := s.writeNote(liveNoteRenderDue, ""); werr != nil {
-			s.warn("clear the render refresh note: " + werr.Error())
+	defer func() {
+		// devco L-10: a fetch that failed (after gitremote's one retry)
+		// is named in the report and the --json, never a bare
+		// "· already in sync" over rows that were not fetched
+		if err != nil || fault != "" {
+			return
 		}
-	}
+		if fault = s.fetchCause(); fault != "" {
+			lines = append(lines, fmt.Sprintf(syncLiveNotFetched, fault))
+		}
+	}()
 	if s.blocked != nil {
 		// G-SYNC-3: the remote live ref was deleted or rewritten; nothing
 		// can be delivered, so sync refuses as every live write does
 		// (never "· already in sync"), naming the backup and the restore.
-		return nil, 0, false, rewrittenError(errs.ReadOnly, s.blocked)
-	}
-	if snap, serr := s.ref.Snapshot(ctx); serr == nil && snap.Ahead() {
-		s.moved = true // this sync sends the clone's own waiting writes
+		return nil, 0, "", rewrittenError(errs.ReadOnly, s.blocked)
 	}
 	s.syncReport = true // this report's own line says what waits (syncLiveWaiting)
 	pushed := s.push(ctx)
 	s.syncReport = false
 	if !pushed || s.ref.Remote == nil {
 		if s.blocked != nil { // the push found it rewritten
-			return nil, 0, false, rewrittenError(errs.ReadOnly, s.blocked)
+			return nil, 0, "", rewrittenError(errs.ReadOnly, s.blocked)
 		}
 		if !pushed && s.ref.Remote != nil {
 			// The push could not deliver (offline, refused): the writes
 			// wait here; say so rather than "already in sync".
 			n := s.waiting()
 			if s.waitWhy == liveRefusedWhy {
-				return []string{fmt.Sprintf(syncLiveRefused, n, s.refusedDetail, s.remoteLabel())}, n, false, nil
+				return []string{fmt.Sprintf(syncLiveRefused, n, s.refusedDetail, s.remoteLabel())}, n, "", nil
 			}
 			why := s.waitWhy
 			if why == "" {
 				why = syncWaitWhyDefault
 			}
-			return []string{fmt.Sprintf(syncLiveWaiting, n, why)}, n, false, nil
+			cause := s.netCause // devco L-10: the remote and git's reason, not "offline" alone
+			if cause == "" {
+				cause = s.fetchCause()
+			}
+			if cause != "" && why == "offline" {
+				why += ": " + cause
+			}
+			return []string{fmt.Sprintf(syncLiveWaiting, n, why)}, n, cause, nil
 		}
-		return nil, 0, false, nil
+		return nil, 0, "", nil
 	}
 	out, err := s.landPass(ctx, folder, nil, true)
 	if err != nil {
-		return nil, 0, false, landErr(err)
+		return nil, 0, "", landErr(err)
 	}
-	if out.Landed+out.Copied+out.Left > 0 {
-		s.moved = true
-	}
-	return landLines(out), 0, false, nil
+	return landLines(out), 0, "", nil
 }
 
 // SyncRun implements opssync.Env.
@@ -165,12 +172,12 @@ func (l liveSync) SyncRun(ctx context.Context, _ opssync.RunIn) (opssync.RunOut,
 	if err := l.refuseIgnoredData(ctx); err != nil {
 		return opssync.RunOut{}, err
 	}
-	lines, waiting, moved, err := l.pushAndLand(ctx)
+	lines, waiting, fault, err := l.pushAndLand(ctx)
 	if err != nil {
 		return opssync.RunOut{}, err
 	}
 	return opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport,
-		Data: opssync.RunData{Pass: syncPassLive, LivePending: waiting, LiveMoved: moved}, Lines: lines}, nil
+		Data: opssync.RunData{Pass: syncPassLive, LivePending: waiting, LiveOffline: fault != "", LiveError: fault}, Lines: lines}, nil
 }
 
 // refuseIgnoredData is E_SYNC_DATA_IGNORED while git ignores row files of
@@ -335,12 +342,25 @@ func (l liveSync) SyncConflicts(ctx context.Context, _ opssync.ConflictsIn) (ops
 		}
 		at := p.File.Block.LiveSince.UTC().Format(time.RFC3339)
 		sides := liveConflictSides(p.File.Body)
-		names := make([]string, 0, len(sides))
+		metas := liveMetaConflicts(p.File.Body)
+		names := make([]string, 0, len(sides)+len(metas))
 		for _, f := range sides {
 			names = append(names, f.name)
 		}
-		out.Data = append(out.Data, opssync.Conflict{ID: int64(len(out.Data) + 1), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at, Fields: names})
-		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; settle with lore sync resolve --id %d --take kept|other, or edit the row)", len(out.Data), p.Key.Table, p.Key.ID, conflictKeptBoth, len(out.Data)))
+		for _, f := range metas {
+			names = append(names, f.name)
+		}
+		n := len(out.Data) + 1
+		out.Data = append(out.Data, opssync.Conflict{ID: int64(n), Table: p.Key.Table, RowID: p.Key.ID, Kept: conflictKeptBoth, At: at, Fields: names})
+		if len(sides) == 0 && len(metas) > 0 {
+			// D-220: a strict metadata key two machines set differently
+			// is no text clash: name the key and the command that sets it
+			out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, %s; settle with %s, or lore sync resolve --id %d --take kept|other)", n, p.Key.Table, p.Key.ID, conflictKeptBoth, wire.LiveMetaConflictWhy, wire.LiveMetaConflictNext(p.Key.ID, metas[0].key), n))
+			sides = metas
+		} else {
+			out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (live, conflict markers in a text field; settle with lore sync resolve --id %d --take kept|other, or edit the row)", n, p.Key.Table, p.Key.ID, conflictKeptBoth, n))
+			sides = append(sides, metas...)
+		}
 		// B2-23: both versions of each clashing field, as for a store row;
 		// kept is the first section (the edit of the machine that merged),
 		// other the second
@@ -369,6 +389,9 @@ func isConflict(p landPlanRow) bool {
 // the text --take kept would leave and the text --take other would.
 type liveConflictField struct {
 	name, kept, other string
+	// key is set for a strict metadata key conflict: the key's name, as
+	// `lore meta set --pair <key>=<value>` takes it (D-220).
+	key string
 }
 
 // maxLiveConflictValue bounds a side repeated in a conflicts line.
@@ -387,6 +410,64 @@ func liveConflictSides(body canonjson.Object) []liveConflictField {
 		out = append(out, liveConflictField{name: k, kept: cutLive(conflictpick.Text(v, false)), other: cutLive(conflictpick.Text(v, true))})
 	}
 	return out
+}
+
+// liveMetaConflicts is every meta entry of body whose value is a strict
+// conflict (METADATA 3.12), sorted by key name: name is "meta.<key>", key
+// the key's name as `lore meta set --pair` takes it, kept and other the
+// ours and theirs values (what --take kept / other leave).
+func liveMetaConflicts(body canonjson.Object) []liveConflictField {
+	entries, ok := body[metaBodyKey].AsObject()
+	if !ok {
+		return nil
+	}
+	var out []liveConflictField
+	for _, id := range slices.Sorted(maps.Keys(entries)) {
+		e, ok := entries[id].AsObject()
+		if !ok {
+			continue
+		}
+		c, ok := e[metaConflictMember].AsObject()
+		if !ok {
+			if v, isObj := e[metaValueMember].AsObject(); isObj {
+				c, ok = v[metaConflictMember].AsObject()
+			}
+		}
+		if !ok {
+			continue
+		}
+		name := e.Str(metaNameMember)
+		if name == "" {
+			name = id
+		}
+		out = append(out, liveConflictField{name: "meta." + name, key: name, kept: cutLive(metaSide(c[metaOursMember])), other: cutLive(metaSide(c[metaTheirsMember]))})
+	}
+	slices.SortFunc(out, func(a, b liveConflictField) int { return strings.Compare(a.name, b.name) })
+	return out
+}
+
+// Members of a row's meta entry and of its conflict value (METADATA 3.1,
+// 3.12; logic/merge keeps them unexported).
+const (
+	metaBodyKey        = "meta"
+	metaNameMember     = "name"
+	metaValueMember    = "v"
+	metaConflictMember = "conflict"
+	metaOursMember     = "ours"
+	metaTheirsMember   = "theirs"
+)
+
+// metaSide is one side of a meta conflict as text: a string as itself,
+// anything else as compact JSON ("null" for a side that had none).
+func metaSide(v canonjson.Value) string {
+	if s, ok := v.AsString(); ok {
+		return s
+	}
+	b, err := canonjson.CompactValue(v)
+	if err != nil {
+		return "?"
+	}
+	return b
 }
 
 // cutLive bounds one side for display.
