@@ -24,6 +24,7 @@ package team
 // success writes nothing (the invite is marked accepted last).
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -36,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/orgcmd"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/ops/stores"
@@ -1123,7 +1125,7 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 	}
 	actor, matched := findMember(ctx, r, emails)
 	if matched == "" {
-		return RosterResult{}, notMember(req.Org, r.Where(), emails)
+		return RosterResult{}, notMember(ctx, req.Org, r.Where(), emails)
 	}
 	res.Actor = actor.ID.String()
 	w := &writer{r: r, actor: actor, today: r.Today()}
@@ -1176,7 +1178,7 @@ func CheckMember(ctx context.Context, profiles profilestore.Store, org string, e
 	}
 	a, matched := findMember(ctx, r, emails)
 	if matched == "" {
-		return notMember(org, r.Where(), emails)
+		return notMember(ctx, org, r.Where(), emails)
 	}
 	return addressClash(ctx, r, emails, a.ID.String())
 }
@@ -1209,10 +1211,35 @@ func findMember(ctx context.Context, r profilestore.Roster, emails []string) (ro
 }
 
 // notMember is the refusal of a join by someone not on org's roster: the
-// cause and the next step (an admin adds them, or an invite line).
-func notMember(org, where string, emails []string) error {
+// cause and the next steps. The first is the person's own: an admin who
+// added them under another address (a person in two orgs has one address
+// in each) needs nothing more, the identity step is answered again with
+// that address (devco N-4: the hint only asked the admin to add the
+// address given, which for a second org was the first org's address).
+func notMember(ctx context.Context, org, where string, emails []string) error {
+	setup := cmp.Or(joinSetupOf(ctx), op.SetupOf(ctx), org)
 	return errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+org+" ("+where+"); nothing was written").
-		WithHint("ask an admin to run: lore member add --email " + emails[0] + ", then lore setup join again (an outsider joins with an invite line instead)")
+		WithHint("if the admin of " + org + " added you under another email, answer the identity step with it: lore setup apply --setup " + setup + " --step identity --answers '{\"email\":\"<that email>\"}', then run the join line again; else ask an admin to run: lore member add --email " + emails[0] + ", then lore setup join again (an outsider joins with an invite line instead)")
+}
+
+// joinSetupKey carries the setup a join step saves for (WithJoinSetup).
+type joinSetupKey struct{}
+
+// WithJoinSetup marks ctx as the join step of setup name, so a refusal
+// names the setup to answer again (`lore setup apply <name>` gives it as an
+// argument, not as the global --setup op.SetupOf reads). The setup layer
+// sets it; "" leaves ctx as it is.
+func WithJoinSetup(ctx context.Context, name string) context.Context {
+	if name == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, joinSetupKey{}, name)
+}
+
+// joinSetupOf is the setup WithJoinSetup recorded, "" when none.
+func joinSetupOf(ctx context.Context) string {
+	s, _ := ctx.Value(joinSetupKey{}).(string)
+	return s
 }
 
 // OrgRoleAdmin is the org-level role of the person who created the org.

@@ -7,7 +7,7 @@ package userscen
 //
 //	TestMigrateGateNewerRow        a row file written by a newer lore (_v 3): show is
 //	                               E_OLD_LORE exit 19 with the exact message and
-//	                               `lore upgrade`; list leaves it out and says so; migrate
+//	                               `lore upgrade`; list leaves it out and says so (naming the file and `lore upgrade`); migrate
 //	                               status counts it as newer; migrate run and other writes
 //	                               leave its bytes alone; doctor names it
 //	TestMigrateGateDeclaredMatrix  _meta.json declares more than this lore knows (a floor
@@ -73,7 +73,9 @@ func TestMigrateGateNewerRow(t *testing.T) {
 	}
 
 	list := c.Lore("memory", "list").OK(t)
-	list.Says(t, "an ordinary note", "invalid-file", rel, msg, "left out of every read (lore doctor)").Never(t, "from the future")
+	// The plain per-command warning (devco O-10, D-281): names the file, says
+	// what is wrong, and gives the next step.
+	list.Says(t, "an ordinary note", "lore: "+rel+" is not a usable row file: "+msg, "left out of every read (lore doctor)", "next: upgrade lore: lore upgrade").Never(t, "from the future", "invalid-file", "rowfs")
 
 	if p := migRepoPlace(t, migStatus(t, c)); p.Newer != 1 || p.Total != p.V1+p.V2+p.Newer {
 		t.Fatalf("migrate status: %+v, want newer 1 counted in the total", p)

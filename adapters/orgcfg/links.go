@@ -86,6 +86,14 @@ type GitLinks struct {
 	// Route reaches each store as its setup's account (fetch, ls-remote,
 	// push); nil = git as configured.
 	Route Router
+	// Only, when non-nil, names the org entries whose stores Links may read
+	// (fetch, ls-remote, the clone itself); every other entry is skipped
+	// and listed in the detail. Gather sets it from what the repo already
+	// says about its org (scopeOrgs): two orgs on one laptop never touch
+	// each other's stores, so a command in org A's repo makes no call to
+	// org B's remote and never needs B's clone to resolve (devco D-278).
+	// nil reads every entry (no hint: the store links decide).
+	Only map[string]bool
 	// Held reports whether a commit lore makes in the store clone at dir
 	// waits there for a person's `lore sync` (the store's push mode; C5,
 	// B-16) instead of being pushed at once. nil pushes at once (the
@@ -149,10 +157,14 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 		return res, nil
 	}
 	want := setOf(remotes)
-	var unknown, stale, forks, unrelated []string
+	var unknown, stale, forks, unrelated, otherOrgs []string
 	scanned := 0
 	for i := range g.Config.Orgs {
 		o := &g.Config.Orgs[i]
+		if g.Only != nil && !g.Only[o.Name] {
+			otherOrgs = append(otherOrgs, o.Name)
+			continue
+		}
 		links, status, detail, err := g.entryLinks(ctx, o, false)
 		if err != nil {
 			return orgresolve.LinkResult{}, err
@@ -206,6 +218,9 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 	}
 	if len(unrelated) > 0 {
 		details = append(details, "not read (no pattern matches this repo): "+strings.Join(unrelated, "; "))
+	}
+	if len(otherOrgs) > 0 {
+		details = append(details, "not read (another org's stores; this repo names its org): "+strings.Join(otherOrgs, ", "))
 	}
 	if len(stale) > 0 {
 		details = append(details, "offline, using the local copy for "+strings.Join(stale, "; "))

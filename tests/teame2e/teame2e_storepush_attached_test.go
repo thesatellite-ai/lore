@@ -64,7 +64,7 @@ func TestE55_StorePushAttachedStoreSetBatchCompact(t *testing.T) {
 	p.add(t, p.cb, spAttachedStore, "kb bob one")
 	p.add(t, p.cb, spAttachedStore, "kb bob two")
 	spSameLog(t, "batched writes inside push_every", p.log(), before)
-	p.cb.MustLore("sync").Says(t, "store kb: sent")
+	p.cb.MustLore("sync").Says(t, "store kb: pushed (sent ")
 	spOneBatchOnTop(t, before, p.log(), 2)
 	// The store's history compacts (asks first, then folds the old writes).
 	p.ca.MustLore("sync")

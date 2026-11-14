@@ -29,7 +29,7 @@ func TestStoreSyncLineOneShape(t *testing.T) {
 		if own != c.want {
 			t.Errorf("own repo line = %q, want %q", own, c.want)
 		}
-		outside := syncStoreLines(opssync.StoreReport{Store: "s", Status: status, Sent: c.sent, Received: c.received, Merged: c.merged, Refused: c.refused})[0]
+		outside := syncStoreLines(opssync.StoreReport{Store: "s", Status: status, Sent: c.sent, Received: c.received, Merged: c.merged, Refused: c.refused}, "")[0]
 		if outside != own {
 			t.Errorf("outside a repo %q, in a repo %q: two shapes for the same counts", outside, own)
 		}

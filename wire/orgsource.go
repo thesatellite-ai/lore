@@ -52,8 +52,27 @@ const orgRefreshLockWait = 200 * time.Millisecond
 // refresh the org entries from their stores' lore-org.yaml, then refuse
 // writes to a second address of a store id.
 func afterAttach(ctx context.Context, home, top string, opened []attach.Opened, urls map[store.Source]string) {
-	refreshOrgSources(ctx, home)
+	refreshOrgSources(ctx, home, urls)
 	markSplitAddresses(home, top, opened, urls)
+}
+
+// orgsOfStores returns the names of the org entries that list one of the
+// store urls a command opened, or nil when none does (a folder in no org).
+func orgsOfStores(cfg *orgconf.Config, urls map[store.Source]string) map[string]bool {
+	var out map[string]bool
+	for i := range cfg.Orgs {
+		for _, sc := range cfg.Orgs[i].Stores {
+			for _, u := range urls {
+				if storeaddr.Same(sc.URL, u) {
+					if out == nil {
+						out = map[string]bool{}
+					}
+					out[cfg.Orgs[i].Name] = true
+				}
+			}
+		}
+	}
+	return out
 }
 
 // orgSuggestionLocal is the lore-org.yaml org o's store holds on this
@@ -76,14 +95,21 @@ func orgSuggestionLocal(ctx context.Context, home string, cfg *orgconf.Config, o
 }
 
 // refreshOrgSources is the automatic refresh (see the file comment). Best
-// effort: any failure leaves the entry for the doctor.
-func refreshOrgSources(ctx context.Context, home string) {
+// effort: any failure leaves the entry for the doctor. Only the entries
+// whose stores this command opened (urls) are refreshed, so a command in
+// org A's repo never reads org B's store clone (devco D-278); a command
+// that opened no org's store refreshes every entry, as before.
+func refreshOrgSources(ctx context.Context, home string, urls map[store.Source]string) {
 	cfg, _, err := orgcfg.LoadConfig(home)
 	if err != nil || cfg == nil {
 		return
 	}
+	only := orgsOfStores(cfg, urls)
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
+		if only != nil && !only[o.Name] {
+			continue // another org's store: its own repos refresh it
+		}
 		sg, ok := orgSuggestionLocal(ctx, home, cfg, o)
 		if !ok {
 			continue

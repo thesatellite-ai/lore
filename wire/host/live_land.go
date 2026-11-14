@@ -424,6 +424,26 @@ func (s *liveSession) heldByLocalBranch(ctx context.Context, branch string, item
 	return changed, len(items) - len(changed), local
 }
 
+// landsNext is the set of plan rows a landing pass (landPass) would take
+// now: the rows to land or copy, minus companion rows with no other row
+// to land beside (withoutLoneSupporting). Doctor and `lore sync status`
+// count "waiting to land" from it (devco N-14: a lone companion row was
+// reported as "1 row(s) waiting to land; the next live write or `lore
+// sync` lands them" right after a sync that, by design, did not land it).
+func landsNext(plan []landPlanRow, folder string) map[live.RowKey]bool {
+	var items []live.LandItem
+	for _, p := range plan {
+		if p.Decision.Action == live.LandFinal || p.Decision.Action == live.LandCopy {
+			items = append(items, live.LandItem{Folder: folder, Key: p.Key, File: p.File, Action: p.Decision.Action})
+		}
+	}
+	out := map[live.RowKey]bool{}
+	for _, it := range withoutLoneSupporting(items) {
+		out[it.Key] = true
+	}
+	return out
+}
+
 // withoutLoneSupporting drops companion rows when no other row lands with
 // them: a plain `lore task add` must not move the branch (F2).
 func withoutLoneSupporting(items []live.LandItem) []live.LandItem {

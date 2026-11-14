@@ -357,6 +357,46 @@ func clientPatternMatches(cfg *orgconf.Config, remotes []string) bool {
 	return false
 }
 
+// scopeOrgs returns the org entries whose stores this repo's resolution
+// may read, or nil for all of them (devco D-278: a command in org A's repo
+// made fetches and ls-remotes to org B's store while resolving the org).
+// The set is the entries the repo already names without any store
+// (LORE_ORG, `lore org use`, the committed .lore/org.yaml, the active
+// setup's org) plus every entry whose own:/repos: patterns match one of
+// its remotes, so a client repo another org claims by pattern is still
+// read and still fails closed. With no such name at all every entry is
+// read, as before: then only the store links can say whose repo it is.
+func scopeOrgs(cfg *orgconf.Config, s *Situation, in In) map[string]bool {
+	var named []string
+	named = append(named, strings.TrimSpace(in.EnvOrg), in.Setup.Org)
+	if ro, ok := cfg.RepoOrgs[s.ProjectID]; ok && s.ProjectID != "" {
+		named = append(named, ro.Org)
+	}
+	if s.Committed != nil {
+		named = append(named, s.Committed.Org)
+	}
+	only := map[string]bool{}
+	for _, n := range named {
+		if n == "" {
+			continue
+		}
+		for i := range cfg.Orgs {
+			if cfg.Orgs[i].Name == n {
+				only[n] = true
+			}
+		}
+	}
+	if len(only) == 0 {
+		return nil
+	}
+	for i := range cfg.Orgs {
+		if entryMatches(&cfg.Orgs[i], s.Remotes) {
+			only[cfg.Orgs[i].Name] = true
+		}
+	}
+	return only
+}
+
 // Gather reads the machine and runs F10. A broken config is an error
 // (E_CONFIG_INVALID); every other problem lands in the Situation.
 func Gather(ctx context.Context, in In) (*Situation, error) {
@@ -382,6 +422,13 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 	if in.Links != nil && len(cfg.Orgs) > 0 {
 		links = in.Links
 		defBranch = func(norm string) string { return in.Links.DefaultBranch(ctx, norm) }
+	}
+	if gl, ok := links.(*GitLinks); ok {
+		if only := scopeOrgs(cfg, s, in); only != nil {
+			scoped := *gl
+			scoped.Only = only
+			links = &scoped
+		}
 	}
 	var lr orgresolve.LinkResult
 	if s.ProjectID == "" {

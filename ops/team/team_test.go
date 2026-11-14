@@ -841,8 +841,10 @@ func TestJoinMemberRefusedFirst(t *testing.T) {
 	_, err := ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"dan@agency.example"}, Name: "Dan", Handle: "dan"})
 	wantCode(t, "non-member join by url", err, errs.NotFound)
 	var e *errs.Error
-	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add --email dan@agency.example") {
-		t.Errorf("refusal = %v, want the cause and the admin's command", err)
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add --email dan@agency.example") ||
+		!strings.Contains(e.Hint, "--setup agency --step identity --answers") {
+		// devco N-4: the person's own next step (another address) comes first
+		t.Errorf("refusal = %v, want the cause, the identity step again and the admin's command", err)
 	}
 	if got := count(); got != rows || x.e.Pushes != pushes {
 		t.Errorf("a refused join wrote: rows %d -> %d, pushes %d -> %d", rows, got, pushes, x.e.Pushes)

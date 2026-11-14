@@ -63,6 +63,21 @@ func leftOutNote(p rowfs.Problem, plain string) string {
 	return plain
 }
 
+// rowFileNextFallback is the next step of a file whose problem carries
+// none of its own (a stray entry, a JSON value that is no row).
+const rowFileNextFallback = "fix or remove it"
+
+// rowFileNext is what the person does about p: its own hint (lore upgrade
+// for a row from a newer lore, the restore command, settling the markers),
+// else the fallback. Never empty: the notice always ends with a next step
+// (devco D-281: a newer row's line had lost its "lore upgrade").
+func rowFileNext(p rowfs.Problem) string {
+	if p.Hint != "" {
+		return p.Hint
+	}
+	return rowFileNextFallback
+}
+
 // rowFileNotices hands Options.Notice one line per row file the open's
 // refresh left out. Called once per opened state from App.state, with
 // a.mu held: it reads st only, never an App method (that would deadlock).
@@ -81,11 +96,8 @@ func (a *App) rowFileNotices(st *state) {
 			continue
 		}
 		for _, p := range rp.ReadProblems() {
-			line := "lore: " + rowFileNoticePlace(st.byName[n], n, st.folders[n], p.Path) + " is not a usable row file: " + plainReason(p) + "; " + leftOutNote(p, rowFileNoticeLeftOut)
-			if p.Hint != "" {
-				line += "\n  next: " + p.Hint
-			}
-			a.opts.Notice(line)
+			a.opts.Notice("lore: " + rowFileNoticePlace(st.byName[n], n, st.folders[n], p.Path) + " is not a usable row file: " + plainReason(p) + "; " + leftOutNote(p, rowFileNoticeLeftOut) +
+				"\n  next: " + rowFileNext(p))
 		}
 	}
 }
@@ -124,9 +136,6 @@ func plainReason(p rowfs.Problem) string {
 			break
 		}
 	}
-	if p.FieldMarkers {
-		r, _, _ = strings.Cut(r, "; resolve them in the file")
-	}
 	return strings.TrimRight(r, "; ")
 }
 
@@ -149,10 +158,7 @@ func (a *App) DoctorRowFiles(ctx context.Context) ([]DoctorFinding, error) {
 			return out, perr
 		}
 		for _, p := range probs {
-			next := "fix or remove it"
-			if p.Hint != "" {
-				next = p.Hint
-			}
+			next := rowFileNext(p)
 			out = append(out, DoctorFinding{Check: DoctorCheckRowFile, Level: DoctorError, Store: src, Plain: true,
 				Message: rowFilePlace(st.byName[src], src, st.folders[src], p.Path) + " is not a usable row file: " + oneLine(p.Reason) + "; " + next + " (" + leftOutNote(p, rowFileDoctorLeftOut) + ")"})
 		}

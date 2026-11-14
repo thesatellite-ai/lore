@@ -40,7 +40,7 @@ func TestJoinCommands(t *testing.T) {
 		{ID: onboard.StepTools, Kinds: []onboard.Kind{onboard.KindMember}, Optional: true},
 		{ID: onboard.StepSummary, Kinds: []onboard.Kind{onboard.KindMember}},
 	}}
-	got := strings.Join(joinCommands("acme", "git@git.acme.example:acme/team-store.git", "sam@acme.example", plan), "\n")
+	got := strings.Join(joinCommands("acme", "git@git.acme.example:acme/team-store.git", joinIdentity{Email: "sam@acme.example"}, plan), "\n")
 	want := strings.Join([]string{
 		`lore setup apply --setup acme --step kind --answers '{"kind":"member","name":"acme"}'`,
 		`lore setup apply --setup acme --step identity --answers '{"email":"sam@acme.example","name":"Sam O'\''Neil"}'`,
@@ -67,5 +67,24 @@ func TestHereForJoin(t *testing.T) {
 	}
 	if line := onboard.HereLine(got); !strings.Contains(line, "offers a member setup acme") {
 		t.Fatalf("line %q", line)
+	}
+}
+
+// TestJoinCommandsNeverOfferAnotherOrgsEmail (devco N-4): a git email that
+// is another org's identity on this machine is replaced in the identity
+// line, also when the plan prefilled it, so the line asks for this org's
+// address instead of carrying the first org's.
+func TestJoinCommandsNeverOfferAnotherOrgsEmail(t *testing.T) {
+	plan := PlanOut{Steps: []PlanStep{
+		{ID: onboard.StepIdentity, Kinds: []onboard.Kind{onboard.KindMember}, Values: onboard.Answers{"email": {Text: "ngozi@first.example"}, "name": {Text: "Ngozi"}}},
+		{ID: onboard.StepJoin, Kinds: []onboard.Kind{onboard.KindMember}},
+	}}
+	id := joinIdentity{Email: "<your email in second>", Avoid: "ngozi@first.example", Note: "note"}
+	got := strings.Join(joinCommands("second", "git@git.second.example:second/store.git", id, plan), "\n")
+	if strings.Contains(got, "ngozi@first.example") || !strings.Contains(got, `"email":"<your email in second>"`) {
+		t.Fatalf("identity line carries another org's address:\n%s", got)
+	}
+	if out := (JoinOut{Commands: []string{"x"}, IdentityNote: id.Note}).Text(); !strings.Contains(out, "note") {
+		t.Fatalf("Text leaves out the identity note:\n%s", out)
 	}
 }

@@ -16,6 +16,13 @@ package wire
 //
 // It never connects to the remote: a repo whose host exists but refuses
 // or lost the repo is lore sync's to name (the fetch reads it anyway).
+//
+// It runs no git process for a healthy repo (devco:D-281-land7b): the url
+// is read from .git/config (doctor --all runs this once per repo, inside a
+// git budget per repo). git itself is asked only when the file cannot say
+// (a worktree or submodule, whose .git is a file) or before a fault is
+// reported: url.<base>.insteadOf and include rules can rewrite the url,
+// which only git applies, so a fault is always the url git really uses.
 
 import (
 	"context"
@@ -28,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 )
@@ -43,12 +51,49 @@ const originLookupTimeout = 2 * time.Second
 // pass a fake so no network is used).
 type hostLookup func(ctx context.Context, host string) ([]string, error)
 
+// originURL is a way to read the url of a repo's origin ("" when none).
+type originURL func(ctx context.Context, dir string) string
+
 // originFault is the doctor line of a repo whose origin cannot work, ""
 // when it can (or cannot be told without connecting). dir is the repo top.
 func originFault(ctx context.Context, dir string, lookup hostLookup) string {
+	return originFaultVia(ctx, dir, lookup, gitOriginURL)
+}
+
+// originFaultVia is originFault asking git for the url through askGit
+// (tests count the calls): only when .git/config cannot tell, and once
+// more to confirm a fault found from the file's url.
+func originFaultVia(ctx context.Context, dir string, lookup hostLookup, askGit originURL) string {
+	if fi, err := os.Stat(filepath.Join(dir, ".git")); err != nil || !fi.IsDir() {
+		return originFaultOf(ctx, dir, askGit(ctx, dir), lookup) // a worktree or submodule: git finds its config
+	}
+	raw := gitbackend.OriginAt(dir)
+	if raw == "" {
+		return "" // no origin: a repo of this machine only
+	}
+	line := originFaultOf(ctx, dir, raw, lookup)
+	if line == "" {
+		return ""
+	}
+	if real := askGit(ctx, dir); real != raw {
+		return originFaultOf(ctx, dir, real, lookup) // a rewritten url: judge the one git uses
+	}
+	return line
+}
+
+// gitOriginURL is origin's url as git resolves it (insteadOf, includes).
+func gitOriginURL(ctx context.Context, dir string) string {
 	out, err := gitRun{dir: dir, args: []string{"remote", "get-url", originRemote}}.output(ctx)
-	raw := strings.TrimSpace(string(out))
-	if err != nil || raw == "" {
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// originFaultOf is the doctor line for the origin url raw of the repo at
+// dir, "" when it can work, cannot be told, or there is no origin.
+func originFaultOf(ctx context.Context, dir, raw string, lookup hostLookup) string {
+	if raw == "" {
 		return "" // no origin: a repo of this machine only
 	}
 	shown := repourl.MaskText(raw)

@@ -129,10 +129,15 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			if err := h.app.ConfirmClientRepoInit(cmd.Context(), yes); err != nil {
 				return err
 			}
+			// D-281-initundo: a failed init leaves the clone's git set-up
+			// (.git/config keys, hooks, info/exclude, .gitattributes,
+			// .gitignore) as it found it, as `lore repo init` does through
+			// the Runner; RootAt's undo covers only .lore/
+			undo := hosthooks.GuardSetUp(cmd.Context(), wd)
 			ctx, written := wire.WithWriteLog(cmd.Context())
 			out, err := repoinit.Run(ctx, ih, in)
 			if err != nil {
-				return err
+				return undo(err)
 			}
 			if os.Getenv(hosthooks.EnvSyncQuiet) != "1" {
 				for _, l := range wire.WrittenLines(written.Files()) {

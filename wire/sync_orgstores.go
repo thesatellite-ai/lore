@@ -14,9 +14,15 @@ package wire
 //	                 (the `lore store push` path) ─▶ one more report line
 //
 // Only clones with waiting work are touched: an org store with nothing to
-// send costs no fetch.
+// send costs no fetch. Only the stores of the org this folder resolves to
+// are pushed (devco N-3): with two orgs on one machine, a sync in org A's
+// repo pushed org B's waiting commits and named org B's store in its
+// summary. A folder that resolves to no org (a `--to <org store>/<folder>`
+// write from a repo no org matches, plainfiles:4, D-224) still sends every
+// waiting clone: there is no other org to keep apart.
 
 import (
+	"cmp"
 	"context"
 	"path"
 	"slices"
@@ -50,7 +56,7 @@ func (a *App) pushWaitingOrgStores(ctx context.Context, done []opsstores.Report)
 			unreachable[norm] = true
 		}
 	}
-	pushed := a.waitingOrgPushes(ctx, unreachable)
+	pushed := a.waitingOrgPushes(ctx, unreachable, a.syncOrg(ctx))
 	out := make([]opsstores.Report, 0, len(pushed))
 	for _, p := range pushed {
 		out = append(out, p.report)
@@ -67,12 +73,13 @@ type orgPush struct {
 
 // waitingOrgPushes pushes every configured org store clone that holds
 // commits its remote has not got, except the stores whose normalized url
-// skip names (a store this sync already reported). It is shared by the
+// skip names (a store this sync already reported) and, when org is not
+// empty, the stores no entry of that org lists (N-3: never another org's). It is shared by the
 // repo sync (pushWaitingOrgStores) and the sync outside a code repo
 // (SyncSetup): a write outside any setup (`lore store folder add` from ~)
 // said "lore sync sends it", and `lore sync` there must send it too
 // (devco D-224).
-func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool) []orgPush {
+func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool, org string) []orgPush {
 	if a.opts.Home == "" {
 		return nil
 	}
@@ -86,6 +93,9 @@ func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool) []orgP
 	for _, cs := range list {
 		if skip[cs.norm] {
 			continue // this sync's own line already says it (K-7)
+		}
+		if org != "" && !slices.Contains(cs.entries, org) {
+			continue // another org's store: its own repos' sync sends it (N-3)
 		}
 		info := cl.Inspect(ctx, cs.norm)
 		if !info.Cloned || !slices.ContainsFunc(info.Unpushed, isBranchRef) {
@@ -104,17 +114,38 @@ func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool) []orgP
 		if !found {
 			continue // a clone lore's own store layout does not name: `lore store doctor` reports it
 		}
-		r := opsstores.Report{Store: orgStoreShortName(cs.norm)}
+		// named as `lore store list` names it (the org's name for its main
+		// store), not by its clone folder (N-3)
+		r := opsstores.Report{Store: cmp.Or(orgStoreLabel(a.opts.Home, cs.url), orgStoreShortName(cs.norm))}
 		res, perr := a.PushStoreNow(ctx, opsstores.PushIn{Store: cs.url, Branch: branch})
 		switch {
 		case perr != nil:
 			r.Problems = []string{perr.Error()}
 		default:
-			r.Sent, r.Offline = res.Sent, res.Offline
+			// a clone pushed here held branch commits (checked above): a
+			// push that was not offline sent them, even with no note rows
+			// in them, so the line says "pushed", never a bare "sent 0" (N-3)
+			r.Sent, r.Offline, r.Pushed = res.Sent, res.Offline, !res.Offline
 		}
 		out = append(out, orgPush{report: r, url: cs.url})
 	}
 	return out
+}
+
+// syncOrg is the org whose waiting store clones a sync here may push: the
+// org this folder resolves to (own:/repos: patterns, LORE_ORG, lore org
+// use, .lore/org.yaml), else the org of the active setup; "" when neither
+// names one (then every waiting clone is sent, as before N-3).
+func (a *App) syncOrg(ctx context.Context) string {
+	if a.opts.Org != nil {
+		if o, err := a.opts.Org(ctx); err == nil && o != nil && o.Name != "" {
+			return o.Name
+		}
+	}
+	if res, err := a.SetupResolution(ctx, ""); err == nil && res.Entry.Kind.HasOrg() {
+		return res.Entry.Org
+	}
+	return ""
 }
 
 // orgStoreShortName is the name a store of an org goes by when its

@@ -201,3 +201,53 @@ func TestOriginFault(t *testing.T) {
 		t.Fatalf("host resolves: %q", line)
 	}
 }
+
+// TestOriginFaultRunsNoGitWhenHealthy (devco:D-281-land7b): doctor --all
+// ran `git remote get-url origin` once per repo, past its git budget. A
+// healthy origin (or none) is now read from .git/config with no git
+// process; git is asked only to confirm a fault (an insteadOf rule can
+// rewrite the url, so a fault is judged on the url git really uses) and
+// for a worktree, whose .git is a file.
+func TestOriginFaultRunsNoGitWhenHealthy(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repo := gitRepo(t)
+	bare := filepath.Join(t.TempDir(), "kit.git")
+	gitIn(t, filepath.Dir(bare), nil, "init", "-q", "--bare", bare)
+	calls := 0
+	askGit := func(ctx context.Context, dir string) string {
+		calls++
+		return gitOriginURL(ctx, dir)
+	}
+	check := func(name string, wantCalls int, wantFault bool) {
+		t.Helper()
+		calls = 0
+		line := originFaultVia(ctx, repo, fakeLookup(nil), askGit)
+		if (line != "") != wantFault {
+			t.Errorf("%s: fault %q, want fault %v", name, line, wantFault)
+		}
+		if calls != wantCalls {
+			t.Errorf("%s: asked git %d times, want %d", name, calls, wantCalls)
+		}
+	}
+	check("no origin", 0, false)
+	gitIn(t, repo, nil, "remote", "add", "origin", bare)
+	check("existing bare repo", 0, false)
+	gitIn(t, repo, nil, "remote", "set-url", "origin", "https://git.example.test/acme/kit.git")
+	check("hosted origin that resolves", 0, false)
+	gitIn(t, repo, nil, "remote", "set-url", "origin", filepath.Join(filepath.Dir(bare), "gone.git"))
+	check("missing folder", 1, true)
+	// The file names a folder that does not exist; git rewrites it to the
+	// bare repo, so the origin works and doctor says nothing.
+	gitIn(t, repo, nil, "remote", "set-url", "origin", "/no-such-place/kit.git")
+	gitIn(t, repo, nil, "config", "url."+filepath.Dir(bare)+"/.insteadOf", "/no-such-place/")
+	check("url rewritten by insteadOf", 1, false)
+
+	wt := filepath.Join(t.TempDir(), "wt")
+	gitIn(t, repo, nil, "commit", "-q", "--allow-empty", "-m", "base")
+	gitIn(t, repo, nil, "worktree", "add", "-q", wt)
+	calls = 0
+	if line := originFaultVia(ctx, wt, fakeLookup(nil), askGit); line != "" || calls != 1 {
+		t.Errorf("worktree: fault %q after %d git calls, want none after 1", line, calls)
+	}
+}

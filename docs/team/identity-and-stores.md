@@ -62,6 +62,8 @@ stable:      yes
 
 An **org** is one company's setup in your config: its stores, its people and the repos it owns. At work you usually use a different email than at home. `--org` stores that identity in the company's entry of `~/.lore/config.yaml`, and lore uses it in every repo of that company:
 
+To change only the email (an admin added your new address with `lore actor contact add … --identity`), give `--key` alone: the name and handle the entry has are kept, and the store clone's git user stays your name.
+
 <!-- example: people#identity-per-org only=1,2 -->
 ```console
 # alice, in ~

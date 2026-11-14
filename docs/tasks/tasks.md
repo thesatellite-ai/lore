@@ -245,8 +245,8 @@ $ lore task edit --id tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
 lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 ✓ tsk_76bd…3f10 updated
 $ lore tasklist list
-tlt_7a67…9504  default [active]  (4 tasks)
 tlt_b4f4…a5b0  Launch week [active]  (2 tasks)
+tlt_7a67…9504  default [active]  (4 tasks)
 $ lore tasklist search --query launch
 tlt_b4f4…a5b0 Launch week
 $ lore tasklist edit --id tlt_b4f4…a5b0 --status closed
@@ -373,7 +373,7 @@ The commands and their output are written to `tests/docs/transcripts/tasks.txt`.
 $ git commit -qm 'Fix the Pro plan price on the pricing page'
 lore: added 5 lore row file(s) to this commit: .lore/data/_meta.json, .lore/data/memories/mem_05e9…4603.json, .lore/data/reminders/rmd_b69e…5ed7.json, .lore/data/reminders/rmd_0aae…a61f.json, .lore/data/task_views/tvw_4c59…6c38.json (lore's rows travel with your commits)
 $ git push -q origin main
-lore: added "lore: land 4 rows (_root)" to main (tlt_7a67…9504, tlt_b4f4…a5b0, tsk_2ad3…f891, tsk_54fe…28f2)
+lore: added "lore: land 4 rows (_root)" to main (tlt_b4f4…a5b0, tlt_7a67…9504, tsk_2ad3…f891, tsk_54fe…28f2)
 ERROR: [E_PUSH_AGAIN] lore added 'lore: land 4 rows (_root)' to main (rows that finished in live land with your push); run git push again
   hint: the commit only adds .lore/data files of rows that finished in live; the same git push now sends it (a script that pushes once can retry on E_PUSH_AGAIN, exit 23)
 lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live

@@ -538,6 +538,10 @@ type JoinOut struct {
 	// Org is the org joined when the answer names it (an invite line or
 	// an org name); "" for a store url until the join reads the store.
 	Org string `json:"org,omitempty"`
+	// IdentityNote says why the identity line asks for an address instead
+	// of carrying git's email: that email is another org's identity on
+	// this machine (devco N-4); "" otherwise.
+	IdentityNote string `json:"identity_note,omitempty"`
 }
 
 // Text implements op.Texter: the join lines (the page, when it opens,
@@ -549,6 +553,9 @@ func (o JoinOut) Text() string {
 		b.WriteString("  " + c + "\n")
 	}
 	b.WriteString("Each line checks its step first and says what to fix; lore setup list then shows the setup.\n")
+	if o.IdentityNote != "" {
+		b.WriteString(o.IdentityNote + "\n")
+	}
 	if slices.ContainsFunc(o.Commands, choosesLocalPersonal) {
 		b.WriteString(LocalPersonalWarning + "\n")
 	}

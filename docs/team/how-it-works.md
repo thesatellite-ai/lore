@@ -62,7 +62,7 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 $ lore explain --id tsk_54fe…28f2
 tsk_54fe…28f2 in ~/work/billing (folder _root)
   fetched 35s ago
-  live (local df3a55c): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
+  live (local 6d00426): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -203,18 +203,18 @@ A **protected branch** is one GitHub only lets you change through a pull request
 ```console
 # bob, in billing
 $ lore sync
-lore live: pushed waiting live writes commit 9d655a5 to origin refs/lore/live
+lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ lore sync
-lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
+lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain --id tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 2fc021b): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
+  live (local 51886a5): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)

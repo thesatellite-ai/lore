@@ -78,18 +78,18 @@ lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, no
 ✓ tsk_54fe…28f2 started
 $ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done --id tsk_54fe…28f2 --commit $(git rev-parse --short HEAD)
 lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
-✓ tsk_54fe…28f2 done (commit cf563f3, not linked to the task; link it with: lore link add --entity tsk_54fe…28f2 --commit cf563f3); waiting for merge
+✓ tsk_54fe…28f2 done (commit cf563f3, not linked to the task; link it with: lore link add --entity tsk_54fe…28f2 --commit cf563f339644); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore sync
-lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
-lore live: landed on main (6d00426); leaves live once main is fetched
+lore live: pushed waiting live writes commit 6d00426 to origin refs/lore/live
+lore live: landed on main (34ee210); leaves live once main is fetched
 lore live: landed on main; this checkout is on feat/login, so those rows show here after you merge main
 $ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-6d00426 lore: land 2 rows (_root)
+34ee210 lore: land 2 rows (_root)
 05513aa lore: land 1 row (_root)
 86dbae4 lore: land 1 row (_root)
-34ee210 lore: init
-7898daa init
+7898daa lore: init
+ccfb0bb init
  .../tlt_162d…9666.json      | 27 +++++++
  .../tsk_54fe…28f2.json      | 87 ++++++++++++++++++++++
  2 files changed, 114 insertions(+)
@@ -121,7 +121,7 @@ lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, no
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
   on tasklist tlt_162d…9666 "default" (the default; --tasklist picks another)
 $ lore sync
-lore live: pushed waiting live writes commit 9d655a5 to origin refs/lore/live
+lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
@@ -131,24 +131,24 @@ lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, no
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore sync
-lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
+lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain --id tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 2fc021b): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
+  live (local 51886a5): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)
   land: waits: main is protected; rides on your next push
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
 lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
-[feat/login 51886a5] fix login timeout
+[feat/login 22efc3b] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-22efc3b lore: land 1 row (_root)
-51886a5 fix login timeout
+8c373dc lore: land 1 row (_root)
+22efc3b fix login timeout
 cf563f3 fix the checkout page on phones
 $ git push -q -u origin feat/login
 $ git status --short

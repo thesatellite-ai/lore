@@ -342,7 +342,7 @@ func (ap setupApplier) retryJoinIdentity(ctx context.Context, org string, emails
 	if want == have {
 		return nil
 	}
-	_, err = ap.a.SetOrgIdentity(ctx, org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle})
+	_, _, err = ap.a.SetOrgIdentity(ctx, org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle})
 	return err
 }
 
@@ -378,7 +378,7 @@ func (ap setupApplier) applyIdentity(ctx context.Context, e onboard.SetupEntry, 
 				return opssetup.ApplyResult{}, err
 			}
 		}
-		if _, err = ap.a.SetOrgIdentity(ctx, e.Org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle}); err != nil {
+		if _, _, err = ap.a.SetOrgIdentity(ctx, e.Org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle}); err != nil {
 			return res, err
 		}
 		// The roster actor row is the team's source of the name (row 3):
@@ -618,6 +618,18 @@ func (ap setupApplier) withEarlySteps(ctx context.Context, e onboard.SetupEntry)
 	return e, initURL, nil
 }
 
+// joinSigner marks the org store a join step clones as signed by the
+// identity the step answers (devco N-6), as the admin team step does
+// (F-16): the clone is made before orgs[<org>] holds that identity, so the
+// clone kept the global git email (another org's) until lore's first write
+// there, and doctor --all was degraded right after a clean join.
+func joinSigner(ctx context.Context, storeURL, name string, emails []string) context.Context {
+	if len(emails) == 0 {
+		return ctx
+	}
+	return withApplyingSigner(ctx, storeURL, git.Signature{Name: name, Email: emails[0]})
+}
+
 // applyRoster is 4.5 (join) and 4.6 (team) Apply: ops/team writes the org
 // entry and the roster rows (idempotent: a re-run is Already / writes
 // nothing), then the setups[] entry is written with its org (step 6), now
@@ -649,6 +661,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	// after the admin setups[] entry below.
 	var teamOrg, teamURL string
 	var push []storepush.Assignment
+	if req.Apply == onboard.ApplyJoin {
+		ctx = team.WithJoinSetup(ctx, e.Name) // a refusal names this setup's identity step (N-4)
+	}
 	if req.Apply == onboard.ApplyJoin && !strings.HasPrefix(strings.TrimSpace(answerText(ans, onboard.QIDInvite)), onboard.InvitePrefix) {
 		// a member an admin added (`lore member add`): the answer names the
 		// org (an entry here, or its store url), no invite line
@@ -664,7 +679,7 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if err = ap.retryJoinIdentity(ctx, org, emails, name, handle); err != nil {
 			return opssetup.ApplyResult{}, err
 		}
-		res, err = team.ApplyJoinMember(withApplyingSetup(ctx, e.Name, org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
+		res, err = team.ApplyJoinMember(joinSigner(withApplyingSetup(ctx, e.Name, org), url, name, emails), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.MemberJoinRequest{Org: org, Store: url, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 		if err == nil && res.OrgRole == team.OrgRoleAdmin {
 			// I-17: the org's admin joining from another machine gets an
@@ -684,7 +699,7 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		if err = ap.retryJoinIdentity(ctx, inv.Org, emails, name, handle); err != nil {
 			return opssetup.ApplyResult{}, err
 		}
-		res, err = team.ApplyJoin(withApplyingSetup(ctx, e.Name, inv.Org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
+		res, err = team.ApplyJoin(joinSigner(withApplyingSetup(ctx, e.Name, inv.Org), inv.Store, name, emails), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
 			team.JoinRequest{Invite: inv, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	} else {
 		org := pick(ans, onboard.QIDOrg, e.Org)
