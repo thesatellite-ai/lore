@@ -244,6 +244,7 @@ func TestJourneySolo(t *testing.T) {
 		}
 		lap.LoreIn(appRepo, "memory", "add", "--body", "app: timestamps are UTC").OK(t)
 		lap.LoreIn(appRepo, "memory", "add", "--body", "I like short commit subjects", "--to", "me").OK(t).Says(t, "[me]")
+		lap.LoreIn(appRepo, "sync").OK(t) // C5: the personal note reaches GitHub with Sam's sync
 		got := soloBodies(t, lap, appRepo.Dir)
 		if me, ok := got["app: timestamps are UTC"]; !ok || me {
 			t.Errorf("the repo note is not listed as the repo's: %v", got)
@@ -330,7 +331,10 @@ func TestJourneySolo(t *testing.T) {
 
 	w.Step("week1/laptop-sleeps-mid-push", func() {
 		w.AdvanceDays(1)
-		r := soloKillAtPush(lap, appRepo.Dir, false, "memory", "add", "--body", "lid closed while pushing", "--to", "me")
+		// C5: the write commits locally; the push happens on lore sync,
+		// which is where the lid closes
+		lap.LoreIn(appRepo, "memory", "add", "--body", "lid closed while pushing", "--to", "me").OK(t)
+		r := soloKillAtPush(lap, appRepo.Dir, false, "sync")
 		if r.Code == 0 {
 			t.Errorf("the push was not killed (nothing to test): %s", r)
 		}
@@ -352,7 +356,8 @@ func TestJourneySolo(t *testing.T) {
 		// No duplicate commits of one row: a retry sends it once.
 		n := 0
 		for _, l := range w.Remote(soloStore).Log("main") {
-			if strings.Contains(l, "lore: memory add mem_") {
+			// a sync sends the waiting writes as one batch commit (C5)
+			if strings.Contains(l, "lore: memory add mem_") || strings.HasPrefix(l, "lore: batch ") {
 				n++
 			}
 		}
@@ -363,13 +368,15 @@ func TestJourneySolo(t *testing.T) {
 
 	w.Step("week1/push-killed-after-it-reached-github", func() {
 		// The push lands on GitHub, then the lid closes before lore hears back.
-		r := soloKillAtPush(lap, appRepo.Dir, true, "memory", "add", "--body", "pushed then lid closed", "--to", "me")
+		lap.LoreIn(appRepo, "memory", "add", "--body", "pushed then lid closed", "--to", "me").OK(t)
+		r := soloKillAtPush(lap, appRepo.Dir, true, "sync") // C5: the push is lore sync's
 		t.Logf("killed after push: exit %d", r.Code)
 		if !soloBodies(t, lap, appRepo.Dir)["pushed then lid closed"] {
 			t.Errorf("a note committed and pushed before the kill is not listed")
 		}
 		lap.LoreIn(appRepo, "sync").OK(t)
 		lap.LoreIn(appRepo, "memory", "add", "--body", "the next morning", "--to", "me").OK(t)
+		lap.LoreIn(appRepo, "sync").OK(t)
 		for _, b := range []string{"pushed then lid closed", "the next morning"} {
 			if !soloRemoteHas(w, b) {
 				t.Errorf("%q is not on GitHub", b)
@@ -467,6 +474,7 @@ func TestJourneySolo(t *testing.T) {
 			t.Errorf("setup show does not name the new account and alias: %s", show.Stdout)
 		}
 		lap.LoreIn(appRepo, "memory", "add", "--body", "after the account switch", "--to", "me").OK(t)
+		lap.LoreIn(appRepo, "sync").OK(t) // C5: sent with Sam's sync, over the new account
 		if !soloRemoteHas(w, "after the account switch") {
 			t.Errorf("a write after the account switch did not reach the personal store")
 		}
@@ -645,6 +653,7 @@ func TestJourneySolo(t *testing.T) {
 			t.Errorf("the new laptop shows a note the old one never pushed")
 		}
 		desk.LoreIn(deskApp, "memory", "add", "--body", "desk: first note", "--to", "me").OK(t)
+		desk.LoreIn(deskApp, "sync").OK(t) // C5: the note reaches GitHub with Sam's sync
 		// The desk only knows the new email, yet Sam is the one actor he
 		// has been since his first email: the personal store's row names
 		// the new email as its key and the old one as an alias.
@@ -804,6 +813,7 @@ func TestJourneySoloMonth6(t *testing.T) {
 		deskApp = desk.Clone(w.Remote("github.com/sam-dev/app-renamed"), "app")
 		desk.LoreIn(deskApp, "init").OK(t)
 		desk.LoreIn(deskApp, "memory", "add", "--body", "desk: first note", "--to", "me").OK(t)
+		desk.LoreIn(deskApp, "sync").OK(t) // C5: the note reaches GitHub with Sam's sync
 	})
 
 	w.Step("month6/swap-coding-tool", func() {

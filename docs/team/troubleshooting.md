@@ -81,7 +81,7 @@ ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under sto
 
 # alice, in ~
 $ lore store doctor
-ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes: unpushed work: refs/heads/main; git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
   hint: fix each problem, then run `lore store doctor` again
 (exit 20)
 ```
@@ -152,7 +152,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 # alice, in website
 $ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
+  hint: the store repo has branches but not this one (an empty repo gets its branch with the first link): check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org> if they are wrong
 (exit 20)
 ```
 <!-- /example -->
@@ -232,18 +232,18 @@ Lore shares live rows through a hidden list on the remote that is not a branch (
 ```console
 # bob, in portal
 $ lore task add --title 'set up the portal CI'
-lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
-lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
-✓ tsk_54fe…28f2 — set up the portal CI [medium]
-  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
+lore: wrote task_lists/tlt_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/portal/.lore/data/task_lists/tlt_54fe…28f2.json is unchanged)
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/portal/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
+✓ tsk_05e9…4603 — set up the portal CI [medium]
+  created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore live diff
 local     86dbae476bd6
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
-  _root/task_lists/tlt_05e9…4603.json
-  _root/tasks/tsk_54fe…28f2.json
+  _root/task_lists/tlt_54fe…28f2.json
+  _root/tasks/tsk_05e9…4603.json
 $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 15s ago

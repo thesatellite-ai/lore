@@ -227,6 +227,8 @@ func TestJourneyJoiner(t *testing.T) {
 		if !strings.HasPrefix(invite, "lore-invite:") {
 			t.Fatalf("team invite printed no invite line: %s", r)
 		}
+		// C5: the team store, the link and the invite reach the remote with the admin's sync
+		bm.LoreIn(bapp, "sync").OK(t)
 	})
 
 	steps := jJoinerSteps(invite, foldersA)
@@ -540,6 +542,9 @@ func TestJourneyJoiner(t *testing.T) {
 
 	w.AdvanceDays(90)
 	w.Step("month3/leave-job-a", func() {
+		// C5: Pat sends job A's waiting work before leaving (forget keeps a
+		// store that holds unsent work)
+		m.LoreIn(app, "sync").OK(t)
 		meBefore := jJoinerTree(t, m.LorePath("stores", "_me"))
 		m.Lore("", "setup", "remove", jJoinerSetupA).OK(t)
 		r := m.Lore("", "setup", "trash", "purge", jJoinerSetupA, "--confirm").OK(t)

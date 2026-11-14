@@ -4,12 +4,12 @@ package wire
 // (ONB 4.4) and the Start a team step (4.6), written where `lore store set`
 // keeps it (storepushops.go):
 //
-//	personal store step, push batch|manual ─▶ config.yaml personal.push (the `me` settings)
-//	team step, push batch|manual           ─▶ the team store's lore-store.yaml push key,
-//	                                          one commit, after the admin setups[] entry exists
-//	push now or no answer                  ─▶ nothing (now is the default)
+//	personal store step, push batch|now ─▶ config.yaml personal.push (the `me` settings)
+//	team step, push batch|now           ─▶ the team store's lore-store.yaml push key,
+//	                                       one commit, after the admin setups[] entry exists
+//	push manual or no answer            ─▶ nothing (manual is the default, C5)
 //
-// A mode other than now needs a git store: a local folder (file://) or no
+// A mode other than manual needs a git store: a local folder (file://) or no
 // personal store has no remote, so the step is refused before it writes
 // anything, naming the store choice.
 
@@ -36,7 +36,7 @@ func stepPushSettings(step onboard.StepID, a onboard.Answers) ([]storepush.Assig
 	set, err := onboard.PushSettings(raw)
 	if err != nil {
 		return nil, errs.New(errs.InvalidInput, "setup apply "+string(step)+": "+err.Error()).
-			WithHint("pick now, batch or manual for " + onboard.QIDPush)
+			WithHint("pick manual (the default), batch or now for " + onboard.QIDPush)
 	}
 	return set, nil
 }
@@ -51,8 +51,9 @@ func pushModeOf(set []storepush.Assignment) string {
 	return ""
 }
 
-// refusePushWithoutRemote refuses a push mode other than now for a
-// personal store that has no remote: none, or a file:// folder (url).
+// refusePushWithoutRemote refuses a push mode other than the default
+// (manual: nothing to push) for a personal store that has no remote: none,
+// or a file:// folder (url).
 func refusePushWithoutRemote(set []storepush.Assignment, choice, url string) error {
 	if len(set) == 0 {
 		return nil
@@ -67,7 +68,7 @@ func refusePushWithoutRemote(set []storepush.Assignment, choice, url string) err
 		return nil
 	}
 	return errs.New(errs.InvalidInput, "setup apply personal_store: push "+pushModeOf(set)+" needs a git repo to push to, but "+why+"; nothing was written").
-		WithHint("pick push now (or leave it empty), or a repo: create, existing, or same as my other setups")
+		WithHint("leave push empty (wait for lore sync), or pick a repo: create, existing, or same as my other setups")
 }
 
 // applyPersonalPush writes set into config.yaml's personal: block unless

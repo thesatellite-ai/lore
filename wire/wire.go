@@ -453,6 +453,10 @@ type state struct {
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
+	// wroteTo is every store a write reached (ensureActor runs before each
+	// one, under actorMu): the machine profile rides only with a write to
+	// its own store (wroteToMachineTarget, B-16). Nil until the first write.
+	wroteTo map[store.Source]bool
 	// agentOwner is the owning person of the App's agent identity in a
 	// client repo (agentOwnerOf); zero otherwise. Read by clientActorAs.
 	agentOwner ids.ID[ids.Actor]

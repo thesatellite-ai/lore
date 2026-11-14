@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -112,6 +113,21 @@ func TestTeamInviteOutText(t *testing.T) {
 		"Send this to tomas@agency.example (it holds no secret):\n  lore setup join --invite lore-invite:v1:abc\n"
 	if got := o.Text(); got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestTeamInviteOutSyncFirst: an invite whose roster commit is still only
+// in this clone says to run lore sync before the line is sent (C5: the
+// join reads the store's remote), and only then.
+func TestTeamInviteOutSyncFirst(t *testing.T) {
+	o := TeamInviteOut{ID: "inv_1", Line: "lore-invite:v1:abc", ExpiresOn: "2026-11-20", Email: "tomas@agency.example", Org: "agency", SyncFirst: true}
+	got := o.Text()
+	if i, j := strings.Index(got, "run `lore sync` before you send the line"), strings.Index(got, "Send this to"); i < 0 || j < i {
+		t.Errorf("sync-first text missing or after the line:\n%s", got)
+	}
+	o.SyncFirst = false
+	if strings.Contains(o.Text(), "lore sync") {
+		t.Errorf("a sent invite names lore sync:\n%s", o.Text())
 	}
 }
 

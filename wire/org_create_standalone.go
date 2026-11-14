@@ -217,7 +217,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	}
 	doc := orgcfg.OrgFileDoc{Name: in.Org, Own: in.Own, Repos: in.Repos,
 		Stores: []orgcfg.OrgFileStore{{URL: url, OrgFolder: in.OrgFolder}}}
-	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
 	res, err := g.WriteOrgFile(ctx, orgcfg.OrgFileWrite{URL: url, OrgFolder: in.OrgFolder, Doc: doc, Signature: storeSignature(&entry)})
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, orgFileError(err, url)
@@ -296,7 +296,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	}
 	typed := canonicalTyped(ctx, in.URL) // brief 3.7: the entry names the canonical url
 	in.URL = typed.URL
-	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: typed.withRule(h.router())}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: cfg, Now: h.wall(), Route: typed.withRule(h.router())}
 	sg, err := g.ReadSuggestion(ctx, in.URL, in.Branch)
 	if err != nil {
 		return opsorgcmd.Report{}, orgFileError(err, in.URL)

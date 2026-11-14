@@ -156,8 +156,8 @@ func TestRenderPrivateStoresMatrix(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{ // file → words it must hold
-		privMatrixInnerID + privateFileExt:            {"innerword"},
-		privMatrixOrgID + privateFileExt:              {"orgaword", "orgbword"},
+		p.fileFor(t, privMatrixInnerID):               {"innerword"},
+		p.fileFor(t, privMatrixOrgID):                 {"orgaword", "orgbword"},
 		privateNoIDPrefix + "old_v1" + privateFileExt: {"oldword"},
 	}
 	never := []string{"shareword", "repoword"}
@@ -195,7 +195,7 @@ func TestRenderPrivateStoresMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(idx), privMatrixOrgID+privateFileExt+"  store orga, orgb  ") {
+	if !strings.Contains(string(idx), "- "+p.fileFor(t, privMatrixOrgID)+"  store orga, orgb  ") {
 		t.Errorf("index does not name both org folders on one line:\n%s", idx)
 	}
 	if strings.Contains(string(idx), privMatrixShareID) || strings.Contains(string(idx), "share") {
@@ -231,7 +231,7 @@ func TestRenderPrivateLocalFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := user + "\n@" + privateImportDir + p.repoKey + "/" + privMatrixInnerID + privateFileExt + "\n"
+		want := user + "\n@" + privateImportDir + p.dirName + "/" + p.fileFor(t, privMatrixInnerID) + "\n"
 		got, err := readUnder(t, repo, local)
 		if err != nil || string(got) != want {
 			t.Fatalf("%s = %q (%v), want %q", local, got, err, want)
@@ -348,10 +348,17 @@ func TestPrivateRepoKey(t *testing.T) {
 		if err = h.renderPrivate(ctx, &w, repo, false, false); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = os.Stat(filepath.Join(home, renderDirName, repoID, privTestInnerID+privateFileExt)); err != nil {
+		after, err := h.planPrivate(ctx, repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasSuffix(after.dirName, repoID) {
+			t.Fatalf("render folder %s does not end with the stamped repo id %s", after.dirName, repoID)
+		}
+		if _, err = os.Stat(filepath.Join(home, renderDirName, after.dirName, after.fileFor(t, privTestInnerID))); err != nil {
 			t.Fatalf("private file not under the stamped repo id %s: %v", repoID, err)
 		}
-		if _, err = os.Stat(filepath.Join(home, renderDirName, before.projectID)); !os.IsNotExist(err) {
+		if _, err = os.Stat(filepath.Join(home, renderDirName, before.dirName)); !os.IsNotExist(err) {
 			t.Errorf("a render dir under the project id exists too: %v", err)
 		}
 	})

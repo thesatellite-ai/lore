@@ -131,6 +131,9 @@ func TestReadsNeverWriteOrPush(t *testing.T) {
 	w.git(t, repo, "init", "-q", "-b", "main")
 	w.mustLore(t, repo, "init")
 	w.mustLore(t, repo, "store", "init", "notes", "https://github.com/acme/notes.git", "--yes")
+	// push mechanics: the store opts into push=now (C5: the default waits
+	// for lore sync, and a read then names no waiting commit)
+	w.mustLore(t, repo, "store", "set", "notes", "push=now")
 
 	// a write pushes and says where: store, commit, branch
 	code, out, errOut := w.lore(t, repo, "memory", "add", "--body", "the widget cache warms at boot", "--to", "notes")

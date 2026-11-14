@@ -15,7 +15,7 @@ ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under sto
   hint: point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 alice$ lore store doctor
-ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes: unpushed work: refs/heads/main; git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
   hint: fix each problem, then run `lore store doctor` again
 (exit 20)
 
@@ -53,37 +53,37 @@ ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable)
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)
 alice (work/website)$ lore memory add --body 'the API keys rotate every 90 days' --to agency || true
-lore: the change is committed in the local copy of store agency; no git repository at git@github.com:agency/notes ('/srv/git/github.com/agency/notes' does not appear to be a git repository); check the store's address (git@github.com:agency/notes): `lore store set-url --name <store> --url <url>` fixes a wrong one; local commits stay in the clone meanwhile; run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store agency)
 ✓ mem_162df51b7f78b785c97c26b41ea89666 [agency/client]
   scope: [master]
 alice (work/website)$ lore sync
-lore: pushed store agency/client (here: agency): commit 601d285 to branch main
+lore: pushed store agency/client, agency/org: commit 601d285 to branch main
 store me: sent 0, received 0, merged 0, refused 0
 store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 1, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): sent 4, received 0, merged 0, refused 0
+store agency/org: sent 2, received 0, merged 0, refused 0
 
 ### store branch missing
 alice (work/website)$ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
 ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
-  hint: a store branch is made only on purpose; 0.1.18 makes stores with `lore store init --name <name> --url <url>` and ties repos to an org with `lore org create` / `lore org link` (v0.1.17 stores: lore fix)
+  hint: the store repo has branches but not this one (an empty repo gets its branch with the first link): check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org> if they are wrong
 (exit 20)
 
 ### refs refused by the host
 bob (work/portal)$ lore task add --title 'set up the portal CI'
-lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
-lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
-✓ tsk_54fe984c9b495744c0217776765a28f2 — set up the portal CI [medium]
-  created tasklist tlt_05e99e22e9e86e96fe4daa7777994603 "default" for tasks added without --tasklist
+lore: wrote task_lists/tlt_54fe984c9b495744c0217776765a28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/portal/.lore/data/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json is unchanged)
+lore: wrote tasks/tsk_05e99e22e9e86e96fe4daa7777994603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/portal/.lore/data/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json is unchanged)
+✓ tsk_05e99e22e9e86e96fe4daa7777994603 — set up the portal CI [medium]
+  created tasklist tlt_54fe984c9b495744c0217776765a28f2 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 bob (work/portal)$ lore live diff
 local     86dbae476bd6ce74d5b75ffd4ee51ca3a0d5fb3a
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
-  _root/task_lists/tlt_05e99e22e9e86e96fe4daa7777994603.json
-  _root/tasks/tsk_54fe984c9b495744c0217776765a28f2.json
+  _root/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json
+  _root/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json
 bob (work/portal)$ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: tracking refspec installed, not forced into refs/lore/*
   - live: last fetch 15s ago

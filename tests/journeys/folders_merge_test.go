@@ -98,6 +98,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		old := jPlainRepo(t, lee, w.Remote(jAdoptLegacySlug), filepath.Join(parent, "merge-app"))
 		jMergeLegacy(t, old)
 		lee.Lore(parent, "store", "adopt", tlOrg+"/"+jMergeFolder, "--from", old.Dir, "--yes").OK(t)
+		lee.Lore(parent, "sync").OK(t) // C5: the adopt reaches the store with Lee's sync
 		task0 := jMergeFolder + "/tasks/" + jAdoptID(jMergeTaskStem, 0) + ".json"
 		if doc, _ := two.Read(mainRef, task0); strings.Contains(doc, `"tasklist_id": ""`) || !strings.Contains(doc, jMergeOldActor) {
 			t.Fatalf("adopt kept tasklist_id \"\" (or lost the actor):\n%s", doc)
@@ -140,12 +141,14 @@ func TestJourneyFoldersMerge(t *testing.T) {
 			Says(t, fmt.Sprintf("%d rows would name %s", jMergeTasks, into), fmt.Sprintf("%s: %d to edit", where, jMergeTasks), "stores read: ", where).
 			Never(t, "stores read: repo, me, "+tlOrg+",")
 		t.Logf("actor merge --dry-run:\n%s", r.Out())
+		lee.LoreIn(hub, "sync").OK(t) // C5: send what waits first, so the count is the merge's alone
 		before := two.CommitCount(mainRef)
 		start := time.Now()
 		r = lee.LoreIn(hub, "actor", "merge", jMergeOldActor, into, "--yes").OK(t).
 			Says(t, fmt.Sprintf("%d rows now name %s", jMergeTasks, into), fmt.Sprintf("%s: %d edited", where, jMergeTasks),
 				"history stamps (created_by, updated_by) keep "+jMergeOldActor+"; reads show "+into)
 		took := time.Since(start)
+		lee.LoreIn(hub, "sync").OK(t) // the merge commit reaches the store with Lee's sync
 		t.Logf("actor merge (%s, %d store commits):\n%s", took, two.CommitCount(mainRef)-before, r.Out())
 		if n := two.CommitCount(mainRef) - before; n != 1 {
 			t.Errorf("the merge made %d commits in the folder's store, want ONE for all %d rows", n, jMergeTasks)
@@ -183,6 +186,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		start := time.Now()
 		r = lee.LoreIn(hub, "doctor", "--fix", "--yes").Says(t, "wrote null in "+fmt.Sprint(jMergeAnnTasks)+" rows")
 		took := time.Since(start)
+		lee.LoreIn(hub, "sync").OK(t) // C5: the repairs reach the store with Lee's sync
 		t.Logf("doctor --fix (%s, %d store commits):\n%s", took, two.CommitCount(mainRef)-before, grepLines(r.Out(), "empty_ref"))
 		// two repairs ran (task leads, empty refs): one store commit each
 		if n := two.CommitCount(mainRef) - before; n != 2 {

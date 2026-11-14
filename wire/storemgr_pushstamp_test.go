@@ -10,6 +10,7 @@ package wire
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,10 @@ func TestWithStoreDirWritesPushStamp(t *testing.T) {
 	}
 	dir, err := a.storeDir(ctx, src)
 	if err != nil {
+		t.Fatal(err)
+	}
+	// C5: only a store set to push now pushes a settings commit by itself
+	if _, err = a.SetStorePush(ctx, "stamp", []storepush.Assignment{{Key: storepush.KeyPush, Value: string(storepush.ModeNow)}}); err != nil {
 		t.Fatal(err)
 	}
 	stampDir := gitbackend.StateDirOf(dir)

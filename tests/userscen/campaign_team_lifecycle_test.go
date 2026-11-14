@@ -55,6 +55,7 @@ func TestCampaignTeam_ContactReversePath(t *testing.T) {
 			}
 			// edit to an RTL label, read back on bob's clone
 			o.app.MustLore("actor", "contact", "edit", id, "--label", "שלום עולם").Says(t, "edited")
+			o.app.MustLore("sync") // C5: the edit reaches bob with mira's sync
 			if c, _ := teamContactByValue(teamContacts(t, bc, "@bob"), v.value); c.Label != "שלום עולם" {
 				t.Fatalf("bob's clone reads the edit: %+v", c)
 			}
@@ -80,6 +81,7 @@ func TestCampaignTeam_ContactReversePath(t *testing.T) {
 		})
 	}
 	// everyone's list (the org's phone list) is the union, read on both clones
+	o.app.MustLore("sync")
 	if a, b := len(teamContacts(t, o.app)), len(teamContacts(t, bc)); a != b {
 		t.Fatalf("both clones list the same contacts: %d vs %d", a, b)
 	}

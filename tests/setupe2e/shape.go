@@ -43,15 +43,17 @@ type Shape struct {
 	// Push is the push mode the person picks on the Stores step: now |
 	// batch | manual. The walk picks it only when the store chosen there is
 	// a git repo (a local folder or none has no remote; lore refuses a
-	// mode other than now for it), and the judge then expects config.yaml
-	// personal.push to say it (nothing for now). "" is now (PushMode).
+	// mode other than manual for it), and the judge then expects config.yaml
+	// personal.push to say it (nothing for manual, the default: C5). "" is
+	// manual (PushMode).
 	Push string `json:"push"`
 }
 
-// PushMode is the shape's push value, now when it names none.
+// PushMode is the shape's push value, manual (the default) when it names
+// none.
 func (s Shape) PushMode() string {
 	if s.Push == "" {
-		return PushNow
+		return PushManual
 	}
 	return s.Push
 }

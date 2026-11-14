@@ -130,8 +130,8 @@ func TestRenderPrivateExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	file := filepath.Join(p.dir, privTestInnerID+privateFileExt)
-	body, err := readUnder(t, p.dir, privTestInnerID+privateFileExt)
+	file := filepath.Join(p.dir, p.fileFor(t, privTestInnerID))
+	body, err := readUnder(t, p.dir, p.fileFor(t, privTestInnerID))
 	if err != nil || !strings.Contains(string(body), "The primary database is pgmain.internal.example.") || strings.Contains(string(body), "${var:db_host}") {
 		t.Fatalf("private file %q %v", body, err)
 	}

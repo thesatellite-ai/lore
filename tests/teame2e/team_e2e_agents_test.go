@@ -829,6 +829,7 @@ func TestRecipe09_OffboardingADeveloper(t *testing.T) {
 	cr.toolsC.MustLore("task", "revoke", id)
 	cr.toolsC.MustLore("task", "reassign", "--from", "@dev1", "--assign", "@alice")
 	cr.toolsC.MustLore("actor", "deactivate", "@dev1")
+	cr.toolsC.MustLore("sync") // C5: the roster change reaches the store with the writer's sync
 	files := cr.store.FilesMatching(refMain, folderOrg+"/"+tblActors+"/")
 	found := false
 	for _, f := range files {
@@ -869,6 +870,8 @@ func TestRecipe15_AgentOnAClientTask(t *testing.T) {
 	ac.MustLore("task", "note", id, "reproduced; root cause in rounding")
 	ac.MustLore("task", "done", id, "--pr", "88")
 	ac.MustLore("task", "note", id, "fixed rounding; see PR #88", "--to", "repo")
+	a.aliceApp.MustLore("sync") // C5: the agent's roster row and store writes reach the store
+	ac.MustLore("sync")
 	agentKey := ag.Env(th.EnvLoreActor)
 	agentID := agentActorID(t, a.store, agentLabelBackend)
 	if f := a.clientSees(t, "reproduced; root cause in rounding", "claim_token", agentLabelBackend, agentKey, agentID); len(f) != 0 {

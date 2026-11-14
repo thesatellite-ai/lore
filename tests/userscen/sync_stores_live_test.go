@@ -117,6 +117,7 @@ func TestSyncStores_FolderAddWriteAndTeammate(t *testing.T) {
 	if !strings.Contains(y, "name: notes/golang") || !strings.Contains(y, "folder: golang") {
 		t.Fatalf("the first write attaches the folder entry:\n%s", y)
 	}
+	a.MustLore("sync") // C5: the write and the new folder reach the remote with lore sync
 	if fs := r.FilesMatching(syncStoreRef, mem.ID); len(fs) != 1 || !strings.Contains(fs[0], "golang/") {
 		t.Fatalf("the row lands in the store's golang folder: %v", fs)
 	}
@@ -152,6 +153,7 @@ func TestSyncStores_BranchesAndOpen(t *testing.T) {
 	attachTwice(t, a, r.URL()) // a second name for stag's place: refused, so written into stores.yaml
 
 	mem := th.DecodeJSON[syncAddOut](t, a.MustLore("memory", "add", "seed staging with demo data", "--to", "stag2", "--json")).ID
+	a.MustLore("sync") // C5: the write reaches the remote with lore sync
 	if !syncRemoteHolds(r, syncStagingRef, mem) || syncRemoteHolds(r, syncStoreRef, mem) {
 		t.Fatalf("a staging row lands on staging and never on main: staging=%v main=%v",
 			syncRemoteHolds(r, syncStagingRef, mem), syncRemoteHolds(r, syncStoreRef, mem))

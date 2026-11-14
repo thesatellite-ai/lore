@@ -122,7 +122,7 @@ func StandaloneOrgResolution(home, dir string) *OrgResolution {
 	if err != nil {
 		cfg = nil
 	}
-	return NewOrgResolution(home, dir, &orgcfg.GitLinks{Home: home, Config: cfg, Route: storeRouter(home, dir)})
+	return NewOrgResolution(home, dir, &orgcfg.GitLinks{Held: orgStoreHeld, Home: home, Config: cfg, Route: storeRouter(home, dir)})
 }
 
 // repoMetaMode is the mode of a new _meta.json: committed, so git's usual

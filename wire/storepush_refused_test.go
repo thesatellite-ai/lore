@@ -84,7 +84,7 @@ func TestStorePushRefusalRecordAndClear(t *testing.T) {
 				if i < len(c.errs) {
 					f.syncErr = c.errs[i]
 				}
-				b := &storePush{inner: f, name: "kb", res: res, notes: &bytes.Buffer{}} // one command each
+				b := &storePush{inner: f, name: "kb", res: res, notes: &bytes.Buffer{}, push: nowPush()} // one command each
 				var err error
 				switch c.path {
 				case "write":
@@ -135,7 +135,7 @@ func TestStorePushRefusalNeverCreatesLocalDB(t *testing.T) {
 	t.Parallel()
 	res := pushRes(t)
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Sent: 1}}
-	b := &storePush{inner: f, name: "kb", res: res, notes: &bytes.Buffer{}}
+	b := &storePush{inner: f, name: "kb", res: res, notes: &bytes.Buffer{}, push: nowPush()}
 	if _, err := b.Sync(background()); err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestStorePushRefusalsSorted(t *testing.T) {
 	res := pushRes(t)
 	rep := store.SyncReport{Refused: []store.Refusal{{Code: errs.PolicyDenied, Reason: "no"}}}
 	for _, name := range []store.Source{"zeta", "alpha"} {
-		b := &storePush{inner: &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: rep}, name: name, res: res, notes: &bytes.Buffer{}}
+		b := &storePush{inner: &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: rep}, name: name, res: res, notes: &bytes.Buffer{}, push: nowPush()}
 		if _, err := b.Sync(background()); err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +171,7 @@ func TestStorePushSyncCountsEarlierSends(t *testing.T) {
 	t.Parallel()
 	m1, _ := refusedIDs(t)
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Sent: 3, Received: 1, Merged: []ids.AnyID{m1}}}
-	b := &storePush{inner: f, name: "kb", res: pushRes(t), notes: &bytes.Buffer{}}
+	b := &storePush{inner: f, name: "kb", res: pushRes(t), notes: &bytes.Buffer{}, push: nowPush()}
 	if _, err := b.Get(background(), "memories", m1); err != nil && !errors.Is(err, store.ErrNotFound) {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestStorePushSyncCountsEarlierSends(t *testing.T) {
 	}
 	// A failed earlier sync carries nothing.
 	f2 := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Sent: 5}, syncErr: errors.New("boom")}
-	b2 := &storePush{inner: f2, name: "kb", res: pushRes(t), notes: &bytes.Buffer{}}
+	b2 := &storePush{inner: f2, name: "kb", res: pushRes(t), notes: &bytes.Buffer{}, push: nowPush()}
 	_, _ = b2.Get(background(), "memories", m1)
 	f2.rep, f2.syncErr = store.SyncReport{}, nil
 	if rep, err = b2.Sync(background()); err != nil || rep.Sent != 0 {
@@ -213,7 +213,7 @@ func TestStorePushRefusalHeld(t *testing.T) {
 	sync := func(name store.Source, r store.Refusal) {
 		t.Helper()
 		f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Refused: []store.Refusal{r}}}
-		b := &storePush{inner: f, name: name, res: res, notes: &bytes.Buffer{}}
+		b := &storePush{inner: f, name: name, res: res, notes: &bytes.Buffer{}, push: nowPush()}
 		if _, err := b.Sync(background()); err != nil {
 			t.Fatal(err)
 		}
@@ -255,7 +255,7 @@ func TestStorePushRefusalHeldByTwo(t *testing.T) {
 	a := store.Refusal{ID: m1, Code: errs.Stale, Reason: "both sides changed the row", Folder: "platform", Held: true}
 	b := store.Refusal{ID: m2, Code: errs.PolicyDenied, Reason: "pre-receive hook declined", Folder: "web", Held: true}
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: store.SyncReport{Refused: []store.Refusal{b, a}}}
-	bp := &storePush{inner: f, name: "team/org", res: res, notes: &bytes.Buffer{}}
+	bp := &storePush{inner: f, name: "team/org", res: res, notes: &bytes.Buffer{}, push: nowPush()}
 	if _, err := bp.Sync(background()); err != nil {
 		t.Fatal(err)
 	}

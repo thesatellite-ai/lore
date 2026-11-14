@@ -17,7 +17,7 @@ Tomas makes `@web` from his plain `work` folder (no repo there), lists the teams
 ```console
 # tomas, in ~
 $ lore team add --handle @web --name 'Web' --members @tomas,@mira
-lore: pushed store agency/org: commit 601d285 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web (2 member(s)) added in agency org/
 $ lore team list
@@ -43,11 +43,12 @@ members (2):
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'ship the checkout page' --to agency --assign @web
-lore: pushed store agency/acme-hub (here: agency): commit 86dbae4 to branch main
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
-lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/acme-hub (store agency)
-✓ tsk_54fe…28f2 — ship the checkout page [medium] → [agency/acme-hub]
-  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
+lore: committed locally to store agency; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/actors/act_2ad3…f891.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_54fe…28f2.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e9…4603.json (store agency)
+✓ tsk_05e9…4603 — ship the checkout page [medium] → [agency/acme-hub]
+  created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 ```
 <!-- /example -->
 
@@ -61,15 +62,15 @@ A team's name is internal to the org, so a task written into a client's own repo
 ```console
 # tomas, in ~
 $ lore team member remove --handle @web --members @mira
-lore: pushed store agency/org: commit 9b40ce7 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ @web: 1 member(s) now; @mira taken off the team
 $ lore team member add --handle @web --members @mira,@tomas
-lore: pushed store agency/org: commit 05513aa to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ @web: 2 member(s) now; @mira added to the team; @tomas already a member
 $ lore team add --handle @web --name 'Web platform'
-lore: pushed store agency/org: commit dfd8dc8 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
 $ lore team list --json
@@ -131,13 +132,13 @@ ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
 ```console
 # tomas, in ~
 $ lore team remove --handle @web
-lore: pushed store agency/org: commit cf563f3 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
 $ lore team list --all
 @web              Web platform             2 member(s)  [removed]
 $ lore team add --handle @web
-lore: pushed store agency/org: commit df3a55c to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
 ✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
 ```

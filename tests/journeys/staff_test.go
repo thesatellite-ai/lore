@@ -49,9 +49,15 @@ func TestJourneyStaff(t *testing.T) {
 			tlBob.Email+","+tlBob.Name+",bob,"+tlBob.Login+",pm,@web;@ops\n"+
 			tlCat.Email+","+tlCat.Name+",cat,,member,@ops\n")
 		tt.lore(tlLee, "member", "add", "--from", csv, "--dry-run").OK(t).Says(t, "would add "+tlAnn.Email, "nothing written")
+		tt.lore(tlLee, "sync").OK(t) // send the team adds first, so the count is member add's alone
 		before := tt.store.CommitCount(mainRef)
 		tt.lore(tlLee, "member", "add", "--from", csv, "--yes").OK(t).
-			Says(t, "added "+tlAnn.Email, "added "+tlBob.Email, "role pm", "one store commit", "lore setup join")
+			Says(t, "added "+tlAnn.Email, "added "+tlBob.Email, "role pm", "one store commit", "once the roster is sent (`lore sync`)", "lore setup join",
+				"committed locally to store").Never(t, "pushed store")
+		if n := tt.store.CommitCount(mainRef) - before; n != 0 {
+			t.Errorf("member add pushed %d store commits before Lee asked (C5)", n)
+		}
+		tt.lore(tlLee, "sync").OK(t).Says(t, "pushed store")
 		if n := tt.store.CommitCount(mainRef) - before; n != 1 {
 			t.Errorf("member add --from wrote %d store commits, want ONE for the three people", n)
 		}
@@ -91,6 +97,8 @@ func TestJourneyStaff(t *testing.T) {
 	})
 
 	w.Step("day2/ann-joins-by-email", func() {
+		// C5: Lee sends the day's roster writes before Ann joins
+		tt.lore(tlLee, "sync").OK(t)
 		w.AdvanceDays(1)
 		ann := tt.person(tlAnn)
 		dir := tt.repo[tlAnn.Email].Dir
@@ -118,8 +126,10 @@ func TestJourneyStaff(t *testing.T) {
 		}
 		// an outsider still joins with an invite line
 		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlDan.Email, "--team", "@ops")
+		tt.lore(tlLee, "sync").OK(t) // C5: the invite reaches the team store with Lee's sync
 		tlApply(t, dan, dir, tlTeamSetup, "join", map[string]any{"invite": line})
 		tlLastSteps(t, dan, dir, tlTeamSetup, []string{tlFolders})
+		tt.lore(tlDan, "sync").OK(t) // C5: Dan's join reaches the team with his sync
 		tt.lore(tlLee, "sync", "run").OK(t)
 		tt.lore(tlLee, "team", "show", "@ops").OK(t).Says(t, tlDan.Name)
 		tt.lore(tlLee, "team", "list").OK(t).Says(t, "@web", "@ops")

@@ -59,6 +59,7 @@ func TestJourneySoloStoreRenamedWithWaitingNote(t *testing.T) {
 		m.LoreIn(app, "init").OK(t)
 		m.LoreIn(app, "store", "init", "me", old.SSHURL(), "--yes").OK(t)
 		m.LoreIn(app, "memory", "add", "--body", "pushed before the rename", "--to", "me").OK(t)
+		m.LoreIn(app, "sync").OK(t) // C5: the note reaches lore-me with Sam's sync
 		if !jsuRemoteHas(w, jsuOldStore, "pushed before the rename") {
 			t.Fatalf("the first note did not reach lore-me")
 		}
@@ -159,6 +160,7 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 		m.LoreIn(app, "init").OK(t)
 		m.LoreIn(app, "store", "init", "kb", kb.SSHURL(), "--yes").OK(t)
 		m.LoreIn(app, "memory", "add", "--body", "an old note", "--to", "kb").OK(t)
+		m.LoreIn(app, "sync").OK(t) // C5: the note reaches kb with Sam's sync
 		app.CommitAll("lore")
 		app.Git("push", "-q", "origin", "HEAD:main")
 	})
@@ -175,13 +177,15 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 
 	w.Step("day1/repo-made-again-empty", func() {
 		remake()
-		m.LoreIn(app, "memory", "add", "--body", "written after the reset", "--to", "kb").
-			Says(t, "not pushed", "was reset", "lore store push --restore", "lore store forget")
+		// C5: the write commits locally; lore sync finds the reset store and
+		// refuses, naming both ways out
+		m.LoreIn(app, "memory", "add", "--body", "written after the reset", "--to", "kb").OK(t).
+			Says(t, "committed locally to store kb")
 		r := m.LoreIn(app, "sync")
 		if r.Code == 0 {
 			t.Errorf("sync into a reset store must fail naming it: %s", r)
 		}
-		r.Says(t, "was reset")
+		r.Says(t, "was reset", "lore store push --restore", "lore store forget")
 		if refs := w.TryGit(kb.Dir, "for-each-ref").Stdout; strings.TrimSpace(refs) != "" {
 			t.Errorf("lore pushed the old store into the new empty repo: %s", refs)
 		}
@@ -195,6 +199,7 @@ func TestJourneySoloStoreRemadeEmpty(t *testing.T) {
 		m.LoreIn(app, "store", "forget", kb.SSHURL(), "--yes").OK(t)
 		m.LoreIn(app, "store", "init", "kb", kb.SSHURL(), "--yes").OK(t).Says(t, "created store kb").Never(t, "already a lore store")
 		m.LoreIn(app, "memory", "add", "--body", "a new note", "--to", "kb").OK(t)
+		m.LoreIn(app, "sync").OK(t) // C5: the note reaches kb with Sam's sync
 		list := m.LoreIn(app, "memory", "list").OK(t)
 		list.Says(t, "a new note").Never(t, "an old note", "written after the reset")
 	})

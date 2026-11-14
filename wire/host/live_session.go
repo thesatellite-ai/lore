@@ -77,7 +77,14 @@ const (
 	// liveNoteFault holds why the last push did not reach the remote when
 	// waiting cannot fix it (no repository at the address, credentials
 	// refused): `lore live doctor` and `lore doctor` warn with it (B3-14).
-	liveNoteFault         = "live-remote-fault"
+	liveNoteFault = "live-remote-fault"
+	// liveNoteRenderDue marks that a run wrote live rows here since the
+	// last lore sync: a write pushed at once (live.autopush) leaves the
+	// sync nothing to send or receive, yet its rows are not in a committed
+	// .lore/LORE.md, so the next sync takes the note as rows moved
+	// (RunData.LiveMoved) and refreshes the render (B-8 still holds: a
+	// sync with no such note and nothing moved rewrites no tracked file).
+	liveNoteRenderDue     = "live-render-due"
 	liveNoteMode          = 0o600
 	updatedAtKey          = "updated_at"
 	defaultBranchFallback = "main"
@@ -147,6 +154,12 @@ type liveSession struct {
 	finished bool
 	// wrote counts rows this run committed to the local live ref.
 	wrote int
+	// moved: this run brought remote live rows into the local live ref
+	// (integrate took, fast-forwarded, merged or re-applied the remote),
+	// pushed waiting writes or landed rows; lore sync reports it
+	// (RunData.LiveMoved) so its render step may refresh a committed
+	// LORE.md.
+	moved bool
 	notes []live.MergeNote
 	lock  *liveLock
 	// cache is the read cache repo runs git through (nil when the session
@@ -299,6 +312,9 @@ func (s *liveSession) integrate(ctx context.Context) {
 		s.warn(fmt.Sprintf(liveNeverPushedLine, s.ref.RemoteName))
 	default:
 		s.notes = append(s.notes, res.Notes...)
+		if res.Action != live.IntegrateNothing {
+			s.moved = true
+		}
 	}
 }
 
@@ -382,6 +398,11 @@ func (s *liveSession) finish(ctx context.Context) {
 	}
 	if err := s.flushCompanions(ctx); err != nil {
 		s.warn("supporting rows (actors, metadata keys) were not written: " + err.Error())
+	}
+	if s.wrote > 0 {
+		if err := s.writeNote(liveNoteRenderDue, "1"); err != nil {
+			s.warn("note the render refresh for the next sync: " + err.Error())
+		}
 	}
 	if s.push(ctx) {
 		s.autoCompact(ctx)

@@ -492,7 +492,7 @@ var notUserRun = map[string]string{
 	"actor delete": whyTeam, "actor edit": whyTeam, "actor merge": whyTeam, "actor offboard": whyTeam, "actor period add": whyTeam, "actor period edit": whyTeam,
 	"actor period list": whyTeam, "actor register": whyTeam, "actor rejoin": whyTeam, "actor show": whyTeam, "actor status": whyTeam,
 	"contact-type add": whyTeam, "contact-type edit": whyTeam, "role add": whyTeam, "role edit": whyTeam,
-	"org create": whyTeam, "org link": whyTeam, "org unlink": whyTeam, "org rename": whyTeam, "org set": whyTeam,
+	"org create": whyTeam, "org link": whyTeam, "org unlink": whyTeam, "org rename": whyTeam, "org set": whyTeam, "org store add": whyTeam,
 	"project member add": whyTeam, "project member edit": whyTeam, "project member list": whyTeam, "project member remove": whyTeam,
 	"project shared-init": whyTeam, "team invite list": whyTeam, "team invite resend": whyTeam, "team invite revoke": whyTeam,
 	"team add": whyTeam, "team list": whyTeam, "team show": whyTeam, "team remove": whyTeam, "team member add": whyTeam, "team member remove": whyTeam,

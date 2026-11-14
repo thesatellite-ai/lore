@@ -20,10 +20,10 @@ The mistake, and what the client sees:
 ```console
 # alice, in website
 $ lore task add --title 'chase the client about the unpaid March invoice' --to repo
-lore: wrote 3 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
-lore: wrote 1 live row(s) on this clone's refs/lore/live (store me) (not pushed yet; their files are unchanged)
-lore: wrote 1 row file(s) in ~/.lore/personal/agency (store me)
-✓ tsk_7a67…9504 — chase the client about the unpaid March invoice [medium]
+lore: wrote actors/act_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/actors/act_7a67…9504.json is unchanged)
+lore: wrote task_lists/tlt_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/task_lists/tlt_2ad3…f891.json is unchanged)
+lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
+✓ tsk_162d…9666 — chase the client about the unpaid March invoice [medium]
   created tasklist tlt_2ad3…f891 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
@@ -38,8 +38,8 @@ The cleanup has two steps. `lore live purge --ids <id> --confirm` removes the ro
 <!-- example: leak-cleanup#purge -->
 ```console
 # alice, in website
-$ lore live purge --ids tsk_7a67…9504 --confirm
-✓ purged tsk_7a67…9504 from live; run `lore live compact` to drop them from the ref's history too
+$ lore live purge --ids tsk_162d…9666 --confirm
+✓ purged tsk_162d…9666 from live; run `lore live compact` to drop them from the ref's history too
 $ lore live compact --dry-run
 refs/lore/live has 2 commits (threshold 1000); compacting would keep 5 files, epoch 1 → 2
 $ lore live compact

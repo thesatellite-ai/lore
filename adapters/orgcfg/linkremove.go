@@ -99,7 +99,9 @@ func (g *GitLinks) RemoveLinks(ctx context.Context, entry, projectID string, lin
 	for _, st := range stores {
 		ls := byStore[st]
 		removed := 0
-		cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(st), Store: st, Branch: ls[0].Branch, NoPush: res.NoPush, Route: g.Route,
+		held := g.held(g.cloneDirOf(st))
+		res.NoPush = res.NoPush || held
+		cr, err := commitStore(ctx, storeCommit{Dir: g.cloneDirOf(st), Store: st, Branch: ls[0].Branch, NoPush: res.NoPush || held, Route: g.Route,
 			Message: fmt.Sprintf(unlinkMessage, projectID), Signature: sig,
 			Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
 				put, n, cerr := unlinkChange(ctx, repo, tip, st, projectID, ls)

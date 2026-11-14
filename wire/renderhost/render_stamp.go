@@ -367,10 +367,11 @@ func staleError(found []opsrender.CopyFinding) error {
 // last render. Only
 // for a project that renders, run from its root; a failure is a warning,
 // never a failed sync. A tracked render that matches the index is
-// rewritten only when the sync brought rows in (brought) and the repo is
-// not a client repo (B-8, B-11): a sync with nothing to receive changes no
-// tracked file, and in a client repo the committed render is the client's
-// (render_auto.go).
+// rewritten only when the sync moved rows (brought: received, sent or
+// landed) or this clone's row files hold uncommitted writes, and the repo
+// is not a client repo (B-8, B-11): a no-op sync on a clean tree changes
+// no tracked file, and in a client repo the committed render is the
+// client's (render_auto.go).
 func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool) {
 	out := filepath.Join(root, filepath.FromSlash(LoreMDRel))
 	if _, err := os.Stat(out); err != nil {
@@ -381,7 +382,7 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool
 		return
 	}
 	if h.RenderHeld(ctx, root) {
-		if client, cerr := h.repoIsClient(ctx); !brought || client || cerr != nil {
+		if client, cerr := h.repoIsClient(ctx); !(brought || rowsUncommitted(ctx, root)) || client || cerr != nil {
 			return
 		}
 	}

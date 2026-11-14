@@ -133,7 +133,6 @@ lore initialized
   next: lore render            to write .lore/LORE.md for those tools
 alice (work/tools)$ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-lore store init: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 ✓ created store agency (sto_d4314eba822f1bf5908b2b8ded5f313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
 alice (work/tools)$ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
@@ -147,8 +146,7 @@ stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 alice (work/tools)$ lore actor register
-lore: pushed store agency/org: commit 6d00426 to branch main
-lore: pushed store agency/org: commit 34ee210 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_28f8d32584b2db54ffb146bede5b03df.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store agency/org)
 ✓ act_b4f4765e593d51fd1352985e8af3a5b0 Alice Doe (@alice) registered in agency org/

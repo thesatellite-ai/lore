@@ -186,7 +186,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_05e9…4603.json
 $ git status --short
 ?? .lore/data/memories/
 $ lore sync
-· already in sync
+· in sync; 1 file(s) in .lore/data wait for your commit (.lore/data/memories/mem_05e9…4603.json): git add .lore/data && git commit
 $ git status --short
 ?? .lore/data/memories/
 $ git add -A && git commit -qm 'lore: whatsapp memory' && git push -q origin main
@@ -226,7 +226,7 @@ lore initialized
 $ ls .git/hooks | grep -v sample; cat .gitattributes 2>/dev/null || echo '(no .gitattributes)'
 (no .gitattributes)
 $ lore sync
-· already in sync
+· in sync; 5 file(s) in .lore/data wait for your commit (.lore/data/_meta.json, .lore/data/actors/act_b4f4…a5b0.json, .lore/data/policies/pol_28f8…03df.json, .lore/data/projects/prj_76bd…3f10.json, .lore/data/repos/rep_d431…313a.json): git add .lore/data && git commit
 $ ls .git/hooks | grep -v sample; cat .gitattributes
 commit-msg
 post-checkout
@@ -252,11 +252,11 @@ Text that looks like a password stops `lore memory add` with a question; a bare 
 ```console
 # alice, in website
 $ lore memory add --not-a-secret --reason 'example value, not a real password' --yes --body 'The staging password is pass''word=example-only'
-lore: wrote ~/work/website/.lore/data/secret_allows/sal_b4f4…a5b0.json
-lore: wrote ~/work/website/.lore/data/memories/mem_28f8…03df.json
-✓ mem_28f8…03df
+lore: wrote ~/work/website/.lore/data/secret_allows/sal_4c59…6c38.json
+lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
+✓ mem_3b62…e913
   scope: [master]
-$ ls .lore/data/memories | grep -c mem_28f8…03df || true
+$ ls .lore/data/memories | grep -c mem_3b62…e913 || true
 1
 ```
 <!-- /example -->

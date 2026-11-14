@@ -12,7 +12,7 @@ You want this page when your org's roster is more than a list of handles: when y
 
 ## Where profiles live
 
-Everything on this page is stored in the org's roster store: the store folder that holds the org's people and agents (`org/` in the `agency` store), the same place `lore actor register` writes. Writes are pushed at once, and they work from inside any repo of the org and from outside any repo.
+Everything on this page is stored in the org's roster store: the store folder that holds the org's people and agents (`org/` in the `agency` store), the same place `lore actor register` writes. Writes are committed in your clone of the store and reach the team with your next `lore sync` (or at once when the store is set to `push=now`), and they work from inside any repo of the org and from outside any repo.
 
 | Where you run the command | What happens |
 |---|---|
@@ -60,15 +60,15 @@ A profile is a handful of optional fields on the person's actor. Fill them in on
 ```console
 # tomas, in acme-hub
 $ lore actor edit --actor @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'
-lore: pushed store agency/org: commit 601d285 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel edited (title, timezone, location) in agency org/
 $ lore actor edit --actor @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png
-lore: pushed store agency/org: commit 86dbae4 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in agency org/
 $ lore actor edit --actor @mira --clear photo_url,bio
-lore: pushed store agency/org: commit 9b40ce7 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in agency org/
 $ lore actor edit --actor @mira --timezone 'Istanbul time'
@@ -97,23 +97,23 @@ Tomas adds Mira's two emails and two GitHub accounts as identity contacts, and h
 ```console
 # tomas, in acme-hub
 $ lore actor contact add --actor @mira --type email --value mira@agency.example --label work --primary --identity
-lore: pushed store agency/org: commit 05513aa to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_2ad3…f891.json (store agency/org)
 ✓ acn_2ad3…f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in agency org/
 $ lore actor contact add --actor @mira --type email --value mira.patel@example.com --label personal --identity
-lore: pushed store agency/org: commit dfd8dc8 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_162d…9666.json (store agency/org)
 ✓ acn_162d…9666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in agency org/
 $ lore actor contact add --actor @mira --type github --value mira-agency --label work --primary --identity
-lore: pushed store agency/org: commit cf563f3 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_54fe…28f2.json (store agency/org)
 ✓ acn_54fe…28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in agency org/
 $ lore actor contact add --actor @mira --type github --value mirap --label personal --identity
-lore: pushed store agency/org: commit df3a55c to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_05e9…4603.json (store agency/org)
 ✓ acn_05e9…4603 github mirap added for Mira Patel (@mira) [identity] in agency org/
 $ lore actor contact add --actor @mira --type phone --value '+90 532 000 0000' --label work --primary
-lore: pushed store agency/org: commit 6d00426 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_c0f3…b5b8.json (store agency/org)
 ✓ acn_c0f3…b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in agency org/
 $ lore actor contact add --actor @mira --type github --value mirap --label personal --identity
@@ -168,15 +168,15 @@ A contact is changed or removed by its `acn_` id. A removed contact goes to the 
 ```console
 # tomas, in acme-hub
 $ lore actor contact add --actor @mira --type linkedin --value mira-patel --label work
-lore: pushed store agency/org: commit 34ee210 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
 ✓ acn_76bd…3f10 linkedin mira-patel added for Mira Patel (@mira) [primary] in agency org/
 $ lore actor contact edit --id acn_76bd…3f10 --note 'old profile, not updated'
-lore: pushed store agency/org: commit 7898daa to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
 ✓ acn_76bd…3f10 linkedin mira-patel edited for Mira Patel (@mira) [primary] in agency org/
 $ lore actor contact remove --id acn_76bd…3f10 --reason 'account closed'
-lore: pushed store agency/org: commit ccfb0bb to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
 ✓ acn_76bd…3f10 linkedin mira-patel removed from Mira Patel (@mira) in agency org/ (restorable from the trash)
 $ lore actor contact list --actor @mira --identity
@@ -217,11 +217,11 @@ Tomas adds Bitbucket as an identity type and relabels GitHub; the list marks eac
 ```console
 # tomas, in acme-hub
 $ lore contact-type add --name bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'
-lore: pushed store agency/org: commit 9d655a5 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/contact_types/ctp_d431…313a.json (store agency/org)
 ✓ contact type bitbucket added in agency org/
 $ lore contact-type edit --name github --label GitHub
-lore: pushed store agency/org: commit 2fc021b to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/contact_types/ctp_b4f4…a5b0.json (store agency/org)
 ✓ contact type github edited in agency org/
 $ lore contact-type list
@@ -258,7 +258,7 @@ A company period is one stint at the company: its type (`employee`, `contractor`
 ```console
 # tomas, in acme-hub
 $ lore actor period add --actor @mira --type employee --started-on 2026-01-12 --org-role 'Senior engineer'
-lore: pushed store agency/org: commit 51886a5 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_28f8…03df.json (store agency/org)
 ✓ period apd_28f8…03df of Mira Patel (@mira) added: 2026-01-12 → now  employee  Senior engineer
   it replaces the stint read from the roster (active/left_at)
@@ -294,7 +294,7 @@ Tomas adds a `tech_writer` role, gives it a description, and retires `qa`, which
 ```console
 # tomas, in acme-hub
 $ lore role add --name tech_writer --label 'Technical writer'
-lore: pushed store agency/org: commit 22efc3b to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_4c59…6c38.json (store agency/org)
 ✓ role tech_writer added in agency org/
 $ lore role list
@@ -311,11 +311,11 @@ ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
   hint: lore role list; lore role add --name <name>
 (exit 20)
 $ lore role edit --name tech_writer --description 'writes the user docs'
-lore: pushed store agency/org: commit 8c373dc to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_4c59…6c38.json (store agency/org)
 ✓ role tech_writer updated in agency org/
 $ lore role edit --name qa --retire
-lore: pushed store agency/org: commit 6f11034 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_3b62…e913.json (store agency/org)
 ✓ role qa updated in agency org/
 ```
@@ -338,19 +338,19 @@ A retired role (here `qa`) is out of `--role` from then on; memberships that hav
 ```console
 # tomas, in acme-hub
 $ lore project member add --project acme-hub --actor @mira --role dev,reviewer
-lore: pushed store agency/org: commit 468e9a8 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_f147…5139.json (store agency/org)
 ✓ @mira added to acme-hub as dev, reviewer from 2026-01-12 (pmb_f147…5139)
 
 # tomas, in northwind-app
 $ lore project member add --project northwind-app --actor @mira --role lead
-lore: pushed store agency/org: commit 9ea0ca8 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_2537…6bbb.json (store agency/org)
 ✓ @mira added to northwind-app as lead from 2026-03-01 (pmb_2537…6bbb)
 
 # tomas, in acme-hub
 $ lore project member add --project acme-hub --actor @tomas --role lead
-lore: pushed store agency/org: commit aba91f6 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_b69e…5ed7.json (store agency/org)
 ✓ @tomas added to acme-hub as lead from 2026-03-01 (pmb_b69e…5ed7)
 $ lore project member list --project acme-hub
@@ -384,17 +384,17 @@ created 2026-11-02T10:00:00Z by mira · updated 2026-11-02T10:00:00Z by tomas
 ```console
 # tomas, in acme-hub
 $ lore project member edit --project acme-hub --actor @tomas --role lead,pm
-lore: pushed store agency/org: commit a8de760 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_b69e…5ed7.json (store agency/org)
 ✓ @tomas on acme-hub: roles now lead, pm
 
 # tomas, in northwind-app
 $ lore project member add --project northwind-app --actor @tomas --role reviewer
-lore: pushed store agency/org: commit 9169078 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_6a86…ed8c.json (store agency/org)
 ✓ @tomas added to northwind-app as reviewer from 2026-03-01 (pmb_6a86…ed8c)
 $ lore project member remove --project northwind-app --actor @tomas --reason 'Mira reviews her own project now'
-lore: pushed store agency/org: commit b733d8a to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_6a86…ed8c.json (store agency/org)
 ✓ @tomas removed from northwind-app on 2026-03-01 (Mira reviews her own project now; history kept)
 $ lore project member remove --project northwind-app --actor @tomas
@@ -445,7 +445,7 @@ In May, Tomas records Mira's June leave; in July she is back. Leaving the compan
 ```console
 # tomas, in acme-hub
 $ lore actor status --actor @mira --to on_leave --from 2026-06-01 --until 2026-06-30
-lore: pushed store agency/org: commit 1833373 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): active → on_leave (2026-06-01 → 2026-06-30)
 $ lore actor list
@@ -454,7 +454,7 @@ act_7a67…9504 [human] Mira Patel  (on_leave until 2026-06-30)  agency/org
 act_77cb…76c4 [human] carol                                    repo
 3 actors across 2 stores
 $ lore actor status --actor @mira --to active
-lore: pushed store agency/org: commit 59e9d31 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): on_leave → active
 $ lore actor status --actor @mira --to left
@@ -476,50 +476,51 @@ A leave that has passed its end date does not end on its own: `actor show` and `
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
-lore: pushed store agency/acme-hub (here: agency): commit 7540e63 to branch main
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
-lore: wrote 3 row file(s) in ~/.lore/stores/agency/notes/acme-hub (store agency)
-✓ tsk_d191…45c2 — move the invoice export to the new API [medium] → [agency/acme-hub]
-  created tasklist tlt_b4d3…11aa "default" for tasks added without --tasklist
+lore: committed locally to store agency; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/actors/act_4f89…b64b.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency)
+✓ tsk_b4d3…11aa — move the invoice export to the new API [medium] → [agency/acme-hub]
+  created tasklist tlt_d191…45c2 "default" for tasks added without --tasklist
 $ lore actor offboard --actor @mira --reason 'moved abroad'
 ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aae…a61f (lead) ends 2026-09-30
-  open tasks tsk_d191…45c2  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_d191…45c2 --assign @<someone>
+  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3…11aa --assign @<someone>
   agents     (none)
   status     active → left
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore actor offboard --actor @mira --reason 'moved abroad' --yes
-lore: pushed store agency/org: commit ef62c83 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/org (store agency/org)
 offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aae…a61f (lead) ends 2026-09-30
-  open tasks tsk_d191…45c2  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_d191…45c2 --assign @<someone>
+  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3…11aa --assign @<someone>
   agents     (none)
   status     active → left
 ✓ act_7a67…9504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)
 $ lore actor list
-act_4f89…b64b [human] Tomas Weber         me, agency, agency/org
+act_4f89…b64b [human] Tomas Weber         agency, agency/org
 act_7a67…9504 [human] Mira Patel  (left)  agency/org
 act_77cb…76c4 [human] carol               repo
-3 actors across 4 stores
+3 actors across 3 stores
 $ lore task add --title 'review the refund flow' --to agency --assign @mira
-ERROR: [E_NOT_FOUND] no person or team with handle @mira
-  hint: they run `lore actor register` in a repo of the org, then `lore sync` here
-(exit 27)
+ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) left agency on 2026-09-30; --assign takes only people still in the org
+  hint: lore member list shows who is in the org; lore task reassign --from @mira --assign @<someone> --yes hands their tasks over
+(exit 23)
 $ lore actor status --actor @mira --to archived
-lore: pushed store agency/org: commit dd85e7d to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): left → archived
 $ lore actor list --archived
-act_4f89…b64b [human] Tomas Weber             me, agency, agency/org
+act_4f89…b64b [human] Tomas Weber             agency, agency/org
 act_7a67…9504 [human] Mira Patel  (archived)  agency/org
 act_77cb…76c4 [human] carol                   repo
-3 actors across 4 stores
+3 actors across 3 stores
 ```
 <!-- /example -->
 
@@ -544,7 +545,7 @@ After offboarding, `@mira` is out of `--assign` and pickers, still in `lore acto
 ```console
 # tomas, in acme-hub
 $ lore actor rejoin --actor @mira --type contractor --org-role 'Contract engineer' --yes
-lore: pushed store agency/org: commit d18179e to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_9a34…b418.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 rejoin Mira Patel (@mira) (act_7a67…9504) on 2026-11-02:
@@ -555,7 +556,7 @@ rejoin Mira Patel (@mira) (act_7a67…9504) on 2026-11-02:
   status     archived → active
 ✓ act_7a67…9504 Mira Patel (@mira) rejoined on 2026-11-02 as contractor
 $ lore project member add --project acme-hub --actor @mira --role reviewer
-lore: pushed store agency/org: commit f4b8da2 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/project_members/pmb_bfed…eeea.json (store agency/org)
 ✓ @mira added to acme-hub as reviewer from 2026-11-02 (pmb_bfed…eeea)
 $ lore project member list --project acme-hub --history
@@ -591,9 +592,7 @@ lore store init: set up git for lore's row files in this clone: merge drivers lo
 ✓ created store acme (sto_376c…8e1a) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
 $ lore org create --org acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore: pushed store github.com/acme/lore-notes: commit 70f4f88 to branch main
-lore: pushed store acme/org: commit d33587e to branch main
-lore: pushed store acme/org: commit 34010c1 to branch main
+lore: committed locally to store acme/org; lore sync sends it
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e2…291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567…366f.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:
@@ -607,7 +606,7 @@ This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/c
           org_folder: org
     own:
         - github.com/acme/*
-✓ wrote org/lore-org.yaml (pushed)
+✓ wrote org/lore-org.yaml (committed in the local clone; `lore sync` pushes it)
 ✓ added org entry acme
 ✓ act_8567…366f Ana Lima (@ana) registered in acme org/
   teammates join with: lore org import --url git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
@@ -641,6 +640,7 @@ Every machine that writes to a store keeps a small machine profile there (OS, ar
 ```console
 # tomas, in acme-hub
 $ lore machine label --label 'office desktop'
+lore: wrote ~/.lore/personal/agency/actors/act_4f89…b64b.json (store me)
 lore: wrote ~/.lore/personal/agency/machines/mch_71f0…c07d.json (store me)
 ✓ machine mch_017941fe labelled "office desktop"
 $ lore machine list | cut -c1-38
@@ -693,7 +693,7 @@ prj_0aae…a61f  @mira  lead  2026-03-01 → 2026-09-30 (offboarded)
 ```
 <!-- /example -->
 
-To run it yourself, start from an org you can throw away (Step 9 makes one) and replay the commands of Steps 1 to 8 with your own people; every write goes to the org store and is pushed at once.
+To run it yourself, start from an org you can throw away (Step 9 makes one) and replay the commands of Steps 1 to 8 with your own people; every write goes to the org store and reaches the remote with `lore sync`.
 
 ## Identity matching
 

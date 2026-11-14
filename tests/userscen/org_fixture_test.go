@@ -81,6 +81,9 @@ func newOrgScen(t *testing.T) *orgScen {
 	o.app.AdminPush("origin", "main")
 	o.app.MustLore("org", "create", orgName, "--store", "https://"+orgSlugNotes, "--own", orgOwnGlob,
 		"--key", orgMiraKey, "--name", orgMiraName, "--handle", "mira", "--yes")
+	// C5: the store, the org file and mira's roster row wait in her clone
+	// until she sends them
+	o.app.MustLore("store", "push", "https://"+orgSlugNotes)
 	return o
 }
 
@@ -116,7 +119,10 @@ func (o *orgScen) joinOn(t *testing.T, day time.Time, name, email, display, hand
 	p.WriteConfig(orgPersonConfig())
 	p.Lore(orgOutside(t, p), "org", "import", "https://"+orgSlugNotes, "--key", "human:"+email, "--name", display,
 		"--handle", handle, "--yes").OK(t)
-	return p, p.Clone(o.appR, "app")
+	// C5: the newcomer sends their roster row with lore sync
+	c := p.Clone(o.appR, "app")
+	c.MustLore("sync")
+	return p, c
 }
 
 // orgActor is one actor of `lore actor list|show --json`.

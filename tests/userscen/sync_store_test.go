@@ -180,6 +180,7 @@ func TestSyncStore_LifecycleGitAndFolder(t *testing.T) {
 			if mem.Store != "notes" {
 				t.Fatalf("memory add --to notes went to %q", mem.Store)
 			}
+			a.MustLore("sync") // C5: a store write reaches the remote with lore sync
 			if !be.holds(t, st.w, mem.ID) {
 				t.Fatalf("the row must be in the %s store", be.name)
 			}
@@ -368,6 +369,9 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 	a, b := st.clones[0], st.clones[1]
 	r := st.w.Remote(syncSlugStore)
 	a.MustLore("store", "init", "notes", r.URL(), "--yes")
+	// push now is the opt-in whose failed push this test is about (the
+	// default, manual, waits for lore sync anyway: C5)
+	a.MustLore("store", "set", "--store", "notes", "--settings", "push=now")
 	a.CommitAll("attach notes")
 	a.AdminPush("origin", "main")
 	b.Git("pull", "-q", "--no-rebase", "origin", "main")
@@ -413,6 +417,9 @@ func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
 	a := st.clones[0]
 	r := st.w.Remote(syncSlugStore)
 	a.MustLore("store", "init", "notes", r.URL(), "--yes")
+	// push now is the opt-in this retry rule is about (the default, manual,
+	// waits for lore sync: C5)
+	a.MustLore("store", "set", "--store", "notes", "--settings", "push=now")
 	a.MustLore("memory", "list", "--store", "notes") // online: a fresh fetch stamp
 
 	st.people[0].Offline()

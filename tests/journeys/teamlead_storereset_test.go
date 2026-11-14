@@ -152,15 +152,17 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 
 	w.Step("day7/an-org-link-write-without-a-fetch", func() {
 		// the store is put back, then wiped again with no fetch on Lee's
-		// clone (its tracking ref still shows the old branch): an org link
-		// write asks the remote itself and is refused; the repo stays empty
+		// clone (its tracking ref still shows the old branch): the org link
+		// commits locally (C5) and its push on lore sync asks the remote
+		// itself and is refused; the repo stays empty
 		w.AdvanceDays(1)
 		tt.lore(tlLee, "store", "push", tt.store.SSHURL(), "--restore", "--yes").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
 		wipe()
-		r := tt.lore(tlLee, "org", "link", tlOrg, "--project", tlProject, "--yes")
+		tt.lore(tlLee, "org", "link", tlOrg, "--project", tlProject, "--yes").OK(t)
+		r := tt.lore(tlLee, "sync")
 		if r.Code == 0 {
-			t.Errorf("an org link write into the wiped store must be refused: %s", r)
+			t.Errorf("sending an org link into the wiped store must be refused: %s", r)
 		}
 		r.Says(t, "reset")
 		if refs := w.TryGit(tt.store.Dir, "for-each-ref").Stdout; strings.TrimSpace(refs) != "" {

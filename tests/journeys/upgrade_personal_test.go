@@ -97,6 +97,7 @@ func TestJourneyUpgraderPersonalNotes(t *testing.T) {
 		// lore migrate run upgrades the store: its layout commit and the
 		// everywhere/ move
 		m.LoreIn(api, "migrate", "run").OK(t).Says(t, "personal store lore-me:", "moved to _store/")
+		m.LoreIn(api, "sync").OK(t) // C5: the move reaches the personal store remote with lore sync
 		r = m.LoreIn(api, "memory", "list", "--store", "me").OK(t)
 		for _, b := range []string{upAcmeNote, upAnyNote, upOfflineNote} {
 			upCount(t, "api --store me", r.Stdout, b)

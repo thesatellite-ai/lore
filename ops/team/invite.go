@@ -138,6 +138,11 @@ func (o ops) invite(ctx context.Context, in setup.TeamInviteIn) (setup.TeamInvit
 		return setup.TeamInviteOut{}, err
 	}
 	out := setup.TeamInviteOut{ID: inv.ID.String(), Line: text, ExpiresOn: inv.day(), Email: email, Org: e.Org, GitHub: ghUser, Teams: inv.Teams}
+	// C5: the invitee's join reads the invite from the store's remote; a
+	// roster commit still in this clone fails it (E27) until lore sync.
+	if h, ok := r.(profilestore.PushHolder); ok && h.Held() {
+		out.SyncFirst = true
+	}
 	if ghUser != "" && onGitHub {
 		out.Repo = repo.Owner + "/" + repo.Name
 		out.GitHubAccess, out.GitHubDetail = o.githubStep(ctx, e, repo, ghUser, in.Grant)

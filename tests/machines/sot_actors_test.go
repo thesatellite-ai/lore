@@ -88,6 +88,9 @@ func TestSotActorsTeam(t *testing.T) {
 	repo, adminRepo := m.Repos[RepoWorkApp], admin.Repos[RepoWorkApp]
 	memberKey, bossKey := "human:"+saMemberEmail, "human:"+saBossEmail
 	lsRun(t, m, repo, "memory", "add", "member note", "--to", "repo")
+	// a write to the personal store puts the member's actor copy there too
+	// (a repo write no longer does: B-16), the copy the rename leaves stale
+	lsRun(t, m, repo, "memory", "add", "member personal note", "--to", "me")
 	before := saShow(t, m, repo, memberKey)
 	if before.Source.Where == "" || !before.Source.Reachable {
 		t.Fatalf("the member's actor has no reachable roster source: %+v", before)
@@ -101,6 +104,7 @@ func TestSotActorsTeam(t *testing.T) {
 
 	// The admin renames the member on the roster.
 	lsRun(t, admin, adminRepo, "actor", "edit", memberKey, "--name", "Mem Renamed")
+	lsRun(t, admin, adminRepo, "sync") // C5: the rename reaches the roster with the admin's sync
 	lsRun(t, m, repo, "sync")
 	got := saDoctorLines(t, m, repo)
 	if !strings.Contains(strings.Join(got, "\n"), `"Mem Renamed"`) || !strings.Contains(strings.Join(got, "\n"), "lore actor refresh") {

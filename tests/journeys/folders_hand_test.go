@@ -122,9 +122,9 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		write(file(jHandA, t1), `"priority": "medium"`, `"priority": "low"`)
 		r := lee.Lore(web, "task", "list").OK(t)
 		r.Says(t, "picked up 1 row edited by hand in store "+tlOrg, "hand edit: tasks "+t1, "edited tasks "+t1+" (priority, title)", file(jHandA, t1))
-		// a read commits the pick-up but never pushes it (D-aa, B3): it says
-		// the commit waits, and lore sync sends it
-		r.Says(t, "wait to be pushed; a read never pushes")
+		// a read commits the pick-up but never pushes it (D-aa, B3; C5): it
+		// says the commit waits, and lore sync sends it
+		r.Says(t, "committed locally to store "+tlOrg, "lore sync sends it")
 		if log := tt.store.Log(mainRef); len(log) > 0 && log[0] == "hand edit: tasks "+t1 {
 			t.Fatalf("a read pushed the hand edit commit")
 		}
@@ -148,9 +148,10 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 	w.Step("day5/the-older-offline-edit-loses-to-the-hand-edit", func() {
 		w.AdvanceDays(1)
 		ann.Online()
-		// her next write syncs the store: fetch, merge field by field (a
-		// priority both changed: the newer edit wins), push
+		// her next write commits locally; her lore sync fetches, merges field
+		// by field (a priority both changed: the newer edit wins) and pushes (C5)
 		ann.Lore(annFolder(), "task", "add", "Ann is back online").OK(t).Never(t, "refused")
+		ann.Lore(annFolder(), "sync").OK(t)
 		if doc := remoteRow(jHandA, t1); !strings.Contains(doc, `"priority": "low"`) || !strings.Contains(doc, jHandEdited1) {
 			t.Errorf("Ann's older priority overwrote Lee's newer hand edit:\n%s", doc)
 		}
@@ -181,6 +182,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		}
 		lee.Lore(web, "task", "add", "A probe in the other folder", "--to", tlOrg+"/"+jHandB).OK(t).
 			Says(t, "picked up a move made by hand", "hand move: tasks "+t3)
+		lee.Lore(web, "sync").OK(t) // C5: the move reaches the store with Lee's sync
 		if doc := remoteRow(jHandB, t3); !strings.Contains(doc, "Task three") {
 			t.Errorf("the moved row is not in %s on the store: %s", jHandB, doc)
 		}
@@ -241,6 +243,7 @@ func TestJourneyFoldersHandEdits(t *testing.T) {
 		}
 		// Ann's change arrives with a plain git pull (lore's merge driver)
 		r := ann.Lore(annFolder(), "task", "edit", t2, "--title", "Task two, from Ann").OK(t)
+		ann.Lore(annFolder(), "sync").OK(t) // C5: the edit reaches the store with Ann's sync
 		if doc := remoteRow(jHandA, t2); !strings.Contains(doc, "Task two, from Ann") {
 			ac := ann.OpenClone(tt.store, filepath.Dir(annFolder()))
 			t.Fatalf("Ann's edit did not reach the store: %s\n%s\nstatus: %s\nlog: %s\nsync status: %s\nrepo sync status: %s", doc, r, ac.Status(), ac.Git("log", "--oneline", "-8", "--all"), ann.Lore(annFolder(), "sync", "status"), ann.Lore(tt.repo[tlAnn.Email].Dir, "sync", "status"))

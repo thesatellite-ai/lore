@@ -37,6 +37,7 @@ $ lore task list
 ○ tsk_76bd…3f10 Write the welcome email [medium]
 ○ tsk_d431…313a Send the welcome email [medium]
 ○ tsk_28f8…03df Check every link on the home page [medium]
+2 hidden (1 proposed, 1 someday); --include-proposed / --include-someday show them
 ```
 <!-- /example -->
 
@@ -97,6 +98,7 @@ $ lore task triage
 (no tasks)
 $ lore task list --status cancelled
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
+1 hidden (1 proposed); --include-proposed shows them
 $ lore task list --status cancelled --all
 ✗ tsk_54fe…28f2 Update the footer year to 2027 [low] due:2026-11-20
 ✗ tsk_d191…45c2 Rename the shop to Website Pro [medium] (proposed)
@@ -135,6 +137,7 @@ $ lore task list --include-deferred
 ○ tsk_28f8…03df Check every link on the home page [medium]
 ○ tsk_f147…5139 Add a FAQ page [medium]
 ○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
+1 hidden (1 someday); --include-someday shows them
 ```
 <!-- /example -->
 
@@ -169,6 +172,7 @@ $ lore task list --include-deferred
 ○ tsk_28f8…03df Check every link on the home page [medium]
 ○ tsk_f147…5139 Add a FAQ page [medium]
 ○ tsk_2537…6bbb Renew the SSL certificate [medium] ⏾2026-12-01
+1 hidden (1 someday); --include-someday shows them
 ```
 <!-- /example -->
 

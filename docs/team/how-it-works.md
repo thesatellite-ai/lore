@@ -30,7 +30,7 @@ Two separate choices decide where a new row is written. `--to` says **who** may 
  --to me              your personal store         ─┘ or to the store's live ref
 ```
 
-Tasks, missions, handoffs and comments are live by default (`live.defaults` changes this per kind). Rules, decisions and memories travel with the code unless you pass `--live`. A **store** is a separate private repo that only the agency can open, like a locked filing cabinet next to the client's repo. In the store, "branch data" means the store branch itself: a write without `--live` is a commit on the store's `main`, pushed at once. The output always says where a row went (`filed: … → the linked project client/`).
+Tasks, missions, handoffs and comments are live by default (`live.defaults` changes this per kind). Rules, decisions and memories travel with the code unless you pass `--live`. A **store** is a separate private repo that only the agency can open, like a locked filing cabinet next to the client's repo. In the store, "branch data" means the store branch itself: a write without `--live` is a commit on the store's `main`, sent with your next `lore sync` (at once only when the store is set to `push=now`). The output always says where a row went (`filed: … → the linked project client/`).
 
 Sometimes lore cannot tell whether the repo is a client repo: the store cannot be read and there is no saved list of links. Then a write without `--to` is refused with `E_LINK_UNKNOWN`. Lore does not guess.
 
@@ -130,18 +130,18 @@ Your branch, your staged files and your working folder are never touched. Lore b
 ```console
 # bob, in portal
 $ lore task add --title 'set up the portal CI'
-lore: wrote 2 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
-lore: wrote 2 row file(s) in ~/.lore/personal/everywhere (store me)
-✓ tsk_54fe…28f2 — set up the portal CI [medium]
-  created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
+lore: wrote task_lists/tlt_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/portal/.lore/data/task_lists/tlt_54fe…28f2.json is unchanged)
+lore: wrote tasks/tsk_05e9…4603 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/portal/.lore/data/tasks/tsk_05e9…4603.json is unchanged)
+✓ tsk_05e9…4603 — set up the portal CI [medium]
+  created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 $ lore live diff
 local     86dbae476bd6
 tracking  (none)
 seen      (none)
 pending   2 write(s) not confirmed by the remote
-  _root/task_lists/tlt_05e9…4603.json
-  _root/tasks/tsk_54fe…28f2.json
+  _root/task_lists/tlt_54fe…28f2.json
+  _root/tasks/tsk_05e9…4603.json
 ```
 <!-- /example -->
 
@@ -283,20 +283,20 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 <!-- example: internals#signals only=2,3,4,5,6 -->
 ```console
 # agent-backend, in website
-$ lore task claim --id tsk_76bd…3f10
-lore: pushed store agency/client (here: agency): commit cf563f3 to branch main
+$ lore task claim --id tsk_b4f4…a5b0
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147…5139.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_76bd…3f10.json (store agency)
-✓ claimed tsk_76bd…3f10 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
+✓ claimed tsk_b4f4…a5b0 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 
 # alice, in ~
 $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
-client/claims/tsk_76bd…3f10.json
-df3a55c lore: signals
+client/claims/tsk_b4f4…a5b0.json
+9b40ce7 lore: signals
 $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
-  "task": "tsk_76bd…3f10",
+  "task": "tsk_b4f4…a5b0",
   "project": "client",
   "holder": "act_f147…5139",
   "holder_label": "agent:agent-backend",
@@ -311,12 +311,12 @@ $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/sign
 }
 
 # agent-backend, in website
-$ lore task heartbeat --id tsk_76bd…3f10
-✓ tsk_76bd…3f10 renewed until 2026-11-02T10:21:25Z (seq 1)
+$ lore task heartbeat --id tsk_b4f4…a5b0
+✓ tsk_b4f4…a5b0 renewed until 2026-11-02T10:21:25Z (seq 1)
 
 # alice, in ~
 $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git log --oneline refs/lore-remote/origin/signals/main
-6d00426 lore: signals
+05513aa lore: signals
 ```
 <!-- /example -->
 
@@ -362,18 +362,16 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 ```console
 # agent-backend, in agents/api
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-lore: pushed store agency/client2 (here: agency): commit a8de760 to branch main
-lore: pushed store agency/client2 (here: agency): commit 9169078 to branch main
-lore: pushed store agency/client2 (here: agency): commit b733d8a to branch main
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (store agency)
-✓ tsk_162d…9666 done (commit 1833373, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 1833373f9e4e); waiting for merge
+✓ tsk_162d…9666 done (commit 86dbae4, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 86dbae41af28); waiting for merge
   lesson → mem_3b62…e913
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
-  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 1833373 not on the default branch yet)
+  tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
 (exit 10)
 
@@ -381,15 +379,14 @@ ERROR: [E_NO_WORK] nothing ready:
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
-lore: store agency: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 7540e63)
+lore: committed locally to store agency; lore sync sends it
+✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 05513aa)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
-lore: pushed store agency/client2 (here: agency): commit ef62c83 to branch main
-lore: pushed store agency/client2 (here: agency): commit dd85e7d to branch main
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
@@ -519,12 +516,12 @@ $ lore render
 ✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
-✓ private context → ~/.lore/render/rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
+✓ private context → ~/.lore/render/app-rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
 <!-- generated by lore; private: never quote this content in committed files, client files, commits, PRs or chat -->
 repo app (rep_28f8…03df)
-sto_4c59…6c38.md  store me, me/everywhere  -  internal
-sto_7a67…9504.md  store agency, agency/org  -  internal
+- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
+- agency-sto_7a67…9504.md  store agency, agency/org  -  internal
 $ git status --short
 ?? .lore/LORE.full.md
 ?? .lore/LORE.md

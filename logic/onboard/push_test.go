@@ -2,6 +2,7 @@ package onboard
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/storepush"
@@ -30,8 +31,10 @@ func TestPushQuestionInStoreSteps(t *testing.T) {
 				t.Errorf("step %s push choice %s has no label or detail", id, c.Value)
 			}
 		}
-		if !slices.Equal(got, storepush.Modes()) {
-			t.Errorf("step %s push choices %v, want %v", id, got, storepush.Modes())
+		// C5: the default (wait for lore sync) is offered first
+		want := []storepush.Mode{storepush.ModeManual, storepush.ModeBatch, storepush.ModeNow}
+		if !slices.Equal(got, want) || !strings.Contains(q.Choices.Static[0].Detail, "(default)") {
+			t.Errorf("step %s push choices %v, want %v with the first the default", id, got, want)
 		}
 	}
 	for _, id := range []StepID{StepKind, StepIdentity, StepGitHub, StepJoin, StepTools, StepSecrets, StepFolders} {
@@ -47,11 +50,12 @@ func TestPushSettings(t *testing.T) {
 		in   string
 		want []storepush.Assignment
 	}{
+		// C5: manual is the default (no key); now is an opt-in written out
 		{"", nil},
-		{"now", nil},
-		{" NOW ", nil},
+		{"manual", nil},
+		{" Manual ", nil},
 		{"batch", []storepush.Assignment{{Key: storepush.KeyPush, Value: "batch"}}},
-		{"Manual", []storepush.Assignment{{Key: storepush.KeyPush, Value: "manual"}}},
+		{"NOW", []storepush.Assignment{{Key: storepush.KeyPush, Value: "now"}}},
 	} {
 		got, err := PushSettings(c.in)
 		if err != nil || !slices.Equal(got, c.want) {

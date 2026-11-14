@@ -77,7 +77,7 @@ type Marker struct {
 	// Push holds the store's shared push and compaction settings as
 	// written (storepush.Raw; set by an org admin with `lore store set`).
 	// They are read leniently: a bad value is reported by `lore store
-	// show` and `lore doctor`, and the store pushes as mode now.
+	// show` and `lore doctor`, and the store pushes as the default, manual.
 	Push storepush.Raw
 }
 

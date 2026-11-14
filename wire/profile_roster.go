@@ -128,6 +128,9 @@ type profileRoster struct {
 	person ids.ID[ids.Actor]
 	// warns are the engine's warnings of every write so far (Warnings).
 	warns []string
+	// held: the last Push left the roster's commit in the local clone
+	// (profilestore.PushHolder).
+	held bool
 }
 
 // keep records w's warnings (Warnings) and passes its row through.
@@ -196,7 +199,7 @@ func (p *profileRoster) Get(ctx context.Context, table row.Table, id ids.AnyID) 
 	// it (a join retried within live.fetch_ttl of an earlier import). A
 	// miss reads once more after syncing the store, as ResolveActor does
 	// for a person (BUG-T6); a sync that fails leaves the first miss.
-	if _, serr := p.app.Sync(ctx, p.at.src); serr != nil {
+	if _, serr := p.app.Sync(fetchOnly(ctx), p.at.src); serr != nil {
 		return r, err
 	}
 	return p.getOnce(ctx, table, id)
@@ -269,7 +272,10 @@ func (p *profileRoster) FolderProject(ctx context.Context) (ids.ID[ids.Project],
 }
 
 // Push implements profilestore.Roster.
-func (p *profileRoster) Push(ctx context.Context) { p.app.rosterPush(ctx, p.at) }
+func (p *profileRoster) Push(ctx context.Context) { p.held = p.app.rosterPush(ctx, p.at) }
+
+// Held implements profilestore.PushHolder.
+func (p *profileRoster) Held() bool { return p.held }
 
 // ResolveActor implements profilestore.Roster for the forms commit 0 knows
 // (TEAM_PROFILES 3): an act_ id, @handle (or a bare handle), and a stable
@@ -288,7 +294,7 @@ func (p *profileRoster) ResolveActor(ctx context.Context, ref string) (row.Row, 
 	// have registered on their own machine a moment ago. A sync that fails
 	// leaves the first miss standing. A reference whose only holder is a
 	// removed contact (E_IN_TRASH) syncs too: it may have been added back.
-	if _, serr := p.app.Sync(ctx, p.at.src); serr != nil {
+	if _, serr := p.app.Sync(fetchOnly(ctx), p.at.src); serr != nil {
 		return x, err
 	}
 	return p.resolveOnce(ctx, ref)

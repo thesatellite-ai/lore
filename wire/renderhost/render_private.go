@@ -6,8 +6,8 @@
 // OrgStores hook, topic stores) never reach a committed file. Each one is
 // rendered into its own private file outside the checkout:
 //
-//	~/.lore/render/<repo_id>/<store_id>.md   one per internal store
-//	~/.lore/render/<repo_id>/index.md        readable id → name map, never imported
+//	~/.lore/render/<repo>-<repo_id>/<store>-<store_id>.md   one per internal store
+//	~/.lore/render/<repo>-<repo_id>/index.md                readable map, never imported
 //
 // and each target tool's uncommitted private file (toolprofile
 // Profile.PrivateFile: CLAUDE.local.md for claude_code, a Cursor rule file
@@ -20,7 +20,10 @@
 // (render_core.go). The same holds in own repos and client repos: nothing
 // here is ever written inside the checkout except those private files.
 //
-// File names use permanent ids so a renamed repo or store keeps its file.
+// File names start with the repo's or store's name, so a person browsing
+// ~/.lore/render sees which is which (B-17), and end with the permanent id,
+// which keeps them unique; a renamed repo or store gets a new name and the
+// old file (found by its id suffix) is removed.
 // The repo id is `repo_id` from .lore/data/_meta.json, which `lore init`
 // and `lore sync` stamp (wire.EnsureRepoIdentity, PROV1); a v0.1.17
 // checkout not yet synced has none and falls back to its prj_ project id,
@@ -164,6 +167,7 @@ type privateFile struct {
 // privatePlan is everything one private render writes.
 type privatePlan struct {
 	dir       string
+	dirName   string // "<repo>-<repo_id>", the folder under ~/.lore/render
 	repoKey   string
 	projectID string // names the v0.1.17 single file this render replaces
 	stores    []privateStore
@@ -300,20 +304,22 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		}
 	}
 	var internal []privateStore
-	byStem := map[string]int{}
+	byKey := map[string]int{}
 	for _, si := range idents {
 		if si.Shareable {
 			continue
 		}
-		stem := si.ID
-		if stem == "" {
-			stem = privateNoIDPrefix + privateStemUnsafe.ReplaceAllString(string(si.Name), "_")
+		key := si.ID
+		stem := privateName(string(si.Name), si.ID)
+		if key == "" {
+			key = privateNoIDPrefix + privateStemUnsafe.ReplaceAllString(string(si.Name), "_")
+			stem = key
 		}
-		if i, ok := byStem[stem]; ok {
+		if i, ok := byKey[key]; ok {
 			internal[i].sources = append(internal[i].sources, si.Name)
 			continue
 		}
-		byStem[stem] = len(internal)
+		byKey[key] = len(internal)
 		internal = append(internal, privateStore{stem: stem, sources: []store.Source{si.Name}, url: urls[string(si.Name)]})
 	}
 
@@ -325,7 +331,6 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	p.projectID = pid.String()
 	p.repoKey = privateRepoKey(root, p.projectID)
 	home := h.opts.Home
-	p.dir = filepath.Join(home, renderDirName, p.repoKey)
 	// B1-11: the files are keyed by project (every checkout of it on this
 	// machine shares them: a second clone, a copy), so they name the
 	// project, never one checkout's folder; with the folder name two
@@ -334,6 +339,8 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	if name, ok := h.app.ProjectName(ctx, p.projectID); ok {
 		repoName = name // the project's name (lore init names it after the first checkout's folder)
 	}
+	p.dirName = privateName(repoName, p.repoKey)
+	p.dir = filepath.Join(home, renderDirName, p.dirName)
 
 	var imports []string
 	var ex *privateExpander
@@ -357,7 +364,7 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
 		body := withPrivateStamp(fit.texts[i], bodies[i].origins, p.budget)
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: body})
-		imports = append(imports, privateImportDir+p.repoKey+"/"+s.stem+privateFileExt)
+		imports = append(imports, privateImportDir+p.dirName+"/"+s.stem+privateFileExt)
 	}
 	if len(internal) > 0 {
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, privateIndexFile), body: buildPrivateIndex(repoName, p.repoKey, internal)})
@@ -647,7 +654,7 @@ func privateRowText(r row.Row) string {
 func buildPrivateIndex(repoName, repoKey string, ss []privateStore) string {
 	var b strings.Builder
 	b.WriteString(privateHeader + "\n")
-	fmt.Fprintf(&b, "repo %s (%s)\n", repoName, repoKey)
+	fmt.Fprintf(&b, "repo %s (%s)\n\n", repoName, repoKey)
 	for _, s := range ss {
 		names := make([]string, len(s.sources))
 		for i, src := range s.sources {
@@ -657,7 +664,8 @@ func buildPrivateIndex(repoName, repoKey string, ss []privateStore) string {
 		if url == "" {
 			url = "-"
 		}
-		fmt.Fprintf(&b, "\n%s  store %s  %s  internal\n", s.stem+privateFileExt, strings.Join(names, ", "), url)
+		// one bullet per store, so a markdown viewer keeps them apart (B-17)
+		fmt.Fprintf(&b, "- %s  store %s  %s  internal\n", s.stem+privateFileExt, strings.Join(names, ", "), url)
 	}
 	return b.String()
 }
@@ -705,19 +713,75 @@ func prunePrivate(p *privatePlan) error {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		ours := name == privateIndexFile || (strings.HasSuffix(name, privateFileExt) &&
-			(strings.HasPrefix(name, string(ids.PrefixStore)+"_") || strings.HasPrefix(name, privateNoIDPrefix)))
-		if e.IsDir() || !ours || keep[name] {
+		if e.IsDir() || !privateOwnFile(name) || keep[name] {
 			continue
 		}
 		if err := os.Remove(filepath.Join(p.dir, name)); err != nil {
 			return errs.Wrap(errs.Internal, "remove a stale private render", err)
 		}
 	}
+	// the same repo's folder under an earlier name (<repo_id> alone, as
+	// before B-17, or a name the project had before a rename): lore's own
+	// files go, and the folder when nothing else is left in it
+	others, err := os.ReadDir(filepath.Dir(p.dir))
+	if err != nil && !os.IsNotExist(err) {
+		return errs.Wrap(errs.Internal, "read the private render folder", err)
+	}
+	for _, e := range others {
+		name := e.Name()
+		if !e.IsDir() || name == p.dirName || (name != p.repoKey && !strings.HasSuffix(name, "-"+p.repoKey)) {
+			continue
+		}
+		if err := removeOwnFiles(filepath.Join(filepath.Dir(p.dir), name)); err != nil {
+			return err
+		}
+	}
 	old := filepath.Join(filepath.Dir(p.dir), p.projectID+privateFileExt)
 	if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
 		return errs.Wrap(errs.Internal, "remove the v0.1.17 internal render", err)
 	}
+	return nil
+}
+
+// privateName is "<readable>-<id>": the name says which repo or store the
+// file is for, the id keeps it unique and lets lore find its own files
+// after a rename. A name with nothing usable left is the id alone.
+func privateName(readable, id string) string {
+	r := strings.Trim(privateStemUnsafe.ReplaceAllString(strings.ToLower(readable), "-"), "-._")
+	if r == "" || r == id || id == "" {
+		return id
+	}
+	return r + "-" + id
+}
+
+// privateOwnFile reports whether name is a file the private render writes:
+// index.md, <store>-sto_<id>.md, sto_<id>.md (before B-17) or a name- file.
+func privateOwnFile(name string) bool {
+	if name == privateIndexFile {
+		return true
+	}
+	if !strings.HasSuffix(name, privateFileExt) {
+		return false
+	}
+	sto := string(ids.PrefixStore) + "_"
+	return strings.HasPrefix(name, sto) || strings.Contains(name, "-"+sto) || strings.HasPrefix(name, privateNoIDPrefix)
+}
+
+// removeOwnFiles removes the private render's own files from dir, and dir
+// itself when that leaves it empty; anything else in it stays.
+func removeOwnFiles(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return errs.Wrap(errs.Internal, "read an earlier private render folder", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() && privateOwnFile(e.Name()) {
+			if err := os.Remove(filepath.Join(dir, e.Name())); err != nil {
+				return errs.Wrap(errs.Internal, "remove an earlier private render", err)
+			}
+		}
+	}
+	_ = os.Remove(dir) // only an empty folder goes
 	return nil
 }
 

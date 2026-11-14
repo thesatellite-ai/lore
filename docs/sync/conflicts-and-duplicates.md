@@ -136,7 +136,7 @@ lore: picked up a hand edit of memories mem_05e9…4603 (body): checked and stam
 mem_05e9…4603 [retrieved] The client replies faster on WhatsApp than email or phone.
 mem_4c59…6c38 [retrieved] Send the invoice reminder before the demo on Friday.
 $ lore sync
-· already in sync
+· in sync; 1 file(s) in .lore/data wait for your commit (.lore/data/memories/mem_05e9…4603.json): git add .lore/data && git commit
 $ lore sync conflicts
 · no conflicts
 ```

@@ -363,6 +363,12 @@ func leakRowsFrom(ctx context.Context, a leakReader, client bool, expected []sto
 			}
 			out = append(out, leakIndexRows(rows, t, si.Name, label, keys)...)
 		}
+		if !client {
+			// the roster's ids and emails are internal details for a linked
+			// client repo only (F-4); elsewhere the personal store's roster
+			// is the person themself, and a task naming its author is no leak
+			continue
+		}
 		roster, err := leakRosterRows(ctx, a, si.Name, label)
 		if err != nil {
 			return nil, err

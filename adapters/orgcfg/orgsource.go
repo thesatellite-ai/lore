@@ -16,6 +16,7 @@ package orgcfg
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -50,7 +51,7 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 	if branch == "" {
 		branch = g.DefaultBranch(ctx, norm)
 	}
-	tip, ok := branchTip(ctx, dir, branch)
+	tip, ok := orgFileTip(ctx, dir, branch)
 	if !ok {
 		return Suggestion{}, fmt.Errorf("%w: %s has no branch %s", ErrNoStoreBranch, norm, branch)
 	}
@@ -158,7 +159,7 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 	}
 	branch := cur.Branch
 	path := cur.Path
-	res := OrgFileMoveResult{NoPush: !g.autopush(nil)}
+	res := OrgFileMoveResult{NoPush: !g.autopush(nil) || g.held(dir)}
 	cr, err := commitStore(ctx, storeCommit{Dir: dir, Store: norm, Branch: branch, NoPush: res.NoPush, Route: g.Route,
 		Message: fmt.Sprintf(orgMoveMessage, m.Org, m.New), Signature: m.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
@@ -211,4 +212,39 @@ func MoveStoreURLs(doc *OrgFileDoc, old []string, newURL string) bool {
 		}
 	}
 	return changed
+}
+
+// orgFileTip is the commit the org file is read from: branchTip, except
+// when this clone's branch and the fetched one have diverged and the local
+// side changed neither an org file nor the store marker since they split.
+// Then the fetched tip is read: a store clone holds local commits until
+// lore sync (C5: notes, folders), and those must not hide a lore-org.yaml
+// an admin pushed since (its own:/repos: patterns would be copied back to
+// the old ones). A local change to the org file itself still wins, as
+// before.
+func orgFileTip(ctx context.Context, dir, branch string) (string, bool) {
+	tip, ok := branchTip(ctx, dir, branch)
+	if !ok {
+		return tip, ok
+	}
+	track, err := gitRun(ctx, "-C", dir, "rev-parse", "--verify", "--quiet", trackingRef(branch)+"^{commit}")
+	track = strings.TrimSpace(track)
+	if err != nil || track == "" || track == tip {
+		return tip, true
+	}
+	base, err := gitRun(ctx, "-C", dir, "merge-base", tip, track)
+	base = strings.TrimSpace(base)
+	if err != nil || base == "" {
+		return tip, true
+	}
+	changed, err := gitRun(ctx, "-C", dir, "diff", "--name-only", base, tip)
+	if err != nil {
+		return tip, true
+	}
+	for _, f := range strings.Split(strings.TrimSpace(changed), "\n") {
+		if f == storeMarkerFile || path.Base(f) == OrgFile {
+			return tip, true
+		}
+	}
+	return track, true
 }

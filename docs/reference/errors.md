@@ -197,7 +197,7 @@ A project that still has rows cannot be deleted; the message names every row tha
 $ lore project list
 prj_d431…313a  website  https://github.com/client/website
 $ lore project delete --id $(lore project list | cut -d' ' -f1) --yes
-ERROR: [E_HAS_DEPENDENTS] project delete: mem_b4f4…a5b0 (memories.project_id), rul_54fe…28f2 (rules.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_162d…9666 (tasks.project_id), tsk_05e9…4603 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_d431…313a
+ERROR: [E_HAS_DEPENDENTS] project delete: mem_28f8…03df (memories.project_id), rul_54fe…28f2 (rules.project_id), tsk_2ad3…f891 (tasks.project_id), tsk_162d…9666 (tasks.project_id), tsk_05e9…4603 (tasks.project_id) … and 1 more (`lore project delete --json` lists all) still point at prj_d431…313a
   hint: delete or move the pointing rows first
 (exit 23)
 ```
@@ -257,12 +257,12 @@ Removing a key the row does not have is `E_META_UNKNOWN`; the message says which
 ```console
 # alice, in website
 $ lore rule add --body 'Keep the footer links in one list'
-lore: wrote ~/work/website/.lore/data/rules/rul_4c59…6c38.json
-✓ rul_4c59…6c38
+lore: wrote ~/work/website/.lore/data/rules/rul_3b62…e913.json
+✓ rul_3b62…e913
   scope: [master] severity: must
-$ lore meta unset --id rul_4c59…6c38 --key client_tier
-ERROR: [E_META_UNKNOWN] rul_4c59…6c38 has no metadata key "client_tier"; it has no metadata
-  hint: lore meta show --id rul_4c59…6c38 lists its keys
+$ lore meta unset --id rul_3b62…e913 --key client_tier
+ERROR: [E_META_UNKNOWN] rul_3b62…e913 has no metadata key "client_tier"; it has no metadata
+  hint: lore meta show --id rul_3b62…e913 lists its keys
 (exit 20)
 ```
 <!-- /example -->
@@ -308,8 +308,8 @@ A variable whose value holds a reference with an option that scheme does not tak
 ```console
 # alice, in website
 $ lore vars set --name host --value staging.client.example
-lore: wrote ~/work/website/.lore/data/vars/var_28f8…03df.json
-Added var_…03df host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
+lore: wrote ~/work/website/.lore/data/vars/var_4c59…6c38.json
+Added var_…6c38 host = staging.client.example (text) in repo (not shareable: clients see ${var:<name>}).
 $ lore vars set --name base_url --value 'https://${var:host?port=8080}/'
 ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for ${var:…}
 (exit 20)

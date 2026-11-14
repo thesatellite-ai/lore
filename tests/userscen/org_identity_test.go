@@ -57,6 +57,7 @@ func TestOrgContactsAndMatching(t *testing.T) {
 	o.app.MustLore("actor", "contact", "add", "@mira", "github", "mira-home", "--label", "personal", "--identity")
 	o.app.MustLore("actor", "contact", "add", "@mira", "phone", "+90 532 000 0000", "--label", "work")
 
+	o.app.MustLore("sync") // C5: mira's writes reach bob with her sync
 	cs := contacts(bc, "@mira")
 	if len(cs) != 3 {
 		t.Fatalf("three contacts, seen from bob's clone: %+v", cs)
@@ -110,8 +111,11 @@ func TestOrgContactsAndMatching(t *testing.T) {
 	if cs := contacts(o.app, "@mira"); len(cs) != 2 {
 		t.Fatalf("remove takes the contact out: %+v", cs)
 	}
-	// Now bob may hold the login as his own identity.
+	// Now bob may hold the login as his own identity (once mira's removal
+	// reaches him with her sync: C5).
+	o.app.MustLore("sync")
 	bc.MustLore("actor", "contact", "add", "@bob", "github", "mira-p", "--identity")
+	bc.MustLore("sync") // C5: bob's contact reaches mira with his sync
 	if a := showActor(t, o.app, "github:mira-p"); a.StableKey != orgBobKey {
 		t.Fatalf("the freed login is bob's now: %+v", a)
 	}

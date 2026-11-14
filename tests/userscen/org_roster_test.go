@@ -92,6 +92,7 @@ func TestOrgActorShowIsTheRosterProfile(t *testing.T) {
 	_, bc := o.join(t, "bob", orgBobEmail, orgBobName, "bob")
 	o.app.MustLore("actor", "edit", "@mira", "--title", "Backend engineer", "--timezone", "Europe/Istanbul",
 		"--location", "Ankara, TR", "--birthday", "--04-17").Says(t, "edited", "title", "timezone", "location", "birthday")
+	o.app.MustLore("sync") // C5: mira's writes reach bob with her sync
 	for i, c := range []*th.Clone{o.app, bc} {
 		for _, ref := range []string{"@mira", orgMiraKey} {
 			a := showActor(t, c, ref)

@@ -84,13 +84,13 @@ A note for yourself that should follow you into every repo is a plain `--to me` 
 $ lore store init --name me
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@agency.example)
 lore store init: store clone ~/.lore/stores/other/notes: git user set to alice <alice@agency.example> (your lore identity, was alice@example.com)
-✓ created store me (sto_3b62…e913) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_f147…5139) at file://~/.lore/stores/_me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 $ lore memory add --to me --everywhere --body 'I write short commit messages'
 ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to me --body 'I write short commit messages'
-lore: wrote ~/.lore/stores/_me/_store/actors/act_f147…5139.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/actors/act_b4f4…a5b0.json (store me)
 lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537…6bbb.json (store me)
 ✓ mem_2537…6bbb [me]
   scope: [master]
@@ -141,11 +141,10 @@ ERROR: [E_INVALID_INPUT] unknown flag: --force-org
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to freelance --body 'The client pays invoices in 30 days'
-lore: pushed store freelance: commit 05513aa to branch main
-lore: pushed store agency: commit dfd8dc8 to branch main
-lore: wrote 2 row file(s) in ~/.lore/stores/agency/notes/_store (store agency)
-lore: wrote 2 row file(s) in ~/.lore/stores/other/notes/_store (store freelance)
-✓ mem_b4f4…a5b0 [freelance]
+lore: committed locally to store freelance; lore sync sends it
+lore: wrote ~/.lore/stores/other/notes/_store/actors/act_b4f4…a5b0.json (store freelance)
+lore: wrote ~/.lore/stores/other/notes/_store/memories/mem_28f8…03df.json (store freelance)
+✓ mem_28f8…03df [freelance]
   scope: [master]
 ```
 <!-- /example -->

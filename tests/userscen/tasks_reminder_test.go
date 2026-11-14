@@ -113,7 +113,7 @@ func TestTasksReminder_DoneLateSkipsPast(t *testing.T) {
 // message, an id of another kind.
 func TestTasksReminder_BadInput(t *testing.T) {
 	s := newTasksSolo(t)
-	s.c.Lore("reminder", "add", "x", "--due", "2026-13-40").Fails(t, tasksExitBadInput, "E_INVALID_INPUT", "YYYY-MM-DD")
+	s.c.Lore("reminder", "add", "x", "--due", "2026-13-40").Fails(t, tasksExitBadInput, "E_DATE", "YYYY-MM-DD")
 	s.c.Lore("reminder", "add", "x", "--due", "2026-11-05", "--recurrence", "2w").Fails(t, tasksExitBadInput, "E_INVALID_INPUT", "7d | 30d | 1m | 3m | 6m | 1y")
 	s.c.Lore("reminder", "add", "x").Refused(t, "due")
 	s.c.Lore("reminder", "done", "tsk_01a1b4aef035716fb58ae56ab97530b2").Refused(t, "E_INVALID_ID")

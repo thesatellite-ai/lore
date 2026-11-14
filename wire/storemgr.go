@@ -23,6 +23,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
@@ -1075,6 +1076,14 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), subject, paths...); err != nil {
 		return err
 	}
+	// C5 (B-16): the commit goes out only when the store's push mode (as
+	// this very commit leaves it) is now; otherwise it waits for `lore sync`.
+	if m, merr := rowfs.ReadMarker(gb.Dir()); merr != nil || !pushesNow(m.Push) {
+		if a.opts.Notice != nil {
+			a.opts.Notice("committed locally to store " + string(src.Name) + "; lore sync sends it")
+		}
+		return nil
+	}
 	rep, err := gb.Sync(ctx)
 	if err != nil {
 		return err
@@ -1089,6 +1098,27 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	}
 	return nil
 }
+
+// pushesNow reports whether a store with these push settings pushes each
+// commit at once (push: now, a person's opt-in); a bad value is the
+// default, manual.
+func pushesNow(raw storepush.Raw) bool {
+	s, err := storepush.FromRaw(raw)
+	return err == nil && s.Push == storepush.ModeNow
+}
+
+// storeHeld is orgcfg.GitLinks.Held: a commit lore makes in the store clone
+// at dir (a link, lore-org.yaml) waits for `lore sync` unless the store's
+// lore-store.yaml says push: now (C5, B-16). No marker reads as the default.
+func storeHeld(dir string) bool {
+	m, err := rowfs.ReadMarker(dir)
+	return err != nil || !pushesNow(m.Push)
+}
+
+// orgStoreHeld is the Held every orgcfg.GitLinks of wire uses: storeHeld.
+// A variable only so the org link tests (orgWorld) run their store as push
+// now, the opt-in their push mechanics assume; nothing else changes it.
+var orgStoreHeld = storeHeld
 
 // StoreVisibility implements opsstores.Manager (CFG4).
 func (a *App) StoreVisibility(ctx context.Context, name string) (opsstores.VisibilityOut, error) {

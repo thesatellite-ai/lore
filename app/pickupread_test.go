@@ -66,7 +66,9 @@ func TestReadPickUpNeverPushes(t *testing.T) {
 		if now := strings.TrimSpace(w.git(t, clone, "rev-parse", "HEAD")); now == head {
 			t.Fatalf("%s: the read did not commit the hand change (D-aa):\n%s", c.name, errOut)
 		}
-		if !strings.Contains(errOut, "wait to be pushed; a read never pushes") {
+		// C5: the store waits for lore sync (push manual, the default), so
+		// the read's pick-up commit says so with the store's local line
+		if !strings.Contains(errOut, "committed locally to store notes; lore sync sends it") {
 			t.Fatalf("%s: the read does not say the commit waits for `lore sync`:\n%s", c.name, errOut)
 		}
 	}

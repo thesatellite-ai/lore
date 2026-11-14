@@ -613,7 +613,14 @@ type TeamInviteOut struct {
 	// checked at all (gh missing, not logged in, an API error): "pending"
 	// then means unknown, not "has no access" (ONB 4.6, A11 bug 7).
 	GitHubDetail string `json:"github_detail,omitempty"`
+	// SyncFirst: the invite's roster commit is still only in this machine's
+	// clone of the org store (it waits for lore sync), so the join would
+	// not find it; the text says to run lore sync before sending the line.
+	SyncFirst bool `json:"sync_first,omitempty"`
 }
+
+// inviteSyncFirst is the line TeamInviteOut.Text prints when SyncFirst.
+const inviteSyncFirst = "⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)\n"
 
 // githubPending is TeamInviteOut.GitHubAccess while the person has no
 // access yet (ops/team.GitHubPending, same value).
@@ -647,6 +654,9 @@ func (o TeamInviteOut) Text() string {
 		} else if o.GitHubAccess != "" {
 			fmt.Fprintf(&b, "✓ %s can push to %s\n", o.GitHub, target)
 		}
+	}
+	if o.SyncFirst {
+		b.WriteString(inviteSyncFirst)
 	}
 	fmt.Fprintf(&b, "Send this to %s (it holds no secret):\n  lore setup join --invite %s\n", o.Email, o.Line)
 	return b.String()

@@ -332,9 +332,10 @@ If an admin added you ([Adding your staff](members.md)), run `lore setup join --
 ```console
 # tomas, in agency/site
 $ lore team invite mira@agency.example
-lore: pushed store agency/org: commit 601d285 to branch main
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
+⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
 Send this to mira@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 

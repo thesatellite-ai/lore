@@ -180,6 +180,12 @@ type RunData struct {
 	// sync. 0 (omitted) when every write reached the remote.
 	LivePending int           `json:"live_pending,omitempty"`
 	Stores      []StoreReport `json:"stores,omitempty"`
+	// LiveMoved: the live pass of this sync moved rows (brought a
+	// teammate's live writes into this clone, sent waiting writes, or
+	// landed rows). The live pass fills no Imported/Exported list, so this
+	// is how the sync's render step tells a sync that changed rows from a
+	// no-op one (B-8). Not in --json: the report lines already say it.
+	LiveMoved bool `json:"-"`
 }
 
 // RunOut is the output of sync.run (envelope kind sync.report).

@@ -318,7 +318,7 @@ func (a *App) moveOrgFile(ctx context.Context, org string, old []string, raw str
 	if sc == nil || !storeaddr.Same(sc.URL, raw) {
 		return "" // the moved store is not the org's org-folder store: lore-org.yaml lives elsewhere
 	}
-	g := &orgcfg.GitLinks{Home: a.opts.Home, Config: cfg, Now: a.opts.Wall, Route: storeRouter(a.opts.Home, a.projectDir())}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: a.opts.Home, Config: cfg, Now: a.opts.Wall, Route: storeRouter(a.opts.Home, a.projectDir())}
 	res, err := g.MoveOrgFileStore(ctx, orgcfg.OrgFileMove{URL: raw, Branch: sc.Branch, Old: old, New: raw, Org: org, Signature: storeSignature(o)})
 	if err != nil {
 		return "lore-org.yaml of " + org + " still names the old address (" + orgFileError(err, raw).Error() + "); run `lore store set-url --name " + org + " --url " + raw + "` again when the store takes the commit, so teammates importing the org get the new address"

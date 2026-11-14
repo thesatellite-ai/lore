@@ -147,6 +147,7 @@ func TestJourneyLand7DAgentAfterEmail(t *testing.T) {
 		sam.Rename(t, soloName, soloNewEmail)
 		// The personal store's copy of Sam now carries the old email as an alias.
 		lap.LoreIn(appRepo, "memory", "add", "--body", "after the new email", "--to", "me").OK(t)
+		lap.LoreIn(appRepo, "sync").OK(t) // C5: the personal store copy reaches GitHub with Sam's sync
 		if got := jAgentsWhoami(t, lap, appRepo, &jClaude, "cc-2").Data.Identity.ActorID; got != agentID {
 			t.Errorf("on the laptop the agent is %s after the email change, want %s", got, agentID)
 		}

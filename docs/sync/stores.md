@@ -114,9 +114,10 @@ The `note:` line says the old address could not be read (the folder is gone), so
 $ lore store folder add --store notes --folder golang
 ✓ created folder golang in notes (prj_2ad3…f891; shown only in repos that attach it)
 $ lore memory add --to notes/golang --body 'Close every channel from the sender side.'
-lore: wrote 2 row file(s) in ~/stores/agency-notes/_store (store notes)
-lore: wrote 3 row file(s) in ~/stores/agency-notes/golang (store notes/golang)
-✓ mem_162d…9666 [notes/golang]
+lore: wrote ~/stores/agency-notes/golang/actors/act_162d…9666.json (store notes/golang)
+lore: wrote ~/stores/agency-notes/golang/memories/mem_54fe…28f2.json (store notes/golang)
+lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3…f891.json (store notes/golang)
+✓ mem_54fe…28f2 [notes/golang]
   scope: [master]
 $ cat .lore/stores.yaml
 stores:
@@ -126,7 +127,7 @@ stores:
       url: file://~/stores/agency-notes
       folder: golang
 $ lore memory list
-mem_162d…9666 [retrieved] Close every channel from the sender side. [notes/golang]
+mem_54fe…28f2 [retrieved] Close every channel from the sender side. [notes/golang]
 $ lore store folder list --store notes
 store notes folders:
   FOLDER  ID                                    CREATED BY  CREATED  ATTACHED HERE  ROWS
@@ -142,30 +143,30 @@ Alice wrote a rule into the repo that belongs in her store. `lore row move --id 
 ```console
 # alice, in website
 $ lore rule add --body 'Keep the agency hourly rate out of the client repo.'
-lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
-✓ rul_54fe…28f2
+lore: wrote ~/work/website/.lore/data/rules/rul_05e9…4603.json
+✓ rul_05e9…4603
   scope: [master] severity: must
-$ lore row move --id rul_54fe…28f2 --to notes
+$ lore row move --id rul_05e9…4603 --to notes
 ERROR: [E_NEEDS_CONFIRM] This becomes visible to everyone with access to notes (internal):
-  "Keep the agency hourly rate out of the c…" (rul_54fe…28f2, id kept), now in repo
+  "Keep the agency hourly rate out of the c…" (rul_05e9…4603, id kept), now in repo
 Move it?
   hint: ask the person, then rerun with --yes
 (exit 26)
-$ lore row move --id rul_54fe…28f2 --to notes --yes
-lore: wrote ~/stores/agency-notes/_store/rules/rul_54fe…28f2.json (store notes)
-lore: wrote ~/work/website/.lore/data/rules/rul_54fe…28f2.json
-✓ rul_54fe…28f2 moved to store notes (same id; the old copy is tombstoned)
+$ lore row move --id rul_05e9…4603 --to notes --yes
+lore: wrote 3 row file(s) in ~/stores/agency-notes/_store (store notes)
+lore: wrote 1 row file(s) in ~/work/website/.lore/data
+✓ rul_05e9…4603 moved to store notes (same id; the old copy is tombstoned)
 $ lore rule list
-rul_54fe…28f2 [must/always] Keep the agency hourly rate out of the client repo. [notes]
-$ cat .lore/data/rules/rul_54fe…28f2.json
+rul_05e9…4603 [must/always] Keep the agency hourly rate out of the client repo. [notes]
+$ cat .lore/data/rules/rul_05e9…4603.json
 {
   "_deleted": true,
-  "_hlc": "2026-11-02T10:01:40.000Z/0001/act_05e9…4603",
+  "_hlc": "2026-11-02T10:01:40.000Z/0002/act_162d…9666",
   "_table": "rules",
   "_v": 2,
-  "id": "rul_54fe…28f2",
+  "id": "rul_05e9…4603",
   "updated_at": "2026-11-02T10:00:00.000000001Z",
-  "updated_by": "act_05e9…4603"
+  "updated_by": "act_162d…9666"
 }
 ```
 <!-- /example -->
@@ -208,12 +209,12 @@ Run this right after Step 5, while the store is still attached. A moved row cann
 <!-- example: stores#no-way-back -->
 ```console
 # alice, in website
-$ lore row move --id rul_54fe…28f2 --to repo --yes
-ERROR: [E_UNSUPPORTED] rul_54fe…28f2 was in store repo before and left it; a row never returns to a place it left
+$ lore row move --id rul_05e9…4603 --to repo --yes
+ERROR: [E_UNSUPPORTED] rul_05e9…4603 was in store repo before and left it; a row never returns to a place it left
   hint: keep it in notes
 (exit 23)
 $ lore rule list
-rul_54fe…28f2 [must/always] Keep the agency hourly rate out of the client repo. [notes]
+rul_05e9…4603 [must/always] Keep the agency hourly rate out of the client repo. [notes]
 ```
 <!-- /example -->
 

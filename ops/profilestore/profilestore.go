@@ -99,6 +99,15 @@ type Roster interface {
 	Push(ctx context.Context)
 }
 
+// PushHolder is an optional upgrade of an opened Roster: whether the last
+// Push left the roster's commit in this machine's clone of the store (its
+// push mode waits for `lore sync`, or the push failed). A line that
+// someone else reads from the store's remote (an invite, a join) works
+// only once that commit is sent, so the op says to run `lore sync` first.
+type PushHolder interface {
+	Held() bool
+}
+
 // FolderProjecter is an optional upgrade of an opened Roster: the project
 // row of the roster's own folder (the org folder's), made on the folder's
 // first write when it has none. A teams row belongs to it (teams

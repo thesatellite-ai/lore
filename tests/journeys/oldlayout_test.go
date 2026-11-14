@@ -179,7 +179,15 @@ func TestJourneyUpgraderOldLayout(t *testing.T) {
 			r.Says(t, "moved store clone "+olShown(m, s.oldBase(m))+" -> "+olShown(m, s.newDir(m)))
 		}
 		r.Says(t, "(kept 1 local commit)", "(kept 1 local file)",
-			"pushed store lore-hub", "rows moved from <folder>/.lore/data/ to <folder>/, the store's own rows to _store/", "clones-v017")
+			"rows moved from <folder>/.lore/data/ to <folder>/, the store's own rows to _store/", "clones-v017")
+		// C5: the layout commit reaches the store with the person's sync, run
+		// in the store's clone (the home folder is in no setup)
+		for _, s := range stores {
+			r := m.Lore(s.newDir(m), "sync").OK(t)
+			if s.repo == "lore-hub" {
+				r.Says(t, "pushed store lore-hub")
+			}
+		}
 		for _, s := range stores {
 			if _, err := os.Stat(filepath.Join(s.newDir(m), ".git")); err != nil {
 				t.Errorf("%s/%s did not land at %s", s.owner, s.repo, s.newDir(m))

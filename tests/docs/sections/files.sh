@@ -68,6 +68,8 @@ on alice .lore/stores/acme/notes "git reset -q -- _store/tasks/$t_cert.json && g
 
 note "your own clone"
 on alice . "git clone -q git@github.com:acme/notes ~/code/notes && ls ~/code/notes"
+# lore's clone holds commits that wait for lore sync: send them before switching clones
+on alice work/website "lore sync"
 on alice work/website "lore store use --path ~/code/notes --yes"
 on alice work/website "lore store list"
 on alice work/website "lore path --id $t_cert"

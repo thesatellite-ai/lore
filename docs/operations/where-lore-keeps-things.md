@@ -31,7 +31,7 @@ lore's home: ~/.lore
       a store folder's cache; store notes; used by ~/work/website
   cache/uses
       one record per repo of the cache files it uses: uses/<hash of the repo path>.json (`lore cache prune` keeps what a repo still uses)
-  cache/uses/6d0042600cc73cca9cdb9f21bd9da5bd391c2f006142fdaa6b35b1750d1c72e5.json
+  cache/uses/05513aa29b7881f12bc94eb06be8acf0d03eaed2c5b80873f8e40d2805d7e0ce.json
       a repo's cache use record
   machine.json
       this machine's id, kept so it stays the same between runs
@@ -54,8 +54,6 @@ store clones:
       the user.email lore wrote into this clone's .git/config, so lore keeps only its own value current and never changes one you set
   ~/.lore/stores/acme/notes/.git/lore/lock (store git@github.com:acme/notes)
       the store lock (holds no data)
-  ~/.lore/stores/acme/notes/.git/lore/push_stamp (store git@github.com:acme/notes)
-      when lore last pushed
   ~/.lore/stores/acme/notes/.git/lore/remote-tip (store git@github.com:acme/notes)
       the store branch's tip on the remote when lore last saw it, so a store repo deleted and made again is noticed, never refilled
   ~/.lore/stores/acme/notes/.git/lore/state (store git@github.com:acme/notes)

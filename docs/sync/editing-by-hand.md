@@ -18,8 +18,8 @@ $ sed -i 's/reset every Monday/reset every Sunday night/' _store/memories/mem_54
 
 # alice, in website
 $ lore memory list --store notes
-lore: store notes: 1 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-lore: picked up 1 row edited by hand in store notes: committed cf563f3 "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
+lore: committed locally to store notes; lore sync sends it
+lore: picked up 1 row edited by hand in store notes: committed 86dbae4 "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
   edited memories mem_54fe…28f2 (body): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
 mem_54fe…28f2 [retrieved] The staging database is reset every Sunday night. [notes]
 
@@ -53,8 +53,8 @@ D  _store/memories/mem_54fe…28f2.json
 
 # alice, in website
 $ lore memory list --store notes
-lore: store notes: 2 local commit(s) wait to be pushed; a read never pushes: run `lore sync` (or the next lore write here pushes them)
-lore: picked up 1 row edited by hand in store notes: committed df3a55c "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
+lore: committed locally to store notes; lore sync sends it
+lore: picked up 1 row edited by hand in store notes: committed 9b40ce7 "hand edit: memories mem_54fe…28f2" in ~/.lore/stores/acme/notes
   deleted memories mem_54fe…28f2 (moved to the trash; lore trash restore --id mem_54fe…28f2 brings it back): ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json
 (no memories)
 $ lore trash list

@@ -90,8 +90,11 @@ func TestJourneyMixedVersionsOneStore(t *testing.T) {
 		// after the line that warns the 0.1.17 users of the store
 		// (the personal note was filed for acme: it keeps its folder, D5, so
 		// no personal move commit is made)
-		up.LoreIn(lap, "fix", "--migrate").Says(t, "must upgrade lore", "0.1.17 refuses the new layout", "layout commit", "pushed store lore-notes").
-			Never(t, "run `lore sync` to push the org store changes")
+		up.LoreIn(lap, "fix", "--migrate").Says(t, "must upgrade lore", "0.1.17 refuses the new layout", "layout commit")
+		// C5: the layout commit reaches the store with the person's sync, run
+		// in the org store's clone (this folder's sync attaches only me)
+		up.Lore(up.LorePath("stores", "mia-dev", "lore-notes"), "sync").OK(t).Says(t, "store acme: pushed")
+		up.LoreIn(lap, "sync").OK(t) // and the personal store's, from the repo
 		up.LoreIn(lap, "memory", "list").OK(t).Says(t, mxOrgNote, mxNote)
 		if len(org.FilesMatching("main", "/.lore/data/")) != 0 {
 			t.Errorf("the org store still holds rows in the 0.1.17 place after lore fix: %v", org.FilesMatching("main", "/.lore/data/"))
@@ -187,9 +190,10 @@ func TestJourneyStoreOnlyUpgrade(t *testing.T) {
 		if m, _ := st.Read("main", "lore-store.yaml"); strings.Contains(m, "lore_store: 4") {
 			t.Errorf("a read upgraded the store:\n%s", m)
 		}
-		// fix --migrate converts the marker (lore_store: 4, checked below),
-		// moves the rows and pushes
-		up.LoreIn(lap, "fix", "--migrate").OK(t).Says(t, "pushed")
+		// fix --migrate converts the marker (lore_store: 4, checked below)
+		// and moves the rows; lore sync sends them (C5)
+		up.LoreIn(lap, "fix", "--migrate").OK(t)
+		up.LoreIn(lap, "sync").OK(t).Says(t, "pushed")
 		for _, r := range []*teamharness.Remote{st} {
 			if m, _ := r.Read("main", "lore-store.yaml"); !strings.Contains(m, "lore_store: 4") {
 				t.Errorf("%s: marker after lore fix:\n%s", r.Slug, m)

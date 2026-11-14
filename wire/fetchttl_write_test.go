@@ -34,7 +34,7 @@ func TestStoreFetchReadsReuseWritesRefetch(t *testing.T) {
 				t.Fatal(err)
 			}
 			f := &fakePushBackend{caps: store.Capabilities{Remote: true}}
-			b := &storePush{inner: f, name: "northwind", res: pushRes(t), stateDir: dir, notes: &bytes.Buffer{}}
+			b := &storePush{inner: f, name: "northwind", res: pushRes(t), stateDir: dir, notes: &bytes.Buffer{}, push: nowPush()}
 			ctx := background()
 			if tc.write {
 				ctx = WithWriteFetch(ctx)

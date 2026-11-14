@@ -92,6 +92,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.Lore(parent, "store", "folder", "add", two.SSHURL(), "client_a").OK(t).Says(t, "client_a in notes-two")
 		lee.Lore(parent, "store", "folder", "add", "notes-three", "client_d").OK(t).Says(t, "client_d in notes-three")
 		lee.Lore(parent, "store", "folder", "add", "team", "client_c").OK(t).Says(t, "client_c in "+tlOrg)
+		lee.Lore(parent, "sync").OK(t) // C5: the folders reach the stores with Lee's sync
 		for _, r := range []*teamharness.Remote{two, three} {
 			// the first write made each empty repo a store: marker in the same commit
 			if !slices.Contains(r.Files(mainRef), jManyMarker) {
@@ -105,6 +106,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.Lore(parent, "store", "folder", "add", two.SSHURL(), "client_b").OK(t)
 		// the broken store is adopted: its next write adds the marker
 		lee.Lore(parent, "store", "folder", "add", broken.SSHURL(), "client_y").OK(t)
+		lee.Lore(parent, "sync").OK(t) // C5: the folders reach the stores with Lee's sync
 		if !slices.Contains(broken.Files(mainRef), jManyMarker) {
 			t.Errorf("the adopted store has no marker after a write: %v", broken.Files(mainRef))
 		}
@@ -208,6 +210,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--dry-run").OK(t).Says(t, "nothing written")
 		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--yes").OK(t).Says(t, "nothing was written to this repo")
 		lee.LoreIn(hub, "task", "add", jManyTaskTitle).OK(t).Says(t, "client_a")
+		lee.LoreIn(hub, "sync").OK(t) // C5: the link and the task reach the store with Lee's sync
 		lee.LoreIn(hub, "task", "list").OK(t).Says(t, jManyTaskTitle)
 		lee.LoreIn(hub, "doctor").OK(t).Says(t, "holds no lore data")
 		if len(two.FilesMatching(mainRef, "client_a/tasks/")) != 1 {
@@ -239,6 +242,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		lee.LoreIn(portal, "org", "link", tlOrg, "--project", "client_c", "--store", three.SSHURL(), "--yes").Refused(t).Says(t, "client_c")
 		lee.Lore(parent, "store", "folder", "remove", "team", "client_c").Refused(t).Says(t, "remove the empty folder client_c", "--yes")
 		lee.Lore(parent, "store", "folder", "remove", "team", "client_c", "--yes").OK(t).Says(t, "removed folder client_c")
+		lee.Lore(parent, "sync").OK(t) // C5: the removal reaches the store with Lee's sync
 		if got := tt.store.FilesMatching(mainRef, "client_c/"); len(got) != 0 {
 			t.Errorf("the team store still has client_c: %v", got)
 		}
@@ -268,6 +272,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		if !out.Purged || out.Rows != 3 || !strings.HasPrefix(out.Batch, "bat_") {
 			t.Fatalf("remove --purge = %+v, want purged, 3 rows and a bat_ id", out)
 		}
+		lee.Lore(parent, "sync").OK(t) // C5: the purge reaches the store with Lee's sync
 		if len(two.FilesMatching(mainRef, "client_a/_meta.json")) != 0 {
 			t.Error("the purged folder's _meta.json is still in the store")
 		}

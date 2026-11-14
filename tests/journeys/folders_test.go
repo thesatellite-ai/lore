@@ -66,6 +66,7 @@ func TestJourneyFoldersNoRepo(t *testing.T) {
 		}
 		// the org store named by its url works the same
 		lee.Lore(parent, "store", "folder", "add", tt.store.SSHURL(), "client_west").OK(t).Says(t, "client_west")
+		lee.Lore(parent, "sync").OK(t) // C5: the folders reach the store with Lee's sync
 		for _, c := range append(slices.Clone(jFolderClients), "client_west") {
 			if len(tt.store.FilesMatching("refs/heads/main", c+"/")) == 0 {
 				t.Errorf("the team store has no %s folder after store folder add from %s", c, parent)

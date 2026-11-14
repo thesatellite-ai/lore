@@ -152,7 +152,7 @@ func sotrPrivate(t *testing.T) {
 	sotOK(t, m, a, "store", "init", "me", "--yes")
 	sotOK(t, m, a, "memory", "add", "--to", "me", "--body", "sotr private note")
 	sotOK(t, m, a, "render")
-	files, _ := filepath.Glob(filepath.Join(m.Home, ".lore", "render", "*", "sto_*.md"))
+	files, _ := filepath.Glob(filepath.Join(m.Home, ".lore", "render", "*", "*sto_*.md")) // <store>-<sto_id>.md (B-17)
 	if len(files) != 1 {
 		t.Fatalf("private store files: %v", files)
 	}

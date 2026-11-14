@@ -97,8 +97,9 @@ Then each new person runs one command with their own email, from any folder: no 
 ```console
 # bob, in ~
 $ lore org import --url git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
-lore: pushed store agency/org: commit 601d285 to branch main
-lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
+lore: committed locally to store agency/org; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_7a67…9504.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
 This adds to ~/.lore/config.yaml:
     name: agency
     identity:
@@ -113,7 +114,7 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-✓ act_7a67…9504 Bob Roe (@bob) registered in agency org/
+✓ act_2ad3…f891 Bob Roe (@bob) registered in agency org/
 $ cat ~/.lore/config.yaml
 orgs:
   - name: agency
@@ -129,22 +130,25 @@ orgs:
     repos:
       - github.com/client/*
     source:
-      store: sto_2ad3…f891
-      version: 86dbae476bd6
+      store: sto_162d…9666
+      version: 601d2850ffd0
 
 # bob, in website
 $ lore whoami
-org        agency  (matched by: link in github.com/agency/notes client/, project id + remote)
-identity   Bob Roe <human:bob@agency.example>   act_7a67…9504  @bob  (from: org entry (config.yaml orgs[agency].identity))
+org        agency  (matched by: repos pattern github.com/client/* of agency)
+identity   Bob Roe <human:bob@agency.example>   act_2ad3…f891  @bob  (from: org entry (config.yaml orgs[agency].identity))
 repo       client repo  (guards on)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
-project    prj_162d…9666
+project    prj_54fe…28f2
 remotes    github.com/client/website
 stores     git@github.com:agency/notes on branch main  (org folder org)
-internal   github.com/agency/notes client/
-links      known  1 link(s) for this repo (stores of 1 entry scanned)
+links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
+$ lore sync
+lore: pushed store agency/org: commit 86dbae4 to branch main
+store agency: sent 0, received 0, merged 0, refused 0
+store agency/org: sent 2, received 0, merged 0, refused 0
 ```
 <!-- /example -->
 
@@ -177,19 +181,18 @@ Alice wrote a note into the client's repo by mistake, where the client can read 
 ```console
 # alice, in website
 $ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
-lore: wrote 2 row file(s) in ~/.lore/personal/agency (store me)
-lore: wrote 2 row file(s) in ~/work/website/.lore/data
-✓ mem_54fe…28f2
+lore: wrote ~/work/website/.lore/data/actors/act_05e9…4603.json
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
+✓ mem_c0f3…b5b8
   scope: [master]
-$ lore move --id mem_54fe…28f2 --to agency --yes
-lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+$ lore move --id mem_c0f3…b5b8 --to agency --yes
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_54fe…28f2.json (store agency)
-lore: wrote ~/work/website/.lore/data/memories/mem_54fe…28f2.json
-✓ mem_54fe…28f2 moved to store agency (same id; the old copy is tombstoned)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
+lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
+✓ mem_c0f3…b5b8 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
-mem_54fe…28f2 [retrieved] the client replies faster on WhatsApp than email [agency/client]
+mem_c0f3…b5b8 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 ```
 <!-- /example -->
 
@@ -203,7 +206,7 @@ Lore keeps one clone of each store, a plain git clone at `~/.lore/stores/<owner>
 ```console
 # alice, in ~
 $ lore store open --url git@github.com:agency/notes
-✓ ~/.lore/stores/agency/notes on main (05513aa7ab36): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
+✓ ~/.lore/stores/agency/notes on main (9b40ce71af28): the store's own clone, a plain git checkout to browse; lore commits and pulls here too
 $ ls ~/.lore/stores/agency/notes
 README.md
 client
@@ -243,17 +246,17 @@ When a coding agent writes for you, the commit is still signed as the table abov
 
 ## How writes reach the remote
 
-Your personal store (`me`), your org's stores and the stores a repo attaches in `.lore/stores.yaml` are git repos that hold only lore notes. By default every note you write to one is pushed at once, as its own commit. A busy store collects thousands of small commits that way. A store can instead collect your writes and push them together, and its old history can be folded into one commit. None of this applies to the code repo (`repo`): you push that one with your code.
+Your personal store (`me`), your org's stores and the stores a repo attaches in `.lore/stores.yaml` are git repos that hold only lore notes. By default nothing reaches a store's remote until you ask: every note you write to one is committed on your machine, lore says so once per command and store ("committed locally to store <name>"), and `lore sync` (or `lore store push --store <store>`, from any folder, or a `git push` in the store clone) sends what waits. This holds for every store write: notes, `--to me`, `lore secrets allow`, roster and team writes (`lore member add`, `lore team add`), links and `lore-org.yaml` (`lore org link`, `lore org create`), and store settings (`lore store set`, `lore store visibility`, `lore store folder add`). A command that only works in a code repo (a task edit there) writes nothing to your personal store. A store can instead push by itself (`batch`, or `now` for every write at once), a choice you make in the setup or with `lore store set`, and its old history can be folded into one commit. None of this applies to the code repo (`repo`): you push that one with your code.
 
 ### The three push modes
 
 | Mode | What a write does | When it reaches the remote |
 |---|---|---|
-| `now` (the default) | commits and pushes | at once, one commit per write |
+| `manual` (the default) | commits on your machine only | only when you run `lore sync` or `lore store push` (or `git push` in the store clone) |
 | `batch` | commits on your machine only | when the oldest waiting write is `push_every` (default `5m`) old and you run any lore command that uses the store, on `lore sync`, on commands that need the remote current (`lore sync status`, `lore land`), when your coding tool starts or ends a session, and from the repo's git hooks lore installs (after a commit, before a push) |
-| `manual` | commits on your machine only | only on `lore sync` (and on the syncs lore runs itself for team coordination, such as the roster) |
+| `now` (your opt-in) | commits and pushes | at once, one commit per write, roster and link writes included |
 
-Each store commit is titled after what you did: the command and, for a kind with a short title (a task, a plan), the title, as in `lore: task add: Ship the beta`; other rows are named by id, as in `lore: memory add mem_01ab…` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. When the waiting writes go out, they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+Each store commit is titled after what you did: the command and, for a kind with a short title (a task, a plan), the title, as in `lore: task add: Ship the beta`; other rows are named by id, as in `lore: memory add mem_01ab…` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
 
 lore has no daemon, timer or background process, and never starts one. A batch goes out only when something runs lore: a command you (or your coding tool) run anyway checks the age of the oldest waiting write and, once it is `push_every` old, pushes the batch inside that command. That push gets a short time limit, so a slow or unreachable remote never holds your command up; what did not go out stays committed for the next command. If nothing runs lore, the batch simply stays on your machine, safe. `lore store show`, `lore sync status` and `lore doctor` show how old the oldest waiting write is, and `lore doctor` warns once it is more than a day old. Run `lore sync` to push it.
 
@@ -268,12 +271,14 @@ me: push batch every 10m, compact off
   epoch     0
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
 lore memory add: store clone ~/.lore/stores/alice/lore-me: git user set to Alice <alice@agency.example> (your lore identity, was alice@devbox)
+lore: committed locally to store me; lore sync sends it
 lore: wrote ~/.lore/stores/alice/lore-me/_store/actors/act_7a67…9504.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_2ad3…f891.json (store me)
 lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (store me)
 ✓ mem_2ad3…f891 [me]
   scope: [master]
 $ lore memory add --body 'I prefer short standups' --to me
+lore: committed locally to store me; lore sync sends it
 lore: wrote ~/.lore/stores/alice/lore-me/_store/memories/mem_54fe…28f2.json (store me)
 ✓ mem_54fe…28f2 [me]
   scope: [master]
@@ -325,11 +330,17 @@ The admin sets it once and every member's next sync picks it up:
 <!-- example: store-push#org-settings -->
 ```console
 # alice, in website
-$ lore store set --store agency --settings push=batch --settings push_every=15m
+$ lore store set --store agency --settings push=batch --settings push_every=15m && lore sync
+committed locally to store agency; lore sync sends it
 agency: push batch every 15m, compact off
   set in    the store's lore-store.yaml (org agency; set by an org admin, which this machine is)
   epoch     0
-  pushed    2026-11-02T10:01:05Z
+  waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
+  pushed    2026-08-03T09:00:00Z
+lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
+store me: sent 0, received 0, merged 0, refused 0
+store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
+store agency/org: sent 0, received 0, merged 0, refused 0
 
 # bob, in website
 $ lore sync >/dev/null && lore store show --store agency
@@ -346,7 +357,7 @@ The values `lore store set` takes:
 
 | Key | Values | Default |
 |---|---|---|
-| `push` | `now`, `batch`, `manual` | `now` |
+| `push` | `manual`, `batch`, `now` | `manual` |
 | `push_every` | how long a batch may wait, at least `1m` (such as `10m`, `1h`) | `5m` |
 | `compact` | `on` or `off`: fold old history by itself (below) | `off` |
 | `compact_after` | how old history must be to be folded, at least `1d` (such as `30d`); `compact=on` needs it | none |
@@ -405,8 +416,8 @@ ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agen
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae476bd6)
-  pushed store agency: commit 9b40ce7 to branch main
+✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
+  pushed store agency: commit 05513aa to branch main
 ```
 <!-- /example -->
 
@@ -431,12 +442,13 @@ Nothing to do. On Bob's next sync lore sees the higher epoch, moves his copy ont
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants the invoice on the 1st' --to agency
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
 ✓ mem_c0f3…b5b8 [agency/client]
   scope: [master]
 $ lore sync
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
 store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
 store agency/org: sent 0, received 0, merged 0, refused 0
 $ lore memory list

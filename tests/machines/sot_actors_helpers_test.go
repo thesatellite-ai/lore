@@ -91,6 +91,8 @@ func saTeam(t *testing.T, member *Machine, email string) (*Machine, lsTeam) {
 	if tm.invite = o.Text; !strings.HasPrefix(tm.invite, "lore-invite:") {
 		t.Fatalf("team invite printed no invite line: %s", out)
 	}
+	// C5: the invite reaches the team store with the admin's sync
+	lsRun(t, admin, admin.Repos[RepoWorkApp], "sync")
 	return admin, tm
 }
 

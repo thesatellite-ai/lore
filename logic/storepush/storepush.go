@@ -28,12 +28,15 @@ type Mode string
 
 // Push modes.
 const (
-	// ModeNow pushes each write at once (the default; lore before 0.1.18).
+	// ModeNow pushes each write at once: an opt-in a person chooses (setup
+	// answer, `lore store set <store> push=now`), never the default (C5).
 	ModeNow Mode = "now"
 	// ModeBatch keeps writes local and pushes them as ONE commit at most
 	// once per push_every, and always on `lore sync`.
 	ModeBatch Mode = "batch"
-	// ModeManual pushes only on `lore sync`.
+	// ModeManual pushes only when a person asks (`lore sync`, `lore store
+	// push`, a git push in the store clone): the default (C5, the owner's
+	// standing rule that nothing reaches a remote unasked).
 	ModeManual Mode = "manual"
 )
 
@@ -90,8 +93,9 @@ type Settings struct {
 	CompactAfter time.Duration
 }
 
-// Default is a store with no settings: push now, compaction off.
-func Default() Settings { return Settings{Push: ModeNow, PushEvery: DefaultPushEvery} }
+// Default is a store with no settings: push manual (writes commit locally
+// and wait for `lore sync`), compaction off.
+func Default() Settings { return Settings{Push: ModeManual, PushEvery: DefaultPushEvery} }
 
 // Raw is the settings as spelled in a file (each "" when unset).
 type Raw struct {

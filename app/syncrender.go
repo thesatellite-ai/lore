@@ -18,8 +18,9 @@ import (
 )
 
 // syncBrought reports whether a `lore sync` result received or merged any
-// row (a store or the repo pass): only then may the sync rewrite a
-// committed LORE.md (renderhost.RenderHeld; B-8). A result of another
+// row (a store or the repo pass) or its live pass moved rows (brought a
+// teammate's live writes in, sent this clone's, landed some): only then may
+// the sync rewrite a committed LORE.md (renderhost.RenderHeld; B-8). A result of another
 // shape answers true, as before.
 func syncBrought(res op.Result) bool {
 	v := res.Value()
@@ -31,7 +32,7 @@ func syncBrought(res op.Result) bool {
 		return true
 	}
 	d := out.Data
-	if len(d.Imported) > 0 || len(d.Deleted) > 0 || len(d.Merged) > 0 {
+	if d.LiveMoved || len(d.Imported) > 0 || len(d.Deleted) > 0 || len(d.Merged) > 0 {
 		return true
 	}
 	for _, s := range d.Stores {

@@ -233,6 +233,7 @@ func sotStoreClones(t *testing.T) {
 	ra, rb := a.Repos[RepoLore], b.Repos[RepoLore]
 	lsRun(t, a, ra, "store", "init", "sotkb", sotKBURL, "--yes")
 	lsRun(t, a, ra, "memory", "add", "--body", "sot8 one", "--to", "sotkb")
+	lsRun(t, a, ra, "sync") // C5: a's row reaches the store with a's sync
 	lsRun(t, b, rb, "store", "add", "sotkb", sotKBURL, "--yes")
 	lsRun(t, b, "", "config", "set", "live.fetch_ttl", "1h")
 	if got := lsRun(t, b, rb, "memory", "list", "--store", "sotkb"); !strings.Contains(got, "sot8 one") {
@@ -244,6 +245,7 @@ func sotStoreClones(t *testing.T) {
 	// Within the TTL b reads its clone as it is (a's new row is not there
 	// yet); the stamp is untouched.
 	lsRun(t, a, ra, "memory", "add", "--body", "sot8 two", "--to", "sotkb")
+	lsRun(t, a, ra, "sync")
 	if got := lsRun(t, b, rb, "memory", "list", "--store", "sotkb"); strings.Contains(got, "sot8 two") {
 		t.Errorf("b fetched within live.fetch_ttl (1h): %s", got)
 	}
@@ -262,6 +264,7 @@ func sotStoreClones(t *testing.T) {
 
 	// lore sync fetches whatever the TTL says.
 	lsRun(t, a, ra, "memory", "add", "--body", "sot8 three", "--to", "sotkb")
+	lsRun(t, a, ra, "sync")
 	sotOK(t, b, rb, "sync")
 	if got := lsRun(t, b, rb, "memory", "list", "--store", "sotkb"); !strings.Contains(got, "sot8 three") {
 		t.Errorf("b after lore sync lacks a's row: %s", got)
@@ -270,6 +273,7 @@ func sotStoreClones(t *testing.T) {
 	// Through lore api: the same rule in a long-running process.
 	api := csStartAPI(t, b, rb)
 	lsRun(t, a, ra, "memory", "add", "--body", "sot8 four", "--to", "sotkb")
+	lsRun(t, a, ra, "sync")
 	sotBackdateStamp(t, stamp, 2*time.Hour)
 	if got := sotAPICall(t, api, "GET", "/v1/memories?store=sotkb", "", sotStatusOK); !strings.Contains(got, "sot8 four") {
 		t.Errorf("REST memory list past live.fetch_ttl lacks a's row: %s", got)
@@ -758,6 +762,8 @@ func sotTeamProfile(t *testing.T) {
 		t.Fatalf("team invite: %v %q", err, inv.Text)
 	}
 	tm.invite = inv.Text
+	// C5: the invite reaches the team store with the admin's sync
+	lsRun(t, admin, ar, "sync")
 	lsCreate(t, member, "crew", kindMember, "sot-member@example.test", []string{"~/code/**"}, true, tm, lsAlpha)
 	mr := member.Repos[RepoWorkApp]
 
@@ -777,6 +783,7 @@ func sotTeamProfile(t *testing.T) {
 		}
 	}
 
+	sotOK(t, admin, ar, "sync") // C5: the title reaches the roster with the admin's sync
 	sotOK(t, member, mr, "sync")
 	if got := lsRun(t, member, mr, "actor", "show", act); !strings.Contains(got, "Sot Lead") {
 		t.Errorf("member after a fetch does not read the admin's title: %s", got)
@@ -787,6 +794,7 @@ func sotTeamProfile(t *testing.T) {
 	if got := sotRowText(t, sotStoreRowPath(roster, "actors", act), "title"); got != "Sot Lead Two" {
 		t.Errorf("roster row title after REST = %q", got)
 	}
+	sotOK(t, admin, ar, "sync") // C5: the REST edit reaches the roster with the admin's sync
 	sotOK(t, member, mr, "sync")
 	if got := lsRun(t, member, mr, "actor", "show", act); !strings.Contains(got, "Sot Lead Two") {
 		t.Errorf("member after a fetch does not read the REST title edit: %s", got)

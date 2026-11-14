@@ -59,14 +59,14 @@ Older lore could point a repo at a shared database file with a pointer, `.lore/l
 # alice, in docs
 $ cat .lore/lore.yaml
 db_path: ${LORE_HOME}/client-docs.db
-project_id: prj_4c59…6c38
+project_id: prj_f147…5139
 $ lore migrate run --dry-run
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
 (exit 27)
 $ LORE_HOME=~/shared-dbs lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
-  mode-b: rules/rul_3b62…e913 → store shared (~/shared-dbs/stores/blog)
+  mode-b: rules/rul_2537…6bbb → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
@@ -74,7 +74,7 @@ backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/docs/.git/config; hook blocks in ~/work/docs/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_3b62…e913 [must/always] Posts go out on Tuesdays [shared]
+rul_2537…6bbb [must/always] Posts go out on Tuesdays [shared]
 
 # alice, in ~
 $ ls ~/shared-dbs ~/shared-dbs/stores
@@ -93,7 +93,7 @@ A `..` in `db_path` is refused until `LORE_ALLOW_DB_PATH_OUTSIDE=1` is set for t
 # alice, in blog
 $ cat .lore/lore.yaml
 db_path: ../client.db
-project_id: prj_4c59…6c38
+project_id: prj_f147…5139
 $ lore migrate run --dry-run
 ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
   hint: set LORE_ALLOW_DB_PATH_OUTSIDE=1 to allow it
@@ -101,7 +101,7 @@ ERROR: [E_BAD_PATH] migrate: db_path "../client.db" has a `..` part
 $ LORE_ALLOW_DB_PATH_OUTSIDE=1 lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
-  mode-b: rules/rul_3b62…e913 → store shared (~/work/stores/blog)
+  mode-b: rules/rul_2537…6bbb → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
 team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
@@ -109,7 +109,7 @@ backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-rul_3b62…e913 [must/always] Posts go out on Tuesdays [shared]
+rul_2537…6bbb [must/always] Posts go out on Tuesdays [shared]
 ```
 <!-- /example -->
 
@@ -220,7 +220,7 @@ ERROR: [E_OFFLINE] could not confirm the coordination write (autopush is off (li
 (exit 15)
 $ lore sync
 lore live: pushed waiting live writes commit 601d285 to origin refs/lore/live
-· already in sync
+· in sync; 2 file(s) in .lore/data wait for your commit (.lore/data/_meta.json, .lore/data/tasks/tsk_2ad3…f891.json): git add .lore/data && git commit
 ```
 <!-- /example -->
 
@@ -275,10 +275,10 @@ lore looks for a coding agent behind every command (its environment variables, t
 ```console
 # alice, in website
 $ unset LORE_NO_DETECT LORE_HUMAN; export CODEX_CI=1; lore whoami | grep -E '^(identity|agent) '
-identity   alice via codex <agent:auto/codex/10380a>   act_f147…5139  (from: agent detection)
+identity   alice via codex <agent:auto/codex/10380a>   act_b69e…5ed7  (from: agent detection)
 agent      codex  (from: CODEX_CI)
 $ unset LORE_NO_DETECT; export CODEX_CI=1 LORE_HUMAN=1; lore whoami | grep -E '^(identity|agent) '
-identity   alice <human:alice@agency.example>   act_2537…6bbb  (from: git config user.email)
+identity   alice <human:alice@agency.example>   act_b4f4…a5b0  (from: git config user.email)
 agent      codex  (from: CODEX_CI)  LORE_HUMAN=1: writes stay yours
 ```
 <!-- /example -->

@@ -61,8 +61,8 @@ func TestShapeValidate(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if s, err := ParseShape(`{"gh_accounts":1,"gh_active":"first","ssh":"none","keys":"with_pub","include_if":1,"lore_home":"setups","start":"plain"}`); err != nil || s.PushMode() != PushNow {
-		t.Errorf("shape without push = %+v, %v; want push now", s, err)
+	if s, err := ParseShape(`{"gh_accounts":1,"gh_active":"first","ssh":"none","keys":"with_pub","include_if":1,"lore_home":"setups","start":"plain"}`); err != nil || s.PushMode() != PushManual {
+		t.Errorf("shape without push = %+v, %v; want push manual", s, err)
 	}
 	if _, err := ParseShape(`{"gh_accounts":1,"gh_active":"first","ssh":"none","keys":"with_pub","include_if":1,"lore_home":"setups","start":"plain","push":"hourly"}`); err == nil {
 		t.Errorf("push hourly: accepted")

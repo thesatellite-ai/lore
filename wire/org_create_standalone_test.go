@@ -39,9 +39,28 @@ func orgGit(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// push is `lore store push <url>` run by the person whose lore home is
+// home: under C5 a store write waits in the local clone until a person
+// sends it, so a test that reads the remote pushes first.
+func (w *orgWorld) push(t *testing.T, home, url string) {
+	t.Helper()
+	app, err := New(StandaloneOptions(w.repo, home, w.repo, "test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = app.Close() }()
+	if _, err := app.PushStoreNow(context.Background(), opsstores.PushIn{Store: url}); err != nil {
+		t.Fatalf("store push %s: %v", url, err)
+	}
+}
+
 func newOrgWorld(t *testing.T) *orgWorld {
 	t.Helper()
 	w := &orgWorld{root: t.TempDir()}
+	// the org link tests check what reaches the remote: their store is
+	// push now (a person's opt-in; the default, manual, has its own tests)
+	orgStoreHeld = func(string) bool { return false }
+	t.Cleanup(func() { orgStoreHeld = storeHeld })
 	w.hosts = filepath.Join(w.root, "hosts")
 	gc := filepath.Join(w.root, "gitconfig")
 	cfg := "[user]\n\tname = t\n\temail = t@example.com\n[init]\n\tdefaultBranch = main\n[url \"" + filepath.ToSlash(w.hosts) + "/\"]\n\tinsteadOf = https://github.com/\n\tinsteadOf = git@github.com:\n"
@@ -181,6 +200,7 @@ func TestOrgCreateImportRenameOnCmdLore(t *testing.T) {
 			t.Fatalf("create output lacks %q:\n%s", want, text)
 		}
 	}
+	w.push(t, mira, orgTestStoreURL) // C5: the roster row (an engine write) waits for a push
 	files := w.storeFiles(t)
 	if !strings.Contains(files, "org/lore-org.yaml") || !strings.Contains(files, "org/actors/act_") {
 		t.Fatalf("store after create:\n%s", files)
@@ -233,6 +253,7 @@ func TestOrgCreateImportRenameOnCmdLore(t *testing.T) {
 	if !strings.Contains(cfg, "name: agency") || !strings.Contains(cfg, "key: human:bob@agency.example") || !strings.Contains(cfg, "org_folder: org") {
 		t.Fatalf("config after import:\n%s", cfg)
 	}
+	w.push(t, bob, orgTestStoreURL) // C5: bob's roster row waits for his push
 	if n := strings.Count(w.storeFiles(t), "org/actors/act_"); n != 2 {
 		t.Fatalf("roster rows after import = %d, want 2 (mira, bob)", n)
 	}

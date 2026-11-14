@@ -218,7 +218,7 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 		return opsorgcmd.Report{Lines: lines, Ask: "Continue?"}, nil
 	}
 	org := s.Config.FindOrg(plan.Entry)
-	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
 	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID,
 		NewMarker: func() ([]byte, error) {
 			m, merr := rowfs.NewMarker(h.wall()())
@@ -235,7 +235,7 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	case res.Offline:
 		state = "committed in the local clone; offline, pushed by the next command"
 	case res.NoPush && res.Changed:
-		state = "committed in the local clone (autopush off; `lore sync` pushes it)"
+		state = "committed in the local clone; `lore sync` sends it"
 	case !res.Changed && !res.CreatedFolder:
 		state = "already so, nothing changed"
 	}
@@ -309,7 +309,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "no store links this repo: it has no project id (.lore/data/_meta.json) and no link names its remote").
 			WithHint("`lore whoami` says what this repo resolves to; `lore org link --org <org> --project <folder>` links it by its remote")
 	}
-	g := &orgcfg.GitLinks{Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
 	found, err := g.FindLinks(ctx, org.Name, s.ProjectID, strings.Trim(in.Project, "/"))
 	if err != nil {
 		return opsorgcmd.Report{}, linkError(err)
@@ -347,7 +347,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 	case res.Offline:
 		state = "committed in the local clone; offline, pushed by the next command"
 	case res.NoPush:
-		state = "committed in the local clone (autopush off; `lore sync` pushes it)"
+		state = "committed in the local clone; `lore sync` sends it"
 	}
 	lines = append(lines, fmt.Sprintf("✓ unlinked %s from %s (%d link(s) removed; %s)", s.ProjectID, org.Name, res.Removed, state),
 		"  nothing was written to this repo")

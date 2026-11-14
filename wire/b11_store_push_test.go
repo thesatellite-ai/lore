@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -115,7 +116,7 @@ func TestStorePushWrite(t *testing.T) {
 		wantNote  string
 	}{
 		{"pushed at once", true, nil, store.SyncReport{Sent: 1}, nil, false, 1, ""},
-		{"autopush off: commit waits silently", false, nil, store.SyncReport{}, nil, false, 0, ""},
+		{"autopush off: commit waits, said once", false, nil, store.SyncReport{}, nil, false, 0, "committed locally to store"},
 		{"write refused: error, no push", true, boom, store.SyncReport{}, nil, true, 0, ""},
 		{"write refused, autopush off", false, boom, store.SyncReport{}, nil, true, 0, ""},
 		{"push error: note", true, nil, store.SyncReport{}, boom, false, 1, "pushing failed"},
@@ -129,7 +130,7 @@ func TestStorePushWrite(t *testing.T) {
 			}
 			f := &fakePushBackend{caps: store.Capabilities{Remote: true}, writeErr: tc.writeErr, rep: tc.rep, syncErr: tc.syncErr}
 			var notes bytes.Buffer
-			b := &storePush{inner: f, name: "northwind", res: pushRes(t), notes: &notes}
+			b := &storePush{inner: f, name: "northwind", res: pushRes(t), notes: &notes, push: nowPush()}
 			err := b.Write(background(), nil)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
@@ -159,7 +160,7 @@ func TestStorePushNoteOnce(t *testing.T) {
 	t.Parallel()
 	f := &fakePushBackend{caps: store.Capabilities{Remote: true}, syncErr: errors.New("boom")}
 	var notes bytes.Buffer
-	b := &storePush{inner: f, name: "agency", res: pushRes(t), notes: &notes}
+	b := &storePush{inner: f, name: "agency", res: pushRes(t), notes: &notes, push: nowPush()}
 	for range 2 {
 		if err := b.Write(background(), nil); err != nil {
 			t.Fatal(err)
@@ -204,7 +205,7 @@ func TestStorePushRefresh(t *testing.T) {
 			}
 			before := live.FetchStamp(dir)
 			f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: tc.rep, syncErr: tc.syncErr}
-			b := &storePush{inner: f, name: "northwind", res: pushRes(t), stateDir: dir, notes: &bytes.Buffer{}}
+			b := &storePush{inner: f, name: "northwind", res: pushRes(t), stateDir: dir, notes: &bytes.Buffer{}, push: nowPush()}
 			ctx := background()
 			start := time.Now()
 			if _, _, err := b.Read(ctx, ""); err != nil {
@@ -284,7 +285,7 @@ func TestStorePushRefreshMergesFetchedCommits(t *testing.T) {
 	if err := live.WriteFetchStamp(state, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	b := &storePush{inner: bob, name: "notes", res: pushRes(t), stateDir: state, notes: &bytes.Buffer{}}
+	b := &storePush{inner: bob, name: "notes", res: pushRes(t), stateDir: state, notes: &bytes.Buffer{}, push: nowPush()}
 	if _, err := b.Get(ctx, r.Table, r.ID); err != nil {
 		t.Fatalf("alice's row, fetched but not merged, was not read: %v", err)
 	}
@@ -320,7 +321,7 @@ func TestStorePushFailureKeepsStamp(t *testing.T) {
 			}
 			f := &fakePushBackend{caps: store.Capabilities{Remote: true}, rep: tc.rep, syncErr: tc.err}
 			var notes bytes.Buffer
-			b := &storePush{inner: f, name: "me", res: pushRes(t), notes: &notes, stateDir: dir, fetched: true}
+			b := &storePush{inner: f, name: "me", res: pushRes(t), notes: &notes, stateDir: dir, fetched: true, push: nowPush()}
 			if err := b.Write(background(), nil); err != nil {
 				t.Fatal(err)
 			}
@@ -331,5 +332,34 @@ func TestStorePushFailureKeepsStamp(t *testing.T) {
 				t.Fatalf("note %q", notes.String())
 			}
 		})
+	}
+}
+
+// nowPush is push mode now, the opt-in these push-mechanics tests run under
+// (the default is manual, C5: TestStorePushDefaultStaysLocal).
+func nowPush() *storepush.Settings {
+	s := storepush.Default()
+	s.Push = storepush.ModeNow
+	return &s
+}
+
+// TestStorePushDefaultStaysLocal (C5, B-16): a store with no push setting
+// commits a write locally, never syncs, and says once per command where
+// the change is and what sends it.
+func TestStorePushDefaultStaysLocal(t *testing.T) {
+	f := &fakePushBackend{caps: store.Capabilities{Remote: true}}
+	var notes bytes.Buffer
+	b := &storePush{inner: f, name: "acme/org", res: pushRes(t), notes: &notes}
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if err := b.Write(ctx, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.syncs != 0 {
+		t.Fatalf("a default store synced %d times on its own", f.syncs)
+	}
+	if got := notes.String(); got != "lore: committed locally to store acme/org; lore sync sends it\n" {
+		t.Fatalf("notes = %q, want the committed-locally line once", got)
 	}
 }

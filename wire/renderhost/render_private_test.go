@@ -112,7 +112,7 @@ func TestRenderPrivateFiles(t *testing.T) {
 	if err = h.renderPrivate(ctx, &w, repo, false, false); err != nil {
 		t.Fatal(err)
 	}
-	body, err := os.ReadFile(filepath.Join(p.dir, privTestInnerID+privateFileExt))
+	body, err := os.ReadFile(filepath.Join(p.dir, p.fileFor(t, privTestInnerID)))
 	if err != nil || !strings.Contains(string(body), "internal note") {
 		t.Fatalf("store file %q %v", body, err)
 	}
