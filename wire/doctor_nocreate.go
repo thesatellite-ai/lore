@@ -159,7 +159,7 @@ func noProjectErr(ctx context.Context, top string) error {
 	if r := noCreateOf(ctx); r != nil && r.write {
 		return UntouchedError(ctx, top)
 	}
-	return orBeforeLore(ctx, top, errs.NotAStore, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
+	return orBeforeLore(ctx, top, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
 		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
 }
 
@@ -239,6 +239,6 @@ func UntouchedRepo(ctx context.Context, dir string) string {
 // checkout of a lore repo that only lacks .lore/ here (a commit from before
 // lore, a sparse cone) gets beforeLoreErr's line instead of "lore init".
 func UntouchedError(ctx context.Context, top string) error {
-	return orBeforeLore(ctx, top, errs.NotAStore, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
+	return orBeforeLore(ctx, top, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
 		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
 }

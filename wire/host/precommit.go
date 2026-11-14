@@ -312,11 +312,26 @@ func wrongDecodedRowID(root, p string, r row.Row) string {
 		return ""
 	}
 	table, id, isRow := rowfs.ParseRowPath(rel)
-	if !isRow || (r.Table == table && r.ID == id) {
+	other := loreDataPathspec + "/" + rowfs.RowPath(r.Table, r.ID)
+	if !isRow {
+		// devco Q-12: a name that is no id at all (a case-only rename,
+		// MEM_… for mem_…, from a case-insensitive checkout or a Windows
+		// tool): every read leaves the row out, so it would vanish for
+		// everyone who pulls. A file that is no row (r.ID zero) is not
+		// this check's.
+		if r.ID.IsZero() || strings.Count(rel, "/") != 1 {
+			return ""
+		}
+		why := "holds the row " + r.ID.String() + " of table " + string(r.Table) + ", but its file name is not that id, so every read leaves it out"
+		if _, serr := os.Lstat(filepath.Join(root, filepath.FromSlash(other))); serr == nil {
+			return why + "; " + other + " holds that id too (a duplicate id): keep one of the two"
+		}
+		return why + "; rename it back: git mv " + p + " " + other
+	}
+	if r.Table == table && r.ID == id {
 		return ""
 	}
 	why := "holds the row " + r.ID.String() + " of table " + string(r.Table) + ", but its file name says " + id.String() + " of table " + string(table)
-	other := loreDataPathspec + "/" + rowfs.RowPath(r.Table, r.ID)
 	if _, serr := os.Lstat(filepath.Join(root, filepath.FromSlash(other))); serr == nil {
 		why += "; " + other + " holds that id too (a duplicate id)"
 	}

@@ -40,6 +40,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // stampHexLen is the stamp's length in hex digits (64 bits, as the canary
@@ -432,6 +433,9 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string) {
 	if err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
 		return
 	}
+	if _, busy := wire.GitOpRunning(ctx, root); busy && renderTracked(ctx, root) {
+		return // devco:Q-15: heldStaleNotice names the operation instead
+	}
 	if h.RenderHeld(ctx, root) {
 		if client, cerr := h.repoIsClient(ctx); !rowsUncommitted(ctx, root) || client || cerr != nil {
 			return
@@ -469,7 +473,9 @@ func (h *Host) heldStaleNotice(ctx context.Context, root string) string {
 	if cwd, err := os.Getwd(); err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
 		return ""
 	}
-	if !h.RenderHeld(ctx, root) {
+	gop, busy := wire.GitOpRunning(ctx, root)
+	busy = busy && renderTracked(ctx, root)
+	if !busy && !h.RenderHeld(ctx, root) {
 		return ""
 	}
 	if client, cerr := h.repoIsClient(ctx); client || cerr != nil {
@@ -486,7 +492,29 @@ func (h *Host) heldStaleNotice(ctx context.Context, root string) string {
 	if kind, err := copyVerdict(out, p.body, canaryIn); err != nil || kind != opsrender.CopyStale {
 		return ""
 	}
+	if busy {
+		return syncLogPrefix + gitOpHeldLine(gop)
+	}
 	return syncLogPrefix + LoreMDRel + " is behind its rows (rows that reached this clone since it was committed); it stays as committed so your next git pull works. It catches up with your next commit that carries row files, or run lore render and commit it."
+}
+
+// gitOpHeldLine is the sentence a sync or `lore render` prints when it
+// left the tracked render files as they are because a git operation is
+// stopped in the work tree (devco:Q-15): what is running, why the files
+// stay, and what to run after.
+func gitOpHeldLine(op wire.GitOp) string {
+	return "a git " + op.Name + " is in progress in this clone, so " + LoreMDRel + " and the other tracked files lore renders stay as they are (a changed tracked file would stop it); finish it with " + op.End + ", then run lore render and commit the result."
+}
+
+// renderTracked reports whether git tracks any render file of the project
+// at root (LORE.md, LORE.full.md).
+func renderTracked(ctx context.Context, root string) bool {
+	for _, rel := range renderFileRels {
+		if tracked(ctx, root, rel) {
+			return true
+		}
+	}
+	return false
 }
 
 // generatedBannerOf is the "generated file" banner of the repo's tool file

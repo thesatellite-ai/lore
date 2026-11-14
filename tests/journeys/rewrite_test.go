@@ -115,8 +115,15 @@ func TestJourneyRewriteKeepsNotes(t *testing.T) {
 		a.CommitAll("One devbox binary work")
 		ana.LoreIn(a, "link", "add", "--entity", task, "--commit", "HEAD").OK(t)
 		a.CommitAll("link the work")
-		a.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)")
-		rewritten := a.Git("rev-parse", "HEAD~1")
+		// devco:Q-5: the moved link goes into lore's own commit on top, so
+		// the rebase ends with a clean tree and the next checkout works.
+		a.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)", "committed them as")
+		if st := a.Status(); st != "" {
+			t.Fatalf("the rebase that moved a commit link left changes (Q-5):\n%s", st)
+		}
+		a.Git("checkout", "-q", "-b", "after-rebase", "HEAD~3")
+		a.Git("checkout", "-q", "-")
+		rewritten := a.Git("rev-parse", "HEAD~2")
 		ana.LoreIn(a, "commit", "show", "--id", rewritten).OK(t).Says(t, "tasks/"+task)
 		ana.LoreIn(a, "doctor").Never(t, "commit_links:")
 	})

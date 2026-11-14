@@ -104,7 +104,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		line, level := doctorNoProjectNote, opsdoctor.LevelNote
 		if top := gitTopLevel(ctx, a.projectDir()); top != "" {
 			var e *errs.Error
-			if be := beforeLoreErr(ctx, top, errs.NotAStore); be != nil && errors.As(be, &e) {
+			if be := beforeLoreErr(ctx, top); be != nil && errors.As(be, &e) {
 				line = e.Message + " (" + e.Hint + ")" // D-8/D-10: not "lore init"
 			} else if c := a.clientRepo(ctx); c.Org != "" {
 				line = doctorNoProjectPrefix + " (" + clientRepoHint(c) + ")" // I-13: not "lore init"

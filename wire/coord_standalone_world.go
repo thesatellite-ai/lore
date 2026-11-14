@@ -606,7 +606,9 @@ func (w *coordWorld) env(ctx context.Context) coord.Env {
 	if w.client {
 		rows = clientRowsFor(w)
 	}
-	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: w.agents, Held: w.held()}
+	agents := w.agents
+	agents.PerCheckout = !w.isAgent() // devco:Q-1: a person's limit is per worktree, an agent's per session
+	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: agents, Held: w.held()}
 	if set, err := w.a.Policy(ctx, store.SourceRepo); err == nil {
 		// OV15B-URG, OV7-6: the repo's urgency weights and claim-span keys;
 		// a policy that cannot be read leaves the built-in defaults.

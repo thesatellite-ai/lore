@@ -41,6 +41,12 @@ type RowWrite struct {
 type Agents struct {
 	MaxClaims   int
 	MaxAttempts int
+	// PerCheckout counts MaxClaims per checkout instead of per session:
+	// the caller is a person (devco:Q-1). A person's session is
+	// `<key>@<host>`, the same in every worktree, so a per-session limit
+	// let one person hold one task on the whole machine; with a worktree
+	// per task each worktree (its own held-claims record) holds its own.
+	PerCheckout bool
 }
 
 // Env is one project's coordination context.
@@ -201,6 +207,13 @@ func exemptFromWIP(ctx context.Context, env Env, v signals.View, opts ClaimOptio
 		if opts.coordinating(task) {
 			return true
 		}
+		// devco:Q-1: a person's claim taken in another worktree (not in
+		// this checkout's held record) counts toward that worktree's limit.
+		if env.Agents.PerCheckout {
+			if _, here := env.Held.Get(env.Caller.Session, task); !here {
+				return true
+			}
+		}
 		if s, ok := v.Board[signals.ClaimPath(env.Folder, task)]; !ok || s.Holder != env.Caller.ActorID {
 			return false
 		}
@@ -271,7 +284,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		plan, err := signals.DecideClaim(v, signals.ClaimRequest{
 			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: exemptFromWIP(ctx, env, v, opts),
-			MaxClaims: env.Agents.MaxClaims, MaxAttempts: env.Agents.MaxAttempts,
+			MaxClaims: env.Agents.MaxClaims, PerCheckout: env.Agents.PerCheckout, MaxAttempts: env.Agents.MaxAttempts,
 			Row: signals.RowState{Epoch: doc.Epoch(), Attempts: doc.Int(keyAttempts)}, Token: tok,
 			WorkBranch: workBranch, Owns: opts.Owns,
 		})

@@ -64,9 +64,14 @@ const (
 	useDirMode  = 0o700
 )
 
-// cacheFileSidecars are the files SQLite keeps beside a cache in WAL mode;
-// they are part of the cache and go with it.
-var cacheFileSidecars = []string{"-wal", "-shm"}
+// cacheFileSidecars are the files kept beside a cache: SQLite's WAL files
+// and lore's merged-check memo (wire's mergedMemoSuffix, devco:Q-2). They
+// are part of the cache and go with it, so a pruned cache leaves nothing.
+var cacheFileSidecars = []string{"-wal", "-shm", mergedMemoSuffix}
+
+// mergedMemoSuffix ends the merged-check memo wire writes beside a repo
+// cache (<name>.db.merged.json); it must match wire's mergedMemoSuffix.
+const mergedMemoSuffix = ".merged.json"
 
 // Use is one cache file a repo's core open used.
 type Use struct {
@@ -317,11 +322,17 @@ func RepoCaches(cacheRoot string) ([]File, error) {
 		return nil, errs.Wrap(errs.Internal, "sqlite: list the repo caches", err)
 	}
 	var out []File
+	seen := map[string]bool{}
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), cacheFileExt) {
+		name := e.Name()
+		// devco:Q-2: a memo whose cache an older lore already pruned is
+		// listed by its cache name, so the next prune takes it too.
+		name = strings.TrimSuffix(name, mergedMemoSuffix)
+		if e.IsDir() || !strings.HasSuffix(name, cacheFileExt) || seen[name] {
 			continue
 		}
-		out = append(out, File{Rel: RepoDir + "/" + e.Name(), Size: sizeWithSidecars(filepath.Join(dir, e.Name()))})
+		seen[name] = true
+		out = append(out, File{Rel: RepoDir + "/" + name, Size: sizeWithSidecars(filepath.Join(dir, name))})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Rel < out[j].Rel })
 	return out, nil

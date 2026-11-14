@@ -353,6 +353,9 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if err := straySwitchWord(cmd, cfg.args, args); err != nil {
 			return printUsage(cmd, cfg, err)
 		}
+		if err := flagAsValue(cmd, values); err != nil {
+			return printUsage(cmd, cfg, err)
+		}
 		if err := contradictingSwitch(cmd, negs, aliases); err != nil {
 			return printUsage(cmd, cfg, err)
 		}

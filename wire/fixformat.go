@@ -114,5 +114,5 @@ func (a *App) FixLoreGone(ctx context.Context) error {
 	if top == "" {
 		return nil
 	}
-	return beforeLoreErr(ctx, top, errs.NotAStore)
+	return beforeLoreErr(ctx, top)
 }

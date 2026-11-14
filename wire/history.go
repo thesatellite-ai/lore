@@ -122,7 +122,7 @@ func liveVersions(ctx context.Context, top, ref string, table row.Table, id ids.
 		return nil, nil
 	}
 	spec := ":(glob)**/" + table.String() + "/" + id.String() + liveRowExt
-	log, err := liveGit(ctx, top, "log", "--no-renames", "--name-only",
+	log, err := liveGit(ctx, top, "-c", "core.quotePath=false", "log", "--no-renames", "--name-only", // raw paths (devco Q-13)
 		"--format="+liveLogMark+"%H"+liveLogSep+"%aI"+liveLogSep+"%an", ref, "--", spec)
 	if err != nil {
 		return nil, err

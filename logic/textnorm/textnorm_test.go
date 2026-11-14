@@ -191,6 +191,26 @@ func TestValidatePath(t *testing.T) {
 	}
 }
 
+// TestEscapeControlsBidiZeroWidth is devco:R-3: a row that reached the
+// store by plain git (never through Clean) holding a right-to-left
+// override, isolates, a zero-width space or a BOM prints them as escapes,
+// so a rule cannot read differently on the terminal or in the rendered
+// agent context than it is; ZWJ and ZWNJ (spelling, joined emoji) stay.
+func TestEscapeControlsBidiZeroWidth(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ in, want string }{
+		{"a\u202eevil\u202c b", `a\u202eevil\u202c b`},
+		{"x\u202a\u202b\u202d y", `x\u202a\u202b\u202d y`},
+		{"iso \u2066a\u2069 \u2067b\u2068", `iso \u2066a\u2069 \u2067b\u2068`},
+		{"split\u200bword\ufeff", `split\u200bword\ufeff`},
+		{"keep ZWNJ \u200c and ZWJ \u200d", "keep ZWNJ \u200c and ZWJ \u200d"},
+	} {
+		if got := EscapeControls(tc.in); got != tc.want {
+			t.Errorf("EscapeControls(%+q) = %+q, want %+q", tc.in, got, tc.want)
+		}
+	}
+}
+
 // TestEscapeControls is I-16: ESC, BEL, CR, DEL and C1 controls print as
 // escapes, tab, newline and every other character (accents, CJK, emoji,
 // ZWJ) pass through unchanged.

@@ -138,7 +138,7 @@ func branchHistory(ctx context.Context, src store.Source, dir, data, unshallow s
 	w := histWalk{src: src, dir: dir, data: data, prefix: strings.TrimSpace(string(prefix)), store: unshallow != ""}
 	// --relative: paths come relative to dir (a repo in a monorepo
 	// subfolder, a store folder), which is what readUnder and ./<path> use.
-	out, err := gitRun{dir: dir, args: []string{"log", "--relative", "--no-renames", "--diff-filter=DM", "--name-status", histFormat, "--", data}}.output(ctx)
+	out, err := gitRun{dir: dir, args: []string{"-c", "core.quotePath=false", "log", "--relative", "--no-renames", "--diff-filter=DM", "--name-status", histFormat, "--", data}}.output(ctx)
 	if err != nil {
 		if strings.Contains(err.Error(), histNoCommits) {
 			return nil, nil
@@ -217,7 +217,7 @@ func uncommittedChanges(ctx context.Context, dir, data string) []histChange {
 		return nil
 	}
 	sha, at, _ := commitHeader(strings.TrimPrefix(strings.TrimSpace(string(head)), histCommitMark))
-	out, err := gitRun{dir: dir, args: []string{"diff", "--relative", "--no-renames", "--diff-filter=DM", "--name-status", "HEAD", "--", data}}.output(ctx)
+	out, err := gitRun{dir: dir, args: []string{"-c", "core.quotePath=false", "diff", "--relative", "--no-renames", "--diff-filter=DM", "--name-status", "HEAD", "--", data}}.output(ctx)
 	if err != nil {
 		return nil
 	}
@@ -341,7 +341,9 @@ func liveHistory(ctx context.Context, st *state, src liveSource, seen map[histKe
 		if !liveRefExists(ctx, src.dir, ref) {
 			continue
 		}
-		args := []string{"log", "--no-renames", "--diff-filter=DM", "--name-status", histFormat, ref}
+		// a store folder may be named in any script: raw paths, never
+		// git's quoted octal form (devco Q-13)
+		args := []string{"-c", "core.quotePath=false", "log", "--no-renames", "--diff-filter=DM", "--name-status", histFormat, ref}
 		if src.folder != "" {
 			args = append(args, "--", src.folder+"/")
 		}

@@ -104,6 +104,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
+	a.doctorAttrOverride(ctx, warn)  // gitattr_override.go: a later .gitattributes line beats lore's block (devco:Q-11)
 	a.doctorStaleLinks(ctx, warn)    // hostbase_doctor_links.go: links on rewritten commits (H-8)
 	a.doctorSignals(ctx, warn, note) // hostbase_doctor_signals.go: expired files only report (a note: they do not change the status)
 	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
@@ -342,6 +343,29 @@ func lorePathBinaries(path string) []string {
 // claudeLocalFile is the per-checkout import file of Claude Code (render
 // writes one import line into it; internal context lives in ~/.lore/render).
 const claudeLocalFile = "CLAUDE.local.md"
+
+// attrBlockMarker is the marker of lore's block in .gitattributes (the
+// wire/host block writer's gitBlockMarker).
+const attrBlockMarker = "lore-sync"
+
+// doctorAttrOverride warns when a line after lore's block in the repo's
+// .gitattributes takes text, eol or merge back for lore's files: git
+// applies the later line, so row files check out with the team's line
+// ends and lore's merge driver may not run (devco:Q-11). The next write
+// (or lore fix) moves lore's block to the end.
+func (a *App) doctorAttrOverride(ctx context.Context, warn func(string)) {
+	top, err := a.repoTop(ctx)
+	if err != nil || top == "" || !HoldsLoreData(top) {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(top, ".gitattributes"))
+	if err != nil {
+		return
+	}
+	if line, over := AttrBlockOverride(string(b), attrBlockMarker); over {
+		warn("gitattributes: `" + line + "` comes after lore's block in .gitattributes and overrides it for lore's files (row files get its line ends, lore's merge driver may not run); `lore fix` (or the next lore write here) moves lore's block to the end, then commit .gitattributes")
+	}
+}
 
 // doctorClaudeLocal warns when the checkout's CLAUDE.local.md is a symlink
 // (lore never writes through one), tracked by git (its content would be

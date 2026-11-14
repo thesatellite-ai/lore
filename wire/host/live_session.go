@@ -143,6 +143,16 @@ type liveSession struct {
 	// waitWhy is the reason of the last push that left writes waiting
 	// ("" none): offline, or the remote's fault (gitfault).
 	waitWhy string
+	// branchRefused is set by the pre-push hook when the person's branch
+	// push may not go through: git sends no branch because it refused it
+	// (non-fast-forward), or the branch is no fast-forward as far as this
+	// clone can tell (remote tip unknown here: "fetch first"; or a forced
+	// push). The live ref waits too, with this line (devco:Q-10).
+	branchRefused string
+	// neverPushed is liveNeverPushedLine for this remote, held until the
+	// run's push: said only when the live rows did stay on this clone (a
+	// push that then sent them says that instead, devco:Q-10).
+	neverPushed string
 	// undelivered is the local live ref commit a push of this run could
 	// not deliver (offline, refused, a remote fault); "" when none. A
 	// later push of the same commit in the run (sync's own, then finish)
@@ -312,7 +322,7 @@ func (s *liveSession) integrate(ctx context.Context) {
 	case err != nil:
 		s.warn("integrate: " + err.Error())
 	case res.Action == live.IntegrateNeverPushed:
-		s.warn(fmt.Sprintf(liveNeverPushedLine, s.ref.RemoteName))
+		s.neverPushed = fmt.Sprintf(liveNeverPushedLine, s.ref.RemoteName) // said by finish unless the push sends them
 	default:
 		s.notes = append(s.notes, res.Notes...)
 	}
@@ -402,6 +412,10 @@ func (s *liveSession) finish(ctx context.Context) {
 	if s.push(ctx) {
 		s.autoCompact(ctx)
 	}
+	if s.neverPushed != "" {
+		s.warn(s.neverPushed)
+		s.neverPushed = ""
+	}
 }
 
 // release drops the live lock.
@@ -434,6 +448,13 @@ func (s *liveSession) push(ctx context.Context) bool {
 	// write, or the person's git push.
 	if s.read {
 		s.waitWhy = "a read never pushes"
+		return false
+	}
+	if s.branchRefused != "" {
+		s.printNotes()
+		s.waitWhy = s.branchRefused
+		s.h.line(s.branchRefused) // the line carries its own "lore:" prefix
+		s.neverPushed = ""        // one line says where the rows are
 		return false
 	}
 	if !s.autopush && !s.asked {
@@ -550,6 +571,7 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 		} else {
 			s.warn("pushed waiting live writes" + where)
 		}
+		s.neverPushed = ""                   // they did not stay: the line above says where they went
 		_ = s.writeNote(liveNoteRefused, "") // best effort: clears a stale doctor note
 		s.clearWaitNotes()
 	case live.PushNoRemote:

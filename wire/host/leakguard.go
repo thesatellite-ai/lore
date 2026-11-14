@@ -92,6 +92,34 @@ func (s *liveSession) guardOffText(ctx context.Context, dir string, missing []st
 	return head + ": lore's hook blocks are missing in " + where + " (" + strings.Join(missing, ", ") + "), so " + strings.Join(what, " and ")
 }
 
+// guardNextStep is the one next step of every leak-guard-off line (doctor
+// and a read alike, devco:Q-16): `lore fix`, and when a hook manager moved
+// the hooks folder (core.hooksPath: husky, a shared hooks folder), that it
+// must run again after the manager reinstalls its hooks, since a reinstall
+// rewrites the folder without lore's blocks.
+func (s *liveSession) guardNextStep(ctx context.Context) string {
+	step := "; run `lore fix` to restore them"
+	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" {
+		step += " (core.hooksPath belongs to a hook manager: run `lore fix` again after it reinstalls its hooks)"
+	}
+	return step
+}
+
+// guardOff lists the missing guard hooks of dir when doctor's leak-guard
+// warning reports them (nil otherwise): a clone lore wired before, not a
+// client repo's tracked hooks folder, not the 0.1.17 format. doctorHooks
+// asks it so the same missing blocks get one warning, not two.
+func (s *liveSession) guardOff(ctx context.Context, dir string) []string {
+	if wire.ProjectFormatOld(s.top) {
+		return nil
+	}
+	missing := missingGuardHooks(dir)
+	if len(missing) == 0 || s.neverWired(ctx, dir) || s.clientHooksInWorkTree(ctx, dir) {
+		return nil
+	}
+	return missing
+}
+
 // hooksInWorkTree reports whether dir is inside the work tree and outside
 // the git folder: a hooks folder committed with the repo (husky's .husky).
 func (s *liveSession) hooksInWorkTree(dir string) bool {
@@ -199,7 +227,7 @@ func (s *liveSession) sayGuardOff(ctx context.Context, dir string, missing []str
 	if fixed {
 		line += "; restored now (commits made meanwhile were not checked)"
 	} else {
-		line += "; `lore fix` restores them"
+		line += s.guardNextStep(ctx)
 	}
 	s.cmdNotice(ctx, line)
 	if found := s.unguardedLeaks(ctx); found != "" {

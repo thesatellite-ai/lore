@@ -259,7 +259,7 @@ Only `must` rules and `critical`/`high` hotfixes can be pinned; other notes are 
 
 ## Rules for one folder
 
-A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
+A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts (every live rule and hotfix of any severity, and its memories and decisions) and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
 
 <!-- example: render#scope -->
 ```console
@@ -286,7 +286,7 @@ $ lore render
 ```
 <!-- /example -->
 
-When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
+When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename; folder names in any script, with spaces or accents, are recognised), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
 
 <!-- example: render#scope-move -->
 ```console

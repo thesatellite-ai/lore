@@ -206,6 +206,11 @@ type ShowOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// CommitMissing: links name the commit but this repository has no
+	// such commit (devco Q-9: git filter-repo or a gc after a rewrite
+	// dropped it, or it is not fetched yet), so the links point at
+	// nothing here until they are remapped.
+	CommitMissing bool `json:"commit_missing,omitempty"`
 	// SHA is the asked sha, for the human header.
 	SHA string `json:"-"`
 }
@@ -219,6 +224,9 @@ func (o ShowOut) Text() string {
 	fmt.Fprintf(&b, "Commit %s — %d linked entities:\n", o.SHA, len(o.Data))
 	for _, r := range o.Data {
 		fmt.Fprintf(&b, "  %s/%s\n", r.EntityTable, r.EntityID)
+	}
+	if o.CommitMissing {
+		fmt.Fprintf(&b, "note: commit %s does not exist in this repository (a history rewrite such as git filter-repo dropped it, or it is not fetched yet: git fetch); move its links to the rewritten commit: lore link remap --pair %s=<new-sha>, or remove one: lore link remove --id <cml_…> --yes\n", o.SHA, o.SHA)
 	}
 	return b.String()
 }
@@ -482,7 +490,21 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			rows = append(rows, r)
 		}
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows, SHA: sha}, nil
+	out := ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows, SHA: sha}
+	if len(rows) > 0 {
+		out.CommitMissing = o.commitMissing(ctx, sha)
+	}
+	return out, nil
+}
+
+// commitMissing reports whether sha names no commit of the git repository
+// here while there is one (outside a repository nothing can be said).
+func (o ops) commitMissing(ctx context.Context, sha string) bool {
+	if _, err := o.git.RevParse(ctx, "", "HEAD"); err != nil {
+		return false
+	}
+	_, _, _, err := o.git.Describe(ctx, "", sha)
+	return err != nil
 }
 
 // showSHA turns commit.show's argument into the one sha to list: a hex

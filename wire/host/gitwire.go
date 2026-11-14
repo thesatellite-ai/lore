@@ -376,7 +376,11 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 		// A read wires nothing (owner bug 6): it looks, and says once
 		// what is missing and which command sets it up.
-		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, localAttrs, stamp+gitWiringReadSuffix, fp)
+		// devco:Q-16: when the leak-guard line covers the missing hook
+		// blocks (this read says it, or doctor lists it first), the
+		// set-up note leaves them out: one cause, one line, one step.
+		guardSays := wasWired && len(guardBefore) > 0 && !wire.ProjectFormatOld(root)
+		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, localAttrs, stamp+gitWiringReadSuffix, fp, guardSays)
 		return
 	}
 	// The config, attributes and hook files (not .gitignore, which has its
@@ -518,7 +522,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 // plus the warning when git ignores row files. What it said is
 // remembered in the lore home per state of the wired files (readKey,
 // fp), so later reads of the same state are quiet and spawn no git.
-func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, localAttrs, readKey, fp string) {
+// guardSays: the leak-guard line names the missing hook blocks and
+// `lore fix` (devco:Q-16), so they are not named here a second time.
+func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, localAttrs, readKey, fp string, guardSays bool) {
 	if wire.ReadNoticeSaid(s.h.cfg.Home, readKey, fp) {
 		return
 	}
@@ -545,7 +551,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 			stale = append(stale, n)
 		}
 	}
-	if len(stale) > 0 {
+	if len(stale) > 0 && !guardSays {
 		sort.Strings(stale)
 		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
 	}
@@ -740,8 +746,57 @@ func fileBlockStale(path, marker string, lines []string) (bool, error) {
 }
 
 // withFileBlock is content with lore's block for marker holding exactly
-// lines: replaced in place, or appended when there is none.
+// lines: replaced in place, or appended when there is none. A file git
+// checked out with CRLF line ends (a team's `eol=crlf` rule applies to
+// .gitattributes too) is read as LF and keeps CRLF: the block used to be
+// matched against LF only, so every write "set up" the rules again and
+// left one more blank line (devco:Q-11). In .gitattributes lore's block
+// moves to the end when a later line takes text, eol or merge back for
+// the files it covers (a later line wins in git: wire.AttrBlockOverride).
 func withFileBlock(content, marker string, lines []string) string {
+	norm := strings.ReplaceAll(content, "\r\n", "\n")
+	next := withFileBlockLF(norm, marker, lines)
+	if marker == gitBlockMarker {
+		if _, over := wire.AttrBlockOverride(next, marker); over {
+			next = blockMovedToEnd(next, marker)
+		}
+	}
+	if next == norm {
+		return content
+	}
+	if norm != content {
+		next = strings.ReplaceAll(next, "\n", "\r\n")
+	}
+	return next
+}
+
+// blockMovedToEnd is content (LF) with lore's block for marker cut from
+// where it stands and appended at the end, after a blank line.
+func blockMovedToEnd(content, marker string) string {
+	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
+	i := strings.Index(content, start)
+	if i < 0 {
+		return content
+	}
+	j := strings.Index(content[i:], end)
+	if j < 0 {
+		return content
+	}
+	k := i + j + len(end)
+	if k < len(content) && content[k] == '\n' {
+		k++
+	}
+	block := content[i:k]
+	rest := content[:i] + strings.TrimPrefix(content[k:], "\n")
+	rest = strings.TrimRight(rest, "\n")
+	if rest == "" {
+		return block
+	}
+	return rest + "\n\n" + block
+}
+
+// withFileBlockLF is withFileBlock for LF text, the block in place.
+func withFileBlockLF(content, marker string, lines []string) string {
 	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
 	block := start + "\n" + strings.Join(lines, "\n") + "\n" + end + "\n"
 	next := content

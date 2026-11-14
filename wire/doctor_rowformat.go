@@ -109,6 +109,65 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 	if f, ok := a.mixedOldFormat(ctx, st); ok {
 		return []DoctorFinding{f}, nil
 	}
+	// devco P-9: v1 rows in folders of an attached store that this repo
+	// does not attach are leftovers a migrate run converts, never "a lore
+	// older than 0.1.18"; named apart, with their own next step
+	var found []DoctorFinding
+	own, folders := splitUnattached(st.Pending)
+	if len(folders) > 0 {
+		found = append(found, DoctorFinding{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+			Message: fmt.Sprintf(rowFormatUnattached, strings.Join(folders, "; ")), Fix: rowFormatBeforeFix})
+	}
+	st.Pending = own
+	st.Places = slices.DeleteFunc(slices.Clone(st.Places), func(p opsmigrate.PlaceStatus) bool {
+		return slices.ContainsFunc(folders, func(l string) bool { return strings.HasPrefix(l, p.Place+" (") })
+	})
+	more, err := a.rowFormatOwn(ctx, st)
+	return append(more, found...), err
+}
+
+// rowFormatUnattached is the warning of v1 rows left in folders of an
+// attached store that no entry of this repo attaches.
+const rowFormatUnattached = "row files at _v: 1 in store folders this repo does not attach, left by a migration that converted only the attached folders: %s"
+
+// rowFormatStoreLeft is the warning of v1 rows of a migrated repo that sit
+// only in its attached stores (none in the repo's own files): rows of a
+// store an earlier run did not convert (attached after it, or skipped),
+// which lore migrate run rewrites; an older lore writing here would show
+// in the repo's files too.
+const rowFormatStoreLeft = "row files at _v: 1 (%s) in attached stores (%s), none in this repo's own files: a migration has not converted them yet"
+
+// v1StorePlaces names the places holding v1 rows when the repo's own place
+// holds none (nil when the repo has a v1 row, or no place has one).
+func v1StorePlaces(places []opsmigrate.PlaceStatus) []string {
+	var out []string
+	for _, p := range places {
+		if p.V1 == 0 {
+			continue
+		}
+		if p.Place == string(store.SourceRepo) {
+			return nil
+		}
+		out = append(out, p.Place+" "+plural(p.V1, "row"))
+	}
+	return out
+}
+
+// splitUnattached splits pending lines into the repo's attached places'
+// and the unattached folders' (statusUnattached).
+func splitUnattached(pending []string) (own, folders []string) {
+	for _, p := range pending {
+		if strings.Contains(p, unattachedTag) {
+			folders = append(folders, p)
+			continue
+		}
+		own = append(own, p)
+	}
+	return own, folders
+}
+
+// rowFormatOwn is the row_format finding of the attached places' v1 rows.
+func (a *App) rowFormatOwn(ctx context.Context, st opsmigrate.StatusOut) ([]DoctorFinding, error) {
 	if len(st.Pending) == 0 {
 		return nil, nil
 	}
@@ -124,6 +183,10 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 	if onlyLeftBefore(st.Pending) {
 		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorNote,
 			Message: fmt.Sprintf(rowFormatLeftBefore, pending), Fix: rowFormatBeforeFix}}, nil
+	}
+	if places := v1StorePlaces(st.Places); len(places) > 0 {
+		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+			Message: fmt.Sprintf(rowFormatStoreLeft, pending, strings.Join(places, ", ")), Fix: rowFormatBeforeFix}}, nil
 	}
 	if at, ok := a.v1BeforeMigration(ctx); ok {
 		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
