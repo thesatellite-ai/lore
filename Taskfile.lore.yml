@@ -282,7 +282,7 @@ tasks:
       - GOMAXPROCS=4 tests/lib/gotest-shards.sh {{.SHARDS}} ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m
 
   test:race:changed:
-    desc: "Race detector on the RACE_PKGS packages that hold a changed .go file (since the merge base with FAST_BASE, default origin/main; go.mod/go.sum changes select the whole set; tests/lib/fast-plan.sh race). Part of lore:check:fast"
+    desc: "Race detector on the RACE_PKGS packages that hold a changed .go file (since the merge base with FAST_BASE, default origin/dev; go.mod/go.sum changes select the whole set; tests/lib/fast-plan.sh race). Part of lore:check:fast"
     env:
       RACE_PKGS: "{{.RACE_PKGS}}"
     cmds:
@@ -362,7 +362,7 @@ tasks:
         echo "✓ gate passed for tree $tree ({{.STAMP}})"
 
   check:
-    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it; a small fix may land on lore:check:fast, then this runs on main): bound the Go cache, compile once, build, then every step of GATE_STEPS (lint, cross-builds, the Windows and macOS compile check of every package with its tests (cross-tests), tidy, docsync, every unit test, the race set, every end-to-end suite) under the GATE_SLOTS load budget, heaviest first; per-step logs, wall and CPU times in tmp/check"
+    desc: "FULL tier, THE gate — run before every push (the pre-push hook enforces it; a small fix may land on lore:check:fast, then this runs on dev): bound the Go cache, compile once, build, then every step of GATE_STEPS (lint, cross-builds, the Windows and macOS compile check of every package with its tests (cross-tests), tidy, docsync, every unit test, the race set, every end-to-end suite) under the GATE_SLOTS load budget, heaviest first; per-step logs, wall and CPU times in tmp/check"
     cmds:
       - testlock task --taskfile "{{.TASKFILE}}" check:run
 
@@ -417,19 +417,19 @@ tasks:
       - |
         set -e
         e2e=$(tests/lib/fast-plan.sh steps)
-        echo "changed files: $(tests/lib/fast-plan.sh files | wc -l | tr -d ' ') (since the merge base with ${FAST_BASE:-origin/main})"
+        echo "changed files: $(tests/lib/fast-plan.sh files | wc -l | tr -d ' ') (since the merge base with ${FAST_BASE:-origin/dev})"
         echo "end-to-end steps for them: ${e2e:-none}" | tr '\n' ' '; echo
         # shellcheck disable=SC2086 # step names are single words
         steps=$(tests/lib/fast-plan.sh keep {{.FAST_UNIT_STEPS}} $e2e)
-        case "${SKIP_DOCS:-}" in ""|0) ;; *) echo "SKIP_DOCS=$SKIP_DOCS: nothing to drop, the fast tier runs no docs step (the full gate on main runs them)" ;; esac
+        case "${SKIP_DOCS:-}" in ""|0) ;; *) echo "SKIP_DOCS=$SKIP_DOCS: nothing to drop, the fast tier runs no docs step (the full gate on dev runs them)" ;; esac
         # shellcheck disable=SC2086
         GATE_SLOTS={{.GATE_SLOTS}} tests/lib/gate-steps.sh fast $steps
       - task: check:stamp
         vars: {STAMP: "{{.CHECK_FAST_STAMP}}"}
-      - echo "✓ task check:fast passed (logs in {{.GATE_LOG_DIR}}); the full gate runs on main after landing (task check:after-land)"
+      - echo "✓ task check:fast passed (logs in {{.GATE_LOG_DIR}}); the full gate runs on dev after landing (task check:after-land)"
 
   check:after-land:
-    desc: "The full gate on what landed: fetch origin, a fresh worktree of origin/main in a temp folder, task check there, then the result in LORE_GATE_REPORT (default ~/.local/state/lore-gate/last.md; first line PASS or FAIL with the commit, then the step timings) with the step logs beside it. Run it right after landing a fix that passed only check:fast; a FAIL is fixed at once (docs/DEVELOPMENT.md \"Landing\")"
+    desc: "The full gate on what landed: fetch origin, a fresh worktree of origin/dev in a temp folder, task check there, then the result in LORE_GATE_REPORT (default ~/.local/state/lore-gate/last.md; first line PASS or FAIL with the commit, then the step timings) with the step logs beside it. Run it right after landing a fix that passed only check:fast; a FAIL is fixed at once (docs/DEVELOPMENT.md \"Landing\")"
     cmds:
       - tests/lib/after-land.sh
 
@@ -946,5 +946,5 @@ tasks:
   release:
     desc: "This repo builds no release binaries: a release is a version tag made by .github/workflows/release.yml (docs/DEVELOPMENT.md \"Releases\")"
     cmds:
-      - 'echo "This repo builds no release binaries: a release is the tag vX.Y.Z from .github/workflows/release.yml; the binaries are built and published separately (docs/DEVELOPMENT.md Releases)"'
+      - 'echo "This repo builds no release binaries: a release is the tag vX.Y.Z made by a manual run of .github/workflows/release.yml on dev; the binaries are built and published separately (docs/DEVELOPMENT.md Releases)"'
       - 'exit 1'

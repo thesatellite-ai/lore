@@ -80,6 +80,8 @@ stable:      yes
 ```
 <!-- /example -->
 
+A row you write into one of that company's stores carries this identity wherever you run lore: from a repo of no org, `lore memory add --to <store>/<folder>` records you (`created_by`, `updated_by`, and your actor row in that store) as your identity in the org, never the fallback `lore whoami` shows there (your git email or `human:<user>@<host>`, the OS user).
+
 ## Step 4 — Join your company's setup in one command: `lore org import`
 
 Writing the org entry by hand is easy to get wrong. Instead, someone at the agency commits a suggested entry, `lore-org.yaml`, into the org folder of the store once. It names the stores and which repos belong to whom, and never anyone's identity:

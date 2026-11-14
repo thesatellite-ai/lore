@@ -2,7 +2,7 @@
 # lore installer for macOS / Linux.
 #
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
+#   curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/v0.1.18/install.sh | sh
 #
 # Detects OS + arch, downloads the latest released binary from GitHub
 # Releases, installs it to /usr/local/bin, and (optionally) installs the

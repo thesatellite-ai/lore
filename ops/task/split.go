@@ -12,6 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
@@ -68,7 +69,11 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 	if err != nil {
 		return SplitOut{}, err
 	}
-	if err = o.checkWidth(ctx, f, store.Source(probe.To), id.String(), len(pieces)); err != nil {
+	fresh, err := o.splitFresh(ctx, project, work.Field(pr, work.FieldMission), in.Key, len(pieces))
+	if err != nil {
+		return SplitOut{}, err
+	}
+	if err = o.checkWidth(ctx, f, store.Source(probe.To), id.String(), fresh); err != nil {
 		return SplitOut{}, err
 	}
 	dropUnused(&par.inh, pieces)
@@ -88,25 +93,68 @@ func (o ops) split(ctx context.Context, in SplitIn) (SplitOut, error) {
 		return SplitOut{}, err
 	}
 	out.Batch = batch.String()
+	// run:plat:split-perf: every child (and the default list, the caller's
+	// actor row) is staged and written as ONE store commit, not one per
+	// child; a refused child writes nothing at all. Staged rows are not
+	// read back, so the rank chain is passed down, and the default list
+	// the first child creates is named to the rest.
+	sctx := engine.Staging(store.WithCommitTitle(bctx, "task split: "+strconv.Itoa(len(pieces))+" sub-tasks under "+id.String()))
+	defer engine.Discard(sctx) // no-op once committed
+	tasklist := ""
 	for i, p := range pieces {
 		key := ""
 		if in.Key != "" {
 			key = in.Key + "/" + strconv.Itoa(i+1)
 		}
-		a, aerr := o.add(bctx, AddIn{
+		a, aerr := o.add(sctx, AddIn{
 			Title: p.Title, Body: p.Body, Priority: p.Priority, Commitment: p.Commitment,
-			Assign: p.Assign, Due: p.Due,
-			Parent: id.String(), Key: key, Project: project,
+			Assign: p.Assign, Due: p.Due, Tasklist: tasklist,
+			Parent: id.String(), Key: key, Project: project, rank: out.Added[i].Rank,
 		})
 		if aerr != nil {
 			return SplitOut{}, aerr
 		}
 		out.Added[i].ID = a.Data.ID
 		out.Added[i].Rank = a.Data.Rank
+		if tasklist == "" && !a.existed {
+			tasklist = a.Data.TaskListID
+		}
+	}
+	if _, err = engine.Commit(sctx); err != nil {
+		return SplitOut{}, err
 	}
 	out.Human = work.Success + " " + strconv.Itoa(len(pieces)) + " sub-tasks under " + id.String() + " " + par.title + " (batch " + out.Batch + "):\n" +
 		splitList(out.Added) + inheritedLine(par)
 	return out, nil
+}
+
+// splitFresh is how many of a split's n pieces it will add: with --key,
+// a piece whose key <key>/<n> a live task of the project and mission
+// already holds is not added again (add's --key rule), so a re-run of a
+// split whose children are all there still fits tasks.max_children
+// instead of counting them twice (E_TREE_WIDTH on "a re-run adds
+// nothing"). One task read for every piece, not one per piece.
+func (o ops) splitFresh(ctx context.Context, project, mission, key string, n int) (int, error) {
+	if key == "" {
+		return n, nil
+	}
+	all, err := work.ListAll(ctx, o.env, table, "")
+	if err != nil {
+		return 0, err
+	}
+	have := map[string]bool{}
+	for _, s := range all {
+		if work.Field(s.Row, work.FieldProject) == project && work.Field(s.Row, work.FieldMission) == strings.TrimSpace(mission) {
+			have[work.Field(s.Row, work.FieldKey)] = true
+		}
+	}
+	fresh := 0
+	for i := range n {
+		if !have[key+"/"+strconv.Itoa(i+1)] {
+			fresh++
+		}
+	}
+	return fresh, nil
 }
 
 // dropUnused clears the inherited priority / commitment that no piece

@@ -28,7 +28,7 @@ tasks:
       - task: lore:check:fast
 
   check:after-land:
-    desc: alias → lore:check:after-land — the full gate on the landed origin/main
+    desc: alias → lore:check:after-land — the full gate on the landed origin/dev
     cmds:
       - task: lore:check:after-land
 

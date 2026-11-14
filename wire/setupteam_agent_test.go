@@ -154,3 +154,89 @@ func TestSetupTeamStepMachinePolicyRefusesFirst(t *testing.T) {
 		t.Fatal("the person's team step made no org entry")
 	}
 }
+
+// TestSetupTeamStepOutsideAGitCheckout (gate7a): the admin setup's team
+// step is saved from a folder that is no git checkout (a new machine's
+// home). The agent check that runs before the step writes (agentpol 4)
+// used to read the caller from the repo's row state and refused the step
+// with E_NOT_A_STORE; it now resolves the caller without a repo, so a
+// person and an agent both create the team from there.
+func TestSetupTeamStepOutsideAGitCheckout(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		ctx  context.Context
+	}{{"person", ctx}, {"agent", agentCtx(ctx)}} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newOrgWorld(t)
+			w.bareAt(t, "agency/team")
+			home := w.home(t, "ana")
+			plain := filepath.Join(t.TempDir(), "plain")
+			if err := os.MkdirAll(plain, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			opts, _ := StandaloneOptionsOrg(plain, home, plain, "test")
+			app, err := New(opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = app.Close() })
+			ap, err := app.SetupApplier(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ans := onboard.Answers{onboard.QIDOrg: {Text: "northwind"}, onboard.QIDStoreURL: {Text: "https://github.com/agency/team"},
+				onboard.QIDEmail: {Text: "ana@agency.example"}, onboard.QIDName: {Text: "Ana"}}
+			req := opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "northwind", Kind: onboard.KindAdmin}, Step: onboard.StepTeam, Apply: onboard.ApplyTeam, Answers: ans}
+			if _, err = ap.Apply(tc.ctx, req); err != nil {
+				t.Fatalf("the team step saved outside a git checkout: %v", err)
+			}
+			if !isOrgAdmin(home, "northwind") {
+				t.Fatal("the team step made no org entry")
+			}
+		})
+	}
+}
+
+// TestAgentMayCreateTeamOutsideARepo: the team step's machine-policy check
+// runs from a folder that is no git checkout (the setup page is often
+// opened there). It used to resolve the caller through the folder's store
+// and answered E_NOT_A_STORE, so no team could be started from there
+// (gate7b, setupe2e team-push-batch).
+func TestAgentMayCreateTeamOutsideARepo(t *testing.T) {
+	ctx := context.Background()
+	w := newOrgWorld(t)
+	home := w.home(t, "ana")
+	plain := t.TempDir()
+	opts, _ := StandaloneOptionsOrg(plain, home, plain, "test")
+	app, err := New(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+
+	if err = app.agentMayCreateTeam(ctx); err != nil {
+		t.Fatalf("a person's team step outside a repo, no machine policy = %v, want nil", err)
+	}
+	if err = app.agentMayCreateTeam(agentCtx(ctx)); err != nil {
+		t.Fatalf("an agent's team step outside a repo, no machine policy = %v, want nil", err)
+	}
+
+	cfg := configPath(home)
+	before, err := os.ReadFile(cfg)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(filepath.Dir(cfg), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(cfg, append(before, []byte("policies:\n  agents.may_manage_people: false\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err = app.agentMayCreateTeam(ctx); err != nil {
+		t.Fatalf("a person's team step outside a repo under this machine's false = %v, want nil", err)
+	}
+	if err = app.agentMayCreateTeam(agentCtx(ctx)); !errs.Has(err, errs.PolicyDenied) {
+		t.Fatalf("an agent's team step outside a repo under this machine's false = %v, want E_POLICY_DENIED", err)
+	}
+}

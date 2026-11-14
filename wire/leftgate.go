@@ -24,13 +24,18 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/policy"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -252,4 +257,81 @@ func rosterStatusOnDisk(home, org, actor string) (status, leftAt string) {
 		return "", ""
 	}
 	return doc.Status, doc.LeftAt
+}
+
+// urlPushHold is the push hold of a store clone pushed without an
+// attached open: `lore store push` and the org-store pass of `lore sync`
+// (pushWaitingOrgStores). armLeftHold arms only the stores a repo
+// attaches, so those two paths pushed what a removed person wrote after
+// their removal (D-85, gate7b). Every org of ~/.lore/config.yaml that
+// lists raw holds with its own roster and the caller's identity in that
+// org (its org entry, resolved as an open would); the first org that
+// holds wins. nil when no org lists raw.
+func (a *App) urlPushHold(ctx context.Context, raw string) gitbackend.PushHoldFunc {
+	if a.opts.Home == "" {
+		return nil
+	}
+	orgs := orgsListingStore(a.opts.Home, raw)
+	if len(orgs) == 0 {
+		return nil
+	}
+	mc, err := readMachineConfig(a.opts.Home)
+	if err != nil {
+		return nil
+	}
+	var holds []gitbackend.PushHoldFunc
+	for _, org := range orgs {
+		entry := identity.Org{Name: org}
+		if i := slices.IndexFunc(mc.Orgs, func(m identity.Org) bool { return m.Name == org }); i >= 0 {
+			entry = mc.Orgs[i]
+		}
+		opts := a.opts
+		opts.Org = func(context.Context) (*identity.Org, error) { return &entry, nil }
+		who, rerr := resolveIdentity(ctx, opts)
+		if rerr != nil {
+			continue // no identity: nothing on the roster can name this caller
+		}
+		actor, aerr := who.Person().ActorID() // the roster lists the person, also when their agent pushes
+		if aerr != nil || actor.IsZero() {
+			continue
+		}
+		holds = append(holds, leftPushHold(a.opts.Home, org, actor.String()))
+	}
+	if len(holds) == 0 {
+		return nil
+	}
+	return func(ctx context.Context) (gitbackend.PushHold, bool) {
+		for _, h := range holds {
+			if hold, ok := h(ctx); ok {
+				return hold, true
+			}
+		}
+		return gitbackend.PushHold{}, false
+	}
+}
+
+// orgsListingStore names the orgs of home's config.yaml whose entry lists
+// the store at raw (urls compared normalised), in config order: the orgs
+// whose roster can hold a push of that clone. Another org's store or a
+// personal store is listed by none; a config that does not load lists
+// nothing (`lore config check` names it).
+func orgsListingStore(home, raw string) []string {
+	norm, err := repourl.NormalizeStore(raw)
+	if err != nil {
+		return nil
+	}
+	cfg, _, err := orgcfg.LoadConfig(home)
+	if err != nil || cfg == nil {
+		return nil
+	}
+	var out []string
+	for _, o := range cfg.Orgs {
+		if slices.ContainsFunc(o.Stores, func(s orgconf.Store) bool {
+			n, nerr := repourl.NormalizeStore(s.URL)
+			return nerr == nil && n == norm
+		}) {
+			out = append(out, o.Name)
+		}
+	}
+	return out
 }

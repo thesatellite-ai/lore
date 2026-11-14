@@ -76,7 +76,7 @@ steps:
       ID      LABEL                    HELP         
       name    Your name                             
       email   Email                    The invite na
-      emails  Other addresses you use  Optional. Eac
+      emails  Other addresses you use  Optional. You
       handle  Handle                   Optional shor
     checks: identity.email_format, identity.invite_e
     apply: identity

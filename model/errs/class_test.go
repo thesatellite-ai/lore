@@ -38,7 +38,7 @@ func allConstants() []Code {
 		ContactTaken, ContactType, RoleUnknown, StatusChange, PeriodOverlap,
 		SetupNotFound, SetupAmbiguous, SetupNameTaken, SetupOrgMismatch, SetupNoPersonalStore,
 		SetupStepFailed, SetupStepOrder, InviteInvalid, JoinOrgUnknown, InviteNotFound, InviteExpired, InviteRevoked,
-		InviteUsed, InviteEmail, StoreNoAccess, StoreNoWrite, FixRefused, SkillLinked,
+		InviteUsed, InviteEmail, FixRefused, SkillLinked,
 	}
 }
 
@@ -196,5 +196,21 @@ func TestPurgedRow(t *testing.T) {
 	d, ok := Lookup(Purged)
 	if !ok || d.Code != "E_PURGED" || d.Class != ClassRefused || d.Exit != 23 || d.HTTP != http.StatusConflict {
 		t.Fatalf("E_PURGED = %+v (ok %v), want refused/23/409", d, ok)
+	}
+}
+
+// TestStoreRefusalsHaveNoOwnCode keeps the two store-refusal codes that were
+// registered but never raised out of the registry (run:onboarding:open-5): a
+// store that refuses the account or a push surfaces as the setup's failing
+// store.read / store.write check and, in commands, as E_STORE_UNREACHABLE,
+// which about fifteen callers branch on. A code listed in the reference that
+// no command returns sends scripts after an exit they never see; bring one
+// back only together with the code path that returns it.
+func TestStoreRefusalsHaveNoOwnCode(t *testing.T) {
+	t.Parallel()
+	for _, c := range []Code{"E_STORE_NO_ACCESS", "E_STORE_NO_WRITE"} {
+		if c.Known() {
+			t.Errorf("%s is registered but no command returns it; raise it where a store refuses access, or keep it out", c)
+		}
 	}
 }

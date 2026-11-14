@@ -68,9 +68,19 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 	if out.Restored {
 		sctx = gitbackend.WithFirstPush(ctx) // the person put the old store back (remotereset.go)
 	}
+	if hold := a.urlPushHold(ctx, raw); hold != nil {
+		// a removed person's later commits stay in the clone here too, as
+		// in an attached store's sync (armLeftHold; D-85)
+		sctx = gitbackend.WithPushHold(sctx, hold)
+	}
 	rep, err := b.Sync(sctx)
 	if err != nil {
 		return opsstores.PushOut{}, err
+	}
+	if rep.Held != "" && rep.Sent == 0 {
+		// nothing went out because the person left the org: say so, not "sent 0"
+		return opsstores.PushOut{}, errs.New(errs.Refused, "store push: "+rep.Held).
+			WithHint("lore doctor --all shows your status in each org")
 	}
 	if len(rep.Refused) > 0 {
 		return opsstores.PushOut{}, errs.New(errs.Refused, "store push: the remote refused the push: "+rep.Refused[0].Reason)

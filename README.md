@@ -104,13 +104,13 @@ brew install thesatellite-ai/tap/lore
 ### Script (macOS / Linux)
 
 ```sh
-curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
+curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/v0.1.18/install.sh | sh
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/thesatellite-ai/lore/v0.1.18/install.ps1 | iex
 ```
 
 Or grab a tarball from [Releases](https://github.com/thesatellite-ai/lore/releases) and put `lore` on your `PATH` (the `skills/` folder in the archive is the skill bundle; `BINARY-LICENSE.txt` beside it is the binary's licence, see [License](#license)).

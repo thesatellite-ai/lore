@@ -93,14 +93,14 @@ ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to me --body 'I write short commit messages'
-lore: wrote ~/.lore/stores/_me/_store/actors/act_b4f4…a5b0.json (store me)
-lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537…6bbb.json (store me)
-✓ mem_2537…6bbb [me]
+lore: wrote ~/.lore/stores/_me/_store/actors/act_2537…6bbb.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/memories/mem_b69e…5ed7.json (store me)
+✓ mem_b69e…5ed7 [me]
   scope: [project]
 
 # alice, in landing
 $ lore memory list
-mem_2537…6bbb [retrieved] I write short commit messages [me]
+mem_b69e…5ed7 [retrieved] I write short commit messages [me]
 ```
 <!-- /example -->
 

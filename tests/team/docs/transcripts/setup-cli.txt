@@ -135,7 +135,7 @@ steps:
       ID      LABEL                    HELP         
       name    Your name                             
       email   Email                                 
-      emails  Other addresses you use  Optional. Eac
+      emails  Other addresses you use  Optional. You
       handle  Handle                   Optional shor
     checks: identity.email_format, identity.git_emai
     apply: identity
