@@ -164,6 +164,17 @@ func Unreadable(path, reason string) error {
 		WithHint("restore " + path + " from git history (git log -p -- " + path + "), then retry; lore doctor shows the features the files need")
 }
 
+// UnreadableConflict is Unreadable for a _meta.json that holds git
+// conflict markers: a merge or rebase stopped on it, often because this
+// clone has no lore merge driver yet (lore only read here). It stays fail
+// closed (E_OLD_LORE: nothing is written), but names the conflict and the
+// way out instead of "restore from git history", which threw one side
+// away (E-8).
+func UnreadableConflict(path string) error {
+	return errs.New(errs.OldLore, "this project's "+path+" holds git conflict markers (a git merge, rebase or cherry-pick stopped on it); lore is read-only here until it is resolved").
+		WithHint("git merge --abort (or git rebase --abort, git cherry-pick --abort), then lore sync (sets up lore's merge driver in this clone, which merges lore's files), then run the merge again")
+}
+
 // Raise adds need to d: each name d does not list yet is added (sorted),
 // and min_lore_version is raised to the highest Since of the added names
 // (never lowered). added lists the names that were new. Unknown names are

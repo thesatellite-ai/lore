@@ -100,9 +100,13 @@ func TestMigrateTagsFlow(t *testing.T) {
 	v1EntityTag(t, repo, "projects", project, infra)
 	v1EntityTag(t, repo, "memories", project, infra) // wrong prefix: skipped
 
-	steps, n, err := a.migrateTags(ctx, true)
-	if err != nil || n != 2 {
-		t.Fatalf("dry run: %v %d %v, want 2 rows", steps, n, err)
+	dry, err := a.migrateTags(ctx, true)
+	steps, n := dry.Steps, dry.Rows
+	if err != nil || n != 2 || len(dry.Upgraded) != 2 || len(dry.Detail) != 2 {
+		t.Fatalf("dry run: %v %d %v %v, want 2 rows named", steps, n, dry.Upgraded, err)
+	}
+	if steps[0] != "tags: would fold 4 entity_tags links into the tag_ids of 2 rows (memories 1, projects 1)" {
+		t.Fatalf("summary line %q", steps[0])
 	}
 	if got := tagIDsOf(t, a, mem); !slices.Equal(got, before) {
 		t.Fatalf("the dry run wrote tag_ids: %v", got)
@@ -111,8 +115,8 @@ func TestMigrateTagsFlow(t *testing.T) {
 		t.Fatalf("steps %v do not report the malformed link", steps)
 	}
 
-	if _, n, err = a.migrateTags(ctx, false); err != nil || n != 2 {
-		t.Fatalf("run: %d %v", n, err)
+	if got, err := a.migrateTags(ctx, false); err != nil || got.Rows != 2 {
+		t.Fatalf("run: %d %v", got.Rows, err)
 	}
 	want := []string{deploy, infra, ops}
 	slices.Sort(want)
@@ -123,7 +127,7 @@ func TestMigrateTagsFlow(t *testing.T) {
 		t.Fatalf("project tag_ids = %v, want [%s]", got, infra)
 	}
 
-	if _, _, err = a.migrateTags(ctx, false); err != nil {
+	if _, err = a.migrateTags(ctx, false); err != nil {
 		t.Fatalf("second run: %v", err)
 	}
 	if got := tagIDsOf(t, a, mem); !slices.Equal(got, want) {
@@ -157,9 +161,21 @@ func TestMigrateTagsOrphanLink(t *testing.T) {
 	v1EntityTag(t, repo, "memories", mem, infra)
 	v1EntityTag(t, repo, "memories", gone, infra)
 	v1EntityTag(t, repo, "memories", mem, goneTag)
-	steps, n, err := a.migrateTags(ctx, false)
-	if err != nil || n != 1 {
+	dry, err := a.migrateTags(ctx, true)
+	if err != nil || dry.Rows != 1 {
+		t.Fatalf("dry run: %v %d %v, want 1 row and no error", dry.Steps, dry.Rows, err)
+	}
+	got, err := a.migrateTags(ctx, false)
+	steps, n := got.Steps, got.Rows
+	if err != nil || n != 1 || len(got.Upgraded) != 1 {
 		t.Fatalf("run: %v %d %v, want 1 row and no error", steps, n, err)
+	}
+	// the summary counts only the link that landed, as the dry run did
+	if want := "tags: folded 1 entity_tags link into the tag_ids of 1 row (memories 1)"; steps[0] != want {
+		t.Fatalf("summary line %q, want %q", steps[0], want)
+	}
+	if want := "tags: would fold 1 entity_tags link into the tag_ids of 1 row (memories 1)"; dry.Steps[0] != want {
+		t.Fatalf("dry summary line %q, want %q", dry.Steps[0], want)
 	}
 	for _, want := range []string{"the row " + gone + " no longer exists", "the tag " + goneTag + " no longer exists"} {
 		if !slices.ContainsFunc(steps, func(s string) bool {

@@ -230,8 +230,8 @@ func projectRoot(ctx context.Context, dir string) string {
 		d = real
 	}
 	for {
-		if fi, serr := os.Stat(filepath.Join(d, rowfs.LoreDir)); serr == nil && fi.IsDir() {
-			return d
+		if entries, rerr := os.ReadDir(filepath.Join(d, rowfs.LoreDir)); rerr == nil && len(entries) > 0 {
+			return d // an empty .lore/ is no project: only an earlier lore run left it (D-20)
 		}
 		if d == top || filepath.Dir(d) == d {
 			return ""

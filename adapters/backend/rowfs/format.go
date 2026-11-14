@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/thesatellite-ai/lore/logic/formatgate"
+	"github.com/thesatellite-ai/lore/logic/merge3"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -63,7 +64,7 @@ func readFormatFile(full, rel string) (d formatgate.Declared, doc []byte, exists
 	}
 	o, derr := decodeObject(doc)
 	if derr != nil {
-		return formatgate.Declared{}, doc, true, formatgate.Unreadable(rel, "not a JSON object")
+		return formatgate.Declared{}, doc, true, unreadableDoc(rel, doc)
 	}
 	d, err = decodeFormat(o, rel)
 	return d, doc, true, err
@@ -117,7 +118,7 @@ func raiseFile(root, rel, full string, a *Applied, need []string, m fileModes) (
 	}
 	o, err := decodeObject(doc)
 	if err != nil {
-		return nil, formatgate.Unreadable(rel, "not a JSON object")
+		return nil, unreadableDoc(rel, doc)
 	}
 	if err = setFormat(o, next); err != nil {
 		return nil, err
@@ -233,4 +234,14 @@ func mergeFormat(out, o, t object) error {
 		return nil
 	}
 	return setFormat(out, formatgate.Merge(od, td))
+}
+
+// unreadableDoc is the fail-closed error of a format file doc that is not
+// a JSON object: a conflict-marked file (a stopped merge) says so and
+// names the way out (formatgate.UnreadableConflict).
+func unreadableDoc(rel string, doc []byte) error {
+	if merge3.ContainsConflictMarkers(string(doc)) {
+		return formatgate.UnreadableConflict(rel)
+	}
+	return formatgate.Unreadable(rel, "not a JSON object")
 }

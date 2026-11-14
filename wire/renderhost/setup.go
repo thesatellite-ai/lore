@@ -465,7 +465,12 @@ const (
 // (--schema-only after `lore upgrade`) reports nothing.
 func (h *Host) CoreSchema(ctx context.Context, quiet bool) ([]string, error) {
 	if _, err := h.app.RebuildSearch(ctx); err != nil {
-		return nil, err
+		// D-20: started in a git repo with no lore data, the open refuses
+		// (setup.run never sets a repo up, host.setsUpRepo): there is no
+		// index of this repo to rebuild, and nothing is made there
+		if !wire.NoCreate(ctx) || !errs.Has(err, errs.NotAStore) {
+			return nil, err
+		}
 	}
 	if quiet {
 		return nil, nil

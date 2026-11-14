@@ -145,6 +145,27 @@ type Settings struct {
 	// rewritten, a routing policy row written, a row whose tag_ids were
 	// set). A file that is not a row (a marker, config.yaml) counts 0.
 	Rows int
+	// Upgraded names ("table/id") the repo-store rows among Rows that the
+	// steps wrote (would write, under dryRun), so the run lists them under
+	// their table and counts each once (E-2: the entity_tags fold rewrote
+	// 75 rows as _v: 2 before the format rewrite, so a dry run counted
+	// them twice and the real run's table list left them out).
+	Upgraded []string
+	// Detail are per-row lines behind Steps (one per row whose tag_ids
+	// were set), printed only with --verbose: a 300-row repo printed 75
+	// of them and buried the summary.
+	Detail []string
+}
+
+// ActorRecorder is a Rewriter that writes the running person's actor row
+// into every store where the run stamped rows with that actor (E-3:
+// settings steps write through the engine, which stamps updated_by, but
+// around the write path that lands the writer's actor row first, so
+// doctor called the fresh migration DEGRADED). run calls it after the
+// rewrites, before Finish, so the actor file is part of the same diff.
+type ActorRecorder interface {
+	// RecordRunActor writes the actor row where it is missing.
+	RecordRunActor(ctx context.Context) error
 }
 
 // RunIn is the input of migrate.run.
@@ -178,6 +199,9 @@ type RunOut struct {
 	Rows  []string `json:"rows"`
 	// Steps are the settings changes (identity, store markers).
 	Steps []string `json:"steps"`
+	// Details are the per-row lines behind Steps (Settings.Detail); Text
+	// prints them only with --verbose.
+	Details []string `json:"details,omitempty"`
 	// Journal is the run's own lines: backup, resume, offline, push, undo
 	// (kept apart so a dry run and a run list the same Steps).
 	Journal []string `json:"journal,omitempty"`
@@ -303,6 +327,11 @@ func (o RunOut) Text() string {
 	for _, s := range o.Steps {
 		b.WriteString("  " + s + "\n")
 	}
+	if o.Verbose {
+		for _, d := range o.Details {
+			b.WriteString("    " + d + "\n")
+		}
+	}
 	b.WriteString(LeftText(o.Left, o.DryRun, o.Verbose))
 	for _, j := range o.Journal {
 		b.WriteString(j + "\n")
@@ -421,16 +450,14 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 			if err != nil {
 				return failed(err)
 			}
-			out.Steps = append(out.Steps, settings.Steps...)
-			out.Count += settings.Rows
+			out.addSettings(settings)
 		}
 	} else {
 		settings, err := rw.MigrateSettings(ctx, in.DryRun)
 		if err != nil {
 			return failed(err)
 		}
-		out.Steps = append(out.Steps, settings.Steps...)
-		out.Count += settings.Rows
+		out.addSettings(settings)
 		if err = At(ctx, PointSettings); err != nil {
 			return RunOut{}, err
 		}
@@ -438,7 +465,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		if err != nil {
 			return failed(err)
 		}
-		out.Rows = append(out.Rows, live...)
+		out.addRows(live)
 		if err := At(ctx, PointLive); err != nil {
 			return RunOut{}, err
 		}
@@ -458,17 +485,11 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		if err != nil {
 			return failed(err)
 		}
+		lines := make([]string, 0, len(got))
 		for _, id := range got {
-			// A v0.1.17 live row that also sits at v1 in .lore/data is one
-			// file: the live step writes it as _v: 2 and the rewrite then
-			// skips it, so a real run names it once. A dry run writes
-			// nothing, so the rewrite still finds the file at v1; without
-			// this the dry run promised "2 rows" (the same row twice) that
-			// the real run then reported as 1.
-			if line := t.String() + "/" + id.String(); !slices.Contains(out.Rows, line) {
-				out.Rows = append(out.Rows, line)
-			}
+			lines = append(lines, t.String()+"/"+id.String())
 		}
+		out.addRows(lines)
 		if len(got) > 0 && !in.DryRun { // a table with nothing to rewrite is no boundary
 			if err := At(ctx, PointTable); err != nil {
 				return RunOut{}, err
@@ -476,6 +497,12 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 	}
 	out.Count += len(out.Rows)
+	sortRows(out.Rows, tables)
+	if ar, ok := rw.(ActorRecorder); ok && !in.DryRun {
+		if err := ar.RecordRunActor(ctx); err != nil {
+			return RunOut{}, err
+		}
+	}
 	if lr, ok := rw.(LeftReporter); ok {
 		// T-2: never leave a mixed repo silently; name every file the run
 		// does not rewrite, why, and what converts it
@@ -506,6 +533,51 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 	}
 	return out, nil
+}
+
+// addSettings adds what a settings step did: its lines, its rows named
+// by id once (addRows) and the rest of its row count.
+func (o *RunOut) addSettings(s Settings) {
+	o.Steps = append(o.Steps, s.Steps...)
+	o.Details = append(o.Details, s.Detail...)
+	o.addRows(s.Upgraded)
+	o.Count += max(s.Rows-len(s.Upgraded), 0) // the named rows are counted with Rows
+}
+
+// addRows adds "table/id" lines not listed yet. A row is one file
+// however many steps write it: a v0.1.17 live row that also sits at v1 in
+// .lore/data is written by the live step and then skipped by the rewrite,
+// a row whose tag_ids the fold sets is skipped by the rewrite too; a dry
+// run writes nothing, so its rewrite still finds those files at v1, and
+// without this it promised more rows than the real run then reported.
+func (o *RunOut) addRows(lines []string) {
+	for _, l := range lines {
+		if !slices.Contains(o.Rows, l) {
+			o.Rows = append(o.Rows, l)
+		}
+	}
+}
+
+// sortRows orders "table/id" lines by the run's table order, then id, so
+// a dry run and the real run list the same tables in the same order
+// whichever step wrote a row (E-2). A table the run does not rewrite goes
+// last, in name order.
+func sortRows(rows []string, tables []row.Table) {
+	rank := func(l string) int {
+		t, _, _ := strings.Cut(l, "/")
+		for i, x := range tables {
+			if x.String() == t {
+				return i
+			}
+		}
+		return len(tables)
+	}
+	slices.SortStableFunc(rows, func(x, y string) int {
+		if rx, ry := rank(x), rank(y); rx != ry {
+			return rx - ry
+		}
+		return strings.Compare(x, y)
+	})
 }
 
 // baseOps are run and enable.

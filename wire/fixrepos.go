@@ -66,7 +66,7 @@ func (a *App) FixRepos(ctx context.Context, dirs []string) (opsfix.Found, error)
 	if err != nil {
 		return opsfix.Found{}, err
 	}
-	var w fixRepoWalk
+	w := fixRepoWalk{loreHome: resolvedPath(a.opts.Home)}
 	for _, k := range known {
 		w.known = append(w.known, k.Root)
 	}
@@ -182,6 +182,11 @@ type fixRepoWalk struct {
 	remotes func(ctx context.Context, dir string) []string
 	// depth bounds the walk below each base (0: fixWalkDepth).
 	depth int
+	// loreHome is lore's own home folder (~/.lore): the folder holding it
+	// is not a repo with lore data, so it is neither run in nor listed
+	// as skipped (E-16: "skipped ~: has a .lore folder but is not a git
+	// repo" on every --all).
+	loreHome string
 }
 
 // run finds the repos: sorted, each once (symlinks resolved), and the
@@ -207,7 +212,7 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 			// FP-7: listed, never run in (a run would set the repo up)
 			skipped[root] = true
 			out.Skipped = append(out.Skipped, opsfix.Skip{Path: root, Why: skipNoLoreData})
-		case !isGitTop(root) && hasLoreDir(root):
+		case !isGitTop(root) && hasLoreDir(root) && !w.isLoreHome(root):
 			skipped[root] = true
 			out.Skipped = append(out.Skipped, opsfix.Skip{Path: root, Why: skipNotRepo})
 		}
@@ -245,6 +250,11 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 }
 
 // isLinked reports whether one of dir's remotes is named by a store link.
+// isLoreHome reports whether root's .lore folder is lore's own home.
+func (w fixRepoWalk) isLoreHome(root string) bool {
+	return w.loreHome != "" && resolvedPath(filepath.Join(root, rowfs.LoreDir)) == w.loreHome
+}
+
 func (w fixRepoWalk) isLinked(ctx context.Context, dir string) bool {
 	if len(w.linked) == 0 || w.remotes == nil {
 		return false

@@ -19,7 +19,7 @@ func TestLoreFolderUpTo(t *testing.T) {
 	if loreFolderUpTo(sub, top) || loreFolderUpTo(top, top) {
 		t.Fatal("a repo with no .lore anywhere counts as a lore project")
 	}
-	if err := os.Mkdir(filepath.Join(top, "svc", ".lore"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(top, "svc", ".lore", "data"), 0o755); err != nil { // an empty .lore/ is no project (loreFolderAt, D-20)
 		t.Fatal(err)
 	}
 	if !loreFolderUpTo(sub, top) {

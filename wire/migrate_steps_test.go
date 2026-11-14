@@ -38,14 +38,16 @@ func TestMigrateTagsSnakeCase(t *testing.T) {
 	v1Row(t, repo, schema.TableTags, snakeTagC, `"project_id":"`+prj+`","name":"On-Call"`)
 	v1Row(t, repo, schema.TableMemories, snakeMem, `"project_id":"`+prj+`","body":"b","kind":"core","source_kind":"manual","tag_ids":["`+snakeTagB+`"]`)
 
-	dry, _, err := a.migrateTagsSnakeCase(background(), true)
+	dryOut, err := a.migrateTagsSnakeCase(background(), true)
+	dry := dryOut.Steps
 	if err != nil || len(dry) != 3 {
 		t.Fatalf("dry run: %v %v", dry, err)
 	}
 	if got := tagIDsOf(t, a, snakeMem); !slices.Equal(got, []string{snakeTagB}) {
 		t.Fatalf("a dry run rebound the memory: %v", got)
 	}
-	steps, _, err := a.migrateTagsSnakeCase(background(), false)
+	run, err := a.migrateTagsSnakeCase(background(), false)
+	steps := run.Steps
 	if err != nil || len(steps) != len(dry) {
 		t.Fatalf("run: %v %v (dry %v)", steps, err, dry)
 	}
@@ -66,7 +68,8 @@ func TestMigrateTagsSnakeCase(t *testing.T) {
 	if names[snakeTagA] != "cert_rotation" || names[snakeTagC] != "on_call" || names[snakeTagB] != "" {
 		t.Fatalf("tags after the step: %v", names)
 	}
-	again, _, err := a.migrateTagsSnakeCase(background(), false)
+	againOut, err := a.migrateTagsSnakeCase(background(), false)
+	again := againOut.Steps
 	if err != nil || len(again) != 0 {
 		t.Fatalf("second run: %v %v", again, err)
 	}

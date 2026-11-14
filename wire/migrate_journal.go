@@ -985,7 +985,7 @@ func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error
 		return "", err
 	}
 	return "format: " + rowfs.FormatName(rowfs.ProjectFormatCurrent) + ", recorded in " + rowfs.RepoMetaPath + " (by " + m.By + ", " + m.At + "); " +
-		rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.SignpostFile + " tells teammates still on lore 0.1.17 to upgrade (their lore sync names it); commit both with the rows", nil
+		rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.SignpostFile + " tells teammates still on lore 0.1.17 to upgrade; once this commit reaches them, lore 0.1.17 cannot read this project and, where its own git hook is installed, refuses every git commit here, code too, until they upgrade; commit both with the rows", nil
 }
 
 // metaFilesIn counts the format files (_meta.json) among a migration's

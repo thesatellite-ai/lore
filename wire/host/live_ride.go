@@ -73,6 +73,15 @@ var rideHookLines = map[string][]string{
 	hookPrePush:    {`if command -v lore >/dev/null 2>&1 && lore land --help >/dev/null 2>&1; then lore sync hook pre-push "$@" || exit $?; fi`},
 }
 
+// rideBlockLines are rideHookLines[hook], guarded when the hooks folder
+// is shared by every repo (sharedHookLines, D-21).
+func rideBlockLines(hook string, shared bool) []string {
+	if shared {
+		return sharedHookLines("", rideHookLines[hook])
+	}
+	return rideHookLines[hook]
+}
+
 // rideInProgressMarkers are files in the git dir that mean the user's
 // history is being rewritten or assembled: no ride commit then.
 // The refresh hook and post-commit skip on them too (historyInProgress).
@@ -561,13 +570,13 @@ func (s *liveSession) rideCommit(ctx context.Context, branch, head string, items
 // protected, the moment a ride-along becomes possible. Best effort: a
 // failure is a status line, the rows keep waiting for `lore land`.
 func (s *liveSession) ensureRideHooks(ctx context.Context) {
-	dir, err := s.hooksDir(ctx)
+	dir, shared, err := s.hooksFolder(ctx)
 	if err != nil {
 		s.warn("ride-along hooks: " + err.Error())
 		return
 	}
 	for _, hook := range []string{hookPostCommit, hookPrePush} {
-		if err := ensureHookBlock(dir, hook, rideHookMarker, rideHookLines[hook]); err != nil {
+		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared)); err != nil {
 			s.warn("ride-along hooks: " + err.Error())
 			return
 		}

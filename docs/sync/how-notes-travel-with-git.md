@@ -163,7 +163,7 @@ refused pushes:   0
 | Line in `lore sync status` | What it means |
 |---|---|
 | `pending exports` | rows changed in the database that are not written to files yet (normally 0: the pass after each command writes them) |
-| `open conflicts` | rows where the file and the database both changed; see [Conflicts and duplicates](conflicts-and-duplicates.md) |
+| `open conflicts` | lore files under `.lore/data` with conflict markers or left unmerged by a stopped git merge, rebase, cherry-pick or revert; see [Conflicts and duplicates](conflicts-and-duplicates.md) |
 | `trash rows` | rows removed because their file disappeared; see [Trash, restore from git and purge](trash-and-purge.md) |
 | `uncommitted` | files in `.lore/data` that git has not committed yet |
 | `live rows` | rows on the live list (tasks and other live rows, see [Lore for teams](../team/README.md)) |

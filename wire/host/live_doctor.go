@@ -169,7 +169,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 // warning says so and never points at lore fix. A failed install names its
 // error, so the cause is not lost on stderr.
 func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, warn, note func(string)) {
-	dir, err := s.hooksDir(ctx)
+	dir, shared, err := s.hooksFolder(ctx)
 	if err != nil {
 		return
 	}
@@ -198,7 +198,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		return
 	}
 	for _, h := range missing {
-		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideHookLines[h]); ierr != nil {
+		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared)); ierr != nil {
 			warn(what + "; installing it failed: " + ierr.Error())
 			return
 		}

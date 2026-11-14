@@ -136,8 +136,7 @@ func (a *App) WriteGate(ctx context.Context) error {
 // steps write or move (opsmigrate.Settings), so `count:` never says 0
 // for a run that moved rows.
 func (a *App) MigrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
-	steps, rows, err := a.migrateSettings(ctx, dryRun)
-	return opsmigrate.Settings{Steps: steps, Rows: rows}, err
+	return a.migrateSettings(ctx, dryRun)
 }
 
 var _ opsmigrate.RepoSettingsMigrator = (*App)(nil)
@@ -146,48 +145,60 @@ var _ opsmigrate.RepoSettingsMigrator = (*App)(nil)
 // settings steps an --offline run takes too, because they change only the
 // repo store's rows: the entity_tags links folded into tag_ids (M-1).
 func (a *App) MigrateRepoSettings(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
-	steps, rows, err := a.migrateTags(ctx, dryRun)
+	out, err := a.migrateTags(ctx, dryRun)
 	if err != nil {
 		return opsmigrate.Settings{}, err
 	}
 	// branch files only (--offline): the repo's actor copies are among them
-	proj, n, err := a.migrateActorProjection(ctx, dryRun)
-	return opsmigrate.Settings{Steps: append(steps, proj...), Rows: rows + n}, err
+	proj, err := a.migrateActorProjection(ctx, dryRun)
+	return addSettings(out, proj), err
 }
 
-// migrateSettings is MigrateSettings returning its steps and row count.
-func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, error) {
+// addSettings is s followed by more: the lines, rows and named rows of
+// both.
+func addSettings(s opsmigrate.Settings, more opsmigrate.Settings) opsmigrate.Settings {
+	s.Steps = append(s.Steps, more.Steps...)
+	s.Rows += more.Rows
+	s.Upgraded = append(s.Upgraded, more.Upgraded...)
+	s.Detail = append(s.Detail, more.Detail...)
+	return s
+}
+
+// migrateSettings is MigrateSettings: every settings step in order, the
+// lines in step order (addSettings).
+func (a *App) migrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	steps, rows, err := a.MigrateModeB(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
+	out := opsmigrate.Settings{Steps: steps, Rows: rows}
 	// the checkout's own v0.1.17 lore.db (migrate_repodb.go): before the
 	// live rows and the v1 rewrite, which then see its rows in .lore/data
 	db, n, err := a.migrateRepoDB(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, db...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: db, Rows: n})
 	personal, n, err := a.migrateLocalPersonal(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, personal...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: personal, Rows: n})
 	// rows a newer lore moved to another store whose old copy is still
 	// here (migrate_moved.go): before every step that looks an id up
 	moved, n, err := a.migrateMovedLeftovers(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, moved...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: moved, Rows: n})
 	legacy, ok, err := identity.ReadLegacy(a.opts.Home)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	if ok {
 		mc, cerr := readMachineConfig(a.opts.Home)
 		if cerr != nil {
-			return nil, 0, cerr
+			return opsmigrate.Settings{}, cerr
 		}
 		// OWNERQ-8: the old file is moved aside as identity.yaml.migrated,
 		// never deleted (never delete user config, as Q-MODEB and
@@ -197,111 +208,111 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) ([]string, int, 
 		if mc.Identity.Key != "" {
 			step = "identity: " + ConfigFile + " already sets identity: (kept)" + aside
 		}
-		steps = append(steps, step)
+		out.Steps = append(out.Steps, step)
 		if !dryRun {
 			if mc.Identity.Key == "" {
 				if err = setTopIdentity(a.opts.Home, legacy); err != nil {
-					return nil, 0, err
+					return opsmigrate.Settings{}, err
 				}
 			}
 			if _, err = retireLegacyIdentity(a.opts.Home); err != nil {
-				return nil, 0, err
+				return opsmigrate.Settings{}, err
 			}
 		}
 	}
 	list, err := a.ListStores(ctx)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	seen := map[string]bool{}
 	for _, e := range list {
 		step, serr := a.migrateStoreMarker(ctx, e, seen, dryRun)
 		if serr != nil {
-			return nil, 0, serr
+			return opsmigrate.Settings{}, serr
 		}
 		if step != "" {
-			steps = append(steps, step)
+			out.Steps = append(out.Steps, step)
 		}
 	}
 	orgSteps, n, err := a.migrateOrg(ctx, dryRun, seen)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, orgSteps...), rows+n
-	tagSteps, n, err := a.migrateTags(ctx, dryRun)
+	out = addSettings(out, opsmigrate.Settings{Steps: orgSteps, Rows: n})
+	tagOut, err := a.migrateTags(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, tagSteps...), rows+n
-	snakeSteps, n, err := a.migrateTagsSnakeCase(ctx, dryRun)
+	out = addSettings(out, tagOut)
+	snakeOut, err := a.migrateTagsSnakeCase(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, snakeSteps...), rows+n
+	out = addSettings(out, snakeOut)
 	dbSteps, n, err := a.migrateDBSettings(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, dbSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: dbSteps, Rows: n})
 	urlSteps, n, err := a.migrateURLCredentials(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, urlSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: urlSteps, Rows: n})
 	auditSteps, n, err := a.migrateAuditFields(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, auditSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: auditSteps, Rows: n})
 	periodSteps, n, err := a.migrateActorPeriods(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, periodSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: periodSteps, Rows: n})
 	piiSteps, n, err := a.migratePIIPatterns(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, piiSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: piiSteps, Rows: n})
 	// edits 0.1.17 kept only in lore.db beside migrated files (v017edits.go)
 	editSteps, n, err := a.migrateOldDBEdits(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, editSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: editSteps, Rows: n})
 	// --supersedes links lore 0.1.16 and older wrote on the new row
 	// (hostbase_doctor_supersede.go)
 	supSteps, n, err := a.migrateSupersedes(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, supSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: supSteps, Rows: n})
 	// actors whose stable key the org roster holds under another id
 	// (actor_merge.go)
 	actorSteps, n, err := a.migrateActorKeys(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, actorSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: actorSteps, Rows: n})
 	// P3-LOCAL-3: the checkout's v0.1.17 machine-local rows, copied once
 	machineSteps, n, err := a.migrateMachineLocal(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, machineSteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: machineSteps, Rows: n})
 	// actor copies stale under the 0.1.18 identity (migrate_actorcopies.go)
 	copySteps, n, err := a.migrateActorCopies(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	steps, rows = append(steps, copySteps...), rows+n
+	out = addSettings(out, opsmigrate.Settings{Steps: copySteps, Rows: n})
 	// actor copies in the repo trimmed to {id, display name, kind}, after
 	// every step that writes one (migrate_actorprojection.go)
-	projSteps, n, err := a.migrateActorProjection(ctx, dryRun)
+	projOut, err := a.migrateActorProjection(ctx, dryRun)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	return append(steps, projSteps...), rows + n, nil
+	return addSettings(out, projOut), nil
 }
 
 // StepPIIPatterns names the pii_patterns step (3.3, SETTINGS ARE DATA).
@@ -725,11 +736,13 @@ func v1TagLinkOf(doc []byte) (opsmemory.TagLink, bool) {
 // carries tag_ids (one pass, not per noun). The entity_tags files stay
 // (the run then rewrites them as `_v: 2` like every FormatTables row, M-1)
 // for the readers of the nouns the core does not own yet; a link file
-// reads the same at either version (flat columns). The int is the rows
-// whose tag_ids are set (would be, under dryRun).
+// reads the same at either version (flat columns). Rows and Upgraded are
+// the rows whose tag_ids are set (would be, under dryRun); the step says
+// it in one line (links, rows, rows per table) and keeps one line per row
+// in Detail for --verbose (E-2).
 //
 // A tagged row still at `_v: 1` gets its tag_ids as part of its format
-// rewrite (tagV1Rows): same _hlc, same updated_at, no new author. Through
+// rewrite (tagV1Row): same _hlc, same updated_at, no new author. Through
 // the engine's Update the migration stamped the migrator and the run's
 // time on every tagged row, so a teammate's edit of such a row made
 // before the migration on another branch lost to it field by field when
@@ -741,18 +754,18 @@ func v1TagLinkOf(doc []byte) (opsmemory.TagLink, bool) {
 // entity_tags rows of a hard-deleted row behind) is skipped with one line
 // naming its file and why: one orphan link aborted the whole migration
 // (E-5).
-func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, error) {
+func (a *App) migrateTags(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	reg, err := builtinRegistry()
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	rows, _, err := st.backends[0].Read(ctx, "")
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	var links []opsmemory.TagLink
 	linkFile := map[opsmemory.TagLink][]string{} // the entity_tags ids of each link, for the skip lines
@@ -767,22 +780,32 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, erro
 		}
 		var l v1TagLink
 		if err := json.Unmarshal(sr.Doc, &l); err != nil {
-			return nil, 0, errs.Wrap(errs.InvalidInput, "migrate: entity_tags/"+sr.ID.String()+" is not a v0.1.17 row", err)
+			return opsmigrate.Settings{}, errs.Wrap(errs.InvalidInput, "migrate: entity_tags/"+sr.ID.String()+" is not a v0.1.17 row", err)
 		}
 		tl := opsmemory.TagLink{EntityTable: l.EntityTable, EntityID: l.EntityID, TagID: l.TagID}
 		links = append(links, tl)
 		linkFile[tl] = append(linkFile[tl], sr.ID.String())
 	}
 	if len(links) == 0 {
-		return nil, 0, nil
+		return opsmigrate.Settings{}, nil
 	}
-	merged, skipped := mergeTagLinks(reg, links, func(t row.Table, id ids.AnyID) []string {
+	existing := func(t row.Table, id ids.AnyID) []string {
 		if _, r, gerr := st.eng.Get(ctx, engine.Ref{Store: store.SourceRepo, Table: t, ID: id}); gerr == nil {
 			// any form: a List, or a JSON array as a row file may decode
 			return value.ItemStrings(r.Fields[schema.FieldTagIDs])
 		}
 		return nil
-	})
+	}
+	merged, skipped := mergeTagLinks(reg, links, existing)
+	for key, m := range merged {
+		// a row already listing every tag its links name is not written
+		// again: a second run reports and stamps nothing for it (E-2)
+		cur := slices.Clone(existing(key.table, key.id))
+		slices.Sort(cur)
+		if slices.Equal(slices.Compact(cur), m) {
+			delete(merged, key)
+		}
+	}
 	var steps []string
 	for _, l := range skipped {
 		steps = append(steps, "tags: skipped entity_tags link "+l.EntityTable+"/"+l.EntityID+" → "+l.TagID+" (not a tagged row id and a tag_ id)")
@@ -799,62 +822,82 @@ func (a *App) migrateTags(ctx context.Context, dryRun bool) ([]string, int, erro
 		return gerr == nil && !r.Deleted
 	}
 	keys := slices.SortedFunc(maps.Keys(merged), func(x, y taggedRow) int { return strings.Compare(x.id.String(), y.id.String()) })
-	var v1Changes []store.Change
-	n := 0
+	// which tags of each row are written: the orphans are left out (and
+	// named) before anything is counted, so the dry run counts what the
+	// run writes
+	kept := map[taggedRow][]string{}
+	orphanLinks := 0
 	for _, key := range keys {
 		m := merged[key]
-		sr, live := repoRows[key.id]
-		if !live {
-			steps = append(steps, orphanTagLines(key, m, linkFile, "the row "+key.id.String()+" no longer exists")...)
+		if _, live := repoRows[key.id]; !live {
+			lines := orphanTagLines(key, m, linkFile, "the row "+key.id.String()+" no longer exists")
+			orphanLinks += len(lines)
+			steps = append(steps, lines...)
 			continue
 		}
-		kept := m[:0:0]
+		var k []string
 		for _, t := range m {
 			if tagExists(t) {
-				kept = append(kept, t)
+				k = append(k, t)
 				continue
 			}
-			steps = append(steps, orphanTagLines(key, []string{t}, linkFile, "the tag "+t+" no longer exists")...)
+			lines := orphanTagLines(key, []string{t}, linkFile, "the tag "+t+" no longer exists")
+			orphanLinks += len(lines)
+			steps = append(steps, lines...)
 		}
-		if len(kept) == 0 {
-			continue
+		if len(k) > 0 {
+			kept[key] = k
 		}
-		n++
-		steps = append(steps, "tags: "+key.id.String()+".tag_ids = "+strings.Join(kept, ","))
-		if dryRun {
-			continue
-		}
-		list, err := tagIDList(kept)
+	}
+	keys = slices.DeleteFunc(keys, func(k taggedRow) bool { _, ok := kept[k]; return !ok })
+	out := opsmigrate.Settings{Rows: len(keys)}
+	perTable := map[row.Table]int{}
+	for _, key := range keys {
+		perTable[key.table]++
+		out.Upgraded = append(out.Upgraded, key.table.String()+"/"+key.id.String())
+		out.Detail = append(out.Detail, "tags: "+key.id.String()+".tag_ids = "+strings.Join(kept[key], ","))
+	}
+	if len(keys) > 0 {
+		steps = append([]string{tagFoldLine(len(links)-len(skipped)-orphanLinks, perTable, dryRun)}, steps...)
+	}
+	out.Steps = steps
+	if dryRun {
+		return out, nil
+	}
+	var v1Changes []store.Change
+	for _, key := range keys {
+		sr := repoRows[key.id]
+		list, err := tagIDList(kept[key])
 		if err != nil {
-			return nil, 0, err
+			return opsmigrate.Settings{}, err
 		}
 		r, err := sr.Decode()
 		if err != nil {
-			return nil, 0, errs.Prefix("migrate: tags of "+key.id.String(), err)
+			return opsmigrate.Settings{}, errs.Prefix("migrate: tags of "+key.id.String(), err)
 		}
 		if r.SourceVersion != row.FormatVersion {
 			ch, err := tagV1Row(reg, sr, r, list)
 			if err != nil {
-				return nil, 0, errs.Prefix("migrate: tags of "+key.id.String(), err)
+				return opsmigrate.Settings{}, errs.Prefix("migrate: tags of "+key.id.String(), err)
 			}
 			v1Changes = append(v1Changes, ch)
 			continue
 		}
 		ref := engine.Ref{Store: store.SourceRepo, Table: key.table, ID: key.id}
 		if _, err := st.eng.Update(ctx, ref, map[string]value.Value{schema.FieldTagIDs: list}); err != nil {
-			return nil, 0, errs.Prefix("migrate: tags of "+key.id.String(), err)
+			return opsmigrate.Settings{}, errs.Prefix("migrate: tags of "+key.id.String(), err)
 		}
 	}
 	if len(v1Changes) > 0 {
 		if err := st.backends[0].Write(store.WithCommitMessage(ctx, migrateCommitSubject(ctx, len(v1Changes))), v1Changes); err != nil {
-			return nil, 0, errs.Prefix("migrate: tags", err)
+			return opsmigrate.Settings{}, errs.Prefix("migrate: tags", err)
 		}
 		a.wrote(nil)
 		if _, err := st.eng.Refresh(ctx, store.SourceRepo); err != nil {
-			return nil, 0, err
+			return opsmigrate.Settings{}, err
 		}
 	}
-	return steps, n, nil
+	return out, nil
 }
 
 // orphanTagLines are the step lines of the links of key to tags that the
@@ -908,6 +951,22 @@ func tagV1Row(reg *schema.Registry, sr store.Row, r row.Row, list value.Value) (
 		return store.Change{}, err
 	}
 	return store.Change{Row: up, Expect: sr.HLC}, nil
+}
+
+// tagFoldLine is the tag fold's one summary line: "tags: folded 169
+// entity_tags links into the tag_ids of 75 rows (memories 30, rules 23,
+// …)", tables by name.
+func tagFoldLine(links int, perTable map[row.Table]int, dryRun bool) string {
+	verb, n := "folded", 0
+	if dryRun {
+		verb = "would fold"
+	}
+	parts := make([]string, 0, len(perTable))
+	for _, t := range slices.Sorted(maps.Keys(perTable)) {
+		parts = append(parts, t.String()+" "+strconv.Itoa(perTable[t]))
+		n += perTable[t]
+	}
+	return "tags: " + verb + " " + plural(links, "entity_tags link") + " into the tag_ids of " + plural(n, "row") + " (" + strings.Join(parts, ", ") + ")"
 }
 
 // taggedRow names one row migrateTags writes tag_ids on.

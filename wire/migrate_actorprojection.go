@@ -36,6 +36,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -44,14 +45,15 @@ import (
 const StepActorProjection = "actor_projection"
 
 // migrateActorProjection is the step: it returns the step lines and the
-// copies trimmed (dry run: the copies it would trim).
-func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) ([]string, int, error) {
+// copies trimmed (dry run: the copies it would trim), each also named in
+// Upgraded so the run counts a copy it trims and rewrites as one row (E-2).
+func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) (opsmigrate.Settings, error) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	if fullActorRow(st, store.SourceRepo) {
-		return nil, 0, nil // an org's own repo keeps the full actor row (Q-R2-2)
+		return opsmigrate.Settings{}, nil // an org's own repo keeps the full actor row (Q-R2-2)
 	}
 	names := st.eng.Stores()
 	at := -1
@@ -61,18 +63,19 @@ func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) ([]string
 		}
 	}
 	if at < 0 || at >= len(st.backends) {
-		return nil, 0, nil // no repo store attached: nothing to trim
+		return opsmigrate.Settings{}, nil // no repo store attached: nothing to trim
 	}
 	b := st.backends[at]
 	rows, _, err := b.Read(ctx, "")
 	if err != nil {
-		return nil, 0, errs.Prefix("migrate: read the repo's actor copies", err)
+		return opsmigrate.Settings{}, errs.Prefix("migrate: read the repo's actor copies", err)
 	}
 	reg, err := builtinRegistry()
 	if err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
 	var changes []store.Change
+	var trimmed []string
 	keys := map[string]bool{}
 	for _, sr := range rows {
 		if sr.Table != schema.TableActors || sr.Deleted {
@@ -87,7 +90,7 @@ func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) ([]string
 		}
 		up, ferr := store.FromRow(r)
 		if ferr != nil {
-			return nil, 0, ferr
+			return opsmigrate.Settings{}, ferr
 		}
 		extra := leakcheck.ActorCopyExtraKeys(up.Doc)
 		if len(extra) == 0 {
@@ -98,32 +101,34 @@ func (a *App) migrateActorProjection(ctx context.Context, dryRun bool) ([]string
 		}
 		up, ferr = store.FromRow(trimActorCopy(r, extra))
 		if ferr != nil {
-			return nil, 0, ferr
+			return opsmigrate.Settings{}, ferr
 		}
 		changes = append(changes, store.Change{Row: up, Expect: sr.HLC})
+		trimmed = append(trimmed, string(schema.TableActors)+"/"+sr.ID.String())
 	}
 	if len(changes) == 0 {
-		return nil, 0, nil
+		return opsmigrate.Settings{}, nil
 	}
 	verb := "trimmed"
 	if dryRun {
 		verb = "would trim"
 	}
 	line := StepActorProjection + ": " + verb + " " + copiesText(len(changes)) + " in .lore/data to {id, display name, kind} (dropped " + strings.Join(slices.Sorted(maps.Keys(keys)), ", ") + ")"
+	done := opsmigrate.Settings{Steps: []string{line}, Rows: len(changes), Upgraded: trimmed}
 	if dryRun {
-		return []string{line}, len(changes), nil
+		return done, nil
 	}
 	if werr := b.Write(ctx, changes); werr != nil {
 		if errs.Has(werr, errs.StoreReadOnly) {
-			return []string{StepActorProjection + ": the repo store is read-only here: " + strconv.Itoa(len(changes)) + " actor copies not trimmed"}, 0, nil
+			return opsmigrate.Settings{Steps: []string{StepActorProjection + ": the repo store is read-only here: " + strconv.Itoa(len(changes)) + " actor copies not trimmed"}}, nil
 		}
-		return nil, 0, errs.Prefix("migrate: trim the repo's actor copies", werr)
+		return opsmigrate.Settings{}, errs.Prefix("migrate: trim the repo's actor copies", werr)
 	}
 	a.wrote(nil)
 	if _, err := st.eng.Refresh(ctx, store.SourceRepo); err != nil {
-		return nil, 0, err
+		return opsmigrate.Settings{}, err
 	}
-	return []string{line}, len(changes), nil
+	return done, nil
 }
 
 // trimActorCopy returns r without the document keys extra (as

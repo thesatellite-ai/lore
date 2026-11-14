@@ -89,7 +89,7 @@ func newLiveFixtureWith(t testing.TB, configYAML string, clk clock.Clock) ltFixt
 	}
 	gitT(t, dir, "init", "-q", "-b", "main")
 	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
-	if err := os.MkdirAll(filepath.Join(dir, ".lore"), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".lore", "data"), 0o750); err != nil { // an empty .lore/ is no project (D-20)
 		t.Fatal(err)
 	}
 	h := &liveHost{cfg: LiveConfig{Home: loreHome, WorkDir: dir, Version: "0.1.18", Stderr: &strings.Builder{}, Clock: clk}}

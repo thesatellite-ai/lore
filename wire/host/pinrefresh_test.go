@@ -35,7 +35,7 @@ func pinProject(t *testing.T, fixed bool) (string, string) {
 	if _, gerr := (gitref.Exec{}).Run(context.Background(), gitref.Invocation{Dir: top, Args: []string{"init", "-q", "-b", "main"}}); gerr != nil {
 		t.Fatalf("git init: %v %s", gerr, gitref.Stderr(gerr))
 	}
-	if merr := os.MkdirAll(filepath.Join(top, ".lore"), 0o750); merr != nil {
+	if merr := os.MkdirAll(filepath.Join(top, ".lore", "data"), 0o750); merr != nil {
 		t.Fatal(merr)
 	}
 	in := reposync.InstallOptions{Dir: top, Branches: []string{"main"}, Own: pinOld}

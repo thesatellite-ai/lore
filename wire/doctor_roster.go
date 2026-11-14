@@ -2,12 +2,14 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -72,12 +74,13 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 				missing = append(missing, tv.Actor) // not an actor id at all: no roster can hold it
 				continue
 			}
-			if _, _, gerr := st.eng.Get(ctx, engine.Ref{Store: rc.src, Table: schema.TableActors, ID: id.Any()}); gerr == nil {
-				continue
-			} else if !errs.Has(gerr, errs.NotFound) {
-				return nil, gerr
+			held, herr := rosterHolds(ctx, st, rc.src, id)
+			if herr != nil {
+				return nil, herr
 			}
-			missing = append(missing, tv.Actor)
+			if !held {
+				missing = append(missing, tv.Actor)
+			}
 		}
 		for _, actor := range missing {
 			who := name(actor)
@@ -97,8 +100,21 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 				if fix {
 					if ferr := a.EnsureActor(ctx, rc.src); ferr != nil {
 						f.Message += "; adding it failed: " + ferr.Error()
-					} else {
-						f.Fixed = true
+					} else if id, perr := ids.Parse[ids.Actor](actor); perr == nil {
+						// E-15: fixed only when the check now passes; ensureActor
+						// writes the owner's row for an agent in a client store,
+						// so "fixed" was printed on every run before the same
+						// warning came back
+						held, herr := rosterHolds(ctx, st, rc.src, id)
+						switch {
+						case herr != nil:
+							f.Message += "; adding it failed: " + herr.Error()
+						case held:
+							f.Fixed = true
+						default:
+							f.Message += "; --fix wrote your actor row, which is not this id (an earlier identity of yours), so it cannot add it"
+							f.Fix = "that actor's next write to " + string(rc.src) + " adds it to the roster; the rows read the same until then"
+						}
 					}
 				}
 			}
@@ -106,4 +122,80 @@ func (a *App) DoctorActorRoster(ctx context.Context, fix bool) ([]DoctorFinding,
 		}
 	}
 	return out, nil
+}
+
+// rosterHolds reports whether store src's roster accounts for actor id:
+// its own actors row, or, for the caller's agent in a client store, the
+// owner's row (the engine shows an agent there as its owner, P2B-OLD-2,
+// and ensureActor writes the owner's row there, never the agent's).
+func rosterHolds(ctx context.Context, st *state, src store.Source, id ids.ID[ids.Actor]) (bool, error) {
+	want := id
+	if id == st.actor && !st.agentOwner.IsZero() && st.eng.IsClient(src) {
+		want = st.agentOwner
+	}
+	_, _, err := st.eng.Get(ctx, engine.Ref{Store: src, Table: schema.TableActors, ID: want.Any()})
+	if err == nil {
+		return true, nil
+	}
+	if errs.Has(err, errs.NotFound) {
+		return false, nil
+	}
+	return false, err
+}
+
+var _ opsmigrate.ActorRecorder = (*App)(nil)
+
+// RecordRunActor implements opsmigrate.ActorRecorder: after `lore migrate
+// run` wrote its rows, every store holding a row the run stamped with the
+// caller's actor (created_by or updated_by) gets the caller's actor row
+// (ensureActor), so the migration diff carries it and doctor's
+// actor_roster check stays quiet (E-3: the tag fold stamped 10 memories
+// with the migrator while .lore/data/actors kept only the old actors).
+// It reads the row files, not the caches: a combined cache (CFG3) cannot
+// tell the stores apart. Other writers' rows are not this run's to
+// register.
+func (a *App) RecordRunActor(ctx context.Context) error {
+	st, err := a.state(ctx)
+	if err != nil {
+		return err
+	}
+	if st.actor.IsZero() {
+		return nil
+	}
+	me := st.actor.String()
+	for i, src := range st.eng.Stores() {
+		if src == store.SourceMachine || i >= len(st.backends) {
+			continue // machine-local rows hold no actors table (P3-LOCAL-1)
+		}
+		rows, _, rerr := st.backends[i].Read(ctx, "")
+		if rerr != nil {
+			return errs.Prefix("migrate: read store "+string(src)+" for its writers", rerr)
+		}
+		if !slices.ContainsFunc(rows, func(sr store.Row) bool { return !sr.Deleted && writtenBy(sr.Doc, me) }) {
+			continue
+		}
+		if held, herr := rosterHolds(ctx, st, src, st.actor); herr != nil || held {
+			if herr != nil {
+				return herr
+			}
+			continue
+		}
+		if eerr := a.EnsureActor(ctx, src); eerr != nil {
+			return errs.Prefix("migrate: write your actor row into store "+string(src), eerr)
+		}
+	}
+	return nil
+}
+
+// writtenBy reports whether a row file names actor as its creator or last
+// writer (a file that is not a JSON object names nobody).
+func writtenBy(doc []byte, actor string) bool {
+	var w struct {
+		CreatedBy string `json:"created_by"`
+		UpdatedBy string `json:"updated_by"`
+	}
+	if json.Unmarshal(doc, &w) != nil {
+		return false
+	}
+	return w.CreatedBy == actor || w.UpdatedBy == actor
 }
