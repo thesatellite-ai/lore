@@ -14,10 +14,10 @@ Dev-company round 3, track G. Replayed by `TestStoryGMonthsOfUse` (volume, lifec
 2. Search quality: an exact phrase, accents both ways (`Chloe`, `NAÏVE`, `naive` all find "naïve"), an emoji. `lore memory search` with no hits prints `(no matches)`. A task list page past the end prints something, never nothing.
 3. Rows read through from the fetched default branch: Zoë pushes a note; Ines has fetched but not pulled; the list shows it and search finds it too.
 4. Every `git pull --rebase` that brings rows leaves the tree clean, so the next pull works (checked on every pull of the story).
-5. Lifecycle: a reminder past its due date is listed by `lore reminder list`. As they should behave once fixed (skipped until then): overdue reminders also show in `lore inbox` and LORE.md; old memories archive in bulk with one command; trash purge finishes in seconds; `lore task stale --days 0` means zero days; doctor does not warn about a LORE.md at 8% of its budget; must rules over the render budget keep their text.
+5. Lifecycle: a reminder past its due date is listed by `lore reminder list`. An overdue reminder also shows in `lore inbox` (in LORE.md and doctor too once D-148-render is fixed: skipped until then); old memories archive in bulk with one `--where`; trash purge finishes in seconds; `lore task stale --days 0` is refused with "--days must be 1 or more", never run as the 60-day default; doctor does not warn about a LORE.md at 8% of its budget; 80 must rules over the render budget keep their text.
 6. The docs-only repo: its own `CLAUDE.md` comes first, then `lore init`, a rule and `lore render`; the file keeps its own text; a markdown-only commit with lore's hooks takes under 3 s and leaves the tree clean.
-7. Renames (`TestStoryGRenames`): Chloé changes email and display name; her note is still shown by id and found by search, and she keeps writing. As they should behave once fixed (skipped until then): whoami shows one actor; the repo moves to a new address and writes and sync keep working; team renames reach members' inboxes; a moved org store makes sync name `lore store set-url`; the old store clone is named by `store doctor`. After every rename every note is still found by id on every clone.
-8. Many agents (`TestStoryGManyAgents`): four agent sessions add a task each and comment on one task at the same instant: every task and every comment is there, nothing is pushed without `--push`. As they should behave once fixed (skipped until then): `task next --push` never hands one task to two agents or a done task out again; concurrent `task done` writes no conflict markers and sync works; every command stays under 5 s; `task add --help` matches what agents must pass.
+7. Renames (`TestStoryGRenames`): Chloé changes email and display name; her note is still shown by id and found by search, and she keeps writing. whoami shows one actor; the repo moves to a new address and writes and sync keep working. Still empty steps (skipped): team renames reach members' inboxes; a moved org store makes sync name `lore store set-url`; the old store clone is named by `store doctor`. After every rename every note is still found by id on every clone.
+8. Many agents (`TestStoryGManyAgents`): four agent sessions add a task each and comment on one task at the same instant: every task and every comment is there, nothing is pushed without `--push`. `task next --push` never hands one task to two agents or a done task out again; concurrent `task done` writes no conflict markers and sync works; `task add --help` matches what agents must pass. Every command staying under 5 s is skipped until D-159.
 
 ## What must hold
 
@@ -33,23 +33,23 @@ Steps for findings still being fixed are written as they should behave and skipp
 
 | Finding | Round-3 id | What | Guarded by |
 |---|---|---|---|
-| D-123 | r3 G-1 | repo moved: writes blocked as live ref rewritten | `TestStoryGRenames` (skipped until D-123) |
+| D-123 | r3 G-1 | repo moved: writes blocked as live ref rewritten | `TestStoryGRenames` |
 | D-132 | r3 G-2 | pull --rebase leaves LORE.md modified | `TestStoryGMonthsOfUse` steps 1, 3, 4; `TestJourneyPullRebase` |
 | D-134 | r3 G-3 | read-through rows never found by search | `TestStoryGMonthsOfUse` step 3 |
 | D-135 | r3 G-4 | search with no hits prints nothing | `TestStoryGMonthsOfUse` step 2 |
-| D-148 | r3 G-5 | overdue reminders only in reminder list | `TestStoryGMonthsOfUse` (skipped until D-148) |
-| D-151 | r3 G-6 | over-budget LORE.md renders must rules as ids | `TestStoryGMonthsOfUse` (skipped until D-151) |
-| D-152 | r3 G-7 | no bulk archive | `TestStoryGMonthsOfUse` (skipped until D-152) |
-| D-155 | r3 G-8 | trash purge slow | `TestStoryGMonthsOfUse` (skipped until D-155) |
-| D-156 | r3 G-9 | doctor warns at 8% of budget | `TestStoryGMonthsOfUse` (skipped until D-156) |
-| D-157 | r3 G-10 | tasks finished many times, next hands out done tasks | `TestStoryGManyAgents` (skipped until D-157) |
-| D-158 | r3 G-11 | nested conflict markers in done_by | `TestStoryGManyAgents` (skipped until D-158) |
+| D-148 | r3 G-5 | overdue reminders only in reminder list | `TestStoryGMonthsOfUse` (inbox); render and doctor skipped until D-148-render |
+| D-151 | r3 G-6 | over-budget LORE.md renders must rules as ids | `TestStoryGMonthsOfUse` |
+| D-152 | r3 G-7 | no bulk archive | `TestStoryGMonthsOfUse` |
+| D-155 | r3 G-8 | trash purge slow | `TestStoryGMonthsOfUse` |
+| D-156 | r3 G-9 | doctor warns at 8% of budget | `TestStoryGMonthsOfUse` |
+| D-157 | r3 G-10 | tasks finished many times, next hands out done tasks | `TestStoryGManyAgents` |
+| D-158 | r3 G-11 | nested conflict markers in done_by | `TestStoryGManyAgents` |
 | D-159 | r3 G-12 | commands over 5 s under 10 agents | `TestStoryGManyAgents` (skipped until D-159) |
-| D-160 | r3 G-13 | `--commitment` help wrong for agents | `TestStoryGManyAgents` (skipped until D-160) |
-| r3 G-14 | (no D- id yet) | email change: whoami shows a second actor | `TestStoryGRenames` (skipped until r3 G-14) |
-| r3 G-15 | (no D- id yet) | team tasks never reach the inbox; team rename | `TestStoryGRenames` (skipped until r3 G-15) |
-| r3 G-16 | (no D- id yet) | org store moved: sync says offline | `TestStoryGRenames` (skipped until r3 G-16) |
-| r3 G-17 | (no D- id yet) | merge drops a confirmed repo url | `TestStoryGRenames` (skipped until r3 G-17) |
-| r3 G-18 | (no D- id yet) | repo moved: E_STALE address warning | `TestStoryGRenames` (skipped until r3 G-18) |
-| r3 G-19 | (no D- id yet) | old store clone left after set-url | `TestStoryGRenames` (skipped until r3 G-19) |
-| r3 G-20 | (no D- id yet) | `task stale --days 0` runs with 60 | `TestStoryGMonthsOfUse` (skipped until r3 G-20) |
+| D-160 | r3 G-13 | `--commitment` help wrong for agents | `TestStoryGManyAgents` |
+| r3 G-14 | (no D- id yet) | email change: whoami shows a second actor | `TestStoryGRenames` |
+| r3 G-15 | (no D- id yet) | team tasks never reach the inbox; team rename | `TestJourneyTeamRename`; `TestStoryGRenames` step still empty (skipped) |
+| r3 G-16 | (no D- id yet) | org store moved: sync says offline | `TestJourneyTeamLeadStoreMoved`; `TestStoryGRenames` step still empty (skipped) |
+| r3 G-17 | (no D- id yet) | merge drops a confirmed repo url | `TestJourneyRepoMoveMerge` |
+| r3 G-18 | (no D- id yet) | repo moved: E_STALE address warning | `TestStoryGRenames` |
+| r3 G-19 | (no D- id yet) | old store clone left after set-url | `TestJourneyTeamLeadStoreMoved`; `TestStoryGRenames` step still empty (skipped) |
+| r3 G-20 | (no D- id yet) | `task stale --days 0` runs with 60 | `TestStoryGMonthsOfUse` |

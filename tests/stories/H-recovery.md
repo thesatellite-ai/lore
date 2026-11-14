@@ -36,16 +36,16 @@ Dev-company round 3, track H. Replayed by `TestStoryHCorruption`, `TestStoryHRew
 | D-115 | r3 H-5 | broken row: show names no file | `TestStoryHCorruption` |
 | D-116 | r3 H-6 | pre-commit lets wrong/duplicate ids through | `TestStoryHCorruption`; `TestJourneyDamagedLoreFiles` |
 | D-149 | r3 I-15 | UTF-8 BOM row refused everywhere | `TestStoryHCorruption`; `TestJourneyDamagedLoreFiles` |
-| D-124 | r3 H-7 | force-push dropping notes: no recovery route | `TestStoryHRewrites` (skipped until D-124) |
-| D-125 | r3 H-8 | rebase + force-push leaves links on old shas | `TestStoryHRewrites` (skipped until D-125) |
-| D-126 | r3 H-9 | rewound store: sync re-pushes dropped commits | `TestStoryHRewrites` (skipped until D-126) |
-| D-127 | r3 H-13 | trash restore of an org row refused E_FORMAT_OLD | `TestStoryHRewrites` (skipped until D-127) |
-| D-128 | r3 H-14 | git rm'd row: 'purged by ?', no git restore line | `TestStoryHRewrites` (skipped until D-128) |
-| D-140 | r3 H-15 | `git commit -a` with a new row: 'nothing added' | `TestStoryHRewrites` (skipped until D-140) |
-| D-129 | r3 H-10 | `sync status` outside a repo fails | `TestStoryHLostRemotes` (skipped until D-129) |
-| D-130 | r3 H-11 | deleted/moved store reported as offline | `TestStoryHLostRemotes` (skipped until D-130) |
-| D-131 | r3 H-12 | `store set-url` wrong refusal, member rewrites url | `TestStoryHLostRemotes` (skipped until D-131) |
-| D-143 | r3 H-16 | store doctor: unsent commits as an error ×3 | `TestStoryHLostRemotes` (skipped until D-143) |
-| D-144 | r3 H-17 | new laptop: local personal store lost silently | `TestStoryHLostRemotes` (skipped until D-144) |
-| D-141 | r3 H-18 | hooks taken over: doctor silent about the leak guard | `TestStoryHLostRemotes` (skipped until D-141) |
-| D-142 | r3 H-19 | husky: lore adds hook files to tracked `.husky` | `TestStoryHLostRemotes` (skipped until D-142) |
+| D-124 | r3 H-7 | force-push dropping notes: no recovery route | `TestStoryHRewrites` |
+| D-125 | r3 H-8 | rebase + force-push leaves links on old shas | `TestStoryHRewrites` |
+| D-126 | r3 H-9 | rewound store: sync re-pushes dropped commits | `TestStoryHRewrites` |
+| D-127 | r3 H-13 | trash restore of an org row refused E_FORMAT_OLD | `TestRestoreOfStoreRowInOldFormatRepo` |
+| D-128 | r3 H-14 | git rm'd row: 'purged by ?', no git restore line | `TestStoryHRewrites` |
+| D-140 | r3 H-15 | `git commit -a` with a new row: 'nothing added' | `TestStoryHRewrites` |
+| D-129 | r3 H-10 | `sync status` outside a repo fails | `TestStoryHLostRemotes` |
+| D-130 | r3 H-11 | deleted/moved store reported as offline | `TestStoryHLostRemotes` |
+| D-131 | r3 H-12 | `store set-url` wrong refusal, member rewrites url | `TestStoryHLostRemotes` |
+| D-143 | r3 H-16 | store doctor: unsent commits as an error ×3 | `TestStoryHLostRemotes` |
+| D-144 | r3 H-17 | new laptop: local personal store lost silently | `TestLocalPersonalStoreNote`, `TestJoinLinesSayLocalIsMachineOnly` (story H has no setup with a local personal store) |
+| D-141 | r3 H-18 | hooks taken over: doctor silent about the leak guard | `TestStoryHLostRemotes` |
+| D-142 | r3 H-19 | husky: lore adds hook files to tracked `.husky` | `TestStoryHLostRemotes` (new files; a changed tracked hook skipped until stories:H-1) |

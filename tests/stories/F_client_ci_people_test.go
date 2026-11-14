@@ -67,6 +67,9 @@ func TestStoryFClientRepo(t *testing.T) {
 		// D-78: a package folder inside the linked repo is linked too.
 		cto.LoreIn(sc.In(filepath.Join("libs", "ui")), "task", "add", "--title", "ui: dark mode tokens").OK(t).Never(t, "no internal project is linked")
 		cto.LoreIn(sc, "task", "list").OK(t).Says(t, "checkout page badge", "ui: dark mode tokens")
+		// D-145: lore where lists the live client clone as using the client
+		// store's cache, never "gone" (it has no .lore folder, only .git).
+		cto.LoreIn(sc, "where").OK(t).Says(t, sc.Dir).Never(t, "gone: moved or deleted")
 		fNoLoreIn(t, sc, "writes from the client repo")
 	})
 

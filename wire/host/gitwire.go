@@ -43,6 +43,9 @@ const (
 	mergeDriverKeepOurs = "lore-keep-ours"
 	loreMDRel           = ".lore/LORE.md"
 	gitAttributesFile   = ".gitattributes"
+	// localAttributesPath is git's per-clone attributes file (asked of
+	// git with --git-path: a worktree keeps it in the common dir).
+	localAttributesPath = "info/attributes"
 	gitAttributesMode   = 0o644
 	hookPreCommit       = "pre-commit"
 	hookCommitMsg       = "commit-msg"
@@ -321,6 +324,14 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		paths = append(paths, filepath.Join(dir, n))
 	}
 	sort.Strings(names)
+	// A-1: the clone's own attributes file is wired too (a teammate's
+	// clone of a migrated project keeps lore's rules there).
+	localAttrs, err := s.localAttributes(ctx)
+	if err != nil {
+		s.warn("git wiring: " + err.Error())
+		return
+	}
+	paths = append(paths, localAttrs)
 	fp := wiringFingerprint(s.h.cfg.Version, bin, rel, paths)
 	stamp := filepath.Join(s.stateDir, gitWiringStamp)
 	if b, rerr := os.ReadFile(filepath.Clean(stamp)); mode != wireInstall && rerr == nil && strings.TrimSpace(string(b)) == fp {
@@ -336,7 +347,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 		// A read wires nothing (owner bug 6): it looks, and says once
 		// what is missing and which command sets it up.
-		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, stamp+gitWiringReadSuffix, fp)
+		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, localAttrs, stamp+gitWiringReadSuffix, fp)
 		return
 	}
 	// The config, attributes and hook files (not .gitignore, which has its
@@ -365,8 +376,21 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		// no row files here (a client repo): the rules would only change
 		// a tracked file of theirs for nothing (plain files sweep 3.8)
 	case formatOld:
+	case mode != wireInstall && !wire.TrackedWiringHere(ctx, root):
+		// A-1: a teammate's clone of a migrated project: the tracked
+		// block comes with the migrator's commit; until it is there the
+		// same rules apply from the clone's own attributes file, so the
+		// git pull that brings it finds no uncommitted .gitattributes.
+		if err := ensureLocalAttributes(attrs, localAttrs); err != nil {
+			s.warn("git wiring: " + err.Error())
+			return
+		}
 	default:
 		if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
+			s.warn("git wiring: " + err.Error())
+			return
+		}
+		if err := dropFileBlock(localAttrs, gitBlockMarker); err != nil {
 			s.warn("git wiring: " + err.Error())
 			return
 		}
@@ -455,7 +479,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 // plus the warning when git ignores row files. What it said is
 // remembered in the lore home per state of the wired files (readKey,
 // fp), so later reads of the same state are quiet and spawn no git.
-func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, readKey, fp string) {
+func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, localAttrs, readKey, fp string) {
 	if wire.ReadNoticeSaid(s.h.cfg.Home, readKey, fp) {
 		return
 	}
@@ -471,7 +495,7 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 	if attrs := filepath.Join(root, gitAttributesFile); data && dataDirExists(root) {
 		// the rules only matter for row files: a repo whose rows live in a
 		// store (a converted Mode B repo) is not told
-		if stale, err := fileBlockStale(attrs, gitBlockMarker, gitAttributeLines); err == nil && stale {
+		if stale, err := fileBlockStale(attrs, gitBlockMarker, gitAttributeLines); err == nil && stale && !attributesHeldLocally(localAttrs) {
 			missing = append(missing, "lore's merge rules in "+attrs+" (then commit "+gitAttributesFile+")")
 		}
 	}
@@ -595,6 +619,75 @@ func ensureFileBlock(path, marker string, lines []string) error {
 		return nil
 	}
 	return root.WriteFile(name, []byte(next), gitAttributesMode)
+}
+
+// localAttributes is the clone's own attributes file (localAttributesPath),
+// in this system's spelling.
+func (s *liveSession) localAttributes(ctx context.Context) (string, error) {
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-path", localAttributesPath}})
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(filepath.FromSlash(strings.TrimSpace(string(out)))), nil
+}
+
+// ensureLocalAttributes keeps lore's rules in the clone's own attributes
+// file at local while the tracked file attrs lacks the current block, and
+// drops them once it holds it: git reads info/attributes before
+// .gitattributes, so a block left behind there would outrank a newer
+// tracked one.
+func ensureLocalAttributes(attrs, local string) error {
+	stale, err := fileBlockStale(attrs, gitBlockMarker, gitAttributeLines)
+	if err != nil {
+		return err
+	}
+	if !stale {
+		return dropFileBlock(local, gitBlockMarker)
+	}
+	if err := os.MkdirAll(filepath.Dir(local), gitInfoDirMode); err != nil {
+		return err
+	}
+	return ensureFileBlock(local, gitBlockMarker, gitAttributeLines)
+}
+
+// gitInfoDirMode is the mode of a .git/info folder lore creates (git's own).
+const gitInfoDirMode = 0o755
+
+// attributesHeldLocally reports whether the clone's own attributes file at
+// local holds lore's current block (a teammate's clone, A-1).
+func attributesHeldLocally(local string) bool {
+	if _, err := os.Stat(local); err != nil {
+		return false
+	}
+	stale, err := fileBlockStale(local, gitBlockMarker, gitAttributeLines)
+	return err == nil && !stale
+}
+
+// dropFileBlock removes lore's block under marker from path; a missing file
+// or block changes nothing.
+func dropFileBlock(path, marker string) error {
+	cur, err := os.ReadFile(filepath.Clean(path))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	content := string(cur)
+	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
+	i := strings.Index(content, start)
+	if i < 0 {
+		return nil
+	}
+	j := strings.Index(content[i:], end)
+	if j < 0 {
+		return nil
+	}
+	k := i + j + len(end)
+	if k < len(content) && content[k] == '\n' {
+		k++
+	}
+	return os.WriteFile(filepath.Clean(path), []byte(content[:i]+content[k:]), gitAttributesMode)
 }
 
 // fileBlockStale reports whether ensureFileBlock would change path (the

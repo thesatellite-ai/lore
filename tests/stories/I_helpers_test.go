@@ -8,7 +8,10 @@ package stories
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/tests/journeys"
@@ -21,13 +24,14 @@ var iRowID = regexp.MustCompile(`(mem|dec|rul|tsk)_[0-9a-f]{32}`)
 // iActorID matches an actor id.
 var iActorID = regexp.MustCompile(`act_[0-9a-f]{32}`)
 
-// iWaiting runs a step whose right behaviour waits on an open finding,
-// written as it SHOULD behave and skipped with the finding id (see
-// hWaiting in story H): a subtest, so the skip ends only that step.
-func iWaiting(t *testing.T, finding string, fn func(t *testing.T)) {
+// iFinding runs a step that guards one finding of this story (once
+// waiting on it, now fixed): a subtest named after the finding id, so a
+// failure names the finding it brings back and ends only this step, never
+// the story around it. The regression index names the story test as that
+// finding's guard.
+func iFinding(t *testing.T, finding string, fn func(t *testing.T)) {
 	t.Helper()
 	t.Run(finding, func(t *testing.T) {
-		t.Skip("waiting for " + finding)
 		fn(t)
 	})
 }
@@ -65,4 +69,42 @@ func iShow(t testing.TB, m *journeys.Machine, c *teamharness.Clone, id string) i
 		t.Fatalf("show %s --json is not JSON: %v\n%s", id, err, r)
 	}
 	return out
+}
+
+// iSettle closes every open sync conflict of one laptop, keeping its own
+// side, and syncs: a step that measures what one sync moves (D-121) needs a
+// clean start, or the earlier offline edits' conflict refuses the sync and
+// the counts never print. Conflicts are closed from the highest number down,
+// so closing one never renumbers the ones still to close.
+func iSettle(t testing.TB, m *journeys.Machine, c *teamharness.Clone) {
+	t.Helper()
+	m.LoreIn(c, "sync") // records a refusal as an open conflict
+	var open struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	r := m.LoreIn(c, "sync", "conflicts", "--json").OK(t)
+	if err := json.Unmarshal([]byte(r.Stdout), &open); err != nil {
+		t.Fatalf("sync conflicts --json is not JSON: %v\n%s", err, r)
+	}
+	for n := len(open.Data); n >= 1; n-- {
+		m.LoreIn(c, "sync", "resolve", "--id", strconv.Itoa(n), "--take", "kept", "--yes").OK(t)
+	}
+	m.LoreIn(c, "sync").OK(t)
+}
+
+// iUnderUmask runs fn with every lore of this story started under umask
+// mask (a wrapper script sets it, then execs the binary under test), so a
+// mode step never changes the umask of the test process the parallel
+// stories share. The binary is put back when fn returns.
+func iUnderUmask(t *testing.T, s *Story, mask string, fn func()) {
+	t.Helper()
+	wrapper := filepath.Join(t.TempDir(), "lore-umask-"+mask)
+	script := "#!/bin/sh\numask " + mask + "\nexec '" + s.Bin + "' \"$@\"\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bin := s.Bin
+	s.Bin = wrapper
+	defer func() { s.Bin = bin }()
+	fn()
 }

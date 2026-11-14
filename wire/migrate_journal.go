@@ -980,6 +980,10 @@ func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error
 	if _, err = rowfs.WriteProjectFormat(top, rowfs.ProjectFormatCurrent, m); err != nil {
 		return "", err
 	}
+	// A-1: this clone's next write adds the tracked .gitignore and
+	// .gitattributes lines; teammates' clones keep them local until this
+	// clone's commit reaches them (trackedwiring.go).
+	markMigratedHere(ctx, top)
 	data := filepath.Join(top, rowfs.LoreDir, rowfs.DataDir)
 	if _, err = rowfs.EnsureSignpost(data); err != nil {
 		return "", err

@@ -138,9 +138,8 @@ func TestStoryEMixedFormats(t *testing.T) {
 			r = cs.TryGit("commit", "-q", "-m", "lore: migrate rows to format 2")
 		}
 		if r.Code != 0 {
-			if strings.Contains(r.Out(), "needs-lore") {
-				t.Skip("waiting for D-154: pre-commit refuses the migration commit's signpost file")
-			}
+			// D-154: the signpost file is never checked as a row file, so
+			// the migration commit passes lore's pre-commit.
 			t.Fatalf("committing the migration failed:\n%s", r)
 		}
 		migration = cs.Head()
