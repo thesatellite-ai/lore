@@ -61,6 +61,15 @@ type StorePushRefusal struct {
 	// code and rows, when there are several (HeldBy is the first, for a
 	// binary without the field); empty for a push held by one folder.
 	HeldOn []HeldFolder `json:"held_on,omitempty"`
+	// Own is the store folder's own name (storeOwnName: the same from any
+	// repo and from the store's own folder); "" for a store of no
+	// configured org. Store is only the name of the place that recorded
+	// it: one folder is "acme" in a code repo and "acme/web" in the store
+	// checkout, and a conflict refused in one and settled in the other
+	// left the first record standing for good. With Own a folder keeps one
+	// record, a landed push clears it whatever it was called, and a read
+	// lists it under this place's name (StorePushRefusals).
+	Own string `json:"own,omitempty"`
 }
 
 // HeldFolder is one store folder whose refusal holds a push (rowfs folder
@@ -143,7 +152,7 @@ func heldFolders(held []store.Refusal) []HeldFolder {
 // the other folder whose refusal held this push ("" = its own refusal).
 func (b *storePush) recordRefusal(ctx context.Context, refused []store.Refusal, heldBy string) {
 	rec := StorePushRefusal{Store: string(b.name), Code: string(refused[0].Code), Reason: refused[0].Reason,
-		At: b.res.now().UTC().Format(time.RFC3339), HeldBy: heldBy}
+		At: b.res.now().UTC().Format(time.RFC3339), HeldBy: heldBy, Own: b.own}
 	seen := map[string]bool{}
 	for _, r := range refused {
 		if r.ID.IsZero() {
@@ -162,8 +171,31 @@ func (b *storePush) recordRefusal(ctx context.Context, refused []store.Refusal, 
 	if err != nil {
 		return // the status line is lost, the commits are not
 	}
-	defer func() { _ = st.Close() }() // read-write handle of one small row; a close error loses nothing written
+	defer func() { _ = st.Close() }()           // read-write handle of one small row; a close error loses nothing written
+	deleteOtherNames(ctx, st, b.own, rec.Store) // one record per store folder, under the latest name
 	_ = localstate.PutJSON(ctx, st, localstate.StorePushRefusals, rec.Store, rec)
+}
+
+// deleteOtherNames drops every refusal record of the store folder own
+// (StorePushRefusal.Own) kept under a key other than keep: the record the
+// same folder left under another place's name. Nothing for own "".
+func deleteOtherNames(ctx context.Context, st localstate.Store, own, keep string) {
+	if own == "" {
+		return
+	}
+	entries, err := st.List(ctx, localstate.StorePushRefusals, "")
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.Key == keep {
+			continue
+		}
+		rec, ok, gerr := localstate.GetJSON[StorePushRefusal](ctx, st, localstate.StorePushRefusals, e.Key)
+		if gerr == nil && ok && rec.Own == own {
+			_ = st.Delete(ctx, localstate.StorePushRefusals, e.Key)
+		}
+	}
 }
 
 // clearRefusal drops this store's refusal record, if any.
@@ -176,6 +208,7 @@ func (b *storePush) clearRefusal(ctx context.Context) {
 		return
 	}
 	defer func() { _ = st.Close() }()
+	deleteOtherNames(ctx, st, b.own, string(b.name)) // the same folder's record under another place's name
 	if _, ok, gerr := st.Get(ctx, localstate.StorePushRefusals, string(b.name)); gerr != nil || !ok {
 		return
 	}
@@ -205,6 +238,29 @@ func (a *App) StorePushRefusals(ctx context.Context) ([]StorePushRefusal, error)
 		}
 		out = append(out, rec)
 	}
+	a.refusalsNamedHere(ctx, out)
 	sort.Slice(out, func(i, j int) bool { return out[i].Store < out[j].Store })
 	return out, nil
+}
+
+// refusalsNamedHere renames each record recorded elsewhere (its Own names
+// a folder this place attaches under another name) to this place's name,
+// so status, doctor and resolve, which match by attached name, find it.
+func (a *App) refusalsNamedHere(ctx context.Context, recs []StorePushRefusal) {
+	here := map[string]string{} // own name -> attached name here
+	for i := range recs {
+		if recs[i].Own == "" {
+			continue
+		}
+		if len(here) == 0 {
+			for _, s := range a.orgStoresHere(ctx) {
+				if own := storeOwnName(a.opts.Home, s.URL, s.Folder); own != "" {
+					here[own] = string(s.Name)
+				}
+			}
+		}
+		if name, ok := here[recs[i].Own]; ok {
+			recs[i].Store = name
+		}
+	}
 }

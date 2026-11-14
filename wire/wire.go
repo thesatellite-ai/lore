@@ -1003,6 +1003,11 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if res, handled, err := a.runOutsideRepo(ctx, e, d, c); handled {
 		return res, err
 	}
+	// actor list/show in a git repo with no lore project read the org's
+	// roster store alone, as the roster verbs do (rosterread_noproject.go)
+	if res, handled, err := a.runRosterReadNoProject(ctx, e, d, c); handled {
+		return res, err
+	}
 	// `lore sync` with no code repo here syncs every store of the setup,
 	// or the store checkout it runs in, each on its own App (syncsetup.go)
 	if e.Spec().Name == opssync.OpRun && a.opts.Sync != nil && a.setupSyncHere(ctx) {

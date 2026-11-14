@@ -255,17 +255,20 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		}
 		// The conflict is reported once, under the store folder that holds
 		// the row; the store's other folders say their push waits on it
-		// (owner decision 7: one clone pushes every folder at once).
-		holder := tlOrg + "/" + tlProject
-		heldLine := "held: waiting on " + holder + "'s conflict (" + ruleID + ")"
+		// (owner decision 7: one clone pushes every folder at once). The
+		// code repo attaches the org's folders only (D-6: the team step
+		// writes no .lore/stores.yaml entry), so here the project folder is
+		// the org's name, printed with its own name first (B-9).
+		holder := tlOrg + "/" + tlProject + " (here: " + tlOrg + ")"
+		heldLine := "held: waiting on " + tlOrg + "'s conflict (" + ruleID + ")"
 		if n := strings.Count(r.Out(), "refused 1"); n != 1 {
 			t.Errorf("sync reports the conflict %d times, want once under %s:\n%s", n, holder, r)
 		}
-		r.Says(t, "store "+holder+": sent 0, received 0, merged 0, refused 1", "store "+tlOrg+"/org: "+heldLine, "store "+tlOrg+": "+heldLine)
+		r.Says(t, "store "+holder+": sent 0, received 0, merged 0, refused 1", "store "+tlOrg+"/org: "+heldLine)
 		st := tt.lore(loser, "sync", "status").OK(t).Says(t, ruleID, "edit the row here so both agree")
-		st.Never(t, "push rule", "store "+tlOrg+"/org: E_STALE", "store "+tlOrg+": E_STALE")
-		st.Says(t, "refused pushes:   1", "store "+holder+": E_STALE", "held pushes:      2",
-			"store "+tlOrg+"/org: "+heldLine, "store "+tlOrg+": "+heldLine)
+		st.Never(t, "push rule", "store "+tlOrg+"/org: E_STALE")
+		st.Says(t, "refused pushes:   1", "store "+holder+": E_STALE", "held pushes:      1",
+			"store "+tlOrg+"/org: "+heldLine)
 		// Nothing is lost: each side still reads its own edit.
 		if got := tt.body(t, winner, ruleID); got != edits[winner.Email] {
 			t.Errorf("the pushed edit reads %q", got)

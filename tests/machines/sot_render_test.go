@@ -165,11 +165,15 @@ func sotrPrivate(t *testing.T) {
 	}
 
 	sotOK(t, m, a, "rule", "add", "--to", "me", "--body", "sotr private rule", "--severity", "must")
+	// D-9: render --check judges the committed files only (the CI gate);
+	// the private render under ~/.lore/render is never in a clone, so a
+	// stale one is named as a note with its fix and never fails the check.
+	// doctor below is where it counts against the machine.
 	code, out := sotrCheck(t, m, a)
-	if code == 0 {
-		t.Fatalf("render --check after a private rule passed:\n%s", out)
+	if code != 0 {
+		t.Fatalf("render --check failed on a stale private render (kept only on this machine): exit %d\n%s", code, out)
 	}
-	sotrHas(t, "render --check after a private rule", out, filepath.Base(files[0])+" is stale", "lore render")
+	sotrHas(t, "render --check after a private rule", out, "not checked (kept only on this machine)", filepath.Base(files[0])+" is stale", "lore render")
 	sotrHas(t, "doctor after a private rule", sotrDoctor(t, m, a), "rendered_copy: ", filepath.Base(files[0])+" is stale", sotrFix)
 
 	sotOK(t, m, a, "sync")

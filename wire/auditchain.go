@@ -297,10 +297,27 @@ func (c *chainAudit) Record(ctx context.Context, ev engine.Event) error {
 }
 
 // withChain opens the chain, makes sure the project's import ran, runs fn
-// and closes the handle.
-func (c *chainAudit) withChain(ctx context.Context, fn func(ch *sqlite.AuditChain, key string) error) (err error) {
+// and closes the handle. A record goes to the real lore home: on one lore
+// cannot write it is refused naming ~/.lore, never kept in a temp folder
+// and lost at exit (an audit trail must not vanish silently).
+func (c *chainAudit) withChain(ctx context.Context, fn func(ch *sqlite.AuditChain, key string) error) error {
+	return c.withChainAt(ctx, c.home, fn)
+}
+
+// withReadChain is withChain for a read of the chain (audit log, verify,
+// inbox's forced reveals, --who): on a lore home lore cannot write it
+// opens the scratch copy writableHome made (the real machine store copied
+// in, so every event recorded so far is there), as every other read does
+// on a CI runner's read-only HOME (F-6, dryhome.go). Before, the open
+// tried to create ~/.lore/state and `lore inbox` failed E_INTERNAL.
+func (c *chainAudit) withReadChain(ctx context.Context, fn func(ch *sqlite.AuditChain, key string) error) error {
+	return c.withChainAt(ctx, writableHome(c.home), fn)
+}
+
+// withChainAt is withChain on the chain of the lore home home.
+func (c *chainAudit) withChainAt(ctx context.Context, home string, fn func(ch *sqlite.AuditChain, key string) error) (err error) {
 	c.resolve(ctx)
-	ch, err := openAuditChainAt(ctx, c.home)
+	ch, err := openAuditChainAt(ctx, home)
 	if err != nil {
 		return errs.FileIOOr("open the audit chain in", c.home, err)
 	}
@@ -314,7 +331,7 @@ func (c *chainAudit) withChain(ctx context.Context, fn func(ch *sqlite.AuditChai
 
 // records is the project's chain, oldest first.
 func (c *chainAudit) records(ctx context.Context) (out []auditchain.Record, err error) {
-	err = c.withChain(ctx, func(ch *sqlite.AuditChain, key string) error {
+	err = c.withReadChain(ctx, func(ch *sqlite.AuditChain, key string) error {
 		out, err = ch.Records(ctx, key)
 		return err
 	})
@@ -343,7 +360,7 @@ func (c *chainAudit) AuditLog(ctx context.Context, limit int) ([]opsaudit.Entry,
 func (c *chainAudit) AuditVerify(ctx context.Context) (opsaudit.Report, error) {
 	var rep opsaudit.Report
 	var recs []auditchain.Record
-	err := c.withChain(ctx, func(ch *sqlite.AuditChain, key string) error {
+	err := c.withReadChain(ctx, func(ch *sqlite.AuditChain, key string) error {
 		var verr error
 		if rep.BrokenAt, rep.Entries, verr = ch.Verify(ctx, key); verr != nil { // links + head anchor (P3-AUDIT-3)
 			return verr

@@ -233,7 +233,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 
 | Check | Level | What it checks | Fix it points to |
 |---|---|---|---|
-| `setup.config` | error | the setup's entry in `~/.lore/config.yaml` is valid | `lore config check` lists the problems; edit the file (shown, not run) |
+| `setup.config` | error | the setup's entry in `~/.lore/config.yaml` is valid, and lore can write the lore home (`~/.lore`); a home lore cannot write is the one finding of the run, because reads still work there (in a temp folder removed at exit) while setups, store clones and this machine's state are lost; plain `lore doctor` does not judge the home, so a CI runner's read-only HOME reads HEALTHY | `lore config check` lists the problems; edit the file (shown, not run); for the home, `chmod u+w` it (or set `LORE_HOME` to a folder you can write) |
 | `setup.org_entry` | error | a member or admin setup's org entry exists | `lore setup join --invite <invite>` again, or `lore setup remove --name <name>` |
 | `setup.name_free` | error | no other setup has this name (setup page only) | pick another name, or `lore setup edit --name <name>` |
 | `identity.email_format` | error | the email is a valid address (for a member or admin setup, the org entry's identity email, `orgs[<org>].identity`) | type the address you use for this work |

@@ -452,6 +452,14 @@ func marshalInOrder(orig []byte, m map[string]json.RawMessage) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+// inUntouchedRepo reports whether the command runs in a git repo that
+// holds no lore data (wire.UntouchedRepo of the working folder): the one
+// place CoreSchema has nothing to rebuild and nothing to say.
+func inUntouchedRepo(ctx context.Context) bool {
+	dir, err := os.Getwd()
+	return err == nil && wire.UntouchedRepo(ctx, dir) != ""
+}
+
 // Lines of the core's schema half.
 const (
 	setupLineIndex = "→ building the search index from the row files..."
@@ -467,8 +475,9 @@ func (h *Host) CoreSchema(ctx context.Context, quiet bool) ([]string, error) {
 	if _, err := h.app.RebuildSearch(ctx); err != nil {
 		// D-20: started in a git repo with no lore data, the open refuses
 		// (setup.run never sets a repo up, host.setsUpRepo): there is no
-		// index of this repo to rebuild, and nothing is made there
-		if !wire.NoCreate(ctx) || !errs.Has(err, errs.NotAStore) {
+		// index of this repo to rebuild, and nothing is made there. Outside
+		// any git repo the refusal stands: it names where to run it.
+		if !wire.NoCreate(ctx) || !errs.Has(err, errs.NotAStore) || !inUntouchedRepo(ctx) {
 			return nil, err
 		}
 	}

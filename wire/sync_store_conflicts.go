@@ -270,8 +270,10 @@ func conflictValue(r row.Row, field string) string {
 }
 
 // storeConflictNumbered appends the store conflicts to out, numbered after
-// what it already lists.
-func storeConflictNumbered(out *opssync.ConflictsOut, cs []StoreConflict) {
+// what it already lists. shown is the store's name as output prints it
+// (B-9: its own name, as sync run's line names it; App.shownStoreName);
+// the --json store field keeps the attached name --store takes.
+func storeConflictNumbered(out *opssync.ConflictsOut, cs []StoreConflict, shown func(string) string) {
 	for _, c := range cs {
 		n := len(out.Data) + 1
 		names := make([]string, 0, len(c.Fields))
@@ -285,7 +287,7 @@ func storeConflictNumbered(out *opssync.ConflictsOut, cs []StoreConflict) {
 		out.Data = append(out.Data, opssync.Conflict{ID: int64(n), Table: string(c.Table), RowID: c.ID.String(), Kept: storeConflictKept,
 			OtherDoc: string(c.TheirsDoc), KeptDoc: string(c.MineDoc), Store: c.Store, Fields: names})
 		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (store %s: both sides changed %s; settle with lore sync resolve --id %d --take kept|other, or edit the row so both agree)",
-			n, c.Table, c.ID, storeConflictKept, c.Store, what, n))
+			n, c.Table, c.ID, storeConflictKept, shown(c.Store), what, n))
 		for _, f := range c.Fields {
 			out.Lines = append(out.Lines, "    "+f.Name+" mine (kept):    "+f.Mine, "    "+f.Name+" theirs (other): "+f.Theirs)
 		}
@@ -334,11 +336,12 @@ func (a *App) explainStore(ctx context.Context, out opssync.ExplainOut, id strin
 	if r.Deleted {
 		state = "tombstone"
 	}
-	lines = append(lines, fmt.Sprintf("  store %s: %s (%s), updated %s", src, state, r.Table, r.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")))
+	shown := a.shownStoreName(ctx, string(src)) // B-9: the store's own name in the lines; Copies keep the attached one
+	lines = append(lines, fmt.Sprintf("  store %s: %s (%s), updated %s", shown, state, r.Table, r.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")))
 	out.Copies = append(out.Copies, opssync.ExplainCopy{Place: opssync.ExplainStore, Store: string(src), Present: true, State: state, HLC: r.HLC.String(), Winner: true})
 	out.Winner = opssync.ExplainStore
 	out.Reason = "the copy in store " + string(src) + " (the row lives in that store, not in this repo)"
-	lines = append(lines, "  wins: "+out.Reason)
+	lines = append(lines, "  wins: the copy in store "+shown+" (the row lives in that store, not in this repo)")
 	if cs, cerr := a.StoreConflicts(ctx); cerr == nil {
 		for _, c := range cs {
 			if c.ID != aid {

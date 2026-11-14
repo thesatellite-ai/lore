@@ -131,7 +131,9 @@ func TestJourneyTeamLeadStoreWipedEmpty(t *testing.T) {
 		// tracking ref pruned by another fetch: its push stamp still tells
 		// lore it pushed this store, so the emptied repo stays empty
 		w.AdvanceDays(1)
-		tt.lore(tlLee, "memory", "add", "a note in the fresh store", "--to", tlOrg+"/"+tlProject).OK(t)
+		// day5 started the store fresh: the project folder went with the
+		// wipe, so its first note names --create (a typo never makes one)
+		tt.lore(tlLee, "memory", "add", "a note in the fresh store", "--to", tlOrg+"/"+tlProject, "--create").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
 		if err := os.Remove(filepath.Join(clone, ".git", "lore", "remote-tip")); err != nil {
 			t.Fatal(err)

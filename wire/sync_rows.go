@@ -362,7 +362,7 @@ func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (op
 		out.Lines = append(out.Lines, fmt.Sprintf("#%d %s/%s kept=%s open (%s: git conflict markers; settle with lore sync resolve --id %d --take kept|other, or fix the file)",
 			n, f.Table, f.RowID, branchConflictKept, f.Place, n))
 	}
-	storeConflictNumbered(&out, stores)
+	storeConflictNumbered(&out, stores, func(name string) string { return s.app.shownStoreName(ctx, name) })
 	out.Count = len(out.Data)
 	return out, nil
 }
@@ -529,7 +529,8 @@ func (s syncRows) SyncStatus(ctx context.Context, in opssync.StatusIn) (opssync.
 		}
 		out.Data.StoreRefusals = append(out.Data.StoreRefusals, opssync.StoreRefusal{Store: r.Store, Code: r.Code, Reason: r.Reason,
 			Rows: r.Rows, At: r.At, Next: storeRefusalNextFor(r.Code)})
-		out.Lines = append(out.Lines, "  store "+r.Store+": "+r.Code+" at "+r.At+": "+r.Reason,
+		// B-9: the store's own name, as sync run's line names it (storeshown.go)
+		out.Lines = append(out.Lines, "  store "+s.app.shownStoreName(ctx, r.Store)+": "+r.Code+" at "+r.At+": "+r.Reason,
 			"    waiting: "+rows, "    next: "+storeRefusalNextFor(r.Code))
 	}
 	if len(held) == 0 {
@@ -541,7 +542,7 @@ func (s syncRows) SyncStatus(ctx context.Context, in opssync.StatusIn) (opssync.
 		next := heldNext(on)
 		out.Data.StoreHeld = append(out.Data.StoreHeld, opssync.StoreHeld{Store: r.Store, HeldBy: opsstores.HeldNames(on), Code: r.Code,
 			Rows: r.Rows, At: r.At, Next: next})
-		out.Lines = append(out.Lines, "  store "+r.Store+": "+opsstores.HeldLines(on), "    next: "+next)
+		out.Lines = append(out.Lines, "  store "+s.app.shownStoreName(ctx, r.Store)+": "+opsstores.HeldLines(on), "    next: "+next)
 	}
 	return out, nil
 }
