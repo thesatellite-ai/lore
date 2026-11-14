@@ -119,7 +119,8 @@ func (d *DoctorCache) Get(ctx context.Context, k DoctorCacheKey) (DoctorCacheEnt
 // the table holds only what a TTL could still serve.
 func (d *DoctorCache) Put(ctx context.Context, k DoctorCacheKey, e DoctorCacheEntry, horizon time.Time) (err error) {
 	defer func() { err = d.writes.explain(err) }() // a quota or I/O failure names the file
-	tx, err := d.db.BeginTx(ctx, nil)
+	// beginWrite: wait out a long writer instead of failing "database is locked" (D-166)
+	tx, err := beginWrite(ctx, d.db)
 	if err != nil {
 		return dbErr("doctor cache: begin put", err)
 	}

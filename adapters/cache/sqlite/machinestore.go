@@ -196,7 +196,8 @@ func (m *MachineStore) WritePurge(ctx context.Context, changes []store.Change, p
 		}
 		seen[r.Key()] = struct{}{}
 	}
-	tx, err := m.db.BeginTx(ctx, nil)
+	// beginWrite: wait out a long writer instead of failing "database is locked" (D-166)
+	tx, err := beginWrite(ctx, m.db)
 	if err != nil {
 		return dbErr("machine store begin", err)
 	}

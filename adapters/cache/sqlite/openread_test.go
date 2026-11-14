@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// openBesideWriterWait bounds TestOpenCurrentCacheTakesNoWriteLock's open
+// beside a held write lock (see the comment at its use).
+const openBesideWriterWait = 2 * time.Minute
+
 // TestOpenCurrentCacheTakesNoWriteLock (devco:D-159): opening a cache that
 // is already current needs no write lock, so a lore process opens it while
 // another one holds the write lock (a long refresh, a sync). Before, every
@@ -40,7 +44,12 @@ func TestOpenCurrentCacheTakesNoWriteLock(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	ctx, cancel := context.WithTimeout(f.ctx, 3*time.Second)
+	// The writer keeps its lock until the test ends, so an open that took
+	// the write path could never finish: it would wait until ctx ends and
+	// fail. The deadline only bounds that failure; it is sized for an open
+	// under gate load (-race at load ~100), where a fixed 3 s failed an
+	// open that took no lock at all (devco:D-166).
+	ctx, cancel := context.WithTimeout(f.ctx, openBesideWriterWait)
 	defer cancel()
 	start := time.Now()
 	again, err := Open(ctx, path, f.reg, f.exp)
