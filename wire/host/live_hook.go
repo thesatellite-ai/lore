@@ -859,6 +859,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		ctx = context.WithValue(ctx, leakExemptKey{}, true)
 	}
 	if liveDisabled() || skipLiveRun(run) {
+		if liveDisabled() && !skipLiveRun(run) {
+			h.wireWithoutLive(ctx, run) // devco D-224: rows are branch files git merges
+		}
 		return next(ctx)
 	}
 	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun, still: stillRun(run), ci: ciRun(run)}

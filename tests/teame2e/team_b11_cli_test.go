@@ -76,7 +76,9 @@ func b11Count(t *testing.T, c *th.Clone, noun string) int {
 // every malformed command line exits 20 with exactly one
 // [E_INVALID_INPUT] line naming what is wrong, on host commands (init) as
 // on operations. v0.1.17's `backup` (dropped) is replaced by `init`, the
-// host command cmd/lore keeps.
+// host command cmd/lore keeps. `org link` defaults its org (the only org
+// entry), so leaving it out names the required --project; an extra value
+// is named with the named-flag hint.
 func TestB11_InputErrorsExit20(t *testing.T) {
 	c := b11Solo(t, th.Cmd("org", "link"))
 	for _, tc := range []struct {
@@ -89,8 +91,8 @@ func TestB11_InputErrorsExit20(t *testing.T) {
 		{"unknown flag on a host command", []string{"init", "--nope"}, "unknown flag: --nope"},
 		{"unknown flag on a generated command", []string{"memory", "list", "--nope"}, "unknown flag: --nope"},
 		{"unknown shorthand flag", []string{"init", "-Z"}, "unknown shorthand flag"},
-		{"missing positional on an operation", []string{"org", "link"}, "missing required field org"},
-		{"too many arguments on an operation", []string{"org", "link", "a", "b"}, "too many arguments: want at most 1"},
+		{"left-out optional positional names the required flag", []string{"org", "link"}, "--project <folder>"},
+		{"too many arguments on an operation", []string{"org", "link", "a", "b"}, `unexpected value "b"`},
 		{"required flag not set", []string{"org", "link", "northwind"}, "--project <folder>"},
 		{"missing id on a generated show", []string{"memory", "show"}, "missing required field id"},
 	} {
@@ -122,7 +124,7 @@ func TestB11_ErrorPrintedOnce(t *testing.T) {
 	if r.Code == 0 || strings.Count(r.Stderr, "ERROR:") != 1 {
 		t.Fatalf("the error must be printed once: %s", r)
 	}
-	for _, args := range [][]string{{"migrate", "run", "--bogus"}, {"store", "init", "acme", "--url", "x"}} {
+	for _, args := range [][]string{{"migrate", "run", "--bogus"}, {"store", "init", "acme", "--bogus", "x"}} {
 		if r := c.Lore(args...); r.Code == 0 || strings.Count(r.Stderr, "unknown flag") != 1 {
 			t.Fatalf("lore %v: the flag error must be printed once: %s", args, r)
 		}
@@ -548,23 +550,32 @@ func TestB11_SearchHydratesHits(t *testing.T) {
 // TestB11_DirectiveReinstallIsIdempotent (old usecases_misc_test.go
 // TestUC_MiscDirectiveReinstallIsIdempotent): re-installing leaves the block
 // byte for byte as `directive show` prints it (a "$RID" in it survives), and
-// a stale block is replaced in place, keeping the person's own notes.
-// TOOL NEUTRAL: a folder with no tool file gets AGENTS.md.
+// a stale block is replaced in place, keeping the person's own notes and
+// the LORE.md pointer init wrote. TOOL NEUTRAL: a folder with no tool
+// file gets AGENTS.md.
 func TestB11_DirectiveReinstallIsIdempotent(t *testing.T) {
-	w := newTeamWorld(t, th.Cmd("directive", "install"))
-	c := w.Human("dev", "dev@acme.example").Clone(w.Remote(slugApp), "app")
+	// lore changes nothing in a repo it is not set up in (E_NOT_A_STORE):
+	// the directive goes into a lore project
+	c := b11Solo(t, th.Cmd("directive", "install"))
 	block := c.MustLore("directive", "show").Stdout
+	// init wrote the LORE.md pointer into AGENTS.md: the directive goes on
+	// top of it and every install keeps it
+	pointer, _ := c.ReadFile("AGENTS.md")
 	c.MustLore("directive", "install")
+	initial, _ := c.ReadFile("AGENTS.md")
+	if !strings.HasPrefix(initial, block) || !strings.Contains(initial, pointer) {
+		t.Fatalf("the directive block goes at the top of AGENTS.md, above init's pointer:\n%s", initial)
+	}
+	tail := strings.TrimPrefix(initial, block)
 	c.MustLore("directive", "install").Says(t, "(no change)")
-	got, _ := c.ReadFile("AGENTS.md")
-	if got != block {
-		t.Fatalf("re-installed block differs from `directive show` ($RID kept: %v)", strings.Contains(got, "$RID"))
+	if got, _ := c.ReadFile("AGENTS.md"); got != initial {
+		t.Fatalf("re-installed block differs from `directive show` ($RID kept: %v):\n%s", strings.Contains(got, "$RID"), got)
 	}
 	const hand = "\nhand notes\n"
 	first, rest, _ := strings.Cut(block, "\n")
-	c.WriteFile("AGENTS.md", first+"\nan outdated line\n"+rest+hand)
+	c.WriteFile("AGENTS.md", first+"\nan outdated line\n"+rest+tail+hand)
 	c.MustLore("directive", "install")
-	if got, _ := c.ReadFile("AGENTS.md"); got != block+hand {
-		t.Fatalf("a stale block must be replaced in place, keeping hand notes:\n%q", got)
+	if got, _ := c.ReadFile("AGENTS.md"); got != block+tail+hand {
+		t.Fatalf("a stale block must be replaced in place, keeping the pointer and hand notes:\n%q", got)
 	}
 }

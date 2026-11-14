@@ -1,10 +1,12 @@
 package wire
 
 import (
+	"strings"
 	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 )
 
@@ -48,5 +50,27 @@ func TestStoreIdentityFix(t *testing.T) {
 	want := "git -C /home/pat/.lore/stores/acme/notes config user.email pat@work.example && git -C /home/pat/.lore/stores/acme/notes config user.name 'Pat Person'"
 	if got != want {
 		t.Errorf("fix =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestWaitingPushReport (devco D-224): an org store clone pushed by the
+// sync outside a code repo is one store line: pushed, offline (exit with
+// E_STORE_UNREACHABLE and the next step) or failed with its problem.
+func TestWaitingPushReport(t *testing.T) {
+	const url = "git@git.example.invalid:acme/lore-x.git"
+	r, code := waitingPushReport(url, opsstores.Report{Store: "lore-x", Sent: 1})
+	if code != "" || r.Status != opssync.StoreStatusPushed || !r.Pushed || r.URL != url {
+		t.Fatalf("pushed: %+v %q", r, code)
+	}
+	if got := syncStoreLines(r)[0]; got != "store lore-x: pushed (sent 1, received 0, merged 0)" {
+		t.Errorf("pushed line = %q", got)
+	}
+	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Offline: true})
+	if code != errs.StoreUnreachable || r.Status != opssync.StoreStatusOffline || !strings.Contains(r.Next, url) {
+		t.Fatalf("offline: %+v %q", r, code)
+	}
+	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Problems: []string{"rejected"}})
+	if code != errs.StoreUnreachable || r.Status != opssync.StoreStatusFailed || r.Error != "rejected" || !strings.Contains(r.Next, "lore store push --store "+url) {
+		t.Fatalf("failed: %+v %q", r, code)
 	}
 }

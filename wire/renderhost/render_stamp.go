@@ -432,6 +432,38 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string) {
 	}
 }
 
+// heldStaleNotice is HeldStaleNotice. It runs after rerenderStaleQuiet:
+// a render that sync could rewrite was rewritten, so a stale render here
+// is one rerenderStaleQuiet kept (held, clean row files, not a client
+// repo, whose committed render is the client's).
+func (h *Host) heldStaleNotice(ctx context.Context, root string) string {
+	out := filepath.Join(root, filepath.FromSlash(LoreMDRel))
+	if _, err := os.Stat(out); err != nil {
+		return ""
+	}
+	if cwd, err := os.Getwd(); err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
+		return ""
+	}
+	if !h.RenderHeld(ctx, root) {
+		return ""
+	}
+	if client, cerr := h.repoIsClient(ctx); client || cerr != nil {
+		return ""
+	}
+	projectID, err := h.projectID(ctx)
+	if err != nil {
+		return ""
+	}
+	p, err := h.planCommitted(ctx, projectID, root, nil, nil)
+	if err != nil {
+		return ""
+	}
+	if kind, err := copyVerdict(out, p.body, canaryIn); err != nil || kind != opsrender.CopyStale {
+		return ""
+	}
+	return syncLogPrefix + LoreMDRel + " is behind its rows (rows that reached this clone since it was committed); it stays as committed so your next git pull works. It catches up with your next commit that carries row files, or run lore render and commit it."
+}
+
 // generatedBannerOf is the "generated file" banner of the repo's tool file
 // rel ("" when the file is missing, unreadable or has none).
 func generatedBannerOf(root, rel string) string {

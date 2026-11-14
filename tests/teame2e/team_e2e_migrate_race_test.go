@@ -161,7 +161,10 @@ func TestMigrateRaceOneRepo(t *testing.T) {
 	const racers = 4
 	ps := make([]*th.Pending, racers)
 	for i := range ps {
-		ps[i] = c.Prepare("migrate", "run", "--no-push")
+		// --verbose: one "memories/<id>" line per row (owner item C2 made
+		// the default a per-table count with the first five ids; devco
+		// D-224), so each run's rewritten rows can be counted
+		ps[i] = c.Prepare("migrate", "run", "--no-push", "--verbose")
 	}
 	ok, locked := 0, 0
 	rewrote := map[string]int{} // row → how many racing runs rewrote it
@@ -195,7 +198,7 @@ func TestMigrateRaceOneRepo(t *testing.T) {
 	}
 	got := memoryFiles(t, c)
 	assertMigrated(t, "alice", got)
-	c.MustLore("migrate", "run", "--no-push").Never(t, "memories/mem_")
+	c.MustLore("migrate", "run", "--no-push", "--verbose").Never(t, "memories/mem_")
 	if again := memoryFiles(t, c); len(again) != len(got) {
 		t.Fatal("a rerun changed the memories folder")
 	} else {

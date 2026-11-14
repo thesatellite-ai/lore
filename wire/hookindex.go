@@ -84,10 +84,37 @@ func HookIndexStaged(ctx context.Context, root, before string) {
 	_ = os.WriteFile(p, []byte(before+" "+after+" "+headOID(ctx, root)+"\n"), 0o600) // best effort: without it a refusal keeps lore's staging, as before
 }
 
+// keepHookIndexKey marks a context whose refusal leaves the index alone
+// (KeepHookIndex).
+type keepHookIndexKey struct{}
+
+// KeepHookIndex marks ctx as the commit-msg block's first, one-process
+// check (`lore task hook commit-msg --check-leaks`): its refusal leaves
+// the index as the pre-commit hook left it, because the block then runs
+// the separate `lore check leaks --staged`, which must see the same index
+// to refuse again (and restores it then). Restoring in the first check
+// dropped the rows the pre-commit had staged from the index on disk, so
+// the second check found nothing and passed, while git, which commits the
+// index it read back after pre-commit, committed those rows with the
+// secret in them (D-224).
+func KeepHookIndex(ctx context.Context) context.Context {
+	return context.WithValue(ctx, keepHookIndexKey{}, true)
+}
+
+// hookIndexKept reports whether ctx was marked by KeepHookIndex.
+func hookIndexKept(ctx context.Context) bool {
+	v, _ := ctx.Value(keepHookIndexKey{}).(bool)
+	return v
+}
+
 // HookIndexRestore puts back the index the person staged when the commit
 // is refused: only when this commit's pre-commit staged something and the
-// index is still what it left. It reports whether it restored.
+// index is still what it left, and never in a check marked by
+// KeepHookIndex. It reports whether it restored.
 func HookIndexRestore(ctx context.Context, root string) bool {
+	if hookIndexKept(ctx) {
+		return false // the block's separate check refuses next and restores (KeepHookIndex)
+	}
 	p := hookIndexPath(ctx, root)
 	if p == "" {
 		return false

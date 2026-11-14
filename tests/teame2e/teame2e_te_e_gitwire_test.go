@@ -71,6 +71,19 @@ func teEInitPushed(t *testing.T, bc *th.Clone, body string) string {
 	return id
 }
 
+// teENotWired is the line a read prints in a clone lore has not set up:
+// a read leaves git as it is (docs/operations/ci.md), `lore sync` or the
+// next lore write wires it.
+const teENotWired = "git is not set up for lore's row files in this clone"
+
+// teEWire is a teammate setting up her fresh clone the way the read's
+// line tells her to: `lore sync` installs the merge drivers and the hook
+// blocks (a read never does).
+func teEWire(t *testing.T, c *th.Clone) {
+	t.Helper()
+	c.MustLore("sync")
+}
+
 // teEHooksDir is the absolute hooks folder git uses in the clone.
 func teEHooksDir(c *th.Clone) string {
 	return c.Git("rev-parse", "--path-format=absolute", "--git-path", "hooks")
@@ -102,9 +115,9 @@ func teEWriteExec(t *testing.T, path, body string) {
 // TestE2E_InitBootstrapFreshCloneAdopt (wiring half) + TestGitAttributeLines
 // + TestHookLinesNamesAreSortable, ported: bob's init writes the
 // .gitattributes block and the merge drivers and every hook; carol's fresh
-// clone ships no lore.db, her first lore command wires her clone the same
-// way (driver pointing at the lore she runs), reads bob's rule and leaves
-// the shared files clean.
+// clone ships no lore.db; her first read shows bob's rule, leaves git as it
+// is and names `lore sync`, which wires her clone the same way (driver
+// pointing at the lore she runs) and leaves the shared files clean.
 func TestTeE_FreshCloneIsWiredByFirstCommand(t *testing.T) {
 	bc, carol := teEPair(t)
 	teEInitPushed(t, bc, "use JWT for auth")
@@ -131,13 +144,17 @@ func TestTeE_FreshCloneIsWiredByFirstCommand(t *testing.T) {
 	if r := cc.TryGit("config", "--get", "merge.lore.driver"); r.Code == 0 {
 		t.Fatalf("a fresh clone has no driver before lore runs: %s", r)
 	}
-	cc.MustLore("rule", "list").Says(t, "use JWT for auth")
+	cc.MustLore("rule", "list").Says(t, "use JWT for auth", teENotWired, "lore sync")
+	if r := cc.TryGit("config", "--get", "merge.lore.driver"); r.Code == 0 {
+		t.Fatalf("a read leaves git as it is: %s", r)
+	}
+	teEWire(t, cc)
 	drv := cc.Git("config", "--get", "merge.lore.driver")
 	if !strings.Contains(drv, " merge-driver %O %A %B %P") {
-		t.Fatalf("carol's first command configures the row driver: %q", drv)
+		t.Fatalf("carol's lore sync configures the row driver: %q", drv)
 	}
 	if keep := cc.Git("config", "--get", "merge.lore-keep-ours.driver"); !strings.Contains(keep, "merge-driver --keep-ours %O %A %B %P") {
-		t.Fatalf("carol's first command configures the LORE.md driver: %q", keep)
+		t.Fatalf("carol's lore sync configures the LORE.md driver: %q", keep)
 	}
 	dir := teEHooksDir(cc)
 	for _, h := range teEHooks {
@@ -153,13 +170,13 @@ func TestTeE_FreshCloneIsWiredByFirstCommand(t *testing.T) {
 // TestE2E_NoDriverIsVisibleTextConflict, ported to two clones: carol's
 // clone loses the driver (a merge made where git knows no custom driver);
 // the same field edited by bob and carol is a plain text conflict, taking
-// bob's side imports cleanly, and her next lore command re-installs the
-// driver.
+// bob's side imports cleanly, and lore sync re-installs the driver.
 func TestTeE_NoDriverTextConflictThenReinstall(t *testing.T) {
 	bc, carol := teEPair(t)
 	id := teEInitPushed(t, bc, "base")
 	cc := carol.Clone(bc.Remote, "tool")
 	cc.MustLore("rule", "list").Says(t, "base")
+	teEWire(t, cc)
 
 	bc.MustLore("rule", "edit", id, "--body", "bob's body")
 	bc.CommitAll("bob")
@@ -174,8 +191,9 @@ func TestTeE_NoDriverTextConflictThenReinstall(t *testing.T) {
 	cc.Git("add", "-A")
 	cc.Git("commit", "-qm", "take bob's")
 	cc.MustLore("rule", "show", id).Says(t, "bob's body").Never(t, "carol's body")
+	teEWire(t, cc)
 	if v := cc.Git("config", "--get", "merge.lore.driver"); !strings.Contains(v, "merge-driver") {
-		t.Fatalf("the next lore command re-installs the driver: %q", v)
+		t.Fatalf("lore sync re-installs the driver: %q", v)
 	}
 }
 
@@ -192,6 +210,7 @@ func TestTeE_HooksChainIntoHusky(t *testing.T) {
 	cc.Git("config", "core.hooksPath", ".husky")
 
 	cc.MustLore("rule", "list").Says(t, "clean rule")
+	teEWire(t, cc)
 	if v := cc.Git("config", "--get", "core.hooksPath"); v != ".husky" {
 		t.Fatalf("core.hooksPath repointed to %q", v)
 	}
@@ -236,16 +255,24 @@ func TestTeE_SyncGitOffLeavesGitAlone(t *testing.T) {
 	if s := teEReadHook(t, teEHooksDir(bc), "pre-commit"); strings.Contains(s, "lore-sync") {
 		t.Fatalf("LORE_SYNC_GIT=0 installs no hook:\n%s", s)
 	}
-	// Switched back on, the next command wires the clone.
-	bc.MustLore("rule", "list")
+	// Switched back on, a read only names what is missing; the next write
+	// wires the clone.
+	bc.MustLore("rule", "list").Says(t, teENotWired)
+	if r := bc.TryGit("config", "--get", "merge.lore.driver"); r.Code == 0 {
+		t.Fatalf("a read leaves git as it is: %s", r)
+	}
+	bc.MustLore("rule", "add", "--body", "y")
 	if r := bc.TryGit("config", "--get", "merge.lore.driver"); r.Code != 0 {
-		t.Fatalf("without the switch the next command wires the clone: %s", r)
+		t.Fatalf("without the switch the next write wires the clone: %s", r)
 	}
 }
 
-// TestE2E_LoreMDRerenderedAfterPull, ported: bob pushes a rule without
-// re-rendering LORE.md; carol's pull (post-merge hook) re-renders hers, and
-// the same data renders byte-identical LORE.md on both clones.
+// TestE2E_LoreMDRerenderedAfterPull, ported to the commit hook that now
+// renders (A-12): bob commits a rule's row file without running lore
+// render; his pre-commit renders LORE.md again and stages it, so the pushed
+// LORE.md carries the rule; carol's pull brings it in and leaves her tree
+// clean (a pull never dirties a committed LORE.md), and the same data
+// renders byte-identical LORE.md on both clones.
 func TestTeE_LoreMDRerenderedAfterPull(t *testing.T) {
 	bc, carol := teEPair(t)
 	bc.MustLore("init", "--non-interactive", "--name=tool")
@@ -253,23 +280,32 @@ func TestTeE_LoreMDRerenderedAfterPull(t *testing.T) {
 	bc.CommitAll("lore")
 	bc.AdminPush("origin", "main")
 	cc := carol.Clone(bc.Remote, "tool")
-	cc.MustLore("rule", "list")
+	teEWire(t, cc)
 
 	bc.MustLore("rule", "add", "--body", "must rule from bob", "--severity", "must")
+	if md, _ := bc.ReadFile(".lore/LORE.md"); strings.Contains(md, "must rule from bob") {
+		t.Fatal("setup: the rule is not rendered before the commit")
+	}
 	bc.Git("add", dataDir)
 	bc.Git("commit", "-qm", "rule data only")
 	bc.AdminPush("origin", "main")
-	if md, _ := bc.Remote.Read("main", ".lore/LORE.md"); strings.Contains(md, "must rule from bob") {
-		t.Fatal("setup: the pushed LORE.md must not carry the rule yet")
+	if md, _ := bc.Remote.Read("main", ".lore/LORE.md"); !strings.Contains(md, "must rule from bob") {
+		t.Fatalf("bob's commit of the row file carries the re-rendered LORE.md:\n%s", md)
 	}
 	cc.Git("pull", "-q", "--no-rebase", "--no-edit")
 	md, ok := cc.ReadFile(".lore/LORE.md")
 	if !ok || !strings.Contains(md, "must rule from bob") {
-		t.Fatalf("carol's pull re-renders LORE.md:\n%s", md)
+		t.Fatalf("carol's pull brings the rendered rule:\n%s", md)
+	}
+	if out := cc.Git("status", "--porcelain"); out != "" {
+		t.Fatalf("the pull leaves carol's tree clean: %s", out)
 	}
 	bc.MustLore("render", "--no-pointer")
-	if bmd, _ := bc.ReadFile(".lore/LORE.md"); bmd != md {
-		t.Fatalf("the same data renders the same LORE.md on both clones:\n--- bob\n%s\n--- carol\n%s", bmd, md)
+	cc.MustLore("render", "--no-pointer")
+	bmd, _ := bc.ReadFile(".lore/LORE.md")
+	cmd, _ := cc.ReadFile(".lore/LORE.md")
+	if bmd != cmd || bmd != md {
+		t.Fatalf("the same data renders the same LORE.md on both clones:\n--- bob\n%s\n--- carol\n%s", bmd, cmd)
 	}
 }
 
@@ -287,6 +323,7 @@ func TestTeE_PreCommitGuardsUnstagedRowInSubdirProject(t *testing.T) {
 	cc := carol.Clone(bc.Remote, "tool")
 	csvc := cc.In("svc")
 	csvc.MustLore("rule", "list").Says(t, "clean")
+	teEWire(t, csvc)
 	rel := "svc/" + dataDir + "/" + tblRules + "/" + id + ".json"
 	body, ok := cc.ReadFile(rel)
 	if !ok {
@@ -317,9 +354,9 @@ func TestTeE_TwoProjectsKeepTheirOwnHookBlocks(t *testing.T) {
 	bc.AdminPush("origin", "main")
 
 	cc := carol.Clone(bc.Remote, "tool")
-	cc.In("a").MustLore("rule", "list")
-	cc.In("b").MustLore("rule", "list")
-	cc.In("a").MustLore("rule", "list") // a again: b's block survives
+	teEWire(t, cc.In("a"))
+	teEWire(t, cc.In("b"))
+	teEWire(t, cc.In("a")) // a again: b's block survives
 	dir := teEHooksDir(cc)
 	for _, h := range []string{"pre-commit", "commit-msg", "post-merge"} {
 		s := teEReadHook(t, dir, h)
@@ -398,6 +435,7 @@ func TestTeE_CommitMsgLeakCheckRefusesSecretMessage(t *testing.T) {
 				cp = cc.In(sub)
 			}
 			cp.MustLore("rule", "list")
+			teEWire(t, cp)
 			cc.WriteFile("notes.txt", "one\n")
 			cc.Git("add", "notes.txt")
 			head := cc.Head()
@@ -416,7 +454,7 @@ func TestTeE_CommitMsgLeakCheckRefusesSecretMessage(t *testing.T) {
 
 // TestPreCommitLineAgainstOldAndNewLore, ported to a teammate's machine:
 // with a lore on PATH too old to read 0.1.18 rows (no `migrate`), her
-// commit of the project is refused with the upgrade line rather than
+// commit of a row file is refused with the upgrade line rather than
 // passing unchecked; one too old for `sync hook` that does know `migrate`
 // only warns.
 func TestTeE_PreCommitWithOlderLoreOnPath(t *testing.T) {
@@ -424,6 +462,7 @@ func TestTeE_PreCommitWithOlderLoreOnPath(t *testing.T) {
 	teEInitPushed(t, bc, "a rule")
 	cc := carol.Clone(bc.Remote, "tool")
 	cc.MustLore("rule", "list")
+	teEWire(t, cc)
 	for _, tc := range []struct {
 		name, script string
 		refused      bool
@@ -436,6 +475,9 @@ func TestTeE_PreCommitWithOlderLoreOnPath(t *testing.T) {
 			old := t.TempDir()
 			teEWriteExec(t, filepath.Join(old, "lore"), tc.script)
 			cold := cc.With("PATH=" + old + string(os.PathListSeparator) + os.Getenv("PATH"))
+			// the commit carries a row file: a code-only commit runs no lore
+			// at all (D-16), so there is nothing for an old lore to miss
+			cc.MustLore("rule", "add", "--body", "rule for "+tc.name)
 			cc.WriteFile("notes-"+strings.ReplaceAll(tc.name, " ", "-")+".txt", "x\n")
 			cc.Git("add", "-A")
 			res := cold.TryGit("commit", "-qm", tc.name)

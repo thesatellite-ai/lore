@@ -20,11 +20,17 @@ import (
 func TestTeF_StoreSyncSaysTheDeleteLost(t *testing.T) {
 	a := newAgency(t, th.Flag("to", "memory", "add"), th.Flag("overruled", "trash", "list"))
 	to := orgNorthwind + "/" + folderAcme
+	// a store write is committed locally until lore sync (U-2): alice
+	// sends the memory, dev1 fetches it
 	id := mustID(t, a.aliceApp.MustLore("memory", "add", "--body", "contested store memory", "--to", to), "mem")
+	a.aliceApp.MustLore("sync")
+	a.dev1App.MustLore("sync")
 	a.dev1App.MustLore("memory", "show", id).Says(t, "contested store memory")
 
+	// dev1's edit stays in her clone; alice's delete reaches the store first
 	a.dev1App.With(autopushOff).MustLore("memory", "edit", id, "--body", "contested store memory, still needed")
 	a.aliceApp.MustLore("memory", "delete", id, "--reason", "obsolete", "--yes")
+	a.aliceApp.MustLore("sync")
 
 	out := a.dev1App.MustLore("sync")
 	line := ""

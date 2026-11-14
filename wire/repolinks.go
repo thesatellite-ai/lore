@@ -162,19 +162,36 @@ func (a *App) applyRepoLinks(ctx context.Context, p repoLinkPlan) []string {
 		return nil
 	}
 	for _, f := range p.folders {
-		added := 0
+		added, local, offline := 0, false, false
 		for _, w := range f.adds {
-			if _, werr := p.g.WriteLink(ctx, w); werr != nil {
+			res, werr := p.g.WriteLink(ctx, w)
+			if werr != nil {
 				lines = append(lines, repoLinkWarning+"store "+f.k.entry+", folder "+f.k.folder+": link not updated: "+linkError(werr).Error())
 				continue
 			}
 			added++
+			local = local || !res.Pushed
+			offline = offline || res.Offline
 		}
 		if added > 0 {
-			lines = append(lines, fmt.Sprintf("✓ store %s, folder %s: link updated (%d confirmed addresses)", f.k.entry, f.k.folder, p.confirmed))
+			lines = append(lines, fmt.Sprintf("✓ store %s, folder %s: link updated (%d confirmed addresses)%s", f.k.entry, f.k.folder, p.confirmed, repoLinkWhere(local, offline)))
 		}
 	}
 	return lines
+}
+
+// repoLinkWhere says where a link update went when it did not reach the
+// store's remote (devco D-224: the line read as if the store had it, while
+// the commit waited in this machine's clone for `lore sync`, as every
+// other store write says).
+func repoLinkWhere(local, offline bool) string {
+	switch {
+	case offline:
+		return "; the store could not be reached: committed locally, `lore sync` sends it"
+	case local:
+		return "; committed locally to the store, `lore sync` sends it"
+	}
+	return ""
 }
 
 // storeBranchOf is the branch of org's store whose normalised url is

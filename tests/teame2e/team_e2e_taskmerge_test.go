@@ -394,7 +394,7 @@ func actorIDOf(t *testing.T, c *th.Clone, h string) string {
 // `--add-assignee @dev1` was E_NOT_FOUND once dev1's clone had assigned
 // @dev1 and @dev2 to a task, although `lore actor list` there showed dev1.
 // It no longer reproduces; the test now fails instead of skipping, and the
-// gate's team step runs it (Taskfile.lore.yml test:team:run filter).
+// gate's team step runs it (Taskfile.lore.yml test:team:core).
 func TestTask_AssignHandleAfterTeammateAssigned(t *testing.T) {
 	rt := newRepoTeam(t, th.Flag("add-assignee", "task", "edit"))
 	rt.c1.MustLore("actor", "register")

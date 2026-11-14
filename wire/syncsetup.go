@@ -175,20 +175,34 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		}
 	}
 	out.Lines = bareLines(ctx, a.opts.RepoDir)
-	if len(stores) == 0 {
-		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
-		return out, nil
-	}
 	var failed []opssync.StoreReport
 	var codes []errs.Code
-	for _, one := range stores {
-		r, code := a.syncOneStore(ctx, one)
+	add := func(r opssync.StoreReport, code errs.Code) {
 		out.Data.Stores = append(out.Data.Stores, r)
 		out.Lines = append(out.Lines, syncStoreLines(r)...)
 		if r.Status == opssync.StoreStatusFailed || r.Status == opssync.StoreStatusOffline {
 			failed = append(failed, r)
 			codes = append(codes, code)
 		}
+	}
+	synced := map[string]bool{} // normalized urls this pass reported
+	for _, one := range stores {
+		add(a.syncOneStore(ctx, one))
+		if norm, nerr := repourl.NormalizeStore(one.URL); nerr == nil && norm != "" {
+			synced[norm] = true
+		}
+	}
+	if out.Data.Pass != opssync.PassStore {
+		// D-224: an org store written from a folder in no setup (`lore
+		// store folder add` from ~) said "lore sync sends it"; its clone's
+		// waiting commits go out here as they do from a repo
+		for _, p := range a.waitingOrgPushes(ctx, synced) {
+			add(waitingPushReport(a.urlLabel(p.url), p.report))
+		}
+	}
+	if len(out.Data.Stores) == 0 {
+		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
+		return out, nil
 	}
 	if len(failed) == 0 {
 		return out, nil
@@ -362,6 +376,27 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 	default:
 		r.Status = opssync.StoreStatusUpToDate
 	}
+	return r, ""
+}
+
+// waitingPushReport is the setup sync's report of an org store clone
+// whose waiting commits it pushed (waitingOrgPushes), with the code a
+// failed or offline push exits with.
+func waitingPushReport(url string, p opsstores.Report) (opssync.StoreReport, errs.Code) {
+	r := opssync.StoreReport{Store: p.Store, URL: url, Sent: p.Sent, Offline: p.Offline}
+	switch {
+	case p.Offline:
+		r.Status = opssync.StoreStatusOffline
+		r.Error = "its remote could not be reached; local changes are kept and sent on the next sync"
+		r.Next = "check the network and your access to " + url + ", then run `lore sync` again (`lore doctor` explains a store it cannot reach)"
+		return r, errs.StoreUnreachable
+	case len(p.Problems) > 0:
+		r.Status = opssync.StoreStatusFailed
+		r.Error = strings.Join(p.Problems, "; ")
+		r.Next = "run `lore store push --store " + url + "` to see the cause, then `lore sync` again; `lore doctor` explains a store it cannot reach"
+		return r, errs.StoreUnreachable
+	}
+	r.Status, r.Pushed = opssync.StoreStatusPushed, true
 	return r, ""
 }
 

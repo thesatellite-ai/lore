@@ -282,7 +282,10 @@ func (r rosterAt) missHint() string {
 	if r.src == store.SourceRepo {
 		return "register first: `lore actor register` (as that person)"
 	}
-	return "they run `lore actor register` in a repo of the org, then `lore sync` here"
+	// devco D-224: a register is committed in the teammate's store clone
+	// and reaches the store with their `lore sync` (owner rule U-2), so
+	// "lore sync here" alone left the handle missing.
+	return "they run `lore actor register` and `lore sync` in a repo of the org, then `lore sync` here"
 }
 
 // rosterLookups bounds a handle lookup: the store copy, then once more

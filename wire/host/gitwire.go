@@ -295,6 +295,35 @@ func sharedHookLines(rel string, lines []string) []string {
 	return out
 }
 
+// wireWithoutLive wires the clone (merge drivers, attributes, hook
+// blocks) for a run with live rows off (LORE_LIVE=0 or LORE_SYNC=0),
+// exactly as ensureGitWiring does for a run with them on: a write wires,
+// a read only says what is missing. Why (devco D-224): with live rows off
+// the live hook opened no session, so nothing ever configured
+// merge.lore.driver, although then every row is a file on the branch that
+// git merges; two people's edits of one row met with git's line merge and
+// conflicted on the next `git pull`. LORE_SYNC_GIT=0 still turns wiring
+// off (ensureGitWiring). The session here is wiring-only: no live lock,
+// no fetch, no live ref.
+func (h *liveHost) wireWithoutLive(ctx context.Context, run *Run) {
+	root := liveProjectRoot(h.cfg.WorkDir)
+	if root == "" || leavesWorkRepo(run.Entry.Spec().Name) {
+		return
+	}
+	top, _ := livePlace(root)
+	repo, err := gitref.Open(ctx, top, h.git())
+	if err != nil || repo.Bare() {
+		return
+	}
+	common, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}})
+	if err != nil {
+		return
+	}
+	s := &liveSession{h: h, top: top, repo: repo, cfg: loadLiveSettings(h.cfg.Home), clk: h.clock(),
+		stateDir: filepath.Join(strings.TrimSpace(string(common)), liveStateDirName)}
+	s.ensureGitWiring(ctx, root, runWireMode(run))
+}
+
 // ensureGitWiring wires the clone for the project at root (see the file
 // comment).
 func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wireMode) {
