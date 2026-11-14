@@ -121,7 +121,7 @@ mem_76bd…3f10 [retrieved] the client staging database is restored every Sunday
 $ lore store show
 git@github.com:agency/notes
   entries   agency   branches main
-  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:00:35Z
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:00:40Z
   unpushed  refs/heads/main
 git@github.com:agency/notes-client
   entries   agency   branches main

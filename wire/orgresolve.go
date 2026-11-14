@@ -481,7 +481,9 @@ func (r *OrgResolution) OrgEntryStore(ctx context.Context, name, folder string) 
 
 // OrgSigners is Options.OrgSigners: every entry with an identity and
 // stores signs its stores' commits with that identity (Q-R2-1). The name
-// is the identity's name, else the entry's; the email is the key's.
+// is the identity's name, else the email's local part (never the org's
+// name: devco N-12 set a store clone's git user.name to "acme"); the
+// email is the key's.
 func (r *OrgResolution) OrgSigners(ctx context.Context) ([]OrgSigner, error) {
 	cfg, _, err := orgcfg.LoadConfig(r.home)
 	if err != nil || cfg == nil {
@@ -493,11 +495,12 @@ func (r *OrgResolution) OrgSigners(ctx context.Context) ([]OrgSigner, error) {
 		if strings.TrimSpace(org.Identity.Key) == "" || len(org.Stores) == 0 {
 			continue
 		}
-		name := org.Identity.Name
+		email := emailOfKey(org.Identity.Key)
+		name := strings.TrimSpace(org.Identity.Name)
 		if name == "" {
-			name = org.Name
+			name, _, _ = strings.Cut(email, "@")
 		}
-		s := OrgSigner{Name: name, Email: emailOfKey(org.Identity.Key)}
+		s := OrgSigner{Name: name, Email: email}
 		for _, st := range org.Stores {
 			s.StoreURLs = append(s.StoreURLs, st.URL)
 		}

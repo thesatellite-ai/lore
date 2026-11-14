@@ -18,8 +18,8 @@ For example, the fetch a `lore sync` makes (the time is shown as `<time>` here):
 ```console
 # alice, in billing
 $ lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'
-trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok)
-trace: git push --porcelain --no-verify -- origin 05513aa29b78:refs/lore/live (<time>, ok)
+trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok, remote github.com)
+trace: git push --porcelain --no-verify -- origin 05513aa29b78:refs/lore/live (<time>, ok, remote github.com)
 · already in sync
 ```
 <!-- /example -->
@@ -250,7 +250,6 @@ $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: last fetch 15s ago
   - live: 2 live write(s) not pushed yet
   - live: 2 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
-  - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
 ```

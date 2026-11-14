@@ -208,7 +208,7 @@ A list or search with `--store <store>` reads that store and every folder of it:
 | `lore store init --name <name>`, `add`, `remove`, `set-url` | need a repo: they edit its `.lore/stores.yaml` (`lore store init --name me` works anywhere, and so does `lore store set-url` of an org's store, `me` or a `sto_` id) |
 | `lore org link`, `unlink`, `set`, `use` | need a git repo: they are about that repo (`lore org link` needs no `lore init`) |
 | `lore org create`, `import`, `rename`, `refresh`, `lore team invite --email …` | always |
-| `lore sync` | always: the setup's stores, then the waiting commits of every org store in `~/.lore/config.yaml` (a folder or a note written outside a repo is sent from there too) |
+| `lore sync` | always: the setup's stores, then the waiting commits of the other stores of the same org in `~/.lore/config.yaml`, never another org's (a folder or a note written outside a repo is sent from there too; a folder in no setup sends every org's) |
 | a write with `--to <store>` or `--to <store>/<folder>` (`lore rule add --to acme/org …`, `lore memory add --to me …`) | the same names: it lands in that store folder (a new folder asks first, or `--create`); a write with no `--to` needs a repo, and in the home folder the hint names `--to` instead of `git init` |
 
 A command that only changes a store also leaves the repo you run it in alone: it does not touch that repo's `.gitignore`, `.gitattributes` or git hooks.

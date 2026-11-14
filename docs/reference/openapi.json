@@ -73603,6 +73603,9 @@
                         "type": "string"
                       }
                     },
+                    "identity_note": {
+                      "type": "string"
+                    },
                     "invite": {
                       "type": "object",
                       "properties": {

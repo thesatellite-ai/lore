@@ -95,6 +95,7 @@ ERROR: [E_INVALID_INPUT] refusing to commit broken lore files:
 (exit 1)
 $ lore rule edit --id rul_b4f4…a5b0 --body 'Buttons are blue.'
 lore: .lore/data/rules/rul_b4f4…a5b0.json is not a usable row file: field body holds unresolved conflict markers; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+  next: keep the side you want and delete the marker lines in the file, or set the value with the row's edit command (lore sync resolve can pick a side); then commit it
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4…a5b0.json
 ✓ rul_b4f4…a5b0 updated
 $ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main

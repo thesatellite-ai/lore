@@ -94,12 +94,14 @@ func (e engine) Join(ctx context.Context, in JoinIn) (JoinOut, error) {
 	if i := strings.Index(text, InvitePrefix); i > 0 {
 		text = text[i:] // drop a pasted "lore setup join " in front
 	}
+	id := e.joinEmail(ctx, inv.Email, cmp.Or(inv.Org, name))
 	return JoinOut{
-		Web:      WebStart{Setup: name, NoOpen: in.NoOpen, Invite: text},
-		Invite:   Invite(inv),
-		Plan:     plan,
-		Commands: joinCommands(cmp.Or(name, joinFallbackName), text, e.joinEmail(ctx, inv.Email), plan),
-		Org:      inv.Org,
+		Web:          WebStart{Setup: name, NoOpen: in.NoOpen, Invite: text},
+		Invite:       Invite(inv),
+		Plan:         plan,
+		Commands:     joinCommands(cmp.Or(name, joinFallbackName), text, id, plan),
+		Org:          inv.Org,
+		IdentityNote: id.Note,
 	}, nil
 }
 
@@ -121,6 +123,7 @@ func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOu
 	if err != nil {
 		return JoinOut{}, err
 	}
+	id := e.joinEmail(ctx, "", cmp.Or(inv.Org, name))
 	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan,
-		Commands: joinCommands(cmp.Or(name, joinFallbackName), org, e.joinEmail(ctx, ""), plan), Org: inv.Org}, nil
+		Commands: joinCommands(cmp.Or(name, joinFallbackName), org, id, plan), Org: inv.Org, IdentityNote: id.Note}, nil
 }

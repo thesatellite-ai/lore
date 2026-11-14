@@ -19,6 +19,7 @@ package setup
 //	                                     (HereForJoin), never solo
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"path"
@@ -67,8 +68,10 @@ var joinCommandSkip = []onboard.StepID{onboard.StepThisFolder, onboard.StepSumma
 // joinCommands are the `lore setup apply` lines that make setup name as a
 // member joining with answer, in plan order: every required step, an
 // optional one the plan has values for, and an optional one a later line
-// needs (github, skipped with {}). email is the identity step's address.
-func joinCommands(name, answer, email string, plan PlanOut) []string {
+// needs (github, skipped with {}). id is the identity step's address: its
+// Email fills an empty answer, and replaces a prefilled one equal to
+// id.Avoid (another org's identity on this machine, devco N-4).
+func joinCommands(name, answer string, id joinIdentity, plan PlanOut) []string {
 	include := map[onboard.StepID]bool{}
 	steps := []PlanStep{}
 	for _, st := range plan.Steps {
@@ -99,7 +102,8 @@ func joinCommands(name, answer, email string, plan PlanOut) []string {
 			ans[onboard.QIDKind] = onboard.Answer{Text: string(onboard.KindMember)}
 			ans[onboard.QIDName] = onboard.Answer{Text: name}
 		case onboard.StepIdentity:
-			if strings.TrimSpace(ans[onboard.QIDEmail].Text) == "" {
+			if have := strings.TrimSpace(ans[onboard.QIDEmail].Text); have == "" || (id.Avoid != "" && strings.EqualFold(have, id.Avoid)) {
+				email := id.Email
 				if email == "" {
 					email = joinPlaceholderEmail
 				}
@@ -114,33 +118,100 @@ func joinCommands(name, answer, email string, plan PlanOut) []string {
 }
 
 // answersJSON is a step's answers as the --answers JSON ({} when none).
+// <, > and & read as typed: json escapes them (\u003cyour email\u003e for
+// the "<your email>" placeholder, which a person cannot read), and the
+// escape is undone here; inside a JSON string both spellings are the same
+// value.
 func answersJSON(a onboard.Answers) string {
 	b, err := json.Marshal(a)
 	if err != nil {
 		return "{}" // Answers always marshal; {} keeps the line runnable
 	}
-	return string(b)
+	return htmlUnescaper.Replace(string(b))
 }
+
+// htmlUnescaper undoes json's HTML escapes.
+var htmlUnescaper = strings.NewReplacer(`\u003c`, "<", `\u003e`, ">", `\u0026`, "&")
 
 // shellQuote single-quotes s for a POSIX shell.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
-// joinEmail is the address the identity line carries: the invite's,
-// else git's user.email (what a member is matched on the roster by).
-func (e engine) joinEmail(ctx context.Context, inviteEmail string) string {
+// joinIdentity is the address the identity line of a join carries.
+type joinIdentity struct {
+	// Email is the address the line answers with ("" = the placeholder).
+	Email string
+	// Avoid is an address the line must never carry: this machine's git
+	// email when it is already another org's identity here (N-4).
+	Avoid string
+	// Note says why the line carries a placeholder instead of the git
+	// email ("" when it does not); JoinOut.Text prints it.
+	Note string
+}
+
+// joinEmail is the identity of a join of org: the invite's address, else
+// git's email. A git email that is already the identity of ANOTHER org on
+// this machine is never offered (devco N-4: a person in two orgs has one
+// address in each, docs/team/use-cases/two-companies.md; the line carried
+// the first org's address, the join failed and told the admin to add that
+// address to the second org's roster): the line then asks for the address
+// this org's admin added, and Note says why.
+func (e engine) joinEmail(ctx context.Context, inviteEmail, org string) joinIdentity {
 	if inviteEmail != "" {
-		return inviteEmail
+		return joinIdentity{Email: inviteEmail}
 	}
 	pr, err := e.env.SetupProber(ctx)
 	if err != nil {
-		return ""
+		return joinIdentity{}
 	}
 	p, err := pr.Prefill(ctx, onboard.PrefillGitUserEmail, onboard.SetupEntry{})
 	if err != nil {
+		return joinIdentity{}
+	}
+	email := strings.TrimSpace(p.Value.Text)
+	other := e.orgOwningEmail(ctx, email, org)
+	if other == "" {
+		return joinIdentity{Email: email}
+	}
+	where := cmp.Or(org, "this org")
+	ph := "<your email in " + where + ">"
+	return joinIdentity{Email: ph, Avoid: email,
+		Note: "Note: your git email " + email + " is your identity in org " + other + " on this machine, and each org keeps its own identity, so the identity line asks for the address the admin of " + where + " added you with (lore member list run by them shows it): replace " + ph + " with it before you run the line."}
+}
+
+// orgOwningEmail is the org entry on this machine, other than org, whose
+// identity is email (its key human:<email>, or one of its addresses); ""
+// when none or when the config does not read.
+func (e engine) orgOwningEmail(ctx context.Context, email, org string) string {
+	if email == "" {
 		return ""
 	}
-	return strings.TrimSpace(p.Value.Text)
+	st, err := e.env.SetupStore(ctx)
+	if err != nil {
+		return ""
+	}
+	cfg, err := st.Config(ctx)
+	if err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(cfg.OrgIdentities))
+	for n := range cfg.OrgIdentities {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	for _, n := range names {
+		if strings.EqualFold(n, org) {
+			continue
+		}
+		id := cfg.OrgIdentities[n]
+		if strings.EqualFold(strings.TrimPrefix(id.Key, humanKeyPrefix), email) || slices.ContainsFunc(id.Emails, func(x string) bool { return strings.EqualFold(x, email) }) {
+			return n
+		}
+	}
+	return ""
 }
+
+// humanKeyPrefix starts a person's identity key (human:<email>).
+const humanKeyPrefix = "human:"
 
 // JoinContext is the join a setup page serves (`lore setup join`): the
 // setup it makes and its org ("" until the store is read).

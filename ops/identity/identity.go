@@ -119,8 +119,9 @@ type Manager interface {
 	// setup; keep is "", KeepSetup or KeepTop ("" refuses a conflict).
 	MigrateIdentity(ctx context.Context, keep string) (Migration, error)
 	// SetOrgIdentity writes orgs[<org>].identity; an org entry the file
-	// lacks is E_CONFIG_INVALID (as v0.1.17).
-	SetOrgIdentity(ctx context.Context, org string, e Entry) (path string, err error)
+	// lacks is E_CONFIG_INVALID (as v0.1.17). A name or handle e leaves
+	// empty keeps the entry's own (N-12); written is the identity saved.
+	SetOrgIdentity(ctx context.Context, org string, e Entry) (written Entry, path string, err error)
 	// UnsetIdentity clears identity: (org "") or orgs[<org>].identity; on
 	// the top-level form it also moves identity.yaml aside and removes a
 	// pre-0.1.17 identity.toml (OV31-d). found is false when nothing was
@@ -323,7 +324,7 @@ func Ops(m Manager) []op.Entry {
 					return WriteOut{}, errs.New(errs.InvalidInput, "--org needs --key human:<your email in "+in.Org+">")
 				}
 				e := Entry{Key: in.Key, Name: in.Name, Handle: in.Handle}
-				path, err := m.SetOrgIdentity(ctx, in.Org, e)
+				e, path, err := m.SetOrgIdentity(ctx, in.Org, e)
 				if err != nil {
 					return WriteOut{}, err
 				}

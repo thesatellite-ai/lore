@@ -76,6 +76,7 @@ func (sp setupProber) memberJoinFound(ctx context.Context, r opssetup.ProbeReque
 	if len(emails) == 0 {
 		return skip(skipNoEmail)
 	}
+	ctx = team.WithJoinSetup(ctx, r.Setup.Name) // a refusal names this setup's identity step (N-4)
 	admit := func(ctx context.Context, entry string) error {
 		return team.CheckMember(ctx, orgRosterStore{a: sp.a, org: entry}, entry, emails)
 	}

@@ -116,6 +116,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		return base, nil
 	}
 	branch := s.defaultBranch(ctx)
+	lands := landsNext(plan, folder) // what the next sync lands (devco N-14)
 	only, old, waiting, conflicts := 0, 0, 0, 0
 	for _, p := range plan {
 		if p.File.Deleted() {
@@ -127,7 +128,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		if p.File.Block.Conflict || isConflict(p) {
 			conflicts++
 		}
-		if p.Decision.Action != live.LandStay {
+		if lands[p.Key] {
 			waiting++
 		}
 		since := p.File.Block.LastCopyAt

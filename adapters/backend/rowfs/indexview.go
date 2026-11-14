@@ -240,7 +240,7 @@ func (f *Folder) readIndexed(ctx context.Context, cursor store.Cursor, prev Stat
 	changed := false
 	for i, c := range results {
 		if c.bad != nil {
-			bad = append(bad, Problem{Path: files[i].rel, Reason: c.bad.Error(), Code: errs.CodeOf(c.bad), FieldMarkers: isFieldMarkers(c.bad)})
+			bad = append(bad, f.problem(files[i].rel, c.bad)) // keeps Cause and Hint: the notice's next step
 		}
 		if !c.ok {
 			continue
@@ -379,7 +379,7 @@ func (f *Folder) readMirrored(ctx context.Context, view IndexView, table row.Tab
 	next := StatCursor{At: at, Files: make([]FileStat, 0, len(files))}
 	for i, c := range results {
 		if c.bad != nil {
-			bad = append(bad, Problem{Path: files[i].rel, Reason: c.bad.Error(), Code: errs.CodeOf(c.bad), FieldMarkers: isFieldMarkers(c.bad)})
+			bad = append(bad, f.problem(files[i].rel, c.bad)) // keeps Cause and Hint: the notice's next step
 		}
 		if !c.ok || c.row == nil {
 			continue

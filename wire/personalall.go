@@ -94,6 +94,7 @@ func (a *App) OtherPersonalEntries(_ context.Context, got []opsstores.Entry) ([]
 		}
 	}
 	var out []opsstores.Entry
+	local := fileuri.URL(personalFolderDir(a.opts.Home), "")
 	for _, raw := range personalStoreURLs(a.opts.Home) {
 		k, ok := storeKey(raw)
 		if !ok {
@@ -103,12 +104,26 @@ func (a *App) OtherPersonalEntries(_ context.Context, got []opsstores.Entry) ([]
 			continue
 		}
 		listed[k] = true
-		name := strings.ToLower(orgconf.RepoName(raw))
-		if name == "" || taken[name] || slices.Contains(attach.Reserved(), name) {
+		name := personalEntryName(raw, raw == local, taken)
+		if name == "" || taken[name] || (name != attach.ReservedMe && slices.Contains(attach.Reserved(), name)) {
 			name = raw
 		}
 		taken[name] = true
 		out = append(out, opsstores.Entry{Name: name, URL: raw, Personal: true, Source: opsstores.SourcePersonal})
 	}
 	return out, nil
+}
+
+// personalEntryName is the name store list and the setup-wide sync give
+// the personal store at raw (OtherPersonalEntries): the local personal
+// folder is the person's `me` store, named so while no listed store holds
+// the name (devco D-279: outside any setup it was listed by its folder's
+// name `_me`, which is no store name, so `lore sync` there FAILED with "a
+// store needs a snake_case name"); any other store is named by its short
+// name without the leading '_', '-' or '.' no store name may start with.
+func personalEntryName(raw string, local bool, taken map[string]bool) string {
+	if local && !taken[attach.ReservedMe] {
+		return attach.ReservedMe
+	}
+	return strings.TrimLeft(strings.ToLower(orgconf.RepoName(raw)), "_-.")
 }

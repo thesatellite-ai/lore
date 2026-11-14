@@ -44,6 +44,26 @@ type rootFlags struct {
 // environment twin, read in wire).
 const flagSetup = "setup"
 
+// carryTrace turns tracing on for cmd when on (--trace) or LORE_TRACE=1:
+// --trace also traces the signals writes (wire signalsTrace reads
+// LORE_TRACE), so the flag sets the variable for this process; and the
+// git calls outside live rows (store fetches and pushes, org link reads
+// and writes, store clones, a linked store's signals remote; issue 15)
+// trace through the command's context. A shortcut command (`lore sync`)
+// parses its flags after the root's hook ran, so it calls this again with
+// what it parsed (devco N-3: `lore sync --trace` printed no store call).
+func carryTrace(cmd *cobra.Command, on bool) error {
+	if on {
+		if err := os.Setenv(hosthooks.EnvTrace, envOn); err != nil {
+			return err
+		}
+	}
+	if hosthooks.TraceOn(&on)() && gitref.TracerFrom(cmd.Context()) == nil {
+		cmd.SetContext(gitref.WithTracer(cmd.Context(), hosthooks.Tracer(os.Stderr)))
+	}
+	return nil
+}
+
 // addRootFlags registers the root's global flags into f.
 func addRootFlags(root *cobra.Command, f *rootFlags) {
 	root.PersistentFlags().BoolVar(&f.trace, hosthooks.FlagTrace, false, "print every git command lore runs for live rows and every fetch, push and ls-remote to a store, with timing and the host reached (same as LORE_TRACE=1)")
@@ -51,16 +71,8 @@ func addRootFlags(root *cobra.Command, f *rootFlags) {
 	// LORE_TRACE): the flag sets the variable for this process once parsed.
 	prev := root.PersistentPreRunE
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		if f.trace {
-			if err := os.Setenv(hosthooks.EnvTrace, envOn); err != nil {
-				return err
-			}
-		}
-		// --trace / LORE_TRACE=1 also reach the git calls outside live rows
-		// (org link reads and writes, store clones, a linked store's signals
-		// remote; issue 15) through the command's context.
-		if hosthooks.TraceOn(&f.trace)() {
-			cmd.SetContext(gitref.WithTracer(cmd.Context(), hosthooks.Tracer(os.Stderr)))
+		if err := carryTrace(cmd, f.trace); err != nil {
+			return err
 		}
 		if f.setup != "" {
 			cmd.SetContext(op.WithSetup(cmd.Context(), f.setup))

@@ -215,7 +215,8 @@ Automatic merge failed; fix conflicts and then commit the result.
 alice (work/website)$ grep body .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
   "body": "<<<<<<< yours (this branch) 2026-11-02T10:03:55.000Z/0000/act_54fe984c9b495744c0217776765a28f2\nButtons are dark blue.\n=======\nButtons are light blue.\n>>>>>>> theirs (merged in) 2026-11-02T10:04:00.000Z/0000/act_28f8d32584b2db54ffb146bede5b03df",
 alice (work/website)$ lore sync status
-lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+lore: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json is not a usable row file: field body holds unresolved conflict markers; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+  next: keep the side you want and delete the marker lines in the file, or set the value with the row's edit command (lore sync resolve can pick a side); then commit it
 meta quarantined: 0
 live rows:        0 (_root)
 conflicted files: 1
@@ -227,7 +228,8 @@ ERROR: [E_INVALID_INPUT] refusing to commit broken lore files:
   hint: fix the file by hand (a row file is one JSON object named after its own id; settle a conflict with the row's edit command), or restore it with `git checkout HEAD -- <path>`; then commit again
 (exit 1)
 alice (work/website)$ lore rule edit --id rul_b4f4765e593d51fd1352985e8af3a5b0 --body 'Buttons are blue.'
-lore: invalid-file store repo: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json: [E_INVALID_INPUT] rowfs: "rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json": field body holds unresolved conflict markers; resolve them in the file and commit; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+lore: .lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json is not a usable row file: field body holds unresolved conflict markers; lists and search leave it out until it is settled; show prints it with both sides (lore sync conflicts)
+  next: keep the side you want and delete the marker lines in the file, or set the value with the row's edit command (lore sync resolve can pick a side); then commit it
 lore: wrote ~/work/website/.lore/data/rules/rul_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ rul_b4f4765e593d51fd1352985e8af3a5b0 updated
 alice (work/website)$ git add -A && git commit -qm 'merge: buttons are blue' && git push -q origin main

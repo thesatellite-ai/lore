@@ -266,7 +266,17 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		if n := strings.Count(r.Out(), "refused 1"); n != 1 {
 			t.Errorf("sync reports the conflict %d times, want once under %s:\n%s", n, holder, r)
 		}
-		r.Says(t, "store "+holder+": refused (sent 0, received 0, merged 0, refused 1)", "store "+tlOrg+"/org: "+heldLine)
+		// The rows that did not clash go out while the clashing one waits
+		// (devco O-5): Ann's first edit in the project folder also writes
+		// her actor row there, so when she is the one refused her line
+		// says that row was pushed; Lee's actor row is already on the
+		// remote, so his line says only the refusal (devco D-281).
+		refusedOnly := "store " + holder + ": refused (sent 0, received 0, merged 0, refused 1)"
+		sentActor := "store " + holder + ": pushed (sent 1, received 0, merged 0, refused 1)"
+		if !strings.Contains(r.Out(), refusedOnly) && !strings.Contains(r.Out(), sentActor) {
+			t.Errorf("sync names the conflict's store as neither %q nor %q:\n%s", refusedOnly, sentActor, r)
+		}
+		r.Says(t, "store "+tlOrg+"/org: "+heldLine)
 		st := tt.lore(loser, "sync", "status").OK(t).Says(t, ruleID, "edit the row here so both agree")
 		st.Never(t, "push rule", "store "+tlOrg+"/org: E_STALE")
 		st.Says(t, "refused pushes:   1", "store "+holder+": E_STALE", "held pushes:      1",

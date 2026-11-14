@@ -28,16 +28,16 @@ func TestSyncSetupHelpers(t *testing.T) {
 	if c := sameCode([]errs.Code{errs.Stale, errs.Internal}); c != errs.Stale {
 		t.Errorf("mixed: %s", c)
 	}
-	lines := syncStoreLines(opssync.StoreReport{Store: "notes-two", Status: opssync.StoreStatusFailed, Error: "no such repo", Next: "check the url"})
+	lines := syncStoreLines(opssync.StoreReport{Store: "notes-two", Status: opssync.StoreStatusFailed, Error: "no such repo", Next: "check the url"}, "")
 	if len(lines) != 2 || lines[0] != "store notes-two: FAILED: no such repo" || lines[1] != "  next: check the url" {
 		t.Errorf("failed lines: %q", lines)
 	}
-	lines = syncStoreLines(opssync.StoreReport{Store: "acme", Status: opssync.StoreStatusPulled, Received: 2})
+	lines = syncStoreLines(opssync.StoreReport{Store: "acme", Status: opssync.StoreStatusPulled, Received: 2}, "")
 	if len(lines) != 1 || lines[0] != "store acme: pulled (sent 0, received 2, merged 0, refused 0)" {
 		t.Errorf("pulled lines: %q", lines)
 	}
 	// devco J-4: a push of commits with no row is said, not "up to date"
-	lines = syncStoreLines(opssync.StoreReport{Store: "client-store", Status: opssync.StoreStatusPushed, Pushed: true})
+	lines = syncStoreLines(opssync.StoreReport{Store: "client-store", Status: opssync.StoreStatusPushed, Pushed: true}, "")
 	if len(lines) != 1 || lines[0] != "store client-store: pushed (sent 0, received 0, merged 0, refused 0)"+syncPushedNoRows {
 		t.Errorf("pushed-no-rows lines: %q", lines)
 	}
@@ -62,7 +62,7 @@ func TestWaitingPushReport(t *testing.T) {
 	if code != "" || r.Status != opssync.StoreStatusPushed || !r.Pushed || r.URL != url {
 		t.Fatalf("pushed: %+v %q", r, code)
 	}
-	if got := syncStoreLines(r)[0]; got != "store lore-x: pushed (sent 1, received 0, merged 0, refused 0)" {
+	if got := syncStoreLines(r, "")[0]; got != "store lore-x: pushed (sent 1, received 0, merged 0, refused 0)" {
 		t.Errorf("pushed line = %q", got)
 	}
 	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Offline: true})

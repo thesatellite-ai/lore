@@ -226,7 +226,7 @@ func (a *App) followRosterName(ctx context.Context, st *state, src actorsource.S
 		}
 		e := o.Identity
 		e.Name = src.Values.Name
-		if _, err := a.SetOrgIdentity(ctx, o.Name, opsidentity.Entry{Key: e.Key, Name: e.Name, Handle: e.Handle}); err == nil {
+		if _, _, err := a.SetOrgIdentity(ctx, o.Name, opsidentity.Entry{Key: e.Key, Name: e.Name, Handle: e.Handle}); err == nil {
 			st.who.DisplayName = src.Values.Name
 		}
 		return

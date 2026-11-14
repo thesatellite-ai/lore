@@ -277,6 +277,11 @@ func (l liveSync) Land(ctx context.Context, in opssync.LandIn) (opssync.DoneOut,
 // not apply.
 const statusLiveOff = "live rows:        off here (LORE_LIVE=0, or not a git repo)"
 
+// liveCompanionWaits is `lore sync status`'s reason for a companion row
+// no other row lands beside: a sync leaves it live on purpose (F2), so it
+// is not "waiting to land" on the next sync (devco N-14).
+const liveCompanionWaits = "goes live beside other rows; lands with the next finished row, never alone"
+
 // SyncStatus implements opssync.Env: the live rows of the cwd project and
 // why each waits (v0.1.17 printLiveStatus, side effect 13). This binary
 // keeps no lore.db sync state, so the file counters stay zero; open
@@ -318,6 +323,7 @@ func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.S
 	protected := s.noteText(liveNoteProtected)
 	branch := s.defaultBranch(ctx)
 	now := s.clk.Now()
+	lands := landsNext(plan, folder) // what the next sync lands (devco N-14)
 	for _, p := range plan {
 		if isConflict(p) {
 			out.Data.OpenConflicts++
@@ -326,6 +332,8 @@ func (l liveSync) SyncStatus(ctx context.Context, _ opssync.StatusIn) (opssync.S
 		switch {
 		case p.Leave:
 			why = "on " + branch + "; leaves live on the next sync"
+		case p.Decision.Action != live.LandStay && !lands[p.Key]:
+			why = liveCompanionWaits
 		case p.Decision.Action != live.LandStay && protected != "":
 			why = "waiting to land: " + branch + " is protected, rides on your next push"
 		case p.Decision.Action != live.LandStay:
