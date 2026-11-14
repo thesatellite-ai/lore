@@ -27,11 +27,11 @@ const (
 	// Owner item M-4: at v0.1.17's 60 s a person's reads minutes apart each
 	// paid a fetch of every store over ssh (8 calls, ~25 s on a Mac).
 	DefaultFetchTTL = 5 * time.Minute
-	// WriteFetchTTL caps the fetch TTL of a write the person passed --push
-	// to (a claim or hold that goes to the remote now must see it about as
-	// current as v0.1.17 kept it). Every other write does not fetch at all
-	// (devco L-12-perf); a task a teammate added since is found by the
-	// one refetch on E_NOT_FOUND (wire/host staleRowsAnswer).
+	// WriteFetchTTL caps the fetch TTL of a writing command: a write needs
+	// the remote about as current as v0.1.17 kept it (a claim of a task a
+	// teammate added a minute ago must find it; a refusal that rests on a
+	// teammate's claim, gate or newer edit must see it), so only reads
+	// reuse a fetch for DefaultFetchTTL (devco D-233).
 	WriteFetchTTL = 60 * time.Second
 	// DefaultLinkIndexMaxAge is how old a store copy may be and still
 	// answer links while the store is unreachable.

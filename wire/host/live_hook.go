@@ -219,9 +219,6 @@ type liveRun struct {
 	read bool
 	// asked: the run is a push the person asked for (pushAsked).
 	asked bool
-	// netAsked: the person passed --push (or LORE_PUSH_CLAIMS=1) to a write
-	// that has the flag: that write may fetch before it writes (netAskedRun).
-	netAsked bool
 	// doctor: the run is `lore doctor`, whose report carries the
 	// leak-guard warning itself (doctorGuard): the wiring's notice of it
 	// would print it twice.
@@ -302,7 +299,6 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 			s.agent = r.agent
 			s.read = r.read
 			s.asked = r.asked
-			s.netAsked = r.netAsked
 			s.still = r.still
 			s.ci = r.ci
 			s.cache = cache
@@ -733,41 +729,6 @@ func dryRun(run *Run) bool {
 	return false
 }
 
-// pushFlag is the --push flag of the writes that reach the remote when
-// asked (task claim, resource hold: ops/coord, JSON "push").
-const pushFlag = "push"
-
-// envPushClaims=1 asks for --push on every claim and hold of the shell
-// (ops/coord's flag help names it).
-const envPushClaims = "LORE_PUSH_CLAIMS"
-
-// netAskedRun reports whether the person asked a write to go to the
-// network now (devco L-12-perf): the operation has a push input and the
-// person passed it (--push, JSON "push": true), or LORE_PUSH_CLAIMS=1 asks
-// for it. Every other write stays local until it pushes: no fetch before
-// it writes, whatever live.fetch_ttl says.
-func netAskedRun(run *Run) bool {
-	if run.Entry == nil || !slices.ContainsFunc(run.Entry.InputFields(), func(f op.FieldInfo) bool { return f.Flag == pushFlag }) {
-		return false
-	}
-	if os.Getenv(envPushClaims) == envOn {
-		return true
-	}
-	if run.Cmd != nil {
-		if f, err := run.Cmd.Flags().GetBool(pushFlag); err == nil {
-			return f
-		}
-		return slices.Contains(run.Args, "--"+pushFlag)
-	}
-	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
-		var in struct {
-			Push bool `json:"push"`
-		}
-		return json.Unmarshal(d.Body, &in) == nil && in.Push
-	}
-	return false
-}
-
 // fixDryRun reports whether run is `lore fix --dry-run` (CLI flag or REST
 // body); an input it cannot read is a dry run, the side that changes less.
 func fixDryRun(run *Run) bool {
@@ -911,12 +872,10 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		stillGit(run)
 	}
 	if !r.read {
-		r.netAsked = netAskedRun(run)
-		if r.netAsked {
-			ctx = wire.WithWriteFetch(ctx) // its store clones fetch at orgconf.WriteFetchTTL (M-4)
-		} else {
-			ctx = wire.WithLocalWrite(ctx) // devco L-12-perf: its store clones stay off the network until the push
-		}
+		// A write fetches when the fetch is due (orgconf.WriteFetchTTL, M-4):
+		// its refusals (a teammate's claim, gate, closed tasklist, newer
+		// edit, roster change) must see the remote (devco D-233).
+		ctx = wire.WithWriteFetch(ctx)
 		gitleaks.Warm() // the write's secret scan rules load while it queues for the live lock (D-159)
 	}
 	ctx = withRun(ctx, r)

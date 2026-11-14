@@ -105,10 +105,9 @@ type liveSession struct {
 	clk      clock.Clock
 	stateDir string
 	// autopush: live.autopush on (and LORE_LIVE_AUTOPUSH not "0"): each
-	// write pushes at once. It gates pushes only (D18 amended): reads still
-	// fetch teammates' rows when the fetch is due; a write never fetches
-	// before it writes (devco L-12-perf), its push fetches only when the
-	// remote moved (live.Ref.Push).
+	// write pushes at once. It gates pushes only (D18 amended): reads and
+	// writes still fetch teammates' rows when the fetch is due (a write at
+	// orgconf.WriteFetchTTL, devco D-233).
 	autopush bool
 	// offline: LORE_LIVE_AUTOPUSH=0 keeps lore off the network on its own,
 	// fetches included (only `lore sync` reaches the remote).
@@ -121,9 +120,6 @@ type liveSession struct {
 	// asked: the command is a push the person asked for (liveRun.asked):
 	// it pushes waiting live writes even with live.autopush off.
 	asked bool
-	// netAsked: the person passed --push to this write (liveRun.netAsked):
-	// it fetches when the fetch is due, as before devco L-12-perf.
-	netAsked bool
 	// landLive: this sync's landing pass carries the waiting live writes in
 	// its own push (canCarryLive, live.LandRequest.Live; devco L-12-land).
 	landLive bool
@@ -293,14 +289,6 @@ func (s *liveSession) prepare(ctx context.Context) {
 	if !s.read {
 		ttl = orgconf.ForWrite(ttl) // M-4: only reads reuse a fetch for the whole TTL
 	}
-	if s.localWrite() {
-		// devco L-12-perf: a write lands on the local live ref and says
-		// whether it went out; a slow remote never holds it up. Teammates'
-		// rows arrive with the next read that fetches, `lore sync`, or the
-		// write's own push (a rejected push fetches and integrates).
-		s.integrate(ctx)
-		return
-	}
 	if live.ShouldFetch(live.FetchInputs{
 		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: ttl,
 		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
@@ -328,13 +316,6 @@ func (s *liveSession) integrate(ctx context.Context) {
 	default:
 		s.notes = append(s.notes, res.Notes...)
 	}
-}
-
-// localWrite reports whether this run is a write that does no network
-// I/O before it writes (devco L-12-perf): not a read, not a run that
-// fetches like sync (FetchAlways), and no --push the person passed.
-func (s *liveSession) localWrite() bool {
-	return !s.read && s.kind != live.FetchAlways && !s.netAsked
 }
 
 // fetch is F3 step 2: refs/lore/* and the default branch, then the stamp.

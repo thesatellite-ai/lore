@@ -92,7 +92,6 @@ $ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
 lore live: landed on main (05513aa); leaves live once main is fetched
 lore live: 4 row(s) left live (main holds them)
-lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 $ lore task list --status done
 ✓ tsk_162d…9666 merged 10:04 (found by: ancestry, 86dbae4)
 ✓ tsk_2ad3…f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06
