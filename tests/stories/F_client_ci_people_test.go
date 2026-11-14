@@ -298,7 +298,7 @@ func TestStoryFPeople(t *testing.T) {
 			}
 		}()
 		nh.LoreIn(nc, "memory", "add", "a note after access went", "--to", orgStore, "--yes").OK(t).Says(t, "committed locally").Never(t, "check the store's address")
-		nh.LoreIn(nc, "doctor").Says(t, "access was most likely removed", "do not run lore store init").Never(t, "not a lore store yet")
+		nh.LoreIn(nc, "doctor").Says(t, "access was most likely removed", "Do not run lore store init").Never(t, "not a lore store yet")
 	})
 
 	s.Step("week3/a-to-write-from-a-repo-without-lore-data", func() {

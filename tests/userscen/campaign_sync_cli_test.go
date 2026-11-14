@@ -62,7 +62,7 @@ func TestCampaignSync_BadInputMatrix(t *testing.T) {
 		{[]string{"trash", "restore", unknownTask}, "E_NOT_FOUND", 27, unknownTask},
 		{[]string{"trash", "purge"}, "E_INVALID_INPUT", 20, "give exactly one of"},
 		{[]string{"trash", "list", "--since", "garbage"}, "E_INVALID_INPUT", 20, "want a duration"},
-		{[]string{"trash", "list", "--limit", "-1"}, "E_INVALID_INPUT", 20, "positive number"},
+		{[]string{"trash", "list", "--limit", "-1"}, "E_INVALID_INPUT", 20, "--limit must be 1 or more"},
 		{[]string{"trash", "list", "--to", "nope"}, "E_NOT_FOUND", 27, "no store named nope"},
 		{[]string{"sync", "resolve", "nope"}, "E_INVALID_INPUT", 20, "take"},
 		{[]string{"sync", "peek", "nope"}, "E_INVALID_INPUT", 20, "nope"},

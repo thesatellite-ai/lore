@@ -333,7 +333,7 @@ lore keeps a fast local cache in its home folder (`~/.lore/cache/repo/<repo fold
 
 <!-- ds:block id=sync-mergedriver-config-cthptudb -->
 <!-- ds:block id=sync-strategyfor-db9rgsqn -->
-**Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles. List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
+**Merges.** One file per row means two people adding knowledge never conflict. Editing *different fields* of the same row merges cleanly through lore's git merge driver; editing the *same text* on two branches is a real conflict that a person settles (a task's one-value text fields, such as who finished it or its done commit, take the side changed last instead). List fields that are sets (labels, approvers, team members, project links) merge both sides' additions and never conflict, and an edit beats a delete. Details, and what happens in pull requests, in [Merges and pull requests](#merges-and-pull-requests).
 
 **The files are the truth.** Every lore command writes the row file and updates the cache in the same step; the cache under `~/.lore/cache/` is only a cache, rebuilt from `.lore/data` at any time, so never edit it by hand. A row whose file disappears goes to `lore trash list --local` first, and its file is still in git, so a `git clean` or a stash is always recoverable.
 

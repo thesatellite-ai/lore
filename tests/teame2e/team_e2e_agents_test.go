@@ -573,7 +573,7 @@ type globexGroup struct {
 
 func newGlobexGroup(t *testing.T, caps ...th.Cap) *globexGroup {
 	t.Helper()
-	a := newAgency(t, append(append([]th.Cap{}, crewCaps...), append(caps, th.Cmd("task", "next"), th.Flag("after", "task", "add"), th.Flag("to", "task", "add"), th.Flag("to", "mission", "add"))...)...)
+	a := newAgency(t, append(append([]th.Cap{}, crewCaps...), append(caps, th.Cmd("task", "next"), th.Flag("after", "task", "add"), th.Flag("to", "task", "add"), th.Flag("to", "mission", "add"), th.Flag("yes", "init"))...)...)
 	g := &globexGroup{agency: a, backend: a.w.Remote("github.com/globex/backend"), frontend: a.w.Remote("github.com/globex/frontend")}
 	for _, x := range []struct {
 		r    *th.Remote
@@ -581,7 +581,7 @@ func newGlobexGroup(t *testing.T, caps ...th.Cap) *globexGroup {
 		dst  **th.Clone
 	}{{g.backend, "backend", &g.aliceBE}, {g.frontend, "frontend", &g.aliceFE}} {
 		c := a.alice.Clone(x.r, x.name)
-		c.MustLore("init", "--non-interactive", "--name="+x.name)
+		c.MustLore("init", "--non-interactive", "--name="+x.name, "--yes") // globex repos are client repos: init asks until --yes (I-13)
 		c.CommitAll("lore")
 		c.AdminPush("origin", "main")
 		c.MustLore("org", "link", orgNorthwind, "--project", folderGlobex, "--yes")
@@ -718,7 +718,7 @@ func TestWorkedExample75_FourAgentsOneMission(t *testing.T) {
 		th.Cmd("gate", "approve"), th.Cmd("mission", "status"), th.Flag("pr", "task", "done"), th.Flag("lesson", "task", "done"))
 	proxy := g.w.Remote("github.com/globex/proxy")
 	pc := g.alice.Clone(proxy, "proxy")
-	pc.MustLore("init", "--non-interactive", "--name=proxy")
+	pc.MustLore("init", "--non-interactive", "--name=proxy", "--yes")
 	pc.CommitAll("lore")
 	pc.AdminPush("origin", "main")
 	pc.MustLore("org", "link", orgNorthwind, "--project", folderGlobex, "--yes")

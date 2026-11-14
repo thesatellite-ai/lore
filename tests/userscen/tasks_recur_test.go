@@ -47,7 +47,7 @@ func TestTasksRecur_WeeklyDoneTwiceAndLate(t *testing.T) {
 	first := tasksAdd(t, s.c, title, "--recur", "every week", "--due", "2026-11-02")
 	s.c.MustLore("task", "recur", "show", first).Says(t, "every week", "2026-11-09")
 	s.c.MustLore("task", "done", first, "--no-lesson").Says(t, "next instance", "due 2026-11-09")
-	s.c.MustLore("task", "done", first, "--no-lesson").Says(t, "already there")
+	s.c.MustLore("task", "done", first, "--no-lesson").Says(t, "was already done by", "nothing changed")
 	if due := tasksOpenDue(tasksSeries(t, s.c, title)); len(due) != 1 || due[0] != "2026-11-09" {
 		t.Fatalf("one open instance due 2026-11-09 after two dones: %v", due)
 	}

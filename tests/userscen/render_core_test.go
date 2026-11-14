@@ -102,8 +102,13 @@ func TestRenderEveryKindLandsInItsTier(t *testing.T) {
 		t.Errorf("the must rule is in full: %q", must)
 	}
 	high := renderSection(md, "## High hotfixes")
-	if !strings.Contains(high, "`"+ids["high"]+"` Flaky CI") || !strings.Contains(high, "`lore show --id "+ids["high"]+"`") || strings.Contains(high, "rerun the job once") {
-		t.Errorf("the high hotfix is one line with its fetch command, no body: %q", high)
+	// G-6: one line, no body; the fetch command is said once, in the
+	// footer, for every one-line entry (not repeated per line)
+	if !strings.Contains(high, "`"+ids["high"]+"` Flaky CI") || strings.Contains(high, "rerun the job once") {
+		t.Errorf("the high hotfix is one line, no body: %q", high)
+	}
+	if foot := renderSection(md, "## Not in this file"); !strings.Contains(foot, "1 pinned entry is shown here only as one line: `lore show --id <id>` prints the full text") {
+		t.Errorf("the footer names the fetch command for the one-line entry: %q", foot)
 	}
 	// Search-only kinds: neither id nor text in the summary.
 	for _, k := range []string{"should", "may", "medium", "low", "memory", "decision", "pattern"} {

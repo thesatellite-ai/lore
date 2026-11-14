@@ -64,12 +64,26 @@ func (a *App) setupStatusHere(ctx context.Context) bool {
 // repo's.
 const setupStatusLine = "no code repo here: the stores of this setup (`lore store list` names them; `lore sync` syncs them)"
 
+// setupBareLine follows setupStatusLine (and opens `lore sync`) in a bare
+// repository: the stores still answer, but the folder is a git repo with
+// no checked-out files, so the person is told what it is and the way to
+// its repo status (a clone), never "git init here" (machines ReposKinds).
+const setupBareLine = "this folder is a bare repository (no work tree), so it has no repo status: clone it (git clone <this folder> <new folder>) and run lore in the clone"
+
+// bareLines is setupBareLine when dir is a bare repository, else nothing.
+func bareLines(ctx context.Context, dir string) []string {
+	if gitBareRepo(ctx, dir) {
+		return []string{setupBareLine}
+	}
+	return nil
+}
+
 // setupSyncStatus is `lore sync status` with no code repo here (H-10):
 // the stores' standing against their remotes (local copies only, no
 // network) and the refused pushes, the parts of the repo status that do
 // not need a repo.
 func (a *App) setupSyncStatus(ctx context.Context) (opssync.StatusOut, error) {
-	out := opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus, Lines: []string{setupStatusLine}}
+	out := opssync.StatusOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindStatus, Lines: append([]string{setupStatusLine}, bareLines(ctx, a.opts.RepoDir)...)}
 	a.syncStoreStates(ctx, &out)
 	if len(out.Data.Stores) == 0 {
 		out.Lines = append(out.Lines, "no stores: this folder is in no setup with a team or personal store (`lore setup list`)")
@@ -160,8 +174,9 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 			}
 		}
 	}
+	out.Lines = bareLines(ctx, a.opts.RepoDir)
 	if len(stores) == 0 {
-		out.Lines = []string{"no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)"}
+		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
 		return out, nil
 	}
 	var failed []opssync.StoreReport
