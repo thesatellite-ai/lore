@@ -62,7 +62,7 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 $ lore explain --id tsk_54fe…28f2
 tsk_54fe…28f2 in ~/work/billing (folder _root)
   fetched 35s ago
-  live (local 34ee210): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
+  live (local df3a55c): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -93,7 +93,7 @@ $ git config --get-all remote.origin.fetch
 
 The remote's hidden lists arrive in **tracking copies** under `refs/lore-remote/`. A tracking copy is your clone's note of what the remote holds. Lore then merges it into your own `refs/lore/live`. It never overwrites your copy, so a live write you made offline is kept until it can be pushed.
 
-Each lore command fetches once: one `git fetch` gets live, signals and `main` together. A read skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old. A write does not fetch at all: it writes on this clone and says whether it went out, so a slow remote never holds it up (a claim or hold you pass `--push` to fetches when the last fetch is over 60 seconds old). `lore sync` always fetches, once per remote, and pushes once per remote. So a teammate's change shows up within 5 minutes, or at once after `lore sync`:
+Each lore command fetches once: one `git fetch` gets live, signals and `main` together. A read skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old, a write if it is less than 60 seconds old (a write's refusals, such as a teammate's claim or gate, need the remote's rows). `lore sync` always fetches, once per remote, and pushes once per remote. So a teammate's change shows up within a minute, or at once after `lore sync`:
 
 Commands in one clone take turns on its live list: each waits for the one before it to finish, in the order they started (a command that waited longer always goes first), and gives up with `E_STORE_LOCKED` after 30 seconds. Ten agent sessions working in one clone at the same time each wait for about the other nine commands, a few seconds; agents that each have their own clone or worktree of the repo do not wait for each other at all.
 
@@ -101,10 +101,9 @@ Commands in one clone take turns on its live list: each waits for the one before
 ```console
 # bob, in billing
 $ lore sync
-lore live: pushed waiting live writes commit cf563f3 to origin refs/lore/live
+lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -204,19 +203,18 @@ A **protected branch** is one GitHub only lets you change through a pull request
 ```console
 # bob, in billing
 $ lore sync
-lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
+lore live: pushed waiting live writes commit 9d655a5 to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit 22efc3b to origin refs/lore/live
 
 # alice, in billing
 $ lore sync
-lore live: pushed waiting live writes commit 8c373dc to origin refs/lore/live
+lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain --id tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 8c373dc): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
+  live (local 2fc021b): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)

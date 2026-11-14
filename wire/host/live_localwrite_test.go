@@ -19,12 +19,12 @@ import (
 // run (git-upload-pack is a fetch, git-receive-pack a push) and runs it.
 const liveCountingSSH = "#!/bin/sh\nfor a; do cmd=$a; done\necho \"$cmd\" >> \"$FAKE_SSH_LOG\"\nexec sh -c \"$cmd\"\n"
 
-// devco L-12-perf: on a slow remote the first write after a pause fetched
-// (live.fetch_ttl had run out) though it only writes refs/lore/live here.
-// Now a write does no network I/O at all, however old the last fetch is;
-// a read that is due still fetches, a write the person passed --push to
-// still fetches, and lore sync makes one fetch and one push.
-func TestLocalWriteDoesNoNetworkIO(t *testing.T) {
+// devco L-12-perf / D-233: a write fetches before it writes only when the
+// fetch is due (orgconf.WriteFetchTTL), and then once: its refusals (a
+// teammate's claim, gate or newer edit) rest on the remote's rows, so a
+// write never skips a due fetch (D-233), and a write right after a fetch
+// makes no call. lore sync makes one fetch and one push.
+func TestWriteFetchesOnlyWhenDue(t *testing.T) {
 	clk := clock.NewFake(ltBase)
 	f := newLiveFixtureWith(t, "live:\n  autopush: false\n", clk)
 	f.s.release()
@@ -67,30 +67,27 @@ func TestLocalWriteDoesNoNetworkIO(t *testing.T) {
 	}
 	run := func() *liveRun { return &liveRun{h: f.s.h, sessions: map[string]*liveSession{}} }
 
-	// never fetched: a write stays local
+	// never fetched: the write fetches once before it writes
+	write(run())
+	if fe, pu := calls(); fe != 1 || pu != 0 {
+		t.Fatalf("a first write made %d fetch(es) and %d push(es), want 1 and 0:\n%s", fe, pu, errOut.String())
+	}
+	// right after that fetch: a write and a read make no call
 	write(run())
 	if fe, pu := calls(); fe+pu != 0 {
-		t.Fatalf("a local write made %d fetch(es) and %d push(es), want none:\n%s", fe, pu, errOut.String())
+		t.Fatalf("a write right after a fetch made %d fetch(es) and %d push(es), want none:\n%s", fe, pu, errOut.String())
 	}
-	// a read that is due fetches (the counter bites)
 	rd := run()
 	rd.read = true
 	open(rd)
-	if fe, _ := calls(); fe != 1 {
-		t.Fatalf("a due read made %d fetch(es), want 1", fe)
+	if fe, _ := calls(); fe != 0 {
+		t.Fatalf("a read right after a fetch made %d fetch(es), want none", fe)
 	}
-	// long after that fetch (a pause): a write still stays local
+	// long after that fetch (a pause): the write fetches again, once (D-233)
 	clk.Advance(2 * time.Hour)
 	write(run())
-	if fe, pu := calls(); fe+pu != 0 {
-		t.Fatalf("a write after a pause made %d fetch(es) and %d push(es), want none:\n%s", fe, pu, errOut.String())
-	}
-	// a write the person passed --push to fetches when the fetch is due
-	pr := run()
-	pr.netAsked = true
-	write(pr)
-	if fe, _ := calls(); fe != 1 {
-		t.Fatalf("a --push write made %d fetch(es), want 1", fe)
+	if fe, pu := calls(); fe != 1 || pu != 0 {
+		t.Fatalf("a write after a pause made %d fetch(es) and %d push(es), want 1 and 0:\n%s", fe, pu, errOut.String())
 	}
 	// lore sync: one fetch and one push for the waiting writes
 	sr := run()

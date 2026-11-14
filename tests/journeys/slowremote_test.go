@@ -4,13 +4,15 @@ package journeys
 
 // slowremote_test.go — a slow remote stays out of the way (devco L-12-perf,
 // L-12-land). Every ssh call to Sol's git host costs seconds, so lore makes
-// as few as it can: a write makes none, and a sync that also lands a
-// finished task makes one fetch and one push to the code remote. The fake
+// as few as it can: a write fetches once when its fetch is due (its
+// refusals need teammates' rows, D-233) and makes no call right after, and
+// a sync that also lands a finished task makes one fetch and one push to
+// the code remote. The fake
 // ssh logs each call, so the counts are checked, never wall times.
 //
 //	day 1  online: init, commit and push; origin moves to the slow ssh host
-//	day 2  after a pause: a task add makes no call at all; the task is
-//	       finished; lore sync fetches once and pushes once (the live
+//	day 2  after a pause: a task add fetches once and pushes nothing; a
+//	       task start right after makes no call; the task is finished; lore sync fetches once and pushes once (the live
 //	       writes and the landing commit in one push)
 
 import (
@@ -65,12 +67,12 @@ func TestJourneySlowRemote(t *testing.T) {
 	})
 
 	var id string
-	w.Step("day2/a-write-makes-no-call", func() {
+	w.Step("day2/a-write-fetches-once-when-due", func() {
 		w.AdvanceDays(1) // long past live.fetch_ttl
 		calls()          // the invariants' own reads (lore doctor) after the last step
 		r := lap.LoreIn(repo, "task", "add", "ship the slow-link page").OK(t)
-		if fe, pu := calls(); fe+pu != 0 {
-			t.Errorf("task add after a pause made %d fetch(es) and %d push(es), want none:\n%s", fe, pu, r.Out())
+		if fe, pu := calls(); fe != 1 || pu != 0 {
+			t.Errorf("task add after a pause made %d fetch(es) and %d push(es), want 1 and 0:\n%s\n%s", fe, pu, last, r.Out())
 		}
 		for _, f := range strings.Fields(r.Out()) {
 			if strings.HasPrefix(f, "tsk_") {
@@ -83,7 +85,7 @@ func TestJourneySlowRemote(t *testing.T) {
 		}
 		lap.LoreIn(repo, "task", "start", "--id", id).OK(t)
 		if fe, pu := calls(); fe+pu != 0 {
-			t.Errorf("task start made %d fetch(es) and %d push(es), want none", fe, pu)
+			t.Errorf("task start right after a fetch made %d fetch(es) and %d push(es), want none:\n%s", fe, pu, last)
 		}
 		// task done reads the claims on the remote's refs/lore/signals first
 		// (a task a teammate claimed is never closed unfenced, B11): that

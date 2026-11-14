@@ -68,24 +68,6 @@ func WithWriteFetch(ctx context.Context) context.Context {
 	return context.WithValue(ctx, writeFetchKey{}, true)
 }
 
-// localWriteKey is the context key of WithLocalWrite.
-type localWriteKey struct{}
-
-// WithLocalWrite marks ctx as a writing command the person did not ask to
-// reach the network (the host's live hook; devco L-12-perf): its store
-// clones do no fetch before the write, whatever live.fetch_ttl says. The
-// write itself still pushes as the store's push mode says (now: the push
-// fetches and merges first), and the next read or `lore sync` fetches.
-func WithLocalWrite(ctx context.Context) context.Context {
-	return context.WithValue(ctx, localWriteKey{}, true)
-}
-
-// localWrite reports whether ctx carries WithLocalWrite.
-func localWrite(ctx context.Context) bool {
-	w, _ := ctx.Value(localWriteKey{}).(bool)
-	return w
-}
-
 // writeFetch reports whether ctx carries WithWriteFetch.
 func writeFetch(ctx context.Context) bool {
 	w, _ := ctx.Value(writeFetchKey{}).(bool)
@@ -268,9 +250,6 @@ func (b *storePush) refresh(ctx context.Context) {
 	in := live.FetchInputs{Now: b.res.now(), TTL: ttl, Kind: live.FetchCached, Autopush: autopush, HasRemote: true}
 	if b.res != nil && b.res.fetchAlways {
 		in.Kind = live.FetchAlways
-	}
-	if localWrite(ctx) && !readRun(ctx) && in.Kind != live.FetchAlways {
-		return // devco L-12-perf: a write reads the local copy; its push (if any) syncs
 	}
 	if writeFetch(ctx) && !readRun(ctx) {
 		in.TTL = orgconf.ForWrite(in.TTL) // M-4: only reads reuse a fetch for the whole TTL
