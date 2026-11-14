@@ -89,6 +89,12 @@ The quick tier stays fast only while no unit package is slow: a package that tak
 
 A feature that changes what a person does over time (a new command, a new kind of store, a new sync mode, a new refusal, a new setup step) adds, in the same change, the journey steps where a real person would meet it, in the persona who would (`tests/journeys/<persona>_test.go`). A rule that must hold everywhere becomes a shared invariant instead. How: [tests/journeys/README.md](../tests/journeys/README.md).
 
+## Every scenario and every bug is a replayable regression
+
+A story is one scenario lore was tried against, written down so it can run again: who the people are, what they do in plain words, and what must hold afterwards (`tests/stories/<id>-<name>.md`), plus a hermetic Go test that replays it end to end with the real binary. Every finding ever fixed has a row in `tests/stories/REGRESSIONS.md` naming the test that guards it, and a guard test fails when a row names a test that does not exist or a finding has no test. The stories run in the full gate (`task check` and `task check:after-land`, step `stories`), not in `task check:fast`.
+
+Every new scenario, bug fix or feature lands with its story, its test and its REGRESSIONS.md row in the same commit, or it does not land. How: [tests/stories/README.md](../tests/stories/README.md).
+
 ## The gate: `task check`, before every push
 
 `task check` holds the machine-wide `testlock` for its whole run, first bounds the Go build cache (stage cache: `lore:check:gocache`, above), compiles the module once (stage warm: `lore:build:warm`, plain and `-race`, so the steps that follow find every package in the cache instead of each compiling the same code at the same time), builds the test binary (stage build), then runs every check in one stage, test. Each step writes its own log to `tmp/check/<step>.log`; when a stage ends it prints every step's wall seconds and CPU seconds so far and each stage's wall time with its peak and mean load average (`tmp/check/timings.tsv`, `stages.tsv`). A failed step fails the stage, is named, and the tail of its log is printed. A stage starts only when the one before it passed.

@@ -116,6 +116,7 @@ vars:
   GATE_STEPS: |
     userscen          13  test:scen PARALLEL=13
     setupe2e          11  test:setupe2e:run PARALLEL=10
+    stories           4   test:stories PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
     journey-solo      2   test:journeys:solo PARALLEL=4
     machines          7   test:machines:core PARALLEL=8
@@ -615,6 +616,14 @@ tasks:
       - CGO_ENABLED=0 go build -tags loretest -o {{.JOURNEYS_BIN}} ./cmd/lore
       - "JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel {{.PARALLEL | default 16}} -timeout 15m {{.FILTER}} ./tests/journeys/"
 
+  test:stories:
+    desc: "Replayable user stories (tests/stories, tags stories+journeys): every scenario track lore was tried against (bug hunt J1-J4, dev company A-I) replayed end to end on the real binary over generated repo shapes (5.5k-row 0.1.17 repo, monorepo, docs-only, Unicode/CRLF, worktrees, shallow clones, two machines), checking the owner's standing rules; tests/stories/REGRESSIONS.md maps every fixed finding to the test that guards it. Stories run in parallel (PARALLEL); full gate only, not check:fast. Extra go test flags after --"
+    vars:
+      STORIES_BIN: "{{.BIN_DIR}}/lore-stories"
+    cmds:
+      - CGO_ENABLED=0 go build -tags loretest -o {{.STORIES_BIN}} ./cmd/lore
+      - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout 15m {{.CLI_ARGS}} ./tests/stories/"
+
   test:journeys:frame:
     desc: "Journey harness self-tests: a walk through every harness action, every shared invariant bites, Pending records"
     cmds:
@@ -837,7 +846,7 @@ tasks:
       # A suite whose build tags exclude the target (journeys and machines are !windows) has no
       # package there, and go vet refuses an empty pattern: skip it, named.
       - |
-        for s in "teame2e ./tests/..." "setupe2e ./tests/setupe2e/..." "machines ./tests/machines/..." "journeys ./tests/journeys/..." "userscen ./tests/userscen/..."; do
+        for s in "teame2e ./tests/..." "setupe2e ./tests/setupe2e/..." "machines ./tests/machines/..." "journeys ./tests/journeys/..." "stories,journeys ./tests/stories/..." "userscen ./tests/userscen/..."; do
           set -- $s
           if [ -z "$(go list -tags "$1" "$2" 2>/dev/null)" ]; then echo "{{.GOOS}}: $1 suite does not build there (its build tags), skipped"; continue; fi
           go vet -tags "$1" "$2" || exit 1
@@ -854,7 +863,7 @@ tasks:
       # A suite whose build tags exclude the target (journeys and machines are !windows) has no
       # package there, and go vet refuses an empty pattern: skip it, named.
       - |
-        for s in "teame2e ./tests/..." "setupe2e ./tests/setupe2e/..." "machines ./tests/machines/..." "journeys ./tests/journeys/..." "userscen ./tests/userscen/..."; do
+        for s in "teame2e ./tests/..." "setupe2e ./tests/setupe2e/..." "machines ./tests/machines/..." "journeys ./tests/journeys/..." "stories,journeys ./tests/stories/..." "userscen ./tests/userscen/..."; do
           set -- $s
           if [ -z "$(go list -tags "$1" "$2" 2>/dev/null)" ]; then echo "{{.GOOS}}: $1 suite does not build there (its build tags), skipped"; continue; fi
           go vet -tags "$1" "$2" || exit 1

@@ -19,8 +19,6 @@ const envLore = "JOURNEYS_LORE"
 // the ones a user with it gets.
 const userUmask = 0o022
 
-var loreBin string
-
 func TestMain(m *testing.M) { os.Exit(runMain(m)) }
 
 func runMain(m *testing.M) int {
