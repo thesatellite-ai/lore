@@ -203,6 +203,10 @@ func TestRestParity_ConfirmThenAct(t *testing.T) {
 		ce := restCLIErr(cli)
 		if ce == nil || rep.err == nil || ce.Code != rep.err.Code || ce.Code != "E_PURGED" || rep.status != errs.HTTPFor(errs.Class(ce.Class), ce.Exit) {
 			t.Errorf("%s after purge: CLI %+v / REST %d %.300s", id, ce, rep.status, rep.body)
+		} else if ce.Hint == "" || rep.err.Hint != ce.Hint {
+			// run:tests:rest-purged: REST answered a purged id with no hint
+			// where the CLI names the next step.
+			t.Errorf("%s after purge: hint CLI %q / REST %q, want the same next step", id, ce.Hint, rep.err.Hint)
 		}
 	}
 	// Running the confirmed purge twice: the second refuses the same way on both.
