@@ -402,8 +402,15 @@ func TestOffboardRefusals(t *testing.T) {
 			}
 		})
 	}
-	// A policy that allows agents lets the agent caller through.
+	// devco:T-14: the before-the-stint refusal names the edit that moves
+	// the start back (named flags), not only the list.
 	w := newWorld(t)
+	_, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-01-11"})
+	if h := errs.EnvelopeOf(err).Error.Hint; !strings.Contains(h, "lore actor period edit --period ") || !strings.Contains(h, "--started-on 2026-01-11") {
+		t.Errorf("hint: %q", h)
+	}
+	// A policy that allows agents lets the agent caller through.
+	w = newWorld(t)
 	w.f.Agent, w.f.MayManagePeople = true, true
 	if _, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"}); err != nil {
 		t.Fatalf("agents.may_manage_people: %v", err)

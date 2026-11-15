@@ -144,7 +144,7 @@ func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
 			updated = append(updated, ev)
 		case actPurge:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" purged "+ev.ID.String()+
-				"; purged rows never come back (DQ4)").
+				"; purged rows never come back").
 				WithHint("see what it changed: lore batch show --id " + id.String() + " --all")
 		default:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" holds a "+strconv.Quote(ev.Action)+" row ("+ev.ID.String()+"); only delete and create batches can be undone")

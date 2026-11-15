@@ -235,6 +235,10 @@ type StatsIn struct{}
 type Count struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+	// Label is a by_deleter entry's @handle or display name (devco:T-16:
+	// stats printed the act_ id while trash list named the person); Name
+	// keeps the id.
+	Label string `json:"label,omitempty"`
 }
 
 // StatsOut is the output of trash.stats (DELETION 4.5).
@@ -634,8 +638,18 @@ func (o ops) stats(ctx context.Context, _ StatsIn) (StatsOut, error) {
 	if err != nil {
 		return StatsOut{}, err
 	}
-	return StatsOut{Rows: st.Rows, Dependents: st.Dependents, Expired: st.Expired,
-		ByTable: counts(st.ByTable), ByStore: counts(st.ByStore), ByDeleter: counts(st.ByDeleter), Tombstones: counts(st.Tombstones)}, nil
+	out := StatsOut{Rows: st.Rows, Dependents: st.Dependents, Expired: st.Expired,
+		ByTable: counts(st.ByTable), ByStore: counts(st.ByStore), ByDeleter: counts(st.ByDeleter), Tombstones: counts(st.Tombstones)}
+	if len(out.ByDeleter) > 0 {
+		labels := o.deleterLabels(ctx)
+		for i, c := range out.ByDeleter {
+			out.ByDeleter[i].Label = Item{DeletedBy: c.Name, byLabel: labels[c.Name]}.deleter()
+			if out.ByDeleter[i].Label == c.Name {
+				out.ByDeleter[i].Label = ""
+			}
+		}
+	}
+	return out, nil
 }
 
 // counts is m as a list, largest first, then by name.
@@ -668,6 +682,9 @@ func (o StatsOut) Text() string {
 		b.WriteString(sec.name + "\n")
 		for _, c := range sec.c {
 			name := c.Name
+			if c.Label != "" {
+				name = c.Label
+			}
 			if name == "" {
 				name = "(unknown)"
 			}
@@ -952,15 +969,25 @@ func (o ops) labelDeleters(ctx context.Context, items []Item) {
 	if len(items) == 0 {
 		return
 	}
+	handles := o.deleterLabels(ctx)
+	for i := range items {
+		items[i].byLabel = handles[items[i].DeletedBy]
+	}
+}
+
+// deleterLabels maps each actor id of the attached stores to its @handle,
+// else its display name (labelDeleters, stats). A failed roster read
+// returns what was read so far: it only costs the labels.
+func (o ops) deleterLabels(ctx context.Context) map[string]string {
+	handles := map[string]string{}
 	a, ok := upgrade.As[Actors](o.env)
 	if !ok {
-		return
+		return handles
 	}
-	handles := map[string]string{}
 	for _, src := range engine.ReadStoresOf(a) {
 		rows, err := a.List(ctx, src, schema.TableActors)
 		if err != nil {
-			return
+			return handles
 		}
 		for _, r := range rows {
 			if r.Deleted {
@@ -976,9 +1003,7 @@ func (o ops) labelDeleters(ctx context.Context, items []Item) {
 			}
 		}
 	}
-	for i := range items {
-		items[i].byLabel = handles[items[i].DeletedBy]
-	}
+	return handles
 }
 
 // line is one row of `lore trash list`.

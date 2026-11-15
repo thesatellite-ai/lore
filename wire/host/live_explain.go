@@ -30,7 +30,7 @@ import (
 
 // ruleDefaultReadThrough names F1's default-branch read-through rule in
 // explain's "wins" line (v0.1.17 live_wire.go wording).
-const ruleDefaultReadThrough = "default-branch read-through (F1)"
+const ruleDefaultReadThrough = "default-branch read-through"
 
 // Explain implements opssync.Env (`lore explain <id>`).
 func (l liveSync) Explain(ctx context.Context, in opssync.ExplainIn) (opssync.ExplainOut, error) {

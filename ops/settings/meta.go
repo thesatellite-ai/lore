@@ -533,7 +533,8 @@ func (o ops) metaValueRename(ctx context.Context, in MetaValueRenameIn) (RowOut,
 			Human: fmt.Sprintf("%s: renamed value %s %s → %s; row labels refresh on each row's next write; no values changed\n",
 				text(k.Row, mName), short(v.Row.ID), in.Old, in.New)}, nil
 	}
-	return RowOut{}, errs.New(errs.NotFound, text(k.Row, mName)+" has no value "+quote(in.Old))
+	return RowOut{}, errs.New(errs.NotFound, text(k.Row, mName)+" has no value "+quote(in.Old)).
+		WithHint("run `lore meta keys` to see each key's allowed values")
 }
 
 // metaWriteErrors are the codes of meta set / unset (METADATA 6).

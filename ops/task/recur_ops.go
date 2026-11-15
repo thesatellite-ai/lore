@@ -99,7 +99,7 @@ func (o ops) recurShow(ctx context.Context, in IDIn) (RecurOut, error) {
 	}
 	out := RecurOut{ID: cur.ID.String(), Recur: rc}
 	if due := work.Time(cur, fieldDue); !due.IsZero() && !rc.Stopped {
-		for _, d := range rule.Upcoming(due, upcomingShown) {
+		for _, d := range rule.Upcoming(calDay(due, time.Local), upcomingShown) {
 			out.Upcoming = append(out.Upcoming, d.Format(time.DateOnly))
 		}
 	}

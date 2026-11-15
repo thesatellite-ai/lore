@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -247,3 +248,45 @@ func TestTrashShowAndStats(t *testing.T) {
 		t.Fatalf("stats: %+v", st)
 	}
 }
+
+// TestTrashStatsNamesTheDeleter (devco:T-16): stats names who deleted the
+// rows the way trash list does (@handle or display name), never the raw
+// act_ id; --json keeps the id in name and adds the label.
+func TestTrashStatsNamesTheDeleter(t *testing.T) {
+	h := opstest.WithOrg(t) // the harness actor is on the roster as @owner
+	trashed(t, h, "first", "")
+	trashed(t, h, "second", "")
+	list := opstest.Text(h.Must(trash.OpList, ``))
+	_, by, ok := strings.Cut(strings.SplitN(list, "\n", 2)[0], "  by ")
+	if !ok || strings.HasPrefix(by, "act_") {
+		t.Fatalf("list names no deleter: %s", list)
+	}
+	by = strings.SplitN(by, "  ", 2)[0]
+	stats := opstest.Text(h.Must(trash.OpStats, ``))
+	if strings.Contains(stats, "act_") || !strings.Contains(stats, "  "+by+"  2") {
+		t.Fatalf("stats does not name %q:\n%s", by, stats)
+	}
+	var st trash.StatsOut
+	if err := json.Unmarshal([]byte(h.JSON(h.Must(trash.OpStats, ``))), &st); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.ByDeleter) != 1 || !strings.HasPrefix(st.ByDeleter[0].Name, "act_") || st.ByDeleter[0].Label != by {
+		t.Fatalf("stats --json: %+v", st.ByDeleter)
+	}
+}
+
+// TestPurgedErrorsCarryNoSpecID (devco:T-16): a restore of a purged row
+// said "purged rows never come back (DQ4)"; no error names a spec id.
+func TestPurgedErrorsCarryNoSpecID(t *testing.T) {
+	h := opstest.New(t)
+	id := trashed(t, h, "gone for good", "")
+	h.Must(trash.OpPurge, `{"target":"`+id+`","confirm":true}`)
+	msg := h.Fails(trash.OpRestore, `{"target":"`+id+`"}`, errs.Purged)
+	if m := specIDInText.FindString(msg); m != "" || !strings.Contains(msg, "purged rows never come back") {
+		t.Fatalf("error carries the spec id %q: %s", m, msg)
+	}
+}
+
+// specIDInText is an internal spec id in parentheses: "(DQ4)", "(TSQ14)",
+// "(TEAM-030)", "(BATCH 5)".
+var specIDInText = regexp.MustCompile(`\(([A-Z][A-Z_]*-?[0-9][0-9.]*|[A-Z][A-Z_]{2,} [0-9][0-9.]*)\)`)

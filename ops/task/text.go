@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"strings"
+	"time"
+
+	"github.com/thesatellite-ai/lore/logic/dates"
 
 	"github.com/thesatellite-ai/lore/logic/tasktree"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -50,13 +53,13 @@ func BriefOf(lab work.Labeler, src store.Source, r row.Row) Brief {
 	b := Brief{
 		ID: r.ID.String(), Title: work.Field(r, work.FieldTitle), Status: work.Field(r, work.FieldStatus),
 		Priority: work.Field(r, fieldPriority), Commitment: work.Field(r, fieldCommitment),
-		DeferredUntil: work.DateText(r, fieldDeferred), DueAt: work.DateText(r, fieldDue),
+		DeferredUntil: work.DateText(r, fieldDeferred), DueAt: dueText(work.Time(r, fieldDue)),
 		MissionID: work.Field(r, work.FieldMission), Store: work.SourceOf(lab, src), Label: work.Label(lab, src), CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 	}
 	status, priority := orDefault(b.Status, schema.TaskStatusTodo), orDefault(b.Priority, DefaultPriority)
 	line := badge(status) + " " + b.ID + " " + b.Title + " [" + priority + "]"
 	if b.DueAt != "" {
-		line += " due:" + b.DueAt
+		line += " due:" + dueHuman(b.DueAt, time.Local)
 	}
 	if b.Commitment != "" && b.Commitment != schema.TaskCommitmentAccepted {
 		line += " (" + b.Commitment + ")"
@@ -67,6 +70,30 @@ func BriefOf(lab work.Labeler, src store.Source, r row.Row) Brief {
 	b.base = line
 	b.Line = line + storeLabel(b.Label)
 	return b
+}
+
+// dueText is a task's due as --json carries it: YYYY-MM-DD for a
+// date-only due, RFC3339 UTC for one given with a time of day ("" when
+// unset). devco:T-9: --due "2027-03-12 + 09:00" printed the time on add,
+// then show, list and --json dropped it.
+func dueText(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	if dates.IsDay(t) {
+		return t.UTC().Format(dates.DayLayout)
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+// dueHuman is a dueText value as a person reads it: a day as is, an
+// instant as "2027-03-12 09:00 EST" on the wall clock in loc.
+func dueHuman(due string, loc *time.Location) string {
+	t, err := time.Parse(time.RFC3339, due)
+	if err != nil {
+		return due
+	}
+	return t.In(loc).Format("2006-01-02 15:04 MST")
 }
 
 // storeLabel is the "  [<label>]" suffix of a store task's line, from its
@@ -93,7 +120,7 @@ func fullOf(lab work.Labeler, src store.Source, r row.Row) Full {
 	return Full{
 		ID: r.ID.String(), Title: work.Field(r, work.FieldTitle), Body: work.Field(r, work.FieldBody),
 		Status: work.Field(r, work.FieldStatus), Priority: work.Field(r, fieldPriority), Commitment: work.Field(r, fieldCommitment),
-		DeferredUntil: work.DateText(r, fieldDeferred), DueAt: work.DateText(r, fieldDue),
+		DeferredUntil: work.DateText(r, fieldDeferred), DueAt: dueText(work.Time(r, fieldDue)),
 		StartedAt: work.TimeText(r, fieldStarted), CompletedAt: work.TimeText(r, work.FieldCompleted),
 		MissionID: work.Field(r, work.FieldMission), TaskListID: work.Field(r, work.FieldTasklist), PlanID: work.Field(r, work.FieldPlan),
 		ProjectID: work.Field(r, work.FieldProject), RepoID: work.Field(r, work.FieldRepo),
@@ -152,7 +179,7 @@ func (o ShowOut) baseText() string {
 		b.WriteString("  deferred: " + t.DeferredUntil + "\n")
 	}
 	if t.DueAt != "" {
-		b.WriteString("  due:      " + t.DueAt + "\n")
+		b.WriteString("  due:      " + dueHuman(t.DueAt, time.Local) + "\n")
 	}
 	if t.MissionID != "" {
 		b.WriteString("  mission:  " + t.MissionID + "\n")

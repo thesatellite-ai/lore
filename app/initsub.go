@@ -73,7 +73,7 @@ func rootInitAt(wd string) (undo func(), err error) {
 const repoMetaPathspec = ":(glob)**/" + rowfs.RepoMetaPath
 
 // mergeIDsHint is the way out of two repo ids in one checkout.
-const mergeIDsHint = "one repository has one repo id (PROVENANCE 11.6): keep one, then run `lore repo merge-ids` in each project that carried the other"
+const mergeIDsHint = "one repository has one repo id: keep one, then run `lore repo merge-ids` in each project that carried the other"
 
 // checkoutRepoMetas is the repo identity of every lore project in wd's git
 // checkout except the one rooted at wd, keyed by its folder relative to the

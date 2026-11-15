@@ -41,6 +41,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
@@ -84,7 +85,10 @@ type StaffAddIn struct {
 	ProjectRoles []string `json:"project_roles,omitempty" flag:"project-role" desc:"project role(s) on each --project (repeat, or comma-separate)"`
 	From         string   `json:"from,omitempty" flag:"from" desc:"a .csv or .json file of people (email,name,handle,github,role,type,teams,projects,project_roles); all of them in one store commit"`
 	FromInvites  bool     `json:"from_invites,omitempty" flag:"from-invites" desc:"every pending invite becomes a member (its teams and projects kept)"`
-	DryRun       bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show who would be added; write nothing"`
+	// StartedOn back-dates the new stint (devco:T-14: a person added after
+	// they began could not be offboarded on a day before the add).
+	StartedOn string `json:"started_on,omitempty" flag:"started-on" desc:"first day of their stint, YYYY-MM-DD, today or earlier (default today)"`
+	DryRun    bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show who would be added; write nothing"`
 }
 
 // StaffRow is one person as member ops show them.
@@ -463,13 +467,35 @@ type staffSpec struct {
 	Teams        []string
 	Projects     []string
 	ProjectRoles []string
-	invite       *inviteRow
+	// StartedOn is the stint's first day (member add --started-on); zero
+	// is today.
+	StartedOn time.Time
+	invite    *inviteRow
 	// at is where a --from file names this person ("line 8", "entry 3");
 	// empty for flags and invites.
 	at string
 	// bad is a line whose cells do not fit the header; planStaff lists it
 	// with the other bad lines.
 	bad *fromfile.Problem
+}
+
+// startedOnFlag reads member add --started-on: "" is the zero time
+// (today), else a YYYY-MM-DD day no later than today.
+func startedOnFlag(raw string, today time.Time) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(value.DateLayout, raw)
+	if err != nil {
+		return time.Time{}, errs.New(errs.InvalidInput, "member add: --started-on "+work.Quote(raw)+" is not a YYYY-MM-DD day").
+			WithHint("lore member add --email <email> --started-on 2026-03-02")
+	}
+	if t.After(teamprofile.Day(today)) {
+		return time.Time{}, errs.New(errs.InvalidInput, "member add: --started-on "+raw+" is after today ("+teamprofile.Day(today).Format(value.DateLayout)+")").
+			WithHint("add them on or after their first day, or give --started-on today or earlier")
+	}
+	return t, nil
 }
 
 // staffAdd is member.add.
@@ -488,8 +514,16 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: give one of <email>, --from <file> or --from-invites").
 			WithHint("lore member add --email mira@agency.example --team @web")
 	}
+	if in.StartedOn != "" && in.Email == "" {
+		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: --started-on goes with one <email>, not --from or --from-invites").
+			WithHint("lore member add --email <email> --started-on YYYY-MM-DD; for the others run lore actor period edit --period <apd_id> --started-on YYYY-MM-DD after the add")
+	}
 	r, done, err := o.env.Roster(ctx, !in.DryRun)
 	defer done()
+	if err != nil {
+		return StaffAddOut{}, err
+	}
+	startedOn, err := startedOnFlag(in.StartedOn, r.Today())
 	if err != nil {
 		return StaffAddOut{}, err
 	}
@@ -516,7 +550,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		}
 	default:
 		specs = []staffSpec{{Email: in.Email, Name: in.Name, Handle: in.Handle, GitHub: in.GitHub, Role: in.Role, Type: in.Type,
-			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles)}}
+			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles), StartedOn: startedOn}}
 	}
 	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
 	plans, err := o.planStaff(ctx, r, specs, in.From, pending, &out)
@@ -822,7 +856,7 @@ func (o ops) writeStaff(ctx context.Context, r profilestore.Roster, p staffPlan)
 			return 0, err
 		}
 	}
-	w := &writer{r: r, actor: actor, today: r.Today(), orgRole: s.Role}
+	w := &writer{r: r, actor: actor, today: r.Today(), orgRole: s.Role, startOn: s.StartedOn}
 	if p.existing != nil {
 		if _, err := w.reactivate(ctx); err != nil {
 			return 0, err

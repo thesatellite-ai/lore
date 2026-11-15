@@ -451,7 +451,7 @@ func decodeValues(r located) (resValues, error) {
 		if err != nil {
 			e = errs.Wrap(errs.ResourceInvalid, e.Error(), err)
 		}
-		return e.WithHint(`each entry must be {"name": <field>, "v": <value>} (STORE_SERVER_SPEC 4.4)`)
+		return e.WithHint(`each entry must be {"name": <field>, "v": <value>}`)
 	}
 	var entries map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &entries); err != nil {

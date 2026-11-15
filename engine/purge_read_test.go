@@ -134,7 +134,7 @@ func TestPurgedErrorShape(t *testing.T) {
 				t.Fatalf("exit %d, want %d", d.Exit, errs.ExitRefused)
 			}
 			msg := err.Error()
-			if !strings.Contains(msg, p.ref.ID.String()+" was purged") || !strings.Contains(msg, "purged rows never come back (DQ4)") {
+			if !strings.Contains(msg, p.ref.ID.String()+" was purged") || !strings.Contains(msg, "purged rows never come back") {
 				t.Fatalf("message %q lacks the DELETION_DESIGN 2.7 shape", msg)
 			}
 			named := strings.Contains(msg, " by "+testActor.String()) && strings.Contains(msg, " on "+day(p))

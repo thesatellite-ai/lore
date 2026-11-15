@@ -172,8 +172,8 @@ by type
 by store
   repo  3
 by deleter
-  act_54fe…28f2  2
-  act_28f8…03df  1
+  alice  2
+  bob  1
 tombstones (kept forever)
   repo  1
 $ lore batch list

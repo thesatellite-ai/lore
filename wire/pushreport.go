@@ -161,6 +161,15 @@ func (b *storePush) readRefresh(ctx context.Context, in live.FetchInputs, autopu
 			b.reach = reachOffline
 		}
 	}
+	b.readWaiting(ctx, in, autopush)
+}
+
+// readWaiting is the end of a read's refresh: it names the commits that
+// wait while the store's mode would push them (now, or a batch whose
+// interval passed), once, with the command that sends them. A read that
+// backs off the network (live.BackingOff, devco:U-6) still says it:
+// skipping the fetch must not hide what waits (devco:D-387).
+func (b *storePush) readWaiting(ctx context.Context, in live.FetchInputs, autopush bool) {
 	// `lore sync` (FetchAlways) reads first and pushes next: telling it to
 	// run `lore sync` would be noise; its push names itself (PushLine).
 	if !autopush || in.Kind == live.FetchAlways {

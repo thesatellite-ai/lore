@@ -578,7 +578,7 @@ var tableNames = sync.OnceValue(func() map[string]bool {
 // ValidateHumanKey checks a person's identity key: human:<email> (TEAM-029).
 func ValidateHumanKey(key string) error {
 	if !strings.HasPrefix(key, humanKeyPrefix) {
-		return fmt.Errorf("must be %s<your email in that org> (TEAM-029)", humanKeyPrefix)
+		return fmt.Errorf("must be %s<your email in that org>", humanKeyPrefix)
 	}
 	email := strings.TrimPrefix(key, humanKeyPrefix)
 	at := strings.LastIndex(email, "@")

@@ -310,7 +310,7 @@ func (w *coordWorld) forHolds(ctx context.Context) error {
 	}
 	if w.unlinkedClient() {
 		return errs.New(errs.Unsupported, "this is a client repo with no store link: its holds belong on a linked store's signals ref, and none is linked").
-			WithHint("never written into the client repo (D8); link it with `" + w.linkCommand(ctx) + "`")
+			WithHint("never written into the client repo; link it with `" + w.linkCommand(ctx) + "`")
 	}
 	return w.useStore(ctx)
 }

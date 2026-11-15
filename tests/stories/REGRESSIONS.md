@@ -10,13 +10,13 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1659 |
+| fixed | 1669 |
 | open | 0 |
 | on-hold | 14 |
 | owner | 6 |
 | not-reproduced | 109 |
-| not-a-bug | 68 |
-| docs-only | 69 |
+| not-a-bug | 70 |
+| docs-only | 70 |
 | process | 185 |
 | needs a test | 0 |
 
@@ -630,6 +630,19 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:S-10 | finding | with an older lore first on PATH the commit-msg block refused a README commit with the old lore's E_OLD_LORE, not naming the hook or the build | fixed | TestOldLoreCommitMsgLetsCodeCommitsThrough | wire/host gitwire.go: the commit-msg block carries pre-commit's old-lore guard: a commit with no row file goes through, one with row files (or any commit in a client repo) is refused naming the binary and doctor --fix; break-verified |
 | devco:S-11 | finding | every refused write printed the git set-up line and 'the command was refused, so what it changed first is undone (…)' before the real error, even in a clone already wired | fixed | TestRefusedWriteSaysOnlyTheError | wire/host setupnotes.go: the Runner holds a write's set-up lines and prints them only when it goes through; a refusal drops them and puts the set-up back without a word (work-tree files a first write migrated are still named); break-verified |
 | devco:S-16 | finding | REGRESSION of devco:R-13: check leaks --ci in an own repo with no org failed on the actor rows lore wrote (actor register, agent start, a sync landing) and hinted lore migrate run, which keeps them | fixed | TestCIAcceptsOwnRepoActorCopies | logic/leakcheck RepoRosterActorRow: a repo outside any org is its own roster, whose rows are full and unstamped; --ci accepts a format-2 row with lore's write stamp and no origin stamp (stable_key, handle, key aliases, label, owner); R-13's test only had org-stamped copies; --as-client stays strict; break-verified |
+| devco:D-387-sweep | finding | after-land b49: `rule approve` (new in round 7) was neither in the command sweep nor in notUserRun | fixed | TestSweepCoversEveryCommand | pkg tests/machines (sweep table) |
+| devco:D-387-hint | finding | after-land b49: `lore vars where` of an unknown name (the sweep's read-only home row) was E_NOT_FOUND with no hint line; six more refusals had the same shape (--overrides, task --parent/--blocked-by, task relate, actor period, meta value rename, resource adopt) | fixed | TestVarsWhereNotFoundHasHint, TestSweepRows | pkg ops/settings, ops/scope, ops/task, ops/period, tests/machines |
+| devco:D-387-verbs | finding | after-land b49: the knowledge campaign's verb inventory lacked `rule approve`, so its help check failed | fixed | TestCampaignKnowledge_HelpListsEveryVerb, TestCampaignKnowledge_HelpEveryCommand | pkg tests/userscen |
+| devco:D-387-claim | finding | after-land b49: TestCampaignTasks_CoordinationVerbs had the revoked agent claim the task again (exit 23); the revoke marker (round 7, devco:S-13) fences the holder off by design | not-a-bug | - | test updated: the revoked agent is refused with the reassign hint, the other clone claims; TestCampaignTasks_CoordinationVerbs |
+| devco:D-387-waiting | finding | after-land b49: an offline read while the fetch backs off (U-6) no longer said 'local commit(s) wait to be pushed; a read never pushes: run lore sync' | fixed | TestStorePushReadSaysWaitingWhileBackingOff, TestSyncStore_OfflineWriteIsPushedByTheNextWrite | pkg wire, tests/userscen; docs/team/troubleshooting.md |
+| devco:D-387-local | finding | after-land b49: while the fetch backs off, a write to a store that pushes only on lore sync (the default) said 'lore did not try it again' instead of 'committed locally to store … lore sync sends it' | fixed | TestStorePushManualStoreSaysLocalWhileBackingOff, TestJourneyTeamLeadTeam | pkg wire, tests/journeys; docs/team/troubleshooting.md |
+| devco:D-387-rowdrop | finding | after-land a35784ad: TestStoryEMixedFormats hand-deletes a row to set up a modify/delete conflict; the commit hook now refuses a hand-deleted row by design | not-a-bug | - | test confirms the drop with LORE_ALLOW_ROW_DROP=1; TestStoryEMixedFormats |
+| devco:D-387-docs | finding | after-land b48/b49: docs example transcripts (api, render, start, agency, team-ops) stale after rounds 48-50 | docs-only | - | transcripts and pasted pages refreshed; each diff traced to an intended fix |
+| devco:T-8 | finding | a weekly 09:00 reminder (and a recurring task with a clock-time due) slid to 10:00 local after the DST change: the next date added 7×24 h in UTC | fixed | TestNextOccurrenceKeepsWallClockAcrossDST, TestRecurTimedDueKeepsTimeAcrossDST, TestJourneyRecurringKeepsTheClock | ops/reminder nextOccurrence and ops/task spawnNext step calendar days on the wall clock in the person's zone (time.Local, TZ) for a clock-time due, UTC days for a date-only one; the subtree shift is whole days too; New York and Berlin across their March and November changes; break-verified |
+| devco:T-9 | finding | task --due 'DATE + HH:MM' printed the time on add, then task show, list, --json and the next recurring instance showed only the date | fixed | TestRecurTimedDueKeepsTimeAcrossDST, TestJourneyRecurringKeepsTheClock | ops/task text.go dueText/dueHuman: --json due_at is RFC3339 UTC for a clock-time due (YYYY-MM-DD for a date-only one), show and list print "2027-03-12 09:00 EST", done prints the next instance's local time; a late-evening due lists its own local day in the recurs line; break-verified |
+| devco:T-10 | finding | 'every month on last' started on Jan 30 listed Jan 30 then Jan 31: two instances in one month | fixed | TestMonthDaySeriesNeverTwiceInAMonth, TestFirst, TestJourneyRecurringKeepsTheClock | logic/recur: Next of a month-day rule (on N, on last) steps to the following month even from an off-rule due; First is the first rule day of a series created without a due; break-verified |
+| devco:T-14 | finding | member add had no start date, and offboard's refusal of a date before the stint start named only actor period list | fixed | TestStaffAddStartedOn, TestOffboardRefusals | ops/team member add --started-on YYYY-MM-DD (today or earlier, one --email) back-dates the new stint; ops/period offboard's E_PERIOD_OVERLAP hint names lore actor period edit --period <apd_id or person> --started-on <day>; break-verified |
+| devco:T-16 | finding | trash stats named the deleter by raw act_ id, and the purged-row error carried the spec id (DQ4) | fixed | TestTrashStatsNamesTheDeleter, TestPurgedErrorsCarryNoSpecID, TestNoSpecIDInStrings, TestJourneyRecurringKeepsTheClock | ops/trash stats labels by_deleter with the @handle or display name trash list uses (--json keeps the id in name, adds label); the class: every string literal in non-test code lost its spec id (errors, hints, notes, policy docs, error-code descriptions, the agent directive), and internal/layers TestNoSpecIDInStrings keeps them out; break-verified |
 
 ## lore-adoptfix
 

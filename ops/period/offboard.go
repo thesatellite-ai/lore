@@ -224,6 +224,19 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 	return plan.out, nil
 }
 
+// startHint is the next step when offboard --on is before the open
+// stint's start (devco:T-14): move the start back with actor period
+// edit (the period's apd_ id, or the person while it has no row yet),
+// then offboard again; or pick a later day.
+func startHint(open teamprofile.Period, actor, on string) string {
+	target := actor
+	if !open.Synthesised() {
+		target = open.ID.String()
+	}
+	return "if they started earlier, run lore actor period edit --period " + target + " --started-on " + on +
+		" then offboard again; else pick an --on date on or after the start (lore actor period list --actor " + actor + " shows the stints)"
+}
+
 // offboardPlan is the preview (step 3) and what the confirm writes.
 type offboardPlan struct {
 	out     OffboardOut
@@ -256,7 +269,7 @@ func (o ops) offboardPlan(ctx context.Context, r profilestore.Roster, a row.Row,
 	if open, ok := openPeriod(ps); ok {
 		if on.Before(open.StartedOn) {
 			return offboardPlan{}, errs.New(errs.PeriodOverlap, "--on "+dayText(on)+" is before their stint started on "+dayText(open.StartedOn)).
-				WithHint("lore actor period list --actor " + in.Actor + " shows the stints; pick a date on or after the start")
+				WithHint(startHint(open, in.Actor, dayText(on)))
 		}
 		open.EndedOn, open.EndReason = on, in.Reason
 		if in.Note != "" {

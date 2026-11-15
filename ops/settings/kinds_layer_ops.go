@@ -157,7 +157,8 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 				"; writes of a conflicted kind are refused until it is resolved; nothing moved").
 				WithHint("resolve the conflict in the row file, then run lore sync")
 		}
-		return AdoptOut{}, errs.New(errs.NotFound, "no kind or field rows in "+string(from))
+		return AdoptOut{}, errs.New(errs.NotFound, "no kind or field rows in "+string(from)).
+			WithHint("run `lore resource kinds` to see which place defines each kind")
 	}
 	if err = bulk.Ask(ctx, fmt.Sprintf("move %s (%s) and %s from %s into %s?", plural.Count(len(kinds), "kind"), strings.Join(names, ", "), plural.Count(len(fields), "field row"), from, place(to))); err != nil {
 		return AdoptOut{}, err

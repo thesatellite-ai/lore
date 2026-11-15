@@ -424,7 +424,7 @@ func refuseSecretRefs(r row.Row) error {
 	// FLAG5 / SQ17 / BATCH 5: a secret reference names our vault and its
 	// holder, which a client must never read: the leak guard's code.
 	return errs.New(errs.LeakBlocked, ""+r.ID.String()+" holds secret references and cannot live in a client repo: "+strings.Join(found, ", ")+"; nothing written").
-		WithHint("remove the references from the row first, or keep the row in one of your own stores (BATCH 5)")
+		WithHint("remove the references from the row first, or keep the row in one of your own stores")
 }
 
 // texts returns the text of a value in any form it is held in: a text, a

@@ -178,10 +178,11 @@ $ lore task revoke --id tsk_c0f3…b5b8
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ revoked the claim on tsk_c0f3…b5b8 (was held by agent-backend)
+  pushed refs/lore/signals/main to origin: the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
 
 # agent-backend, in website
 $ lore task done --id tsk_c0f3…b5b8
-ERROR: [E_LOST_CLAIM] tsk_c0f3…b5b8: your claim (token ct_cb04f…) was revoked by alice at 10:16AM
+ERROR: [E_LOST_CLAIM] tsk_c0f3…b5b8: your claim (token ct_cb04f…) was revoked by @alice at 10:16AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```
@@ -222,7 +223,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store
 
 # bob, in website
 $ lore task done --id tsk_d431…313a
-ERROR: [E_LOST_CLAIM] your claim is not on the signals ref; your token ct_87f6f… expired 10:39AM
+ERROR: [E_LOST_CLAIM] your claim is not on the signals ref; your token ct_87f6f… was dropped before its lease ended (10:39AM)
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```

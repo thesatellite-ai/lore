@@ -1340,15 +1340,19 @@ Examples:
   lore task note --id tsk_<id> --text "route + loader done, form next"
 
 Flags:
-      --everywhere         with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org          write even though LORE_ORG or lore org use disagrees with a store link
-      --from string        the source of the id: repo | <org> | <org>/<folder> (also --store)
-      --id string          the task id (tsk_…) (required)
-      --json               print the result (or the error) as JSON
-      --read-only          refuse writes (also LORE_READ_ONLY=1)
-      --text stringArray   the note (several words are joined) (required)
-      --to string          where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
-      --yes                answer yes to the confirmation without a terminal
+      --everywhere               with --to me: file the note under everywhere/ (loads in every repo)
+      --force-org                write even though LORE_ORG or lore org use disagrees with a store link
+      --from string              the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string                the task id (tsk_…) (required)
+      --json                     print the result (or the error) as JSON
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --text stringArray         the note (several words are joined) (required)
+      --to string                where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 

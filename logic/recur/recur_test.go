@@ -33,7 +33,7 @@ func TestNextTable(t *testing.T) {
 		{"every month on 1", "2026-11-04", "2026-12-01"},
 		{"every month on 31", "2027-01-31", "2027-02-28"},
 		{"every month on last", "2026-11-30", "2026-12-31"},
-		{"every month on last", "2028-02-10", "2028-02-29"},
+		{"every month on last", "2028-01-31", "2028-02-29"},
 		{"every! 3 days", "2026-12-02", "2026-12-05"},
 		{"Every  2 Months", "2026-12-31", "2027-02-28"},
 	} {
@@ -43,6 +43,52 @@ func TestNextTable(t *testing.T) {
 		}
 		if got := r.Next(day(c.base)).Format("2006-01-02"); got != c.want {
 			t.Errorf("%s after %s = %s, want %s", c.rule, c.base, got, c.want)
+		}
+	}
+}
+
+// TestMonthDaySeriesNeverTwiceInAMonth (devco:T-10): a series whose
+// first due is off the rule's day ("on last" from Jan 30, "on 15" from
+// Jan 3) steps to the next month, never to a second day in the same one.
+func TestMonthDaySeriesNeverTwiceInAMonth(t *testing.T) {
+	for _, c := range []struct{ rule, first, want string }{
+		{"every month on last", "2026-01-30", "2026-01-30 2026-02-28 2026-03-31 2026-04-30"},
+		{"every month on 15", "2026-01-03", "2026-01-03 2026-02-15 2026-03-15 2026-04-15"},
+		{"every month on 31", "2026-01-30", "2026-01-30 2026-02-28 2026-03-31 2026-04-30"},
+		{"every month on last", "2026-01-31", "2026-01-31 2026-02-28 2026-03-31 2026-04-30"},
+	} {
+		r, err := Parse(c.rule, untilISO)
+		if err != nil {
+			t.Fatalf("%s: %v", c.rule, err)
+		}
+		var got []string
+		for _, d := range r.Upcoming(day(c.first), 4) {
+			got = append(got, d.Format("2006-01-02"))
+		}
+		if strings.Join(got, " ") != c.want {
+			t.Errorf("%s from %s = %v, want %s", c.rule, c.first, got, c.want)
+		}
+	}
+}
+
+// TestFirst: the due day of a series created without one is the first
+// day on or after today that the rule names (an interval rule: today).
+func TestFirst(t *testing.T) {
+	for _, c := range []struct{ rule, from, want string }{
+		{"every month on last", "2028-02-10", "2028-02-29"},
+		{"every month on 15", "2026-11-15", "2026-11-15"},
+		{"every month on 15", "2026-11-16", "2026-12-15"},
+		{"every month on 31", "2027-02-01", "2027-02-28"},
+		{"every mon,thu", "2026-11-05", "2026-11-05"},
+		{"every weekday", "2026-11-07", "2026-11-09"},
+		{"every week", "2026-11-07", "2026-11-07"},
+	} {
+		r, err := Parse(c.rule, untilISO)
+		if err != nil {
+			t.Fatalf("%s: %v", c.rule, err)
+		}
+		if got := r.First(day(c.from)).Format("2006-01-02"); got != c.want {
+			t.Errorf("%s first from %s = %s, want %s", c.rule, c.from, got, c.want)
 		}
 	}
 }

@@ -420,7 +420,8 @@ func (o ops) varsWhere(ctx context.Context, in VarsShowIn) (VarsOut, error) {
 		}); terr != nil {
 			return VarsOut{}, terr // DELETION 3.2
 		}
-		return VarsOut{}, errs.New(errs.NotFound, "no variable "+quote(in.Name))
+		return VarsOut{}, errs.New(errs.NotFound, "no variable "+quote(in.Name)).
+			WithHint("run `lore vars list` to see the variables, or `lore vars set --name " + in.Name + " --value <value>` to add it")
 	}
 	out.Count = len(out.Data)
 	return out, nil
