@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1746 |
+| fixed | 1747 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -726,6 +726,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bl:BL-25 | scenario | the cache follows the branch's mode on every path (default rule, main-like pattern, per-branch isolate and share, a teammate's choice, offline, stacked), no isolated note in main's cache, landed and dropped branches leave no cache, doctor lists and doctor --fix removes a stray one | fixed | TestStoryBL25CacheFollowsTheMode | story tests/stories (BL) |
 | devco:D-410 | finding | owner Mac (10 cores): test steps died at their 15/20/40/60 min go test -timeout and harness deadlines with nothing wrong; every limit was tuned on a 48-core Linux server | fixed | TestFactorFor, TestScaleBySampleDeadline, TestShellHelperAgrees, TestNoRawTimeoutInGateScripts, TestGuardSeesARawTimeout | pkg internal/testtime and tests/lib/testtime.sh: one factor LORE_TEST_TIME_SCALE (default max(1, 48/cores) capped at 6, x1.5 on macOS; 1 on the gate server) on every whole-run limit |
 | devco:D-411 | finding | owner: V-17 fixed fully: one decision of a branch's mode (wire/branchmode.go, branch policy read from the row files before the cache path is chosen) for the cache path, reads, writes, lore branch mode, code-repo mode and doctor; shared branches read main's cache, isolated ones their own, never an isolated row in main's cache (the combined cache too); a mode switch or a teammate's pushed choice moves the cache on the next command; doctor lists and doctor --fix / lore fix remove stray layer caches | fixed | TestLayerCacheFollowsMode, TestIsolatedRowsNeverReachMainCache, TestCombinedCacheSplitsIsolatedBranch, TestBranchPolicyFromFilesMatchesEngine, TestBrokenPolicyRowIsNoGuess, TestStoryBL25CacheFollowsTheMode | wire/branchmode.go, wire/branchlayer.go, wire/branchlayer_doctor.go |
+| devco:D-412 | finding | docs-examples after-land: tests/docs/transcripts/tasks.txt changed by 2 lines on a re-run; `lore tasklist list` and the ride-along land line order by id, and the default tasklist's natural (hash) id sorted before the time-first ids in a few runs out of hundreds | fixed | TestDocsNormaliseIDOrderedLists | tests/docs/normalize.py and tests/team/docs/normalize.py re-sort id-ordered output by stand-in id; lore's order is stable for the same rows (not a product bug) |
 
 ## lore-adoptfix
 
