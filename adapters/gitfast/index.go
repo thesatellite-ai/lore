@@ -26,12 +26,17 @@ type indexEntry struct {
 	extended bool
 }
 
-// readIndex parses the work tree's index. ok=false: ask git.
+// readIndex parses the work tree's index (or the hook's temporary one,
+// indexFile). ok=false: ask git.
 func (r *repo) readIndex() ([]indexEntry, bool) {
 	if r.top == "" {
 		return nil, false
 	}
-	raw, err := os.ReadFile(filepath.Join(r.gitDir, "index"))
+	path := r.indexFile
+	if path == "" {
+		path = filepath.Join(r.gitDir, "index")
+	}
+	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return nil, true // no index yet: nothing staged
 	}

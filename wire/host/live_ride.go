@@ -45,6 +45,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // EnvRideActive is set by lore while it makes a ride-along commit, so its
@@ -123,26 +124,32 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh Refresh, afterCommit fun
 			if os.Getenv(EnvRideActive) != "" {
 				return nil
 			}
+			// One hook run is one command: the store backends remember the
+			// data folder's git status for the rest of it, as they do for an
+			// operation (host.go Run), instead of asking git once per read
+			// (pre-push's leak check, drop check and ride each asked again,
+			// devco:D-420). A write in between still drops the memo.
+			ctx := store.WithReadScope(cmd.Context())
 			switch name {
 			case hookPostCommit:
-				l.h.afterRevert(cmd.Context()) // M-6: a revert never deletes a note by itself
+				l.h.afterRevert(ctx) // M-6: a revert never deletes a note by itself
 				if !liveDisabled() {
-					l.h.postCommit(cmd.Context())
+					l.h.postCommit(ctx)
 				}
 				if afterCommit != nil {
-					afterCommit(cmd.Context())
+					afterCommit(ctx)
 				}
 			case hookPrePush:
-				return l.h.prePush(cmd.Context(), stdin, args[1:])
+				return l.h.prePush(ctx, stdin, args[1:])
 			case hookPreCommit:
-				if err := l.h.preCommit(cmd.Context()); err != nil {
+				if err := l.h.preCommit(ctx); err != nil {
 					return err
 				}
-				l.h.stageCommitRender(cmd.Context(), commitRender)
+				l.h.stageCommitRender(ctx, commitRender)
 			case hookRefresh:
-				l.h.afterRewrite(cmd.Context(), stdin, args[1:])
-				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(cmd.Context(), l.h.git(), cwd, args[1:]) {
-					refresh(cmd.Context())
+				l.h.afterRewrite(ctx, stdin, args[1:])
+				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(ctx, l.h.git(), cwd, args[1:]) {
+					refresh(ctx)
 				}
 			}
 			return nil

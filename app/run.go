@@ -158,8 +158,11 @@ func run(ctx context.Context, args []string) int {
 		initScope(&base) // init.go: init opens no org store (TestE8, TestE10)
 	}
 	// `lore sync` refreshes the org stores' link index now (F11): every
-	// other command reads it within live.fetch_ttl.
-	if commandName(args) == syncCommand {
+	// other command reads it within live.fetch_ttl. The git hook blocks
+	// (`lore sync hook <name>`) are not `lore sync`: a commit is local, and
+	// each hook fetching every org store whatever the stamp said cost every
+	// plain commit a store fetch and an ls-remote (devco:D-420).
+	if refreshesLinkIndex(args) {
 		org.FetchLinksAlways()
 	}
 	// One clock for row stamps and live decisions: the wall clock, or
@@ -391,7 +394,7 @@ func runsOldLayoutMove(args []string) bool {
 		return false
 	}
 	for i := 0; i+1 < len(args); i++ {
-		if args[i] == opssync.Noun && args[i+1] == "hook" {
+		if args[i] == opssync.Noun && args[i+1] == syncHookWord {
 			return false
 		}
 	}
@@ -429,6 +432,25 @@ func isDryRun(args []string) bool {
 	}
 	return false
 }
+
+// refreshesLinkIndex reports whether args run `lore sync` itself, the one
+// command that fetches every org store whatever live.fetch_ttl says; its
+// hidden `sync hook` entry point for the git hooks reads within the TTL
+// like any other command (devco:D-420).
+func refreshesLinkIndex(args []string) bool {
+	if commandName(args) != syncCommand {
+		return false
+	}
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == opssync.Noun && args[i+1] == syncHookWord {
+			return false
+		}
+	}
+	return true
+}
+
+// syncHookWord is the second word of the git hooks' `lore sync hook <name>`.
+const syncHookWord = "hook"
 
 // isGitPushHook reports whether args run one of the repo git hooks that
 // push a waiting batch (`lore sync hook post-commit|pre-push`).

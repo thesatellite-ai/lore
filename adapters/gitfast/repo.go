@@ -28,6 +28,9 @@ type repo struct {
 	rawGitDir string
 	common    string // the common dir (== gitDir unless a linked worktree)
 	bare      bool
+	// indexFile is the index the index readers read ("" = gitDir/index):
+	// a hook's GIT_INDEX_FILE (withIndex)
+	indexFile string
 
 	objOnce sync.Once
 	objs    *objectStore
@@ -47,6 +50,16 @@ type packedRef struct {
 func (r *repo) objects() (*objectStore, error) {
 	r.objOnce.Do(func() { r.objs, r.objErr = newObjectStore(filepath.Join(r.common, "objects")) })
 	return r.objs, r.objErr
+}
+
+// withIndex is r reading the index file index (absolute) instead of its
+// own: the temporary index `git commit -a` gives its hooks. It shares r's
+// object store; refs are read from the same files.
+func (r *repo) withIndex(index string) *repo {
+	objs, err := r.objects()
+	v := &repo{top: r.top, gitDir: r.gitDir, rawGitDir: r.rawGitDir, common: r.common, bare: r.bare, indexFile: index}
+	v.objOnce.Do(func() { v.objs, v.objErr = objs, err })
+	return v
 }
 
 // discover finds the repository dir belongs to. ok=false means "ask git".

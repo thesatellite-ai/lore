@@ -198,8 +198,22 @@ func (s *Session) Answer(ctx context.Context, dir string, args, env []string, st
 		s.noteWriteStart()
 		return Reply{}, false
 	}
-	if len(env) != 0 && !envLeavesAnswer(inv, env, s.repoFor(inv.dir)) {
-		return Reply{}, false // a read whose answer the env changes: git
+	index := ""
+	if len(env) != 0 {
+		var leaves bool
+		if index, leaves = envLeavesAnswer(inv, env, s.repoFor(inv.dir)); !leaves {
+			return Reply{}, false // a read whose answer the env changes: git
+		}
+	}
+	if index != "" {
+		// a hook's temporary index (`git commit -a`): the reads answered
+		// here read that file instead of .git/index; nothing is looked up
+		// in or kept for the shared memos (devco:D-420)
+		r := s.repoFor(inv.dir)
+		if r == nil || inv.sub == "config" || (inv.sub == "rev-parse" && asksHooks(inv)) || (inv.sub == "log" && !s.logPlain(ctx, inv)) {
+			return Reply{}, false
+		}
+		return answerRead(r.withIndex(index), inv, stdin)
 	}
 	if key, imm := immutableKey(inv, stdin); imm {
 		s.mu.Lock()
@@ -423,27 +437,34 @@ func envHarmless(env []string) bool {
 	return true
 }
 
-// envLeavesAnswer reports whether a read handled here prints the same
-// with env set. Only an index file matters: a hook of `git commit -a`
-// runs with a temporary index (GIT_INDEX_FILE), so under any index file
-// but the usual one only reads that never look at an index are answered
-// (refs, objects, trees, config); everything else runs git.
-func envLeavesAnswer(inv invocation, env []string, r *repo) bool {
+// envLeavesAnswer reports whether a read handled here can be answered
+// with env set, and the index file it must read ("" = the usual one).
+// Only an index file matters: a hook of `git commit -a` runs with a
+// temporary index (GIT_INDEX_FILE). An absolute path is read in place of
+// .git/index by every index reader here (readIndex), so the answer is the
+// one git prints (devco:D-420); a relative one leaves only reads that
+// never look at an index (refs, objects, trees, config).
+func envLeavesAnswer(inv invocation, env []string, r *repo) (string, bool) {
+	index := ""
 	for _, kv := range env {
 		name, val, _ := strings.Cut(kv, "=")
 		if name != "GIT_INDEX_FILE" || defaultIndex(r, inv.dir, val) {
 			continue // a hook's GIT_INDEX_FILE naming the usual index changes nothing
 		}
+		if filepath.IsAbs(val) {
+			index = filepath.Clean(val)
+			continue
+		}
 		if !indexFree[inv.sub] {
-			return false
+			return "", false
 		}
 		for _, a := range inv.args {
 			if a == "--git-path" || strings.HasPrefix(a, ":") || a == "--cached" || a == "--staged" {
-				return false
+				return "", false
 			}
 		}
 	}
-	return true
+	return index, true
 }
 
 // indexFree are the subcommands whose answers handled here never read the
