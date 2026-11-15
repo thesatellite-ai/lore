@@ -211,7 +211,7 @@ func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) [
 	for _, p := range sel.Unwired {
 		hint := "lore render --target " + p.Name
 		if sel.Reason == toolprofile.ReasonSetting {
-			hint = "lore policy set --key " + key + " --value \"<profiles incl. " + p.Name + ">\" --yes"
+			hint = "lore render --add-target " + p.Name // devco:S-4: one step, no profile list to compose
 		}
 		out = append(out, "· "+p.PointerFile+" found but not wired to lore; add it with: "+hint)
 	}

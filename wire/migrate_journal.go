@@ -83,9 +83,78 @@ type journalPlace struct {
 	// TipBefore / TipAfter are a clone's HEAD around the run.
 	TipBefore string `json:"tip_before,omitempty"`
 	TipAfter  string `json:"tip_after,omitempty"`
+	// RemoteBase is the remote commit a clone took in during the run (a
+	// pull of a teammate's push), "" when it took in none: the run's own
+	// store change is measured from it, so what came from the remote is
+	// never reported, pushed or rolled back as the run's (devco U-2).
+	RemoteBase string `json:"remote_base,omitempty"`
 	// CloneBackup is the backup ref inside the clone (keeps TipBefore).
 	CloneBackup string `json:"clone_backup,omitempty"`
 	Pushed      bool   `json:"pushed,omitempty"`
+}
+
+// ownBase is the commit a clone place's own store change starts from: the
+// remote commit it took in during the run, else its tip before the run.
+func (p journalPlace) ownBase() string {
+	if p.RemoteBase != "" {
+		return p.RemoteBase
+	}
+	return p.TipBefore
+}
+
+// ownTip reports whether the run made a store commit of its own in a
+// clone place (a pull alone moves the tip too, devco U-2).
+func (p journalPlace) ownTip() bool { return p.TipAfter != p.ownBase() }
+
+// remoteBase is the remote commit a clone place at tip took in since the
+// run began ("" when none): the merge base of tip and the clone's upstream
+// when that lies past TipBefore. Read it before the run's own push (after
+// it, the upstream holds the run's commit too).
+func remoteBase(ctx context.Context, snaps git.Snapshots, p journalPlace, tip string) string {
+	if !p.Clone || tip == "" || tip == p.TipBefore {
+		return ""
+	}
+	up := snaps.Upstream(ctx, p.Dir)
+	if up == "" {
+		return ""
+	}
+	base := snaps.MergeBase(ctx, p.Dir, up, tip)
+	if base == "" || base == p.TipBefore || (p.TipBefore != "" && !snaps.IsAncestor(ctx, p.Dir, p.TipBefore, base)) {
+		return ""
+	}
+	return base
+}
+
+// ownChanges keeps the paths of diff (the place's data folder before and
+// after the run) the run itself changed: a clone that took in a teammate's
+// push during the run has their files in diff too (devco U-2).
+func ownChanges(ctx context.Context, snaps git.Snapshots, p journalPlace, diff []git.TreeChange) ([]git.TreeChange, error) {
+	if p.RemoteBase == "" || len(diff) == 0 {
+		return diff, nil
+	}
+	own, err := snaps.DiffTrees(ctx, p.Dir, p.RemoteBase, p.TipAfter)
+	if err != nil {
+		return nil, err
+	}
+	prefix := strings.Trim(p.Data, "/")
+	mine := make(map[string]bool, len(own))
+	for _, c := range own {
+		rel := c.Path
+		if prefix != "" && prefix != "." {
+			if !strings.HasPrefix(rel, prefix+"/") {
+				continue
+			}
+			rel = strings.TrimPrefix(rel, prefix+"/")
+		}
+		mine[rel] = true
+	}
+	out := diff[:0:0]
+	for _, c := range diff {
+		if mine[c.Path] {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 // migrateJournal is .lore/state/migrate.json.
@@ -326,8 +395,12 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 		}
 		if p.Clone {
 			p.TipAfter = snaps.Head(ctx, p.Dir)
+			p.RemoteBase = remoteBase(ctx, snaps, *p, p.TipAfter) // before this run's push
 		}
 		diff, err := snaps.DiffTrees(ctx, top, p.TreeBefore, p.TreeAfter)
+		if err == nil {
+			diff, err = ownChanges(ctx, snaps, *p, diff)
+		}
 		if err != nil {
 			return none, err
 		}
@@ -348,7 +421,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 				}
 			}
 		}
-		if len(diff) == 0 && p.TipAfter == p.TipBefore {
+		if len(diff) == 0 && !p.ownTip() {
 			continue
 		}
 		changed = true
@@ -390,7 +463,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 				lines = append(lines, line)
 				line = w // B1-14: named before the person commits, never the values
 			}
-		case p.Clone && p.TipAfter != p.TipBefore && push:
+		case p.Clone && p.ownTip() && push:
 			if !pushed[p.Dir] {
 				if serr := a.syncPlace(ctx, p.Name); serr != nil {
 					line += "; push failed (" + serr.Error() + "): run `lore sync`"
@@ -400,7 +473,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 			}
 			p.Pushed = true
 			line += ", store commit " + shortOID(p.TipAfter) + ", pushed"
-		case p.Clone && p.TipAfter != p.TipBefore:
+		case p.Clone && p.ownTip():
 			line += ", store commit " + shortOID(p.TipAfter) + " (local, not pushed)"
 		}
 		lines = append(lines, line)
@@ -617,13 +690,17 @@ func (a *App) rollbackPlans(ctx context.Context, snaps git.Snapshots, top string
 			p.TreeAfter = after
 			if p.Clone {
 				p.TipAfter = snaps.Head(ctx, p.Dir)
+				p.RemoteBase = remoteBase(ctx, snaps, p, p.TipAfter)
 			}
 		}
 		diff, err := snaps.DiffTrees(ctx, top, p.TreeBefore, p.TreeAfter)
+		if err == nil {
+			diff, err = ownChanges(ctx, snaps, p, diff)
+		}
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(diff) == 0 && p.TipAfter == p.TipBefore {
+		if len(diff) == 0 && !p.ownTip() {
 			continue
 		}
 		now, err := snaps.Snapshot(ctx, top, p.Dir, p.Data)
@@ -653,7 +730,7 @@ func (a *App) rollbackPlans(ctx context.Context, snaps git.Snapshots, top string
 		if p.Clone {
 			up := snaps.Upstream(ctx, p.Dir)
 			unpushed := !p.Pushed && snaps.Head(ctx, p.Dir) == p.TipAfter && (up == "" || !snaps.IsAncestor(ctx, p.Dir, p.TipAfter, up))
-			pl.localUndo = unpushed && p.TipBefore != ""
+			pl.localUndo = unpushed && p.ownBase() != ""
 			pl.pushed = !unpushed
 		}
 		plans = append(plans, pl)
@@ -669,10 +746,12 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 			return "", nil
 		}
 		reset[p.Dir] = true
-		if err := snaps.ResetClone(ctx, p.Dir, p.TipBefore); err != nil {
+		// back to the remote commit the run took in, if any: a teammate's
+		// pulled push is no part of the run's undo (devco U-2)
+		if err := snaps.ResetClone(ctx, p.Dir, p.ownBase()); err != nil {
 			return "", err
 		}
-		return placeLabel(p) + ": local store ref back to " + shortOID(p.TipBefore) + " (" + p.CloneBackup + "); nothing was pushed", nil
+		return placeLabel(p) + ": local store ref back to " + shortOID(p.ownBase()) + " (" + p.CloneBackup + "); nothing was pushed", nil
 	}
 	paths, err := a.restoreFiles(ctx, snaps, top, p, pl.diff, pl.keepMeta)
 	if err != nil {

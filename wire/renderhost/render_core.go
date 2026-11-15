@@ -57,6 +57,7 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -83,14 +84,18 @@ const (
 
 // renderDefaultTrust is v0.1.17's LifecycleMixin default for trust_score:
 // a row file without the field renders as ent read it back.
-const renderDefaultTrust = 0.5
+const renderDefaultTrust = trust.Default
 
 // pinnedRule is one rule as the render prints it.
 type pinnedRule struct {
 	ID         string
 	Severity   string
 	TrustScore float64
-	Body       string
+	// NeedsApproval: an agent wrote or rewrote the rule and no person
+	// approved it (trust below trust.Default); the rule is printed marked
+	// so (devco:S-15).
+	NeedsApproval bool
+	Body          string
 	// Budget inputs (CONTEXT_BUDGET 6.4, 6.6).
 	Summary    string
 	Activation string
@@ -267,7 +272,7 @@ func (h *Host) loadPinnedRules(ctx context.Context, projectID string, skips *pin
 		}
 		out = append(out, pinnedRule{
 			ID: r.ID.String(), Severity: renderRuleSeverityMust,
-			TrustScore: renderTrust(r.Row), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
+			TrustScore: renderTrust(r.Row), NeedsApproval: !trust.Approved(renderTrust(r.Row)), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
 			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
 			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
 			TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope), OverridesID: repoScope(r, schema.FieldOverrides),

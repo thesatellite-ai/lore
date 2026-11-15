@@ -224,9 +224,11 @@ Usage:
 Examples:
   # someone left the team
   lore actor deactivate --handle @carol
+  # stop an agent session (its next write is refused)
+  lore actor deactivate --handle @agent-frontend
 
 Flags:
-      --handle string   the person's @handle (required)
+      --handle string   the person's @handle, an agent's @label, or an act_ id (required)
       --json            print the result (or the error) as JSON
       --read-only       refuse writes (also LORE_READ_ONLY=1)
       --yes             answer yes to the confirmation without a terminal

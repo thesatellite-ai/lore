@@ -77,6 +77,7 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -595,7 +596,7 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 	if len(rules) > 0 {
 		b.WriteString("\n## Rules\n\n")
 		for _, r := range rules {
-			fmt.Fprintf(&b, "<rule id=\"%s\" severity=\"%s\" trust=\"%.2f\">\n", r.ID, renderRuleSeverityMust, renderTrust(r))
+			fmt.Fprintf(&b, "<rule id=\"%s\" severity=\"%s\" trust=\"%.2f\"%s>\n", r.ID, renderRuleSeverityMust, renderTrust(r), reviewAttr(!trust.Approved(renderTrust(r))))
 			b.WriteString(mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true))
 			b.WriteString("\n</rule>\n")
 		}

@@ -58,6 +58,12 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 	if err := h.stitchPointers(w, root, pick.targets, out); err != nil {
 		return err
 	}
+	h.ignoredPointerLines(ctx, w, root, pick.targets) // devco:S-2
+	// devco:S-1: say now, not after the first render, that the committed
+	// LORE.md came from rows this repo does not have.
+	if line := h.OrphanRenderLine(ctx, root); line != "" {
+		fmt.Fprintf(w, "%s %s\n", h.decor.warn("!"), line)
+	}
 	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetting {
 		return nil // the row already says it (a re-init over shared data)
 	}

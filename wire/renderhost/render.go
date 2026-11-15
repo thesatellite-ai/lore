@@ -327,18 +327,30 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		unchanged = sha256Hex(existing) == sha256Hex([]byte(body))
 	}
 
-	if unchanged {
+	// devco:S-1: a LORE.md rendered from rows this repo does not have (an
+	// older lore, another machine) is kept, never replaced by an empty
+	// render; its companion LORE.full.md and the render history wait too.
+	orphan, isOrphan := orphanRender{}, false
+	if !unchanged {
+		orphan, isOrphan = h.findOrphanRender(ctx, resolvedOut, f.outPath, body)
+	}
+	switch {
+	case isOrphan:
+		if !f.quiet {
+			fmt.Fprintf(f.out(), "%s %s\n", h.decor.warn("!"), orphan.line())
+		}
+	case unchanged:
 		if !f.quiet {
 			fmt.Fprintf(f.out(), "%s %s (unchanged)\n", h.decor.muted("·"), resolvedOut)
 		}
-	} else {
+	default:
 		if err = atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
 			return wire.WriteError("write", resolvedOut, err, renderWriteHint)
 		}
 		if !f.quiet {
-			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %s)\n",
+			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes%s, %s)\n",
 				h.decor.check(), resolvedOut, len(body), report.Budget, report.Profile,
-				report.MustFull, report.MustLine, report.Critical, report.HighLine, plural.Count(report.Topics, "topic"))
+				report.MustFull, report.MustLine, report.Critical, report.HighLine, highOutNote(len(report.HighOut)), plural.Count(report.Topics, "topic"))
 		}
 	}
 	if report.Over {
@@ -346,7 +358,7 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 			resolvedOut, report.After, report.Budget, report.Profile)))
 	}
 	// CQ2: the full fallback file, next to LORE.md, never imported.
-	if in.Settings.FullFile {
+	if in.Settings.FullFile && !isOrphan {
 		if err = h.writeFullFile(f.out(), fullPath, full, f.quiet); err != nil {
 			return err
 		}
@@ -364,6 +376,9 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		}
 		if err = h.stitchPointers(f.out(), root, pick.targets, resolvedOut); err != nil {
 			return err
+		}
+		if !f.quiet {
+			h.ignoredPointerLines(ctx, f.out(), root, pick.targets) // devco:S-2
 		}
 	}
 	// 6.7: path-scoped rule files per target; stale lore-path-* files go.
@@ -387,6 +402,9 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		}
 	}
 
+	if isOrphan {
+		return nil // S-1: nothing of this render is recorded or private-rendered until the rows are here
+	}
 	if err := h.persistRenderHistory(ctx, projectID, repoID, resolvedOut, body, renderResult{
 		Rules: len(rules), Hotfixes: len(hotfixes),
 	}, newCutSummary(report, skips)); err != nil {
@@ -638,7 +656,7 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	for _, p := range pick.sel.Unwired {
 		hint := "lore render --target " + p.Name
 		if pick.sel.Reason == toolprofile.ReasonSetting {
-			hint = "lore policy set --key " + string(policy.KeyContextTargets) + " --value \"<profiles incl. " + p.Name + ">\" --yes"
+			hint = "lore render --add-target " + p.Name // devco:S-4: one step, no profile list to compose
 		}
 		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", h.decor.muted("·"), p.PointerFile, hint)
 	}

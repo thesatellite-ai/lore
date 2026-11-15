@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
@@ -48,6 +49,9 @@ const (
 	OpUnarchive = "rule.unarchive"
 	OpDelete    = "rule.delete"
 	OpSearch    = "rule.search"
+	// OpApprove is a person's approval of a rule an agent wrote
+	// (devco:S-15): its trust_score goes from trust.Agent to trust.Default.
+	OpApprove = "rule.approve"
 )
 
 // Envelope kinds (v0.1.17 constants.KindRule*).
@@ -119,6 +123,11 @@ func Ops(env kn.Env) []op.Entry {
 			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore rule search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.SearchErrors,
 		}, o.search),
+		op.Define(op.Spec{
+			Name: OpApprove, Summary: "Approve a rule an agent wrote (a person only): its trust goes from 0.25 to 0.50 and LORE.md stops marking it agent-written",
+			Examples:   []op.Example{{Title: "approve an agent's rule", CLI: "lore rule approve --id rul_<id>", Want: "approved"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
+		}, o.approve),
 	}
 }
 
@@ -245,6 +254,9 @@ func (o ListOut) rowsText() string {
 		if !r.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
+		if r.NeedsApproval {
+			badge += " [" + trust.ReviewLabel + "]"
+		}
 		fmt.Fprintf(w, "%s [%s/%s] %s%s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(textcut.OneLine(r.Body), kn.ListCut), badge, kn.LabelSuffix(r.Label))
 	}
 	return b.String() + ext.String()
@@ -287,6 +299,9 @@ type Record struct {
 	// auditrec), last so the v0.1.17 keys keep their order.
 	CreatedBy string `json:"created_by,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
+	// NeedsApproval: an agent wrote or rewrote the rule and no person
+	// approved it yet (trust_score below trust.Default, devco:S-15).
+	NeedsApproval bool `json:"needs_approval,omitempty"`
 }
 
 // IDIn is the input of the operations that take one rule id.
@@ -333,7 +348,11 @@ type ShowOut struct {
 
 // Text prints v0.1.17's show block.
 func (o ShowOut) baseText() string {
-	return fmt.Sprintf("%s\n  severity:   %s\n  activation: %s\n\n%s\n", o.Data.ID, o.Data.Severity, o.Data.Activation, o.Data.Body)
+	review := ""
+	if o.Data.NeedsApproval {
+		review = fmt.Sprintf("  review:     %s (a person runs lore rule approve --id %s)\n", trust.ReviewLabel, o.Data.ID)
+	}
+	return fmt.Sprintf("%s\n  severity:   %s\n  activation: %s\n%s\n%s\n", o.Data.ID, o.Data.Severity, o.Data.Activation, review, o.Data.Body)
 }
 
 // EditIn is the input of rule.edit; an empty flag leaves its field.
@@ -458,6 +477,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err := opsscope.RefuseLive(in.Scope, in.Live, in.NoLive); err != nil {
 		return AddOut{}, err
 	}
+	if callerIsAgent(ctx) {
+		c.Trust = trust.Agent // devco:S-15: waits for a person's lore rule approve
+	}
 	scopeLabel, sw, err := knscope.ForAdd(ctx, o.env, noun, in.Scope, in.Overrides, &c)
 	if err != nil {
 		return AddOut{}, err
@@ -520,6 +542,11 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 		},
 		RebindRepo: in.RebindRepo, RebindMaster: in.RebindMaster, Tags: in.Tags, Untags: in.Untags,
 		Hint: "give at least one of --body, --severity, --activation, --globs, --applies-to, --source-ref, --summary, --scope, --overrides, --rebind-repo, --rebind-master, --tag, --untag",
+	}
+	if callerIsAgent(ctx) && in.changesMeaning() {
+		// devco:S-15: an agent that rewrites a rule (a person's too) puts it
+		// back in review; tags, source-ref and moves do not change what it says.
+		e.Trust = trust.Agent
 	}
 	plan, err := knscope.ForEdit(ctx, o.env, noun, in.ID, in.Scope, in.Overrides, &e)
 	if err != nil {
@@ -626,7 +653,7 @@ func check(severity, activation string) error {
 
 // recordOf is the v0.1.17 --json form of a rule row.
 func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
-	return Record{
+	return Record{NeedsApproval: !trust.Approved(scoreOf(r)),
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 		TrustScore: kn.Number(r, kn.FieldTrust), Confidence: kn.Number(r, kn.FieldConfidence),
 		LastValidatedAt: kn.Time(r, kn.FieldValidated), ArchivedAt: kn.Time(r, kn.FieldArchivedAt),
@@ -649,4 +676,79 @@ func checkSummary(s string) (string, error) {
 			WithHint("keep it to one short line; the full text stays in the body")
 	}
 	return s, nil
+}
+
+// callerIsAgent reports whether a coding agent runs the operation (the
+// engine's caller; false outside Run, so a direct call acts as a person).
+func callerIsAgent(ctx context.Context) bool {
+	c, ok := engine.CallerOf(ctx)
+	return ok && c.Agent != ""
+}
+
+// changesMeaning reports whether the edit changes what the rule says or
+// where it applies (the flags that put an agent's edit back in review).
+func (in EditIn) changesMeaning() bool {
+	return in.Body != "" || in.Severity != "" || in.Activation != "" || in.Globs != "" || in.AppliesTo != "" ||
+		in.Summary != "" || in.Scope != "" || in.Overrides != ""
+}
+
+// scoreOf is the row's trust_score; a row without the field reads as
+// trust.Default (every rule written before devco:S-15 stays approved).
+func scoreOf(r row.Row) float64 {
+	if _, ok := r.Fields[kn.FieldTrust]; !ok {
+		return trust.Default
+	}
+	return kn.Number(r, kn.FieldTrust)
+}
+
+// ApproveOut is the output of rule.approve.
+type ApproveOut struct {
+	ID    string `json:"id"`
+	Store string `json:"store,omitempty"`
+	// TrustBefore / TrustAfter are the rule's trust_score before and after.
+	TrustBefore float64 `json:"trust_before"`
+	TrustAfter  float64 `json:"trust_after"`
+	// Already: the rule needed no approval; nothing was written.
+	Already bool `json:"already,omitempty"`
+}
+
+// Text is the approval line, or why nothing changed.
+func (o ApproveOut) Text() string {
+	if o.Already {
+		return fmt.Sprintf("✓ %s needs no approval (trust %.2f; only a rule an agent wrote or rewrote waits for one)\n", o.ID, o.TrustBefore)
+	}
+	return fmt.Sprintf("✓ %s approved: trust %.2f → %.2f; LORE.md drops its review=%q mark at the next lore render (the commit hook runs it)\n", o.ID, o.TrustBefore, o.TrustAfter, trust.ReviewLabel)
+}
+
+// approve sets an agent-written rule's trust_score to trust.Default. Only
+// a person approves: an agent caller gets E_POLICY_DENIED that names who
+// runs it, so an agent can never vouch for its own (or another agent's)
+// rule.
+func (o ops) approve(ctx context.Context, in IDIn) (ApproveOut, error) {
+	if c, ok := engine.CallerOf(ctx); ok && c.Agent != "" {
+		e := errs.New(errs.PolicyDenied, "rule approve: only a person approves a rule; this looks like the agent "+fmt.Sprintf("%q", c.Agent)).
+			WithHint("ask a person to run lore rule approve --id " + strings.TrimSpace(in.ID) + " in their own terminal")
+		e.NeedsPerson = true
+		return ApproveOut{}, e
+	}
+	it, err := kn.Show(ctx, o.env, noun, in.ID)
+	if err != nil {
+		return ApproveOut{}, err
+	}
+	before := scoreOf(it.Row)
+	out := ApproveOut{ID: it.Row.ID.String(), Store: string(it.Source), TrustBefore: before, TrustAfter: before}
+	if trust.Approved(before) {
+		out.Already = true
+		return out, nil
+	}
+	v, err := value.Float(trust.Default)
+	if err != nil {
+		return ApproveOut{}, errs.Wrap(errs.Internal, "rule approve: trust score", err)
+	}
+	src, w, err := kn.Stamp(ctx, o.env, noun, in.ID, kn.FieldTrust, v)
+	if err != nil {
+		return ApproveOut{}, err
+	}
+	out.ID, out.Store, out.TrustAfter = w.Row.ID.String(), string(src), trust.Default
+	return out, nil
 }

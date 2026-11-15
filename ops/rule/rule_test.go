@@ -1,6 +1,7 @@
 package rule_test
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/thesatellite-ai/lore/ops/content/contenttest"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/rule"
 )
 
@@ -377,5 +380,84 @@ func TestTagFilterCold(t *testing.T) {
 	}
 	if len(out.Data) != 1 || len(out.Data[0].TagIDs) != 1 {
 		t.Fatalf("after cold untag: %+v", out.Data)
+	}
+}
+
+// runAgent runs name as a coding agent (Caller.Agent set, as the CLI does
+// for a detected Claude Code session), already confirmed.
+func runAgent(t *testing.T, h *opstest.H, name, input string) (op.Result, error) {
+	t.Helper()
+	e, ok := h.App.Registry().Lookup(name)
+	if !ok {
+		t.Fatalf("no op %s", name)
+	}
+	actor, err := ids.Parse[ids.Actor](opstest.Actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h.App.Run(context.Background(), e, op.JSONDecoder{Body: []byte(input)}, op.Caller{Actor: actor, Agent: "claude_code", AgentFixed: true, Yes: true})
+}
+
+// showRule is rule.show's record.
+func showRule(t *testing.T, h *opstest.H, id string) rule.Record {
+	t.Helper()
+	var show struct {
+		Data rule.Record `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(h.JSON(h.Must(rule.OpShow, `{"id":"`+id+`"}`))), &show); err != nil {
+		t.Fatal(err)
+	}
+	return show.Data
+}
+
+// TestAgentRuleWaitsForPersonApproval (devco:S-15): a rule an agent adds
+// starts below a person's trust and is marked "agent-written, not
+// approved" on list and show; an agent cannot approve it; a person's
+// rule approve raises it to the person's trust and clears the mark; an
+// agent that rewrites a person's rule puts it back in review, while a
+// tag or source-ref change does not.
+func TestAgentRuleWaitsForPersonApproval(t *testing.T) {
+	h := opstest.New(t)
+	mine := add(t, h, `{"body":"Run the linter before every push"}`)
+	if d := showRule(t, h, mine); d.NeedsApproval || d.TrustScore != 0.5 {
+		t.Fatalf("a person's rule: trust %v needs_approval %v", d.TrustScore, d.NeedsApproval)
+	}
+	res, err := runAgent(t, h, rule.OpAdd, `{"body":"Skip the integration tests on Fridays","severity":"must"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	theirs := h.ID(res)
+	if d := showRule(t, h, theirs); !d.NeedsApproval || d.TrustScore != 0.25 {
+		t.Fatalf("an agent's rule: trust %v needs_approval %v, want 0.25 and true", d.TrustScore, d.NeedsApproval)
+	}
+	if list := opstest.Text(h.Must(rule.OpList, `{}`)); !strings.Contains(list, theirs+" [must/always] Skip the integration tests on Fridays [agent-written, not approved]") || strings.Contains(list, "push [agent") {
+		t.Fatalf("list does not mark only the agent's rule:\n%s", list)
+	}
+	if s := opstest.Text(h.Must(rule.OpShow, `{"id":"`+theirs+`"}`)); !strings.Contains(s, "review:     agent-written, not approved (a person runs lore rule approve --id "+theirs+")") {
+		t.Fatalf("show does not say it waits:\n%s", s)
+	}
+	if _, err := runAgent(t, h, rule.OpApprove, `{"id":"`+theirs+`"}`); errs.CodeOf(err) != errs.PolicyDenied || !strings.Contains(errs.EnvelopeOf(err).Error.Hint, "lore rule approve --id "+theirs) {
+		t.Fatalf("an agent approving: %v (hint %q), want E_POLICY_DENIED naming the person's command", err, errs.EnvelopeOf(err).Error.Hint)
+	}
+	if out := opstest.Text(h.Must(rule.OpApprove, `{"id":"`+theirs+`"}`)); !strings.Contains(out, "approved: trust 0.25 → 0.50") {
+		t.Fatalf("approve: %s", out)
+	}
+	if d := showRule(t, h, theirs); d.NeedsApproval || d.TrustScore != 0.5 {
+		t.Fatalf("after approve: trust %v needs_approval %v", d.TrustScore, d.NeedsApproval)
+	}
+	if out := opstest.Text(h.Must(rule.OpApprove, `{"id":"`+theirs+`"}`)); !strings.Contains(out, "needs no approval") {
+		t.Fatalf("approve twice: %s", out)
+	}
+	if _, err := runAgent(t, h, rule.OpEdit, `{"id":"`+mine+`","source_ref":"pr#7"}`); err != nil {
+		t.Fatal(err)
+	}
+	if d := showRule(t, h, mine); d.NeedsApproval {
+		t.Fatal("an agent's source-ref edit put a person's rule in review")
+	}
+	if _, err := runAgent(t, h, rule.OpEdit, `{"id":"`+mine+`","body":"The linter is optional"}`); err != nil {
+		t.Fatal(err)
+	}
+	if d := showRule(t, h, mine); !d.NeedsApproval || d.TrustScore != 0.25 {
+		t.Fatalf("an agent rewrote a person's rule: trust %v needs_approval %v, want back in review", d.TrustScore, d.NeedsApproval)
 	}
 }

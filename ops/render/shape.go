@@ -29,6 +29,7 @@ type Report struct {
 	MustFull           int        `json:"must_full,omitempty" desc:"--report: must rules written in full"`
 	MustLine           int        `json:"must_line,omitempty" desc:"--report: must rules written as one line"`
 	HighHotfixLines    int        `json:"high_hotfix_lines,omitempty"`
+	HighHotfixesOut    []string   `json:"high_hotfixes_left_out,omitempty" desc:"--report: the high hotfixes left out to fit the budget, by id"`
 	Topics             int        `json:"topics,omitempty"`
 	IndexCollapsed     bool       `json:"index_collapsed,omitempty" desc:"--report: the topic index was folded to one line"`
 	BudgetExceeded     bool       `json:"budget_exceeded,omitempty"`

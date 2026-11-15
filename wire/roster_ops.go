@@ -205,7 +205,7 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 	}
 	act, err := x.rosterByHandle(ctx, r, handle)
 	if err != nil {
-		if gone := x.rosterInactive(ctx, r, handle); gone != nil && errs.Has(err, errs.InvalidInput) {
+		if gone := x.rosterInactive(ctx, r, handle); gone != nil && (errs.Has(err, errs.InvalidInput) || errs.Has(err, errs.NotFound)) {
 			return opsinfra.ActorDeactivateOut{}, gone
 		}
 		return opsinfra.ActorDeactivateOut{}, err
@@ -219,7 +219,7 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 		return opsinfra.ActorDeactivateOut{}, err
 	}
 	x.rosterPush(ctx, r)
-	return opsinfra.ActorDeactivateOut{ID: act.ID, Name: act.Name}, nil
+	return opsinfra.ActorDeactivateOut{ID: act.ID, Name: act.Name, Kind: act.Kind}, nil
 }
 
 // rosterInactive is the refusal of deactivating @handle when the roster
@@ -229,14 +229,21 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 // inactive actor has the handle (the caller's "no one is @h" stands).
 // A read error is nil too: the lookup's own error is the one to show.
 func (a *App) rosterInactive(ctx context.Context, r rosterAt, handle string) error {
-	h := strings.TrimPrefix(handle, rosterHandleMark)
+	ref := strings.TrimPrefix(strings.TrimSpace(handle), rosterHandleMark)
+	h := handleKey(ref)
 	actors, err := a.RosterActors(ctx, r.src)
 	if err != nil {
 		return nil
 	}
 	for _, x := range actors {
-		if x.Active || x.Handle != h {
+		if x.Active || (x.Handle != h && !agentLabelIs(x, h) && x.ID != ref) {
 			continue
+		}
+		if x.Kind == schema.ActorKindAgent {
+			// devco:S-14: a stopped agent comes back with its owner's
+			// `lore agent start --label`, not a person's register.
+			return errs.New(errs.StatusChange, "agent @"+x.Label+" ("+x.ID+") is already deactivated; nothing to deactivate").
+				WithHint("its owner starts it again with `lore agent start --label " + x.Label + " --yes`")
 		}
 		if x.Status == "" {
 			// v0.1.17 deactivate (active=false only): they come back by
@@ -309,13 +316,19 @@ func (r rosterAt) actorMissErr(ref string) error {
 // missHint is the hint for a handle missing from the roster.
 func (r rosterAt) missHint() string {
 	if r.src == store.SourceRepo {
-		return "register first: `lore actor register` (as that person)"
+		return repoRosterMissHint
 	}
 	// devco D-224: a register is committed in the teammate's store clone
 	// and reaches the store with their `lore sync` (owner rule U-2), so
 	// "lore sync here" alone left the handle missing.
 	return "they run `lore actor register` and `lore sync` in a repo of the org, then `lore sync` here"
 }
+
+// repoRosterMissHint is the next step for a name the repo's own roster
+// lacks. devco:S-5: a register or `lore agent start` in a teammate's clone
+// is a live row kept in that clone until their `lore sync`, so the likely
+// cause of a fresh name is a sync on both sides, named before registering.
+const repoRosterMissHint = "if they registered (or started the agent) in another clone, they run `lore sync`, then you run `lore sync`; not registered yet: `lore actor register` (a person, run by them) or `lore agent start --label <label>` (an agent, run by its owner)"
 
 // rosterLookups bounds a handle lookup: the store copy, then once more
 // after syncing the roster's store.
@@ -576,17 +589,38 @@ func (a *App) rosterHandleFree(ctx context.Context, r rosterAt, handle, stableKe
 	return r.handleTakenErr(handle, holder)
 }
 
-// rosterByHandle finds the active actor @handle on the repo's roster.
+// rosterByHandle finds the active actor @handle on the repo's roster. An
+// act_ id names its actor, and an agent (which has a label, no handle) is
+// named by @<label> as a fallback when no person holds the handle
+// (devco:S-14: `lore actor deactivate --handle @agent-lead-2` and every
+// other roster verb resolve an agent the way `lore handoff add --for` does).
 func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (RosterActor, error) {
+	if id, perr := ids.Parse[ids.Actor](strings.TrimPrefix(strings.TrimSpace(handle), rosterHandleMark)); perr == nil {
+		x, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.ID == id.String() })
+		if err != nil || ok {
+			return x, err
+		}
+		return RosterActor{}, r.actorMissErr(id.String())
+	}
 	h := handleKey(handle)
 	x, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.Handle == h })
 	if err != nil || ok {
+		return x, err
+	}
+	if x, ok, err = a.rosterFind(ctx, r, func(x RosterActor) bool { return agentLabelIs(x, h) }); err != nil || ok {
 		return x, err
 	}
 	if near, found := a.nearHandle(ctx, r, h); found {
 		return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on the roster in "+r.shown()).WithHint(nearHandleHint(near, h))
 	}
 	return RosterActor{}, r.handleMissErr(h)
+}
+
+// agentLabelIs reports whether x is an agent with no handle whose label is
+// h: an agent is registered by label (`lore agent start --label`), so
+// @<label> is how people name it.
+func agentLabelIs(x RosterActor, h string) bool {
+	return x.Kind == schema.ActorKindAgent && x.Handle == "" && x.Label != "" && x.Label == h
 }
 
 // handleKey is a typed @handle as roster handles are stored: without its

@@ -185,3 +185,35 @@ func TestOpenAuditChainOutwaitsBusyTimeout(t *testing.T) {
 		t.Fatalf("open returned after %s, before the lock was free", time.Since(start))
 	}
 }
+
+// TestAuditChainSessionWritesSpansChains (devco S-19): one session writes
+// the chains of a clone and its worktrees (chains are per checkout), and
+// two sessions of one person run side by side; SessionWrites counts each
+// session's entries over every chain, distinct metadata keys apart, and
+// skips entries with no session.
+func TestAuditChainSessionWritesSpansChains(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ch := openChain(t, filepath.Join(t.TempDir(), "machine.db"))
+	now := time.Now()
+	add := func(chain, ses, table, target string) {
+		t.Helper()
+		if _, err := ch.Append(ctx, chain, auditchain.Record{ActorID: "act_p", Action: table + ".write", TargetTable: table, TargetID: target, SessionID: ses}, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("/clone/.lore/lore.db", "ses_a", "memories", "mem_1")
+	add("/clone/.lore/lore.db", "ses_a", "meta_keys", "mk_1")
+	add("/clone-wt1/.lore/lore.db", "ses_a", "meta_keys", "mk_1")
+	add("/clone-wt1/.lore/lore.db", "ses_b", "tasks", "tsk_1")
+	add("/clone-wt2/.lore/lore.db", "ses_b", "meta_keys", "mk_2")
+	add("/clone-wt2/.lore/lore.db", "", "tasks", "tsk_2")
+	got, err := ch.SessionWrites(ctx, "meta_keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]SessionWriteCount{"ses_a": {Writes: 3, NewKeys: 1}, "ses_b": {Writes: 2, NewKeys: 1}}
+	if len(got) != len(want) || got["ses_a"] != want["ses_a"] || got["ses_b"] != want["ses_b"] {
+		t.Fatalf("SessionWrites = %+v, want %+v", got, want)
+	}
+}

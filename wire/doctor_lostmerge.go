@@ -14,8 +14,11 @@ package wire
 //	  ├► repo tasks: status done, no merged_at, done_commit set   ── none: no git
 //	  ├► git rev-list --branches --remotes (one call)  ─► reachable set
 //	  ├► none left: done, else git log of every Lore-Task trailer (one call)
-//	  └► per task whose done_commit is not in the set and that no commit
-//	     on a branch carries a trailer for ─► one note naming the fix
+//	  ├► per task whose done_commit is not in the set and that no commit
+//	  │  on a branch carries a trailer for:
+//	  ├► git cat-file --batch-check (one call): is the commit here at all?
+//	  │    no  ─► "not fetched here" note: git fetch, then lore sync (devco S-6)
+//	  └►   yes ─► "on no branch" note; the push advice names who finished it
 
 import (
 	"context"
@@ -33,6 +36,10 @@ const DoctorCheckLostMerge DoctorCheck = "lost_merge"
 // lostMergeShort is how much of the done commit a note prints.
 const lostMergeShort = 7
 
+// lostCand is one done, unmerged task with a done commit: the commit,
+// who finished it and the branch it recorded.
+type lostCand struct{ id, commit, doneBy, branch string }
+
 // DoctorLostMerges notes every done task of this repo whose merge lore can
 // no longer find (see the file comment). A note, not a warning: the store
 // is healthy, a person has one step to take. Nothing when the repo has no
@@ -42,14 +49,14 @@ func (a *App) DoctorLostMerges(ctx context.Context) ([]DoctorFinding, error) {
 	if err != nil {
 		return nil, err
 	}
-	type cand struct{ id, commit string }
-	var cands []cand
+	var cands []lostCand
 	for _, r := range rows {
 		if r.Deleted || !unmergedRow(r) {
 			continue
 		}
 		if c := strings.ToLower(strings.TrimSpace(rowDocStr(r, fieldDoneCommit))); c != "" {
-			cands = append(cands, cand{id: r.ID.String(), commit: c})
+			cands = append(cands, lostCand{id: r.ID.String(), commit: c,
+				doneBy: strings.TrimSpace(rowDocStr(r, fieldDoneBy)), branch: strings.TrimSpace(rowDocStr(r, fieldWorkBranch))})
 		}
 	}
 	if len(cands) == 0 {
@@ -68,7 +75,7 @@ func (a *App) DoctorLostMerges(ctx context.Context) ([]DoctorFinding, error) {
 		onBranch[l] = true
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].id < cands[j].id })
-	var lost []cand
+	var lost []lostCand
 	for _, c := range cands {
 		if !reachable(onBranch, c.commit) {
 			lost = append(lost, c)
@@ -78,16 +85,48 @@ func (a *App) DoctorLostMerges(ctx context.Context) ([]DoctorFinding, error) {
 		return nil, nil
 	}
 	trailers := taskTrailers(ctx, top)
+	var unseen []string
+	for _, c := range lost {
+		if !trailers[c.id] {
+			unseen = append(unseen, c.commit)
+		}
+	}
+	present := commitsPresent(ctx, top, unseen)
 	var out []DoctorFinding
 	for _, c := range lost {
 		if trailers[c.id] {
 			continue
 		}
+		if !reachable(present, c.commit) { // hostbase_doctor_links.go: one cat-file call
+			// devco S-6: the commit is not in this clone at all, which is
+			// the usual case for a task a teammate's session finished on a
+			// branch it pushed and this clone has not fetched; "on no
+			// branch … push it again" sent everyone who syncs to the
+			// wrong fix.
+			out = append(out, DoctorFinding{Check: DoctorCheckLostMerge, Level: DoctorNote, Store: store.SourceRepo,
+				Message: "task " + c.id + " is done with commit " + shortOf(c.commit) + ", which is not fetched here (it is on a branch this clone has not fetched, or was never pushed), so lore cannot see it merge yet",
+				Fix:     "run git fetch, then lore sync; if it is still named, " + c.pusher() + " pushes the branch that holds it"})
+			continue
+		}
 		out = append(out, DoctorFinding{Check: DoctorCheckLostMerge, Level: DoctorNote, Store: store.SourceRepo,
 			Message: "task " + c.id + " is done, but its commit " + shortOf(c.commit) + " is on no branch and no commit on a branch carries its " + mergewatch.TrailerKey + " trailer (a squash merge that dropped the trailer, or a deleted branch), so lore cannot see it merge",
-			Fix:     "if the work reached the default branch, run lore task merged --id " + c.id + "; if not, push its branch again"})
+			Fix:     "if the work reached the default branch, run lore task merged --id " + c.id + "; if not, " + c.pusher() + " pushes its branch again"})
 	}
 	return out, nil
+}
+
+// pusher names who can push the task's branch: the actor that finished
+// it and the branch it recorded, so the advice reaches the holder rather
+// than whoever happens to run lore sync (devco S-6).
+func (c lostCand) pusher() string {
+	who := "the person who finished it"
+	if c.doneBy != "" {
+		who += " (" + c.doneBy + ")"
+	}
+	if c.branch != "" {
+		who += ", on branch " + c.branch + ","
+	}
+	return who
 }
 
 // reachable reports whether commit (a full or abbreviated sha) is in set.

@@ -32,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
@@ -236,7 +237,26 @@ const standingInstruction = "## How to use this file\n\n" +
 // own file (bug hunt B3-18: a folder-only rule in the root read as a rule
 // for every file).
 func ruleFull(r pinnedRule) string {
-	return fmt.Sprintf("<rule id=\"%s\" severity=\"%s\" trust=\"%.2f\"%s>\n%s\n</rule>\n\n", r.ID, r.Severity, r.TrustScore, scopeAttr(r.Dir), r.Body)
+	return fmt.Sprintf("<rule id=\"%s\" severity=\"%s\" trust=\"%.2f\"%s%s>\n%s\n</rule>\n\n", r.ID, r.Severity, r.TrustScore, reviewAttr(r.NeedsApproval), scopeAttr(r.Dir), r.Body)
+}
+
+// reviewAttr is the ` review="agent-written, not approved"` attribute of a
+// rule an agent wrote that no person approved (devco:S-15), so every
+// session that reads LORE.md can weigh it; "" for an approved rule.
+func reviewAttr(needs bool) string {
+	if !needs {
+		return ""
+	}
+	return ` review="` + trust.ReviewLabel + `"`
+}
+
+// reviewNote is the "(agent-written, not approved) " start of a rule's
+// line form, reviewAttr's twin ("" for an approved rule).
+func reviewNote(needs bool) string {
+	if !needs {
+		return ""
+	}
+	return "(" + trust.ReviewLabel + ") "
 }
 
 // hotfixFull is a hotfix in full (scope attribute as ruleFull).
@@ -265,7 +285,7 @@ func scopeNote(dir string) string {
 // ruleLine is the 6.4 line form with its own `lore show` pointer (path
 // rule files, which have no footer).
 func ruleLine(r pinnedRule) string {
-	return contextfit.LineForm(r.ID, scopeNote(r.Dir)+contextfit.ShortForm(r.ID, r.Summary, "", r.Body))
+	return contextfit.LineForm(r.ID, reviewNote(r.NeedsApproval)+scopeNote(r.Dir)+contextfit.ShortForm(r.ID, r.Summary, "", r.Body))
 }
 
 // ruleBrief and hotfixBrief are the line forms of LORE.md and the folder
@@ -273,7 +293,7 @@ func ruleLine(r pinnedRule) string {
 // form) and no per-line pointer, the file says once how to see the full
 // text (bug hunt G-6).
 func ruleBrief(r pinnedRule, cut int) string {
-	return contextfit.BriefLine(r.ID, scopeNote(r.Dir)+contextfit.ShortFormMax(r.ID, r.Summary, "", r.Body, cut))
+	return contextfit.BriefLine(r.ID, reviewNote(r.NeedsApproval)+scopeNote(r.Dir)+contextfit.ShortFormMax(r.ID, r.Summary, "", r.Body, cut))
 }
 
 func hotfixBrief(h pinnedHotfix, cut int) string {
@@ -281,17 +301,33 @@ func hotfixBrief(h pinnedHotfix, cut int) string {
 }
 
 // fitStep is one try at fitting LORE.md: how short the line forms are and
-// whether the high hotfix lines give way to one pointer line.
+// how many high hotfix lines it keeps (keepAll: every one).
 type fitStep struct {
 	Cut      int
-	DropHigh bool
+	KeepHigh int
 }
 
-// fitSteps are tried in order until the file fits (bug hunt G-6): the
-// lower-priority content goes first (high hotfix lines, after the tails
-// and the index), then every line is shortened; a must rule always keeps
-// its id and some text, and a critical hotfix is never shortened (CQ3).
-var fitSteps = []fitStep{{}, {DropHigh: true}, {Cut: 80, DropHigh: true}, {Cut: 48, DropHigh: true}}
+// keepAll is fitStep.KeepHigh for "every high hotfix line".
+const keepAll = -1
+
+// fitSteps are tried in order until the file fits. devco:S-3: a high
+// hotfix line ranks above a must rule's full text and above longer line
+// forms, so every line is shortened first (a must rule always keeps its id
+// and some text, a critical hotfix is never shortened, CQ3); only then do
+// high hotfix lines give way, as few as the budget needs (halving the
+// count kept), each one named by render and --report. Bug hunt G-6 dropped
+// them all at the first squeeze, so 20 loud warnings left LORE.md while 93
+// must rules stayed as lines.
+func fitSteps(high int) []fitStep {
+	steps := []fitStep{{KeepHigh: keepAll}, {Cut: 80, KeepHigh: keepAll}, {Cut: 48, KeepHigh: keepAll}}
+	for k := high / 2; high > 0; k /= 2 {
+		steps = append(steps, fitStep{Cut: 48, KeepHigh: k})
+		if k == 0 {
+			break
+		}
+	}
+	return steps
+}
 
 // noPinnedHint is LORE.md's empty-state line: the two writes that put
 // something in this file (a must rule, a critical or high hotfix), never
@@ -327,16 +363,20 @@ type reportEntry struct {
 
 // renderReport is what --report prints (6.11).
 type renderReport struct {
-	File         string        `json:"file"`
-	Profile      string        `json:"profile"`
-	Budget       int           `json:"budget"`
-	WarnPct      int           `json:"warn_at_percent"`
-	Before       int           `json:"before"` // every pinned entry in full (LORE.full.md bytes)
-	After        int           `json:"after"`
-	Critical     int           `json:"critical_hotfixes"`
-	MustFull     int           `json:"must_full"`
-	MustLine     int           `json:"must_line"`
-	HighLine     int           `json:"high_hotfix_lines"`
+	File     string `json:"file"`
+	Profile  string `json:"profile"`
+	Budget   int    `json:"budget"`
+	WarnPct  int    `json:"warn_at_percent"`
+	Before   int    `json:"before"` // every pinned entry in full (LORE.full.md bytes)
+	After    int    `json:"after"`
+	Critical int    `json:"critical_hotfixes"`
+	MustFull int    `json:"must_full"`
+	MustLine int    `json:"must_line"`
+	HighLine int    `json:"high_hotfix_lines"`
+	// HighOut are the high hotfixes left out to fit the budget, by id
+	// (devco:S-3: --report named the must rules it shortened but not one
+	// of the hotfixes it dropped).
+	HighOut      []string      `json:"high_hotfixes_left_out,omitempty"`
 	Topics       int           `json:"topics"`
 	IndexFolded  bool          `json:"index_collapsed"`
 	Over         bool          `json:"budget_exceeded"`
@@ -356,6 +396,23 @@ type renderReport struct {
 	TailsOut []string `json:"tails_left_out,omitempty"`
 }
 
+// reasonHighLeftOut is --report's reason for a high hotfix left out.
+const reasonHighLeftOut = "high hotfix left out: budget (shorten or supersede must rules, or raise the budget)"
+
+// hotfixAlwaysFull reports whether h is written in full whatever the
+// budget: a critical hotfix, or one pinned full (CQ3).
+func hotfixAlwaysFull(h pinnedHotfix) bool {
+	return h.Severity == renderHotfixSeverityCritical || h.Pin == contextfit.FormFull
+}
+
+// highOutNote is " (3 left out)" after a count of high hotfixes, or "".
+func highOutNote(n int) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (%d left out)", n)
+}
+
 // buildBudgetedFile renders LORE.md within the budget and its report.
 // canary goes in the first line (content-derived by the caller). Each
 // fitStep is tried until one fits; when none does the last is written
@@ -363,7 +420,13 @@ type renderReport struct {
 func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 	var body string
 	var rep renderReport
-	for _, st := range fitSteps {
+	high := 0
+	for _, h := range in.Hotfixes {
+		if !hotfixAlwaysFull(h) {
+			high++
+		}
+	}
+	for _, st := range fitSteps(high) {
 		body, rep = buildBudgetedStep(canary, in, st)
 		if !rep.Over {
 			break
@@ -376,7 +439,7 @@ func buildBudgetedFile(canary string, in renderInput) (string, renderReport) {
 func buildBudgetedStep(canary string, in renderInput, st fitStep) (string, renderReport) {
 	var crit, high []pinnedHotfix
 	for _, h := range in.Hotfixes {
-		if h.Severity == renderHotfixSeverityCritical || h.Pin == contextfit.FormFull {
+		if hotfixAlwaysFull(h) {
 			crit = append(crit, h)
 		} else {
 			high = append(high, h)
@@ -393,17 +456,23 @@ func buildBudgetedStep(canary string, in renderInput, st fitStep) (string, rende
 			critText.WriteString(hotfixFull(h)) // CQ3: never shortened
 		}
 	}
-	highOut := 0
-	if len(high) > 0 && st.DropHigh {
-		highOut = len(high) // named once in the footer
-	} else if len(high) > 0 {
+	kept := high
+	if st.KeepHigh != keepAll && st.KeepHigh < len(high) {
+		kept = high[:st.KeepHigh] // the first in rank order stay
+	}
+	var leftOut []string
+	for _, h := range high[len(kept):] {
+		leftOut = append(leftOut, h.ID) // named in the footer count, the summary and --report
+	}
+	highOut := len(leftOut)
+	if len(kept) > 0 {
 		highText.WriteString("## High hotfixes\n\n")
-		for _, h := range high {
+		for _, h := range kept {
 			highText.WriteString(hotfixBrief(h, st.Cut)) // CQ3: one line each
 		}
 		highText.WriteString("\n")
 	}
-	shownHigh := len(high) - highOut
+	shownHigh := len(kept)
 	mustHead := ""
 	if len(in.Rules) > 0 {
 		mustHead = "## Must rules\n\n"
@@ -439,7 +508,7 @@ func buildBudgetedStep(canary string, in renderInput, st fitStep) (string, rende
 	b.WriteString(critText.String())
 	b.WriteString(mustHead)
 	rep := renderReport{Profile: in.Settings.Profile, Budget: in.Settings.Budget, WarnPct: in.Settings.WarnPct,
-		Critical: len(crit), HighLine: shownHigh, Topics: len(in.Topics), IndexFolded: res.IndexCollapsed,
+		Critical: len(crit), HighLine: shownHigh, HighOut: leftOut, Topics: len(in.Topics), IndexFolded: res.IndexCollapsed,
 		NoSummary: noSummary, SupersededR: in.Skips.SupersededRules, SupersededH: in.Skips.SupersededHotfixes,
 		Manual: in.Skips.ManualRules, PathScoped: in.Skips.PathScoped, Canary: canary}
 	// Full entries first, then lines, each group in rank order.
@@ -502,7 +571,7 @@ func notInFile(lines, highOut int) string {
 		fmt.Fprintf(&b, "- %s shown here only as one line: `lore show --id <id>` prints the full text.\n", plural.Of(lines, "pinned entry is", "pinned entries are"))
 	}
 	if highOut > 0 {
-		fmt.Fprintf(&b, "- %s left out to fit the budget: `lore hotfix list` lists them.\n", plural.Of(highOut, "high hotfix is", "high hotfixes are"))
+		fmt.Fprintf(&b, "- %s left out to fit the budget: `lore render --report` names them, `lore hotfix list` lists every hotfix.\n", plural.Of(highOut, "high hotfix is", "high hotfixes are"))
 	}
 	b.WriteString("- Memories, decisions, patterns, should/may rules and medium/low hotfixes are search-only: `lore search --query \"<keywords>\"`.\n")
 	b.WriteString("- Infrastructure facts: `lore resource list` / `lore resource show --id <name>`.\n")
@@ -551,7 +620,7 @@ func (r renderReport) reportText() string {
 	fmt.Fprintf(&b, "core (always loads)\n")
 	fmt.Fprintf(&b, "  critical hotfixes   %4d  full\n", r.Critical)
 	fmt.Fprintf(&b, "  must rules          %4d  %d full, %d line\n", r.MustFull+r.MustLine, r.MustFull, r.MustLine)
-	fmt.Fprintf(&b, "  high hotfixes       %4d  line\n", r.HighLine)
+	fmt.Fprintf(&b, "  high hotfixes       %4d  line%s\n", r.HighLine, highOutNote(len(r.HighOut)))
 	idx := "full"
 	if r.IndexFolded {
 		idx = "collapsed to one line"
@@ -566,6 +635,9 @@ func (r renderReport) reportText() string {
 	}
 	for _, l := range r.Lines {
 		fmt.Fprintf(&b, "  %s  %s\n", l.ID, l.Reason)
+	}
+	for _, id := range r.HighOut {
+		fmt.Fprintf(&b, "  %s  %s\n", id, reasonHighLeftOut)
 	}
 	if r.NoSummary > 0 {
 		fmt.Fprintf(&b, "\nwarnings\n  %d must rules have no summary; their line form is the first sentence (lore lint --context)\n", r.NoSummary)

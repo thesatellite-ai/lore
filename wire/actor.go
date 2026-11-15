@@ -137,6 +137,9 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	}
 	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: who.Any()}
 	if _, cur, err := st.eng.Get(ctx, ref); err == nil {
+		if serr := stoppedAgentErr(cur, who == st.actor); serr != nil {
+			return serr
+		}
 		// devco:K-6: both updates below are lore's own upkeep of a copy
 		// that exists, so a live write carries them with its row instead
 		// of rewriting the committed actor file (store.WithSupportingRefresh).
@@ -207,6 +210,20 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	}
 	st.actorDone[target] = true
 	return nil
+}
+
+// stoppedAgentErr refuses the write of an agent session whose actor row a
+// person deactivated (devco:S-14: `lore actor deactivate --handle @<label>`
+// is how a person stops an agent in any repo, org or not). own is whether
+// cur is the caller's own row; nil for anyone else, and for people (a
+// deactivated person keeps v0.1.17's register-to-come-back rule).
+func stoppedAgentErr(cur row.Row, own bool) error {
+	x := actorOfRow(cur)
+	if !own || cur.Deleted || x.Active || x.Kind != schema.ActorKindAgent {
+		return nil
+	}
+	return errs.New(errs.StatusChange, "agent @"+x.Label+" ("+x.ID+") was stopped: a person deactivated it, so this session cannot write").
+		WithHint("stop this session; its owner starts it again with `lore agent start --label " + x.Label + " --yes` if it should go on")
 }
 
 // ensureWriterRow writes the actor row of w, the person's identity in the

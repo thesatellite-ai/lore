@@ -414,6 +414,7 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 		return err
 	}
 	applied, err := b.folder.ApplyAudited(ctx, changes, recs)
+	err = b.heldWriteErr(changes, err)
 	if err == nil && b.mode == modeClone {
 		var undo func()
 		if undo, err = b.addMissingMarker(applied); err == nil {

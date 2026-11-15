@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,11 +91,11 @@ func TestAgentHooksAsksThenWrites(t *testing.T) {
 		t.Fatalf("unconfirmed: %v written %d", err, h.written)
 	}
 	body := errs.EnvelopeOf(err).Error
-	if !strings.Contains(body.Message, "Write 1 settings file(s)?") || body.Next == nil || strings.Join(body.Next.Args, " ") != "setup --agent-hooks --yes --remove" {
+	if !strings.Contains(body.Message, "Write 1 hook in 1 settings file?") || body.Next == nil || strings.Join(body.Next.Args, " ") != "setup --agent-hooks --yes --remove" {
 		t.Fatalf("refusal = %+v", body)
 	}
 	done, err := Run(ctx, h, RunIn{AgentHooks: true}, true)
-	if err != nil || h.written != 1 || done.Written != 1 || !strings.HasSuffix(done.Text(), "✓ 1 settings file(s) written\n") {
+	if err != nil || h.written != 1 || done.Written != 1 || !strings.HasSuffix(done.Text(), "✓ 1 hook in 1 settings file written\n") {
 		t.Fatalf("confirmed: %q %v", done.Text(), err)
 	}
 	none := &fakeHost{plans: twoPlans()[1:]}
@@ -180,5 +181,29 @@ func TestLoreRepoAt(t *testing.T) {
 	}
 	if !LoreRepoAt(sub) || !LoreRepoAt(repo) {
 		t.Fatal("an initialised repo did not count")
+	}
+}
+
+// TestAgentHooksCountsFiles (devco:S-4): 4 Claude Code hooks across 2
+// settings files printed "✓ 4 settings file(s) written", and each "not set
+// up here" line of a tool with 4 hooks printed 4 times. Now the line says
+// hooks and files apart, Written counts files, and a repeated plan line
+// prints once.
+func TestAgentHooksCountsFiles(t *testing.T) {
+	ctx := context.Background()
+	var plans []HookPlan
+	for _, f := range []string{".claude/settings.json", ".claude/settings.json", ".claude/settings.local.json", ".claude/settings.local.json"} {
+		plans = append(plans, HookPlan{Tool: "claude_code", File: f, Note: "add hook " + f + fmt.Sprint(len(plans)), Change: true})
+	}
+	for range 4 {
+		plans = append(plans, HookPlan{Tool: "codex", File: ".codex/hooks.json", Note: "not set up here (.codex/ missing)"})
+	}
+	h := &fakeHost{plans: plans}
+	done, err := Run(ctx, h, RunIn{AgentHooks: true}, true)
+	if err != nil || done.Written != 2 || !strings.HasSuffix(done.Text(), "✓ 4 hooks in 2 settings files written\n") {
+		t.Fatalf("written %d: %q %v", done.Written, done.Text(), err)
+	}
+	if n := strings.Count(done.Text(), "not set up here"); n != 1 {
+		t.Fatalf("the not-set-up line printed %d times:\n%s", n, done.Text())
 	}
 }

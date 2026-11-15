@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/model/canon"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/store"
@@ -271,5 +273,66 @@ func TestOwnRowsOfAMemberAreAccepted(t *testing.T) {
 	b := orgFolderClone(t, h.remote)
 	if held, err := b.Held(context.Background()); err != nil || len(held) != 0 {
 		t.Errorf("held = %+v, %v; a member's own join rows were held", held, err)
+	}
+}
+
+// TestOwnAgentOfAMemberIsAccepted: devco U-1. A member's first write
+// through a coding agent adds the agent's actors row (owner = the member,
+// written by the agent) in the same commit as the row it writes; every
+// reader held that actors row back, because "the author owns the agent"
+// was asked of the roster before the commit, where the agent did not
+// exist yet. It is the member's own roster change: read, with the agent
+// kept as the writer of both rows and of the member's later writes. A
+// member who takes over another person's actors row by naming themself
+// its owner is still held.
+func TestOwnAgentOfAMemberIsAccepted(t *testing.T) {
+	t.Parallel()
+	h := newHandStore(t)
+	boss, dev := newPerson(t, "boss@example.test"), newPerson(t, "dev@example.test")
+	agent, mem1, mem2 := mustID[ids.Actor](t), mustID[ids.Memory](t), mustID[ids.Memory](t)
+	byAgent := map[string]string{"updated_by": `"` + agent.String() + `"`, "created_by_actor_id": `"` + agent.String() + `"`}
+	h.commit(boss.email, map[string]string{
+		orgPath("actors", boss.actor): boss.actorRow(), orgPath("actor_periods", boss.period): boss.periodRow("admin", ""),
+	})
+	h.commit(dev.email, map[string]string{
+		orgPath("actors", dev.actor): dev.actorRow(), orgPath("actor_periods", dev.period): dev.periodRow("", ""),
+	})
+	agentFields := maps.Clone(byAgent)
+	agentFields["kind"], agentFields["owner_actor_id"] = `"agent"`, `"`+dev.actor.String()+`"`
+	h.commit(dev.email, map[string]string{
+		orgPath("actors", agent):  rowJSON("actors", agent, agentFields),
+		orgPath("memories", mem1): rowJSON("memories", mem1, byAgent),
+	})
+	h.commit(dev.email, map[string]string{orgPath("memories", mem2): rowJSON("memories", mem2, byAgent)})
+	b := orgFolderClone(t, h.remote)
+	if held, err := b.Held(context.Background()); err != nil || len(held) != 0 {
+		t.Fatalf("held = %+v, %v; a member's own agent was held", held, err)
+	}
+	for _, id := range []ids.AnyID{agent, mem1, mem2} {
+		if by, ok := readField(t, b, id, "updated_by"); !ok || by != agent.String() {
+			t.Errorf("row %s: updated_by %q (read %v), want the agent %s", id, by, ok, agent)
+		}
+	}
+
+	// a takeover: the member names themself owner of the boss's actors row
+	hijack := map[string]string{"stable_key": `"human:` + boss.email + `"`, "status": `"active"`, "kind": `"human"`,
+		"owner_actor_id": `"` + dev.actor.String() + `"`, "updated_by": `"` + dev.actor.String() + `"`}
+	h.commit(dev.email, map[string]string{orgPath("actors", boss.actor): rowJSONAt("actors", boss.actor, "2026-02-01T00:00:00.000Z", hijack)})
+	b2 := orgFolderClone(t, h.remote)
+	held, err := b2.Held(context.Background())
+	if err != nil || len(held) != 1 || held[0].ID != boss.actor.String() {
+		t.Fatalf("held = %+v, %v; want the takeover of the boss's actors row held", held, err)
+	}
+	// a write of the held row is refused naming the hold, never a bare E_STALE
+	cur, err := b2.Get(context.Background(), row.Table("actors"), boss.actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cur.Doc, err = canon.Document(cur.Doc); err != nil {
+		t.Fatal(err)
+	}
+	err = b2.Write(context.Background(), []store.Change{{Row: cur, Expect: cur.HLC}})
+	if !errs.Has(err, errs.PolicyDenied) || !strings.Contains(err.Error(), "held back") || !strings.Contains(err.Error(), held[0].Short()) {
+		t.Errorf("write of a held row: %v; want E_POLICY_DENIED naming the hold and its commit", err)
 	}
 }

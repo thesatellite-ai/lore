@@ -248,6 +248,21 @@ lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ```
 <!-- /example -->
 
+## Rules an agent writes wait for a person
+
+Every rule, memory and decision carries a trust score from 0 to 1 (`trust` in `show`, `trust="…"` on each rule in LORE.md). A row a person writes gets 0.50. A rule a coding agent adds (a Claude Code, Codex or other detected session, or a labelled `lore agent start` session) gets 0.25, and so does a person's rule whose text an agent changes (`--body`, `--severity`, `--activation`, `--globs`, `--applies-to`, `--summary`, `--scope` or `--overrides`; a tag or `--source-ref` change keeps the score). A rule below 0.50 is "agent-written, not approved": LORE.md prints it with `review="agent-written, not approved"` (and those words before its line form), `lore rule list` adds `[agent-written, not approved]`, `lore rule show` adds a `review:` line and `--json` adds `"needs_approval": true`. Every session still reads the rule; the mark tells it, and the people reviewing, that nobody vouched for it yet.
+
+A person's `lore inbox` lists each such rule with who wrote it and the two ways out. The list is read from the rule rows, which travel in git, so a lead sees a teammate's agent's rule after `git pull` and `lore sync` (the audit log is per machine and never would).
+
+```console
+$ lore inbox
+-  review   bea via claude_code rul_3c7d…a1f0 must rule "Skip the integration tests on Fridays to ship faster": agent-written, not approved; lore rule approve --id rul_3c7d…a1f0, or lore rule delete --id rul_3c7d…a1f0
+$ lore rule approve --id rul_3c7d…a1f0 --yes
+✓ rul_3c7d…a1f0 approved: trust 0.25 → 0.50; LORE.md drops its review="agent-written, not approved" mark at the next lore render (the commit hook runs it)
+```
+
+`lore rule approve` sets the score to 0.50; only a person runs it (an agent gets `E_POLICY_DENIED` naming the command for its person). A rule you do not want goes with `lore rule delete --id <id> --yes` (to the trash, restorable). Commit `.lore/data` after either, so every clone sees the change. Rules written before this change have no lower score and stay approved. To keep agents from adding rules at all, list the command: `lore policy set --key agents.person_only --value rule.add`.
+
 ## Pitfalls
 
 - **Archived rows are hidden from lists.** `lore rule list` and `lore memory list` skip archived rows; pass `--archived` to see them with an `[archived]` mark.

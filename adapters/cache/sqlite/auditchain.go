@@ -10,6 +10,7 @@ package sqlite
 //	Import(chain, source, recs) ─▶ once per chain (marker row): the v0.1.17 rows, verbatim, in order
 //	Append(chain, e)            ─▶ BEGIN IMMEDIATE · head · prev = auditchain.Hash(head) · insert pos+1
 //	Records(chain)              ─▶ oldest first (pos order)
+//	SessionWrites(keysTable)    ─▶ per ses_ id: entries and distinct keys, over every chain
 //	Verify(chain)               ─▶ auditchain.Verify(Records) + the head anchor
 //
 // The head anchor (P3-AUDIT-3): the links prove every entry but the newest,
@@ -82,6 +83,11 @@ const (
 	auditHead   = `SELECT pos, ` + auditCols + ` FROM audit_chain WHERE chain = ? ORDER BY pos DESC LIMIT 1`
 	auditAll    = `SELECT pos, ` + auditCols + ` FROM audit_chain WHERE chain = ? ORDER BY pos`
 	auditInsert = `INSERT INTO audit_chain (chain, pos, ` + auditCols + `) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	// auditSessionWrites counts each session's entries over every chain:
+	// a session is machine-wide and writes the chain of whichever checkout
+	// it runs in (devco S-19).
+	auditSessionWrites = `SELECT session_id, COUNT(*), COUNT(DISTINCT CASE WHEN target_table = ? AND target_id != '' THEN target_id END)
+		FROM audit_chain WHERE session_id != '' GROUP BY session_id`
 	auditMarked = `SELECT COUNT(*) FROM audit_chain_imports WHERE chain = ?`
 	auditMark   = `INSERT INTO audit_chain_imports (chain, source, rows, at) VALUES (?, ?, ?, ?)`
 )
@@ -244,6 +250,39 @@ func (a *AuditChain) Records(ctx context.Context, chain string) (_ []auditchain.
 	}
 	if err = rows.Err(); err != nil {
 		return nil, dbErr("audit chain: read", err)
+	}
+	return out, nil
+}
+
+// SessionWriteCount is one session's entries over every chain: Writes is
+// how many entries carry its ses_ id, NewKeys how many distinct rows of
+// the metadata-keys table those entries wrote.
+type SessionWriteCount struct {
+	Writes, NewKeys int
+}
+
+// SessionWrites returns every session's SessionWriteCount over all chains
+// of this machine store, keyed by ses_ id; keysTable is the metadata-keys
+// table name. Why every chain: chains are per checkout, while one session
+// writes in a clone and its worktrees (devco S-19: a list run in the main
+// clone showed 0 for the sessions that wrote in the worktrees).
+func (a *AuditChain) SessionWrites(ctx context.Context, keysTable string) (_ map[string]SessionWriteCount, err error) {
+	rows, err := a.db.QueryContext(ctx, auditSessionWrites, keysTable)
+	if err != nil {
+		return nil, dbErr("audit chain: count session writes", err)
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	out := map[string]SessionWriteCount{}
+	for rows.Next() {
+		var id string
+		var c SessionWriteCount
+		if err = rows.Scan(&id, &c.Writes, &c.NewKeys); err != nil {
+			return nil, dbErr("audit chain: count session writes", err)
+		}
+		out[id] = c
+	}
+	if err = rows.Err(); err != nil {
+		return nil, dbErr("audit chain: count session writes", err)
 	}
 	return out, nil
 }

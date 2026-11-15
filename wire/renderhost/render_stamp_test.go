@@ -6,6 +6,7 @@ package renderhost
 // missing apart; the pointer files are compared with context.targets.
 
 import (
+	"context"
 	"errors"
 	"github.com/thesatellite-ai/lore/store"
 	"os"
@@ -199,7 +200,7 @@ func TestPointerCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	pick := targetPick{sel: sel, targets: []contextTarget{{profile: claude, file: claude.PointerFile, known: true}}}
-	got := pointerCopies(root, pick)
+	got := pointerCopies(context.Background(), root, pick)
 	kinds := map[opsrender.CopyKind]opsrender.CopyFinding{}
 	for _, f := range got {
 		kinds[f.Kind] = f
@@ -215,7 +216,7 @@ func TestPointerCopies(t *testing.T) {
 		t.Error("pointerCopies changed a file")
 	}
 	// Without a context.targets row nothing is compared.
-	if got := pointerCopies(root, targetPick{sel: toolprofile.Selection{Reason: toolprofile.ReasonWired}}); len(got) != 0 {
+	if got := pointerCopies(context.Background(), root, targetPick{sel: toolprofile.Selection{Reason: toolprofile.ReasonWired}}); len(got) != 0 {
 		t.Errorf("no row, findings anyway: %+v", got)
 	}
 }
@@ -237,7 +238,7 @@ func TestPointerCopiesGeneratedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := pointerCopies(root, targetPick{sel: sel, targets: []contextTarget{{profile: claude, file: claude.PointerFile, known: true}}})
+	got := pointerCopies(context.Background(), root, targetPick{sel: sel, targets: []contextTarget{{profile: claude, file: claude.PointerFile, known: true}}})
 	if len(got) != 1 || got[0].Kind != opsrender.PointerGenerated || got[0].Fix != "lore render --add-target "+toolprofile.NameCodex ||
 		!strings.Contains(got[0].Message, "another tool generates it") {
 		t.Fatalf("generated CLAUDE.md: %+v", got)
@@ -289,7 +290,7 @@ func TestPointerCopiesGeneratedFileNamesTheWiredFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := pointerCopies(root, targetPick{sel: sel, targets: []contextTarget{
+	got := pointerCopies(context.Background(), root, targetPick{sel: sel, targets: []contextTarget{
 		{profile: claude, file: claude.PointerFile, known: true},
 		{profile: codex, file: codex.PointerFile, known: true},
 	}})

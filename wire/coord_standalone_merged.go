@@ -41,6 +41,7 @@ import (
 const (
 	fieldDoneCommit = "done_commit"
 	fieldDonePR     = "done_pr"
+	fieldDoneBy     = "done_by"
 	fieldTaskID     = "id"
 )
 

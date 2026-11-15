@@ -444,7 +444,7 @@ lore render
 | "what tasks are open?" | `lore task list --json` (default already hides done + cancelled; use `--all` for full history, `--status X` for explicit filter) |
 | "show everything including done/cancelled" | `lore task list --all --json` |
 | "what is assigned to me / to X?" | `lore task list --assignee @me --json` (also takes an actor_id (act_*), stable_key or display name; composes with `--status`, `--all` etc.) |
-| "start work on tsk_<id>" | `lore task start --id tsk_<id>` |
+| "start work on tsk_<id>" | `lore task claim --id tsk_<id> --push` (a claim, so no other agent gets it; `task start` alone does not claim) |
 | "mark tsk_<id> done" | `lore task done --id tsk_<id>` |
 | "cancel tsk_<id>" | `lore task cancel --id tsk_<id>` |
 | "move tsk_<id> to tasklist L-5" | `lore task edit --id tsk_<id> --tasklist tlt_<id>` (or any other field via `edit`) |
