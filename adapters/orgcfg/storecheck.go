@@ -8,6 +8,7 @@ package orgcfg
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"sort"
 	"strings"
 
@@ -23,7 +24,7 @@ const (
 	// counted ("and 3 more").
 	maxListedOffenders = 5
 	// hintStoreInit is the refusal's hint (v0.1.17 storeHintInit).
-	hintStoreInit = "point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml"
+	hintStoreInit = "point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from <config>"
 )
 
 // storeAllowed reports whether one path may exist in a store: the one
@@ -79,7 +80,7 @@ func checkStoreTree(ctx context.Context, dir, rev, norm, branch string) error {
 		parts = append(parts, "it holds non-lore files: "+listOffenders(bad))
 	}
 	return errs.New(errs.NotAStore, fmt.Sprintf("%s (branch %s) is listed under stores: but is not a lore store (%s)", norm, branch, strings.Join(parts, "; "))).
-		WithHint(hintStoreInit)
+		WithHint(strings.Replace(hintStoreInit, "<config>", lorehome.Shown()+"/config.yaml", 1))
 }
 
 // listOffenders names the first maxListedOffenders paths in full (never

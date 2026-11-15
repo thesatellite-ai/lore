@@ -2220,6 +2220,10 @@
                     "type": "string",
                     "description": "the actor id that stays (act_…; usually the org roster's)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "the org store holding both actors (\u003corg\u003e/\u003cfolder\u003e); default: the stores this command reads, then this machine's org stores"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -14876,7 +14880,7 @@
                   },
                   "source_ref": {
                     "type": "string",
-                    "description": "free-form provenance"
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
                   },
                   "status": {
                     "type": "string",
@@ -21814,6 +21818,10 @@
                   "source": {
                     "type": "string",
                     "description": "source_kind (default manual)"
+                  },
+                  "source_ref": {
+                    "type": "string",
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
                   },
                   "summary": {
                     "type": "string",
@@ -30555,7 +30563,7 @@
                   },
                   "source_ref": {
                     "type": "string",
-                    "description": "free-form provenance pointer"
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
                   },
                   "supersedes": {
                     "type": "string",
@@ -43053,6 +43061,10 @@
                     "type": "string",
                     "description": "where it attaches: global | project | repo | dir:\u003cpath\u003e (folder scopes rank it in lore context)"
                   },
+                  "source_ref": {
+                    "type": "string",
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
+                  },
                   "supersedes": {
                     "type": "string",
                     "description": "pattern_id this entry replaces"
@@ -47813,6 +47825,10 @@
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
+                  },
+                  "source_ref": {
+                    "type": "string",
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
                   },
                   "text": {
                     "type": "string",
@@ -66652,7 +66668,7 @@
                   },
                   "source_ref": {
                     "type": "string",
-                    "description": "free-form provenance pointer"
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
                   },
                   "summary": {
                     "type": "string",
@@ -79989,6 +80005,10 @@
                   "source": {
                     "type": "string",
                     "description": "where the snapshot came from: manual | learn-from | agent-proposal | plugin | imported | migrated (default manual)"
+                  },
+                  "source_ref": {
+                    "type": "string",
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
                   },
                   "text": {
                     "type": "string",

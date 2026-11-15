@@ -266,7 +266,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `store.read` | error | you can read the store | `gh repo create <owner>/<repo> --private` (runnable, asks), ask for access, or check the network |
 | `store.write` | error | you can write the store (a dry-run push) | ask the owner for write access, or attach it `--read-only` |
 | `store.marker` | warn | the repo is already a lore store | saving the step runs `lore store init` |
-| `store.private` | error / warn | the repo is private | `gh repo edit <owner>/<repo> --visibility private` (runnable, asks) |
+| `store.private` | error / warn | the repo is private (a store url on github.com, or on a host alias your `~/.ssh/config` maps to github.com, such as `git@github-work:acme/notes.git`) | `gh repo edit <owner>/<repo> --visibility private` (runnable, asks) |
 | `invite.parse` | error | the invite text is a lore invite | copy the whole line starting with `lore-invite:v1:` |
 | `invite.found` | error | the invite row is in the team's store | ask the inviter to invite you again |
 | `invite.status` | error | the invite is still pending | ask the inviter for a new one |

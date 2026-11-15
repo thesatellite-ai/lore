@@ -34,7 +34,10 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -121,7 +124,16 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	if from == into {
 		return opsinfra.ActorMergeOut{}, errs.New(errs.InvalidInput, actorMergeVerb+": "+in.From+" is both actors; give two different ids")
 	}
+	if to := strings.TrimSpace(in.To); to != "" {
+		return a.mergeActorOn(ctx, in, store.Source(to))
+	}
 	st, err := a.state(ctx)
+	if errs.Has(err, errs.NotAStore) {
+		// outside any repo (devco D-424): the org stores of this machine
+		if out, found, ferr := a.mergeActorInOrgStores(ctx, in, from, into); found {
+			return out, ferr
+		}
+	}
 	if err != nil {
 		return opsinfra.ActorMergeOut{}, err
 	}
@@ -131,15 +143,20 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	}
 	stores := storeNames(st.eng.Stores())
 	if len(fromCopies) == 0 || len(intoCopies) == 0 {
+		// devco D-424: inside a store's clone the org folder's actors are
+		// not among the stores read; the org store holding both is
+		if out, found, ferr := a.mergeActorInOrgStores(ctx, in, from, into); found {
+			return out, ferr
+		}
 		missing := in.From
 		if len(fromCopies) > 0 {
 			missing = in.Into
 		}
-		return opsinfra.ActorMergeOut{}, errs.New(errs.NotFound, actorMergeVerb+": no actor "+missing+" in the stores this command reads ("+strings.Join(stores, ", ")+")").
-			WithHint("run it in a repo that attaches the store holding it (the org roster's actors: a repo linked to the org); `lore actor list` shows the ids")
+		return opsinfra.ActorMergeOut{}, errs.New(errs.NotFound, actorMergeVerb+": no actor "+missing+" in the stores this command reads ("+strings.Join(stores, ", ")+") or in this machine's org stores").
+			WithHint("name the org store holding both: lore actor merge --from " + in.From + " --into " + in.Into + " --to <org>/<folder>; `lore actor list` shows the ids")
 	}
 	f, t := fromCopies[0].r, intoCopies[0].r
-	if fk, tk := actorKindOf(fieldText(f, actorFieldKind)), actorKindOf(fieldText(t, actorFieldKind)); fk != tk {
+	if fk, tk := actorKindOf(fieldText(f, actorFieldKind)), actorKindOf(fieldText(t, actorFieldKind)); fk != tk && !agentOfPerson(fromCopies, fk, tk, into) {
 		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is a "+fk+" and "+in.Into+" a "+tk+"; only one person's (or one agent's) two ids are merged").
 			WithHint("check the ids with `lore actor show --id <id>`")
 	}
@@ -205,6 +222,88 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 		return out, ferr
 	}
 	return out, cerr
+}
+
+// mergeActorOn runs the merge in the org folder store target alone (--to
+// <org>/<folder>), from any folder: an App over that store
+// (openOrgFolderApp, writing as the org's identity), closed after.
+func (a *App) mergeActorOn(ctx context.Context, in opsinfra.ActorMergeIn, target store.Source) (opsinfra.ActorMergeOut, error) {
+	for _, o := range a.machineOrgFolders() {
+		if o.store.Name != target {
+			continue
+		}
+		x, err := openOrgFolderApp(ctx, a.opts, o.org, o.store)
+		if err != nil {
+			return opsinfra.ActorMergeOut{}, errs.Prefix(actorMergeVerb+" --to "+string(target), err)
+		}
+		defer func() { _ = x.Close() }() // the merge's commit is written by return
+		in.To = ""
+		return x.MergeActor(ctx, in)
+	}
+	return opsinfra.ActorMergeOut{}, errs.New(errs.NotFound, actorMergeVerb+": no org store "+string(target)+" in "+lorehome.Shown()+"/config.yaml").
+		WithHint("name an org's folder store as <org>/<org_folder> (`lore org list` shows the orgs)")
+}
+
+// orgFolderOf is one org's folder store on this machine.
+type orgFolderOf struct {
+	org   string
+	store attach.Store
+}
+
+// machineOrgFolders is the org folder store of every org entry in this
+// machine's config.yaml, by org name (none when it cannot be read).
+func (a *App) machineOrgFolders() []orgFolderOf {
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return nil
+	}
+	var out []orgFolderOf
+	for _, o := range cfg.Orgs {
+		if one, ok, ferr := orgFolderStore(a.opts.Home, o.Name); ferr == nil && ok {
+			out = append(out, orgFolderOf{org: o.Name, store: one})
+		}
+	}
+	slices.SortFunc(out, func(x, y orgFolderOf) int { return strings.Compare(x.org, y.org) })
+	return out
+}
+
+// mergeActorInOrgStores runs the merge in the first org folder store of
+// this machine (by org name) that holds both actors; found is false when
+// none does (or none can be opened), and nothing was written.
+func (a *App) mergeActorInOrgStores(ctx context.Context, in opsinfra.ActorMergeIn, from, into ids.AnyID) (opsinfra.ActorMergeOut, bool, error) {
+	for _, o := range a.machineOrgFolders() {
+		x, err := openOrgFolderApp(ctx, a.opts, o.org, o.store)
+		if err != nil {
+			continue // an org store this machine cannot open: the next one
+		}
+		st, err := x.state(ctx)
+		if err != nil {
+			_ = x.Close() // not this store
+			continue
+		}
+		f, t, err := actorCopies(ctx, st, from, into)
+		if err != nil || len(f) == 0 || len(t) == 0 {
+			_ = x.Close() // not this store
+			continue
+		}
+		in.To = ""
+		out, merr := x.MergeActor(ctx, in)
+		_ = x.Close() // the merge's commit is written by return
+		return out, true, merr
+	}
+	return opsinfra.ActorMergeOut{}, false, nil
+}
+
+// agentOfPerson reports whether the agent actor whose copies are given
+// acts for person (a copy's owner_actor_id names it): such an agent may
+// be merged into its person (devco D-424: the "<person> via <tool>" actor
+// a coding tool's first write registered then reads as the person, its
+// rows edited to name the person, nothing rewritten in history).
+func agentOfPerson(copies []actorCopy, fromKind, intoKind string, person ids.AnyID) bool {
+	if fromKind != schema.ActorKindAgent || intoKind != schema.ActorKindHuman {
+		return false
+	}
+	return slices.ContainsFunc(copies, func(c actorCopy) bool { return fieldText(c.r, rosterFieldOwner) == person.String() })
 }
 
 // mergeStoreCounts is per-store row counts as the output lists them,

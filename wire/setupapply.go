@@ -65,6 +65,11 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 		return opssetup.ApplyResult{}, errs.New(errs.InvalidInput, "setup apply: the setup has no name").WithHint("answer the kind step first (lore setup plan)")
 	}
 	switch req.Apply {
+	case onboard.ApplyIdentity, onboard.ApplyPersonalStore, onboard.ApplyJoin, onboard.ApplyTeam:
+		// devco D-424: the steps that write stores are the person's own
+		ctx = ap.a.creditPerson(ctx, "setup apply "+string(req.Step), ap.stepPerson(ctx, e, req.Answers), ap.a.notice)
+	}
+	switch req.Apply {
 	case onboard.ApplyNone:
 		return opssetup.ApplyResult{Wrote: []string{}, Setup: e}, nil
 	case onboard.ApplySetupEntry, onboard.ApplyTools, onboard.ApplySecrets, onboard.ApplyFolders:
@@ -80,6 +85,18 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 		return ap.applyRoster(ctx, e, req)
 	}
 	return opssetup.ApplyResult{}, errs.New(errs.InvalidInput, "setup apply: unknown apply "+string(req.Apply)).WithHint("lore setup plan lists the steps")
+}
+
+// stepPerson is the name the setup's identity answers give ("" when none
+// does yet): the person a step under a coding agent is credited to.
+func (ap setupApplier) stepPerson(ctx context.Context, e onboard.SetupEntry, step onboard.Answers) string {
+	if n := answerText(step, onboard.QIDName); n != "" {
+		return n
+	}
+	if ans, err := ap.setupAnswers(ctx, e, step); err == nil {
+		return answerText(ans, onboard.QIDName)
+	}
+	return ""
 }
 
 // withStepAnswers is e with what a kind, tools, secrets or folders step's
@@ -473,7 +490,7 @@ func (ap setupApplier) applyPersonalStore(ctx context.Context, e onboard.SetupEn
 		ap.a.notice(prevNote)
 	}
 	if !req.DryRun && choice == onboard.PersonalStoreLocal {
-		ap.a.notice("setup apply personal_store: " + opssetup.LocalPersonalWarning) // H-17
+		ap.a.notice("setup apply personal_store: " + opssetup.LocalPersonalWarningText()) // H-17
 	}
 	if !req.DryRun && initURL != "" {
 		if res, err = ap.initPersonalStore(ctx, res, initURL); err != nil {

@@ -99,6 +99,8 @@ lore sets up each store clone so plain git behaves:
 
 lore writes `user.name` and `user.email` when it clones the store, or when it opens a clone that has no `user.email` of its own, and prints one line naming the clone, the name and email and why. It remembers the email it wrote in `.git/lore/identity` and keeps only that value current (say your email in the org changes); an email you set yourself in the clone is never changed. Your global git config is never touched. `lore doctor` warns (`store_identity`) about a clone whose `git config user.email` is not your identity for that store and prints the exact `git -C <clone> config user.email …` line; `lore doctor --fix` writes it. `lore where` lists both entries for each clone.
 
+When lore runs with `LORE_HOME` set (a preview build run as `lore-dev` with `LORE_HOME=$HOME/.lore-dev`), the block's first line exports that home (`LORE_HOME='<home>'; export LORE_HOME`), so your plain `git commit` in a clone under `<home>/stores/` is checked by the lore home that owns the clone, even from a shell that does not set `LORE_HOME`; with the default home `~/.lore` the block has no such line. A clone whose block an older lore wrote is rewritten by the next lore command that writes to it, or by `lore doctor --fix`.
+
 Lines of your own in `.git/hooks/pre-commit` are kept around lore's block. lore's own commits in the clone never run that hook and never use the driver (it validated them before writing, and it merges rows itself during `lore sync`).
 
 So in the store clone:

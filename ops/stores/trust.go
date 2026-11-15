@@ -12,6 +12,7 @@ package stores
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -46,7 +47,7 @@ func (o TrustOut) Text() string {
 	if !o.Changed {
 		return fmt.Sprintf("store %s (%s) is trusted on this machine already; nothing changed\n", o.Store, o.URL)
 	}
-	return fmt.Sprintf("✓ store %s (%s) is trusted on this machine: the next lore command clones and reads it (recorded in ~/.lore/state/trusted-stores.json)\n", o.Store, o.URL)
+	return fmt.Sprintf("✓ store %s (%s) is trusted on this machine: the next lore command clones and reads it (recorded in %s/state/trusted-stores.json)\n", o.Store, o.URL, lorehome.Shown())
 }
 
 // trustErrors are the codes of store.trust.

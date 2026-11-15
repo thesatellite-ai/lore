@@ -46,6 +46,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -56,6 +57,7 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/merge3"
@@ -144,7 +146,7 @@ func handGitOption(say func(string)) gitbackend.Option {
 	}
 	return gitbackend.WithHandGit(gitbackend.HandGit{
 		Driver: bin + " merge-driver %O %A %B %P",
-		Hook:   storeHookLines(bin),
+		Hook:   storeHookLines(bin, hookHome()),
 		Say: func(ctx context.Context, dir string, set []string) {
 			if say != nil {
 				say(handGitSetUpLine(ctx, dir, set))
@@ -199,17 +201,39 @@ func handGitParts(set []string) string {
 // storeHookLines is the pre-commit block of a store clone: lore's check of
 // the staged row files (valid JSON and rows, no conflict markers), then
 // its secret scan; no lore that can run refuses the commit.
-func storeHookLines(bin string) []string {
-	return []string{
-		EnvGitHook + "=pre-commit; export " + EnvGitHook,
-		"if command -v " + bin + " >/dev/null 2>&1; then",
-		"  " + bin + " sync hook pre-commit || exit $?",
-		"  " + bin + " check leaks --staged || exit $?",
+//
+// home is the LORE_HOME the installing build ran under ("" for the default
+// home): the block exports it, so a person's hand `git commit` in
+// <home>/stores/<org>/<store> checks against the home that owns the clone
+// and not ~/.lore (devco D-423: under LORE_HOME=~/.lore-dev every hand
+// commit was refused as "a clone lore does not use").
+func storeHookLines(bin, home string) []string {
+	var lines []string
+	if home != "" {
+		lines = append(lines, lorehome.EnvName+"='"+home+"'; export "+lorehome.EnvName)
+	}
+	return append(lines,
+		EnvGitHook+"=pre-commit; export "+EnvGitHook,
+		"if command -v "+bin+" >/dev/null 2>&1; then",
+		"  "+bin+" sync hook pre-commit || exit $?",
+		"  "+bin+" check leaks --staged || exit $?",
 		"else",
 		`  echo "lore: this is a lore store clone and no lore on PATH can check this commit (rows and secrets); install lore, then commit again" >&2`,
 		"  exit 1",
 		"fi",
+	)
+}
+
+// hookHome is the home a hook lore writes must carry: the resolved
+// LORE_HOME when the person set one, "" for the default home (whose hooks
+// stay as they were, so default users see no rewrite) and when the folder
+// holds a single quote the hook text cannot hold.
+func hookHome() string {
+	h, err := lorehome.Resolve()
+	if err != nil || h.Source != lorehome.FromEnv || strings.Contains(h.Dir, "'") {
+		return ""
 	}
+	return filepath.ToSlash(h.Dir)
 }
 
 // pickUpThenSync ends an open: the pick-up of hand edits, then the store

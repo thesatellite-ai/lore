@@ -46,6 +46,8 @@ hfx_f147…5139 [critical] Use the old button until the fix ships.
 
 When the problem is fixed, archive the hotfix (`lore hotfix archive --id <id>`) so it stops showing.
 
+Where a row came from goes in `--source-ref` (a url, a ticket, a commit, `file:line`), not into its body: every add whose row keeps a source has the same flag and the same `source_ref` field (`memory`, `rule`, `decision`, `hotfix`, `pattern`, `playbook` and `snapshot add`), and `show` gives it back.
+
 ## Step 2 — Add the other kinds
 
 Each kind is one `add` command. Here are the ones with a title and a body:

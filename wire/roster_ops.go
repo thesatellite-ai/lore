@@ -457,6 +457,9 @@ func (a *App) agentCaller(ctx context.Context, who identity.Resolved) bool {
 	if who.Kind == schema.ActorKindAgent || who.Agent != "" {
 		return true
 	}
+	if creditedAgent(ctx) != "" {
+		return true // a person-credited setup step run through an agent (D-424)
+	}
 	c, ok := ctx.Value(profileCallerKey{}).(op.Caller)
 	return ok && c.Agent != ""
 }

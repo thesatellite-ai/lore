@@ -77,6 +77,10 @@ func (r orgRegistrar) register(ctx context.Context, entry, orgFolder string, wal
 	}()
 	opts := StandaloneOptions(r.repoDir, r.home, r.workDir, r.version)
 	opts.Wall = wall // the binary's clock (LORE_NOW in a test build)
+	// devco D-424: creating an org is the person's own step; under a coding
+	// agent the roster row and its commits name the person, never a
+	// "<person> via <tool>" actor (creditPerson)
+	opts.PersonOnly = true
 	app, alone, err := StoreOnlyRoster(ctx, opts, store.Source(entry+orgconf.RefSep+orgFolder))
 	if err != nil {
 		return "", err
@@ -92,6 +96,9 @@ func (r orgRegistrar) register(ctx context.Context, entry, orgFolder string, wal
 		return "", err
 	}
 	line := strings.TrimRight(out.Text(), "\n")
+	if tool := detectedTool(ctx, StandaloneOptions(r.repoDir, r.home, r.workDir, r.version)); tool != "" {
+		line += "\norg create: run through " + tool + "; the roster row and store commits are credited to you, the person (no agent actor, no Lore-Agent trailer)"
+	}
 	// The creator is the org's admin (devco P-5): the open stint with org
 	// role admin the admin setup step writes, so `lore member add` works
 	// at once instead of refusing for want of an admin setup. Same write

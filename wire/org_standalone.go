@@ -57,7 +57,7 @@ const (
 	orgYAMLMode = 0o644 // committed: world-readable like every repo file
 	loreDirName = ".lore"
 	// hintNotAStore is v0.1.17's storeHintInit.
-	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in ~/.lore/config.yaml"
+	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in <config>"
 	// hintEmptyStore: org create (and import) read the org entry a store
 	// suggests; a brand-new repo has none until it is a lore store.
 	hintEmptyStore = "the repo is empty: make it a lore store first with `lore store init --name <name> --url <url>`, then run this again"
@@ -418,7 +418,7 @@ func storeFolderProjectID(store, branch, folder string) (string, error) {
 func linkError(err error) error {
 	switch {
 	case errors.Is(err, orgcfg.ErrNotAStore):
-		return errs.New(errs.NotAStore, err.Error()).WithHint(hintNotAStore)
+		return errs.New(errs.NotAStore, err.Error()).WithHint(strings.Replace(hintNotAStore, "<config>", lorehome.Shown()+"/config.yaml", 1))
 	case errors.Is(err, orgcfg.ErrStoreEmpty):
 		return errs.New(errs.NotAStore, err.Error()).WithHint(hintEmptyStore)
 	case errors.Is(err, orgcfg.ErrNoStoreBranch):
