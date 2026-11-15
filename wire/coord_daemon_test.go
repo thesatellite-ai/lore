@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
@@ -69,7 +70,7 @@ func (d daemonWorld) daemon(ctx context.Context, id string) (opscoord.Report, er
 
 // daemonGuard bounds a daemon run in these tests: far past any renewal on
 // a loaded machine, so it only ends a daemon that never reports an event.
-const daemonGuard = 2 * time.Minute
+var daemonGuard = testtime.Scale(2 * time.Minute)
 
 // daemonUntil runs the daemon and cancels it the first time event
 // happens (the daemon's own hook, never a clock), or returns what the

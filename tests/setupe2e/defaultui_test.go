@@ -16,10 +16,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // defaultUIDeadline bounds the whole check: one world, one start, two GETs.
-const defaultUIDeadline = 2 * time.Minute
+var defaultUIDeadline = testtime.Scale(2 * time.Minute)
 
 // defaultUIMarkers are what only the open-core page holds (surface/setupweb/opencore).
 var defaultUIMarkers = []string{"The guided setup page comes with lore EE", "lore setup plan", "/setup/assets/opencore.css"}

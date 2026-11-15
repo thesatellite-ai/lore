@@ -13,12 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // agentWriteTimeout bounds each command: a deadlock never returns, a
 // normal write takes well under a second.
-const agentWriteTimeout = 60 * time.Second
+var agentWriteTimeout = testtime.Scale(60 * time.Second)
 
 // TestAgentFirstWritesWithSessionFinish: see the file comment. The person
 // adds the tasks; the agent's first write is an edit (task start: an

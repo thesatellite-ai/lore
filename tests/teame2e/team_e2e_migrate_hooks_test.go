@@ -37,6 +37,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -56,7 +57,7 @@ const tblPatterns = "patterns"
 const v1Patterns = 3
 
 // pauseWait bounds how long a test waits for a paused process to reach its point.
-const pauseWait = 60 * time.Second
+var pauseWait = testtime.Scale(60 * time.Second)
 
 // v1PatternDoc is a v0.1.17 patterns row file; i makes it unique.
 func v1PatternDoc(i int) (string, string) {

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -517,7 +518,7 @@ func TestServeEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(testtime.Scale(10 * time.Second)):
 		t.Fatal("Serve did not stop on close")
 	}
 	mu.Lock()

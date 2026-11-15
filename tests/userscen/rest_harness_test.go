@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -37,7 +38,7 @@ var restAnyListenRe = regexp.MustCompile(`lore api listening on http://\S+`)
 var restCLICodeRe = regexp.MustCompile(`\[(E_[A-Z0-9_]+)\]`)
 
 // restStartTimeout bounds how long `lore api` may take to print its line.
-const restStartTimeout = 30 * time.Second
+var restStartTimeout = testtime.Scale(30 * time.Second)
 
 // restWorld is one person with one initialised repo.
 type restWorld struct {

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // takenPortDeadline is how long a refused start may take: binding a port
@@ -28,7 +30,7 @@ import (
 const takenPortDeadline = 20 * time.Second
 
 func TestSetupWebTakenPortFailsBeforeFetch(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), testtime.Scale(3*time.Minute))
 	defer cancel()
 	s := Shape{GHAccounts: 1, GHActive: ActiveFirst, SSH: SSHDefaultOnly, Keys: KeysWithPub, LoreHome: HomeV0117, Start: StartLoreRepo}
 	w, err := Build(ctx, t.TempDir(), s, loreBin)

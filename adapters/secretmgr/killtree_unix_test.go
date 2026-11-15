@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -44,7 +45,7 @@ func TestTimeoutKillsProcessTree(t *testing.T) {
 	if err != nil || pid <= 1 {
 		t.Fatalf("bad helper pid %q", b)
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(testtime.Scale(3 * time.Second))
 	for {
 		err := syscall.Kill(pid, 0)
 		if errors.Is(err, syscall.ESRCH) {

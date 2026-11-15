@@ -35,6 +35,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -42,10 +43,10 @@ import (
 var reSetupLink = regexp.MustCompile(`http://127\.0\.0\.1:\d+/setup/#t=[0-9a-f]+`)
 
 // pageStartTimeout bounds the wait for the printed link.
-const pageStartTimeout = 60 * time.Second
+var pageStartTimeout = testtime.Scale(60 * time.Second)
 
 // pageCallTimeout bounds one HTTP call (a step apply may probe ssh/gh).
-const pageCallTimeout = 2 * time.Minute
+var pageCallTimeout = testtime.Scale(2 * time.Minute)
 
 // Page is one started setup page with a spent token (one page session).
 type Page struct {

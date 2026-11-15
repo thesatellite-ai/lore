@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/doctor"
@@ -109,7 +110,7 @@ func TestRunAllStreamsAsReposFinish(t *testing.T) {
 		if root == "/w/slow" {
 			select {
 			case <-fastOut:
-			case <-time.After(5 * time.Second):
+			case <-time.After(testtime.Scale(5 * time.Second)):
 				return RepoResult{Error: "the fast block was not emitted while this repo ran"}
 			}
 		}

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
 
@@ -31,7 +32,7 @@ const actorRaceRounds = 3
 
 // actorRaceWait bounds the barrier: past it a commit goes ahead alone, so a
 // change that stops staging the actor row cannot hang the test.
-const actorRaceWait = 5 * time.Second
+var actorRaceWait = testtime.Scale(5 * time.Second)
 
 // commitBarrier holds each App's first commit that carries an actor row
 // until both Apps reached theirs: both have then read "no actor row yet" and
