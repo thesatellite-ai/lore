@@ -17,12 +17,17 @@ import (
 type LiveFlags struct {
 	Live   bool `json:"live,omitempty" flag:"live" desc:"share this row with everyone at once on the live ref (refs/lore/live)"`
 	NoLive bool `json:"no_live,omitempty" flag:"no-live" desc:"keep this row with the code (this branch's .lore/data)"`
+	// NoLayer writes to the shared notes on a code branch that keeps its
+	// own notes in a store (BRANCH_LAYERS 13).
+	NoLayer bool `json:"no_layer,omitempty" flag:"no-layer" desc:"on a code branch with its own notes (a branch layer), write this row to the shared notes instead"`
 }
 
 // Input field names of LiveFlags.
 const (
 	inputLive   = "live"
 	inputNoLive = "no_live"
+	// inputNoLayer is LiveFlags.NoLayer's input name.
+	inputNoLayer = "no_layer"
 )
 
 // bindInputLive is Run's step: an input's --live / --no-live becomes the
@@ -30,6 +35,9 @@ const (
 func bindInputLive(ctx context.Context, in op.Input) (context.Context, error) {
 	on, _ := in.Bool(inputLive)
 	off, _ := in.Bool(inputNoLive)
+	if noLayer, _ := in.Bool(inputNoLayer); noLayer {
+		ctx = store.WithNoLayer(ctx)
+	}
 	switch {
 	case on && off:
 		return nil, errs.New(errs.InvalidInput, "--live and --no-live cannot be used together").

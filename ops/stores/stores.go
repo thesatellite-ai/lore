@@ -615,6 +615,9 @@ type Syncer interface {
 // SyncOut is what `lore sync` reports for the 0.1.18 stores.
 type SyncOut struct {
 	Stores []Report `json:"stores"`
+	// Notes are lines a sync adds after the stores (branch layers it
+	// landed or moved to the trash, BRANCH_LAYERS 9, 10).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Report is one store's sync result.

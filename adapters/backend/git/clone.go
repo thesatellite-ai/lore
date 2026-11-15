@@ -570,7 +570,7 @@ func (b *Backend) fetch(ctx context.Context, dir string) error {
 	if b.openFetchFresh(ctx) {
 		return nil // the open's own fetch just brought every head (openFetch)
 	}
-	return b.runFetch(ctx, dir, "fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", "--", RemoteName, headsRefspec)
+	return b.runFetch(ctx, dir, "fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", "--", RemoteName, headsRefspec, layerRefspec, layerTrashRefspec)
 }
 
 // runFetch runs one git fetch (args are the whole command line) and maps
@@ -697,7 +697,7 @@ func (b *Backend) openFetch(ctx context.Context, dir string) (head string, err e
 		return DefaultBranch, ferr // refused earlier in this scope: no second connection
 	}
 	remote := "remote." + RemoteName + "."
-	err = b.runFetch(ctx, dir, "-c", remote+"followRemoteHEAD=always", "-c", remote+"fetch="+headsRefspec, "-c", remote+"fetch="+liveRefspec,
+	err = b.runFetch(ctx, dir, "-c", remote+"followRemoteHEAD=always", "-c", remote+"fetch="+headsRefspec, "-c", remote+"fetch="+liveRefspec, "-c", remote+"fetch="+layerRefspec, "-c", remote+"fetch="+layerTrashRefspec,
 		"fetch", "--quiet", "--no-tags", "--prune", "--no-write-fetch-head", RemoteName)
 	if err != nil {
 		if isOffline(err) {

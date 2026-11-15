@@ -168,6 +168,11 @@ func liveRequest(ctx context.Context, s *liveSession) rowroute.Request {
 		req.Choice, req.ChoiceTable = rowroute.ChoiceNoLive, string(c.Table)
 	case store.LiveDefault:
 	}
+	// BRANCH_LAYERS 4 (code-repo mode): on an isolated code branch a new
+	// row of a live kind stays with the code; --no-layer keeps today's.
+	if f := s.h.cfg.BranchIsolated; f != nil && !store.NoLayer(ctx) {
+		req.Isolated = f(ctx)
+	}
 	return req
 }
 

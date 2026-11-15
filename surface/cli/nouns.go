@@ -59,6 +59,7 @@ func nounDocs() map[string]NounDoc {
 		"behaviour":       {Short: "Manage behaviours"},
 		"cache":           {Short: "Maintain lore's caches outside the checkout (" + lorehome.Shown() + "/cache, " + lorehome.Shown() + "/render)"},
 		"check":           {Short: "Leak checks: internal or personal content must never reach the client"},
+		"branch":          {Short: "Notes a code branch keeps to itself until it merges (branch layers): list, land, drop, restore"},
 		"comment":         {Short: "Manage comments on entities"},
 		"commit":          {Short: "Show the entities linked to a git commit"},
 		"config":          {Short: "Get/set keys of " + lorehome.Shown() + "/config.yaml"},

@@ -187,8 +187,10 @@ func run(ctx context.Context, args []string) int {
 		HoldFinishLines: true, // the run's push/landing lines follow the result (flushed after Execute)
 		RepoAddresses:   func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
 		// FLAG4: live commits fall back to the lore identity, as store commits do.
-		Signer:     func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
-		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
+		Signer: func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
+		// BRANCH_LAYERS 4: code-repo mode, new live-kind rows on an isolated branch stay with the code.
+		BranchIsolated: func(ctx context.Context) bool { return app.RepoBranchIsolated(ctx) },
+		MetaStatus:     func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
 		// F-9: a removed person's later writes stay local, as in the store clones.
 		PushHold: func(ctx context.Context) (time.Time, string, bool) { return app.LivePushHold(ctx) },
 		// J-11: a link of a client repo with no .lore/ installs the leak guard there.

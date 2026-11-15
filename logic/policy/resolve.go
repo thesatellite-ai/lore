@@ -288,6 +288,20 @@ func weightRange(c int64) string {
 	return " from -" + n + " to " + n
 }
 
+// Flag returns a ShapeFlag key's value; ok is false when it is unset (and
+// has no default) or k is not a flag key.
+func (s Set) Flag(k Key) (bool, bool) {
+	e, ok := s.m[k]
+	if !ok || e.Value == nil {
+		return false, false
+	}
+	b, isBool := e.Value.(value.Bool)
+	if !isBool {
+		return false, false
+	}
+	return b.Bool(), true
+}
+
 // Text returns a ShapeText key's value; ok is false when it is unset (and
 // has no default) or k is not a text key.
 func (s Set) Text(k Key) (string, bool) {

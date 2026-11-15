@@ -325,6 +325,7 @@ func (s syncRows) syncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	// R-5/R-6/R-18: changes no one with authority made, read as their
 	// last accepted version, named here (rosterhold.go)
 	out.Lines = append(out.Lines, s.app.heldSyncLines(ctx)...)
+	out.Lines = append(out.Lines, res.Notes...) // branch layers landed or trashed (BRANCH_LAYERS 9, 10)
 	if serr == nil {
 		if f := opsrun.FlushOutbox(ctx, s.app); f.Written > 0 || f.Failed != "" {
 			if f.Failed != "" {

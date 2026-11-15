@@ -65,7 +65,27 @@ const (
 	// P2-RES-6: whole hours, a limit, the smaller is stricter).
 	KeyResourcesStaleAfter Key = "resources.stale_after"
 	KeyTrashRetentionDays  Key = "trash.retention_days"
-	KeyAgentsPersonOnly    Key = "agents.person_only"
+	// Branch layer keys (BRANCH_LAYERS 14): which code branches write to a
+	// layer of their own, set per project folder (--to <org>/<folder>).
+	// KeyBranchesLayers: layers on (true, the stricter value: isolation).
+	KeyBranchesLayers Key = "branches.layers"
+	// KeyBranchesDefaultMode: step 4, isolate (strictest) | share.
+	KeyBranchesDefaultMode Key = "branches.default_mode"
+	// KeyBranchesIsolate: step 2, glob patterns always isolated.
+	KeyBranchesIsolate Key = "branches.isolate"
+	// KeyBranchesMainLike: step 3, glob patterns that write to the shared
+	// notes (the code repo's default branch always does).
+	KeyBranchesMainLike Key = "branches.main_like"
+	// KeyBranchesIsolated / KeyBranchesShared: step 1, exact branch names
+	// `lore branch isolate|share` chose.
+	KeyBranchesIsolated Key = "branches.isolated"
+	KeyBranchesShared   Key = "branches.shared"
+	// KeyBranchesAutoLand: a detected merge lands on the next lore sync.
+	KeyBranchesAutoLand Key = "branches.auto_land"
+	// KeyBranchesOrphanDays: days an orphaned layer waits before lore sync
+	// moves it to the trash.
+	KeyBranchesOrphanDays Key = "branches.orphan_days"
+	KeyAgentsPersonOnly   Key = "agents.person_only"
 	// KeyAgentsMayManagePeople lets an agent run the team profile writes
 	// (actor edit, contacts, periods, offboard, rejoin, members, roles,
 	// contact types; TEAM_PROFILES 3.4, TS-4, TP-20). A flag, default
@@ -264,6 +284,9 @@ const (
 	AgentRevealAllow AgentReveal = "allow"
 )
 
+// defaultBranchesOrphanDays is branches.orphan_days' default (owner, 2026-11-14).
+const defaultBranchesOrphanDays = 14
+
 // DefaultTimeClientKey is time.client_key's default (TQ8).
 const DefaultTimeClientKey = "client"
 
@@ -390,6 +413,19 @@ func Keys() []KeyDef {
 		{Key: KeyResourcesStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultStaleAfterHours), Doc: "hours since a store's last fetch after which a resource write notes the store kinds' commit"},
 		{Key: KeyResourcesAllowedIn, Shape: ShapeAllow, Choices: AllowedInPlaces(), Default: mustTexts(AllowedInPlaces()...),
 			Doc: "where resources may live: store, repo, client; a lower level may only narrow"},
+		{Key: KeyBranchesLayers, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(true),
+			Doc: "branch layers on: writes on an isolated code branch stay with that branch until lore branch land"},
+		{Key: KeyBranchesDefaultMode, Shape: ShapeRank, Choices: []string{"isolate", "share"}, Default: mustText("isolate"),
+			Doc: "a code branch no exact choice and no pattern names: isolate (its own layer) or share (the shared notes)"},
+		{Key: KeyBranchesIsolate, Shape: ShapeSet, Default: mustList(), Doc: "glob patterns of code branches that always get their own layer"},
+		{Key: KeyBranchesMainLike, Shape: ShapeSet, Default: mustTexts("dev", "staging", "release/*"),
+			Doc: "glob patterns of code branches that write to the shared notes (the default branch always does)"},
+		{Key: KeyBranchesIsolated, Shape: ShapeSet, Default: mustList(), Doc: "code branches lore branch isolate chose (exact names)"},
+		{Key: KeyBranchesShared, Shape: ShapeSet, Default: mustList(), Doc: "code branches lore branch share chose (exact names)"},
+		{Key: KeyBranchesAutoLand, Shape: ShapeFlag, Strict: false, Default: value.BoolOf(false),
+			Doc: "a merge lore detects lands on the next lore sync without asking"},
+		{Key: KeyBranchesOrphanDays, Shape: ShapeLimit, Default: value.Int(defaultBranchesOrphanDays),
+			Doc: "days a layer of a branch deleted without merging waits before lore sync moves it to the trash"},
 		{Key: KeyTrashRetentionDays, Shape: ShapeLimit, Doc: "maximum days a deleted row stays in the trash; unset keeps forever"},
 		{Key: KeyTasksMaxDepth, Shape: ShapeLimit, Ceiling: ceilingTasksMaxDepth, Default: value.Int(defaultTasksMaxDepth),
 			Doc: "deepest sub-task nesting"},

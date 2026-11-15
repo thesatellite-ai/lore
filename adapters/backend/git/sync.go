@@ -213,6 +213,20 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		break
 	}
 	b.markHeld(rep.Refused)
+	if !rep.Offline && !o.NoPush && len(rep.Refused) == 0 {
+		// BRANCH_LAYERS 16: lore sync also sends this clone's branch
+		// layers (every folder of the store branch): one sync of a clone
+		// carries every folder, its layers included.
+		lr, lerr := b.layerPushLocked(ctx, b.branch+"/")
+		if lerr != nil {
+			return rep, lerr
+		}
+		rep.Offline = rep.Offline || lr.Offline
+		pushed = pushed || len(lr.Pushed) > 0
+		for _, r := range lr.Refused {
+			rep.Refused = append(rep.Refused, store.Refusal{Code: errs.Refused, Reason: "branch notes not pushed: " + r})
+		}
+	}
 	return b.count(ctx, rep, before, pushedOver, pushed)
 }
 

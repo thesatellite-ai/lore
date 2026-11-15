@@ -44,6 +44,7 @@ var auditListSetups = map[string]func(h *opstest.H) (map[string]string, string){
 // or the plural rule) and take --created-by/--updated-by.
 var auditNoTable = map[string]string{
 	"batch.list":          "lists delete batches, a view over the trash of every table",
+	"branch.list":         "lists branch layers (hidden refs of a store clone), not rows",
 	"config.list":         "lists ~/.lore/config.yaml settings, not rows",
 	"machine.path.list":   "lists where lore keeps its own files on this machine, not rows",
 	"member.list":         "lists people: actor rows joined with their contacts, stints and teams (actor list takes the writer filters on actor rows)",
