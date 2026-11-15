@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -163,7 +164,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
 	}
 	s.doctorHooks(ctx, branch, fix, warn, note)
-	if g := s.doctorGuard(ctx); len(g) > 0 {
+	if g := s.doctorGuard(ctx, branch); len(g) > 0 {
 		// H-18: the leak guard being off is what a person must read
 		// first, before rows riding along or fetch times
 		base.Warnings = append(g, base.Warnings...)
@@ -325,7 +326,7 @@ func (s *liveSession) clientHooksInWorkTree(ctx context.Context, dir string) boo
 // found. Nil when the guard is in place, in a fresh clone (the set-up
 // note covers it), in a client repo whose hooks are tracked files lore
 // never changes (doctorHooks says so), and on the 0.1.17 format.
-func (s *liveSession) doctorGuard(ctx context.Context) []string {
+func (s *liveSession) doctorGuard(ctx context.Context, branch string) []string {
 	dir, _, err := s.hooksFolder(ctx)
 	if err != nil {
 		return nil
@@ -334,7 +335,20 @@ func (s *liveSession) doctorGuard(ctx context.Context) []string {
 	if len(missing) == 0 {
 		return nil
 	}
-	out := []string{liveDoctorPrefix + s.guardOffText(ctx, dir, missing) + s.guardNextStep(ctx)}
+	line := s.guardOffText(ctx, dir, missing)
+	// devco:D-326: doctorHooks leaves the missing ride-along blocks to this
+	// line (Q-16, one line per cause), so it names the ones that are no
+	// guard hook (post-commit) too; they were left unreported.
+	var rideOnly []string
+	for _, h := range missingRideHooks(dir) {
+		if !slices.Contains(missing, h) {
+			rideOnly = append(rideOnly, h)
+		}
+	}
+	if len(rideOnly) > 0 {
+		line += "; the " + strings.Join(rideOnly, ", ") + " hook block is missing too, so rows cannot ride along on a protected " + branch
+	}
+	out := []string{liveDoctorPrefix + line + s.guardNextStep(ctx)}
 	if found := s.unguardedLeaks(ctx); found != "" {
 		out = append(out, liveDoctorPrefix+found)
 	}

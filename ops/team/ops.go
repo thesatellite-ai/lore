@@ -138,8 +138,11 @@ func adminSetup(ctx context.Context, env Env) (onboard.SetupEntry, error) {
 	}
 	if e.Kind != onboard.KindAdmin || e.Org == "" {
 		// a member or solo setup in a repo of an org the caller is the
-		// admin of (the setup came before org create): act as that admin
-		if a, ok := orgAdminHere(ctx, env); ok && (e.Org == "" || e.Org == a.Org) {
+		// admin of (the setup came before org create): act as that admin.
+		// A setup named with --setup is the person's choice for this run
+		// and is kept: `--setup personal team invite` stays refused
+		// (devco:D-327); P-5's fallback is for a setup lore picked.
+		if a, ok := orgAdminHere(ctx, env); ok && act.Why != setup.WhyFlag && (e.Org == "" || e.Org == a.Org) {
 			return a, nil
 		}
 		return onboard.SetupEntry{}, errs.New(errs.Refused, "setup "+e.Name+" is a "+string(e.Kind)+" setup; people are added and invited from an admin setup of the org").

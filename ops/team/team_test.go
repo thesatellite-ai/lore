@@ -57,13 +57,19 @@ type fakeSetups struct {
 	setup.Store
 	active string
 	cfg    onboard.Config
+	// why is how the active setup was picked; empty is --setup (WhyFlag).
+	why string
 }
 
 func (s fakeSetups) Active(context.Context, string) (setup.ActiveSetup, error) {
 	if s.active == "" {
 		return setup.ActiveSetup{Why: setup.WhyNone}, nil
 	}
-	return setup.ActiveSetup{Name: s.active, Why: setup.WhyFlag}, nil
+	why := s.why
+	if why == "" {
+		why = setup.WhyFlag
+	}
+	return setup.ActiveSetup{Name: s.active, Why: why}, nil
 }
 func (s fakeSetups) Config(context.Context) (onboard.Config, error) { return s.cfg, nil }
 

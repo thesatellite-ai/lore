@@ -406,7 +406,49 @@ func openMember(ctx context.Context, env Env, write bool, project string, actor 
 	if err != nil {
 		return memberCtx{}, done, err
 	}
+	if write {
+		if err := requireAdminOrLead(ctx, r, p, all); err != nil {
+			return memberCtx{}, done, err
+		}
+	}
 	return memberCtx{r: r, project: p, actor: a, all: all, stints: stintsOf(all, p.ID.String(), a.ID.String())}, done, nil
+}
+
+// orgRoleAdmin is the org_role of an admin's stint (ops/team OrgRoleAdmin).
+const orgRoleAdmin = "admin"
+
+// requireAdminOrLead refuses a membership change by a caller who is
+// neither an admin of the org nor a lead of project (devco D-328): every
+// teammate's lore holds back such a change on read (adapters/backend/git
+// authority.go), whoever's membership it is, so it would only be refused
+// later, on everyone's machine. A roster with no admin stint at all (a
+// personal store, an org from before org roles) refuses nobody.
+func requireAdminOrLead(ctx context.Context, r profilestore.Roster, p Project, all []membership) error {
+	periods, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return err
+	}
+	caller := r.Caller().String()
+	anyAdmin := false
+	for _, x := range periods {
+		if x.Deleted || fieldText(x, schema.FieldPeriodEndedOn) != "" || fieldText(x, schema.FieldPeriodOrgRole) != orgRoleAdmin {
+			continue
+		}
+		if fieldText(x, schema.FieldPeriodActor) == caller {
+			return nil
+		}
+		anyAdmin = true
+	}
+	if !anyAdmin {
+		return nil
+	}
+	for _, m := range all {
+		if m.Project == p.ID.String() && m.Actor == caller && m.EndedOn.IsZero() && slices.Contains(m.Roles, teamprofile.RoleLead) {
+			return nil
+		}
+	}
+	return errs.New(errs.Refused, "only an admin of the org or a lead of "+p.Shown()+" can change who is on it, and you are neither on "+r.Where()+"'s roster; nothing was written").
+		WithHint("ask an admin of the org or a lead of the project to run it, e.g. lore project member add " + p.Shown() + " <@handle> --role <role>")
 }
 
 func memberAdd(ctx context.Context, env Env, in MemberAddIn) (MemberWriteOut, error) {

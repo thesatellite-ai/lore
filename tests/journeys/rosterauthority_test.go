@@ -12,6 +12,8 @@ package journeys
 import (
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 func TestJourneyRosterAuthority(t *testing.T) {
@@ -59,5 +61,34 @@ func TestJourneyRosterAuthority(t *testing.T) {
 		tt.lore(tlLee, "sync").OK(t).Says(t, "held back in", "commit "+short+" by "+tlAnn.Email, "makes its author an admin and the author is not an admin", "the hold ends")
 		tt.lore(tlLee, "member", "list").OK(t).Never(t, "admin   @ann")
 		tt.lore(tlLee, "member", "show", tlAnn.Email, "--history").OK(t).Says(t, "roster fix", "[held back]")
+	})
+
+	// devco D-328: who is on a project is changed by an admin or the
+	// project's lead only, a person's own membership included.
+	w.Step("day1/a-self-made-membership-is-held", func() {
+		ann := tt.m[tlAnn.Email]
+		hand := ann.Clone(tt.store, "hand-member")
+		projects := strings.Fields(hand.Git("ls-files", "--", "*/projects/prj_*.json"))
+		if len(projects) == 0 {
+			t.Fatal("no project row in the store")
+		}
+		prj := strings.TrimSuffix(projects[0][strings.LastIndex(projects[0], "/")+1:], ".json")
+		tt.lore(tlAnn, "project", "member", "add", prj, "@ann", "--role", "lead").Refused(t).
+			Says(t, "only an admin of the org or a lead of", "nothing was written", "lore project member add")
+		annID := tt.roster(t, tlLee)["human:"+tlAnn.Email].ID
+		pm, err := ids.New[ids.ProjectMember]()
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := projects[0][:strings.Index(projects[0], "/projects/")]
+		hand.WriteFile(dir+"/project_members/"+pm.String()+".json", `{"_table":"project_members","_v":2,"_hlc":"2026-11-15T00:00:00.000Z/0000/`+annID+
+			`","id":"`+pm.String()+`","actor_id":"`+annID+`","project_id":"`+prj+`","roles":["lead"],"started_on":"2026-11-15","created_by":"`+annID+
+			`","updated_by":"`+annID+`"}`+"\n")
+		hand.Git("add", "-A")
+		hand.Git("commit", "-q", "--no-verify", "-m", "membership")
+		hand.Git("push", "-q", "origin", "HEAD")
+		short := hand.Git("rev-parse", "--short=7", "HEAD")
+		tt.lore(tlLee, "sync").OK(t).Says(t, "held back in", "project_members "+pm.String(), "commit "+short+" by "+tlAnn.Email,
+			"changes who is on a project", "neither an admin nor a lead of that project")
 	})
 }

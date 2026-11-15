@@ -23,3 +23,22 @@ func TestPlaceCRLFKeepsFile(t *testing.T) {
 		t.Fatalf("changed block in a CRLF file: %q", got)
 	}
 }
+
+// TestPlaceCRLFAndBOM is devco:D-326: a CRLF file with a byte-order mark
+// gets the block in CRLF (never LF lines in a CRLF file: git warns on a
+// mixed one) after the mark, which stays the file's first bytes; a second
+// place changes nothing.
+func TestPlaceCRLFAndBOM(t *testing.T) {
+	p := Profile{Name: "agents", PointerFile: "AGENTS.md", Import: ImportRead}
+	link := Link{FromPointer: ".lore/LORE.md", FromRoot: ".lore/LORE.md"}
+	crlf := func(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+	in := "\ufeffBOM file\r\nwindows line\r\n"
+	want := "\ufeff" + crlf(p.PointerBlock(link)+"\nBOM file\nwindows line\n")
+	got := p.StitchPointer(in, link)
+	if got != want {
+		t.Fatalf("CRLF file with a BOM:\n%q\nwant\n%q", got, want)
+	}
+	if again := p.StitchPointer(got, link); again != got {
+		t.Fatalf("a second place changed it:\n%q", again)
+	}
+}
