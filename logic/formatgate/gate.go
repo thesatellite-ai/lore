@@ -33,10 +33,17 @@ const (
 	Refs         = "refs"
 	Vars         = "vars"
 	PersonalFlat = "personal_flat"
+	// BranchLayers: the folder has branch layers (BRANCH_LAYERS 15): a
+	// lore that does not know it must not write there, or a feature-branch
+	// note would land in the real notes.
+	BranchLayers = "branch_layers"
 )
 
 // since018 is the release that introduced the 0.1.18 features.
 const since018 = "0.1.18"
+
+// since019 is the release that introduced branch layers.
+const since019 = "0.1.19"
 
 // known is every feature this binary understands (plus the test step's in
 // a loretest_format build). A declared name missing here makes the project
@@ -58,6 +65,7 @@ var releaseFeatures = []Feature{
 	{Name: Refs, Since: since018},
 	{Name: Vars, Since: since018},
 	{Name: PersonalFlat, Since: since018},
+	{Name: BranchLayers, Since: since019},
 }
 
 // Known returns a copy of the features this binary understands.

@@ -57,6 +57,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckUntrustedHost, a.DoctorUntrustedHost},
 		{DoctorCheckStoreTrust, a.DoctorStoreTrust}, // storetrust.go (devco R-2, R-7, R-9)
 		{DoctorCheckTrash, a.DoctorTrash},
+		{DoctorCheckBranchLayers, a.DoctorBranchLayers}, // branchlayer_doctor.go (BRANCH_LAYERS 10, 12)
 		{DoctorCheckSharedMachine, a.DoctorSharedMachines},
 		{DoctorCheckTeamVersions, a.DoctorTeamVersions},
 		{DoctorCheckCombinedCache, a.DoctorCombinedCache},

@@ -16,6 +16,7 @@ package wire
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +40,10 @@ type Written struct {
 	// "wrote <file>" for a file the write did not touch sent the person
 	// to commit an unchanged file).
 	Live string
+	// Layer is the code branch whose notes (a branch layer) the row went
+	// to instead of File, with the folder ("feat/x notes of app"); "" when
+	// none (BRANCH_LAYERS 7).
+	Layer string
 	// key is "table/id", matching NoteLiveWrite's records.
 	key string
 }
@@ -50,14 +55,21 @@ type WriteLog struct {
 	seen  map[Written]bool
 	// live maps "table/id" to the live ref a row of this command went to.
 	live map[string]string
+	// layer maps "table/id" to the branch layer a row went to.
+	layer map[string]layerWrite
+	// declared lists folders a first layer declared branch_layers in.
+	declared []string
 }
+
+// layerWrite is one row written to a branch layer.
+type layerWrite struct{ branch, folder string }
 
 // writeLogKey carries the log on a context.
 type writeLogKey struct{}
 
 // WithWriteLog returns ctx with a new WriteLog and the log.
 func WithWriteLog(ctx context.Context) (context.Context, *WriteLog) {
-	l := &WriteLog{seen: map[Written]bool{}, live: map[string]string{}}
+	l := &WriteLog{seen: map[Written]bool{}, live: map[string]string{}, layer: map[string]layerWrite{}}
 	return context.WithValue(ctx, writeLogKey{}, l), l
 }
 
@@ -79,6 +91,39 @@ func NoteLiveWrite(ctx context.Context, table row.Table, id string, ref string) 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.live[string(table)+"/"+id] = ref
+}
+
+// NoteLayerWrite records that the row table/id went to the branch layer
+// of code branch branch in store folder folder (wire branchlayer.go).
+func NoteLayerWrite(ctx context.Context, table row.Table, id, branch, folder string) {
+	l := writeLogOf(ctx)
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.layer[string(table)+"/"+id] = layerWrite{branch: branch, folder: folder}
+}
+
+// NoteLayerDeclared records that a first layer declared the format
+// feature branch_layers in folder (one commit on the store branch).
+func NoteLayerDeclared(ctx context.Context, folder string) {
+	l := writeLogOf(ctx)
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !slices.Contains(l.declared, folder) {
+		l.declared = append(l.declared, folder)
+	}
+}
+
+// Declared are the folders whose first branch layer this command made.
+func (l *WriteLog) Declared() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.declared...)
 }
 
 // add records w once.
@@ -103,6 +148,10 @@ func (l *WriteLog) Files() []Written {
 	for i := range out {
 		out[i].File = currentRowFile(out[i].File)
 		out[i].Live = l.live[out[i].key]
+		if lw, ok := l.layer[out[i].key]; ok {
+			out[i].Layer = lw.branch + " notes of " + lw.folder
+			out[i].Live = ""
+		}
 	}
 	return out
 }
@@ -149,6 +198,10 @@ func WrittenLines(files []Written) []string {
 	if len(files) <= WrittenShowAll {
 		out := make([]string, 0, len(files))
 		for _, f := range files {
+			if f.Layer != "" {
+				out = append(out, layerWrittenLine(f))
+				continue
+			}
 			if f.Live != "" {
 				out = append(out, liveWrittenLine(f))
 				continue
@@ -161,12 +214,12 @@ func WrittenLines(files []Written) []string {
 		}
 		return out
 	}
-	type group struct{ store, dir, live string }
+	type group struct{ store, dir, live, layer string }
 	counts := map[group]int{}
 	var order []group
 	for _, f := range files {
-		g := group{store: f.Store, live: f.Live}
-		if f.File != "" && f.Live == "" {
+		g := group{store: f.Store, live: f.Live, layer: f.Layer}
+		if f.File != "" && f.Live == "" && f.Layer == "" {
 			g.dir = filepath.Dir(filepath.Dir(f.File)) // <folder data>/<table>/<id>.json → the folder's data
 		}
 		if counts[g] == 0 {
@@ -178,6 +231,10 @@ func WrittenLines(files []Written) []string {
 	out := make([]string, 0, len(order))
 	for _, g := range order {
 		n := counts[g]
+		if g.layer != "" {
+			out = append(out, "lore: wrote "+strconv.Itoa(n)+" row(s) to the "+g.layer+storeSuffix(g.store)+" (not shared with the default branch; lore branch land when the branch merges)")
+			continue
+		}
 		if g.live != "" {
 			out = append(out, "lore: wrote "+strconv.Itoa(n)+" live row(s) on this clone's "+g.live+storeSuffix(g.store)+" (not pushed yet; their files are unchanged)")
 			continue
@@ -189,6 +246,11 @@ func WrittenLines(files []Written) []string {
 		out = append(out, "lore: wrote "+strconv.Itoa(n)+" row file(s) in "+g.dir+storeSuffix(g.store))
 	}
 	return out
+}
+
+// layerWrittenLine is the line of one row written to a branch layer.
+func layerWrittenLine(f Written) string {
+	return "lore: wrote " + f.key + " to the " + f.Layer + storeSuffix(f.Store) + " (not shared with the default branch; lore branch land when the branch merges)"
 }
 
 // liveWrittenLine is the line of one row written to the local live ref:

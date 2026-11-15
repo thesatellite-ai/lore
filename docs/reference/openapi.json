@@ -8070,6 +8070,1887 @@
         }
       }
     },
+    "/v1/branch": {
+      "get": {
+        "operationId": "branch.list",
+        "summary": "List the notes code branches keep to themselves in this project's store folder (branch layers)",
+        "tags": [
+          "branch"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          },
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "every code repo linked to the project folder, not only this one",
+            "schema": {
+              "type": "boolean",
+              "description": "every code repo linked to the project folder, not only this one"
+            }
+          },
+          {
+            "name": "trash",
+            "in": "query",
+            "required": false,
+            "description": "also list dropped and landed notes kept in the trash",
+            "schema": {
+              "type": "boolean",
+              "description": "also list dropped and landed notes kept in the trash"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "layers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "age": {
+                            "type": "string"
+                          },
+                          "branch": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "rows": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "count": {
+                                  "type": "integer"
+                                },
+                                "table": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "table",
+                                "count"
+                              ]
+                            }
+                          },
+                          "started": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "tip": {
+                            "type": "string"
+                          },
+                          "trash": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "repo",
+                          "folder",
+                          "state",
+                          "rows",
+                          "tip"
+                        ]
+                      }
+                    },
+                    "store": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "store",
+                    "folder",
+                    "layers",
+                    "count"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/adopt": {
+      "post": {
+        "operationId": "branch.adopt",
+        "summary": "Move the shared rows born on a code branch (before branch layers) into that branch's own notes",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "move the shared rows born on this code branch into its notes (required)"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "list the rows; change nothing"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/drop": {
+      "post": {
+        "operationId": "branch.drop",
+        "summary": "Move a code branch's own notes to the trash without landing them",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "the code branch whose notes go to the trash (required)"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "show what would be dropped; change nothing"
+                  }
+                },
+                "required": [
+                  "branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/install_action": {
+      "post": {
+        "operationId": "branch.install_action",
+        "summary": "Add the GitHub workflow that lands a branch's notes when its pull request merges (asks first)",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "print the workflow; write nothing"
+                  },
+                  "force": {
+                    "type": "boolean",
+                    "description": "overwrite a workflow file lore did not write"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/isolate": {
+      "post": {
+        "operationId": "branch.isolate",
+        "summary": "Make a code branch keep its own notes, for everyone in this project folder",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "the code branch (required)"
+                  },
+                  "undo": {
+                    "type": "boolean",
+                    "description": "remove this choice again"
+                  }
+                },
+                "required": [
+                  "branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_POLICY_DENIED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/land": {
+      "post": {
+        "operationId": "branch.land",
+        "summary": "Squash a code branch's own notes into the shared notes as one commit and push it (after the branch merged)",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "the code branch whose notes land (required)"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "list what would land; change and push nothing"
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "the project folder in the store (with --store)"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "description": "the rows --take settles",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "into": {
+                    "type": "string",
+                    "description": "land into the notes of this branch (a stacked branch merged into its parent) instead of the shared notes"
+                  },
+                  "kinds": {
+                    "type": "array",
+                    "description": "land only rows of these tables (tasks,memories); the rest stay with the branch",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "pr": {
+                    "type": "integer",
+                    "description": "the pull request number, named in the landing commit"
+                  },
+                  "repo": {
+                    "type": "string",
+                    "description": "the code repo's address, e.g. github.com/acme/app (with --store)"
+                  },
+                  "review": {
+                    "type": "boolean",
+                    "description": "ask keep or drop for every row first (a terminal only); dropped rows go to the trash with the branch's notes"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "the store's url, for CI where no config links the repo (with --folder and --repo)"
+                  },
+                  "take": {
+                    "type": "string",
+                    "description": "branch or main: the side kept for the rows --ids names, when both changed the same text"
+                  }
+                },
+                "required": [
+                  "branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "already_landed": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "commit": {
+                      "type": "string"
+                    },
+                    "dropped": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "count"
+                        ]
+                      }
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "into": {
+                      "type": "string"
+                    },
+                    "kept": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "count"
+                        ]
+                      }
+                    },
+                    "merged": {
+                      "type": "integer"
+                    },
+                    "nothing": {
+                      "type": "boolean"
+                    },
+                    "pushed": {
+                      "type": "boolean"
+                    },
+                    "rebased": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "count"
+                        ]
+                      }
+                    },
+                    "store_branch": {
+                      "type": "string"
+                    },
+                    "trash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "branch",
+                    "folder",
+                    "rows",
+                    "store_branch"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_LAND_CONFLICT, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/mode": {
+      "post": {
+        "operationId": "branch.mode",
+        "summary": "Say whether a code branch keeps its own notes (isolated) or writes to the shared notes, and which rule decided",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "a code branch name (default: the one checked out)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "branch": {
+                      "type": "string"
+                    },
+                    "folder": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "repo": {
+                      "type": "string"
+                    },
+                    "step": {
+                      "type": "integer"
+                    },
+                    "store": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "branch",
+                    "repo",
+                    "folder",
+                    "store",
+                    "mode",
+                    "step",
+                    "why"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/promote": {
+      "post": {
+        "operationId": "branch.promote",
+        "summary": "Put rows of this branch's own notes into the shared notes now (an urgent rule)",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "description": "row ids of this branch's notes to put in the shared notes now (comma separated or repeated)",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_LAND_CONFLICT, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/purge": {
+      "post": {
+        "operationId": "branch.purge",
+        "summary": "Delete trashed branch notes for good",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "purge every trashed copy of this branch's notes"
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "description": "required: purged notes cannot come back"
+                  },
+                  "older_than": {
+                    "type": "string",
+                    "description": "purge every trashed copy older than this (90d, 720h)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "purged": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "purged"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/rename": {
+      "post": {
+        "operationId": "branch.rename",
+        "summary": "Move a code branch's notes to its new name after git branch -m",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "description": "the old code branch name whose notes move (required)"
+                  },
+                  "to_branch": {
+                    "type": "string",
+                    "description": "the new code branch name (required)"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to_branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_NAME_TAKEN, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/restore": {
+      "post": {
+        "operationId": "branch.restore",
+        "summary": "Bring a code branch's dropped or landed notes back from the trash",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "at": {
+                    "type": "string",
+                    "description": "the trash stamp to restore (20261120T091200Z; default: the newest)"
+                  },
+                  "branch": {
+                    "type": "string",
+                    "description": "the code branch whose notes come back from the trash (required)"
+                  },
+                  "revert": {
+                    "type": "boolean",
+                    "description": "also add a commit that reverts the landing of these notes on the store branch (pushed)"
+                  }
+                },
+                "required": [
+                  "branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_LAND_CONFLICT, E_NAME_TAKEN, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/share": {
+      "post": {
+        "operationId": "branch.share",
+        "summary": "Make a code branch write to the shared notes, for everyone in this project folder",
+        "tags": [
+          "branch"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "description": "the code branch (required)"
+                  },
+                  "undo": {
+                    "type": "boolean",
+                    "description": "remove this choice again"
+                  }
+                },
+                "required": [
+                  "branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_CONTENDED, E_POLICY_DENIED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/branch/show": {
+      "get": {
+        "operationId": "branch.show",
+        "summary": "Show one code branch's own notes: its rows, where it started, who started it",
+        "tags": [
+          "branch"
+        ],
+        "parameters": [
+          {
+            "name": "branch",
+            "in": "query",
+            "required": false,
+            "description": "the code branch (default: the one checked out)",
+            "schema": {
+              "type": "string",
+              "description": "the code branch (default: the one checked out)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base": {
+                      "type": "string"
+                    },
+                    "code_head": {
+                      "type": "string"
+                    },
+                    "layer": {
+                      "type": "object",
+                      "properties": {
+                        "age": {
+                          "type": "string"
+                        },
+                        "branch": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        },
+                        "repo": {
+                          "type": "string"
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "count": {
+                                "type": "integer"
+                              },
+                              "table": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "table",
+                              "count"
+                            ]
+                          }
+                        },
+                        "started": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "tip": {
+                          "type": "string"
+                        },
+                        "trash": {
+                          "type": "string"
+                        },
+                        "why": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "branch",
+                        "repo",
+                        "folder",
+                        "state",
+                        "rows",
+                        "tip"
+                      ]
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "deleted": {
+                            "type": "boolean"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id"
+                        ]
+                      }
+                    },
+                    "split": {
+                      "type": "string"
+                    },
+                    "started_by": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "layer",
+                    "base",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/cache/prune": {
       "post": {
         "operationId": "cache.prune",
@@ -28402,6 +30283,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "no_live": {
                     "type": "boolean",
                     "description": "keep this row with the code (this branch's .lore/data)"
@@ -29665,6 +31550,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "no_live": {
                     "type": "boolean",
@@ -64147,6 +66036,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "no_live": {
                     "type": "boolean",
                     "description": "keep this row with the code (this branch's .lore/data)"
@@ -65414,6 +67307,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "no_live": {
                     "type": "boolean",
@@ -96311,6 +98208,10 @@
                     "type": "string",
                     "description": "attach to mission_id (msn_*)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "no_live": {
                     "type": "boolean",
                     "description": "keep this row with the code (this branch's .lore/data)"
@@ -96642,6 +98543,10 @@
                   "mission": {
                     "type": "string",
                     "description": "mission_id (msn_*) to attach to"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "no_live": {
                     "type": "boolean",
@@ -101569,6 +103474,10 @@
                   "mission": {
                     "type": "string",
                     "description": "attach to mission_id (msn_*)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "no_live": {
                     "type": "boolean",

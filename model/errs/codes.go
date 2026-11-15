@@ -183,6 +183,18 @@ const (
 	// project still on an older format (decision D13: only lore migrate
 	// run raises a project's format).
 	FormatOld Code = "E_FORMAT_OLD"
+	// Detached refuses a write meant for a branch layer while the code
+	// repo's HEAD is detached (CI, bisect): there is no code branch to file
+	// it under (BRANCH_LAYERS 5, step 0).
+	Detached Code = "E_DETACHED"
+	// LandConflict stops `lore branch land` (or a layer merge) when the
+	// branch and the store branch changed the same free text of one row:
+	// nothing is committed, the layer is untouched (BRANCH_LAYERS 9).
+	LandConflict Code = "E_LAND_CONFLICT"
+	// LayerStale refuses a write on a code branch whose open layer belongs
+	// to an older branch of the same name (its split commit is not in this
+	// branch): the old layer is landed or dropped first (BRANCH_LAYERS 7).
+	LayerStale Code = "E_LAYER_STALE"
 	// PushAgain stops a `git push` once because lore's pre-push hook added
 	// a commit to the pushed branch (rows that finished in live land with
 	// the person's push): nothing is wrong with the input, the same push
@@ -440,6 +452,9 @@ var table = map[Code]entry{
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	PortInUse:             {class: ClassRefused, desc: "the --port is held by another program (or another lore api / setup page); pick another --port, or --port 0 for a free one"},
 	PushAgain:             {class: ClassRefused, desc: "lore's pre-push hook added a commit of finished live rows to the branch being pushed, so this push stopped once; run the same git push again (it sends that commit too)"},
+	Detached:              {class: ClassRefused, desc: "the code repo's HEAD is detached, so a write meant for a branch layer has no code branch; check out a branch, or write to the real notes with --no-layer (LORE_LAYER=off)"},
+	LandConflict:          {class: ClassRefused, desc: "the branch and the store branch changed the same text of a row; nothing was landed; settle the rows named, then land again"},
+	LayerStale:            {class: ClassRefused, desc: "an open branch layer of that name belongs to an older branch (a reused name); land or drop it first (lore branch land|drop --branch <b>)"},
 	FormatOld:             {class: ClassMigrate, desc: "the project is on an older lore format; only lore migrate run upgrades it, and this lore writes nothing there until then"},
 	MigrateRollbackLoses:  {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
 	URLUserinfo:           {class: ClassBadInput, desc: "a URL value holds credentials"},

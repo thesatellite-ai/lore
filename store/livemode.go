@@ -93,3 +93,19 @@ func SupportingRefreshFrom(ctx context.Context) bool {
 	v, _ := ctx.Value(supportingRefreshKey{}).(bool)
 	return v
 }
+
+// noLayerKey carries a write's --no-layer choice (BRANCH_LAYERS 13).
+type noLayerKey struct{}
+
+// WithNoLayer marks ctx: the write goes to the shared notes even on a code
+// branch that has a layer of its own (--no-layer, LORE_LAYER=off). A
+// backend without layers ignores it.
+func WithNoLayer(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noLayerKey{}, true)
+}
+
+// NoLayer reports whether ctx carries --no-layer.
+func NoLayer(ctx context.Context) bool {
+	v, _ := ctx.Value(noLayerKey{}).(bool)
+	return v
+}

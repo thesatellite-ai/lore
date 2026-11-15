@@ -245,3 +245,16 @@ func unreadableDoc(rel string, doc []byte) error {
 	}
 	return formatgate.Unreadable(rel, "not a JSON object")
 }
+
+// RaiseFeatures adds need to the folder's declaration outside a write
+// batch (branch layers: a store folder's first layer declares
+// branch_layers on the store branch before any layer commit,
+// BRANCH_LAYERS 15). It returns the store path of the _meta.json it
+// changed, "" when nothing changed or the folder has no _meta.json.
+func (f *Folder) RaiseFeatures(need []string) (string, error) {
+	added, err := f.raise(nil, need)
+	if err != nil || len(added) == 0 {
+		return "", err
+	}
+	return f.storePath(MetaFileName), nil
+}

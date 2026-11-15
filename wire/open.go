@@ -174,6 +174,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			}
 		}
 	}
+	// BRANCH_LAYERS 7, 8: a project folder of a git store reads and writes
+	// the layer of the checkout's code branch when that branch is isolated
+	// (branchlayer.go); the code repo is asked once, only when such a
+	// folder is attached.
+	wrapLayers(ctx, st, attached)
 	// D16 (formatold.go): a shared store still on lore 0.1.17's layout is
 	// read, never written in the new format, until lore migrate run
 	for i := range attached {
@@ -893,6 +898,9 @@ func cachePath(home string, o attach.Opened) (string, error) {
 		name = clean
 	}
 	dir := filepath.Join(writableHome(home), cacheDir, cacheStoresDir, id, filepath.FromSlash(branch))
+	if sub := layerCacheDirOf(o.Backend); sub != "" {
+		dir = filepath.Join(dir, filepath.FromSlash(sub)) // BRANCH_LAYERS 6.3: one cache per layer
+	}
 	path := filepath.Join(dir, filepath.FromSlash(name)+cacheExt)
 	if err := mkCacheDir(filepath.Dir(path)); err != nil {
 		return "", err

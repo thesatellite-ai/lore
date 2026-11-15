@@ -60,6 +60,11 @@ const HookLive = "live"
 
 // LiveConfig configures LiveHook.
 type LiveConfig struct {
+	// BranchIsolated reports whether the checkout is on an isolated code
+	// branch (branch layers, code-repo mode: BRANCH_LAYERS 4): new rows of
+	// live kinds then stay with the code. cmd/lore passes
+	// wire.App.RepoBranchIsolated; nil keeps every branch shared.
+	BranchIsolated func(ctx context.Context) bool
 	// Home is the lore home (~/.lore), where config.yaml lives.
 	Home string
 	// WorkDir is the folder commands run in (the project is found from it).

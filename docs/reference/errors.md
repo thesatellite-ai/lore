@@ -214,6 +214,9 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_28f8…03df (memories.project_id),
 | `E_STORE_READ_ONLY` | 23 | a write to a store this repo attaches read-only, or to the repo store of a client repo linked by its remote (no `.lore/` of its own: lore writes nothing into it; the message names the repo's remote) | write to another place with `--to` (in a linked client repo the hint names the linked folder's `--to`), or attach the store without read-only |
 | `E_STORE_LOCKED` | 23 | another lore process kept the store lock past `store.lock_timeout` | wait and run the command again |
 | `E_STORE_BACKEND` | 23 | a store's settings and its backend do not fit. Not raised by the 0.1.18 core | check the store entry in `.lore/stores.yaml` |
+| `E_DETACHED` | 23 | a write meant for a branch layer ran while the code repo's HEAD is detached (a CI checkout, a bisect), so there is no code branch to keep it with | check out a branch, or write to the shared notes with `--no-layer` (`LORE_LAYER=off`) |
+| `E_LAND_CONFLICT` | 23 | `lore branch land` found the same text of a row changed on the branch and on the store branch; nothing was landed | edit one side so they agree (or drop the row from the branch), then land again |
+| `E_LAYER_STALE` | 23 | the open branch notes of that name belong to an older branch with the same name | land or drop the old notes first: `lore branch land --branch <b>` or `lore branch drop --branch <b>` |
 
 `lore store set` and `lore store compact` (push modes and history compaction, [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote)) answer with these codes:
 

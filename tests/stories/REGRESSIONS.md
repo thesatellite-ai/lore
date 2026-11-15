@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1669 |
+| fixed | 1693 |
 | open | 0 |
 | on-hold | 14 |
 | owner | 6 |
@@ -643,6 +643,30 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:T-10 | finding | 'every month on last' started on Jan 30 listed Jan 30 then Jan 31: two instances in one month | fixed | TestMonthDaySeriesNeverTwiceInAMonth, TestFirst, TestJourneyRecurringKeepsTheClock | logic/recur: Next of a month-day rule (on N, on last) steps to the following month even from an off-rule due; First is the first rule day of a series created without a due; break-verified |
 | devco:T-14 | finding | member add had no start date, and offboard's refusal of a date before the stint start named only actor period list | fixed | TestStaffAddStartedOn, TestOffboardRefusals | ops/team member add --started-on YYYY-MM-DD (today or earlier, one --email) back-dates the new stint; ops/period offboard's E_PERIOD_OVERLAP hint names lore actor period edit --period <apd_id or person> --started-on <day>; break-verified |
 | devco:T-16 | finding | trash stats named the deleter by raw act_ id, and the purged-row error carried the spec id (DQ4) | fixed | TestTrashStatsNamesTheDeleter, TestPurgedErrorsCarryNoSpecID, TestNoSpecIDInStrings, TestJourneyRecurringKeepsTheClock | ops/trash stats labels by_deleter with the @handle or display name trash list uses (--json keeps the id in name, adds label); the class: every string literal in non-test code lost its spec id (errors, hints, notes, policy docs, error-code descriptions, the agent directive), and internal/layers TestNoSpecIDInStrings keeps them out; break-verified |
+| bl:BL-1 | scenario | two developers share a branch's notes through lore sync; a third on main sees nothing; the client repo stays byte-identical | fixed | TestStoryBL1SharedLayer | story tests/stories (BL) |
+| bl:BL-2 | scenario | a merged branch's notes land as one squash commit with the layer moved to the trash; landing twice is a no-op; restore | fixed | TestStoryBL2NormalMergeLands | story tests/stories (BL) |
+| bl:BL-3 | scenario | squash merges: the CI form lands without a config; a deleted branch is landed by hand | fixed | TestStoryBL3SquashMerge | story tests/stories (BL) |
+| bl:BL-4 | scenario | a branch deleted unmerged is orphaned; sync moves it to the trash after 14 days; restore, drop, purge | fixed | TestStoryBL4Orphaned | story tests/stories (BL) |
+| bl:BL-5 | scenario | commit, reset --hard, rebase, merge main, rename never lose a branch note | fixed | TestStoryBL5GitCommands | story tests/stories (BL) |
+| bl:BL-6 | scenario | the same row changed on both sides: fields merge; the same text stops the landing (E_LAND_CONFLICT) and changes nothing | fixed | TestStoryBL6SameRowBothSides, TestLayerLandConflictChangesNothing | story tests/stories (BL) |
+| bl:BL-7 | scenario | worktrees keep separate notes; promote; detached HEAD (E_DETACHED, --no-layer); reused branch name (E_LAYER_STALE) | fixed | TestStoryBL7WorktreesDetachedReuse | story tests/stories (BL) |
+| bl:BL-8 | scenario | standing rules: no push from a write, byte-identical client repo, no secret printed, branch_layers declared for lore 0.1.19 | fixed | TestStoryBL8StandingRules, TestLayerDeclaresFormatFeature | story tests/stories (BL) |
+| bl:BL-9 | scenario | two landings of one branch: one commit, the other already landed | fixed | TestStoryBL9TwoLandings | story tests/stories (BL) |
+| bl:BL-10 | scenario | code-repo mode: a new task on an isolated branch of a repo with its own notes stays with the branch and lands with its merge; main and main-like branches keep live rows | fixed | TestStoryBL10CodeRepoMode, TestDecideIsolatedBranch | story tests/stories (BL) |
+| bl:BL-11 | scenario | land --kinds keeps the rest open, --review asks keep or drop (refused without a terminal), --take settles a same-text clash | fixed | TestStoryBL11LandOptions, TestLayerLandKindsKeepsTheRest, TestLayerLandTakeSettlesAClash | story tests/stories (BL) |
+| bl:BL-12 | scenario | stacked branches: feat/b reads feat/a's notes, lands into them, and a stacked layer moves onto main when its parent lands | fixed | TestStoryBL12Stacked, TestLayerStackedIntoAndRebase | story tests/stories (BL) |
+| bl:BL-13 | scenario | restore --revert brings the notes back and reverts their landing with a new commit | fixed | TestStoryBL13RestoreRevert, TestLayerRevertLanding | story tests/stories (BL) |
+| bl:BL-14 | scenario | branch adopt moves shared rows born on a branch into its notes; landing brings them back | fixed | TestStoryBL14Adopt | story tests/stories (BL) |
+| bl:BL-15 | scenario | the CI workflow is offered in own repos only, asks first, never in a client repo | fixed | TestStoryBL15InstallAction | story tests/stories (BL) |
+| bl:F1 | finding | a teammate's sync pushed back a layer the CI step had just landed | fixed | TestStoryBL3SquashMerge, TestLayerPushRetiresTrashedLayer | pkg adapters/backend/git |
+| bl:F2 | finding | a branch whose notes were written before its first commit read as merged | fixed | TestStoryBL3SquashMerge, TestStoryBL4Orphaned | pkg wire |
+| bl:F3 | finding | lore sync in a linked repo syncs whole store clones, so the layer was never pushed | fixed | TestStoryBL1SharedLayer | pkg adapters/backend/git |
+| bl:F4 | finding | two moves to the trash in one second clashed on the trash ref name | fixed | TestStoryBL4Orphaned, TestRefsRoundTrip | pkg logic/branchlayer |
+| bl:F5 | finding | the CI form of land was refused in a checkout with no lore project | fixed | TestStoryBL3SquashMerge | pkg ops/branch |
+| bl:F9 | finding | after dev's roster authority replay, rows a CI runner (off the roster) landed as a squash were held back and never shown; a landing is now a merge commit whose second parent is the layer tip | fixed | TestStoryBL3SquashMerge, TestLayerLandSquashesOnce | pkg adapters/backend/git |
+| bl:F8 | finding | code-repo mode did not read the repo's own branches.* policy rows (the value is stored as plain JSON), so a branch the repo shares was still isolated | fixed | TestStoryBL10CodeRepoMode | pkg wire |
+| bl:F7 | finding | restore --revert after a drop reverted an older landing instead of saying the restored copy was never landed | fixed | TestStoryBL13RestoreRevert | pkg adapters/backend/git |
+| bl:F6 | finding | the layer wrapper hid the audit journal and purge recording of the store clone: a purge in a linked folder was refused E_UNSUPPORTED (found by the journeys) | fixed | TestJourneyAgencyFirstWeeks, TestJourneyTeamLeadUndo | pkg wire |
 
 ## lore-adoptfix
 

@@ -213,6 +213,11 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		return out, nil
 	}
 	if len(failed) == 0 {
+		if insideWorkTree(ctx, a.opts.RepoDir) {
+			// a repo linked to a store folder by its remote: its branch
+			// layers land (auto_land) or retire (orphaned) here too
+			out.Lines = append(out.Lines, a.sweepLayers(ctx)...) // BRANCH_LAYERS 9, 10
+		}
 		return out, nil
 	}
 	// a failed run prints no stdout: the lines go to stderr first, then

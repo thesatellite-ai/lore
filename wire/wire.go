@@ -57,6 +57,7 @@ import (
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
 	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
+	opsbranch "github.com/thesatellite-ai/lore/ops/branch"
 	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
@@ -428,6 +429,8 @@ type App struct {
 	machOpened bool
 	machErr    error
 	mach       *App
+	// repoBranch is RepoBranchIsolated's answer for this command (branchlayer_repo.go).
+	repoBranch repoBranchCache
 }
 
 // state is everything Open built; nil until the first use.
@@ -582,6 +585,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsselfupgrade.Ops(a)...)
 	// LORE_TEAM_SPEC §1, §6.6, F8: lore live show|diff|log|restore|compact|purge.
 	entries = append(entries, opslive.Ops(a)...)
+	entries = append(entries, opsbranch.Ops(a)...) // BRANCH_LAYERS 13: lore branch list|show|mode|land|drop|restore|purge|promote|isolate|share
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
@@ -1362,6 +1366,9 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	out, err := opsstores.SyncAll(ctx, a, only)
 	if err == nil && only == "" {
 		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx, out.Stores)...)
+		if !syncWasOffline(out) {
+			out.Notes = append(out.Notes, a.sweepLayers(ctx)...) // BRANCH_LAYERS 9, 10 (branchlayer_sweep.go)
+		}
 	}
 	a.forgetStoreChecks(ctx, out.Stores)
 	return out, err

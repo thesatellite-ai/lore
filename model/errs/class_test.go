@@ -39,6 +39,7 @@ func allConstants() []Code {
 		SetupNotFound, SetupAmbiguous, SetupNameTaken, SetupOrgMismatch, SetupNoPersonalStore,
 		SetupStepFailed, SetupStepOrder, InviteInvalid, JoinOrgUnknown, InviteNotFound, InviteExpired, InviteRevoked,
 		InviteUsed, InviteEmail, FixRefused, SkillLinked, GitMissing,
+		Detached, LandConflict, LayerStale,
 	}
 }
 
