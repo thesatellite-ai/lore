@@ -87,6 +87,12 @@ type HandReport struct {
 // Folder is the clean store folder this Backend reads and writes.
 func (b *Backend) Folder() string { return b.folder.Name() }
 
+// RowFolder is the row folder this Backend reads and writes, for a caller
+// that must read a table straight from the files before any cache exists
+// (wire reads the branches.* policy rows before it picks the cache path,
+// devco:D-411): a Read on it runs no git and never fetches.
+func (b *Backend) RowFolder() *rowfs.Folder { return b.folder }
+
 // Layout is where this checkout keeps its folders' rows.
 func (b *Backend) Layout() rowfs.Layout { return b.root.Layout() }
 

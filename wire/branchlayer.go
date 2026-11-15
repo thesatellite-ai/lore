@@ -17,9 +17,10 @@ package wire
 //	Sync  ─▶ the clone's sync, then the folder's layers pushed (merged
 //	         with a teammate's copy first)
 //
-// Which branch is isolated is logic/branchlayer.Classify over the
-// branches.* policy keys, read once per command through the engine (the
-// read runs with the wrapper switched off, so it cannot ask itself).
+// Which branch is isolated is branchMode (branchmode.go) over the
+// branches.* policy keys, read from the row files once per command BEFORE
+// the cache path is chosen and pinned on the wrapper: the cache path, the
+// reads and the writes all ask that one decision (devco:D-411).
 
 import (
 	"context"
@@ -154,10 +155,6 @@ func layersOff(ctx context.Context) bool {
 	return v
 }
 
-// layerSettings reads the branches.* policy for the folder a layer
-// wrapper serves.
-type layerSettings func(ctx context.Context) (branchlayer.Settings, error)
-
 // layerBackend is the wrapper (see the file comment).
 type layerBackend struct {
 	inner store.Backend
@@ -165,12 +162,13 @@ type layerBackend struct {
 	name  store.Source
 	code  codeRepo
 	key   branchlayer.Key
-	// settings reads the policy once (decide).
-	settings layerSettings
-
-	decideOnce sync.Once
-	decision   branchlayer.Decision
-	decideErr  error
+	// settings, decision and decideErr are pinned when the wrapper is
+	// made (branchmode.go), before the cache path is chosen: every caller
+	// asks them, never a fresh policy read, so the cache this command
+	// uses and the rows its reads return always follow one mode.
+	settings  branchlayer.Settings
+	decision  branchlayer.Decision
+	decideErr error
 
 	// parentOnce finds, once per command, the branch a not-yet-written
 	// layer would stack on (parentBranch), so the branch reads its parent's
@@ -191,7 +189,8 @@ var (
 
 // newLayerBackend wraps b when it is a git store clone serving a project
 // folder of a repo in a git checkout with an origin remote; else b.
-func newLayerBackend(ctx context.Context, name store.Source, folder string, b store.Backend, code codeRepo, settings layerSettings) store.Backend {
+// settings and settingsErr are readBranchPolicy's answer for the folder.
+func newLayerBackend(ctx context.Context, name store.Source, folder string, b store.Backend, code codeRepo, settings branchlayer.Settings, settingsErr error) store.Backend {
 	gb, ok := concrete(b).(*git.Backend)
 	if !ok || gb.Branch() == "" || folder == "" || folder == "." {
 		return b
@@ -203,20 +202,45 @@ func newLayerBackend(ctx context.Context, name store.Source, folder string, b st
 	if key.Check() != nil {
 		return b
 	}
-	return &layerBackend{inner: b, gb: gb, name: name, code: code, key: key, settings: settings}
+	l := &layerBackend{inner: b, gb: gb, name: name, code: code, key: key, settings: settings, decideErr: settingsErr}
+	if settingsErr == nil {
+		l.decision = branchMode(code.Branch, code.Default, settings)
+	}
+	return l
 }
 
 // Unwrap implements Unwrapper.
 func (l *layerBackend) Unwrap() store.Backend { return l.inner }
 
 // LayerCacheDir is the cache sub-folder of this wrapper's code branch
-// (BRANCH_LAYERS 6.3): "" on the default branch and a detached HEAD, which
-// read the shared notes only and keep the folder's own cache file.
+// (BRANCH_LAYERS 6.3), "" when the command reads the shared notes only
+// and uses the folder's own cache file (main's): a shared branch (the
+// default branch, a main-like one, `lore branch share`, layers off), a
+// detached HEAD, LORE_LAYER=off. It is "" exactly when the command's own
+// reads see no layer rows (ownCache), so an isolated branch's rows never
+// reach main's cache and main's cache never stands in for a layer
+// (devco:D-411). A policy that does not read gets the layer folder: its
+// reads fail anyway, and nothing lands in main's file.
 func (l *layerBackend) LayerCacheDir() string {
-	if l.code.Branch == "" || l.code.Branch == l.code.Default || envLayerIsOff() {
+	if !l.ownCache() {
 		return ""
 	}
+	return l.layerCacheSub()
+}
+
+// layerCacheSub is the layer cache sub-folder of this wrapper's branch,
+// whatever its mode.
+func (l *layerBackend) layerCacheSub() string {
 	return layerCacheSeg + "/" + l.key.RepoKey + "/" + branchlayer.BranchKey(l.code.Branch)
+}
+
+// ownCache reports whether the command reads through a layer cache: the
+// pinned decision isolates a named branch and layers are not off.
+func (l *layerBackend) ownCache() bool {
+	if l.code.Branch == "" || l.code.Detached || envLayerIsOff() {
+		return false
+	}
+	return l.decideErr != nil || l.decision.Mode == branchlayer.Isolated
 }
 
 // layerCacheSeg is the cache folder of the branch layers of one store
@@ -229,12 +253,88 @@ const layerCacheSeg = "_layers"
 // then names the folder by the attached name, which the caller does not
 // know here).
 func layerCacheFolder(home string, lb *layerBackend, branch string) string {
+	repoDir := layerCacheRepoDir(home, lb)
+	if repoDir == "" || branch == "" {
+		return ""
+	}
+	return filepath.Join(repoDir, filepath.FromSlash(branchlayer.BranchKey(branch)))
+}
+
+// layerCacheRepoDir is the folder holding the layer caches of every branch
+// of lb's code repo in lb's store branch, "" as layerCacheFolder.
+func layerCacheRepoDir(home string, lb *layerBackend) string {
+	if lb == nil {
+		return ""
+	}
 	m, ok := concrete(lb.inner).(markerOf)
-	if !ok || m.Marker().ID.IsZero() || branch == "" {
+	if !ok || m.Marker().ID.IsZero() {
 		return ""
 	}
 	return filepath.Join(writableHome(home), cacheDir, cacheStoresDir, m.Marker().ID.String(), filepath.FromSlash(lb.gb.Branch()),
-		layerCacheSeg, lb.key.RepoKey, filepath.FromSlash(branchlayer.BranchKey(branch)))
+		layerCacheSeg, lb.key.RepoKey)
+}
+
+// dropSharedBranchCache removes the layer cache of lb's branch when the
+// pinned decision shares it (devco:D-411): it then reads main's cache, and
+// the layer cache it kept while it was isolated would only go stale. A
+// one-shot LORE_LAYER=off, a detached HEAD and a policy that does not read
+// keep it (the branch is still isolated). Best effort: a cache that stays
+// is listed by doctor and removed by lore fix.
+func dropSharedBranchCache(home string, lb *layerBackend) {
+	if lb == nil || lb.code.Branch == "" || lb.code.Detached || lb.decideErr != nil || lb.decision.Mode != branchlayer.Shared {
+		return
+	}
+	if dir := layerCacheFolder(home, lb, lb.code.Branch); dir != "" {
+		_ = os.RemoveAll(dir) // best effort, see above
+	}
+}
+
+// strayLayerCaches are the branches whose layer cache in lb's store folder
+// no command needs any more (devco:D-411): every branch with a cache
+// folder under layerCacheRepoDir, except an isolated one (branchMode over
+// the pinned settings) that still has an open layer or is the branch
+// this command reads through its own cache. Landed, dropped and purged
+// branches, branches now shared and caches of layers gone elsewhere are
+// all stray.
+func strayLayerCaches(ctx context.Context, home string, lb *layerBackend) ([]string, error) {
+	repoDir := layerCacheRepoDir(home, lb)
+	if repoDir == "" {
+		return nil, nil
+	}
+	dirs, err := os.ReadDir(repoDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, errs.FileIO("read the layer caches", repoDir, err)
+	}
+	if len(dirs) == 0 {
+		return nil, nil
+	}
+	open := map[string]bool{}
+	entries, err := lb.gb.LayerList(ctx, lb.key.RepoKey, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		open[e.Layer.Key.Branch] = true
+	}
+	var stray []string
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		b := branchlayer.BranchFromKey(d.Name())
+		if b == lb.code.Branch && lb.ownCache() {
+			continue // this command's own cache
+		}
+		if open[b] && lb.decideErr == nil && branchMode(b, lb.code.Default, lb.settings).Mode == branchlayer.Isolated {
+			continue
+		}
+		stray = append(stray, b)
+	}
+	slices.Sort(stray)
+	return stray, nil
 }
 
 // forgetLayerCache removes the cache of branch's layer once its notes left
@@ -251,20 +351,8 @@ func forgetLayerCache(home string, lb *layerBackend, branch string) {
 	}
 }
 
-// decide classifies the code branch once per command.
-func (l *layerBackend) decide(ctx context.Context) (branchlayer.Decision, error) {
-	l.decideOnce.Do(func() {
-		s := branchlayer.DefaultSettings()
-		if l.settings != nil {
-			got, err := l.settings(withoutLayers(ctx))
-			if err != nil {
-				l.decideErr = err
-				return
-			}
-			s = got
-		}
-		l.decision = branchlayer.Classify(l.code.Branch, l.code.Default, s)
-	})
+// decide is the decision pinned when the wrapper was made (branchmode.go).
+func (l *layerBackend) decide(context.Context) (branchlayer.Decision, error) {
 	return l.decision, l.decideErr
 }
 
@@ -581,38 +669,17 @@ func layerOf(b store.Backend) *layerBackend {
 	}
 }
 
-// policySettings reads the branches.* keys of the policy a write to name
-// sees into branchlayer.Settings.
-func policySettings(st *state, name store.Source) layerSettings {
-	return func(ctx context.Context) (branchlayer.Settings, error) {
-		s := branchlayer.DefaultSettings()
-		if st.eng == nil {
-			return s, nil
-		}
-		set, err := st.eng.Policy(ctx, name)
-		if err != nil {
-			return s, err
-		}
-		if v, ok := set.Flag(policy.KeyBranchesLayers); ok {
-			s.Layers = v
-		}
-		if v, ok := set.Text(policy.KeyBranchesDefaultMode); ok {
-			s.DefaultMode = branchlayer.ModeOfPolicy(v)
-		}
-		s.Isolate = set.Strings(policy.KeyBranchesIsolate)
-		s.MainLike = set.Strings(policy.KeyBranchesMainLike)
-		s.IsolatedSet = set.Strings(policy.KeyBranchesIsolated)
-		s.SharedSet = set.Strings(policy.KeyBranchesShared)
-		return s, nil
-	}
-}
-
 // wrapLayers puts a layer wrapper in front of every attached project
 // folder of a git store clone (policy.LevelFolder) when the repo is a git
-// checkout with an origin remote.
-func wrapLayers(ctx context.Context, st *state, attached []attach.Opened) {
+// checkout with an origin remote. The branch policy is read from the row
+// files of every store the engine reads it from (the repo, then each
+// attached store at its level) once, before any cache path is chosen
+// (branchmode.go, devco:D-411).
+func wrapLayers(ctx context.Context, st *state, home string, repo store.Backend, attached []attach.Opened) {
 	var code codeRepo
-	asked, ok := false, false
+	asked, ok, read := false, false, false
+	var settings branchlayer.Settings
+	var settingsErr error
 	for i := range attached {
 		if levelOf(attached[i]) != policy.LevelFolder {
 			continue
@@ -627,7 +694,11 @@ func wrapLayers(ctx context.Context, st *state, attached []attach.Opened) {
 		if !ok {
 			return
 		}
-		attached[i].Backend = newLayerBackend(ctx, attached[i].Name, attached[i].Folder, attached[i].Backend, code, policySettings(st, attached[i].Name))
+		if !read {
+			settings, settingsErr = attachedBranchSettings(ctx, home, repo, attached)
+			read = true
+		}
+		attached[i].Backend = newLayerBackend(ctx, attached[i].Name, attached[i].Folder, attached[i].Backend, code, settings, settingsErr)
 	}
 }
 

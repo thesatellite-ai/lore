@@ -12,15 +12,11 @@ package wire
 
 import (
 	"context"
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/logic/policy"
-	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // repoBranchCache keeps one command's answer.
@@ -49,8 +45,11 @@ func (a *App) RepoBranchIsolated(ctx context.Context) bool {
 		// read from the repo's own policy rows, never through the App's
 		// state: this runs inside the live write path (wire/host), where
 		// opening the state again would re-enter the live session
-		s := repoBranchSettings(top)
-		a.repoBranch.isolated = branchlayer.Classify(code.Branch, code.Default, s).Mode == branchlayer.Isolated
+		s, err := repoBranchSettings(a.opts.Home, top)
+		if err != nil {
+			return // a policy that does not read: today's live rows, doctor names it
+		}
+		a.repoBranch.isolated = branchMode(code.Branch, code.Default, s).Mode == branchlayer.Isolated
 	})
 	return a.repoBranch.isolated
 }
@@ -87,59 +86,27 @@ func readCodeBranch(ctx context.Context, top string) codeRepo {
 }
 
 // repoBranchSettings are the branches.* keys the repo's own policy rows
-// set (.lore/data/policies at the repo top), over the defaults. A row that
-// does not read is skipped: a broken policy row is `lore doctor`'s to name.
-func repoBranchSettings(top string) branchlayer.Settings {
-	s := branchlayer.DefaultSettings()
-	dir := filepath.Join(top, loreFolderName, "data", "policies")
-	files, err := os.ReadDir(dir)
+// (.lore/data/policies at the repo top) and the machine policy set, read
+// and resolved as readBranchPolicy resolves a store's (branchmode.go), so
+// code-repo mode and the store layers decide by one rule. A policy that
+// does not read is returned as the error: the caller treats the branch as
+// shared for live rows and `lore doctor` names the row.
+func repoBranchSettings(home, top string) (branchlayer.Settings, error) {
+	rows, err := readRepoPolicyDir(top)
 	if err != nil {
-		return s
+		return branchlayer.DefaultSettings(), err
 	}
-	for _, f := range files {
-		b, rerr := os.ReadFile(filepath.Join(dir, f.Name()))
-		if rerr != nil {
-			continue
-		}
-		var r struct {
-			Key       string          `json:"key"`
-			Value     json.RawMessage `json:"value"`
-			Deleted   bool            `json:"_deleted"`
-			DeletedAt string          `json:"deleted_at"`
-		}
-		if json.Unmarshal(row.TrimBOM(b), &r) != nil || r.Deleted || r.DeletedAt != "" || len(r.Value) == 0 {
-			continue
-		}
-		raw := []byte(r.Value)
-		var items []string
-		var flag bool
-		var text string
-		switch policy.Key(r.Key) {
-		case policy.KeyBranchesLayers:
-			if json.Unmarshal(raw, &flag) == nil {
-				s.Layers = flag
-			}
-		case policy.KeyBranchesDefaultMode:
-			if json.Unmarshal(raw, &text) == nil {
-				s.DefaultMode = branchlayer.ModeOfPolicy(text)
-			}
-		case policy.KeyBranchesIsolate:
-			if json.Unmarshal(raw, &items) == nil {
-				s.Isolate = items
-			}
-		case policy.KeyBranchesMainLike:
-			if json.Unmarshal(raw, &items) == nil {
-				s.MainLike = items
-			}
-		case policy.KeyBranchesIsolated:
-			if json.Unmarshal(raw, &items) == nil {
-				s.IsolatedSet = items
-			}
-		case policy.KeyBranchesShared:
-			if json.Unmarshal(raw, &items) == nil {
-				s.SharedSet = items
-			}
-		}
+	entries, err := policyEntriesOf(policy.LevelRepo, rows)
+	if err != nil {
+		return branchlayer.DefaultSettings(), err
 	}
-	return s
+	machine, _, err := machinePolicy(home)
+	if err != nil {
+		return branchlayer.DefaultSettings(), err
+	}
+	set, err := policy.Resolve(append(entries, machine...))
+	if err != nil {
+		return branchlayer.DefaultSettings(), err
+	}
+	return branchSettingsOf(set), nil
 }
