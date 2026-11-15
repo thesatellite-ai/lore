@@ -20,6 +20,8 @@ lore's home: ~/.lore
       this map of lore's home, written by lore and rewritten when the layout changes
   cache
       rebuildable caches: everything here is made again from the row files when deleted
+  cache/gitfast
+      git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files
   cache/machine-store.db
       the cache of state/machine.db, arranged for search
   cache/repo
@@ -141,7 +143,7 @@ machine.json
 state
 stores
 $ head -20 ~/.lore/README.md
-<!-- written by lore, layout 2026-11-15.1; lore rewrites this file when its layout changes -->
+<!-- written by lore, layout 2026-11-15.2; lore rewrites this file when its layout changes -->
 # lore's home on this machine
 This folder is where lore keeps what belongs to this machine: its settings, the stores it cloned, caches and small state files. Your notes themselves live in stores (git repositories or folders) and in your code repos' .lore/data folders; nothing here is synced by itself.
 `lore where` lists every file lore keeps on this machine and in the repo you run it in, one line each, with the store and repo each cache file belongs to (`lore where --json` for scripts). It also names anything in this folder lore does not recognise; lore never deletes such a file.

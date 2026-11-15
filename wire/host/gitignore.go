@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -205,17 +206,20 @@ func gitOutput(ctx context.Context, args ...string) ([]byte, error) {
 		return nil, err
 	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Env: gitenv.Clean(os.Environ())} // -C names the repo, never a hook GIT_DIR
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	stop := context.AfterFunc(ctx, func() { _ = cmd.Process.Kill() }) // a kill of an exited process has nothing to report
-	defer stop()
-	if err := cmd.Wait(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), ctx.Err()
+	// gitfast (devco:D-418): a read the Session answers starts no git
+	return gitfast.OutputQuiet(ctx, "", args, nil, nil, func() ([]byte, error) {
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		stop := context.AfterFunc(ctx, func() { _ = cmd.Process.Kill() }) // a kill of an exited process has nothing to report
+		defer stop()
+		if err := cmd.Wait(); err != nil {
+			return nil, err
+		}
+		return out.Bytes(), ctx.Err()
+	})
 }
 
 // projectRoot is the lore project dir works in: the nearest folder at or

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
@@ -148,6 +149,16 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	if why, refused := gitenv.StoreNetRefused(os.Environ(), c.args); refused {
 		return nil, &gitError{cmd: gitenv.Subcommand(c.args), code: netRefusedExit, stderr: why}
 	}
+	// gitfast (devco:D-418): a read the process's Session answers from the
+	// clone's files starts no git
+	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
+		if rep, ok := gitfast.Try(ctx, c.dir, args, c.env, c.stdin); ok {
+			if rep.Code != 0 {
+				return rep.Out, &gitError{cmd: subcommand(c.args), code: rep.Code}
+			}
+			return rep.Out, nil
+		}
+	}
 	// The Cmd is built directly rather than through exec.CommandContext:
 	// r.bin is an absolute path resolved once by exec.LookPath (lookGit),
 	// every argument is a separate argv entry built by this package (no
@@ -165,6 +176,14 @@ func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	err := runCancellable(ctx, cmd)
 	if trace := gitref.TracerFrom(ctx); trace != nil && tracedSubcommands[subcommand(c.args)] {
 		trace(gitref.TraceCall{Args: args, Remote: r.remote, Env: append(append([]string(nil), r.routeEnv...), c.env...), Took: time.Since(start), Err: err})
+	}
+	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
+		code, exited := 0, err == nil
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ctx.Err() == nil {
+			code, exited = ee.ExitCode(), true
+		}
+		gitfast.Note(ctx, c.dir, args, c.env, c.stdin, stdout.Bytes(), code, exited)
 	}
 	if err != nil {
 		var ee *exec.ExitError

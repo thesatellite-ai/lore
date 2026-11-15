@@ -176,6 +176,7 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 | `LORE_PUSH_CLAIMS` | `1` is your standing go-ahead to push claims and holds (`lore task claim`, `lore task next`, `lore hold claim`) to a code repo's remote at once, as `--push` gives it for one command (`live.autopush: true` in `config.yaml` gives it too); without any of them, a claim there is refused before anything is written. Set it in an agent's environment when the agent should claim work by itself |
 | `LORE_LIVE_REMOTE` | the git remote that holds the live rows (default `origin`), for forks and tests |
 | `LORE_TRACE` | `1` prints every git command lore runs for live rows, with timing, like `--trace` |
+| `LORE_GIT_FAST` | `0` makes lore start the git program for every repository read. By default lore reads refs, objects and trees from the `.git` files itself and starts git only for what it cannot read exactly as git would (unusual layouts, the work tree, writes); an everyday command starts a handful of git processes instead of a hundred. Use it to rule lore's own reader out when something looks wrong |
 
 `LORE_LIVE=0` keeps a new task out of the live list: it is written to `.lore/data` and waits for a commit, while the next task without the switch goes live as usual:
 

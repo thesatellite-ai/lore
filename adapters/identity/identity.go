@@ -48,6 +48,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
@@ -520,8 +521,8 @@ func gitEmail(ctx context.Context, in Inputs) (Resolved, bool) {
 func gitConfig(ctx context.Context, dir, key string) string {
 	cmd := exec.CommandContext(ctx, "git", "config", key)
 	cmd.Dir = dir
-	cmd.Env = gitenv.Clean(os.Environ()) // dir, not an inherited GIT_DIR, names the repository
-	out, err := cmd.Output()
+	cmd.Env = gitenv.Clean(os.Environ())                                                     // dir, not an inherited GIT_DIR, names the repository
+	out, err := gitfast.OutputQuiet(ctx, dir, []string{"config", key}, nil, nil, cmd.Output) // devco:D-418
 	if err != nil {
 		return ""
 	}

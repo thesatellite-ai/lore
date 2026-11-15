@@ -21,6 +21,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -122,6 +123,15 @@ func Run(ctx context.Context, args []string, opts ...Option) int {
 // run builds the app and the command tree, executes args and returns the
 // process exit status (never 0 for a failure).
 func run(ctx context.Context, args []string) int {
+	// One gitfast Session per process (devco:D-418): every git runner asks
+	// it first, so repeated repository reads start no git process.
+	fast := gitfast.New()
+	defer fast.Close()
+	if home, herr := lorehome.Resolve(); herr == nil {
+		fast.SetCacheDir(filepath.Join(home.Dir, "cache")) // kept answers live in the lore home, never in a repo
+	}
+	ctx = gitfast.With(ctx, fast)
+	defer gitfast.Install(fast)()        // callers that start from context.Background()
 	if err := refuseRoot(); err != nil { // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
 		return printHostError(err)
 	}

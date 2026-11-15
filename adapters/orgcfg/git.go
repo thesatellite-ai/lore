@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 )
@@ -46,6 +47,14 @@ func gitRunEnv(ctx context.Context, env []string, args ...string) (string, error
 	if why, refused := gitenv.StoreNetRefused(os.Environ(), args); refused {
 		return "", errors.New(why) // LORE_OFFLINE / LORE_NO_FETCH / LORE_NO_STORE_FETCH: not run (orgcfg git reaches store clones only)
 	}
+	if rep, ok := gitfast.Try(ctx, "", args, env, nil); ok {
+		// gitfast (devco:D-418): answered from the repository files; a
+		// non-zero status is a quiet "no" (git printed nothing either)
+		if rep.Code != 0 {
+			return string(rep.Out), fmt.Errorf("orgcfg: git %s: %w: %s", strings.Join(args, " "), &gitfast.ExitError{Code: rep.Code}, "")
+		}
+		return string(rep.Out), nil
+	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...)}
 	// Never the bare inherited environment: inside a git hook it carries
 	// GIT_DIR and friends, and `git -C <dir> ...` would act on the hook's
@@ -70,6 +79,12 @@ func gitRunEnv(ctx context.Context, env []string, args ...string) (string, error
 	}()
 	werr := cmd.Wait()
 	close(done)
+	code, exited := 0, werr == nil
+	var ee *exec.ExitError
+	if errors.As(werr, &ee) && ctx.Err() == nil {
+		code, exited = ee.ExitCode(), true
+	}
+	gitfast.Note(ctx, "", args, env, nil, stdout.Bytes(), code, exited)
 	if werr != nil {
 		return stdout.String(), fmt.Errorf("orgcfg: git %s: %w: %s", strings.Join(args, " "), werr, strings.TrimSpace(stderr.String()))
 	}

@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -73,10 +72,15 @@ func run(ctx context.Context, dir string, args ...string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
+// exitCoder is an error carrying a process exit status: *exec.ExitError,
+// or the *gitfast.ExitError of a quiet "no" answered without a process
+// (devco:D-418).
+type exitCoder interface{ ExitCode() int }
+
 // isExitCode reports whether err is git exiting with code.
 func isExitCode(err error, code int) bool {
-	var exitErr *exec.ExitError
-	return errors.As(err, &exitErr) && exitErr.ExitCode() == code
+	var ec exitCoder
+	return errors.As(err, &ec) && ec.ExitCode() == code
 }
 
 // toplevel is the work tree root containing dir.

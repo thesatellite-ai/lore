@@ -351,8 +351,16 @@ func cacheFiles(t *testing.T, dir string) map[string]bool {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		if d.IsDir() {
+			if d.Name() == "gitfast" && filepath.Dir(p) == dir {
+				// cache/gitfast keeps git answers between commands
+				// (devco:D-418), no rows: not a store or row cache
+				return fs.SkipDir
+			}
+			return nil
 		}
 		out[p] = true
 		return nil
