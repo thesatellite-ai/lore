@@ -809,6 +809,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	}
 	names := make([]string, 0, len(paths))
 	rels := make(map[string]string, len(paths))
+	roots := make(map[string]string, len(paths)) // name ─▶ root-relative path (creditRow)
 	// R-5/R-6/R-18: a change no one with authority made is read as its
 	// last accepted version, or not at all (authority.go)
 	auth, _ := b.authorityOf(ctx, h)
@@ -822,7 +823,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 				name = blob
 			}
 			names = append(names, name)
-			rels[name] = rel
+			rels[name], roots[name] = rel, p
 		}
 	}
 	// round-6 follow-up: a row held back after the cache already took it
@@ -831,9 +832,11 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	var hidden []store.Row
 	if from != "" {
 		more, tombs := b.heldRecheck(ctx, auth, h, paths)
-		for name, rel := range more {
-			names = append(names, name)
-			rels[name] = rel
+		for name, p := range more {
+			if rel, ok := b.folder.FileRel(p); ok {
+				names = append(names, name)
+				rels[name], roots[name] = rel, p
+			}
 		}
 		hidden = tombs
 	}
@@ -852,7 +855,7 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 		if derr != nil {
 			continue // reported by Problems
 		}
-		rows = append(rows, r)
+		rows = append(rows, auth.creditRow(roots[name], r)) // C35: the committer named as the writer
 	}
 	if from == "" {
 		b.keepFull(h, rows)

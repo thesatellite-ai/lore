@@ -58,6 +58,9 @@ func TestJourneyStoreCommands(t *testing.T) {
 		tlLastSteps(t, lee, app.Dir, tlLeadSetup, []string{tlFolders})
 		lee.Lore(app.Dir, "sync").OK(t) // C5: the new team store reaches the remote with Lee's sync
 		s := lee.Clone(tt.store, "team-store")
+		// the org file is the admin's to change (R-7): Lee commits it as the
+		// work identity the org knows as its admin, not the personal one
+		s.Git("config", "user.email", jCmdsWorkEmail)
 		jWrite(t, filepath.Join(s.Dir, filepath.FromSlash(jManyOrgFile)), "name: "+tlOrg+"\nstores:\n"+
 			"    - url: "+tt.store.SSHURL()+"\n      org_folder: org\n"+
 			"    - url: "+two.SSHURL()+"\n")

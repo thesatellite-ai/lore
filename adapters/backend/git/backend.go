@@ -172,9 +172,17 @@ func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 		}
 		if h, herr := b.headIfHeld(ctx, path); herr == nil && h != "" {
 			if auth, _ := b.authorityOf(ctx, h); auth != nil {
+				var r store.Row
+				var err error
 				if blob, held := auth.heldBlob(path); held {
-					return b.rowAtBlob(ctx, blob, table, id)
+					r, err = b.rowAtBlob(ctx, blob, table, id)
+				} else {
+					r, err = b.folder.Get(table, id)
 				}
+				if err != nil {
+					return store.Row{}, err
+				}
+				return auth.creditRow(path, r), nil // C35: the committer named as the writer
 			}
 		}
 	}

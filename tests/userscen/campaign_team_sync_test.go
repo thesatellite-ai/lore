@@ -39,7 +39,8 @@ func TestCampaignTeam_TwoClonesSeeProfileWrites(t *testing.T) {
 		{"mira puts bob on leave", o.app, []string{"actor", "status", "@bob", "on_leave", "--from", "2026-11-08", "--until", "2026-11-30"}, []string{"on_leave"}, []string{"actor", "show", "@bob"}},
 		{"bob is back", bc, []string{"actor", "status", "@bob", "active"}, []string{"Bob Roe"}, []string{"actor", "list", "--status", "active"}},
 		{"mira adds bob to app", o.app, []string{"project", "member", "add", "app", "@bob", "--role", "dev,sre"}, []string{"@bob", "dev, sre"}, []string{"project", "member", "list", "app"}},
-		{"bob changes his roles", bc, []string{"project", "member", "edit", "app", "@bob", "--role", "sre"}, []string{"@bob  sre"}, []string{"project", "member", "list", "app"}},
+		// D-328: a membership change needs an admin or a lead of the project
+		{"mira narrows bob's roles", o.app, []string{"project", "member", "edit", "app", "@bob", "--role", "sre"}, []string{"@bob  sre"}, []string{"project", "member", "list", "app"}},
 	}
 	for _, w := range writes {
 		w.by.MustLore(w.args...)

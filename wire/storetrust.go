@@ -28,8 +28,34 @@ import (
 )
 
 // storeTrustLines are the lines `lore sync` adds for what it did not take.
+// The org this folder resolves to is worked out once, and only when an
+// org of the config lists a store: each resolution runs git in the repo,
+// and doctor --all asks this in every repo (devco D-332, its git budget).
 func (a *App) storeTrustLines(ctx context.Context) []string {
-	return slices.Concat(a.heldOrgChangeLines(ctx), a.strayFileLines(ctx), a.untrustedLines(ctx))
+	var org []string
+	if cfg := a.storeOrgConfig(); cfg != nil {
+		only := a.syncOrg(ctx)
+		org = slices.Concat(a.heldOrgChangeLines(ctx, cfg, only), a.strayFileLines(ctx, cfg, only))
+	}
+	return slices.Concat(org, a.untrustedLines(ctx))
+}
+
+// storeOrgConfig is this machine's org config when an org in it lists a
+// store, nil otherwise (no home, no config, or no org store to check).
+func (a *App) storeOrgConfig() *orgconf.Config {
+	if a.opts.Home == "" {
+		return nil
+	}
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return nil
+	}
+	for i := range cfg.Orgs {
+		if len(cfg.Orgs[i].Stores) > 0 {
+			return cfg
+		}
+	}
+	return nil
 }
 
 // strayFileHint is the step a stray-file line names: drop them in the
@@ -39,15 +65,8 @@ const strayFileHint = "lore reads the rest of the store as before; to drop them:
 // strayFileLines is one line per org store (of the org this folder
 // resolves to, or every org) whose clone here holds files lore does not
 // own: which files, the commit and author that added them, and the step.
-func (a *App) strayFileLines(ctx context.Context) []string {
-	if a.opts.Home == "" {
-		return nil
-	}
-	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
-	if err != nil || cfg == nil {
-		return nil
-	}
-	only := a.syncOrg(ctx)
+// only is the org this folder resolves to ("" = every org of cfg).
+func (a *App) strayFileLines(ctx context.Context, cfg *orgconf.Config, only string) []string {
 	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: a.opts.Home, Config: cfg}
 	var out []string
 	seen := map[string]bool{}
@@ -93,16 +112,9 @@ const strayShown = 5
 // heldOrgChangeLines is one line per held-back change to the
 // lore-org.yaml of the org this folder resolves to (every org of the
 // config when it resolves to none), as this machine's store clone holds
-// it (no network).
-func (a *App) heldOrgChangeLines(ctx context.Context) []string {
-	if a.opts.Home == "" {
-		return nil
-	}
-	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
-	if err != nil || cfg == nil {
-		return nil
-	}
-	only := a.syncOrg(ctx)
+// it (no network). only is the org this folder resolves to ("" = every
+// org of cfg).
+func (a *App) heldOrgChangeLines(ctx context.Context, cfg *orgconf.Config, only string) []string {
 	var out []string
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
