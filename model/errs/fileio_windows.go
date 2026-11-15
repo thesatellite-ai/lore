@@ -25,3 +25,8 @@ func badName(err error) bool {
 	return errors.Is(err, winInvalidName) || errors.Is(err, winBadPathname) || errors.Is(err, winFilenameLong) ||
 		errors.Is(err, winPathNotFound) || errors.Is(err, syscall.ERROR_FILE_NOT_FOUND)
 }
+
+// writable and searchable: Windows has no access(2); PermissionHint then
+// names the path or its folder as before.
+func writable(string) bool   { return true }
+func searchable(string) bool { return true }

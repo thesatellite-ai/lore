@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	gt "github.com/thesatellite-ai/lore/adapters/gitremote/gitremotetest"
@@ -104,5 +105,33 @@ func TestRefusalIsNotRetried(t *testing.T) {
 	}
 	if n := sshCalls(t, dir); n != 1 {
 		t.Fatalf("a refusal got %d ssh calls, want 1 (a retry cannot change the answer)", n)
+	}
+}
+
+// TestTimedOutConnectIsNotRetried (devco:U-6): a call that already waited
+// out a connect timeout (longer than RetryAfter allows) is not tried again:
+// offline, the retry only doubled every command's wait. A fast drop still
+// gets its one retry (TestDroppedConnectionIsRetriedOnce).
+func TestTimedOutConnectIsNotRetried(t *testing.T) {
+	if gitremote.RetryAfter(5*time.Second) || !gitremote.RetryAfter(100*time.Millisecond) {
+		t.Fatal("RetryAfter: a 5 s try must not be retried, a 100 ms drop must")
+	}
+	w := gt.NewWorld(t)
+	c := w.Clone("a")
+	gt.Git(t, c.Dir, "remote", "set-url", gt.RemoteName, "ssh://fakehost"+w.OriginDir)
+	dir := t.TempDir()
+	script := filepath.Join(dir, "ssh.sh")
+	body := "#!/bin/sh\n[ \"$1\" = \"-G\" ] && exit 0\necho call >> \"" + dir + "/calls\"\nsleep 2.2\necho \"" + timedOut + "\" >&2\nexit 255\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	c.Remote = &gitremote.Git{Repo: c.Repo, Name: gt.RemoteName, RouteEnv: []string{"GIT_SSH_COMMAND=" + script}}
+	err := c.Remote.Fetch(context.Background(), gitremote.FetchRequest{Refspecs: gitremote.TrackingRefspecs(gt.RemoteName, gt.DefaultBranch)})
+	if !errors.Is(err, gitremote.ErrUnconfirmed) {
+		t.Fatalf("fetch through a timing-out host: %v, want ErrUnconfirmed", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "calls"))
+	if n := strings.Count(string(b), "call"); n != 1 {
+		t.Fatalf("a timed-out fetch made %d ssh calls, want 1 (no retry after a timeout)", n)
 	}
 }

@@ -75,7 +75,13 @@ const (
 	// agents.person_only only adds refusals and the roster verbs had no
 	// allow switch to reuse (TEAM_PROFILES 13).
 	KeyAgentsMayManagePeople Key = "agents.may_manage_people"
-	KeyTasksMaxDepth         Key = "tasks.max_depth"
+	// KeyAgentsMaxClaimsPerAgent: how many task claims one agent session
+	// (a person: one worktree) may hold at once (devco:S-20). A limit, the
+	// smaller is stricter, default 1: a team sets the cap and a personal
+	// config.yaml `agents.max_claims_per_agent` may only lower it, so an
+	// agent cannot lift its own cap. A value below 1 counts as 1.
+	KeyAgentsMaxClaimsPerAgent Key = "agents.max_claims_per_agent"
+	KeyTasksMaxDepth           Key = "tasks.max_depth"
 	// KeyTasksMaxChildren: most direct sub-tasks of one parent (TASK 6.4,
 	// open question 4 answer A, FA-TASK-1: default 200, ceiling 1000); a
 	// limit, the smaller is stricter.
@@ -212,6 +218,7 @@ const (
 	defaultMetaRenderKeysBudget int64 = 6144      // METADATA 3.14 (meta.RenderKeysBudget)
 	ceilingMetaMaxDepth         int64 = 6         // metafilter.ImportMaxDepth: deeper keys would quarantine on import
 	defaultTasksHistoryMax      int64 = 200       // TSQ10
+	defaultMaxClaimsPerAgent    int64 = 1         // devco:S-20, the built-in agents.max_claims_per_agent
 	ceilingTasksHistoryMax      int64 = 1000      // TSQ10 "up to 1000"
 	defaultPreviewRows          int64 = 20        // XQ2
 	defaultTimeLongSpanMin      int64 = 600       // TQ2: 10h
@@ -446,6 +453,8 @@ func Keys() []KeyDef {
 		// --confirm; a lower level may not switch it back off.
 		{Key: KeyTrashPurgeOnDelete, Shape: ShapeFlag, Strict: true, Default: value.BoolOf(false), Doc: "every delete purges (tombstone, no trash) and needs --confirm (DELETION 3.12)"},
 		{Key: KeyAgentsPersonOnly, Shape: ShapeSet, Default: mustList(), Doc: "operations only a person may run"},
+		{Key: KeyAgentsMaxClaimsPerAgent, Shape: ShapeLimit, Default: value.Int(defaultMaxClaimsPerAgent),
+			Doc: "task claims one agent session (a person: one worktree) may hold at once; config.yaml may only lower it (at least 1)"},
 		// TS-4: false is stricter (agents refused), so a level that sets
 		// false cannot be switched back on below it. Default true (owner
 		// decision 2026-11-11): an agent acts for its person, and a store

@@ -66,6 +66,7 @@ var whereGitLore = []struct{ pattern, what string }{
 	{"state", "the store lock's journal of audit records not yet acknowledged"},
 	{"audit-pending.jsonl", "the journal of audit records not yet acknowledged (a folder store's)"},
 	{"fetch-stamp", "when lore last fetched the remote"},
+	{"fetch-failed", "when a fetch last could not reach the remote; until live.fetch_ttl has passed, lore does not try again on its own (lore sync always does)"},
 	{"remote-tip", "the store branch's tip on the remote when lore last saw it, so a store repo deleted and made again is noticed, never refilled"},
 	{"remote-reset", "set when lore found the store's repo deleted and made again; nothing is pushed until lore store push --restore or lore store forget"},
 	{gitbackend.IdentityRecordFile, "the user.email lore wrote into this clone's .git/config, so lore keeps only its own value current and never changes one you set"},

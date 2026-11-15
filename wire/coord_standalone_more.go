@@ -60,7 +60,11 @@ func (h standaloneCoord) TaskReassign(ctx context.Context, in opscoord.ReassignI
 	}
 	by := w.actorID
 	gone := h.goneActors(ctx)
-	if _, err = coord.OverrideChecked(ctx, w.env(ctx), in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
+	env := w.env(ctx)
+	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, "a reassign of a claimed task"); err != nil {
+		return opscoord.Report{}, err
+	}
+	if _, err = coord.OverrideChecked(ctx, env, in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
 		prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
 		d.SetStr(fieldTaskLead, to)
 		d[schema.FieldTaskAssignees] = canonjson.Array(canonjson.String(to))

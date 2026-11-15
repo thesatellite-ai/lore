@@ -45,6 +45,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckTaskLead, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorTaskLeads(c, fix) }},
 		{DoctorCheckTriageOwner, a.DoctorTriageOwner},
 		{DoctorCheckStoreLock, a.DoctorStoreLocks},
+		{DoctorCheckClockSkew, a.DoctorClockSkew}, // doctor_clockskew.go (devco:U-3)
 		{DoctorCheckEditAfterPurge, a.DoctorEditsAfterPurge},
 		{DoctorCheckInternalOff, a.DoctorInternalOff},
 		{DoctorCheckResurrected, a.DoctorResurrected},

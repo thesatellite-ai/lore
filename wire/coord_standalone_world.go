@@ -78,9 +78,16 @@ type coordWorld struct {
 	autopushChosen bool
 	lease          signals.Lease
 	agents         coord.Agents
-	folder         string
-	who            identity.Resolved
-	actorID        string
+	// maxClaimsConfig is agents.max_claims_per_agent as config.yaml (top
+	// level, then the org entry) sets it; 0 = unset. It may only lower the
+	// team policy's cap (devco:S-20, env).
+	maxClaimsConfig int
+	// commonDir is the repository's shared git directory when it has no
+	// remote: its signals ref is written there (devco:D-362).
+	commonDir string
+	folder    string
+	who       identity.Resolved
+	actorID   string
 	// sit is the org resolution of this checkout (links, role, org).
 	sit orgresolve.Result
 	// orgStore is the attached name of the org store at this repo's linked
@@ -180,6 +187,8 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	w.settings(sit.Config, sit.Result.Org)
 	if _, rerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + w.remoteName + ".url"}}); rerr == nil {
 		w.remote = &gitremote.Git{Repo: repo, Name: w.remoteName}
+	} else if out, cerr := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}}); cerr == nil {
+		w.commonDir = strings.TrimSpace(string(out)) // devco:D-362: the signals ref of a repo with no remote
 	}
 	w.spot = w.repoSpot()
 	return w, nil
@@ -425,7 +434,7 @@ func (w *coordWorld) settings(cfg *orgconf.Config, org *orgconf.Org) {
 				continue
 			}
 			if ag.MaxClaimsPerAgent != nil {
-				w.agents.MaxClaims = *ag.MaxClaimsPerAgent
+				w.maxClaimsConfig = *ag.MaxClaimsPerAgent
 			}
 			if ag.MaxAttempts != nil {
 				w.agents.MaxAttempts = *ag.MaxAttempts
@@ -535,19 +544,42 @@ func (w *coordWorld) held() coord.HeldStore {
 	return coord.HeldStore{Path: filepath.Join(w.stateDir, heldFile)}
 }
 
+// localSignalsRemoteName names the tracking namespace of the signals ref
+// of a repo with no remote (refs/lore-remote/local/…), so it never mixes
+// with a remote's copy once the repo gets one.
+const localSignalsRemoteName = "local"
+
+// localSignalsRemote is the repo's own git directory as the signals
+// "remote" when this repo's own ref has no remote (devco:D-362: claims in a
+// solo repo failed E_OFFLINE "autopush is off"). The signals ref then
+// lives in this repository only; a linked store's ref never takes this.
+func localSignalsRemote(sp sigSpot, commonDir string) (gitremote.Remote, bool) {
+	if sp.remote != nil || sp.store || sp.repo == nil || commonDir == "" {
+		return nil, false
+	}
+	return &gitremote.Git{Repo: sp.repo, Name: commonDir}, true
+}
+
 // signalsStore is this repo's own signals ref (§1 "Refs").
 func (w *coordWorld) signalsStore() *signals.Store {
 	name := w.who.DisplayName
 	email := signatureEmail(w.who.StableKey)
 	sp := w.spot
+	remote, remoteName, autopush := sp.remote, sp.remoteName, w.autopush && sp.remote != nil
+	if local, ok := localSignalsRemote(sp, w.commonDir); ok {
+		// devco:D-362: a repo with no remote coordinates on its own git
+		// directory: the claim is local by nature (nothing to push to),
+		// with the same lease, fencing and companions as a pushed one.
+		remote, remoteName, autopush = local, localSignalsRemoteName, true
+	}
 	return &signals.Store{
-		Repo: sp.repo, Remote: sp.remote, RemoteName: sp.remoteName, Ref: sp.ref,
+		Repo: sp.repo, Remote: remote, RemoteName: remoteName, Ref: sp.ref,
 		Seen:  signals.SeenStore{Path: sp.seen},
 		Clock: w.a, Lease: w.lease,
 		Signature: func(at time.Time) gitref.Signature {
 			return gitref.Signature{Name: name, Email: email, When: at}
 		},
-		Autopush: w.autopush && sp.remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
+		Autopush: autopush, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		Trace: signalsTrace(os.Stderr),
 		// FORMAT_EVOLUTION rule 2 (OV48): no claim, renew or release on a
 		// project this lore may not write. The engine's floor alone
@@ -609,7 +641,9 @@ func (w *coordWorld) env(ctx context.Context) coord.Env {
 	agents := w.agents
 	agents.PerCheckout = !w.isAgent() // devco:Q-1: a person's limit is per worktree, an agent's per session
 	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: agents, Held: w.held()}
-	if set, err := w.a.Policy(ctx, store.SourceRepo); err == nil {
+	set, perr := w.a.Policy(ctx, store.SourceRepo)
+	e.Agents.TeamMaxClaims, e.Agents.MaxClaims = maxClaims(set, perr == nil, w.maxClaimsConfig)
+	if perr == nil {
 		// OV15B-URG, OV7-6: the repo's urgency weights and claim-span keys;
 		// a policy that cannot be read leaves the built-in defaults.
 		if uw, uerr := opstask.UrgencyWeights(set); uerr == nil {
@@ -618,6 +652,25 @@ func (w *coordWorld) env(ctx context.Context) coord.Env {
 		e.Time = claimSpans(set)
 	}
 	return e
+}
+
+// maxClaims is the team's cap and the effective WIP limit (devco:S-20):
+// the policy agents.max_claims_per_agent (built-in 1 when no level sets
+// it or the policy cannot be read; below 1 counts as 1), lowered by the
+// person's config.yaml when that sets less. A config value above the
+// team's cap is ignored: an agent cannot lift its own limit.
+func maxClaims(set policy.Set, read bool, configured int) (team, effective int) {
+	team = defaultMaxClaims
+	if read {
+		if n, ok := set.Limit(policy.KeyAgentsMaxClaimsPerAgent); ok {
+			team = max(int(n), 1)
+		}
+	}
+	effective = team
+	if configured > 0 && configured < team {
+		effective = configured
+	}
+	return team, effective
 }
 
 // Built-in time.long_span / time.coalesce_gap (TQ2 10h, TQ4 2m).
@@ -1125,6 +1178,11 @@ func coordErr(err error) error {
 		const hint = "lore task next claims the next ready task; lore task list shows the open ones"
 		if ad, ok := coord.IsAlreadyDone(err); ok {
 			return errs.New(errs.Refused, ad.Error()).WithHint(hint)
+		}
+		if rv, ok := coord.IsRevoked(err); ok {
+			// devco:S-13: the person who revoked it decides who works on it.
+			return errs.New(errs.Refused, rv.Error()).
+				WithHint("lore task next claims other work; a person hands it back with `lore task reassign --id " + rv.Task + " --assign @<handle>`")
 		}
 		msg := strings.TrimPrefix(err.Error(), coord.ErrNotOpen.Error()+": ")
 		return errs.New(errs.Refused, msg+"; only an open task can be claimed").WithHint(hint)

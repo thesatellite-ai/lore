@@ -103,9 +103,11 @@ type call struct {
 // run runs git and returns stdout. A fetch, push or ls-remote whose
 // connection never opened (gitremote.NeverConnected) is tried once more
 // after gitremote.RetryPause (devco L-10 / L-12: one dropped ssh call on a
-// flaky link made the store "offline" for the whole sync); the remote saw
+// flaky link made the store "offline" for the whole sync), unless the first
+// try already took a connect timeout (gitremote.RetryAfter); the remote saw
 // nothing, so the retry cannot apply a push twice.
 func (r runner) run(ctx context.Context, c call) ([]byte, error) {
+	start := time.Now()
 	out, err := r.runOnce(ctx, c)
 	if err == nil || !retriedSubcommands[subcommand(c.args)] {
 		return out, err
@@ -113,6 +115,9 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 	var ge *gitError
 	if !errors.As(err, &ge) || ge.code == netRefusedExit || !gitremote.NeverConnected(ge.stderr) {
 		return out, err
+	}
+	if !gitremote.RetryAfter(time.Since(start)) {
+		return out, err // it already waited out a connect timeout (devco:U-6)
 	}
 	select {
 	case <-ctx.Done():
@@ -209,9 +214,22 @@ func runCancellable(ctx context.Context, cmd *exec.Cmd) error {
 func lookGit(bin string) (string, error) {
 	p, err := exec.LookPath(bin)
 	if err != nil {
-		return "", errs.Wrap(errs.Internal, "git: the git program was not found", err).WithHint("install git or pass its path")
+		return "", GitMissingErr(err)
 	}
 	return p, nil
+}
+
+// GitMissingErr is the error of a git program that is not on PATH
+// (devco:U-5): E_GIT_MISSING naming the folders searched, with the two
+// fixes that exist. Before, it was E_INTERNAL "install git or pass its
+// path", and no flag or variable takes a path.
+func GitMissingErr(cause error) error {
+	where := os.Getenv("PATH")
+	if where == "" {
+		where = "an empty PATH"
+	}
+	return errs.Wrap(errs.GitMissing, "lore needs git, and there is no git program on PATH (searched: "+where+")", cause).
+		WithHint("install git, or put the folder that holds it on PATH, then run the command again")
 }
 
 // subcommand is the first non-option argument, for error messages.

@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/url"
 	"os"
@@ -149,10 +150,16 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 		return nil, errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (a dry run or a CI read)").
 			WithHint("a run that is neither a dry run nor a CI read clones it to " + dir)
 	}
+	lockOpts := []rowfs.Option{rowfs.WithLockPath(paths.Lock), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)}
+	if denied := cloneUnwritable(paths); denied != nil && exists(filepath.Join(dir, gitDirName, headFileName)) {
+		// devco:U-4: a clone lore may not write (a read-only lore home, a
+		// clone owned by someone else) still reads: no lock, no fetch, no
+		// setup; a write answers why and how to fix it
+		return openCloneReadOnly(ctx, cfg, bin, remote, dir, folder, o, lockOpts, denied)
+	}
 	if err = os.MkdirAll(paths.StateDir, cloneDirMode); err != nil {
 		return nil, errs.FileIO("create the clone folder", paths.StateDir, err)
 	}
-	lockOpts := []rowfs.Option{rowfs.WithLockPath(paths.Lock), rowfs.WithLockTimeout(cfg.lockTimeout), rowfs.WithLockTimeout(o.LockTimeout), rowfs.WithAllowNetworkFS(o.AllowNetworkFS)}
 	setupRoot, err := rowfs.Open(dir, lockOpts...)
 	if err != nil {
 		return nil, err
@@ -187,6 +194,81 @@ func OpenClone(ctx context.Context, remote, dir, folder string, o store.OpenOpti
 		return nil, err
 	}
 	return b, nil
+}
+
+// cloneUnwritable is the permission error of a clone whose state folder or
+// lock file this process may not write (nil when it may, or when the
+// failure is anything but a permission one: the normal open reports it).
+// Creating the lock file is no change: the store lock creates it anyway.
+func cloneUnwritable(p ClonePaths) error {
+	if err := os.MkdirAll(p.StateDir, cloneDirMode); err != nil {
+		if errors.Is(err, fs.ErrPermission) {
+			return errs.FileIO("create the clone state folder", p.StateDir, err)
+		}
+		return nil
+	}
+	f, err := os.OpenFile(p.Lock, os.O_RDWR|os.O_CREATE, rowfsLockMode) // #nosec G304 -- lore's own lock path
+	if err != nil {
+		if errors.Is(err, fs.ErrPermission) {
+			return errs.FileIO("take the store lock", p.Lock, err)
+		}
+		return nil
+	}
+	_ = f.Close() // a probe: nothing was written
+	return nil
+}
+
+// rowfsLockMode is the mode the store lock file is made with.
+const rowfsLockMode = 0o600
+
+// openCloneReadOnly opens an existing clone lore may not write (denied
+// says why): reads work from what the clone holds, nothing is fetched,
+// locked or set up, and a write or sync answers E_READ_ONLY_FS naming the
+// folder and a fix that works (devco:U-4). Before, every command, reads
+// included, failed taking the store lock, and the hint's chmod of the lock
+// folder left the read-only lock file inside it as it was.
+func openCloneReadOnly(ctx context.Context, cfg config, bin, remote, dir, folder string, o store.OpenOptions, lockOpts []rowfs.Option, denied error) (*Backend, error) {
+	b := &Backend{cfg: cfg, git: runner{bin: bin, owned: true}, mode: modeClone, readOnly: true, unwritable: true, work: dir}
+	b.git.remote = remote
+	b.readOnlyErr = unwritableErr(dir, o.Home, denied)
+	b.handPending, b.identityRemote = true, remote // set up by the first write lore may make
+	out, err := b.git.run(ctx, call{dir: dir, args: []string{"symbolic-ref", "--short", "HEAD"}})
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "git: the store clone is not on a branch", err).
+			WithHint("check a branch out in " + dir + " (`git -C " + dir + " switch <branch>`)")
+	}
+	b.branch = trimmed(out)
+	if b.root, err = rowfs.Open(dir, append(lockOpts, rowfs.WithClock(cfg.now))...); err != nil {
+		return nil, err
+	}
+	if b.folder, err = b.root.Folder(folder); err != nil {
+		return nil, err
+	}
+	b.folder.SetMetaSource(b.sharedFile)
+	if err := b.checkMarker(ctx); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// unwritableErr is the refusal of a write to a clone lore may not write:
+// E_READ_ONLY_FS, wrapping store.ErrReadOnly, with the fix of what blocks
+// (denied's hint) and, for a clone under the lore home, the whole home's:
+// make it writable, or point LORE_HOME at a writable folder.
+func unwritableErr(dir, home string, denied error) error {
+	reason := denied.Error()
+	var le *errs.Error
+	if errors.As(denied, &le) && le.Message != "" {
+		reason = le.Message
+	}
+	hint := errs.PermissionHint(dir)
+	if le != nil && le.Hint != "" {
+		hint = le.Hint
+	}
+	if home != "" && strings.HasPrefix(dir, home+string(filepath.Separator)) {
+		hint = "lore cannot write its home " + home + ": make it writable (chmod -R u+rwX " + home + "), or point LORE_HOME at a writable folder (a new home has no stores yet: lore setup join --invite <invite> joins them there)"
+	}
+	return errs.Wrap(errs.ReadOnlyFS, "the store clone "+dir+" is read-only for lore ("+reason+"): reads work, writes and syncs do not", fmt.Errorf("%w: %w", store.ErrReadOnly, denied)).WithHint(hint)
 }
 
 // checkCloneFolder refuses a clone folder lore cannot use as it is: a

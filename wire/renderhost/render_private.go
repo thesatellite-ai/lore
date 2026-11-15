@@ -244,7 +244,7 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 		}
 		for _, f := range p.files {
 			if err := atomicWriteFile(f.path, []byte(f.body), renderFileMode); err != nil {
-				return errs.Wrap(errs.Internal, "write the private render", err)
+				return errs.FileIOOr("write the private render", f.path, err) // the cause and its fix, not a bare E_INTERNAL
 			}
 		}
 	}

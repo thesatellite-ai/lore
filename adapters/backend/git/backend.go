@@ -62,11 +62,14 @@ type Backend struct {
 	// answers instead of the bare store.ErrReadOnly, so the refusal names the
 	// store, why it takes no writes and what to do instead (devco N-8).
 	readOnlyErr error
-	root        *rowfs.Root   // the worktree (clone mode) or the repo top (repo mode)
-	folder      *rowfs.Folder // the data folder this Backend reads and writes
-	work        string        // absolute worktree path (= root.Dir())
-	branch      string        // clone mode: the store branch
-	marker      rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
+	// unwritable: the clone was opened read-only because lore may not
+	// write it (openCloneReadOnly, devco:U-4): no fetch, no sync, no lock.
+	unwritable bool
+	root       *rowfs.Root   // the worktree (clone mode) or the repo top (repo mode)
+	folder     *rowfs.Folder // the data folder this Backend reads and writes
+	work       string        // absolute worktree path (= root.Dir())
+	branch     string        // clone mode: the store branch
+	marker     rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
 
 	// beforePush, when set (tests only), runs before each push attempt so a
 	// test can push from another clone and make this one lose the race.

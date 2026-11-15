@@ -53,6 +53,17 @@ const (
 	// done), and a claim of a task it marks is refused. A binary without
 	// this kind reads the file as malformed and drops it on its next write.
 	KindDone Kind = "done"
+	// KindRevoke records a person's revoke of a holder's claim (devco:S-12,
+	// S-13). The revoke's row change reaches other clones only with a sync,
+	// so the fenced-out holder could neither say who revoked it (it read
+	// its own unchanged row and reported a lease expiry in the future) nor
+	// keep away from the task (its next `task next` claimed it again). The
+	// marker sits on the signals ref, which the holder reads on every
+	// write: Holder/Session/ClaimToken name the revoked claim, By/ByLabel
+	// the person, Since the revoke. It stays until a person reassigns the
+	// task or its Expires (RevokeKeep in coord) passes. A binary without
+	// this kind reads the file as malformed and drops it on its next write.
+	KindRevoke Kind = "revoke"
 )
 
 // Folders inside one project folder of the signals tree (§1 "Files and
@@ -62,6 +73,9 @@ const (
 	ResourcesDir = "resources"
 	// DoneDir holds the done markers (KindDone): `<folder>/done/<task-id>.json`.
 	DoneDir = "done"
+	// RevokedDir holds the revoke markers (KindRevoke):
+	// `<folder>/revoked/<task-id>.json`.
+	RevokedDir = "revoked"
 	// fileExt is the extension of every signal file.
 	fileExt = ".json"
 )
@@ -125,6 +139,10 @@ type Signal struct {
 	Owns []string `json:"owns,omitempty"`
 	// Host is the machine the holder runs on (messages only).
 	Host string `json:"host,omitempty"`
+	// By and ByLabel name the person who revoked the claim (KindRevoke
+	// only; Holder is then the revoked holder). Additive wire fields.
+	By      string `json:"by,omitempty"`
+	ByLabel string `json:"by_label,omitempty"`
 }
 
 // ErrBadSignal means a signal file does not decode or misses required
@@ -159,9 +177,9 @@ func Decode(b []byte) (Signal, error) {
 		return Signal{}, fmt.Errorf("%w: %w", ErrBadSignal, err)
 	}
 	switch {
-	case s.Kind != KindClaim && s.Kind != KindResource && s.Kind != KindDone:
+	case s.Kind != KindClaim && s.Kind != KindResource && s.Kind != KindDone && s.Kind != KindRevoke:
 		return Signal{}, fmt.Errorf("%w: unknown kind %q", ErrBadSignal, s.Kind)
-	case (s.Kind == KindClaim || s.Kind == KindDone) && s.Task == "":
+	case (s.Kind == KindClaim || s.Kind == KindDone || s.Kind == KindRevoke) && s.Task == "":
 		return Signal{}, fmt.Errorf("%w: %s without task", ErrBadSignal, s.Kind)
 	case s.Kind == KindResource && s.Name == "":
 		return Signal{}, fmt.Errorf("%w: resource without name", ErrBadSignal)
@@ -176,6 +194,10 @@ func ClaimPath(folder, id string) string { return path.Join(folder, ClaimsDir, i
 
 // DonePath is the tree path of the done marker of task id in project folder.
 func DonePath(folder, id string) string { return path.Join(folder, DoneDir, id+fileExt) }
+
+// RevokedPath is the tree path of the revoke marker of task id in project
+// folder.
+func RevokedPath(folder, id string) string { return path.Join(folder, RevokedDir, id+fileExt) }
 
 // ResourcePath is the tree path of a hold on name in project folder.
 func ResourcePath(folder, name string) string { return path.Join(folder, ResourcesDir, name+fileExt) }
@@ -214,6 +236,8 @@ func (k Key) Path() string {
 		return ResourcePath(k.Folder, k.Subject)
 	case KindDone:
 		return DonePath(k.Folder, k.Subject)
+	case KindRevoke:
+		return RevokedPath(k.Folder, k.Subject)
 	}
 	return ClaimPath(k.Folder, k.Subject)
 }
@@ -239,6 +263,8 @@ func ParsePath(p string) (Key, bool) {
 		return Key{Folder: folder, Kind: KindResource, Subject: subject}, true
 	case DoneDir:
 		return Key{Folder: folder, Kind: KindDone, Subject: subject}, true
+	case RevokedDir:
+		return Key{Folder: folder, Kind: KindRevoke, Subject: subject}, true
 	}
 	return Key{}, false
 }

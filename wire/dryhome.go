@@ -27,6 +27,7 @@ import (
 	"syscall"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 var (
@@ -84,6 +85,21 @@ func scratchFor(home string) string {
 		}
 	}
 	return dryScratchDir
+}
+
+// RefuseWriteInReadOnlyHome is the refusal of a writing command in a lore
+// home lore cannot write (devco:U-4), nil when the home is writable, not
+// made yet, or the run is a dry run. Reads still work there (writableHome
+// sends caches to a scratch folder, store clones open read-only); a write
+// would store its row and then fail on the audit trail, the machine store
+// or the store lock with E_INTERNAL, so it is refused before anything is
+// written, naming the home and the two fixes that work.
+func RefuseWriteInReadOnlyHome(home string) error {
+	if home == "" || dryRunProcess() || !isDirPath(home) || homeWritable(home) {
+		return nil
+	}
+	return errs.New(errs.ReadOnlyFS, "lore cannot write its home "+home+" (read-only): this command writes, so nothing was changed; reads still work").
+		WithHint("make it writable (chmod -R u+rwX " + home + "), or point LORE_HOME at a writable folder (a new home has no stores yet: lore setup join --invite <invite> joins them there)")
 }
 
 // scratchHome reports whether home is redirected to a scratch folder

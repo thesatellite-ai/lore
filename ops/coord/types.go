@@ -142,6 +142,9 @@ type ReassignIn struct {
 	ID     string `json:"id,omitempty" arg:"0" desc:"the task id (tsk_…); leave out with --from"`
 	Assign string `json:"assign,omitempty" flag:"assign" desc:"the new assignee (@handle)"`
 	From   string `json:"from,omitempty" flag:"from" desc:"reassign every open task of this person"`
+	// Push: as ClaimIn.Push, for a reassign that drops a claim (or a
+	// revoke marker) on the code repo's signals ref (devco:S-17).
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
 }
 
 // ReassignTask is one task a `task reassign --from` batch changes.
@@ -181,6 +184,9 @@ type ReleaseIn struct {
 type RevokeIn struct {
 	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	From string `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
+	// Push: as ClaimIn.Push (devco:S-17): a revoke changes refs/lore/signals,
+	// so on a code repo's own remote it needs the same explicit go-ahead.
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the revoke to this code repo's remote now (refs/lore/signals); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
 }
 
 // HoldClaimIn is the input of hold.claim.

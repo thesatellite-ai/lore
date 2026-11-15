@@ -7,6 +7,7 @@ package wire
 // the lines they printed.
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -68,7 +69,7 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 		return opscoord.Report{}, errs.New(errs.InvalidInput, "file ownership overlaps: "+strings.Join(cr.Overlaps, "; ")).
 			WithHint("drop --strict to claim with a warning")
 	}
-	return opscoord.Report{Lines: append(lines, claimLines(in.ID, cr, w.lease.TTL, env.Signals.Ref)...)}, nil
+	return opscoord.Report{Lines: append(lines, claimLines(in.ID, cr, w.lease.TTL, w.claimPlace(env.Signals.Ref))...)}, nil
 }
 
 // claimLines is v0.1.17 printClaim.
@@ -94,6 +95,16 @@ func claimLines(id string, cr coord.ClaimResult, ttl time.Duration, ref string) 
 		out = append(out, "! file ownership overlaps: "+o)
 	}
 	return out
+}
+
+// claimPlace is where a claim line says the claim went: the signals ref,
+// and for a repo with no remote that it stays local (devco:D-362: there is
+// nothing to push to, so --push changes nothing and nobody else sees it).
+func (w *coordWorld) claimPlace(ref string) string {
+	if _, local := localSignalsRemote(w.spot, w.commonDir); local {
+		return ref + " (local: this repo has no remote, so the claim stays in this repository)"
+	}
+	return ref
 }
 
 // shortDuration prints 20m instead of 20m0s.
@@ -285,15 +296,55 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 	if err = w.requireHuman(ctx, "revoke"); err != nil {
 		return opscoord.Report{}, err
 	}
-	removed, err := coord.Override(ctx, w.env(ctx), in.ID, coord.OverrideRevoke, nil)
+	env := w.env(ctx)
+	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, "a revoke"); err != nil {
+		return opscoord.Report{}, err
+	}
+	removed, err := coord.Override(ctx, env, in.ID, coord.OverrideRevoke, nil)
 	if err != nil {
 		return opscoord.Report{}, coordErr(err)
 	}
-	who := "no one held it"
-	if removed != nil {
-		who = "was held by " + holderName(*removed)
+	if removed == nil {
+		return opscoord.Report{Lines: []string{fmt.Sprintf("%s revoked the claim on %s (no one held it)", markOK, in.ID)}}, nil
 	}
-	return opscoord.Report{Lines: []string{fmt.Sprintf("%s revoked the claim on %s (%s)", markOK, in.ID, who)}}, nil
+	lines := []string{fmt.Sprintf("%s revoked the claim on %s (was held by %s)", markOK, in.ID, holderName(*removed))}
+	return opscoord.Report{Lines: append(lines, w.overridePushedLine(removed.Holder != w.actorID))}, nil
+}
+
+// requireOverridePush is requirePushAsked for a person's override
+// (revoke, reassign; devco:S-17): it asks only when the override changes
+// the signals ref, that is when the task has a claim or a revoke marker on
+// it. An override of a task nobody holds writes its row only, which waits
+// for lore sync like every other row.
+func (w *coordWorld) requireOverridePush(ctx context.Context, env coord.Env, id string, asked bool, what string) error {
+	if asked || w.autopushChosen || w.spot.store || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+		return nil
+	}
+	v, err := env.Signals.Read(ctx)
+	if err != nil {
+		return coordErr(err)
+	}
+	_, claimed := v.Board[signals.ClaimPath(env.Folder, id)]
+	_, marked := v.Board[signals.RevokedPath(env.Folder, id)]
+	if !claimed && !marked {
+		return nil
+	}
+	return w.requirePushAsked(false, what)
+}
+
+// overridePushedLine says what a revoke sent and to where (devco:S-17: the
+// row line alone read "not pushed yet" although the holder was already
+// fenced out). marked: the holder is kept off the task until a reassign.
+func (w *coordWorld) overridePushedLine(marked bool) string {
+	where := "on " + w.spot.ref
+	if w.spot.remote != nil {
+		where = "pushed " + w.spot.ref + " to " + cmp.Or(w.spot.remoteName, w.remoteName)
+	}
+	line := "  " + where + ": the holder is fenced out now"
+	if marked {
+		line += " and lore task next will not hand it this task again until a person runs `lore task reassign`"
+	}
+	return line + "; the task row itself waits for your next lore sync"
 }
 
 // nextTagName is the tag whose tasks get the next_tag term (TASK 13.2).
@@ -347,7 +398,7 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		lines = append(lines, fmt.Sprintf("you hold %s; resume, or `lore task release --id %s`", res.Task, res.Task))
 		return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
 	}
-	lines = append(lines, claimLines(res.Task, res.Claim, w.lease.TTL, env.Signals.Ref)...)
+	lines = append(lines, claimLines(res.Task, res.Claim, w.lease.TTL, w.claimPlace(env.Signals.Ref))...)
 	if s, ok := res.Scores[res.Task]; ok && in.Why {
 		lines = append(lines, "  urgency "+urgency.Format(s.Total))
 		for _, l := range s.Lines() {

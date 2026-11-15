@@ -465,6 +465,11 @@ func (a *App) localClaims(ctx context.Context) (localBoard, error) {
 	if remote == "" {
 		remote = defaultRemote
 	}
+	if _, rerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remote + ".url"}}); rerr != nil {
+		// devco:D-362: no such remote, so this repo's claims are local and
+		// their tracking copy sits under the local namespace (signalsStore).
+		remote = localSignalsRemoteName
+	}
 	st := &signals.Store{
 		Repo: repo, RemoteName: remote, Ref: signals.CodeRepoRef,
 		Seen:  signals.SeenStore{Path: filepath.Join(strings.TrimSpace(string(gitDir)), signalsStateDir, signalsSeenFile)},

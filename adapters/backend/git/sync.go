@@ -74,6 +74,9 @@ var lostRaceReasons = []string{
 // remote whose epoch is higher (its history was compacted) is adopted
 // before any merge (adoptEpoch).
 func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncReport, err error) {
+	if b.unwritable {
+		return store.SyncReport{}, b.refusedWrite() // devco:U-4: it names the folder and the fix
+	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {
 		return store.SyncReport{}, err

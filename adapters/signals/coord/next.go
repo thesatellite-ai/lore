@@ -155,6 +155,9 @@ func queueOf(env Env, v signals.View, req NextRequest, docs []Doc) queue.Result 
 		if _, done := DoneMarkerOf(v, env.Folder, t.ID, d); done && isOpen(d.Status()) {
 			t.Status = queue.Status(statusDone) // G-10: finished elsewhere; this row has not synced it yet
 		}
+		if rerr, revoked := IsRevoked(RevokedFrom(v, env.Folder, t.ID, env.Caller.ActorID)); revoked {
+			t.RevokedFromCaller = fmt.Sprintf("revoked from you by %s at %s; a person reassigns it (lore task reassign --id %s --assign @<handle>)", rerr.By, rerr.At.UTC().Format(time.Kitchen), t.ID)
+		}
 		tasks = append(tasks, t)
 	}
 	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts, Weights: env.Urgency})

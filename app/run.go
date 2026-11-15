@@ -204,6 +204,7 @@ func run(ctx context.Context, args []string) int {
 			return nil
 		}})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
+	hooks = append(hooks, readOnlyHomeHook(home))          // guard.go: a write in a read-only lore home is refused up front
 	// E-FATES-5: after an upgrade, a writing command or `lore sync` moves an
 	// auto-pinned lore-sync-merge workflow to this release (v0.1.17 notice).
 	hooks = append(hooks, hosthooks.PinRefreshHook(wd, version, os.Stderr))

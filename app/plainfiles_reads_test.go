@@ -49,11 +49,13 @@ func pfLastPush(s string) string {
 // what a read last told the person, so it does not repeat it, B3-13).
 // remote-tip is fetch bookkeeping too: the remote tip a fetch saw, kept
 // past a later prune so a wiped store is never refilled (B2-28); it must
-// be written by the read's own fetch, the fetch that prunes.
+// be written by the read's own fetch, the fetch that prunes. fetch-failed
+// is its twin: the read's fetch that could not reach the remote, so the
+// next commands back off instead of waiting for the network (devco:U-6).
 func pfSkip(rel string) bool {
 	base := filepath.Base(rel)
 	switch {
-	case base == "index" || base == "FETCH_HEAD" || base == "fetch-stamp" || base == "ORIG_HEAD" || base == "lock" || base == "live.lock" || base == "signals-seen.json" ||
+	case base == "index" || base == "FETCH_HEAD" || base == "fetch-stamp" || base == "fetch-failed" || base == "ORIG_HEAD" || base == "lock" || base == "live.lock" || base == "signals-seen.json" ||
 		base == "waiting_said" || base == "live-waiting-said" || base == "remote-tip":
 		return true
 	case strings.HasPrefix(base, "lore-cache.db"):

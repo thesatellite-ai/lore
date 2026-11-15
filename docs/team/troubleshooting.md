@@ -8,7 +8,7 @@ First steps for anything odd:
 
 - `lore whoami` (add `--explain`): which org, which identity, which store, and why.
 - `lore explain --id <id>`: every copy of a row, which one won, and its landing decision.
-- `lore doctor`: hooks, fetch settings, live rows waiting, clock skew, stores.
+- `lore doctor`: hooks, fetch settings, live rows waiting, clock skew (a warning `clock_skew` names a store whose newest commit is stamped more than 5 minutes ahead of this machine's clock, and who made it), stores.
 - `lore store doctor`: every store this repo and machine use (`.lore/stores.yaml`, the org's stores, your personal store `me`): reachable, unpushed commits and how old the oldest is, a refused push, the clone folders; then every v0.1.17 org store (`orgs[].stores` in `~/.lore/config.yaml`). `lore sync status` prints one line per store: ahead and behind its remote, and the last push. When two people edited the same row, the conflict is listed once, under `refused pushes`, for the store folder that holds the row; the store's other folders are listed under `held pushes` as `held: waiting on <folder>'s conflict (<row>)`, because one clone pushes every folder of a store at once. Settle that one row and run `lore sync`; every folder's commits go out together. These lines, `lore sync conflicts` and `lore explain` name a store folder by its own name, with this repo's name for it beside it when they differ (`store acme/web (here: acme)`), as `lore sync` does; a refusal seen in the store's own folder and settled in a code repo (or the other way round) is cleared wherever the push lands.
 - `--trace` on any command (or `LORE_TRACE=1`): every git command lore runs for live rows, with timing; a fetch, push or ls-remote to a store also names the host it reached (`remote git@github-work` when a setup with a host alias owns the store), so a call that went out as the wrong account shows.
 
@@ -180,6 +180,7 @@ Fix: reconnect and run the command again. Ordinary writes behave differently:
 
 - A memory or task written while the store is unreachable is committed in the local clone and pushed by a later command ("1 file(s) offline: committed in the local clone, pushed by the next command").
 - Live writes in a code repo wait as "(live, not pushed yet: N waiting)".
+- On a network that times out (a train, captive Wi-Fi), lore tries the remote once per command, never twice, and a try that fails is remembered (`.git/lore/fetch-failed`): until `live.fetch_ttl` has passed (5 minutes by default), later reads and writes make no network call at all and run at local speed. `lore sync` always tries the remote, so run it when you are back online to send what waits at once.
 
 `E_CONTENDED` (exit 11) on the same commands is different: the remote answered every time, but another writer got in first on every retry. Nothing was written; wait a few seconds and run the command again.
 
