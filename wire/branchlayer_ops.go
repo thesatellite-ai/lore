@@ -375,13 +375,12 @@ func (a *App) BranchMode(ctx context.Context, in opsbranch.ModeIn) (opsbranch.Mo
 		out.Why = "a detached HEAD has no branch: reads show the shared notes, writes are refused (E_DETACHED) unless LORE_LAYER=off (or --no-layer on an add or edit)"
 		return out, nil
 	}
-	s := branchlayer.DefaultSettings()
-	if lb.settings != nil {
-		if s, err = lb.settings(withoutLayers(ctx)); err != nil {
-			return out, err
-		}
+	// the settings this command's reads, writes and cache path follow
+	// (pinned at open, branchmode.go), so mode never disagrees with them
+	if lb.decideErr != nil {
+		return out, lb.decideErr
 	}
-	d := branchlayer.Classify(branch, lb.code.Default, s)
+	d := branchMode(branch, lb.code.Default, lb.settings)
 	out.Mode, out.Step, out.Why = string(d.Mode), int(d.Step), d.Why(lb.code.Default)
 	off, err := envLayerSetting()
 	if err != nil {

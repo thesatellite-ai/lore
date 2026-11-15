@@ -252,6 +252,12 @@ func StoreDirMoveLine(name string, c rowfs.LayoutChange) string {
 // Marker is the store's lore-store.yaml as read at Open.
 func (b *Backend) Marker() rowfs.Marker { return b.marker }
 
+// RowFolder is the row folder this Backend reads and writes, for a caller
+// that must read a table straight from the files before any cache exists
+// (wire reads the branches.* policy rows before it picks the cache path,
+// devco:D-411).
+func (b *Backend) RowFolder() *rowfs.Folder { return b.folder }
+
 // usable fails after Close or when ctx is done.
 func (b *Backend) usable(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {

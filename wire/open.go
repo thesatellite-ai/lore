@@ -185,7 +185,13 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	// the layer of the checkout's code branch when that branch is isolated
 	// (branchlayer.go); the code repo is asked once, only when such a
 	// folder is attached.
-	wrapLayers(ctx, st, attached)
+	wrapLayers(ctx, st, opts.Home, repoBackend, attached)
+	// devco:D-411: a branch whose pinned mode is shared now (share chosen,
+	// a pattern or a teammate's pushed policy) reads main's cache; the layer
+	// cache it kept while isolated goes now, before any cache opens
+	for _, o := range attached {
+		dropSharedBranchCache(opts.Home, layerOf(o.Backend))
+	}
 	// D16 (formatold.go): a shared store still on lore 0.1.17's layout is
 	// read, never written in the new format, until lore migrate run
 	for i := range attached {
@@ -242,7 +248,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// CFG3 fallback (O10): past the lens attach limit every attached
 		// store shares one combined cache file for this repo, each applied
 		// under its own source name.
-		path, pathErr := combinedCachePath(opts.Home, st.repoTop)
+		layered := make([]store.Backend, len(attached))
+		for i, o := range attached {
+			layered[i] = o.Backend
+		}
+		path, pathErr := combinedCachePath(opts.Home, st.repoTop, layerSubOf(layered))
 		if pathErr != nil {
 			return fail(pathErr)
 		}
@@ -1000,11 +1010,30 @@ func cacheOpen(ctx context.Context, path string, reg *schema.Registry, exp sqlit
 
 // combinedCachePath is <home>/cache/combined/<sha256 of the repo top>.db:
 // one file per code repo, outside the repo so it never shows in git status.
-func combinedCachePath(home, repoTop string) (string, error) {
+// layerSub is the layer cache sub-folder of the command's isolated branch
+// ("" on a shared one, layerSubOf): an isolated branch gets a combined file
+// of its own (<sha256 of top NUL sub>.db), so its layer rows never reach
+// the file the shared branches of this checkout read (devco:D-411).
+func combinedCachePath(home, repoTop, layerSub string) (string, error) {
 	if err := mkCacheDir(filepath.Join(writableHome(home), cacheDir, combinedDir)); err != nil {
 		return "", err
 	}
+	if layerSub != "" {
+		return hashedCacheFile(home, combinedDir, repoTop+"\x00"+layerSub), nil
+	}
 	return hashedCacheFile(home, combinedDir, repoTop), nil
+}
+
+// layerSubOf is the layer cache sub-folder of the first backend that reads
+// through a layer cache, "" when none does (one checkout has one branch,
+// so every layer wrapper of a command names the same one).
+func layerSubOf(backends []store.Backend) string {
+	for _, b := range backends {
+		if sub := layerCacheDirOf(b); sub != "" {
+			return sub
+		}
+	}
+	return ""
 }
 
 // hashedCacheFile is <home>/cache/<dir>/<sha256 of repoTop>.db, the name of

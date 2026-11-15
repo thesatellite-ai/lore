@@ -57,7 +57,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckUntrustedHost, a.DoctorUntrustedHost},
 		{DoctorCheckStoreTrust, a.DoctorStoreTrust}, // storetrust.go (devco R-2, R-7, R-9)
 		{DoctorCheckTrash, a.DoctorTrash},
-		{DoctorCheckBranchLayers, a.DoctorBranchLayers}, // branchlayer_doctor.go (BRANCH_LAYERS 10, 12)
+		{DoctorCheckBranchLayers, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorBranchLayers(c, fix) }}, // branchlayer_doctor.go (BRANCH_LAYERS 10, 12; devco:D-411 stray caches)
 		{DoctorCheckSharedMachine, a.DoctorSharedMachines},
 		{DoctorCheckTeamVersions, a.DoctorTeamVersions},
 		{DoctorCheckCombinedCache, a.DoctorCombinedCache},

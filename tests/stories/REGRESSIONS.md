@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1744 |
+| fixed | 1746 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -697,7 +697,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:V-10 | finding | E_DETACHED on lore decision add named --no-layer, a flag the command did not have | fixed | TestStoryBL24ShareNowAndHonestCounts | the hint names LORE_LAYER=off, which every command takes |
 | devco:V-13 | finding | lore sync said "pushed (sent 42 …)" on every run with a layer open: a push of layers alone counted every row of the folder | fixed | TestSyncCountsLayerRowsNotTheFolder, TestStoryBL24ShareNowAndHonestCounts | adapters/backend/git/sync.go: layer pushes add the rows they carried |
 | devco:V-16 | finding | a lore build that did not know a branches.* policy key failed every read and write with E_CONFIG_INVALID | fixed | TestResolveIgnoresUnknownKey, TestUnknownPolicyKeyIsOneNote | logic/policy: an unknown key is ignored with one note naming the key, the row and lore upgrade; in a namespace that guards writes (agents, secrets, delete) it still fails closed with the upgrade hint; policy set still refuses unknown keys |
-| devco:V-17 | finding | layer caches were not explained in the lore home README and stayed after a branch's notes landed or were dropped | fixed | TestLayerCacheExplainedInHomeLayout, TestStoryBL24ShareNowAndHonestCounts | wire/homelayout.go row; land, drop, purge and the sync sweep remove the branch's layer cache; lore cache prune removes those no repo reads |
+| devco:V-17 | finding | layer caches were not explained in the lore home README and stayed after a branch's notes landed or were dropped | fixed | TestLayerCacheExplainedInHomeLayout, TestStoryBL24ShareNowAndHonestCounts, TestLayerCacheFollowsMode, TestStoryBL25CacheFollowsTheMode | wire/homelayout.go row; land, drop, purge and the sync sweep remove the branch's layer cache; lore cache prune removes those no repo reads |
 | bl:BL-1 | scenario | two developers share a branch's notes through lore sync; a third on main sees nothing; the client repo stays byte-identical | fixed | TestStoryBL1SharedLayer | story tests/stories (BL) |
 | bl:BL-2 | scenario | a merged branch's notes land as one squash commit with the layer moved to the trash; landing twice is a no-op; restore | fixed | TestStoryBL2NormalMergeLands | story tests/stories (BL) |
 | bl:BL-3 | scenario | squash merges: the CI form lands without a config; a deleted branch is landed by hand | fixed | TestStoryBL3SquashMerge | story tests/stories (BL) |
@@ -723,7 +723,9 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bl:F7 | finding | restore --revert after a drop reverted an older landing instead of saying the restored copy was never landed | fixed | TestStoryBL13RestoreRevert | pkg adapters/backend/git |
 | bl:F6 | finding | the layer wrapper hid the audit journal and purge recording of the store clone: a purge in a linked folder was refused E_UNSUPPORTED (found by the journeys) | fixed | TestJourneyAgencyFirstWeeks, TestJourneyTeamLeadUndo | pkg wire |
 | bl:BL-24 | scenario | LORE_LAYER in any case, a decision shared at once with --no-layer, refusals naming only what works, honest sync counts, layer caches gone with their notes | fixed | TestStoryBL24ShareNowAndHonestCounts | story tests/stories (BL) |
+| bl:BL-25 | scenario | the cache follows the branch's mode on every path (default rule, main-like pattern, per-branch isolate and share, a teammate's choice, offline, stacked), no isolated note in main's cache, landed and dropped branches leave no cache, doctor lists and doctor --fix removes a stray one | fixed | TestStoryBL25CacheFollowsTheMode | story tests/stories (BL) |
 | devco:D-410 | finding | owner Mac (10 cores): test steps died at their 15/20/40/60 min go test -timeout and harness deadlines with nothing wrong; every limit was tuned on a 48-core Linux server | fixed | TestFactorFor, TestScaleBySampleDeadline, TestShellHelperAgrees, TestNoRawTimeoutInGateScripts, TestGuardSeesARawTimeout | pkg internal/testtime and tests/lib/testtime.sh: one factor LORE_TEST_TIME_SCALE (default max(1, 48/cores) capped at 6, x1.5 on macOS; 1 on the gate server) on every whole-run limit |
+| devco:D-411 | finding | owner: V-17 fixed fully: one decision of a branch's mode (wire/branchmode.go, branch policy read from the row files before the cache path is chosen) for the cache path, reads, writes, lore branch mode, code-repo mode and doctor; shared branches read main's cache, isolated ones their own, never an isolated row in main's cache (the combined cache too); a mode switch or a teammate's pushed choice moves the cache on the next command; doctor lists and doctor --fix / lore fix remove stray layer caches | fixed | TestLayerCacheFollowsMode, TestIsolatedRowsNeverReachMainCache, TestCombinedCacheSplitsIsolatedBranch, TestBranchPolicyFromFilesMatchesEngine, TestBrokenPolicyRowIsNoGuess, TestStoryBL25CacheFollowsTheMode | wire/branchmode.go, wire/branchlayer.go, wire/branchlayer_doctor.go |
 
 ## lore-adoptfix
 
