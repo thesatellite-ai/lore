@@ -22,8 +22,10 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/logic/merge"
+	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -31,6 +33,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	opsbranch "github.com/thesatellite-ai/lore/ops/branch"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
+	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -227,14 +230,28 @@ func (a *App) BranchShow(ctx context.Context, in opsbranch.ShowIn) (opsbranch.Sh
 	if err != nil {
 		return opsbranch.ShowOut{}, err
 	}
+	onMain, err := bornOnShared(ctx, lb, key.Branch)
+	if err != nil {
+		return opsbranch.ShowOut{}, err
+	}
+	var hint string
+	if len(onMain) > 0 {
+		hint = opsbranch.OnMainHint(key.Branch)
+	}
 	if !l.Exists() {
+		if len(onMain) > 0 {
+			// D-392: a landed (or adopted) branch has no open notes, but
+			// its rows on the shared notes still answer to its name
+			return opsbranch.ShowOut{Rows: []opsbranch.ShowRow{}, OnMain: onMain, Hint: hint,
+				Layer: opsbranch.Layer{Branch: key.Branch, Folder: key.Folder, State: opsbranch.StateLanded, Rows: []opsbranch.Count{}}}, nil
+		}
 		return opsbranch.ShowOut{}, errs.New(errs.NotFound, "no notes of "+key.Branch+" in "+key.Folder).WithHint("lore branch list shows the branches that have some")
 	}
 	rows, err := lb.gb.LayerRows(ctx, l)
 	if err != nil {
 		return opsbranch.ShowOut{}, err
 	}
-	out := opsbranch.ShowOut{Base: l.Base, Split: l.Facts.Split, Head: l.Facts.CodeHead, By: l.Facts.By,
+	out := opsbranch.ShowOut{OnMain: onMain, Hint: hint, Base: l.Base, Split: l.Facts.Split, Head: l.Facts.CodeHead, By: l.Facts.By,
 		Layer: opsbranch.Layer{Branch: key.Branch, Repo: l.Facts.Repo, Folder: key.Folder, State: opsbranch.StateOpen, Rows: rowCounts(rows), Tip: l.Tip}}
 	if !l.Facts.Started.IsZero() {
 		out.Layer.Started = l.Facts.Started.UTC().Format(time.RFC3339)
@@ -252,6 +269,33 @@ func (a *App) BranchShow(ctx context.Context, in opsbranch.ShowIn) (opsbranch.Sh
 		out.Rows = append(out.Rows, opsbranch.ShowRow{Table: string(r.Table), ID: r.ID.String(), Title: titleOf(r), Deleted: r.Deleted})
 	}
 	return out, nil
+}
+
+// bornOnShared counts, per table, the live note rows of the folder's
+// shared notes (the store branch, layers left out) created on branch:
+// what a land or an adopt put there (D-392). The tables are the ones
+// `lore trash add --born-branch` sweeps, so the count and the trash
+// agree.
+func bornOnShared(ctx context.Context, lb *layerBackend, branch string) ([]opsbranch.Count, error) {
+	shared, _, err := lb.inner.Read(withoutLayers(ctx), "")
+	if err != nil {
+		return nil, err
+	}
+	notes := opstrash.NoteTables()
+	var born []store.Row
+	for _, r := range shared {
+		if r.Deleted || !slices.Contains(notes, r.Table) {
+			continue
+		}
+		m, derr := r.Decode()
+		if derr != nil || m.Deleted || trash.Is(m) {
+			continue
+		}
+		if origin.Branch(m.Origin) == branch {
+			born = append(born, r)
+		}
+	}
+	return rowCounts(born), nil
 }
 
 // titleOf is a row's title, name or the start of its body (60 runes).

@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
@@ -172,6 +173,9 @@ type Request struct {
 	// Store is --store (alias --to): only hits of that attached store; ""
 	// = every store. An unattached name is E_NOT_FOUND (wire).
 	Store string
+	// BornBranch is --born-branch (D-392): only rows created on that code
+	// branch (their `_o.git.branch`); "" = every row.
+	BornBranch string
 }
 
 // Hit is one cross-table match, the v0.1.17 globalSearchHit JSON shape.
@@ -243,6 +247,8 @@ type RunIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope (reserved)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"`
+	// Born is the --born-branch flag every list shares (D-392).
+	metalist.Born
 }
 
 // RunData is the data of the search.global envelope.
@@ -356,6 +362,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 		Query: in.Query, Targets: targets, Limit: in.Limit, PerTable: in.PerTable,
 		IncludeArchived: in.IncludeArchived, IncludeDeleted: in.IncludeDeleted,
 		AllRepos: in.AllRepos, MasterOnly: in.MasterOnly, Repo: in.Repo, Store: in.Store,
+		BornBranch: in.BornBranch,
 	})
 	if err != nil {
 		return RunOut{}, err

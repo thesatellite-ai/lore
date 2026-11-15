@@ -7,7 +7,6 @@ package wire
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
+	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -172,7 +172,7 @@ func (a *App) BranchAdopt(ctx context.Context, in opsbranch.AdoptIn) (opsbranch.
 		if derr != nil || m.Origin.IsZero() {
 			continue
 		}
-		if branchOfOrigin(m.Origin.Raw()) == in.Branch {
+		if origin.Branch(m.Origin) == in.Branch {
 			born = append(born, r)
 		}
 	}
@@ -186,20 +186,6 @@ func (a *App) BranchAdopt(ctx context.Context, in opsbranch.AdoptIn) (opsbranch.
 		return opsbranch.DoneOut{}, err
 	}
 	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ moved " + opsbranch.RowsText(rowCounts(born)) + " born on " + in.Branch + " into its notes; the shared notes keep them in the trash until the branch lands (lore sync shares both)"}}, nil
-}
-
-// branchOfOrigin reads _o.git.branch from a row's origin JSON ("" when
-// none).
-func branchOfOrigin(raw []byte) string {
-	var o struct {
-		Git struct {
-			Branch string `json:"branch"`
-		} `json:"git"`
-	}
-	if err := json.Unmarshal(raw, &o); err != nil {
-		return ""
-	}
-	return o.Git.Branch
 }
 
 // BranchInstallAction implements opsbranch.Env: the GitHub workflow that

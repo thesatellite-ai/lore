@@ -14,10 +14,13 @@ package engine
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/logic/auditfill"
+	"github.com/thesatellite-ai/lore/logic/origin"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
@@ -28,7 +31,10 @@ import (
 const (
 	inputCreatedBy = "created_by"
 	inputUpdatedBy = "updated_by"
-	listVerb       = ".list"
+	// InputBornBranch is metalist.Born's json name: --born-branch, the
+	// branch a row was created on (`_o.git.branch`, D-392).
+	InputBornBranch = "born_branch"
+	listVerb        = ".list"
 )
 
 type authorsKey struct{}
@@ -38,6 +44,8 @@ type authorsKey struct{}
 type authorsScope struct {
 	table            row.Table
 	created, updated ids.ID[ids.Actor]
+	// born is --born-branch: keep rows whose `_o.git.branch` is it.
+	born string
 }
 
 // bindInputAuthors puts a list input's writer filter on ctx. Inputs of
@@ -98,12 +106,14 @@ func BindListAuthors(ctx context.Context, reg *schema.Registry, in op.Input) (co
 			s.created, err = auditfill.ParseActor("--created-by", tv.Text)
 		case inputUpdatedBy:
 			s.updated, err = auditfill.ParseActor("--updated-by", tv.Text)
+		case InputBornBranch:
+			s.born, err = ParseBornBranch(tv.Text)
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
-	if s.created.IsZero() && s.updated.IsZero() {
+	if s.created.IsZero() && s.updated.IsZero() && s.born == "" {
 		return ctx, nil
 	}
 	s.table = nounTable(reg, strings.TrimSuffix(in.Op(), listVerb))
@@ -143,6 +153,9 @@ func keepAuthor(ctx context.Context, r row.Row) bool {
 	s, ok := ctx.Value(authorsKey{}).(authorsScope)
 	if !ok || s.table != r.Table {
 		return true
+	}
+	if s.born != "" && !BornOn(r, s.born) {
+		return false // D-392 --born-branch
 	}
 	if !r.Deleted {
 		r, _ = auditfill.Defaults(r)
@@ -194,4 +207,31 @@ func (e *Engine) mergedActors(ctx context.Context) map[ids.ID[ids.Actor]]ids.ID[
 		}
 	}
 	return out
+}
+
+// BornOn reports whether r was created on the code branch branch: its
+// `_o.git.branch` (written once at create and carried whole by a land,
+// an adopt, a stacked land and a revert, so a row landed on main still
+// answers with the branch it was born on). A row without provenance was
+// born on no branch. Every --born-branch path (the list filter here and
+// in ops/internal/metalist, search, `lore trash add --born-branch`, the
+// count of `lore branch show`) asks this one question (D-392).
+func BornOn(r row.Row, branch string) bool {
+	return branch != "" && origin.Branch(r.Origin) == branch
+}
+
+// ParseBornBranch checks a --born-branch value: a branch name as git
+// spells it, trimmed. Why typed: a value with a space or a control
+// character can never be a branch and would silently match nothing, so
+// it is refused with the flag named.
+func ParseBornBranch(raw string) (string, error) {
+	b := strings.TrimSpace(raw)
+	if b == "" {
+		return "", nil
+	}
+	if strings.ContainsFunc(b, func(c rune) bool { return c <= ' ' || c == 0x7f || c == '~' || c == '^' || c == ':' || c == '\\' }) {
+		return "", errs.New(errs.InvalidInput, "--born-branch "+strconv.Quote(b)+" is not a branch name").
+			WithHint("pass the branch as git names it, e.g. --born-branch feat/x")
+	}
+	return b, nil
 }

@@ -191,11 +191,34 @@ type ShowOut struct {
 	Head  string    `json:"code_head,omitempty"`
 	By    string    `json:"started_by,omitempty"`
 	Rows  []ShowRow `json:"rows"`
+	// OnMain counts the rows of the folder's shared notes that were
+	// created on the branch (their `_o.git.branch`): landed or adopted
+	// (D-392). It is filled also when the branch has no open notes any
+	// more, so a landed branch still answers.
+	OnMain []Count `json:"on_main"`
+	// Hint names the list and trash commands for the OnMain rows.
+	Hint string `json:"hint,omitempty"`
 }
 
-// Text prints the layer's facts, then its rows by table.
+// OnMainHint is the hint under the OnMain count: the commands that list
+// and trash the rows a branch left on the shared notes (named flags).
+func OnMainHint(branch string) string {
+	return "list them: lore <kind> list --born-branch " + branch + "; trash them: lore trash add --born-branch " + branch + " --dry-run"
+}
+
+// Text prints the layer's facts, then its rows by table, then the rows
+// of the shared notes born on the branch.
 func (o ShowOut) Text() string {
 	var b strings.Builder
+	if o.Layer.Tip == "" {
+		// no open notes: only what the branch left on the shared notes
+		fmt.Fprintf(&b, "branch     %s (folder %s): no open notes\n", o.Layer.Branch, o.Layer.Folder)
+		fmt.Fprintf(&b, "on main    %s created on %s (landed or adopted)\n", RowsText(o.OnMain), o.Layer.Branch)
+		if o.Hint != "" {
+			fmt.Fprintf(&b, "  %s\n", o.Hint)
+		}
+		return b.String()
+	}
 	fmt.Fprintf(&b, "branch     %s (repo %s, folder %s)\n", o.Layer.Branch, o.Layer.Repo, o.Layer.Folder)
 	fmt.Fprintf(&b, "state      %s\n", o.Layer.State)
 	fmt.Fprintf(&b, "rows       %s\n", RowsText(o.Layer.Rows))
@@ -207,6 +230,9 @@ func (o ShowOut) Text() string {
 			mark = " (deleted)"
 		}
 		fmt.Fprintf(&b, "  %-12s %s  %s%s\n", r.Table, r.ID, r.Title, mark)
+	}
+	if len(o.OnMain) > 0 {
+		fmt.Fprintf(&b, "on main    %s created on %s (landed or adopted)\n  %s\n", RowsText(o.OnMain), o.Layer.Branch, o.Hint)
 	}
 	return b.String()
 }
