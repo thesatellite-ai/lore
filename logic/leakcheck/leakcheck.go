@@ -27,7 +27,9 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +37,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
+	"github.com/thesatellite-ai/lore/logic/actorsource"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 )
 
@@ -906,6 +909,66 @@ type CIFinding struct {
 // (profileTables, TP-7) blocks outright. files maps repo-relative paths to
 // content.
 func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
+	return CheckCIMode(files, repoProjectID, CIClientRules)
+}
+
+// CIMode chooses which actor copies a CI check accepts (CheckCIMode).
+type CIMode int
+
+const (
+	// CIClientRules holds every actor copy to the client projection
+	// ({id, display name, kind}): the hand-over check (--as-client), where
+	// the repo is about to become the client's.
+	CIClientRules CIMode = iota
+	// CIOwnCopiesKept also accepts the full actor copy lore writes in an
+	// org's own repo (Q-R2-2: stable_key and handle, stamped with an org
+	// origin; OwnRepoActorCopy). `lore check leaks --ci` runs with no store
+	// and cannot read the org config, so the stamp is what tells it the
+	// copy came from an own repo's write: lore never stamps a copy in a
+	// client repo or a repo outside any org (actorsource Copy.Projected).
+	// An unstamped copy, a 0.1.17 copy and `_o` still block.
+	CIOwnCopiesKept
+)
+
+// ownCopyKeys are the keys a full actor copy of an org's own repo adds to
+// the projection (actorsource: the source's identity fields and the stamp).
+var ownCopyKeys = map[string]bool{
+	actorsource.FieldStableKey: true, actorsource.FieldHandle: true, actorsource.FieldKeyAliases: true,
+	actorsource.FieldOriginStore: true, actorsource.FieldOriginVersion: true,
+}
+
+// ownOriginPrefixes start the origin_store of a copy written inside an org:
+// the roster store's id (sto_…) or the org entry's identity (org:<org>).
+var ownOriginPrefixes = []string{"sto_", actorsource.OriginOrgPrefix}
+
+// formatVersionOwn is the row format lore 0.1.18 writes (model/row
+// FormatVersion); a 0.1.17 copy (_v 1) is never an own-repo copy of this
+// release, so `lore migrate run` still trims it.
+const formatVersionOwn = 2
+
+// OwnRepoActorCopy reports whether doc is the full actor copy lore 0.1.18
+// writes in an org's own repo: format 2, an origin_store naming an org
+// origin and an origin_version (devco R-13: `lore check leaks --ci` failed
+// every own repo where a teammate had written a row, on the copies lore
+// itself wrote, and hinted `lore migrate run`, which keeps them).
+func OwnRepoActorCopy(doc canonjson.Object) bool {
+	if v, ok := doc["_v"].AsNumber(); !ok || v != strconv.Itoa(formatVersionOwn) {
+		return false
+	}
+	if doc.Str(actorsource.FieldOriginVersion) == "" {
+		return false
+	}
+	origin := doc.Str(actorsource.FieldOriginStore)
+	for _, p := range ownOriginPrefixes {
+		if strings.HasPrefix(origin, p) && len(origin) > len(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// CheckCIMode is CheckCI with the actor-copy rule mode chose.
+func CheckCIMode(files map[string][]byte, repoProjectID string, mode CIMode) []CIFinding {
 	var out []CIFinding
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -933,7 +996,11 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 		if table == tableActors {
 			// BATCH2 #14: name the keys (exact reason); the id stays
 			// withheld as for every CI finding.
-			if extra := actorExtraKeys(doc); len(extra) > 0 {
+			extra := actorExtraKeys(doc)
+			if mode == CIOwnCopiesKept && OwnRepoActorCopy(doc) {
+				extra = slices.DeleteFunc(extra, func(k string) bool { return ownCopyKeys[k] })
+			}
+			if len(extra) > 0 {
 				out = append(out, CIFinding{Where: where, Path: p, Fix: ActorCopyFix, Detail: "an actor copy holds more than {id, display name, kind}: " + strings.Join(extra, ", ")})
 			}
 			continue

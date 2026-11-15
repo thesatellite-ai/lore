@@ -201,6 +201,12 @@ func loginsOf(t AliasesOut) []onboard.AliasLogin {
 // alias (answered, not derived) that logs in as another user than the
 // account refused here rather than by a later network check.
 func (e engine) validateStep(ctx context.Context, step onboard.Step, kind onboard.Kind, answers onboard.Answers) []onboard.FieldError {
+	fe := e.validateStepRules(ctx, step, kind, answers)
+	return append(fe, secretAnswerErrors(step, answers, fe)...)
+}
+
+// validateStepRules is validateStep without the secret check.
+func (e engine) validateStepRules(ctx context.Context, step onboard.Step, kind onboard.Kind, answers onboard.Answers) []onboard.FieldError {
 	fe := e.cat.Validate(step, kind, answers)
 	if step.ID == onboard.StepPersonalStore {
 		return withoutUnusedStoreURL(fe, answers)

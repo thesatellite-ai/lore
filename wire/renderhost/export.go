@@ -81,7 +81,7 @@ func (h *Host) Render(ctx context.Context, in opsrender.RunIn) (_ opsrender.Answ
 	if err = h.runRender(ctx, flagsOf(in, &text, false)); err != nil {
 		return opsrender.Answer{}, err
 	}
-	a := opsrender.Answer{Text: text.String()}
+	a := opsrender.Answer{Text: text.String() + h.app.MaskedReadLines(ctx)}
 	if in.Report || in.Trend {
 		// P3-MISC-7: the operation cannot know whether --json was asked,
 		// and a report writes nothing, so the JSON form is a second read.
@@ -106,7 +106,7 @@ func flagsOf(in opsrender.RunIn, w *strings.Builder, asJSON bool) *renderFlags {
 func (h *Host) Run(ctx context.Context, f Flags) (string, error) {
 	rf := &renderFlags{outPath: f.OutPath, noPointer: f.NoPointer, quiet: f.Quiet}
 	err := h.runRender(ctx, rf)
-	return rf.out().String(), err
+	return rf.out().String() + h.app.MaskedReadLines(ctx), err
 }
 
 // LastRender implements wire.RenderHistory: the newest render record of

@@ -32,8 +32,15 @@ const (
 	KeyMoves      = "moves"
 
 	gitBranch = "branch"
-	gitCommit = "commit"
-	gitState  = "state"
+
+	// KeyGitBranch is the branch key inside `_o.git`.
+	KeyGitBranch = gitBranch
+	// RedactedBranch is recorded as `_o.git.branch` when the branch name
+	// matched a secret rule (devco:R-10): the row says it was made on a
+	// branch, never the name.
+	RedactedBranch = "[redacted branch]"
+	gitCommit      = "commit"
+	gitState       = "state"
 
 	importSource = "source"
 	importSrc    = "src"

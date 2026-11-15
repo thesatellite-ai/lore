@@ -941,7 +941,7 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		found = append(found, copyHit{src: name, row: e.readRow(ctx, got), hidden: res})
+		found = append(found, copyHit{src: name, row: e.readRow(ctx, name, got), hidden: res})
 	}
 	if len(found) == 0 {
 		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "no row "+ref.ID.String(), store.ErrNotFound)

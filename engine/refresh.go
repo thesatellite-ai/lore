@@ -28,7 +28,9 @@ func (e *Engine) Refresh(ctx context.Context, source store.Source) (int, error) 
 	if len(rows) == 0 && next == cur && cur != "" {
 		return 0, nil // nothing changed: the cache is current, not rewritten (B1-16)
 	}
-	if err := e.cache.Apply(ctx, source, rows, next); err != nil {
+	// devco:R-14: search and sql read the cache, so they see the same
+	// masked text show does (readmask.go).
+	if err := e.cache.Apply(ctx, source, e.maskStoreRows(ctx, source, rows), next); err != nil {
 		return 0, err
 	}
 	return len(rows), nil

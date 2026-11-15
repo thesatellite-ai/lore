@@ -24,6 +24,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/surface/docs"
+	"github.com/thesatellite-ai/lore/surface/errmask"
 )
 
 // Server constants (spec 9.7, 12).
@@ -355,7 +356,7 @@ func WriteError(w http.ResponseWriter, err error) { writeError(w, err) }
 // writeError writes the spec 9.4 error object under its class status.
 func writeError(w http.ResponseWriter, err error) {
 	// Envelope is a fixed struct of strings and ints; Marshal cannot fail.
-	b, mErr := json.Marshal(errs.EnvelopeOf(err))
+	b, mErr := json.Marshal(errmask.Of(err))
 	if mErr != nil {
 		b = []byte(`{"error":{"code":"E_INTERNAL","message":"encode error","exit":1,"class":"generic"}}`)
 	}

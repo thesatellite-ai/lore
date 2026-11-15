@@ -8212,7 +8212,7 @@
                   },
                   "ci": {
                     "type": "boolean",
-                    "description": "CI mode: ids and structure only, no store access, names nothing internal"
+                    "description": "CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal"
                   },
                   "commit_msg": {
                     "type": "string",

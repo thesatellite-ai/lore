@@ -201,6 +201,9 @@ func (o ops) run(ctx context.Context, in RunIn) (RunOut, error) {
 // rows lists every live row of every built-in table in every store.
 func (o ops) rows(ctx context.Context) (map[row.Table][]sourced, error) {
 	out := map[row.Table][]sourced{}
+	// devco:R-14: reads mask a stored secret match; secret_found must see
+	// the stored text to report it.
+	ctx = engine.WithRawRead(ctx)
 	for _, def := range schema.Builtin() {
 		for _, src := range engine.ReadStoresOf(o.env) {
 			rs, err := o.env.List(ctx, src, def.Name)

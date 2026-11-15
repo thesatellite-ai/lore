@@ -17,8 +17,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/listcap"
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/surface/errmask"
 )
 
 // Output formatting constants.
@@ -352,7 +352,7 @@ func jsonField(v reflect.Value, name string) (reflect.Value, bool) {
 // with --json the spec 9.4 object on stdout, else the human line on stderr,
 // its "ERROR:" and hint coloured by pal (the stderr palette; off = plain).
 func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette, cmd string) int {
-	env := errs.EnvelopeOf(err)
+	env := errmask.Of(err)
 	if asJSON {
 		// Envelope is a fixed struct of strings and ints: Marshal cannot
 		// fail on it, and a failing writer has nowhere left to report to.

@@ -309,7 +309,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	engOpts := []engine.Option{
 		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient),
 			AgentsInternal: details == AgentDetailsInternal, Place: repoPlace(ctx, st.repoTop)}),
-		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
+		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner), engine.WithReadScanner(readScanner()),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
 	}
@@ -1269,7 +1269,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		}
 	}
 	engOpts := []engine.Option{
-		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
+		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner), engine.WithReadScanner(readScanner()),
 		engine.WithActor(st.actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(storeOnlyProvenance{inner: newProvenance(opts, "")}),
 		engine.WithMachinePolicy(machinePol),

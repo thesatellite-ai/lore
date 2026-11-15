@@ -85,8 +85,11 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		for _, f := range fe {
 			msgs = append(msgs, f.Question+": "+f.Message)
 		}
-		return ApplyOut{}, errs.New(errs.InvalidInput, "step "+string(step.ID)+" has "+itoa(len(fe))+" invalid answer(s): "+strings.Join(msgs, "; ")).
-			WithNext("lore", "setup", "check", "--setup", name, "--step", string(step.ID))
+		refusal := errs.New(errs.InvalidInput, "step "+string(step.ID)+" has "+itoa(len(fe))+" invalid answer(s): "+strings.Join(msgs, "; "))
+		if hasSecretAnswer(fe) {
+			refusal = refusal.WithHint(secretHint(name, step.ID))
+		}
+		return ApplyOut{}, refusal.WithNext("lore", "setup", "check", "--setup", name, "--step", string(step.ID))
 	}
 	// The save gate reuses what a check (or a fix's re-check) found for
 	// these same answers in the last onboard.CheckFreshTTL; only missing,

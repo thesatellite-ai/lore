@@ -68,7 +68,7 @@ const prBodyClean = "✓ nothing internal found (a copy-paste check: a paraphras
 
 // LeaksIn is the input of check.leaks.
 type LeaksIn struct {
-	CI        bool   `json:"ci,omitempty" flag:"ci" desc:"CI mode: ids and structure only, no store access, names nothing internal"`
+	CI        bool   `json:"ci,omitempty" flag:"ci" desc:"CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal"`
 	Explain   bool   `json:"explain,omitempty" flag:"explain" desc:"print the rule, the source and the matched words of each finding"`
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`
 	CommitMsg string `json:"commit_msg,omitempty" flag:"commit-msg" desc:"also check this commit message file (the commit-msg hook's $1)"`

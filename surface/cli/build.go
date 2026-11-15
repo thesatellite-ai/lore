@@ -14,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/surface/errmask"
 )
 
 // Reserved flags every generated command may carry. An operation field may
@@ -438,7 +439,7 @@ func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Deco
 		if !errs.Has(err, errs.NeedsConfirm) || !caller.Interactive {
 			return res, err
 		}
-		body := errs.EnvelopeOf(err).Error
+		body := errmask.Of(err).Error
 		switch {
 		case len(body.Findings) > 0 && !caller.Secret.Any():
 			// SECRETS 2.1 / FB-SEC-2: the finding needs a choice, never a

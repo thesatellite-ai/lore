@@ -600,7 +600,11 @@ func (a *App) FindingMatchHash(ctx context.Context, r row.Row, field, rule, fing
 		return 0, err
 	}
 	found := map[uint32]bool{}
-	for _, text := range fieldTexts(r.Fields[field]) {
+	var v value.Value = r.Fields[field]
+	if field == row.KeyOrigin && !r.Origin.IsZero() {
+		v = r.Origin // devco:R-10: `lore check leaks --rows` scans `_o` too
+	}
+	for _, text := range fieldTexts(v) {
 		for _, f := range sc.Scan(field, text) {
 			fp := strings.TrimPrefix(f.Preview, "sha256:")
 			if f.RuleID == rule && (strings.HasPrefix(fp, fingerprint) || strings.HasPrefix(fingerprint, fp)) {
