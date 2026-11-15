@@ -164,6 +164,14 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
 	}
 	s.doctorHooks(ctx, branch, fix, warn, note)
+	// S-8: row files removed by hand, not deleted with lore (handdelete.go)
+	if root := liveProjectRoot(d.h.cfg.WorkDir); root != "" {
+		if changed, _, cerr := changedUnder(ctx, s.repo, root, loreDataPathspec); cerr == nil {
+			if w := handDeletedWarning(handDeletedRows(ctx, s.repo, root, changed)); w != "" {
+				warn(w)
+			}
+		}
+	}
 	if g := s.doctorGuard(ctx, branch); len(g) > 0 {
 		// H-18: the leak guard being off is what a person must read
 		// first, before rows riding along or fetch times

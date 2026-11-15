@@ -145,6 +145,8 @@ rul_162d…9666 [must/always] Run the tests before you push.
 
 From now on, `git pull`, `git checkout`, `git merge` and `git rebase` just change files, and the next lore command reads the change in. Bob never has to "import" anything.
 
+A write that lore refuses (a secret it asks about, a hold someone else has) leaves the clone's git set-up as it was and prints only its error: the `set up git for lore's row files` line comes with the first write that goes through.
+
 ## Step 4 — Run a pass by hand when you want to see it
 
 `lore sync` runs one pass now and prints what changed; `lore sync status` shows what is waiting. When nothing landed but files in `.lore/data` differ from your commit (a fresh clone's sync writes its repo row, your actor copy and `repo_id` in `_meta.json`), the line names them instead of `· already in sync`: `· in sync; 3 file(s) in .lore/data wait for your commit (.lore/data/_meta.json, …): git add .lore/data && git commit`. Example:

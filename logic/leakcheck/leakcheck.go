@@ -967,6 +967,46 @@ func OwnRepoActorCopy(doc canonjson.Object) bool {
 	return false
 }
 
+// repoRosterKeys are the keys a roster row adds to the projection when the
+// repo itself is the roster (RepoRosterActorRow): a person's stable key,
+// handle and key aliases, an agent's label and owner.
+var repoRosterKeys = map[string]bool{
+	actorsource.FieldStableKey: true, actorsource.FieldHandle: true, actorsource.FieldKeyAliases: true,
+	actorLabelKey: true, actorOwnerKey: true,
+}
+
+// Actor fields of an agent's roster row (schema actors: label,
+// owner_actor_id).
+const (
+	actorLabelKey = "label"
+	actorOwnerKey = "owner_actor_id"
+)
+
+// RepoRosterActorRow reports whether doc is a roster row lore 0.1.18 wrote
+// into a repo outside any org, where the repo is the roster (`lore actor
+// register`, `lore agent start`, and a `lore sync` landing them from the
+// live ref: Q12): format 2, lore's write stamp (`_w` with its version) and
+// no origin stamp, since only a copy of an org's roster is stamped (devco
+// S-16, a regression of R-13: `lore check leaks --ci` refused these rows
+// in every no-org repo where a person had registered, and hinted `lore
+// migrate run`, which keeps them as the roster needs them for `--assign
+// @handle`). A hand-made copy, a 0.1.17 copy and `_o` still block, and
+// `--as-client` (CIClientRules) holds every copy to the projection.
+func RepoRosterActorRow(doc canonjson.Object) bool {
+	if v, ok := doc["_v"].AsNumber(); !ok || v != strconv.Itoa(formatVersionOwn) {
+		return false
+	}
+	if doc.Str(actorsource.FieldOriginStore) != "" || doc.Str(actorsource.FieldOriginVersion) != "" {
+		return false
+	}
+	w, ok := doc[envWrite].AsObject()
+	if !ok {
+		return false
+	}
+	v, ok := w[writeVersionKey].AsString()
+	return ok && v != ""
+}
+
 // CheckCIMode is CheckCI with the actor-copy rule mode chose.
 func CheckCIMode(files map[string][]byte, repoProjectID string, mode CIMode) []CIFinding {
 	var out []CIFinding
@@ -997,8 +1037,12 @@ func CheckCIMode(files map[string][]byte, repoProjectID string, mode CIMode) []C
 			// BATCH2 #14: name the keys (exact reason); the id stays
 			// withheld as for every CI finding.
 			extra := actorExtraKeys(doc)
-			if mode == CIOwnCopiesKept && OwnRepoActorCopy(doc) {
+			switch {
+			case mode != CIOwnCopiesKept:
+			case OwnRepoActorCopy(doc):
 				extra = slices.DeleteFunc(extra, func(k string) bool { return ownCopyKeys[k] })
+			case RepoRosterActorRow(doc):
+				extra = slices.DeleteFunc(extra, func(k string) bool { return repoRosterKeys[k] })
 			}
 			if len(extra) > 0 {
 				out = append(out, CIFinding{Where: where, Path: p, Fix: ActorCopyFix, Detail: "an actor copy holds more than {id, display name, kind}: " + strings.Join(extra, ", ")})

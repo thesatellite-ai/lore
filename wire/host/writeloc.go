@@ -30,6 +30,7 @@ func writeLocationHook(w io.Writer) Hook {
 		ctx, log := wire.WithWriteLog(ctx)
 		res, err := next(ctx)
 		if err == nil {
+			flushSetupNotes(ctx) // the git set-up line first, as before (setupnotes.go)
 			for _, l := range wire.WrittenLines(log.Files()) {
 				_, _ = fmt.Fprintln(w, l)
 			}

@@ -271,11 +271,11 @@ func (s *liveSession) unguardedLeaks(ctx context.Context) string {
 		return n + " commit(s) here are on no remote and were not scanned now; once `lore fix` restores the pre-push block, `git push` checks them"
 	}
 	updates := []pushUpdate{{localRef: "HEAD", localSHA: head, remoteRef: "HEAD", remoteSHA: strings.Repeat("0", len(head))}}
-	docs, err := pushDocs(ctx, s.repo, remote, updates)
-	if err != nil || len(docs) == 0 {
+	sets, err := pushDocs(ctx, s.repo, remote, updates)
+	if err != nil || len(sets) == 0 {
 		return ""
 	}
-	cerr := s.h.cfg.LeakCheck(wire.WithPushBases(ctx, pushBases(ctx, s.repo, remote, updates)), wire.LeakWherePush, docs)
+	cerr := checkPushDocs(wire.WithPushBases(ctx, pushBases(ctx, s.repo, remote, updates)), s.h.cfg.LeakCheck, sets)
 	if cerr == nil {
 		return ""
 	}

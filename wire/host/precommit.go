@@ -117,6 +117,12 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 			h.line(fmt.Sprintf(migrationLeftOut, n))
 		}
 	}
+	// S-8: a row file removed by hand is refused before anything is
+	// staged (handdelete.go): lore itself never deletes one
+	if herr := handDeleteError(handDeletedRows(ctx, repo, root, changed)); herr != nil {
+		wire.HookIndexRestore(ctx, root)
+		return herr
+	}
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "pre-commit: core registry", err)

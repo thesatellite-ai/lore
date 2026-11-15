@@ -103376,6 +103376,10 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -103439,7 +103443,17 @@
             }
           },
           "409": {
-            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_UNSUPPORTED",
+            "description": "E_AMBIGUOUS_ID, E_CANCELLED, E_CONTENDED, E_LOST_CLAIM, E_REASSIGNED, E_REFUSED, E_SECRET_DETECTED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
