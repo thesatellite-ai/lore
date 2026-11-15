@@ -423,7 +423,7 @@ func (o ops) timeShow(ctx context.Context, in TimeShowIn) (TimeOut, error) {
 		nameOf(c.Actor)
 	}
 	if trashed {
-		d.Notes = append(d.Notes, "this task is in the trash (--include-deleted); its time is left out of every other report (DQ10)")
+		d.Notes = append(d.Notes, "this task is in the trash (--include-deleted); its time is left out of every other report")
 	}
 	res := timecalc.Compute(spans)
 	d.EffortSeconds, d.ElapsedSeconds, d.ManualSeconds = res.Effort, res.Elapsed, res.Manual

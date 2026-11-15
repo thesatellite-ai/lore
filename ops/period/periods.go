@@ -343,7 +343,8 @@ func findPeriod(ctx context.Context, r profilestore.Roster, ref string) (row.Row
 			return a, ps, i, nil
 		}
 	}
-	return row.Row{}, nil, 0, errs.New(errs.NotFound, "no period "+ref)
+	return row.Row{}, nil, 0, errs.New(errs.NotFound, "no period "+ref).
+		WithHint("run `lore actor period list --actor " + a.ID.String() + "` to see the stints and their apd_ ids")
 }
 
 // periodPatch is the full patch of p's editable fields (an empty optional

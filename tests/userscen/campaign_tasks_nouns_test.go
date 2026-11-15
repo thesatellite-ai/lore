@@ -156,7 +156,11 @@ func TestCampaignTasks_CoordinationVerbs(t *testing.T) {
 	// Reassign to bob (a person on the roster) drops any claim.
 	ta.cb.MustLore("actor", "register")
 	ta.cb.CommitAll("bob registers")
-	ta.c1.MustLore("task", "claim", id)
+	// devco:D-387: alice revoked the agent's claim above, so the agent is
+	// fenced off this task until a person hands it back (the revoke marker,
+	// round 7); the other clone claims it so reassign has a claim to drop.
+	ta.c1.Lore("task", "claim", id).Refused(t, "E_REFUSED", "was revoked from you", "lore task reassign --id")
+	ta.c2.MustLore("task", "claim", id)
 	r := ta.ca.Lore("task", "reassign", id, "--assign", "@bob", "--json")
 	if r.Code != 0 {
 		t.Logf("reassign: %s", r) // a roster that does not know @bob yet is a refusal with a hint

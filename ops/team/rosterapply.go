@@ -539,6 +539,9 @@ type writer struct {
 	// orgRole is the org-level role a new open stint gets (member add
 	// --role), and that setOrgRole puts on the open one.
 	orgRole string
+	// startOn is a new open stint's first day (member add --started-on);
+	// zero is today.
+	startOn time.Time
 }
 
 func (w *writer) note(id ids.AnyID) { w.wrote = append(w.wrote, id.String()) }
@@ -761,7 +764,11 @@ func (w *writer) openPeriod(ctx context.Context, typ string) error {
 	if reopened, err := w.reopenEndedToday(ctx, kept, typ, today); err != nil || reopened {
 		return err
 	}
-	next := teamprofile.Period{ActorID: w.actor.ID, Type: typ, StartedOn: today}
+	start := today
+	if !w.startOn.IsZero() {
+		start = teamprofile.Day(w.startOn)
+	}
+	next := teamprofile.Period{ActorID: w.actor.ID, Type: typ, StartedOn: start}
 	if err := teamprofile.CheckPeriods(append(kept, next)); err != nil {
 		return err
 	}

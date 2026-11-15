@@ -135,7 +135,7 @@ Every switch (a flag that takes no value, such as `--force`) also has an off for
 | `lore machine path list` | List the paths of lore's own files on this machine (lore home, config.yaml, this repo's .lore) | `--limit` `--page` | `GET /v1/machine/paths` | read | `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
 | `lore machine reveal --target <target>` | Show one of lore's files in the file manager (Finder): lore_home, config_file or repo_lore; never another path |  | `POST /v1/machines/reveal` | read | `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
 | `lore machine show --id <id>` | Show one machine profile in full |  | `GET /v1/machines/{id}` | read | `E_INVALID_INPUT` `E_INVALID_ID` `E_NOT_FOUND` `E_PURGED` `E_AMBIGUOUS_ID` `E_STORE_UNREACHABLE` `E_OLD_LORE` `E_INTERNAL` |
-| `lore member add [--email <email>]` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite <store-url> | `--name` `--handle` `--github` `--role` `--type` `--team` `--project` `--project-role` `--from` `--from-invites` `--dry-run` | `POST /v1/members` | write | `E_CONTACT_TAKEN` `E_STATUS_CHANGE` `E_ROLE_UNKNOWN` `E_PROJECT_NAME_COLLISION` `E_NEEDS_CONFIRM` `E_POLICY_DENIED` `E_REFUSED` `E_LEAK_BLOCKED` `E_SETUP_NOT_FOUND` `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
+| `lore member add [--email <email>]` | Add your own staff straight to the org roster (no invite): role, teams and projects apply at once; they join with lore setup join --invite <store-url> | `--name` `--handle` `--github` `--role` `--type` `--team` `--project` `--project-role` `--from` `--from-invites` `--started-on` `--dry-run` | `POST /v1/members` | write | `E_CONTACT_TAKEN` `E_STATUS_CHANGE` `E_ROLE_UNKNOWN` `E_PROJECT_NAME_COLLISION` `E_NEEDS_CONFIRM` `E_POLICY_DENIED` `E_REFUSED` `E_LEAK_BLOCKED` `E_SETUP_NOT_FOUND` `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
 | `lore member edit --who <who>` | Change a person's name, @handle or org-level role | `--name` `--handle` `--role` | `PATCH /v1/members/{id}` | write | `E_ROLE_UNKNOWN` `E_PROJECT_NAME_COLLISION` `E_NEEDS_CONFIRM` `E_POLICY_DENIED` `E_REFUSED` `E_LEAK_BLOCKED` `E_SETUP_NOT_FOUND` `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
 | `lore member list` | List the org's people: email, name, org role, handle, teams | `--all` `--limit` `--page` | `GET /v1/members` | read | `E_REFUSED` `E_LEAK_BLOCKED` `E_SETUP_NOT_FOUND` `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
 | `lore member remove --who <who>` | Take a person off the org (actor offboard: their stint and memberships end; the row stays for history) | `--reason` | `POST /v1/members/remove` | write | `E_STATUS_CHANGE` `E_ROLE_UNKNOWN` `E_PROJECT_NAME_COLLISION` `E_NEEDS_CONFIRM` `E_POLICY_DENIED` `E_REFUSED` `E_LEAK_BLOCKED` `E_SETUP_NOT_FOUND` `E_INVALID_INPUT` `E_NOT_FOUND` `E_UNSUPPORTED` `E_INTERNAL` |
@@ -625,7 +625,7 @@ Every switch (a flag that takes no value, such as `--force`) also has an off for
 | `E_OFFLINE` | 15 | `coordination` | 503 | the remote could not be reached; nothing was queued |
 | `E_OLD_LORE` | 19 | `guard` | 403 | this lore binary is below the project's min_lore_version or does not know one of its features; run lore upgrade (reads still work) |
 | `E_OPEN_CHILDREN` | 23 | `refused` | 409 | done or cancel of a parent task with open sub-tasks without --children |
-| `E_OPEN_ITEMS` | 23 | `refused` | 409 | done of a task with unticked checklist items without --tick-all or --force (TSQ14) |
+| `E_OPEN_ITEMS` | 23 | `refused` | 409 | done of a task with unticked checklist items without --tick-all or --force |
 | `E_ORG_AMBIGUOUS` | 17 | `coordination` | 409 | two org entries match this repo at the same rule |
 | `E_ORG_DISAGREES` | 17 | `coordination` | 409 | the selected org differs from the store link |
 | `E_PARENT_CLOSED` | 23 | `refused` | 409 | a sub-task added or reopened under a closed parent without --reopen-parent |
@@ -660,13 +660,13 @@ Every switch (a flag that takes no value, such as `--force`) also has an off for
 | `E_RESOURCE_INTERNAL` | 19 | `guard` | 403 | an internal resource field would be written in a client repo; write it in the store or an own repo, or move with --drop-internal |
 | `E_RESOURCE_INVALID` | 20 | `bad_input` | 400 | a value or field does not fit the kind |
 | `E_RESOURCE_IN_USE` | 23 | `refused` | 409 | a kind field or value is still used by resources |
-| `E_RESOURCE_KIND_MISMATCH` | 20 | `bad_input` | 400 | merge across resource kinds (RES 3.6) |
-| `E_RESOURCE_NAME` | 20 | `bad_input` | 400 | a kind, field or resource name breaks its format, is reserved, or looks like a credential (RES 3.1) |
-| `E_RESOURCE_PLACE` | 23 | `refused` | 409 | the place is not allowed by resources.allowed_in, or --to me (RQ2) |
+| `E_RESOURCE_KIND_MISMATCH` | 20 | `bad_input` | 400 | merge across resource kinds |
+| `E_RESOURCE_NAME` | 20 | `bad_input` | 400 | a kind, field or resource name breaks its format, is reserved, or looks like a credential |
+| `E_RESOURCE_PLACE` | 23 | `refused` | 409 | the place is not allowed by resources.allowed_in, or --to me |
 | `E_RESOURCE_QUARANTINED` | 23 | `refused` | 409 | the resource has quarantined values; fix them before moving it |
 | `E_RESOURCE_STALE` | 22 | `definition` | 422 | store kind rows needed for this write are not available; run lore sync or write with --to repo |
 | `E_RESOURCE_TAKEN` | 23 | `refused` | 409 | that resource name is already used at this level (archived and trashed rows included) |
-| `E_RESOURCE_TYPE` | 20 | `bad_input` | 400 | field retype found values that do not fit the new type (RES 3.14) |
+| `E_RESOURCE_TYPE` | 20 | `bad_input` | 400 | field retype found values that do not fit the new type |
 | `E_ROLE_UNKNOWN` | 20 | `bad_input` | 400 | a --role name that is not live in the role list; see lore role list, or lore role add <name> |
 | `E_ROOT_REFUSED` | 23 | `refused` | 409 | lore refuses to run as root |
 | `E_SCHEMA_OLD` | 25 | `upgrade` | 426 | the local database is older than this binary |

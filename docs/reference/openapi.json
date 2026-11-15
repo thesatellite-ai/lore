@@ -26793,6 +26793,10 @@
                     "type": "string",
                     "description": "org-level role, no project needed (member, pm, admin, …): the stint's org role"
                   },
+                  "started_on": {
+                    "type": "string",
+                    "description": "first day of their stint, YYYY-MM-DD, today or earlier (default today)"
+                  },
                   "teams": {
                     "type": "array",
                     "description": "a team to put them on: @handle (repeat)",
@@ -110963,6 +110967,9 @@
                           "count": {
                             "type": "integer"
                           },
+                          "label": {
+                            "type": "string"
+                          },
                           "name": {
                             "type": "string"
                           }
@@ -110981,6 +110988,9 @@
                           "count": {
                             "type": "integer"
                           },
+                          "label": {
+                            "type": "string"
+                          },
                           "name": {
                             "type": "string"
                           }
@@ -110998,6 +111008,9 @@
                         "properties": {
                           "count": {
                             "type": "integer"
+                          },
+                          "label": {
+                            "type": "string"
                           },
                           "name": {
                             "type": "string"
@@ -111025,6 +111038,9 @@
                         "properties": {
                           "count": {
                             "type": "integer"
+                          },
+                          "label": {
+                            "type": "string"
                           },
                           "name": {
                             "type": "string"

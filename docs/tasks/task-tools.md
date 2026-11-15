@@ -404,7 +404,7 @@ lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
 
 ## Step 9 — Make a task repeat
 
-`lore task add --recur '<rule>'` makes a task part of a series. Rules read like `every day`, `every weekday`, `every week`, `every month on 1`, `every mon,thu`, `every 3 months`, and `every! 14 days` (counted from when you finish, not from the due date); add `until <date>` or `for N` to end it. `lore task recur show` prints the rule and the next dates:
+`lore task add --recur '<rule>'` makes a task part of a series. Rules read like `every day`, `every weekday`, `every week`, `every month on 1`, `every mon,thu`, `every 3 months`, and `every! 14 days` (counted from when you finish, not from the due date); add `until <date>` or `for N` to end it. `lore task recur show` prints the rule and the next dates: A monthly rule never gives two instances in one month: `every month on last` from a first due of Jan 30 lists 2026-01-30, 2026-02-28, 2026-03-31 (`every month on 15` from Jan 3: Jan 3, Feb 15, Mar 15). A due with a clock time (`--due '2027-03-12 + 09:00'`) keeps it: `task show` and `task list` print `2027-03-12 09:00 EST`, `--json` carries `due_at` as RFC 3339 UTC (a date-only due stays `YYYY-MM-DD`), and each next instance is due at the same wall-clock time in your `TZ`, across a daylight-saving change too.
 
 <!-- example: task-tools#recur -->
 ```console

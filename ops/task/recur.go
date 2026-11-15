@@ -174,13 +174,38 @@ func (o ops) setRecur(ctx context.Context, target store.Source, fields map[strin
 	}
 	if due.IsZero() {
 		today := recur.Day(opclock.Now(o.env))
-		due = today
-		if rule.Unit == "" {
-			due = rule.Next(today.AddDate(0, 0, -1))
-		}
+		due = rule.First(today)
 		fields[fieldDue] = value.DateTimeFrom(due)
 	}
-	return "recurs: " + rc.Rule + " → next: " + dayList(rule.Upcoming(due, upcomingShown)) + " (series " + rc.Series + ", #" + strconv.Itoa(rc.Index) + ")", nil
+	return "recurs: " + rc.Rule + " → next: " + dayList(rule.Upcoming(calDay(due, time.Local), upcomingShown)) + " (series " + rc.Series + ", #" + strconv.Itoa(rc.Index) + ")", nil
+}
+
+// calDay is the calendar day a due value names, as midnight UTC: a
+// date-only value's own day, a value with a time of day the day it falls
+// on in loc (devco:T-9: 23:30 in New York is that evening, not the next
+// UTC day).
+func calDay(t time.Time, loc *time.Location) time.Time {
+	if t.IsZero() || dates.IsDay(t) {
+		return recur.Day(t)
+	}
+	l := t.In(loc)
+	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// shiftDays moves a due value by n calendar days: a date-only value in
+// UTC, a value with a time of day on the wall clock in loc, so a 09:00
+// due is 09:00 again after a DST change (devco:T-8), not 7×24 h later.
+func shiftDays(t time.Time, n int, loc *time.Location) time.Time {
+	if dates.IsDay(t) {
+		return t.AddDate(0, 0, n)
+	}
+	return t.In(loc).AddDate(0, 0, n).UTC()
+}
+
+// daysBetween is the number of calendar days from a to b, both midnight
+// UTC (calDay, recur.Day).
+func daysBetween(a, b time.Time) int {
+	return int(b.Sub(a).Round(time.Hour).Hours() / 24)
 }
 
 // instanceFields are the fields a next instance copies (10.4). Not
@@ -221,30 +246,36 @@ func (o ops) spawnNext(ctx context.Context, f forest, src store.Source, cur row.
 	if !ok {
 		return RecurNext{}, "", errs.New(errs.Unsupported, "task: this surface cannot create the next instance of a recurring task (no pinned-id create)")
 	}
+	// devco:T-8/T-9: a due with a time of day steps calendar days on the
+	// person's wall clock, so a 09:00 weekly task stays 09:00 across a DST
+	// change; a date-only due steps UTC days as before (TSQ11).
+	loc := time.Local
 	due := work.Time(cur, fieldDue)
-	base, counted := recur.Day(due), "due "+recur.Day(due).Format(dates.DayLayout)
+	dueDay := calDay(due, loc)
+	base, counted := dueDay, "due "+dueDay.Format(dates.DayLayout)
 	if rule.FromDone || due.IsZero() {
 		// TSQ11: every! counts from the UTC completion day; say so.
 		base, counted = recur.Day(at), "counted from "+recur.Day(at).Format(dates.DayLayout)+" (UTC)"
 	}
-	next, skipped := rule.After(base, at)
+	nextDay, skipped := rule.After(base, at)
 	idx := rc.Index + 1
-	if rule.Ends(idx, next) {
+	if rule.Ends(idx, nextDay) {
 		return RecurNext{Series: rc.Series, Ended: true}, "  series " + rc.Series + " ended (" + rc.Rule + ")\n", nil
 	}
+	next := nextDay
 	if !due.IsZero() {
-		next = next.Add(due.Sub(recur.Day(due))) // keep a due time of day
+		next = shiftDays(due, daysBetween(dueDay, nextDay), loc) // keep a due time of day
 	}
 	rc.Index = idx
-	out := RecurNext{Due: next.Format(dates.DayLayout), Series: rc.Series, Index: idx, Skipped: skipped}
+	out := RecurNext{Due: dueText(next), Series: rc.Series, Index: idx, Skipped: skipped}
 	// OV15c: the instance moves its dates by the root's shift (due, or the
 	// creation day when the root had none) and keeps the dependencies
 	// between tasks of its own subtree, re-pointed at the new ids.
-	anchor := due
-	if anchor.IsZero() {
+	anchor := dueDay
+	if due.IsZero() {
 		anchor = recur.Day(cur.CreatedAt)
 	}
-	plan := spawnPlan{rc: rc, shift: next.Sub(anchor), paths: subtreePaths(f, cur.ID.String()), notes: &noteList{}}
+	plan := spawnPlan{rc: rc, shiftDays: daysBetween(anchor, nextDay), loc: loc, paths: subtreePaths(f, cur.ID.String()), notes: &noteList{}}
 	id, existed, err := o.instance(ctx, creator, src, cur, plan, "", "", next)
 	if err != nil {
 		return RecurNext{}, "", err
@@ -262,7 +293,7 @@ func (o ops) spawnNext(ctx context.Context, f forest, src store.Source, cur row.
 	if skipped > 0 {
 		human += "  skipped " + strconv.Itoa(skipped) + " past dates\n"
 	}
-	human += "  next instance: " + out.ID + " due " + out.Due + " (series " + rc.Series + ", #" + strconv.Itoa(idx) + ")"
+	human += "  next instance: " + out.ID + " due " + dueHuman(out.Due, loc) + " (series " + rc.Series + ", #" + strconv.Itoa(idx) + ")"
 	if existed {
 		human += " (already there)"
 	}
@@ -275,9 +306,12 @@ func (o ops) spawnNext(ctx context.Context, f forest, src store.Source, cur row.
 // spawnPlan is what every task of one next instance shares (OV15c).
 type spawnPlan struct {
 	rc Recur
-	// shift moves due_at / deferred_until of every copied task: the new
-	// root due minus the old root due (or its creation day).
-	shift time.Duration
+	// shiftDays moves due_at / deferred_until of every copied task by
+	// calendar days: the new root due day minus the old one (or its
+	// creation day); a value with a time of day keeps its wall-clock time
+	// in loc (shiftDays the function).
+	shiftDays int
+	loc       *time.Location
 	// paths maps each old task of the subtree to its tree path ("" for
 	// the root), so a dependency between two of them is re-pointed at the
 	// new instance's derived ids.
@@ -408,7 +442,7 @@ func isMetaRefusal(err error) bool {
 // metaCodePrefix starts every metadata error code (model/errs).
 const metaCodePrefix = "E_META"
 
-// shiftDates moves from's due_at / deferred_until by p.shift into fields
+// shiftDates moves from's due_at / deferred_until by p.shiftDays into fields
 // (the root's due is set by the caller from the rule; root=true skips it).
 func (p spawnPlan) shiftDates(from row.Row, fields map[string]value.Value, root bool) {
 	for _, k := range []string{fieldDue, fieldDeferred} {
@@ -419,7 +453,7 @@ func (p spawnPlan) shiftDates(from row.Row, fields map[string]value.Value, root 
 		if t.IsZero() {
 			continue
 		}
-		fields[k] = value.DateTimeFrom(t.Add(p.shift))
+		fields[k] = value.DateTimeFrom(shiftDays(t, p.shiftDays, p.loc))
 	}
 }
 

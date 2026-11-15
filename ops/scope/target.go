@@ -305,7 +305,8 @@ func CheckOverrides(ctx context.Context, env Env, noun string, table row.Table, 
 	}
 	_, r, err := env.Get(ctx, engine.Ref{Table: table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return "", errs.New(errs.NotFound, "--overrides "+raw+": no such "+noun)
+		return "", errs.New(errs.NotFound, "--overrides "+raw+": no such "+noun).
+			WithHint("run `lore show --id " + raw + "` to check the id; --overrides names a live " + noun + " at a wider scope")
 	}
 	if err != nil {
 		return "", err

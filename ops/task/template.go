@@ -271,7 +271,7 @@ func readTemplateFile(path string) (TemplateFile, error) {
 // known arg types, every ${arg:…} declared, positions, depth.
 func checkTemplate(f TemplateFile, maxDepth int) error {
 	if !row.ValidName(f.Name) {
-		return tplErr(strconv.Quote(f.Name) + " is not a snake_case name (MQ10)").WithHint(tplNameHint)
+		return tplErr(strconv.Quote(f.Name) + " is not a snake_case name").WithHint(tplNameHint)
 	}
 	for name, a := range f.Args {
 		if !row.ValidName(name) {
@@ -665,7 +665,7 @@ func (o ops) templateRename(ctx context.Context, in TemplateRenameIn) (TemplateO
 	}
 	name := strings.TrimSpace(in.NewName)
 	if !row.ValidName(name) {
-		return TemplateOut{}, tplErr(strconv.Quote(name) + " is not a snake_case name (MQ10)").WithHint(tplNameHint)
+		return TemplateOut{}, tplErr(strconv.Quote(name) + " is not a snake_case name").WithHint(tplNameHint)
 	}
 	if _, _, ferr := o.findTemplate(ctx, name); ferr == nil || errs.Has(ferr, errs.AmbiguousID) {
 		return TemplateOut{}, tplErr(strconv.Quote(name) + " already exists").WithHint("pick another name, or see it with `lore task template show --name " + name + "`")

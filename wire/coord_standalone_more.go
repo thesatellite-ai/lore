@@ -460,7 +460,7 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 		person = *w.who.Owner
 	}
 	if person.Kind != identity.KindHuman || person.Step == identity.StepEnv || person.Step == identity.StepFlag {
-		return opscoord.Report{}, errs.New(errs.InvalidInput, "only a person approves a gate (TEAM-028); you are "+w.who.StableKey).
+		return opscoord.Report{}, errs.New(errs.InvalidInput, "only a person approves a gate; you are "+w.who.StableKey).
 			WithHint("set your identity with `lore identity set` and approve from your own shell")
 	}
 	approver := w.personID()

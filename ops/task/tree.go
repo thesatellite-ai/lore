@@ -988,7 +988,8 @@ func treeFilter(f forest, in ListIn) (func(string) bool, error) {
 			return err
 		}
 		if !f.tree.Has(id.String()) {
-			return errs.New(errs.NotFound, "--"+flag+" "+work.Quote(raw)+": no such task")
+			return errs.New(errs.NotFound, "--"+flag+" "+work.Quote(raw)+": no such task").
+				WithHint("run `lore task list` to see the task ids")
 		}
 		next := map[string]bool{}
 		for _, x := range of(id.String()) {

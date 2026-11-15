@@ -20,6 +20,7 @@ lore member add --from staff.csv --yes       # all of them, one store commit
 | `--name`, `--handle`, `--github` | their display name (default: the email's name part), roster @handle and GitHub login |
 | `--role <r>` | an **org-level** role (`member`, `pm`, `admin`, …): no project needed; it is the role on their stint (`lore member edit --who <who> --role pm` changes it) |
 | `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact` |
+| `--started-on <YYYY-MM-DD>` | the first day of their stint when they began before you add them (today or earlier; default today), so a later `lore member remove` or `lore actor offboard --on <day>` can name a day before the add; one `--email` only (for people added from a file, `lore actor period edit --period <apd_id> --started-on <day>` moves the start back) |
 | `--team @t` | a team to put them on (repeat it) |
 | `--project <p>` with `--project-role <r>` | a project membership with its project roles (repeat both) |
 | `--from <file>` | many people from a `.csv` (header `email,name,handle,github,role,type,teams,projects,project_roles`; list cells separated by `;`) or a `.json` list |

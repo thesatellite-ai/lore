@@ -661,7 +661,7 @@ func checkArchive(t *testing.T, s Spec, r Runner) {
 	// OV30-2: every list hides archived rows unless --archived (v0.1.17
 	// hid them only on snapshot); search hides them too.
 	if strings.Contains(Text(must(t, r, s.Noun+".list", "")), id) {
-		t.Error("list shows an archived row without --archived (OV30-2)")
+		t.Error("list shows an archived row without --archived")
 	}
 	if !strings.Contains(Text(must(t, r, s.Noun+".list", `{"archived":true}`)), id) {
 		t.Error("list --archived misses the archived row")

@@ -266,7 +266,7 @@ func (s *liveSession) whyMissingCode(ctx context.Context, folder, id string) (er
 			return errs.NotFound, id + ": the live purge list could not be read (" + perr.Error() + ")"
 		}
 		if purged[id] {
-			return errs.Purged, id + " was purged: deleted on purpose (`lore trash purge` or `lore live purge`); purged rows never come back (DQ4)"
+			return errs.Purged, id + " was purged: deleted on purpose (`lore trash purge` or `lore live purge`); purged rows never come back"
 		}
 		rows, _ := tree.Rows(folder) // undecodable files say nothing about id
 		for k, f := range rows {
@@ -285,7 +285,7 @@ func (s *liveSession) whyMissingCode(ctx context.Context, folder, id string) (er
 	}
 	b, found, err := s.repo.ReadFile(ctx, trk, mainDataPath(folder, purgedFileName))
 	if err == nil && found && strings.Contains(string(b), `"`+id+`"`) {
-		return errs.Purged, id + " was purged: deleted on purpose (listed in main's _purged.json); purged rows never come back (DQ4)"
+		return errs.Purged, id + " was purged: deleted on purpose (listed in main's _purged.json); purged rows never come back"
 	}
 	return errs.NotFound, ""
 }

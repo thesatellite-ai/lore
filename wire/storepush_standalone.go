@@ -270,6 +270,12 @@ func (b *storePush) refresh(ctx context.Context) {
 		// fetch, no retried push, so an offline command never waits for the
 		// network's timeout again; `lore sync` always tries (devco:U-6)
 		b.backingOff = true
+		if readRun(ctx) || opsmigrate.NoPushAsked(ctx) {
+			// the remote was out of reach a moment ago: a read still names
+			// the commits that wait and how they are sent (devco:D-387)
+			b.reach = reachOffline
+			b.readWaiting(ctx, in, autopush)
+		}
 		return
 	}
 	held := b.held()
@@ -544,10 +550,6 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 	if b.pushFailed {
 		return
 	}
-	if b.backingOff && (b.res == nil || !b.res.fetchAlways) {
-		b.sayBackingOff() // devco:U-6: no push while the remote was just out of reach
-		return
-	}
 	if autopush, _ := b.settings(ctx); !autopush {
 		b.sayLocal()
 		return
@@ -567,6 +569,14 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		// (the pick-up of a hand edit) waits for the next write or `lore
 		// sync`, and the read says so once.
 		b.sayWaiting(ctx)
+		return
+	}
+	// The back-off is checked only here, where a push would really be
+	// tried: a store whose mode keeps writes local (manual, a batch not
+	// due) says "committed locally" as always, not that lore skipped a
+	// push it would never have tried (devco:D-387).
+	if b.backingOff && (b.res == nil || !b.res.fetchAlways) {
+		b.sayBackingOff() // devco:U-6: no push while the remote was just out of reach
 		return
 	}
 	b.pushNow(ctx)

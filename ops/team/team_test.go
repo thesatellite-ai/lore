@@ -1079,3 +1079,34 @@ func TestJoinOfALeaverNamesLeft(t *testing.T) {
 		t.Errorf("refusal = %v; want the left cause and the admin's rejoin line", err)
 	}
 }
+
+// TestStaffAddStartedOn (devco:T-14): member add --started-on back-dates
+// the new stint, so a person added after they began can be offboarded on
+// an earlier day; a bad, future or file-wide --started-on is refused
+// naming the flag and writes nothing.
+func TestStaffAddStartedOn(t *testing.T) {
+	x := newFixture(t)
+	ctx := op.WithConfirmed(x.ctx, true)
+	out, err := x.ops().staffAdd(ctx, StaffAddIn{Email: "wen@agency.example", Name: "Wen Park", StartedOn: "2026-03-02"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wen, err := ids.Parse[ids.Actor](out.Added[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := x.rowsOf(schema.TableActorPeriods, wen)
+	if len(ps) != 1 || fieldText(ps[0], schema.FieldPeriodStartedOn) != "2026-03-02" {
+		t.Fatalf("stint start: %v", ps)
+	}
+	for _, c := range []struct{ in StaffAddIn }{
+		{StaffAddIn{Email: "kai@agency.example", StartedOn: "02/03/2026"}},
+		{StaffAddIn{Email: "kai@agency.example", StartedOn: "2027-01-04"}},
+		{StaffAddIn{From: "people.csv", StartedOn: "2026-03-02"}},
+	} {
+		_, err := x.ops().staffAdd(ctx, c.in)
+		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "--started-on") {
+			t.Errorf("%+v: %v", c.in, err)
+		}
+	}
+}

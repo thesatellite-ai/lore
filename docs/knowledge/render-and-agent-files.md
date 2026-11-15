@@ -77,7 +77,7 @@ lore initialized
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2905 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3256 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (520 bytes, every pinned entry in full; not imported)
 = ~/work/website/CLAUDE.md (pointer present)
 $ cat CLAUDE.md
@@ -140,7 +140,7 @@ $ lore render --dry-run | head -12
 ```console
 # alice, in website
 $ lore render --target AGENTS.md
-✓ .lore/LORE.md (2899 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3250 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 $ cat AGENTS.md
 <!-- lore:pointer:start -->
@@ -153,7 +153,7 @@ Read `.lore/LORE.md` (at the repository root) before answering: it holds this pr
 ```console
 # alice, in website
 $ lore render --out docs/agent-notes.md --target AGENTS.md
-✓ docs/agent-notes.md (2899 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ docs/agent-notes.md (3250 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ docs/LORE.full.md (520 bytes, every pinned entry in full; not imported)
 ✓ ~/work/website/AGENTS.md (pointer → docs/agent-notes.md)
 $ cat AGENTS.md; ls docs
@@ -173,7 +173,7 @@ In a package project (a folder below the repository's top with its own `.lore/`,
 ```console
 # alice, in website
 $ lore render --no-pointer
-✓ .lore/LORE.md (2905 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3256 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ```
 <!-- /example -->
 
@@ -204,9 +204,9 @@ $ lore why-context
 render_id:    rnd_162d…9666
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  2905
+total_bytes:  3256
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
-scope:        1 rules, 1 hotfixes, 0 memories in full; 2905 of 32000 bytes (profile claude_code), nothing moved out of the core
+scope:        1 rules, 1 hotfixes, 0 memories in full; 3256 of 32000 bytes (profile claude_code), nothing moved out of the core
 ```
 <!-- /example -->
 
@@ -217,10 +217,10 @@ scope:        1 rules, 1 hotfixes, 0 memories in full; 2905 of 32000 bytes (prof
 # alice, in website
 $ lore render --trend
 .lore/LORE.md: renders in the last 14 days (budget 32000 bytes, profile claude_code)
-  2026-11-02 10:00     2905 bytes
-  2026-11-02 10:00     2905 bytes
-  2026-11-02 10:00     2899 bytes
-  2026-11-02 10:00     2905 bytes
+  2026-11-02 10:00     3256 bytes
+  2026-11-02 10:00     3256 bytes
+  2026-11-02 10:00     3250 bytes
+  2026-11-02 10:00     3256 bytes
 growth: needs renders at least a day apart
 ```
 <!-- /example -->
@@ -279,7 +279,7 @@ scope chain for src/checkout/pay.ts (general first; later wins on conflict)
   dir      src/checkout                 1 rule  (no file: lore render writes it when the folder has enough entries)
   glob     (none match this path)
 $ lore render
-✓ .lore/LORE.md (3202 bytes, budget 32000 claude_code; 3 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3553 bytes, budget 32000 claude_code; 3 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (792 bytes, every pinned entry in full; not imported)
 · AGENTS.md carries lore's pointer but context.targets does not name it, so render leaves it as is; list it with: lore policy set --key context.targets --value "<profiles incl. codex>" --yes
 = ~/work/website/CLAUDE.md (pointer present)

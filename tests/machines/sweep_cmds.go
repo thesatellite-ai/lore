@@ -345,7 +345,7 @@ var rowChains = []sweepChain{
 	}},
 	{Name: "rule-any-row", Steps: []sweepStep{
 		r("tag add", "--name=sweep_tag"), r("tag edit", "sweep_tag", "--globs", "src/**"),
-		rs("rule add", "--body", sampleWord+" pinned rule"), r("pin set", varID, "--context", "full"), r("pin unset", varID),
+		rs("rule add", "--body", sampleWord+" pinned rule"), r("rule approve", "--id", varID), r("pin set", varID, "--context", "full"), r("pin unset", varID),
 		r("tag attach", "--on-table", "rules", "--on-id", varID, "--tag", "sweep_tag"),
 		r("tag detach", "--on-table", "rules", "--on-id", varID, "--tag", "sweep_tag"), r("tag list"),
 		r("explain run", varID), r("row show", varID), r("show", varID),

@@ -3,7 +3,8 @@
 // computes the same next date whatever its zone.
 //
 //	Parse("every month on last until 2027-03-31", until) ─▶ Rule
-//	Rule.Next(base)            next day strictly after base
+//	Rule.Next(base)            next instance's day strictly after base
+//	Rule.First(from)           first rule day on or after from (a new series)
 //	Rule.After(base, today)    Next, then past dates skipped (overdue series)
 //	Rule.Upcoming(first, n)    the dates printed on create
 //
@@ -13,6 +14,7 @@ package recur
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -164,7 +166,12 @@ func weekdaySet(s string) ([]time.Weekday, bool) {
 	return out, len(out) > 0
 }
 
-// Next is the next day strictly after base's UTC day.
+// Next is the next instance's day after an instance due on base (strictly
+// after base's UTC day). A month-day rule ("every month on 15", "on
+// last") steps to the following month even when base is not on the
+// rule's day, so a series never holds two instances in one month
+// (devco:T-10: a first due of Jan 30 on "every month on last" listed
+// Jan 30 and Jan 31). The first day of a new series is First.
 func (r Rule) Next(base time.Time) time.Time {
 	b := Day(base)
 	switch {
@@ -174,37 +181,41 @@ func (r Rule) Next(base time.Time) time.Time {
 		return b.AddDate(0, 0, 7*r.N)
 	case r.Unit == UnitMonth:
 		return addMonths(b, r.N)
-	case r.Weekdays:
-		d := b.AddDate(0, 0, 1)
-		for d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
-			d = d.AddDate(0, 0, 1)
-		}
-		return d
-	case len(r.Days) > 0:
-		for i := 1; i <= 7; i++ {
-			d := b.AddDate(0, 0, i)
-			for _, w := range r.Days {
-				if d.Weekday() == w {
-					return d
-				}
-			}
-		}
 	case r.LastDay:
-		end := monthEnd(b)
-		if end.After(b) {
-			return end
-		}
-		return monthEnd(end.AddDate(0, 0, 1))
+		return monthEnd(time.Date(b.Year(), b.Month()+1, 1, 0, 0, 0, 0, time.UTC))
 	case r.MonthDay > 0:
-		for m := 0; m < 3; m++ {
-			first := time.Date(b.Year(), b.Month()+time.Month(m), 1, 0, 0, 0, 0, time.UTC)
-			d := clampDay(first, r.MonthDay)
-			if d.After(b) {
+		return clampDay(time.Date(b.Year(), b.Month()+1, 1, 0, 0, 0, 0, time.UTC), r.MonthDay)
+	}
+	return r.First(b.AddDate(0, 0, 1)) // a weekday set: the next named day
+}
+
+// First is the first day on or after from's UTC day that the rule
+// names: the due day of a series created without one (DECISION
+// OV15C-1). An interval rule names every day, so it is from itself.
+func (r Rule) First(from time.Time) time.Time {
+	b := Day(from)
+	switch {
+	case r.Weekdays:
+		for b.Weekday() == time.Saturday || b.Weekday() == time.Sunday {
+			b = b.AddDate(0, 0, 1)
+		}
+		return b
+	case len(r.Days) > 0:
+		for i := 0; i < 7; i++ {
+			d := b.AddDate(0, 0, i)
+			if slices.Contains(r.Days, d.Weekday()) {
 				return d
 			}
 		}
+	case r.LastDay:
+		return monthEnd(b)
+	case r.MonthDay > 0:
+		if d := clampDay(time.Date(b.Year(), b.Month(), 1, 0, 0, 0, 0, time.UTC), r.MonthDay); !d.Before(b) {
+			return d
+		}
+		return clampDay(time.Date(b.Year(), b.Month()+1, 1, 0, 0, 0, 0, time.UTC), r.MonthDay)
 	}
-	return b.AddDate(0, 0, 1)
+	return b
 }
 
 // After is the next instance's due day after an instance due on base

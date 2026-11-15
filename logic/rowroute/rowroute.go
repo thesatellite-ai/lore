@@ -91,7 +91,7 @@ const (
 	ReasonLiveWins     = "the row is live; live wins (rule 4)"
 	ReasonFlagLive     = "--live"
 	ReasonFlagNoLive   = "--no-live"
-	ReasonBranchRow    = "the row is in this branch's data; an edit stays with the code (F1)"
+	ReasonBranchRow    = "the row is in this branch's data; an edit stays with the code"
 	ReasonDefaultLive  = "live.defaults: live"
 	ReasonDefaultLocal = "live.defaults: with the code"
 	ReasonDeleteBranch = "a branch row's delete is a file delete on the branch"

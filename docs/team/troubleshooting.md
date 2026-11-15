@@ -176,7 +176,7 @@ Fix: reconnect and run the command again. Ordinary writes behave differently:
 
 - A memory or task written while the store is unreachable is committed in the local clone and pushed by a later command ("1 file(s) offline: committed in the local clone, pushed by the next command").
 - Live writes in a code repo wait as "(live, not pushed yet: N waiting)".
-- On a network that times out (a train, captive Wi-Fi), lore tries the remote once per command, never twice, and a try that fails is remembered (`.git/lore/fetch-failed`): until `live.fetch_ttl` has passed (5 minutes by default), later reads and writes make no network call at all and run at local speed. `lore sync` always tries the remote, so run it when you are back online to send what waits at once.
+- On a network that times out (a train, captive Wi-Fi), lore tries the remote once per command, never twice, and a try that fails is remembered (`.git/lore/fetch-failed`): until `live.fetch_ttl` has passed (5 minutes by default), later reads and writes make no network call at all and run at local speed. A read still names the local commits that wait to be pushed, and a write to a store that pushes only on `lore sync` (the default) still says it was committed locally. `lore sync` always tries the remote, so run it when you are back online to send what waits at once.
 
 `E_CONTENDED` (exit 11) on the same commands is different: the remote answered every time, but another writer got in first on every retry. Nothing was written; wait a few seconds and run the command again.
 
@@ -328,7 +328,7 @@ The status change is not one `lore actor status` makes, or the person is in the 
 
 ### `E_PERIOD_OVERLAP`
 
-A date would make two company periods overlap, end a period before it starts, or (offboarding) end the current stint before the day it started; a person also has at most one open stint. Run `lore actor period list --actor <actor>` and pick a date after the last stint ended, or fix a mistyped date with `lore actor period edit --period <apd_id>`.
+A date would make two company periods overlap, end a period before it starts, or (offboarding) end the current stint before the day it started; a person also has at most one open stint. Run `lore actor period list --actor <actor>` and pick a date after the last stint ended, or fix a mistyped date with `lore actor period edit --period <apd_id>`. When offboarding someone who began before they were added (their stint starts on the add day), the refusal names the fix: `lore actor period edit --period <period> --started-on <day>` (the stint's apd_ id, or the person's @handle while they have one stint), then offboard again; `lore member add --started-on <day>` gives the right start at add time.
 
 ### `E_NEEDS_CONFIRM` on offboard, rejoin or `--merge`
 

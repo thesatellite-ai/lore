@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
@@ -408,9 +409,10 @@ func TestSyncStore_OfflineWriteIsSentByTheNextSync(t *testing.T) {
 
 // A store write whose push failed offline waits in the local clone: a
 // read never pushes it (plain files 3.3) but the first read says it waits
-// and that `lore sync` sends it (once per count, B3-13), and the next
-// write to the store pushes it with its own commit, even when that store
-// was fetched moments before (refresh retries while commits wait).
+// and that `lore sync` sends it (once per count, B3-13), even while the
+// fetch backs off (devco:D-387); a write inside the back-off (live.fetch_ttl
+// after the failed push, devco:U-6) stays local and says why, and the
+// first write after it pushes every waiting commit with its own.
 func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
 	// fetch_ttl 1h: no read fetches again, only the next write retries
 	st := newSyncTeam(t, 1, th.Config{Live: &th.Live{FetchTTL: "1h"}})
@@ -420,8 +422,11 @@ func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
 	// push now is the opt-in this retry rule is about (the default, manual,
 	// waits for lore sync: C5)
 	a.MustLore("store", "set", "--store", "notes", "--settings", "push=now")
+	// a fixed clock, so the fetch back-off below can be waited out (U-6)
+	st.people[0].SetNow(time.Now().UTC())
 	a.MustLore("memory", "list", "--store", "notes") // online: a fresh fetch stamp
 
+	st.people[0].Advance(time.Minute) // the failure comes after that fetch
 	st.people[0].Offline()
 	w := a.MustLore("memory", "add", "placeholder offline note", "--to", "notes", "--json")
 	w.Says(t, "run `lore sync` when the store is reachable (or the next lore write to it pushes it; a read never pushes)")
@@ -451,6 +456,15 @@ func TestSyncStore_OfflineWriteIsPushedByTheNextWrite(t *testing.T) {
 	if onRemote() {
 		t.Fatal("a read that reaches the store must not push the waiting write")
 	}
+	// devco:U-6: the remote was out of reach less than live.fetch_ttl ago,
+	// so the next write backs off and stays local, and says so; once the
+	// back-off has passed, the next write reaches the store and pushes both
+	// (devco:D-387).
+	a.MustLore("memory", "add", "placeholder backed-off note", "--to", "notes").Says(t, "the remote was out of reach a moment ago")
+	if onRemote() {
+		t.Fatal("a write inside the back-off must not push")
+	}
+	st.people[0].Advance(time.Hour + time.Minute)
 	a.MustLore("memory", "add", "placeholder second note", "--to", "notes").Says(t, "lore: pushed store notes: commit ")
 	if !onRemote() {
 		t.Fatal("the next write that reaches the store must push the waiting write")

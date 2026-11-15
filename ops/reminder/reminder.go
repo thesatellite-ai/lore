@@ -125,10 +125,16 @@ const longestMonth = 31
 // long after its date lands in the future, never overdue again at once).
 // A reminder done before its date moves exactly one period (skipped 0).
 // ok is false for a pattern outside schema.ReminderRecurrences().
-func nextOccurrence(due time.Time, pattern string, now time.Time) (next time.Time, skipped int, ok bool) {
+// A due with a time of day steps on the wall clock in loc, so a 09:00
+// weekly reminder is 09:00 again after a DST change (devco:T-8: it added
+// 7×24 h in UTC and slid to 10:00); a date-only due steps UTC days.
+func nextOccurrence(due time.Time, pattern string, now time.Time, loc *time.Location) (next time.Time, skipped int, ok bool) {
 	s, ok := recurrenceShift[pattern]
 	if !ok {
 		return time.Time{}, 0, false
+	}
+	if loc != nil && !dates.IsDay(due) {
+		due = due.In(loc)
 	}
 	k := 1
 	// Start near the answer instead of stepping from due one period at a
@@ -141,12 +147,18 @@ func nextOccurrence(due time.Time, pattern string, now time.Time) (next time.Tim
 		}
 		k = max(1, int(elapsed/(time.Duration(stepDays)*24*time.Hour)))
 	}
+	// A DST change makes a step an hour longer or shorter than stepDays
+	// days, so k may land one past the answer: step back while the step
+	// before it is still in the future.
+	for k > 1 && shiftBy(due, s.y, s.m, s.d, k-1).After(now) {
+		k--
+	}
 	next = shiftBy(due, s.y, s.m, s.d, k)
 	for !next.After(now) {
 		k++
 		next = shiftBy(due, s.y, s.m, s.d, k)
 	}
-	return next, k - 1, true
+	return next.UTC(), k - 1, true
 }
 
 // AddIn is the input of reminder.add.
@@ -416,7 +428,7 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 		return DoneOut{}, err
 	}
 	if rec := work.Field(r, schema.FieldReminderRecurrence); rec != "" {
-		next, skipped, ok := nextOccurrence(work.Time(r, schema.FieldReminderDueAt), rec, opclock.Now(o.env))
+		next, skipped, ok := nextOccurrence(work.Time(r, schema.FieldReminderDueAt), rec, opclock.Now(o.env), time.Local)
 		if !ok {
 			return DoneOut{}, errs.New(errs.InvalidInput, "reminder "+id.String()+": unknown recurrence "+work.Quote(rec)).
 				WithHint("fix it with a recurrence of: " + strings.Join(schema.ReminderRecurrences(), " | "))

@@ -303,7 +303,8 @@ func (o ops) addRelation(ctx context.Context, src store.Source, cur row.Row, rel
 		return errs.New(errs.InvalidInput, "task relate: a task cannot relate to itself")
 	}
 	if tableOf(did) == "" || !o.loaded(ctx, tableOf(did), did.String()) {
-		return errs.New(errs.NotFound, "task relate: no row "+dst+" in the attached stores")
+		return errs.New(errs.NotFound, "task relate: no row "+dst+" in the attached stores").
+			WithHint("run `lore show --id " + dst + "` to check the id; run `lore sync` if a teammate wrote it")
 	}
 	key := relKey(cur.ID.String(), rel, did)
 	have, err := engine.FindByKey(ctx, o.env, tableKnowledgeRf, key)

@@ -261,7 +261,9 @@ func TestStoryEMixedFormats(t *testing.T) {
 		// doctor must see it and name the next step.
 		d2.Git("switch", "-q", "-c", "drop-row", preMigration)
 		d2.Git("rm", "-q", ".lore/data/decisions/"+prj.Rows["decisions"][0]+".json")
-		d2.Git("commit", "-q", "-m", "drop an old decision")
+		// the commit hook refuses a hand-deleted row (a35784ad): this
+		// deletion is the conflict under test, so it is confirmed
+		d2.With("LORE_ALLOW_ROW_DROP=1").Git("commit", "-q", "-m", "drop an old decision")
 		d2.Git("switch", "-q", "mig-a")
 		r = d2.TryGit("merge", "--no-edit", "drop-row")
 		if r.Code != 0 {

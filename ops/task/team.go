@@ -267,7 +267,7 @@ func (o ops) refuseClientTeam(ctx context.Context, a work.Assignee, target store
 	if class != direction.Client {
 		return nil
 	}
-	return errs.New(errs.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)").
+	return errs.New(errs.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal").
 		WithHint("assign a person (--assign @handle), or keep the task internal with --to <org>")
 }
 

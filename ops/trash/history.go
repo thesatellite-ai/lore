@@ -178,7 +178,7 @@ func (o ops) restoreHistory(ctx context.Context, id string) error {
 	if err := o.removedByCommit(ctx, id); err != nil {
 		return err
 	}
-	return errs.New(errs.Purged, "trash: "+id+" was purged; purged rows never come back (DQ4)").
+	return errs.New(errs.Purged, "trash: "+id+" was purged; purged rows never come back").
 		WithHint("read it: lore trash show --id " + id + " --from-history; then add what you still need as a new row")
 }
 

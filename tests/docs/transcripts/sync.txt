@@ -373,8 +373,8 @@ by type
 by store
   repo  3
 by deleter
-  act_54fe984c9b495744c0217776765a28f2  2
-  act_28f8d32584b2db54ffb146bede5b03df  1
+  alice  2
+  bob  1
 tombstones (kept forever)
   repo  1
 alice (work/website)$ lore batch list
