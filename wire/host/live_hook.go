@@ -858,6 +858,16 @@ func readRun(run *Run) bool {
 	return run.Entry != nil && runWireMode(run) == wireRead
 }
 
+// liveStill reports whether run's live session leaves the clone's .git as
+// it is (no live lock, fetch or integrate; live_still.go): a still run
+// (stillRun), or a roster command that writes only the org store
+// (storeOnlyOps), which reads the repo's live rows as they are and so
+// never waits on a task import in the same clone (T-13: 6-7 s idle, 33 s
+// and an E_STORE_LOCKED line behind an import).
+func liveStill(run *Run) bool {
+	return stillRun(run) || (run.Entry != nil && storeOnly(run.Entry.Spec().Name))
+}
+
 // around is LiveHook's Around (see the file comment).
 func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, error) {
 	spec := run.Entry.Spec()
@@ -870,7 +880,7 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		}
 		return next(ctx)
 	}
-	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun, still: stillRun(run), ci: ciRun(run)}
+	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun, still: liveStill(run), ci: ciRun(run)}
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
 	}

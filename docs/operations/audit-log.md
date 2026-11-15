@@ -37,6 +37,7 @@ $ lore audit log
 2026-11-02T10:00:00Z  repos.write                  repos/rep_05e9…4603  by alice
 2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3…b5b8  by alice
 2026-11-02T10:00:00Z  actors.write                 actors/act_76bd…3f10  by alice
+· this log lists this repo's own rows; a write to a store (--to <store>, roster changes) is a commit in that store: lore member show --who <person> --history lists a person's commits in the org's stores
 $ lore audit verify
 ✓ audit chain intact (7 entries)
 ```
@@ -111,6 +112,7 @@ Exit 23 comes with `E_AUDIT_CHAIN_BROKEN` and a hint, as in Step 2.
 
 - **The log is per machine.** A teammate's log shows what lore did on their machine, not yours. It cannot be merged, so it is never committed.
 - **Keep a copy if you need the history.** `~/.lore/state/machine.db` is not in any repo. Back it up with the rest of your home folder; a broken chain can only be investigated against an older copy.
+- **Writes to a store are not in a repo's log.** The log lists this repo's own rows. A memory written with `--to <store>`, or a roster change, is a commit in that store: `lore member show --who <person> --history` lists a person's commits in the org's stores. `lore audit log` says so under its entries, and when it is empty.
 - **Hand edits to `.lore/data` are not in the log.** Use `git log -p .lore/data` (and code review) to see who changed a note file outside lore.
 - **The times in the log are the real clock time,** even when you run lore with a fixed test clock.
 - **The actor is an id (`act_…`).** `lore whoami` shows your own; for teams, [the roster](../team/concepts.md) maps ids to people and agents.

@@ -61,7 +61,7 @@ func TestLogLimitMatrix(t *testing.T) {
 }
 
 func TestLogTextEmptyAndForced(t *testing.T) {
-	if got := (LogOut{}).Text(); got != "· audit log is empty\n" {
+	if got := (LogOut{}).Text(); !strings.HasPrefix(got, "· audit log is empty: ") {
 		t.Fatalf("empty text = %q", got)
 	}
 	out := LogOut{Data: []Entry{
@@ -112,6 +112,19 @@ func TestIsAuditOp(t *testing.T) {
 	for name, want := range map[string]bool{OpLog: true, OpVerify: true, "audit": false, "memory.add": false} {
 		if IsAuditOp(name) != want {
 			t.Fatalf("IsAuditOp(%q) != %v", name, want)
+		}
+	}
+}
+
+// TestLogTextNamesWhereStoreWritesAre (devco:T-15): a team-store write is
+// never in a checkout's chain, so the log says what it covers and names
+// the command that lists store writes, empty or not.
+func TestLogTextNamesWhereStoreWritesAre(t *testing.T) {
+	t.Parallel()
+	full := LogOut{Data: []Entry{{CreatedAt: "2026-11-05T09:00:00Z", Action: "memories.create", TargetTable: "memories", TargetID: "mem_1", ActorID: "act_1"}}}
+	for name, txt := range map[string]string{"empty": (LogOut{}).Text(), "full": full.Text()} {
+		if !strings.Contains(txt, "this repo's own rows") || !strings.Contains(txt, "lore member show --who <person> --history") {
+			t.Errorf("%s log does not name where store writes are:\n%s", name, txt)
 		}
 	}
 }

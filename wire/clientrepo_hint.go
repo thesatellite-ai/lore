@@ -17,6 +17,7 @@ package wire
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -100,21 +101,44 @@ const clientInitWrites = ".lore/, .gitattributes, a \"# lore\" block in .gitigno
 // op repo.init) in a client repo with no .lore/ yet: init writes .lore/,
 // .gitattributes, git hooks and its pointer into CLAUDE.md/AGENTS.md, all
 // in the client's repository, so it answers E_NEEDS_CONFIRM until the
-// caller says yes (--yes, a tty answer, the REST yes field). A repo already
-// set up, and a repo that is no client repo, pass.
+// caller says yes (--yes, a tty answer, the REST yes field). A clone
+// already set up on this machine, and a repo that is no client repo, pass.
+//
+// devco:T-1: a client repo whose .lore/ came with the checkout (lore
+// 0.1.17 data, or a teammate's init) is not set up yet in this clone:
+// init would adopt it and still write the git hooks, merge drivers and the
+// .gitignore block, so it asks there too. Only a clone this machine set up
+// before (its repo cache exists) passes.
 func (a *App) ConfirmClientRepoInit(ctx context.Context, yes bool) error {
 	if yes {
 		return nil
 	}
 	top := gitTopLevel(ctx, a.projectDir())
-	if top == "" || loreFolderAt(a.loreRootFrom(top)) {
+	if top == "" {
 		return nil
 	}
-	cr := a.clientRepo(ctx)
+	if loreFolderAt(a.loreRootFrom(top)) && a.cloneSetUp(top) {
+		return nil
+	}
+	// asked before init sets the project up: the situation gathered now
+	// would be stale for init's own writes, so it is not kept
+	// (devco:D-388-init)
+	cr := a.clientRepo(withUncachedSituation(ctx))
 	if cr.Org == "" {
 		return nil
 	}
 	return errs.New(errs.NeedsConfirm, "this is a client repo of "+cr.Org+": lore init would write "+clientInitWrites+" of the client's repository; nothing written").
 		WithQuestion("set lore up inside this client's repository anyway?").
 		WithHint(clientRepoStep(cr) + "; to set lore up inside the client's repository anyway: lore init --yes")
+}
+
+// cloneSetUp reports whether lore set up the clone at top on this machine
+// before: its repo cache under the lore home exists. A checkout that only
+// carries a committed .lore/ has none.
+func (a *App) cloneSetUp(top string) bool {
+	if a.opts.Home == "" {
+		return true // no lore home to tell by: keep the old pass
+	}
+	_, err := os.Lstat(RepoCachePath(a.opts.Home, top))
+	return err == nil
 }

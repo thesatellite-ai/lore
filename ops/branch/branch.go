@@ -125,6 +125,9 @@ type ListOut struct {
 // Text prints one line per layer, then the next steps.
 func (o ListOut) Text() string {
 	if len(o.Layers) == 0 {
+		if o.Folder == "" && len(o.Lines) > 0 {
+			return strings.Join(o.Lines, "\n") + "\n" // no store folder here (devco:D-388-branchlist)
+		}
 		return "no branch notes in " + o.Folder + " (store " + o.Store + ")\n"
 	}
 	var b strings.Builder

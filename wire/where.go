@@ -102,7 +102,7 @@ func (a *App) Where(ctx context.Context, in opswhere.ShowIn) (opswhere.Out, erro
 	out.Entries, out.Unknown = whereHome(home, uses, in.All)
 	out.Entries = append(out.Entries, a.whereStores(ctx, home)...)
 	if top := whereRepoTop(ctx, a.opts.RepoDir); top != "" {
-		if storeTop, _, isStore := rowfs.StoreTop(top); !isStore || storeTop != top {
+		if storeTop, _, isStore := rowfs.StoreTop(top); !isStore || resolvedPath(storeTop) != resolvedPath(top) { // StoreTop resolves links, top may not (D-389)
 			out.Repo = top
 			out.Entries = append(out.Entries, whereRepo(ctx, top)...)
 			// the repo's cache sits under the lore home, never in the repo

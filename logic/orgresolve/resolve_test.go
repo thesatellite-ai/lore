@@ -360,3 +360,27 @@ func TestDisagreesHintNamesLiveFlags(t *testing.T) {
 		t.Fatalf("hint %q", oe.Hint)
 	}
 }
+
+// devco T-17: an own repo moved to another owner on the git host matches
+// no own: pattern; its own lore data keeps it own (named in a warning
+// with both fixes), and a client link or repos: pattern still wins.
+func TestResolveMovedOwnRepoStaysOwn(t *testing.T) {
+	cfg := &orgconf.Config{Orgs: []orgconf.Org{{Name: "acme", Own: []string{"git.example.test/acme/*"}, Repos: []string{"git.example.test/client/*"}}}}
+	in := Inputs{Config: cfg, ProjectID: "prj_1", Remotes: []string{"git.example.test/other/app"}, OwnData: true,
+		Setup: SetupHint{Name: "work", Org: "acme", Why: "folder ~/code/**"}}
+	r, err := Resolve(in)
+	if err != nil || r.Role != RoleOwn {
+		t.Fatalf("moved own repo: role %s err %v, want own", r.Role, err)
+	}
+	if len(r.Warnings) == 0 || !strings.Contains(r.Warnings[0], "git.example.test/other/*") || !strings.Contains(r.Warnings[0], "lore org link --org acme") {
+		t.Fatalf("the move is not named with its fixes: %q", r.Warnings)
+	}
+	in.OwnData = false
+	if r, _ := Resolve(in); r.Role != RoleClient {
+		t.Fatalf("without own data the fail-closed default must stay client, got %s", r.Role)
+	}
+	in.OwnData, in.Remotes = true, []string{"git.example.test/client/app"}
+	if r, _ := Resolve(in); r.Role != RoleClient {
+		t.Fatalf("a repos: pattern match must stay client whatever its data, got %s", r.Role)
+	}
+}

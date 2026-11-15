@@ -150,6 +150,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 
 	var attached []attach.Opened
+	var aliasOpts []engine.Option
 	if !repoOnly {
 		personal, perr := localPersonalStores(ctx, opts)
 		if perr != nil {
@@ -160,6 +161,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		for _, s := range org {
 			optional[s.Name] = true
 		}
+		aliasOpts = storeAliasOpts(slices.Concat(extra, org, personal))
 		if attached, st.unreachable, st.untrusted, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, org, personal), optional); err != nil {
 			return fail(err)
 		}
@@ -208,7 +210,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// link, store add, sync: host.setsUpRepo) or an in-process caller
 		// with a plain ctx makes .lore/ here (a read reaches here only when
 		// it exists: MkdirAll then changes nothing).
-		if mkErr := os.MkdirAll(filepath.Join(st.repoTop, loreFolderName), cacheDirMode); mkErr != nil {
+		// a committed folder: the work tree's modes, group access in a
+		// group's shared checkout (D-390), as init makes it
+		if mkErr := rowfs.MkdirShared(filepath.Join(st.repoTop, loreFolderName)); mkErr != nil {
 			return fail(errs.FileIO("create the .lore folder", filepath.Join(st.repoTop, loreFolderName), mkErr))
 		}
 		repoCache = RepoCachePath(opts.Home, st.repoTop)
@@ -344,6 +348,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	st.defaultTarget = store.SourceRepo
+	engOpts = append(engOpts, aliasOpts...)
 	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
@@ -450,6 +455,27 @@ func repoIsClient(ctx context.Context, opts Options) (client bool, note string) 
 		return true, "the repo is treated as a client repo: whether it is one could not be checked (" + err.Error() + ")"
 	}
 	return client, ""
+}
+
+// storeAliasOpts are the engine aliases of the stores to attach: each
+// store's Aliases, unless a store is attached under that name itself or
+// an earlier store already took the alias (devco T-5).
+func storeAliasOpts(stores []attach.Store) []engine.Option {
+	names := make(map[store.Source]bool, len(stores))
+	for _, s := range stores {
+		names[s.Name] = true
+	}
+	var out []engine.Option
+	for _, s := range stores {
+		for _, a := range s.Aliases {
+			if a == "" || names[a] {
+				continue
+			}
+			names[a] = true
+			out = append(out, engine.WithStoreAlias(a, s.Name))
+		}
+	}
+	return out
 }
 
 // orgStores asks opts.OrgStores for the folders the repo's org brings; no

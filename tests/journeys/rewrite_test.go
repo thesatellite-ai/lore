@@ -95,7 +95,11 @@ func TestJourneyRewriteKeepsNotes(t *testing.T) {
 	w.Step("day3/a-git-rm-is-named-with-its-author-and-the-way-back", func() {
 		b.Git("pull", "-q")
 		b.Git("rm", "-q", ".lore/data/decisions/"+dec+".json")
-		b.Git("commit", "-q", "-m", "Remove the Go pin decision")
+		// devco:D-388: since S-8 the pre-commit hook stops a hand drop and
+		// names the row and the escape; Ben drops it on purpose with it, so
+		// the way back below is still reached from a real git rm.
+		b.TryGit("commit", "-q", "-m", "Remove the Go pin decision").Refused(t, "E_NEEDS_CONFIRM", dec, "LORE_ALLOW_ROW_DROP=1")
+		b.With("LORE_ALLOW_ROW_DROP=1").Git("commit", "-q", "-m", "Remove the Go pin decision")
 		removed := b.Git("rev-parse", "--short", "HEAD")
 		b.Git("push", "-q")
 		a.Git("pull", "-q")

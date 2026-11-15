@@ -151,7 +151,11 @@ type RenameOut struct {
 	IDRecorded bool   `json:"id_recorded"`
 	RepoOrgs   int    `json:"repo_orgs"`
 	Defaults   int    `json:"defaults"`
-	Config     string `json:"config"`
+	// Setups are the setups whose org: named the old label and now name
+	// the new one (devco T-19: left behind, they made config.yaml invalid
+	// and refused every org write with E_SETUP_ORG_MISMATCH).
+	Setups []string `json:"setups,omitempty"`
+	Config string   `json:"config"`
 	// Lines is the human output, built by the host.
 	Lines []string `json:"-"`
 }
@@ -262,7 +266,8 @@ func Ops(env Env) []op.Entry {
 				}
 				return h.Use(ctx, in)
 			}),
-	}, refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...))) // refresh.go, storeadd.go
+	}, refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...)),
+		storeRemoveOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...))) // refresh.go, storeadd.go, storeremove.go
 }
 
 // ops binds the run functions to one Env.

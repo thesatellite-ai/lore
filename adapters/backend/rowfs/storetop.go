@@ -58,7 +58,8 @@ func StoreTop(dir string) (top string, isGit bool, ok bool) {
 // StoreFolderAt is the store folder dir sits in, inside the store whose
 // top is top: the nearest folder from dir up to top (top excluded) whose
 // project marker (the folder's _meta.json) exists, slash separated; the
-// store root (FolderRoot) when there is none or dir is outside top.
+// store root (FolderRoot) when there is none or dir is outside top. Both
+// paths are compared with symlinks resolved, so top may be given either way.
 func StoreFolderAt(top, dir string) string {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -66,6 +67,15 @@ func StoreFolderAt(top, dir string) string {
 	}
 	if real, rerr := filepath.EvalSymlinks(abs); rerr == nil {
 		abs = real
+	}
+	// top resolved too: dir is, so an unresolved top (a caller's own
+	// path, t.TempDir on macOS where /var links to /private/var) never
+	// matched and every folder read as outside the store (D-389)
+	if t, terr := filepath.Abs(top); terr == nil {
+		top = t
+	}
+	if real, rerr := filepath.EvalSymlinks(top); rerr == nil {
+		top = real
 	}
 	for d := abs; d != top && filepath.Dir(d) != d; d = filepath.Dir(d) {
 		rel, rerr := filepath.Rel(top, d)

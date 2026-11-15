@@ -28,10 +28,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
-// initLoreDirMode is the mode of a `.lore` folder init creates: the folder
-// is committed, so git's usual work-tree mode (rowfs.WithSharedModes).
-const initLoreDirMode = 0o755
-
 // rootInitAt makes wd the root the repo store opens for `lore init`:
 // when wd has no `.lore` folder it creates one (any `.lore` above wd would
 // otherwise be taken for the project). The returned undo removes a folder
@@ -50,7 +46,7 @@ func rootInitAt(wd string) (undo func(), err error) {
 	case !errors.Is(err, os.ErrNotExist):
 		return noop, errs.Wrap(errs.Internal, "init: read "+dir, err)
 	}
-	if err := os.Mkdir(dir, initLoreDirMode); err != nil {
+	if err := rowfs.MkdirShared(dir); err != nil {
 		if errors.Is(err, os.ErrPermission) {
 			// A folder the person may not write (a read-only mount, a
 			// checkout owned by another user) is their input to fix, not

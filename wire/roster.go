@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -356,6 +357,14 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 	if pid.IsZero() && len(live) > 0 {
 		slices.SortFunc(live, func(x, y row.Row) int { return strings.Compare(x.ID.String(), y.ID.String()) })
 		return value.RefOf(live[0].ID)
+	}
+	// devco:T-11: a read (search, list, show, context) never creates a row.
+	// lore search in a repo with no lore data reached here for the personal
+	// store's root (no folder id) and committed a nameless project row there,
+	// which the next lore sync pushed.
+	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+		return value.Ref{}, errs.New(errs.NotFound, "store "+string(target)+" has no project row yet, and a read never makes one").
+			WithHint("a write there makes it (lore memory add --to " + string(target) + " --body \"…\"); lore search and lore <kind> list --store " + string(target) + " read its rows without one")
 	}
 	n, err := value.TextOf(folder)
 	if err != nil {

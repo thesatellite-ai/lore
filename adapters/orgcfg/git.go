@@ -23,7 +23,17 @@ import (
 // built by this package (no shell parses them), and the process is killed
 // when ctx ends.
 func gitRun(ctx context.Context, args ...string) (string, error) {
-	return gitRunEnv(ctx, nil, args...)
+	if !immutableRead(args) {
+		return gitRunEnv(ctx, nil, args...)
+	}
+	if out, ok := memoRun(args); ok {
+		return out, nil // gitmemo.go: fixed content, read once per run
+	}
+	out, err := gitRunEnv(ctx, nil, args...)
+	if err == nil {
+		keepRun(args, out)
+	}
+	return out, err
 }
 
 // gitRunEnv is gitRun with extra KEY=VALUE environment entries (nil: the

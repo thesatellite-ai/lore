@@ -409,6 +409,18 @@ func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Durati
 // it is ahead of (or equal to) the tracking ref (it holds writes not pushed
 // yet), else the tracking ref. ok is false when the branch exists nowhere.
 func branchTip(ctx context.Context, dir, branch string) (string, bool) {
+	// The tip is a function of what the two refs hold (gitmemo.go).
+	fp := refFingerprint(dir, branch)
+	if t, ok := memoTip(dir, branch, fp); ok {
+		return t.tip, t.ok
+	}
+	tip, ok := resolveBranchTip(ctx, dir, branch)
+	keepTip(dir, branch, fp, tip, ok)
+	return tip, ok
+}
+
+// resolveBranchTip is branchTip asking git.
+func resolveBranchTip(ctx context.Context, dir, branch string) (string, bool) {
 	resolve := func(ref string) string {
 		out, err := gitRun(ctx, "-C", dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 		if err != nil {

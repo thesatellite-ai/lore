@@ -696,14 +696,16 @@ func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
 	for _, e := range out {
 		taken[e.Name] = true
 	}
+	var listed []string
 	if top != "" {
 		if c, rerr := readStoresFile(top); rerr == nil {
 			for _, s := range c.Stores {
 				taken[string(s.Name)] = true
+				listed = append(listed, s.URL)
 			}
 		}
 	}
-	return append(out, a.otherOrgStores(out, taken)...), nil
+	return append(out, a.otherOrgStores(out, taken, listed)...), nil
 }
 
 // otherOrgStores are the stores of the org entries behind got (the org
@@ -714,9 +716,19 @@ func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
 // (storeshortname.go; owner report 2026-11-11: only the org's first store
 // was listed), or by its url when the short name is a name taken here
 // (a stores.yaml entry, an attached org name, or another store's).
-func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool) []opsstores.Entry {
+//
+// listed are the urls this repo's stores.yaml attaches: such a store is
+// already a row under the name given there, so it is not listed a second
+// time under its org short name or url (devco T-22: one client store
+// showed as "clientco … stores.yaml" and again as "client-store … org").
+func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool, listed []string) []opsstores.Entry {
 	orgs := map[string]bool{}
 	seen := map[string]bool{}
+	for _, u := range listed {
+		if k, ok := storeKey(u); ok {
+			seen[k] = true
+		}
+	}
 	for _, e := range got {
 		org, _, _ := strings.Cut(e.Name, targetSep)
 		orgs[org] = true

@@ -162,11 +162,35 @@ func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.Reassig
 	if err = h.a.RosterAssignable(ctx, in.Assign); err != nil {
 		return nil, "", err
 	}
+	if err = h.refuseTeamAssign(ctx, in); err != nil {
+		return nil, "", err
+	}
 	to, err := h.resolveActor(ctx, in.Assign)
 	if err != nil {
 		return nil, "", err
 	}
 	return w, to, nil
+}
+
+// refuseTeamAssign answers a reassign to a team with the command that
+// assigns one (task edit --assign @team sets the task's team). devco:T-7:
+// the handle was looked up as a person only, and "no one is @web on the
+// roster" hinted that the team run lore actor register, which no team can.
+func (h standaloneCoord) refuseTeamAssign(ctx context.Context, in opscoord.ReassignIn) error {
+	v := strings.TrimSpace(in.Assign)
+	if !strings.HasPrefix(v, "@") {
+		return nil
+	}
+	as, err := standaloneTeam(h).ResolveHandle(ctx, v, true)
+	if err != nil || as.TeamID == "" {
+		return nil // a person, or unknown: the person lookup answers
+	}
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		id = "<id>"
+	}
+	return errs.New(errs.InvalidInput, v+" is a team: task reassign hands a task to a person").
+		WithHint("give the task to the team with lore task edit --id " + id + " --assign " + v + " (that sets its team), or name a person: lore task reassign --id " + id + " --assign @<person>")
 }
 
 // resolveActor is @handle (a person on the repo roster) as an actor id; a

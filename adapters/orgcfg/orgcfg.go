@@ -184,6 +184,43 @@ func ProjectID(dir string) string {
 	return m.ProjectID
 }
 
+// ownDataScanMax caps the actor files OwnData reads: one untrimmed row
+// decides, and a repo holds a handful of actors.
+const ownDataScanMax = 64
+
+// OwnData reports whether the lore data under dir was written as an org's
+// own repo: an actor row in .lore/data/actors holds a stable_key, a key
+// lore strips from every actor copy it writes into a client repo (F18).
+// Why (devco T-17): an own repo the git host moved to another owner
+// matches no own: pattern any more, and this is the evidence that keeps it
+// own (orgresolve.Inputs.OwnData) instead of a client repo by default.
+func OwnData(dir string) bool {
+	actors := filepath.Join(dir, loreDir, dataDir, "actors")
+	ents, err := os.ReadDir(actors)
+	if err != nil {
+		return false
+	}
+	for i, e := range ents {
+		if i >= ownDataScanMax {
+			break
+		}
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(actors, e.Name())))
+		if rerr != nil {
+			continue
+		}
+		var row struct {
+			StableKey string `json:"stable_key"`
+		}
+		if json.Unmarshal(b, &row) == nil && row.StableKey != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // ProjectDir is the lore project root of a command run in dir
 // (ProjectRoot), or dir itself when there is none. Why: run in a subfolder
 // (cd src && lore …, an agent's cwd), Gather read _meta.json and
@@ -501,6 +538,7 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		Links:              lr,
 		StoreDefaultBranch: defBranch,
 		Setup:              in.Setup,
+		OwnData:            s.LinkedByRemote == "" && OwnData(root),
 	})
 	if s.ResolveErr == nil && s.Result.Org != nil && s.ProjectID != "" && in.Links != nil && orgresolve.IsStaging(s.Result.Org, defBranch) {
 		if err := stagingLinks(ctx, s, in.Links); err != nil {
