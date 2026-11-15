@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -47,6 +48,8 @@ type orgFolder struct {
 	Org    string
 	URL    string
 	Branch string
+	// Dir is the store's local checkout the folder was read from.
+	Dir string
 }
 
 // orgFolderScan is what one walk of the org's stores found: the folders,
@@ -67,6 +70,15 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 		scan.Unread[orgStoresLabel] = err
 		return scan
 	}
+	return a.foldersOf(ctx, entries)
+}
+
+// foldersOf walks the stores entries name (each once by placeKey): the
+// folders of each, and each store it could not read. orgFolders feeds it
+// the org stores of this folder's setup; a store clone's read scope
+// (scope.go) the stores of the clone's own org.
+func (a *App) foldersOf(ctx context.Context, entries []opsstores.Entry) orgFolderScan {
+	scan := orgFolderScan{Unread: map[string]error{}}
 	orgOfAny := a.storeOrgs()
 	seen := map[string]bool{}
 	for _, e := range entries {
@@ -93,7 +105,7 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 				continue // a folder whose _meta.json names no project id is not a project
 			}
 			sk, _ := storeKey(e.URL)
-			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch})
+			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch, Dir: dir})
 		}
 	}
 	return scan

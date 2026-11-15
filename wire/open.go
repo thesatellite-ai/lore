@@ -95,7 +95,14 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if err != nil {
 			return nil, err
 		}
-		st, err := openDetachedHere(ctx, opts, &one, one.Name)
+		// the org's company folder beside a project folder: its roster
+		// (--assign @handle), kinds and policy, as a linked repo has it
+		// (scope.go, devco D-433)
+		var also []attach.Store
+		if one.Folder != "" {
+			also = cloneCompanyFolder(cloneOrgEntry(opts.Home, one.URL), one)
+		}
+		st, err := openDetachedHere(ctx, opts, &one, one.Name, also...)
 		if err != nil {
 			return nil, err
 		}

@@ -56,3 +56,6 @@ Dev-company round 2, track F (plus the client-repo findings of track D). Replaye
 | D-96 | r2 D-17 | doctor DEGRADED forever after agent start | `TestStoryFPeople` step 6 |
 | D-98 | r2 F-15 | `--to <org>/<folder>` in a no-lore repo refused | `TestStoryFPeople` step 9; `TestJourneyTeamHandover` |
 | D-99 | r2 F-16 | second org's first commit has the first org's email | `TestStoryFPeople` step 10 |
+| D-428 | store test LF-5 | org link without --own makes a client-listed repo OWN, guards off | `TestJourneyLinkNeverWeakensGuards`; `TestLinkNeverWeakensGuards` |
+| D-429 | store test LF-4 | linked own repo: context empty, render refused, report 0 | `TestJourneyLinkedOwnRepoGetsItsNotes`; `TestContextReadsInternalStoresInOwnRepo` |
+| D-430 | store test LF-16 | private render over its stated budget, trust and Source noise | `TestPrivateBudgetLineStatesTheRealLimit`; `TestPrivateRenderDropsNoise`; `TestJourneyLinkedOwnRepoGetsItsNotes` |

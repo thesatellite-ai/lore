@@ -78,6 +78,12 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 		Path: st.repoCacheOf(),
 	}
 	srcs := []sqlite.LensSource{repo}
+	if repo.Path == "" {
+		// a store-only open (a store clone, a read outside any repo) has
+		// no repo cache: its stores are the sources (devco D-454; it
+		// refused "a source needs a name and a path")
+		srcs = nil
+	}
 	client := st.eng.IsClient(store.SourceRepo)
 	shareable := map[store.Source]bool{}
 	if client {

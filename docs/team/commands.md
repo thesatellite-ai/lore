@@ -1262,22 +1262,23 @@ Flags:
 ### `lore task next`
 
 <!-- help: task next -->
-Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)
+Show the next ready task and why it is next (resume-first, leaves only, dependencies, gates, urgency); --claim takes it
 
 ```text
 Usage:
   lore task next
 
 Examples:
-  # rank without claiming
-  lore task next --mission msn_<id> --why --dry-run
+  # see what is next (writes nothing)
+  lore task next --mission msn_<id> --why
 
 Flags:
-      --dry-run            rank and explain without claiming (nothing written)
+      --claim              claim the task shown (resume the one you hold); without it task next only shows it and writes nothing
+      --dry-run            rank and explain in the old form, never claiming even with --claim (nothing written)
       --json               print the result (or the error) as JSON
       --mission string     only tasks of this mission
       --owns stringArray   paths the claim owns
-      --push               push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
+      --push               with --claim: push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --repo string        only tasks of this repo (a repo name of the group)
       --role string        plan role (e.g. coordinator)

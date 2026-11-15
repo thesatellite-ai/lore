@@ -297,13 +297,13 @@ Lore works for a whole team, several repos, several companies and a crew of codi
 - **Tasks reach teammates on any branch, without a merge.** Live rows (notes every teammate sees whatever branch they are on) are shared on one hidden list on GitHub that is not a branch (git calls it a ref: `refs/lore/live`, one per repo). Nothing pushes by itself: `lore sync` or your next `git push` sends them, and lands the finished ones on `main` (or lets them ride along with your next commit when `main` is protected). `live.autopush: true` pushes each write at once.
 - **Internal notes stay internal.** Notes a client must never read live in a store: a separate notes-only repo linked to the client repo, like a locked filing cabinet next to it. Leak checks stop internal text from reaching the client's commits and pull requests.
 - **Several repos, one product; one person, several companies.** Repos link to one shared project; each repo loads exactly one org (one company), with its own identity, roster (the list of people and agents) and personal notes.
-- **Agents do not step on each other.** `lore task next` claims a task: the agent puts its name on it, like writing your name on a whiteboard job. The claim has a lease, so it runs out after a set time unless the agent keeps saying it is alive, and it is kept on a second hidden ref (`refs/lore/signals`). A crashed agent's task is picked up when its lease runs out, and people approve gates (steps that wait for a person to say yes).
+- **Agents do not step on each other.** `lore task next --claim` claims a task (plain `lore task next` only shows which one is next): the agent puts its name on it, like writing your name on a whiteboard job. The claim has a lease, so it runs out after a set time unless the agent keeps saying it is alive, and it is kept on a second hidden ref (`refs/lore/signals`). A crashed agent's task is picked up when its lease runs out, and people approve gates (steps that wait for a person to say yes).
 
 ```bash
 lore task add --title "Send the invoice reminder before Friday's demo" --assign @bob  # live: Bob sees it on his next command
 lore org link --org agency --project client                     # once: tie a client repo to an internal project
 lore memory add --body "The client replies faster on WhatsApp than email"  # in a client repo: goes to the store, not the repo
-lore task next --mission msn_01a1… --push                 # an agent takes the next ready task (--push: the claim goes to the code remote)
+lore task next --claim --mission msn_01a1… --push         # an agent takes the next ready task (--push: the claim goes to the code remote)
 lore hold claim --name full-suite --ttl 30m --push               # one heavy test run at a time (lore hold release --name full-suite)
 ```
 

@@ -55407,6 +55407,58 @@
                         "path_scoped_rules": {
                           "type": "integer"
                         },
+                        "private": {
+                          "type": "object",
+                          "description": "--report: the private render outside the checkout (the attached internal stores); in a linked repo with no .lore folder the only member",
+                          "properties": {
+                            "budget": {
+                              "type": "integer",
+                              "description": "context.budget.internal in bytes"
+                            },
+                            "bytes": {
+                              "type": "integer",
+                              "description": "the private files' size"
+                            },
+                            "core": {
+                              "type": "integer",
+                              "description": "bytes of the pinned part (never cut)"
+                            },
+                            "dir": {
+                              "type": "string",
+                              "description": "the folder of the private files"
+                            },
+                            "left_out": {
+                              "type": "integer",
+                              "description": "other notes the budget left out"
+                            },
+                            "over_core": {
+                              "type": "boolean",
+                              "description": "the pinned part alone is over the budget"
+                            },
+                            "pinned": {
+                              "type": "integer",
+                              "description": "must rules and critical/high hotfixes, always in full"
+                            },
+                            "rows": {
+                              "type": "integer",
+                              "description": "rows shown in the private files"
+                            },
+                            "stores": {
+                              "type": "integer",
+                              "description": "internal stores rendered"
+                            }
+                          },
+                          "required": [
+                            "dir",
+                            "stores",
+                            "pinned",
+                            "rows",
+                            "left_out",
+                            "budget",
+                            "bytes",
+                            "core"
+                          ]
+                        },
                         "profile": {
                           "type": "string",
                           "description": "--report: the tool profile whose budget applies (the smallest of the targets)"
@@ -101410,7 +101462,7 @@
     "/v1/tasks/next": {
       "post": {
         "operationId": "task.next",
-        "summary": "Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)",
+        "summary": "Show the next ready task and why it is next (resume-first, leaves only, dependencies, gates, urgency); --claim takes it",
         "tags": [
           "task"
         ],
@@ -101421,9 +101473,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "claim": {
+                    "type": "boolean",
+                    "description": "claim the task shown (resume the one you hold); without it task next only shows it and writes nothing"
+                  },
                   "dry_run": {
                     "type": "boolean",
-                    "description": "rank and explain without claiming (nothing written)"
+                    "description": "rank and explain in the old form, never claiming even with --claim (nothing written)"
                   },
                   "mission": {
                     "type": "string",
@@ -101438,7 +101494,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
+                    "description": "with --claim: push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
                   },
                   "repo": {
                     "type": "string",
@@ -101471,6 +101527,9 @@
                     },
                     "dry_run": {
                       "type": "boolean"
+                    },
+                    "holding": {
+                      "type": "string"
                     },
                     "ready": {
                       "type": "array",

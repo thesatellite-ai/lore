@@ -50,7 +50,7 @@ func stillRun(run *Run) bool {
 
 // dryRunReadsLive are the nouns whose dry run answers about the team's
 // current work, so it reads teammates' live rows the way the plain read
-// does (fetching refs/lore/* when due): lore task next --dry-run ranks the
+// does (fetching refs/lore/* when due): lore task next ranks the
 // tasks a teammate just added and claims nothing, and a task bulk change's
 // --dry-run lists the rows the real run would change. A still dry run
 // there saw only the rows this clone last fetched and answered "nothing

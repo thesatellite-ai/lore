@@ -717,7 +717,7 @@ func dryRun(run *Run) bool {
 	if run.Entry == nil {
 		return false
 	}
-	if fixDryRun(run) {
+	if fixDryRun(run) || nextReads(run) {
 		return true
 	}
 	if run.Cmd != nil {
@@ -733,6 +733,30 @@ func dryRun(run *Run) bool {
 		return json.Unmarshal(d.Body, &in) == nil && in.DryRun
 	}
 	return false
+}
+
+// nextClaimFlag is task next's --claim (opscoord.NextIn.Claim).
+const nextClaimFlag = "claim"
+
+// nextReads reports whether run is a `lore task next` without --claim
+// (devco:D-426): it only shows the next task, so the host runs it as the
+// dry run it is (a read's live session and wiring, nothing written in
+// .git). An input it cannot read is a read, the side that changes less.
+func nextReads(run *Run) bool {
+	if run.Entry.Spec().Name != opscoord.OpTaskNext {
+		return false
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(nextClaimFlag); err == nil {
+			return !f
+		}
+		return !slices.Contains(run.Args, "--"+nextClaimFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opscoord.NextIn
+		return json.Unmarshal(d.Body, &in) != nil || !in.Claim
+	}
+	return true
 }
 
 // fixDryRun reports whether run is `lore fix --dry-run` (CLI flag or REST

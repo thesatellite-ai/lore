@@ -134,12 +134,12 @@ func TestCampaignTasks_CoordinationVerbs(t *testing.T) {
 	campTasksStep(t, ta.c1, "task.claim", "task", "claim", id)
 	campTasksStep(t, ta.ca, "task.revoke", "task", "revoke", id)
 	campTasksStep(t, ta.c2, "task.next", "task", "next", "--dry-run").Says(t, id)
-	campTasksStep(t, ta.c2, "task.next", "task", "next").Says(t, id)
+	campTasksStep(t, ta.c2, "task.next", "task", "next", "--claim").Says(t, id)
 	campTasksStep(t, ta.c2, "task.release", "task", "release", id)
 
 	// Gate: a person requests, the agent may not approve, the person does.
 	campTasksStep(t, ta.ca, "gate.request", "gate", "request", id)
-	ta.c1.Lore("task", "next").Fails(t, th.ExitNoWork, "E_NO_WORK", "gate needs approval")
+	ta.c1.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "E_NO_WORK", "gate needs approval")
 	ta.c1.Lore("gate", "approve", id).Refused(t)
 	campTasksStep(t, ta.ca, "gate.approve", "gate", "approve", id)
 

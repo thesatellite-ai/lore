@@ -391,8 +391,14 @@ func (a *App) coordRoster(ctx context.Context) (rosterAt, error) {
 		return r, nil
 	}
 	org, err := a.opts.Org(ctx)
-	if err != nil || org == nil {
+	if err != nil {
 		return r, err
+	}
+	if org == nil {
+		if c, ok := a.cloneRoster(); ok { // a store clone (scope.go, devco D-433)
+			return c, nil
+		}
+		return r, nil
 	}
 	src, folder, ok, err := a.orgRosterSource(ctx, org.Name)
 	if err != nil {

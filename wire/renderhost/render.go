@@ -151,6 +151,19 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	rules, hotfixes, skips, dirs, dirBodies, dirReps, pathGroups := p.rules, p.hotfixes, p.skips, p.dirs, p.dirBodies, p.dirReps, p.pathGroups
 	report.File = f.outPath
 
+	// D-429: a repo linked as one of the org's own repos with no .lore
+	// folder keeps its notes in the store folder: it gets the private
+	// render (outside the checkout, imported by the tool's git-excluded
+	// local file), never a LORE.md, and --report counts those rows.
+	if !f.check && !f.scopes {
+		if top := h.linkedOwnUntouched(ctx, root); top != "" {
+			return h.renderLinkedOwn(ctx, f, top)
+		}
+	}
+	if f.report && !f.scopes {
+		report.Private = h.privateReportOf(ctx, root)
+	}
+
 	if f.report && f.scopes {
 		// 6.2.6: the per-file table; writes nothing.
 		sr := h.buildScopeReport(ctx, report, dirs, dirBodies, dirReps, pick.targets)

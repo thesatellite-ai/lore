@@ -669,7 +669,8 @@ Agents (one actor per session; claims have a lease):
 ```bash
 lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export
 lore inbox
-lore task next --mission mis_12                          # claims the best ready task (exit 10 = no work)
+lore task next --mission mis_12                          # shows the best ready task and why (writes nothing)
+lore task next --claim --mission mis_12                  # claims it (exit 10 = no work)
 lore task heartbeat                                      # keep the claim alive
 lore hold claim --name full-suite --ttl 30m                     # one heavy run at a time; after it: lore hold release --name full-suite
 lore task note --id tsk_30 --text "mutation done; tests next"

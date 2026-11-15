@@ -163,6 +163,45 @@ func queueOf(env Env, v signals.View, req NextRequest, docs []Doc) queue.Result 
 	return queue.Next(queue.Input{Tasks: tasks, Filter: req.Filter, Now: v.Now, MaxAttempts: env.Agents.MaxAttempts, Weights: env.Urgency})
 }
 
+// resumable is the claim Next resumes (§7.3 step 2): a task this session
+// holds. A coordinator lease on a parent is not work to resume (TASK 6.9):
+// the caller is offered a leaf.
+func resumable(env Env, v signals.View, openChildren func(string) []string) (string, bool) {
+	for _, h := range v.ActiveClaimsOf(env.Caller.ActorID) {
+		if h.Signal.Session == env.Caller.Session && !IsMission(h.Signal.Task) && len(openChildren(h.Signal.Task)) == 0 {
+			return h.Signal.Task, true
+		}
+	}
+	return "", false
+}
+
+// Peek is what Next would do, writing nothing (devco:D-426: `task next`
+// reads by default): Holding is the task Next would resume ("" when none),
+// Queue the ranking it would claim from. Poisoned tasks are listed in the
+// queue, never blocked here (blocking them is a write, Next's job).
+type Peek struct {
+	Holding string
+	Queue   queue.Result
+}
+
+// PeekNext reads the signals board and the rows once and returns Peek.
+func PeekNext(ctx context.Context, env Env, req NextRequest) (Peek, error) {
+	v, err := env.Signals.Read(ctx)
+	if err != nil {
+		return Peek{}, err
+	}
+	docs, err := req.List(ctx)
+	if err != nil {
+		return Peek{}, err
+	}
+	open := req.Opts.OpenChildren
+	if open == nil {
+		open = OpenChildrenOf(docs)
+	}
+	held, _ := resumable(env, v, open)
+	return Peek{Holding: held, Queue: queueOf(env, v, req, docs)}, nil
+}
+
 // Next runs §7.3: resume first, block poisoned tasks, then claim the first
 // ready task, re-picking at random among the top three after a lost race.
 func Next(ctx context.Context, env Env, req NextRequest) (NextResult, error) {
@@ -177,12 +216,8 @@ func Next(ctx context.Context, env Env, req NextRequest) (NextResult, error) {
 	if req.Opts.OpenChildren == nil {
 		req.Opts.OpenChildren = OpenChildrenOf(docs)
 	}
-	// Resume first (§7.3 step 2), but a coordinator lease on a parent is
-	// not work to resume (TASK 6.9): the caller is offered a leaf.
-	for _, h := range v.ActiveClaimsOf(env.Caller.ActorID) {
-		if h.Signal.Session == env.Caller.Session && !IsMission(h.Signal.Task) && len(req.Opts.OpenChildren(h.Signal.Task)) == 0 {
-			return NextResult{Resumed: true, Task: h.Signal.Task}, nil
-		}
+	if held, ok := resumable(env, v, req.Opts.OpenChildren); ok {
+		return NextResult{Resumed: true, Task: held}, nil
 	}
 	res := queueOf(env, v, req, docs)
 	out := NextResult{Scores: res.Scores}

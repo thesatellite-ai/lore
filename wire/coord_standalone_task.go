@@ -350,15 +350,19 @@ func (w *coordWorld) overridePushedLine(marked bool) string {
 // nextTagName is the tag whose tasks get the next_tag term (TASK 13.2).
 const nextTagName = "next"
 
-// TaskNext implements opscoord.Host: resume the claim held, or claim the
-// most urgent ready leaf; --dry-run ranks and explains, writing nothing.
-// Poisoned tasks are announced even when the claim then fails.
+// TaskNext implements opscoord.Host. By default it reads (devco:D-426:
+// the name reads like a read, and a claim commits): it shows the task
+// --claim would take, why (its urgency terms), the ranking and what waits,
+// writing nothing. --claim resumes the claim held or claims the most urgent
+// ready leaf, as before; --dry-run prints the old ranking form and never
+// claims. Poisoned tasks are announced (and blocked) only by a claim.
 func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opscoord.NextOut, error) {
 	w, err := h.openWorldFor(ctx, "")
 	if err != nil {
 		return opscoord.NextOut{}, err
 	}
-	if !in.DryRun {
+	claim := in.Claim && !in.DryRun
+	if claim {
 		if err = w.requirePushAsked(in.Push, "the claim task next takes"); err != nil {
 			return opscoord.NextOut{}, err
 		}
@@ -373,17 +377,18 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: w.taskInRepo()},
 		List:   rows.List, RepoName: rows.RepoName, Pick: cryptoPick, Urgency: h.urgencyContext(ctx),
 	}
-	if in.DryRun {
-		v, rerr := env.Signals.Read(ctx)
+	if !claim {
+		pk, rerr := coord.PeekNext(ctx, env, req)
 		if rerr != nil {
 			return opscoord.NextOut{}, coordErr(rerr)
 		}
-		res, rerr := coord.Queue(ctx, env, v, req)
-		if rerr != nil {
-			return opscoord.NextOut{}, coordErr(rerr)
+		out := nextRanking(pk.Queue)
+		if in.DryRun {
+			out.Lines = dryRunLines(pk.Queue, in.Why)
+			return out, nil
 		}
-		out := nextRanking(res)
-		out.Lines = dryRunLines(res, in.Why)
+		out.Holding = pk.Holding
+		out.Lines = readLines(pk, in.Why)
 		return out, nil
 	}
 	res, err := coord.Next(ctx, env, req)
@@ -407,6 +412,71 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 	}
 	lines = append(lines, "  read its notes: lore task show --id "+res.Task)
 	return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
+}
+
+// readLines is the text of a plain `task next` (devco:D-426): the task
+// --claim would take and why it is next, the rest of the ranking, what
+// waits, and how to take it. why breaks the reason out term by term.
+func readLines(pk coord.Peek, why bool) []string {
+	res := pk.Queue
+	var out []string
+	switch {
+	case pk.Holding != "":
+		out = append(out, fmt.Sprintf("you hold %s; resume it (lore task next --claim resumes it), or `lore task release --id %s`", pk.Holding, pk.Holding))
+	case len(res.Ready) == 0:
+		out = append(out, "nothing ready")
+	default:
+		top := res.Ready[0]
+		s := res.Scores[top.ID]
+		out = append(out, fmt.Sprintf("next %s %s   urgency %s", top.ID, top.Title, urgency.Format(s.Total)))
+		out = append(out, nextReason(res, s, why)...)
+	}
+	if pk.Holding == "" && len(res.Ready) > 1 {
+		out = append(out, "ranked:")
+		for i, t := range res.Ready {
+			out = append(out, fmt.Sprintf("  %d  %s  %s", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total)))
+		}
+	}
+	var waiting []string
+	for _, wt := range res.Waiting {
+		if wt.Task.ID != pk.Holding { // your own claim is said above, not as work that waits
+			waiting = append(waiting, fmt.Sprintf("  %s  %s", wt.Task.ID, wt.Reason))
+		}
+	}
+	if len(waiting) > 0 {
+		out = append(append(out, "waiting:"), waiting...)
+	}
+	if pk.Holding == "" && len(res.Ready) > 0 {
+		return append(out, fmt.Sprintf("nothing written; take it: lore task next --claim (or lore task claim --id %s)", res.Ready[0].ID))
+	}
+	return append(out, "nothing written")
+}
+
+// nextReason is why the top task is next: its urgency terms on one line
+// ("why: +6.00 priority high; +2.00 age 3d"), or one per line with why,
+// and the lead over the runner-up when there is one.
+func nextReason(res queue.Result, s urgency.Score, why bool) []string {
+	terms := s.Lines()
+	var out []string
+	switch {
+	case len(terms) == 0:
+		out = append(out, "  why: the only ready task")
+		if len(res.Ready) > 1 {
+			out[0] = "  why: first of the ready tasks at equal urgency"
+		}
+	case why:
+		out = append(out, "  why:")
+		for _, l := range terms {
+			out = append(out, "    "+l)
+		}
+	default:
+		out = append(out, "  why: "+strings.Join(terms, "; "))
+	}
+	if len(res.Ready) > 1 {
+		second := res.Ready[1]
+		out = append(out, fmt.Sprintf("  ahead of %s (urgency %s)", second.ID, urgency.Format(res.Scores[second.ID].Total)))
+	}
+	return out
 }
 
 // cryptoPick is a uniformly random number in [0, n).

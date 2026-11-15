@@ -12,6 +12,7 @@ Cora is the CTO and the admin of the org acme, with a team store on the (fake) G
 2. Cora adds the staff from a CSV that has a malformed email and a duplicate: one run names every bad line by its file line (`line 3:`, `line 4: … is already on line 2`) and writes nothing.
 3. Cora fixes the CSV and adds Lio, Nia and Ruth in one run, then adds a company rule to the org store from the app (`lore rule add --to acme/org --body …`). The team store does not move until Cora runs `lore sync`; then it does.
 3a. From `~/code` (the parent of the clones, inside the setup's folders, not a repo) Cora reads what she wrote: `rule list --to acme/org`, `search --query … --to acme/org`, and with no flag `rule list`, `lint` and `actor list` (the org's stores). Nothing says "run git init", and `~/code` stays a plain folder (D-421).
+3b. Cora wants every open task and proposed decision of the company in one command: at the store clone's top (`<home>/stores/<org>/<store>`) `task list`, `decision list`, `search` and `sql` cover every folder, each row labelled `acme/<folder>`; inside one folder they cover that folder, and `--store acme` (or `--store acme/<other folder>`, `--project <folder>`) widens it; from `~/code` `--store acme` covers every folder too, and `memory edit --id …` / `move --id … --to acme/<folder>` work there; in a folder of the clone `task edit --id … --assign @lio` finds the roster, and `task next` says it is a store clone, not a code repo, naming `lore org link` (D-431, D-433, D-434, D-454).
 4. Day 8: Nia joins on her own laptop by the store url (she is on the roster, matched by her email), `lore whoami` names the org and her email, and she sees the company rule.
 5. Cora gives Ruth two tasks.
 6. Day 15: Cora removes Ruth: the output lists her two open tasks and the hand-over line (`lore task reassign --from …`); Cora runs it, both tasks go to Nia, and Ruth shows as left.
@@ -33,6 +34,7 @@ The story replays the company's timeline in one world; the details of each part 
 - Removing a member, their unsynced writes after removal, undoing it: [staff_remove_test.go](../journeys/staff_remove_test.go); the hand-over and `--assign` naming a leaver (D-25, D-86): [team_handover_test.go](../journeys/team_handover_test.go).
 - A client store and the contractor's wall (D-21, D-23): [orgstoreadd_test.go](../journeys/orgstoreadd_test.go); a client repo stays quiet (D-28, D-63..D-66, D-76, D-77, D-92, D-93): [clientrepo_quiet_test.go](../journeys/clientrepo_quiet_test.go).
 - Reads, `repo add --project` and a resource of an org-folder kind from a plain folder (D-421, D-422): [outside_reads_test.go](../journeys/outside_reads_test.go).
+- The org-wide view from a store clone's top, a folder and a plain folder; edits and moves by id from a plain folder; --assign and coordination in a store folder (devco D-431, D-433, D-434, D-454): [storescope_test.go](../journeys/storescope_test.go).
 - A second org on one laptop (D-38): [setup_secondorg_test.go](../journeys/setup_secondorg_test.go).
 - The admin setup run through the admin's coding agent: the org's first rows and commits are the admin's, no agent actor and no `Lore-Agent:` trailer, and an agent actor merged into its person from a folder that is no repo (devco D-424): [agent_setup_credit_test.go](../journeys/agent_setup_credit_test.go).
 - A new laptop with only git access (D-39): [newlaptop_join_test.go](../journeys/newlaptop_join_test.go).
@@ -41,4 +43,4 @@ The story replays the company's timeline in one world; the details of each part 
 
 ## Findings it guards
 
-D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.
+D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-454, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.

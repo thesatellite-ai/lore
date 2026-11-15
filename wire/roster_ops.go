@@ -405,7 +405,11 @@ func (a *App) repoRoster(ctx context.Context) (rosterAt, error) {
 					WithHint("set org_folder on one of the org's stores in " + lorehome.Shown() + "/config.yaml")
 			}
 			r = newRosterAt(src, org.Name+" "+folder+"/")
+			return r, nil
 		}
+	}
+	if c, ok := a.cloneRoster(); ok { // a store clone (scope.go)
+		return c, nil
 	}
 	return r, nil
 }

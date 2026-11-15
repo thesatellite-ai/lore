@@ -264,7 +264,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			return op.Result{}, undo(err)
 		}
 	}
-	if e.Spec().Access == op.AccessWrite && run.ReadOnly {
+	if e.Spec().Access == op.AccessWrite && run.ReadOnly && !nextReads(run) { // a plain task next only reads (devco:D-426)
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
 			WithHint("unset --read-only and " + EnvReadOnly)
 	}
