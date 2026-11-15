@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -853,12 +854,12 @@ func TestJourneySoloMonth6(t *testing.T) {
 		if bulk != n {
 			t.Errorf("memory list shows %d of %d bulk notes", bulk, n)
 		}
-		if took > 30*time.Second {
+		if took > testtime.SpeedBar(30*time.Second) {
 			t.Errorf("memory list over %d rows took %v", n, took)
 		}
 		start = time.Now()
 		desk.LoreIn(deskApp, "memory", "add", "--body", "after thousands", "--to", "me").OK(t)
-		if d := time.Since(start); d > 20*time.Second {
+		if d := time.Since(start); d > testtime.SpeedBar(20*time.Second) {
 			t.Errorf("one write into a store with %d commits took %v", n, d)
 		}
 		s := desk.LoreIn(deskApp, "search", "bulk note 2999").OK(t)

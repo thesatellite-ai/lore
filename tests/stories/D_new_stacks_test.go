@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/journeys"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
@@ -266,7 +267,7 @@ func TestStoryDNewStacks(t *testing.T) {
 			t.Fatalf("a conventional-commit message failed the hooks:\n%s", r)
 		}
 		t.Logf("code-only commit with lore hooks took %s (D-94: was ~1.7 s)", took)
-		if took > 5*time.Second {
+		if took > testtime.SpeedBar(5*time.Second) {
 			t.Errorf("a code-only commit took %s with lore's hooks (D-94)", took)
 		}
 		var added struct {

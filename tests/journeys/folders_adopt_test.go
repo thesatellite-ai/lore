@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -161,8 +162,8 @@ func TestJourneyFoldersAdopt(t *testing.T) {
 			Pushed  bool `json:"pushed"`
 		}
 		tlJSON(t, lee.Lore(parent, "store", "adopt", "team/"+jAdoptFolder, "--from", legacy.Dir, "--yes", "--json").OK(t), &out)
-		if took := time.Since(start); took > jAdoptBudget {
-			t.Errorf("adopting 5,022 rows took %s, want under %s", took, jAdoptBudget)
+		if took, bar := time.Since(start), testtime.SpeedBar(jAdoptBudget); took > bar {
+			t.Errorf("adopting 5,022 rows took %s, want under %s", took, bar)
 		}
 		// C5: the adopt commit waits in Lee's clone until he sends it
 		if out.Written != 5022 || out.Live != 21 || out.Pushed {

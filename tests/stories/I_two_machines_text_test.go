@@ -24,6 +24,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -231,7 +232,7 @@ func TestStoryIText(t *testing.T) {
 		start := time.Now()
 		m.LoreIn(c, "search", "needle-word-at-the-end").OK(t).Never(t, "(no matches)")
 		// generous for a loaded machine: before the fix it took ~10 s of CPU
-		if d := time.Since(start); d > 5*time.Second {
+		if d := time.Since(start); d > testtime.SpeedBar(5*time.Second) {
 			t.Errorf("search hitting a 1 MB body took %s", d)
 		}
 	})

@@ -18,10 +18,9 @@ package wire
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/foldercase"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -74,11 +73,14 @@ func (a *App) GoneScopes(ctx context.Context, top string) ([]GoneScope, error) {
 	if err != nil {
 		return nil, err
 	}
-	return goneScopes(ctx, top, rows), nil
+	return goneScopes(ctx, foldercase.New(foldercase.OS{}, top), top, rows), nil
 }
 
-// goneScopes is GoneScopes over rows already read.
-func goneScopes(ctx context.Context, top string, rows []row.Row) []GoneScope {
+// goneScopes is GoneScopes over rows already read, the folders checked
+// through dirs (devco D-414: on a case-insensitive file system a folder
+// renamed only in case is gone under its old spelling, though a plain stat
+// of that spelling still finds it).
+func goneScopes(ctx context.Context, dirs foldercase.Checker, top string, rows []row.Row) []GoneScope {
 	var out []GoneScope
 	for _, r := range rows {
 		if r.Deleted {
@@ -89,10 +91,10 @@ func goneScopes(ctx context.Context, top string, rows []row.Row) []GoneScope {
 			continue
 		}
 		p := strings.Trim(v.String(), "/")
-		if p == "" || isDirAt(filepath.Join(top, filepath.FromSlash(p))) {
+		if p == "" || dirs.IsDir(p) {
 			continue
 		}
-		out = append(out, GoneScope{ID: r.ID.String(), Path: p, RenamedTo: FolderRenamedTo(ctx, top, p)})
+		out = append(out, GoneScope{ID: r.ID.String(), Path: p, RenamedTo: folderRenamedTo(ctx, dirs, top, p)})
 	}
 	return out
 }
@@ -102,6 +104,13 @@ func goneScopes(ctx context.Context, top string, rows []row.Row) []GoneScope {
 // found or that folder is gone too. Errors (no git, no commit) are "": the
 // caller still reports the missing folder.
 func FolderRenamedTo(ctx context.Context, top, old string) string {
+	return folderRenamedTo(ctx, foldercase.New(foldercase.OS{}, top), top, old)
+}
+
+// folderRenamedTo is FolderRenamedTo with the folders checked through dirs.
+// A case-only rename (src/Charts to src/charts) is a rename: the names are
+// compared exactly, and the new folder must exist spelled as git names it.
+func folderRenamedTo(ctx context.Context, dirs foldercase.Checker, top, old string) string {
 	// A path-limited log cannot pair a rename (the new side is outside the
 	// pathspec), so find the last commit that touched old/, then read that
 	// whole commit with rename detection.
@@ -122,7 +131,7 @@ func FolderRenamedTo(ctx context.Context, top, old string) string {
 			continue
 		}
 		nd, ok := strings.CutSuffix(ch.to, "/"+rel)
-		if ok && nd != old && isDirAt(filepath.Join(top, filepath.FromSlash(nd))) {
+		if ok && nd != old && dirs.IsDir(nd) {
 			return nd
 		}
 	}
@@ -176,12 +185,6 @@ func nameStatusZ(out []byte) []nameChange {
 		changes = append(changes, ch)
 	}
 	return changes
-}
-
-// isDirAt reports whether path is an existing folder.
-func isDirAt(path string) bool {
-	fi, err := os.Stat(path)
-	return err == nil && fi.IsDir()
 }
 
 // fixScopes is lore fix's folder scopes step (B3-5): each folder scope

@@ -8,6 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/adapters/foldercase"
+	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // TestFolderRenameNonASCII (devco Q-13): a folder renamed with a non-ASCII
@@ -15,7 +18,23 @@ import (
 // in --name-status output ("src/\303\247izelge/…"), so its scoped rules
 // silently fell to the root while an ASCII rename in the same commit was
 // caught. Both renames are found now, from the raw -z paths.
+//
+// devco D-414: the ASCII rename is case-only (src/Charts to src/charts).
+// On a case-insensitive file system (APFS) a one-step `git mv` of a folder
+// to its other-case name fails, so the test renames in two steps, as a
+// person on a Mac must; and lore must see the rename there although a stat
+// of src/Charts still finds the folder. The "folding" case runs that macOS
+// path on any OS through foldercase.Folding.
 func TestFolderRenameNonASCII(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		view foldercase.FS
+	}{{"this file system", foldercase.OS{}}, {"folding", foldercase.Folding{}}} {
+		t.Run(tc.name, func(t *testing.T) { folderRenameCase(t, tc.view) })
+	}
+}
+
+func folderRenameCase(t *testing.T, view foldercase.FS) {
 	top := t.TempDir()
 	git := func(args ...string) {
 		t.Helper()
@@ -40,13 +59,28 @@ func TestFolderRenameNonASCII(t *testing.T) {
 	git("add", "-A")
 	git("commit", "-q", "-m", "folders")
 	git("mv", uni, uniNew)
-	git("mv", ascii, asciiNew)
+	git("mv", ascii, ascii+".tmp") // case-only: two steps, as APFS needs
+	git("mv", ascii+".tmp", asciiNew)
 	git("commit", "-q", "-m", "rename folders")
+
 	ctx := context.Background()
+	dirs := foldercase.New(view, top)
+	if _, folding := view.(foldercase.Folding); folding && !dirs.Folds() {
+		t.Fatal("foldercase.New did not detect the folding view")
+	}
 	for old, want := range map[string]string{uni: uniNew, ascii: asciiNew} {
-		if got := FolderRenamedTo(ctx, top, old); got != want {
-			t.Errorf("FolderRenamedTo(%q) = %q, want %q", old, got, want)
+		if got := folderRenamedTo(ctx, dirs, top, old); got != want {
+			t.Errorf("folderRenamedTo(%q) = %q, want %q", old, got, want)
 		}
+	}
+	rows := []row.Row{scopeRow(t, uni, false), scopeRow(t, ascii, false), scopeRow(t, asciiNew, false)}
+	got := goneScopes(ctx, dirs, top, rows)
+	var gone []string
+	for _, g := range got {
+		gone = append(gone, g.Path+" -> "+g.RenamedTo)
+	}
+	if want := []string{uni + " -> " + uniNew, ascii + " -> " + asciiNew}; !slices.Equal(gone, want) {
+		t.Errorf("goneScopes = %q, want %q (the case-only rename is a rename; the new folder is not gone)", gone, want)
 	}
 	removed := HeadRemovedPaths(ctx, top)
 	for _, p := range []string{uni + "/tablo ü.ts", ascii + "/a.ts"} {

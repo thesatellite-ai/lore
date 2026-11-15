@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // rwPlanBudget is how long setup.plan may take with every network call
@@ -43,8 +45,8 @@ func TestRegress_PlanLoadsWithoutBlankPage(t *testing.T) {
 		if len(net) > 0 {
 			t.Errorf("setup.plan %s made network calls:\n%s", setup, strings.Join(net, "\n"))
 		}
-		if took > rwPlanBudget {
-			t.Errorf("setup.plan %s took %s with a slow network (budget %s)", setup, took, rwPlanBudget)
+		if bar := testtime.SpeedBar(rwPlanBudget); took > bar {
+			t.Errorf("setup.plan %s took %s with a slow network (budget %s)", setup, took, bar)
 		}
 	}
 }

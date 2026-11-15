@@ -2,10 +2,9 @@ package scope
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/foldercase"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/dirscope"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -180,11 +179,22 @@ func checkDir(ctx context.Context, env Env, dir string) (string, error) {
 	if !ok {
 		return "folder " + dir + " was not checked (no repo folder known)", nil
 	}
-	fi, err := os.Stat(filepath.Join(top, filepath.FromSlash(dir)))
-	if err != nil || !fi.IsDir() {
-		return "", errs.New(errs.InvalidInput, "dir scope "+dir+": no such folder in the repo").WithHint("paths are relative to the repo root: " + top)
+	return "", checkDirIn(foldercase.New(foldercase.OS{}, top), top, dir)
+}
+
+// checkDirIn refuses dir unless it is a folder under top spelled exactly
+// as on disk (devco D-414: on a case-insensitive file system a stat of
+// SRC/charts finds src/charts, and the scope stored that way matched no
+// file path).
+func checkDirIn(dirs foldercase.Checker, top, dir string) error {
+	if !dirs.IsDir(dir) {
+		hint := "paths are relative to the repo root: " + top
+		if dirs.Folds() {
+			hint += "; this file system ignores case, so spell each folder name as it is on disk"
+		}
+		return errs.New(errs.InvalidInput, "dir scope "+dir+": no such folder in the repo").WithHint(hint)
 	}
-	return "", nil
+	return nil
 }
 
 // topOf is the repo's top folder, ok false when unknown.
