@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1751 |
+| fixed | 1752 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -731,6 +731,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-415 | finding | Mac M-15: TestTimeoutKillsProcessTree armed a 300 ms timeout and failed under load with "the helper never started" | fixed | TestTimeoutKillsProcessTree | waits on the event (the helper's pid file), then ends the call's context (the same kill branch); only the run-time limits scale; -count=200 under 2x-core load passes |
 | devco:D-416-M14 | finding | Mac M-14: shared-folder rows lacked group rw on macOS (BSD mkdir never copies setgid; new entries take the parent's group); the Linux gate never ran that path because Linux mkdir copies setgid | fixed | TestSharedWriteBSDMkdir, TestSharedWriteInSetgidFolder, TestSharedWriteInGroupWritableFolder | the fix itself is D-390 (group-writable parent counts as shared); emulateBSDMkdir clears setgid after mkdir so Linux runs the BSD branch; break-verified by dropping the group-writable mark |
 | devco:D-417 | finding | owner (r8time option A): product speed bars in tests fail on slower machines; they keep their value at factor 1 and stretch by LORE_TEST_TIME_SCALE's factor elsewhere; lock, kill and timeout bounds under test stay unscaled | fixed | TestSpeedBarsScale, TestSpeedBarGuardSeesRawBars | testtime.SpeedBar on every speed bar (journeys land7b/adopt/merge/solo, stories G p95 and others, wire rwPlanBudget, hook secrets, live read); the guard lists each remaining raw bar as a behaviour bound with its reason |
+| devco:D-419 | finding | owner: a stale core-only build opened the plain setup page ("The guided setup page comes with lore EE...") and the owner could not tell which lore answered or how to reach the guided page | fixed | TestDefaultUINamesTheBinary, TestBinaryServesDefaultUI | surface/setupweb/opencore_page.go: the server fills the open-core page with the binary's version and resolved path (no script), and the page says it is a source build of the open core, how to open the guided page (`lore setup`, previews `lore-dev setup`) and where to install it |
 
 ## lore-adoptfix
 

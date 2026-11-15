@@ -462,7 +462,7 @@ The page listens on `127.0.0.1` only, on a random port, and the address carries 
 
 ## A build without the setup page
 
-The guided page is one of the proprietary components of the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts); the Apache-2.0 source in this repository builds without it. In such a build `lore setup` still opens a local page with the same safety rules, but it is a plain page that says the guided page is not in this build and lists the commands that do the same work: `lore setup plan`, `lore setup check`, `lore setup apply` and `lore doctor --all`. Every step on this page can be done with those commands ([Manage setups from the command line](#manage-setups-from-the-command-line)).
+The guided page is one of the proprietary components of the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts); the Apache-2.0 source in this repository builds without it. In such a build `lore setup` still opens a local page with the same safety rules, but it is a plain page that says the guided page is not in this build, shows the version and the path of the lore that serves it (so you can tell when an old or source-built lore came first on your `PATH`), says how to open the guided page with the released lore (`lore setup`; with a preview build, `lore-dev setup`) and where to install it, and lists the commands that do the same work: `lore setup plan`, `lore setup check`, `lore setup apply` and `lore doctor --all`. Every step on this page can be done with those commands ([Manage setups from the command line](#manage-setups-from-the-command-line)).
 
 ## Try it
 
