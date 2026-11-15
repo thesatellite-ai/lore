@@ -426,3 +426,79 @@ func TestConfigPersistedAcrossSessions(t *testing.T) {
 		t.Fatalf("after the included file changed: %q, %d execs", got, execs)
 	}
 }
+
+// TestTemporaryIndexMatchesGit: `git commit -a` runs its hooks with
+// GIT_INDEX_FILE naming a temporary index, which lore passes on as an
+// absolute path. The index reads answered here read that file, byte for
+// byte as git does, instead of running git for each (devco:D-420: the
+// leak check of one `git commit -a` started three more git processes).
+func TestTemporaryIndexMatchesGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	work, _, _ := fixture(t)
+	tmp := filepath.Join(t.TempDir(), "index.tmp")
+	raw, err := os.ReadFile(filepath.Join(work, ".git", "index"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"GIT_INDEX_FILE=" + tmp}
+	gitEnv := func(args []string, stdin []byte) ([]byte, int) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = work
+		cmd.Env = append(os.Environ(), "LC_ALL=C", "GIT_CONFIG_NOSYSTEM=1", "HOME="+t.TempDir(), env[0])
+		if stdin != nil {
+			cmd.Stdin = bytes.NewReader(stdin)
+		}
+		out, err := cmd.Output()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return out, ee.ExitCode()
+		}
+		if err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+		return out, 0
+	}
+	// what `commit -a` stages: a changed tracked file and a new one, in the
+	// temporary index only
+	if err := os.WriteFile(filepath.Join(work, "top.txt"), []byte("changed for commit -a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "org", "tasks", "only-temp.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, code := gitEnv([]string{"add", "top.txt", "org/tasks/only-temp.json"}, nil); code != 0 {
+		t.Fatal("stage into the temporary index")
+	}
+	s := New()
+	defer s.Close()
+	for _, c := range []struct {
+		args  []string
+		stdin []byte
+	}{
+		{[]string{"ls-files", "-z", "--full-name", "--", "org/tasks/"}, nil},
+		{[]string{"ls-files", "--stage", "-z"}, nil},
+		{[]string{"cat-file", "--batch"}, []byte(":top.txt\n:org/tasks/only-temp.json\n:org/tasks/new.json\n")},
+		{[]string{"diff", "--cached", "--quiet", "HEAD", "--"}, nil},
+	} {
+		rep, ok := s.Answer(context.Background(), work, c.args, env, c.stdin)
+		if !ok {
+			t.Errorf("git %v under an absolute GIT_INDEX_FILE was not answered in-process", c.args)
+			continue
+		}
+		want, code := gitEnv(c.args, c.stdin)
+		if !bytes.Equal(rep.Out, want) || rep.Code != code {
+			t.Errorf("git %v under the temporary index:\n got %d %q\nwant %d %q", c.args, rep.Code, rep.Out, code, want)
+		}
+	}
+	// the usual index still answers from .git/index (it holds neither change)
+	rep, ok := s.Answer(context.Background(), work, []string{"ls-files", "-z", "--full-name", "--", "org/tasks/"}, nil, nil)
+	if !ok || bytes.Contains(rep.Out, []byte("only-temp.json")) {
+		t.Errorf("the usual index answered %v %q, want no only-temp.json", ok, rep.Out)
+	}
+}
