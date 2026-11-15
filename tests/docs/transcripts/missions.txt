@@ -176,5 +176,5 @@ hnd_2537f9b2f7de77bfe5ca958860216bbb [acked] Two of the three sections are writt
 ### handoff unknown
 alice (work/website)$ lore handoff add --for @dave --body 'The logo files are in the shared drive'
 ERROR: [E_NOT_FOUND] no actor "@dave"
-  hint: people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id
+  hint: if @dave was registered (or started with `lore agent start`) in another clone, they run `lore sync`, then you run `lore sync`; not registered yet: `lore actor register` (a person, run by them) or `lore agent start --label dave` (an agent, run by its owner); or pass an act_ id
 (exit 27)

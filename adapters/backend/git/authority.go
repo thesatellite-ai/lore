@@ -74,6 +74,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path"
 	"path/filepath"
@@ -801,6 +802,11 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 			if actor == "" || (subject.ID != actor && subject.Owner != actor) {
 				return "changes another person's roster entry and " + c.author + " is not an admin"
 			}
+			// naming oneself the owner of an entry someone else had is a
+			// takeover, not an own change (devco U-1 class)
+			if hadOld && old.ID != actor && old.Owner != actor {
+				return "changes another person's roster entry and " + c.author + " is not an admin"
+			}
 			if hadOld && hasNext && old.Status != next.Status && !invited && (gone(old.Status) || gone(next.Status)) {
 				return "changes a roster status and " + c.author + " is not an admin"
 			}
@@ -931,7 +937,7 @@ func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, do
 		claimed = append(claimed, d.CreatedBy, d.CreatedByID)
 	}
 	for _, w := range claimed {
-		if w == "" || w == actor || (actor != "" && s.owns(actor, w)) || s.stampBy(f.path, d.HLC, w, d.content) {
+		if w == "" || w == actor || (actor != "" && s.ownsIn(c, actor, w, docOf)) || s.stampBy(f.path, d.HLC, w, d.content) {
 			continue
 		}
 		if actor == "" && !s.known(w) {
@@ -1065,6 +1071,34 @@ func gone(status string) bool {
 	return status == schema.ActorStatusLeft || status == schema.ActorStatusArchived
 }
 
+// ownsIn reports whether actor owns agent by the roster before commit
+// c, or because c itself adds agent's actors row with actor as its owner
+// (devco U-1): a member's first write through a coding agent registers
+// the agent in the same commit as the row it writes, and asking only the
+// roster before c held the member's own agent back for every reader.
+// refusal has already judged that actors row (a non-admin may add only
+// rows they own, never take over another person's), so trusting it here
+// gives no one a name they could not write themselves.
+func (s *rosterState) ownsIn(c replayCommit, actor, agent string, docOf func(string) (rosterDoc, bool)) bool {
+	if s.owns(actor, agent) {
+		return true
+	}
+	for _, d := range s.byTable(schema.TableActors) {
+		if d.ID == agent {
+			return false // an existing actor changes owner only through an admin
+		}
+	}
+	for _, f := range c.changes {
+		if tableOfPath(f.path) != schema.TableActors || zeroBlob(f.newBlob) || !zeroBlob(f.oldBlob) {
+			continue
+		}
+		if d, ok := docOf(f.newBlob); ok && d.ID == agent && d.Owner == actor && d.ID != actor {
+			return true
+		}
+	}
+	return false
+}
+
 // owns reports whether actor owns agent (actors.owner_actor_id).
 func (s *rosterState) owns(actor, agent string) bool {
 	for _, d := range s.byTable(schema.TableActors) {
@@ -1109,6 +1143,32 @@ func (a *authority) heldBlob(p string) (string, bool) {
 		return "", false
 	}
 	return a.trusted[p], true
+}
+
+// heldWriteErr turns a stale write of a row the clone's reads hold back
+// into a refusal that names the hold (devco U-1): reads serve the
+// accepted version of a held row while the file holds the refused one,
+// so every write of it failed the version check with a bare "row changed
+// since it was read" and no way out. Any other error is returned as is.
+func (b *Backend) heldWriteErr(changes []store.Change, err error) error {
+	if err == nil || b.mode != modeClone || !errors.Is(err, store.ErrStale) {
+		return err
+	}
+	authorityCache.Lock()
+	a := authorityCache.byWork[b.work]
+	authorityCache.Unlock()
+	if a == nil {
+		return err
+	}
+	for _, c := range changes {
+		h, ok := a.held[b.folder.StorePath(c.Row.Table, c.Row.ID)]
+		if !ok {
+			continue
+		}
+		return errs.New(errs.PolicyDenied, "git: "+h.Table+" "+h.ID+" is held back in this store (commit "+h.Short()+" by "+h.Author+": "+h.Reason+"), so it cannot be written; nothing was changed").
+			WithHint("an admin who agrees makes that change with lore (or reverts the commit) and the hold ends; `git -C " + b.work + " show " + h.Short() + "` shows what it changed")
+	}
+	return err
 }
 
 // headIfHeld is HEAD when the clone's last replay holds path back,

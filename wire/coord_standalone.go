@@ -365,11 +365,9 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 	}
 	// An org roster's miss keeps its sync hint (the store copy may predate
 	// a teammate's registration, v0.1.17 rosterMissHint); the repo's own
-	// roster has no copy to be stale, so it only says to register.
-	hint := "people join with `lore actor register`"
-	if r.src != store.SourceRepo {
-		hint = r.missHint()
-	}
+	// roster names a sync too (devco:S-5: a register in another clone is a
+	// live row kept there until that person's `lore sync`).
+	hint := r.missHint()
 	if active := activeTeamHandles(teams); len(active) > 0 {
 		// devco:J-14: a handle that names nobody may be a team's old
 		// handle (lore team rename); the person-only hint sent the caller

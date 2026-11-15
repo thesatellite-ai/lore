@@ -233,7 +233,7 @@ func (o ops) actor(ctx context.Context, raw string) (ids.AnyID, error) {
 	switch len(hits) {
 	case 0:
 		return ids.AnyID{}, errs.New(errs.NotFound, "no actor "+content.QuoteID(ref)).
-			WithHint("people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id")
+			WithHint(actorMissHint(name))
 	case 1:
 		return ids.ParseAny(hits[0])
 	}
@@ -353,4 +353,13 @@ func recordOf(lab content.Labeler, src store.Source, r row.Row) Record {
 		StatusStr: content.Field(r, fieldStatus), TaskID: content.Field(r, fieldTask),
 		MissionID: content.Field(r, fieldMission), TagIDs: content.TagIDs(r), Store: content.SourceOf(lab, src), Label: content.Label(lab, src),
 	}
+}
+
+// actorMissHint is the next step when --for names no actor here. devco:S-5:
+// an agent started (or a person registered) in a teammate's clone is a live
+// row kept there until their `lore sync`, so a sync on both sides comes
+// first; registering is for someone who never did.
+func actorMissHint(name string) string {
+	return "if @" + name + " was registered (or started with `lore agent start`) in another clone, they run `lore sync`, then you run `lore sync`; " +
+		"not registered yet: `lore actor register` (a person, run by them) or `lore agent start --label " + name + "` (an agent, run by its owner); or pass an act_ id"
 }

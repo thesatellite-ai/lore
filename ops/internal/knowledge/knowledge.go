@@ -20,6 +20,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -62,8 +63,8 @@ const (
 // Defaults shared by every knowledge add (v0.1.17 flag defaults).
 const (
 	DefaultSource = "manual"
-	// DefaultTrust is LifecycleMixin's trust_score default.
-	DefaultTrust = 0.5
+	// DefaultTrust is LifecycleMixin's trust_score default (logic/trust).
+	DefaultTrust = trust.Default
 	// DefaultSearchLimit is v0.1.17's --limit default of `<noun> search`.
 	DefaultSearchLimit = 20
 	// MaxSearchLimit bounds one search (a REST caller cannot ask the cache
@@ -161,6 +162,9 @@ type Create struct {
 	// unless NoMeta (--no-meta, METADATA 3.19, CLI_REFERENCE 2.4).
 	Meta   engine.MetaFlags
 	NoMeta bool
+	// Trust is the new row's trust_score; 0 writes DefaultTrust. A rule an
+	// agent adds passes trust.Agent so it waits for a person (devco:S-15).
+	Trust float64
 }
 
 // Add creates one row of noun n and returns the store that holds it and
@@ -206,11 +210,15 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 			return "", engine.Written{}, 0, err
 		}
 	}
-	trust, err := value.Float(DefaultTrust)
+	score := DefaultTrust
+	if c.Trust > 0 {
+		score = c.Trust
+	}
+	tv, err := value.Float(score)
 	if err != nil {
 		return "", engine.Written{}, 0, errs.Wrap(errs.Internal, n.Name+" add: trust score", err)
 	}
-	fields[FieldTrust] = trust
+	fields[FieldTrust] = tv
 	var old ids.AnyID
 	var oldSrc store.Source
 	var carry metalist.Carry
@@ -442,6 +450,9 @@ type Edit struct {
 	Tags, Untags []string
 	// Hint names the flags for the "nothing to change" error.
 	Hint string
+	// Trust, when above 0, sets trust_score in the same write: a rule
+	// whose text an agent changes drops back to trust.Agent (devco:S-15).
+	Trust float64
 }
 
 // Apply patches the row whose id is raw with e (only given fields change).
@@ -477,6 +488,11 @@ func Apply(ctx context.Context, env Env, n Noun, raw string, e Edit) (store.Sour
 	}
 	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return "", engine.Written{}, errs.New(errs.InvalidInput, n.Name+" edit: nothing to change").WithHint(e.Hint)
+	}
+	if e.Trust > 0 {
+		if patch[FieldTrust], err = value.Float(e.Trust); err != nil {
+			return "", engine.Written{}, errs.Wrap(errs.Internal, n.Name+" edit: trust score", err)
+		}
 	}
 	w, err := env.Update(ctx, engine.Ref{Store: it.Source, Table: n.Table, ID: it.Row.ID}, patch)
 	return it.Source, w, err

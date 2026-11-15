@@ -309,7 +309,7 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 // compared; a pointer file is never removed (it may hold the person's own
 // lines), so an orphan's fix keeps it listed and the message says how to
 // drop it by hand.
-func pointerCopies(root string, pick targetPick) []opsrender.CopyFinding {
+func pointerCopies(ctx context.Context, root string, pick targetPick) []opsrender.CopyFinding {
 	if pick.sel.Reason != toolprofile.ReasonSetting {
 		return nil
 	}
@@ -339,6 +339,16 @@ func pointerCopies(root string, pick targetPick) []opsrender.CopyFinding {
 				Message: fmt.Sprintf("%s has no lore pointer: %s", t.profile.PointerFile,
 					generatedSkipReason(banner, t.profile.Name, LoreMDRel, carriers)),
 				Fix: fix})
+			continue
+		}
+		if rule, ign := ignoredBy(ctx, root, t.profile.PointerFile); ign {
+			// devco:S-2: an ignored pointer file is never in a clone, so a
+			// bare "lore render" fixed this clone only and the finding came
+			// back in every fresh one. Local: CI's render --check, which
+			// judges committed files, notes it instead of failing.
+			found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerMissing, File: t.profile.PointerFile, Local: true,
+				Message: fmt.Sprintf("%s has no lore pointer: %s", t.profile.PointerFile, ignoredPointerText(t.profile.PointerFile, t.profile.Name, rule)),
+				Fix:     renderFixCommand})
 			continue
 		}
 		found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerMissing, File: t.profile.PointerFile,
@@ -375,7 +385,7 @@ func (h *Host) renderedCopies(ctx context.Context, root string) ([]opsrender.Cop
 	if err != nil {
 		return nil, err
 	}
-	return append(found, pointerCopies(root, p.pick)...), nil
+	return append(found, pointerCopies(ctx, root, p.pick)...), nil
 }
 
 // splitLocalCopies splits found into the copies a clone carries (tracked)

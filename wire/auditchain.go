@@ -338,6 +338,17 @@ func (c *chainAudit) records(ctx context.Context) (out []auditchain.Record, err 
 	return out, err
 }
 
+// sessionWrites is every session's write count over all chains of the
+// machine store (sqlite.AuditChain.SessionWrites); this checkout's chain
+// is opened (and its lore.db imported) first, as records does.
+func (c *chainAudit) sessionWrites(ctx context.Context) (out map[string]sqlite.SessionWriteCount, err error) {
+	err = c.withReadChain(ctx, func(ch *sqlite.AuditChain, _ string) error {
+		out, err = ch.SessionWrites(ctx, schema.TableMetaKeys)
+		return err
+	})
+	return out, err
+}
+
 // AuditLog implements opsaudit.Env: newest first, limit <= 0 = all.
 func (c *chainAudit) AuditLog(ctx context.Context, limit int) ([]opsaudit.Entry, error) {
 	recs, err := c.records(ctx)

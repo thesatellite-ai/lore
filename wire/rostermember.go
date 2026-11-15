@@ -56,7 +56,9 @@ func parseMemberRef(raw string) (memberRef, bool) {
 // matches reports whether roster actor x is the member m names.
 func (m memberRef) matches(x RosterActor) bool {
 	if m.handle != "" {
-		return x.Handle == m.handle
+		// devco:S-14: an agent has a label, no handle; @<label> names it
+		// (`lore task reassign --from @agent-lead-2`).
+		return x.Handle == m.handle || agentLabelIs(x, m.handle)
 	}
 	_, email, _ := strings.Cut(x.StableKey, stableKeyKindSep)
 	return email != "" && strings.EqualFold(email, m.email)

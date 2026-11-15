@@ -65,8 +65,9 @@ func (a *App) AbortRun(ctx context.Context) ([]string, error) {
 	for _, p := range j.Places {
 		if p.Clone {
 			head := snaps.Head(ctx, p.Dir)
-			if head == p.TipBefore {
-				continue
+			p.TipAfter, p.RemoteBase = head, remoteBase(ctx, snaps, p, head)
+			if !p.ownTip() {
+				continue // unmoved, or moved only by a pull of the remote (devco U-2)
 			}
 			up := snaps.Upstream(ctx, p.Dir)
 			if p.TipBefore == "" || (up != "" && snaps.IsAncestor(ctx, p.Dir, head, up)) {

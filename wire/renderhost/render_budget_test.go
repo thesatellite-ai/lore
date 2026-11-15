@@ -72,7 +72,7 @@ func TestBuildBudgetedFileMatrix(t *testing.T) {
 				if rep.HighLine == 1 && !strings.Contains(body, hotfixBrief(high, 0)) && !strings.Contains(body, "- `"+high.ID+"` ") {
 					t.Fatal("a high hotfix must be one line")
 				}
-				if rep.HighLine == 0 && !strings.Contains(body, "1 high hotfix is left out to fit the budget: `lore hotfix list` lists them") {
+				if rep.HighLine == 0 && !strings.Contains(body, "1 high hotfix is left out to fit the budget: `lore render --report` names them") {
 					t.Fatal("a left-out high hotfix is not named in the footer")
 				}
 				if budget == 1<<20 && rep.MustLine != 0 {
@@ -171,5 +171,63 @@ func TestEmptyStateNamesOnlyWhatPins(t *testing.T) {
 	}
 	if strings.Contains(line, "memory add") {
 		t.Errorf("empty-state line tells people a memory pins: %q", line)
+	}
+}
+
+// squeezeInput is devco:S-3's shape: many must rules without a summary and
+// 20 high hotfixes under a 16000-byte budget.
+func squeezeInput(rules, highs, budget int) renderInput {
+	in := renderInput{Settings: contextSettings{Budget: budget, Profile: toolprofile.NameCursor, EntryMax: fallbackEntryMax, WarnPct: fallbackWarnPct}}
+	for i := range rules {
+		in.Rules = append(in.Rules, pinnedRule{ID: fmt.Sprintf("rul_%032d", i+1), Severity: "must",
+			Body:    fmt.Sprintf("Rule %d of the service: ", i) + strings.Repeat("keep the handler small and log the request id ", 3),
+			Updated: time.Date(2026, 1, 1, 0, i, 0, 0, time.UTC)})
+	}
+	for i := range highs {
+		in.Hotfixes = append(in.Hotfixes, pinnedHotfix{ID: fmt.Sprintf("hfx_%032d", i+1), Severity: "high",
+			Title: fmt.Sprintf("Recurring trap %d", i), Body: strings.Repeat("restart the worker after the cache flush ", 4)})
+	}
+	return in
+}
+
+// TestHighHotfixesOutrankMustLines (devco:S-3): with 101 must rules and 20
+// high hotfixes under a 16000-byte budget, render shortened nothing and
+// dropped every high hotfix at once (G-6), while 8 rules kept their full
+// text and 93 stayed lines; --report said "high hotfixes 0" and named no
+// hotfix. Now lines are shortened before any high hotfix goes, and when
+// some must go, the fewest go and the report names each by id.
+func TestHighHotfixesOutrankMustLines(t *testing.T) {
+	body, rep := buildBudgetedFile("c", squeezeInput(101, 20, 16000))
+	if rep.Over {
+		t.Fatalf("over the budget: %d bytes", rep.After)
+	}
+	if rep.HighLine != 20 || len(rep.HighOut) != 0 {
+		t.Fatalf("high hotfixes dropped while must lines could be shortened: %d kept, left out %v (%d full + %d line rules)", rep.HighLine, rep.HighOut, rep.MustFull, rep.MustLine)
+	}
+	for i := range 101 {
+		if id := fmt.Sprintf("rul_%032d", i+1); !strings.Contains(body, id) {
+			t.Fatalf("must rule %s dropped", id)
+		}
+	}
+
+	// So tight that some must go: the first ones stay, the rest are named.
+	body, rep = buildBudgetedFile("c", squeezeInput(101, 20, 12500))
+	if len(rep.HighOut) == 0 || len(rep.HighOut) == 20 || rep.HighLine+len(rep.HighOut) != 20 {
+		t.Fatalf("a squeeze must keep some high hotfixes and name the rest: %d kept, left out %v (after %d)", rep.HighLine, rep.HighOut, rep.After)
+	}
+	if !strings.Contains(body, "hfx_00000000000000000000000000000001") {
+		t.Error("the first high hotfix in rank order is not the one kept")
+	}
+	text := rep.reportText()
+	if !strings.Contains(text, fmt.Sprintf("high hotfixes       %4d  line (%d left out)", rep.HighLine, len(rep.HighOut))) {
+		t.Errorf("--report does not count the left-out hotfixes:\n%s", text)
+	}
+	for _, id := range rep.HighOut {
+		if !strings.Contains(text, id+"  high hotfix left out") {
+			t.Errorf("--report does not name left-out hotfix %s", id)
+		}
+	}
+	if !strings.Contains(body, fmt.Sprintf("%d high hotfixes are left out to fit the budget: `lore render --report` names them", len(rep.HighOut))) {
+		t.Error("the footer does not say where the left-out hotfixes are named")
 	}
 }
