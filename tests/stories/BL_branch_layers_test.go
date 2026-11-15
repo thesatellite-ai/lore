@@ -429,6 +429,8 @@ func TestStoryBL8StandingRules(t *testing.T) {
 		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "integration").OK(t).Says(t, "shared notes")
 		w.admin.LoreIn(w.aapp, "branch", "mode").OK(t).Says(t, "shared", "step 1")
 		w.admin.LoreIn(w.aapp, "memory", "add", "--body", "integration writes to everyone").OK(t).Never(t, "integration notes")
+		// a shared work branch is how a team coordinates on a branch: its tasks reach everyone at once (devco:D-391-docs)
+		w.admin.LoreIn(w.aapp, "task", "add", "--title", "integration task for everyone").OK(t).Never(t, "integration notes")
 		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "integration", "--undo").OK(t).Says(t, "removed")
 		w.admin.LoreIn(w.aapp, "branch", "mode").OK(t).Says(t, "isolated")
 		// dev is main-like by default; isolate makes it keep its own notes
@@ -438,6 +440,7 @@ func TestStoryBL8StandingRules(t *testing.T) {
 		w.admin.LoreIn(w.aapp, "branch", "mode").OK(t).Says(t, "isolated", "step 1")
 		w.aapp.Git("switch", "-q", "main")
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Says(t, "integration writes to everyone", "shared on purpose").Never(t, "branch only")
+		w.admin.LoreIn(w.aapp, "task", "list").OK(t).Says(t, "integration task for everyone")
 	})
 }
 

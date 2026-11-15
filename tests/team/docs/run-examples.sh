@@ -214,9 +214,11 @@ s_small_team() {
   on bob work/billing "lore sync"
 
   note "assign across branches"
-  on bob work/billing "git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice"
+  # branch layers: a task added on a feature branch stays with that branch until it merges, so a task
+  # for a teammate is given from the default branch (or with --no-layer, below); then bob starts his branch.
+  on bob work/billing "git pull -q && lore task add --title 'check the checkout page on a phone' --assign @alice"
   local t1; t1=$(id tsk)
-  on bob work/billing "lore sync"
+  on bob work/billing "lore sync && git switch -q -c feat/payments"
   on alice work/billing "git switch -q -c feat/login && lore task list --mine"
   on alice work/billing "lore sync && lore task list --mine"
   on alice work/billing "lore inbox"
@@ -242,7 +244,8 @@ s_small_team() {
 
   note "protected main"
   protect agency/billing
-  on bob work/billing "lore task add --title 'ask the client for the new logo' --assign @alice"
+  # on his feature branch: --no-layer gives the task to the shared notes at once
+  on bob work/billing "lore task add --title 'ask the client for the new logo' --assign @alice --no-layer"
   local t2; t2=$(id tsk)
   on bob work/billing "lore sync"
   on alice work/billing "lore sync >/dev/null && lore task done --id $t2"
@@ -293,11 +296,13 @@ s_agency() {
   on alice work/website "git add -A && git commit -qm 'lore: rule' && git push -q origin main"
 
   note "internal task"
-  on alice work/website "lore sync >/dev/null; git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync"
+  # branch layers: a task given on a feature branch stays with that branch until it merges, so the
+  # internal task is given (and done) on the default branch; bob starts his feature branch after.
+  on alice work/website "lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync"
   local t1; t1=$(id tsk)
-  on bob work/website "lore sync >/dev/null; git switch -q -c feat/login && lore task list"
+  on bob work/website "lore sync >/dev/null; lore task list"
   on bob work/website "lore inbox"
-  on bob work/website "lore task done --id $t1"
+  on bob work/website "lore task done --id $t1 && lore sync >/dev/null && git switch -q -c feat/login"
   on bob work/website "git status --short"
 
   note "render"
@@ -586,6 +591,11 @@ Y
   ag agent-coord work/api "lore task claim --id $mis"
 
   note "workers start"
+  # branch layers: an agent's claim, note and done on its work branch would stay with that branch until
+  # it merges; the agents' work branches are shared, so the coordinator sees each change at once.
+  for b in agent-backend/invite agent-frontend/invite-route agent-frontend-2/invite-route; do
+    on alice work/api "lore branch share --branch $b --yes"
+  done
   for r in api app infra; do quiet alice work/agents "mkdir -p \$(echo $r) && cd $r && [ -d .git ] || git clone -q https://github.com/client2/$r ."; done
   start_agent agent-backend work/agents/api
   ag agent-backend work/agents/api "lore inbox"

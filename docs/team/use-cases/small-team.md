@@ -4,7 +4,7 @@
 
 ## The situation
 
-Alice and Bob work in one repo, `github.com/agency/billing`, each on their own feature branch. When Bob gives Alice a task, Alice must see it now, not after Bob's branch merges.
+Alice and Bob work in one repo, `github.com/agency/billing`, each on their own feature branch. When Bob gives Alice a task, Alice must see it now, not after Bob's branch merges, so Bob gives it from `main` (or with `--no-layer` on his branch): a task added on a feature branch stays with that branch until it merges ([branch layers](../concepts.md#branch-layers-notes-that-follow-the-code-branch)).
 
 ## The config
 
@@ -47,15 +47,14 @@ Bob, on `feat/payments`, gives Alice a task and shares it with `lore sync`. Alic
 <!-- example: small-team#assign-across-branches -->
 ```console
 # bob, in billing
-$ git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice
+$ git pull -q && lore task add --title 'check the checkout page on a phone' --assign @alice
 lore: wrote task_lists/tlt_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json is unchanged)
 lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
   created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
-$ lore sync
+$ lore sync && git switch -q -c feat/payments
 lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -116,7 +115,7 @@ Most teams protect `main` (only pull requests may change it). Then `lore sync` c
 <!-- example: small-team#protected-main -->
 ```console
 # bob, in billing
-$ lore task add --title 'ask the client for the new logo' --assign @alice
+$ lore task add --title 'ask the client for the new logo' --assign @alice --no-layer
 lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
   on tasklist tlt_162d…9666 "default" (the default; --tasklist picks another)
@@ -173,6 +172,7 @@ $ git status --short
 - **Nothing pushes by itself.** A write stays on your machine until you run `lore sync` or `git push` (the pre-push hook sends the live list with it). `lore config set --key live.autopush --value true` sends each write at once; lore then says once how to turn it off.
 - **The 5-minute cache.** Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
 - **Register first, then branch from a fresh main.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your branch holds her roster entry. A roster entry lands on main on its person's `lore sync` and then leaves the live list, so a branch cut before it landed does not see it: `git pull` main before `git switch -c`, or `git merge origin/main` into an existing branch (the same rule as any row that left live, see `lore sync peek`).
+- **A task added on a feature branch stays there.** On an isolated branch a new task is written with the branch's files and reaches `main` when the branch merges, so the assignee does not see it until then. Give a teammate's task from `main`, or pass `--no-layer` (or `--live`) to share it at once.
 - **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote --ids <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.

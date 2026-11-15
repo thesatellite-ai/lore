@@ -10,12 +10,12 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1718 |
-| open | 2 |
+| fixed | 1720 |
+| open | 1 |
 | on-hold | 14 |
 | owner | 6 |
 | not-reproduced | 109 |
-| not-a-bug | 73 |
+| not-a-bug | 74 |
 | docs-only | 72 |
 | process | 185 |
 | needs a test | 0 |
@@ -646,6 +646,9 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-388-branchlist | finding | after-land r7al2: lore branch list --json refused E_NOT_FOUND in a repo whose notes are its own .lore/data (TestCampaignConfig_SharedFlags: every read with --json on an empty repo succeeds) | fixed | TestBranchListWithNoStoreFolder, TestCampaignConfig_SharedFlags | pkg wire (branchlayer_ops.go), ops/branch: an empty list with a line saying why; API: none (layers is [] instead of an error) |
 | devco:D-388-livefeature | finding | after-land r7al2: TestLiveLand_FeatureBranchSaysWhenRowsShow never landed a row from a feature branch: since branch layers a write on an isolated branch stays with the branch's files by design | not-a-bug | - | test shares the feature branch's writes with LORE_LAYER=off (docs/team/concepts.md), so it still reaches the land note it guards; TestLiveLand_FeatureBranchSaysWhenRowsShow |
 | devco:D-388-docs | finding | after-land r7al2: docs example transcripts and pages (teams, ops, audit-log, commands index, team commands) stale after r7tmisc T-6/T-15, r7torg org store remove and branch layers' new verbs and --no-layer | docs-only | - | refreshed and pasted; each diff traced to T-6, T-15, T-22 or branch layers |
+| devco:D-388-layers | finding | after-land r7al2: docs examples small-team, agency and agents fail since branch layers: a task assigned on a feature branch stays in that branch's notes so the assignee never sees it, and in a mission an agent's claim, note and done on its work branch go into the branch layer | not-a-bug | - | by design (owner 2026-11-14): tasks isolate; share a work branch with lore branch share; the examples and docs follow (devco:D-391-docs) |
+| devco:D-391-sweep | finding | after-land b3ceebe5: TestSweepCoversEveryCommand: the lore branch verbs (adopt, drop, install-action, isolate, land, list, mode, promote, purge, rename, restore, share, show) and org store remove were neither swept nor in notUserRun | fixed | TestSweepCoversEveryCommand | tests/machines/sweep_cmds.go: notUserRun with reasons (they need a linked code repo on a feature branch; the BL stories and r7torg journeys run them) |
+| devco:D-391-docs | finding | after-land b3ceebe5: docs examples small-team, agency and agents set up their task and mission flows on feature branches, where tasks isolate since branch layers (owner decision reverses C37) | fixed | TestStoryBL8StandingRules, tests/team/docs/run-examples.sh | examples give a teammate's task from the default branch or with --no-layer, finish the agency task before branching, and share the agents' work branches with lore branch share; docs/team concepts, agents and the three use-case pages say where an assignee sees a task given on a feature branch |
 | devco:T-8 | finding | a weekly 09:00 reminder (and a recurring task with a clock-time due) slid to 10:00 local after the DST change: the next date added 7×24 h in UTC | fixed | TestNextOccurrenceKeepsWallClockAcrossDST, TestRecurTimedDueKeepsTimeAcrossDST, TestJourneyRecurringKeepsTheClock | ops/reminder nextOccurrence and ops/task spawnNext step calendar days on the wall clock in the person's zone (time.Local, TZ) for a clock-time due, UTC days for a date-only one; the subtree shift is whole days too; New York and Berlin across their March and November changes; break-verified |
 | devco:T-9 | finding | task --due 'DATE + HH:MM' printed the time on add, then task show, list, --json and the next recurring instance showed only the date | fixed | TestRecurTimedDueKeepsTimeAcrossDST, TestJourneyRecurringKeepsTheClock | ops/task text.go dueText/dueHuman: --json due_at is RFC3339 UTC for a clock-time due (YYYY-MM-DD for a date-only one), show and list print "2027-03-12 09:00 EST", done prints the next instance's local time; a late-evening due lists its own local day in the recurs line; break-verified |
 | devco:T-10 | finding | 'every month on last' started on Jan 30 listed Jan 30 then Jan 31: two instances in one month | fixed | TestMonthDaySeriesNeverTwiceInAMonth, TestFirst, TestJourneyRecurringKeepsTheClock | logic/recur: Next of a month-day rule (on N, on last) steps to the following month even from an off-rule due; First is the first rule day of a series created without a due; break-verified |
@@ -2277,7 +2280,6 @@ Every new scenario or finding lands with its test and its row here in the same c
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
 | devco:T-20-list | finding | task list at ~5,000-8,000 live tasks takes 5-8 s: every call still decodes and read-scans every live task in the engine | open | - | r7tperf follow-up: the live files' conversion is kept by blob (TestLiveRowsKeptByBlob) and show no longer lists every task, but engine.List decodes each row and runs the read mask (secret scan) on it per call (~2.2 s of CPU at 5,600 tasks, more under load); next: serve a plain list from the cache's tasks table while the store head is unchanged, or keep the masked decode by row version |
-| devco:D-388-layers | finding | after-land r7al2: docs examples small-team, agency and agents fail since branch layers (426105c1, reproduced on origin/dev alone): a task assigned on a feature branch stays in that branch's notes so the assignee never sees it, and in a mission an agent's claim, note and done on its work branch go into the branch layer, so the coordinator sees the task in progress after the merge (branches.auto_land is off by default) and no work branch is pushed for a reclaim | open | - | owner decision: whether assignments and mission coordination (claims, done, notes on shared tasks) follow the branch or stay shared; then the three docs sections (tests/team/docs/run-examples.sh) follow |
 
 ## On hold (owner, not built in 0.1.18)
 
