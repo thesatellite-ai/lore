@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/fspath"
 )
@@ -49,7 +50,7 @@ func takeSetupSnapshot(ctx context.Context, dir string) *setupSnapshot {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-path", "hooks", "--git-path", "config", "--git-common-dir")
 	cmd.Dir = dir
 	cmd.Env = gitenv.Clean(os.Environ())
-	out, err := cmd.Output()
+	out, err := gitfast.OutputQuiet(ctx, dir, cmd.Args[1:], nil, nil, cmd.Output) // devco:D-418
 	if err != nil {
 		return nil
 	}
@@ -91,7 +92,7 @@ func gitConfigGet(ctx context.Context, dir, key string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
 	cmd.Dir = dir
 	cmd.Env = gitenv.Clean(os.Environ())
-	out, err := cmd.Output()
+	out, err := gitfast.OutputQuiet(ctx, dir, cmd.Args[1:], nil, nil, cmd.Output) // devco:D-418
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -183,7 +184,7 @@ func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = gitenv.Clean(os.Environ())
-	out, err := cmd.Output()
+	out, err := gitfast.OutputQuiet(ctx, dir, args, nil, nil, cmd.Output) // devco:D-418
 	return string(out), err
 }
 

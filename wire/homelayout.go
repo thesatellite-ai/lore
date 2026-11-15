@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 )
 
 // homeEntry is one kind of path in the lore home.
@@ -103,6 +104,8 @@ var homeLayout = []homeEntry{
 	{Pattern: "cache/uses/**", What: "a repo's cache use record", ByHand: "safe to delete"},
 	{Pattern: "cache/repos", Dir: true, What: "the cache use records as an older lore kept them; the next command moves them to cache/uses", ByHand: "safe to delete"},
 	{Pattern: "cache/repos/**", What: "a repo's cache use record (older layout)", ByHand: "safe to delete"},
+	// devco:D-418: git answers kept between commands (adapters/gitfast)
+	{Pattern: "cache/" + gitfast.CacheDirName, Dir: true, Collapse: true, What: "git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files", ByHand: "safe to delete: the next command asks git again", Readme: true},
 	{Pattern: "cache/doctor-health.json", What: "the last `lore doctor` summary, for the setup page", ByHand: "safe to delete", Readme: true},
 	{Pattern: "cache/prj_*", What: "a cache from lore 0.1.17; `lore cache prune` removes it", ByHand: "safe to delete"},
 	{Pattern: "cache/links-*.json", What: "lore 0.1.17's index of an org's store links; this lore reads the links from the store clones; `lore cache prune` removes it", ByHand: "safe to delete"},

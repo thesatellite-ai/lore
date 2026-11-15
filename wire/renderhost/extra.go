@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -57,6 +58,15 @@ func runGit(ctx context.Context, combined bool, args ...string) ([]byte, error) 
 		return nil, err
 	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Env: append(gitenv.Clean(os.Environ()), "LC_ALL=C")}
+	if combined {
+		return gitfast.Bracket(ctx, "", args, nil, nil, func() ([]byte, error) { return runGitCmd(ctx, cmd, true) })
+	}
+	// gitfast (devco:D-418): a read the Session answers starts no git
+	return gitfast.Output(ctx, "", args, nil, nil, func() ([]byte, error) { return runGitCmd(ctx, cmd, false) })
+}
+
+// runGitCmd runs a prepared git command (see runGit).
+func runGitCmd(ctx context.Context, cmd *exec.Cmd, combined bool) ([]byte, error) {
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if combined {

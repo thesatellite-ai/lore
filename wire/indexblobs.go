@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -133,13 +134,20 @@ func catFileBatch(ctx context.Context, top string, env []string, names []string)
 	}
 	// Built directly, as gitRun does: an absolute LookPath'd binary, fixed
 	// argv entries, no shell; runCancellable kills it when ctx ends.
-	cmd := &exec.Cmd{Path: bin, Args: []string{bin, "cat-file", "--batch"}, Dir: top, Env: gitEnv(env), Stdin: &in}
+	stdin := in.Bytes()
+	cmd := &exec.Cmd{Path: bin, Args: []string{bin, "cat-file", "--batch"}, Dir: top, Env: gitEnv(env), Stdin: bytes.NewReader(stdin)}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if rerr := runCancellable(ctx, cmd); rerr != nil {
+	// gitfast (devco:D-418): the objects are read from the repository files
+	// when the Session can; else git runs as before
+	raw, rerr := gitfast.Output(ctx, top, cmd.Args[1:], env, stdin, func() ([]byte, error) {
+		err := runCancellable(ctx, cmd)
+		return stdout.Bytes(), err
+	})
+	if rerr != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: git cat-file: "+strings.TrimSpace(stderr.String()), rerr)
 	}
-	rd := bufio.NewReader(&stdout)
+	rd := bufio.NewReader(bytes.NewReader(raw))
 	for i := range names {
 		hdr, rerr := rd.ReadString('\n')
 		if rerr != nil {

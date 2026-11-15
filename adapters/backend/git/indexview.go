@@ -25,11 +25,20 @@ import (
 // any entry is unmerged (a merge in progress: those files are read as the
 // folder has them, conflict markers and all).
 func (b *Backend) indexView(ctx context.Context, scope string) (rowfs.IndexView, bool) {
+	if scope != "" {
+		// One table: the slice of the whole folder's view (devco:D-418).
+		// Asking git per table (ls-files --stage, diff-files, ls-files -o)
+		// cost three git processes per table on every read; the whole view
+		// is two (ls-files --stage and the status repoStatus remembers),
+		// once per command.
+		whole, ok := b.wholeIndexView(ctx)
+		if !ok {
+			return rowfs.IndexView{}, false
+		}
+		return viewUnder(whole, scope+"/"), true
+	}
 	dir := filepath.Join(b.work, filepath.FromSlash(b.folder.DataPath()))
 	spec := "."
-	if scope != "" {
-		spec = scope // one table folder; paths stay relative to dir
-	}
 	staged, err := b.git.run(ctx, call{dir: dir, args: []string{"ls-files", "--stage", "-z", "--", spec}})
 	if err != nil {
 		return rowfs.IndexView{}, false
@@ -54,20 +63,13 @@ func (b *Backend) indexView(ctx context.Context, scope string) (rowfs.IndexView,
 		}
 		view.Clean[rel] = fields[1]
 	}
-	changed, ok := b.worktreeChanges(ctx, scope, dir, spec)
+	changed, ok := b.worktreeChanges(ctx)
 	if !ok {
 		return rowfs.IndexView{}, false
 	}
 	// Untracked and ignored row files are read too, as a walk of the folder
-	// reads them: the whole-folder status lists them ("??", "!!"); a table
-	// read asks ls-files -o (without --exclude-standard) for its folder.
-	var other []byte
-	if scope != "" {
-		if other, err = b.git.run(ctx, call{dir: dir, args: []string{"ls-files", "--others", "-z", "--", spec}}); err != nil {
-			return rowfs.IndexView{}, false
-		}
-	}
-	for _, rel := range append(changed, splitZ(other)...) {
+	// reads them: the whole-folder status lists them ("??", "!!").
+	for _, rel := range changed {
 		if rel == "" {
 			continue
 		}
@@ -91,20 +93,11 @@ func (b *Backend) ReadTableMirrored(ctx context.Context, table row.Table, m stor
 	return b.folder.ReadTableMirrored(ctx, table, m)
 }
 
-// worktreeChanges lists the files of the data folder (scope "") or of one
-// table folder whose work tree copy differs from the index, deleted ones
-// and untracked ones included, relative to dir. The whole folder is read
-// from the status HandChanges reads too (repoStatus), so one command asks
-// git once; one table folder from `git diff-files` and `git ls-files -o`
-// on that folder alone.
-func (b *Backend) worktreeChanges(ctx context.Context, scope, dir, spec string) ([]string, bool) {
-	if scope != "" {
-		out, err := b.git.run(ctx, call{dir: dir, args: []string{"diff-files", "--name-only", "--relative", "-z", "--", spec}})
-		if err != nil {
-			return nil, false
-		}
-		return splitZ(out), true
-	}
+// worktreeChanges lists the files of the data folder whose work tree copy
+// differs from the index, deleted, untracked and ignored ones included,
+// relative to the data folder. It reads the status HandChanges reads too
+// (repoStatus), so one command asks git once.
+func (b *Backend) worktreeChanges(ctx context.Context) ([]string, bool) {
 	out, err := b.repoStatus(ctx)
 	if err != nil {
 		return nil, false
@@ -124,6 +117,65 @@ func (b *Backend) worktreeChanges(ctx context.Context, scope, dir, spec string) 
 		}
 	}
 	return rels, true
+}
+
+// viewUnder is the part of v under prefix (a table folder + "/"), as the
+// view of that folder alone; v itself is never changed (it is shared).
+func viewUnder(v rowfs.IndexView, prefix string) rowfs.IndexView {
+	out := rowfs.IndexView{Clean: map[string]string{}}
+	for rel, blob := range v.Clean {
+		if strings.HasPrefix(rel, prefix) {
+			out.Clean[rel] = blob
+		}
+	}
+	for _, rel := range v.Check {
+		if strings.HasPrefix(rel, prefix) {
+			out.Check = append(out.Check, rel)
+		}
+	}
+	return out
+}
+
+// viewMemo is the whole data folder's IndexView remembered for one
+// command (the same validity as statusMemo): the per-table reads of one
+// command slice it instead of asking git again.
+type viewMemo struct {
+	mu    sync.Mutex
+	ok    bool
+	gen   uint64
+	scope *store.ReadScope
+	index indexStat
+	view  rowfs.IndexView
+}
+
+// viewMemos are the process's viewMemo values by work tree.
+var viewMemos = struct {
+	mu sync.Mutex
+	by map[string]*viewMemo
+}{by: map[string]*viewMemo{}}
+
+// wholeIndexView is indexView(ctx, "") remembered while no row file was
+// written, the index file did not change and the command (ReadScope) is
+// the same.
+func (b *Backend) wholeIndexView(ctx context.Context) (rowfs.IndexView, bool) {
+	viewMemos.mu.Lock()
+	m, ok := viewMemos.by[b.work]
+	if !ok {
+		m = &viewMemo{}
+		viewMemos.by[b.work] = m
+	}
+	viewMemos.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	idx := b.indexFileStat(ctx)
+	gen := rowfs.WriteGeneration()
+	scope := store.ReadScopeOf(ctx)
+	if m.ok && scope != nil && m.scope == scope && m.gen == gen && m.index == idx && idx != (indexStat{}) {
+		return m.view, true
+	}
+	view, vok := b.indexView(ctx, "")
+	m.ok, m.gen, m.scope, m.index, m.view = vok, gen, scope, b.indexFileStat(ctx), view // the index as status left it
+	return view, vok
 }
 
 // statusMemo is one remembered `git status` of the code repo's data folder
@@ -195,7 +247,11 @@ func (b *Backend) repoStatus(ctx context.Context) ([]byte, error) {
 		m.ok = false
 		return nil, err
 	}
-	m.ok, m.gen, m.scope, m.index, m.out = true, gen, scope, idx, out
+	// the index as git left it: status refreshes the index's stat data and
+	// may rewrite the file, which is no change of content (devco:D-418:
+	// keyed on the stat from before, the next read of the same command
+	// always missed and ran status again)
+	m.ok, m.gen, m.scope, m.index, m.out = true, gen, scope, b.indexFileStat(ctx), out
 	return out, nil
 }
 

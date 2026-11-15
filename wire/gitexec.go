@@ -3,11 +3,13 @@ package wire
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -45,7 +47,22 @@ func (g gitRun) output(ctx context.Context) ([]byte, error) {
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if rerr := runCancellable(ctx, cmd); rerr != nil {
+	// gitfast (devco:D-418): a read the Session answers starts no git; a
+	// non-zero status is a quiet "no" (git printed nothing either)
+	if rep, ok := gitfast.Try(ctx, g.dir, g.args, g.env, g.stdin); ok {
+		if rep.Code != 0 {
+			return nil, errs.Wrap(errs.Internal, "wire: git "+gitfast.FirstArg(g.args)+": ", &gitfast.ExitError{Code: rep.Code})
+		}
+		return rep.Out, nil
+	}
+	rerr := runCancellable(ctx, cmd)
+	code, exited := 0, rerr == nil
+	var ee *exec.ExitError
+	if errors.As(rerr, &ee) && ctx.Err() == nil {
+		code, exited = ee.ExitCode(), true
+	}
+	gitfast.Note(ctx, g.dir, g.args, g.env, g.stdin, stdout.Bytes(), code, exited)
+	if rerr != nil {
 		sub := ""
 		if len(g.args) > 0 {
 			sub = g.args[0]

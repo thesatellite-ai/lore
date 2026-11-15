@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1760 |
+| fixed | 1761 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -740,6 +740,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-413-M11 | finding | Mac M-11: the read-never-writes guard expected the row file under the unresolved home | fixed | TestReadsNeverWriteOrPush | app TestMain runs it through the linked temp folder |
 | devco:D-413-M12 | finding | Mac M-12: the v0.1.17 compat build ran go build with GOWORK under /var while go read the folder as /private/var and refused the workspace | fixed | TestFinCompat_V017FreshCloneRefusesTreeRows, TestFinCompat_V017ExistingCloneSkipsTreeRows, TestFinCompat_V017LiveReadOnlyAfterLead, TestFinCompat_V017LiveReadOnlyAfterTreeRow | tests/teame2e builds in the canonical folder; its TestMain runs through the linked temp folder |
 | devco:D-416 | finding | Mac M-1..M-6 (seen on 426105c1): re-checked on dev 88a930a4, all pass (fixed by b3ceebe5, round 7 r7al2 and r7mac); M-6 now also routes through model/fspath | fixed | TestCampaignConfig_SharedFlags, TestLiveLand_FeatureBranchSaysWhenRowsShow, TestF14_TeamAssignInClientRepoRefused, TestTeB_Team030Matrix, TestB11_ReadThroughRowEditAndLocalDelete, TestStoreTop | M-14 is devco:D-416-M14 (r9fs) |
+| devco:D-418 | finding | owner Mac: everyday commands 3-5x slower than on the server; each started 110-300 git processes (task list 121, task add 168, doctor 297, the hooks of one commit 162 in a fresh repo with a team store) at ~20 ms each on macOS | fixed | TestAnswersMatchGit, TestFallsBack, TestRefsAreNeverCached, TestConfigSnapshotDroppedOnWrite, TestComposedConfigMatchesGit, TestPersistedAcrossSessions, TestConfigPersistedAcrossSessions, TestJourneyGitExecBudget, TestJourneyGitExecBudgetTeam, TestQuietNoIsAnExitCode | adapters/gitfast: one Session per process answers ref, object, index, tree, rev-parse, for-each-ref, check-ref-format, cat-file, ls-tree, ls-files, tree and index diffs, rev-list, merge-base, log -1 and config reads in-process (byte-identical to git, fallback to git for every other shape); content-addressed answers and config snapshots kept in <lore home>/cache/gitfast (never in a repo); per-command budgets in tests/journeys/gitexec_budget_test.go (task list 121 -> 3, task add 168 -> 10, doctor 297 -> 35, hooks 162 -> 17) |
 
 ## lore-adoptfix
 
