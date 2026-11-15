@@ -45,13 +45,14 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -124,20 +125,23 @@ func fetchDeferred(ctx context.Context) bool {
 // pre-commit block. The block runs this binary (the bare name when `lore`
 // on PATH is this file) and fails the commit when no lore can check it.
 //
-// Only a lore binary sets it up (lore, lore.exe, lore-<suffix>): a Go
-// test binary (wire.test) running the wiring would write itself in as the
-// hook and the driver, and git would then start a test run on every hand
-// commit.
+// Every lore build sets it up, whatever its file is called (lore,
+// lore-dev, a scratch name: devco D-333, a build named bin-lt left its
+// clones unguarded); only a Go test binary (wire.test) does not, since it
+// would write itself in as the hook and the driver and git would then start
+// a test run on every hand commit.
 //
 // say gets the line a write prints when it sets an unwired clone up
 // (owner bug 6: a read never does), prefixed with the running command.
 func handGitOption(say func(string)) gitbackend.Option {
 	exe, err := os.Executable()
-	name := strings.TrimSuffix(filepath.Base(exe), ".exe")
-	if err != nil || strings.HasSuffix(name, ".test") || (name != reposync.BinaryName && !strings.HasPrefix(name, reposync.BinaryName+"-")) {
+	if err != nil {
 		return gitbackend.Join()
 	}
-	bin := reposync.RunningDriverBinary()
+	bin, ok := handGitBinary(exe, testing.Testing(), exec.LookPath)
+	if !ok {
+		return gitbackend.Join()
+	}
 	return gitbackend.WithHandGit(gitbackend.HandGit{
 		Driver: bin + " merge-driver %O %A %B %P",
 		Hook:   storeHookLines(bin),
@@ -147,6 +151,18 @@ func handGitOption(say func(string)) gitbackend.Option {
 			}
 		},
 	})
+}
+
+// handGitBinary is the program a store clone's merge driver and pre-commit
+// block run for the executable exe, and false when the wiring must not be
+// written: only for a Go test binary (testBinary, testing.Testing), never
+// because of exe's file name (devco D-333: a build's behaviour must not
+// depend on what its file is called).
+func handGitBinary(exe string, testBinary bool, lookPath func(string) (string, error)) (string, bool) {
+	if testBinary {
+		return "", false
+	}
+	return reposync.DriverBinary(exe, lookPath), true
 }
 
 // handGitSetUpLine is the one short line said when lore wrote a store
