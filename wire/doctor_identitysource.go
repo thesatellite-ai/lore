@@ -13,6 +13,7 @@ package wire
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -103,7 +104,6 @@ func topLevelFinding(c onboard.Config, s onboard.SetupEntry) (DoctorFinding, boo
 
 // Probe details of the two catalog checks.
 const (
-	detailNoTopIdentity  = "no top-level identity: in ~/.lore/config.yaml"
 	detailNoDisagreement = "the top-level identity: and this setup's do not disagree"
 	detailTeamIdentity   = "a member or admin setup's identity is its org entry's"
 )
@@ -133,7 +133,7 @@ func (sp setupProber) topLevelIdentity(r opssetup.ProbeRequest) opssetup.ProbeRe
 	}
 	switch {
 	case st.verdict == identity.SourceNone:
-		return result(onboard.StatusOK, detailNoTopIdentity, nil)
+		return result(onboard.StatusOK, "no top-level identity: in "+lorehome.Shown()+"/config.yaml", nil)
 	case st.heldBy != "":
 		return result(onboard.StatusOK, "the top-level identity: is setup "+st.heldBy+"'s; its own check offers the fix", nil)
 	case conflict:

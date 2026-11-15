@@ -21,6 +21,7 @@ package setup
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -557,7 +558,7 @@ func (o JoinOut) Text() string {
 		b.WriteString(o.IdentityNote + "\n")
 	}
 	if slices.ContainsFunc(o.Commands, choosesLocalPersonal) {
-		b.WriteString(LocalPersonalWarning + "\n")
+		b.WriteString(LocalPersonalWarningText() + "\n")
 	}
 	return b.String()
 }
@@ -576,7 +577,7 @@ func choosesLocalPersonal(line string) bool {
 // every member's join lines picked it and nothing said that personal
 // notes then live on one machine only), and how to keep them in a
 // private git repo instead. The personal_store step prints it too.
-const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: make an empty private git repo; lore store set-url --name me --url <private-repo-url> copies the folder ~/.lore/stores/" + onboard.LocalStoreFolder + " into its clone, then lore sync pushes it)."
+const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: make an empty private git repo; lore store set-url --name me --url <private-repo-url> copies the folder <home>/stores/" + onboard.LocalStoreFolder + " into its clone, then lore sync pushes it)."
 
 // RepairIn is setup.repair's input.
 type RepairIn struct {
@@ -761,4 +762,10 @@ type TeamInviteResendOut struct {
 // without it keeps the plain checks.
 type OrgStoreLister interface {
 	OrgStoreURLs(ctx context.Context, org string) (urls []string, found bool, err error)
+}
+
+// LocalPersonalWarningText is LocalPersonalWarning with the folder in the
+// home this run uses (devco D-423: under LORE_HOME it named ~/.lore).
+func LocalPersonalWarningText() string {
+	return strings.Replace(LocalPersonalWarning, "<home>", lorehome.Shown(), 1)
 }

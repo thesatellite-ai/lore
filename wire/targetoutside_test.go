@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,5 +65,52 @@ func TestWriteToStoreOutsideARepo(t *testing.T) {
 	// a store the setup does not have: named, with where to look
 	if _, err := b.Run(ctx, e, op.JSONDecoder{Body: []byte(`{"body":"x","to":"nosuch/org"}`)}, op.Caller{Yes: true}); !errs.Has(err, errs.NotFound) {
 		t.Fatalf("rule add --to nosuch/org outside a repo: %v, want E_NOT_FOUND", err)
+	}
+}
+
+// TestReadNamingStoreOutsideARepo pins devco D-421: outside any git work
+// tree a read takes the store the write took (`rule list --to <store>`,
+// or --store) and lists what the write put there; a read naming no store
+// in a folder no org covers is refused with the flag to name, never with
+// "run git init here first".
+func TestReadNamingStoreOutsideARepo(t *testing.T) {
+	t.Parallel()
+	ctx := background()
+	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
+	hook := func(context.Context) ([]attach.Store, error) {
+		return []attach.Store{{Name: rosterStore, URL: orgURL, Folder: "org"}}, nil
+	}
+	plain, home := t.TempDir(), t.TempDir()
+	app := func() *App {
+		a, err := New(Options{RepoDir: plain, Home: home, FlagActor: testEmail, OrgStores: hook, Wall: time.Now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = a.Close() })
+		return a
+	}
+	a := app()
+	add, _ := a.Registry().Lookup("rule.add")
+	const body = "every estimate is reviewed by two people"
+	if _, err := a.Run(ctx, add, op.JSONDecoder{Body: []byte(`{"body":"` + body + `","to":"` + string(rosterStore) + `"}`)}, op.Caller{Yes: true}); err != nil {
+		t.Fatalf("rule add --to %s: %v", rosterStore, err)
+	}
+	list, ok := a.Registry().Lookup("rule.list")
+	if !ok {
+		t.Fatal("no rule.list")
+	}
+	res, err := app().Run(ctx, list, op.JSONDecoder{Body: []byte(`{"store":"` + string(rosterStore) + `"}`)}, op.Caller{})
+	if err != nil {
+		t.Fatalf("rule list --to %s outside a repo: %v", rosterStore, err)
+	}
+	if out, jerr := res.JSON(); jerr != nil || !strings.Contains(string(out), body) {
+		t.Fatalf("rule list --to %s does not list the rule: %s %v", rosterStore, out, jerr)
+	}
+	_, err = app().Run(ctx, list, op.JSONDecoder{Body: []byte(`{}`)}, op.Caller{})
+	if hint := errs.EnvelopeOf(err).Error.Hint; !errs.Has(err, errs.NotAStore) || !strings.Contains(hint, "--to") || strings.Contains(hint, "git init") {
+		t.Fatalf("rule list with no store, no org: %v (hint %q), want E_NOT_A_STORE naming --to, not git init", err, hint)
+	}
+	if entries, rerr := os.ReadDir(plain); rerr != nil || len(entries) != 0 {
+		t.Fatalf("the folder it ran in got files: %v %v", entries, rerr)
 	}
 }

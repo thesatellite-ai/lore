@@ -124,6 +124,10 @@ func agentOfWriter(ctx context.Context, who identity.Resolved) (string, error) {
 	agent := who.Agent
 	if c, ok := ctx.Value(profileCallerKey{}).(op.Caller); ok && (c.AgentFixed || c.Agent != "") {
 		agent = c.Agent // the surface decided (REST X-Lore-Agent, or an explicit agent)
+	} else if agent == "" {
+		// a setup step credited to the person still ran through the agent
+		// (devco D-424): the agents.* policies apply to it
+		agent = creditedAgent(ctx)
 	}
 	if agent == "" && who.Kind != schema.ActorKindAgent {
 		return "", nil

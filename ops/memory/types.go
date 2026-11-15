@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -35,6 +36,8 @@ const (
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
 	// CreateFlag: --create, read by the target step (wire) for
 	// --to <store>/<folder> on a folder that does not exist yet (PL-CREATE-1).
 	engine.CreateFlag
@@ -48,9 +51,8 @@ type AddIn struct {
 	// Kind is one of schema.MemoryKinds; empty means retrieved.
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"core | retrieved | episodic | procedural | archival (default retrieved)"`
 	// Source is source_kind; empty means manual.
-	Source    string `json:"source,omitempty" flag:"source" desc:"source_kind: manual | learn-from | agent-proposal | plugin | imported (default manual)"`
-	SourceRef string `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance pointer"`
-	To        string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
+	Source string `json:"source,omitempty" flag:"source" desc:"source_kind: manual | learn-from | agent-proposal | plugin | imported (default manual)"`
+	To     string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
 	// Repo scopes the memory to one repo of the project (mount name or
 	// rep_ id); empty is the project-wide ("master") scope.
 	Repo string `json:"repo,omitempty" flag:"repo" desc:"scope to a repo of the project (mount name or rep_ id; default project-wide)"`

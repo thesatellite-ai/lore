@@ -387,7 +387,7 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		} else {
 			m = sp.p.StoreMarker(ctx, u, sp.route(r))
 		}
-		vars := sp.urlVars(u, r)
+		vars := sp.urlVars(ctx, u, r)
 		vars[onboard.VarStoreName] = markerStoreName(r)
 		res := outcome(m.Outcome, vars)
 		if res.Status == onboard.StatusOK && !m.Present {
@@ -408,7 +408,7 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		// does), an empty repo is made a store; only a repo that holds
 		// files and is no lore store is refused.
 		f := sp.p.RootFiles(ctx, u, sp.route(r), rowfs.MarkerFile, orgcfg.OrgFile)
-		res := outcome(f.Outcome, sp.urlVars(u, r))
+		res := outcome(f.Outcome, sp.urlVars(ctx, u, r))
 		if res.Status == onboard.StatusOK && !f.EmptyRepo && len(f.Found) == 0 {
 			res.Status, res.Detail = onboard.StatusFail, "the repo holds files but no "+rowfs.MarkerFile+": it is not a lore store"
 		}
@@ -458,12 +458,12 @@ func (sp setupProber) storeRead(ctx context.Context, r opssetup.ProbeRequest) op
 		// the person asks lore to create may not exist yet (the save makes
 		// it); `existing` and every later check still need the folder.
 		if creating(r) {
-			return outcome(sp.p.FolderCreatable(dir), sp.urlVars(u, r))
+			return outcome(sp.p.FolderCreatable(dir), sp.urlVars(ctx, u, r))
 		}
-		return outcome(sp.p.FolderRead(dir), sp.urlVars(u, r))
+		return outcome(sp.p.FolderRead(dir), sp.urlVars(ctx, u, r))
 	}
 	res := sp.p.ReadRemote(ctx, u, sp.route(r))
-	vars := sp.urlVars(u, r)
+	vars := sp.urlVars(ctx, u, r)
 	vars[onboard.VarStoreName] = markerStoreName(r) // the reached-before fix names set-url and --restore with it
 	out := sp.reachedBefore(readVars(outcome(res.Outcome, vars), res.Class), u, r)
 	if out.Status == onboard.StatusOK && out.Detail == "" {
@@ -512,9 +512,18 @@ func markerStoreName(r opssetup.ProbeRequest) string {
 // urlVars are the fix vars of a store url: {url}, and {owner}/{repo} for
 // any host url (the fixes name them); a url gh cannot act on (not
 // github.com) selects the FixNotGitHub variant (A6 fix.go).
-func (sp setupProber) urlVars(u string, r opssetup.ProbeRequest) map[string]string {
+func (sp setupProber) urlVars(ctx context.Context, u string, r opssetup.ProbeRequest) map[string]string {
 	v := map[string]string{onboard.VarURL: probe.Sanitize(u)}
 	if owner, repo, ok := githubOwnerRepo(u, sp.route(r).HostAlias); ok {
+		v[onboard.VarOwner], v[onboard.VarRepo] = owner, repo
+		return v
+	}
+	// a host alias of github.com in ~/.ssh/config other than the setup's
+	// route (`git@<alias>:org/store.git` typed for the team store): the
+	// github step lists the same aliases (githubAliasList), so the team
+	// step checks the repo as on github.com instead of skipping it as
+	// "not a github.com url" (devco r10read)
+	if owner, repo, ok := githubOwnerRepo(u, sp.sshGitHubAlias(ctx, u)); ok {
 		v[onboard.VarOwner], v[onboard.VarRepo] = owner, repo
 		return v
 	}
@@ -523,6 +532,26 @@ func (sp setupProber) urlVars(u string, r opssetup.ProbeRequest) map[string]stri
 	}
 	v[onboard.VarFixVariant] = string(onboard.FixNotGitHub)
 	return v
+}
+
+// sshGitHubAlias is u's host when ~/.ssh/config maps it to github.com (one
+// of githubAliasList's aliases), else "". An unreadable config maps
+// nothing.
+func (sp setupProber) sshGitHubAlias(ctx context.Context, u string) string {
+	g, _, ok := onboard.ParseGitURL(u)
+	if !ok || g.Host == "" || g.Host == probe.GitHubHost {
+		return ""
+	}
+	cfg, err := sp.p.ReadSSHConfig(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, a := range githubAliasList(cfg) {
+		if a.Alias == g.Host {
+			return g.Host
+		}
+	}
+	return ""
 }
 
 // readVars adds the FixUnreachable variant to a store.read result whose
@@ -875,7 +904,7 @@ func (sp setupProber) storeWrite(ctx context.Context, r opssetup.ProbeRequest) o
 	if u == "" {
 		return skip(skipNoURL)
 	}
-	v := sp.urlVars(u, r)
+	v := sp.urlVars(ctx, u, r)
 	if dir, ok := sp.p.FolderStorePath(u); ok {
 		// A folder store (no git): a temp file in the folder, not a push
 		// (for create: in its nearest existing parent when it is missing).
@@ -934,7 +963,7 @@ func (sp setupProber) storePrivate(ctx context.Context, r opssetup.ProbeRequest)
 	if _, ok := sp.p.FolderStorePath(u); ok {
 		return skip(skipFolderStore)
 	}
-	v := sp.urlVars(u, r)
+	v := sp.urlVars(ctx, u, r)
 	if v[onboard.VarFixVariant] == string(onboard.FixNotGitHub) {
 		return skip(skipNotGitHub)
 	}
@@ -997,7 +1026,7 @@ func (sp setupProber) collaborator(ctx context.Context, r opssetup.ProbeRequest)
 	if u == "" {
 		return skip(skipNoURL)
 	}
-	v := sp.urlVars(u, r)
+	v := sp.urlVars(ctx, u, r)
 	v[onboard.VarUser] = user
 	if v[onboard.VarFixVariant] == string(onboard.FixNotGitHub) {
 		return skip(skipNotGitHub)
@@ -1460,7 +1489,7 @@ func (sp setupProber) repoStores(ctx context.Context, r opssetup.ProbeRequest) o
 		}
 		bad = append(bad, g.name+": "+g.res.Detail)
 		if v == nil {
-			v = sp.urlVars(cfg.Stores[i].URL, r)
+			v = sp.urlVars(ctx, cfg.Stores[i].URL, r)
 			v[onboard.VarStore] = probe.Sanitize(cfg.Stores[i].URL)
 			status = g.res.Class.Status()
 		}

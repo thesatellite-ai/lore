@@ -29,6 +29,7 @@ import (
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -119,6 +120,8 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
@@ -407,7 +410,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
-			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldSeverity: severity, kn.FieldSourceKind: in.Source, schema.FieldSummary: summary,
+			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldSeverity: severity, kn.FieldSourceKind: in.Source, kn.FieldSourceRef: in.SourceRef, schema.FieldSummary: summary,
 		},
 	}
 	// 6.2.3 / D10: --scope picks the store, repo and folder.

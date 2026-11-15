@@ -916,10 +916,14 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 	}
 	names := e.lookupStores(table) // P3-LOCAL-1: a machine-local table is looked up in the machine store only
 	if ref.Store != "" && !e.IsMachineLocal(table) {
-		if _, err := e.attached(ref.Store); err != nil {
+		at, err := e.attached(ref.Store)
+		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		names = []store.Source{ref.Store}
+		// the attached name, not ref.Store: `repo` resolves to the store
+		// answering for it (WithRepoAlias), which e.stores holds by its own
+		// name (a store-only open outside a repo, devco D-422)
+		names = []store.Source{at.Name}
 	}
 	var found []copyHit
 	seen := map[string]bool{} // Locations already looked in: one place counts once

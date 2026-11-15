@@ -29,6 +29,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -124,13 +125,14 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
 	Text       string   `json:"text,omitempty" arg:"0" argof:"body" desc:"the decision body, instead of --body"`
 	Status     string   `json:"status,omitempty" flag:"status" desc:"proposed | accepted | superseded | deprecated (default accepted)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
-	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"decision_id (dec_*) this entry replaces"`
 	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`

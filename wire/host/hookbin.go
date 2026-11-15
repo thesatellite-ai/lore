@@ -65,7 +65,13 @@ type hookTarget struct {
 // unset). ok is false when the blocks should call bare `lore`.
 func hookPinTarget(exe, loreBin, home string, lookPath func(string) (string, error)) (hookTarget, bool) {
 	if loreBin != "" && filepath.IsAbs(loreBin) && executableHookFile(loreBin) && !strings.Contains(loreBin, shellQuoteChar) {
-		return hookTarget{prog: filepath.ToSlash(filepath.Clean(loreBin))}, true
+		// the home goes with it (devco D-423): a hook pinned to
+		// LORE_HOOK_BIN under LORE_HOME=~/.lore-dev otherwise ran against
+		// ~/.lore; a wrapper that sets its own LORE_HOME still wins
+		if strings.Contains(home, shellQuoteChar) {
+			home = ""
+		}
+		return hookTarget{prog: filepath.ToSlash(filepath.Clean(loreBin)), home: home}, true
 	}
 	if exe == "" || strings.Contains(home, shellQuoteChar) {
 		return hookTarget{}, false

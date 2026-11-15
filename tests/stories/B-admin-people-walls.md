@@ -11,6 +11,7 @@ Cora is the CTO and the admin of the org acme, with a team store on the (fake) G
 1. Day 1: Cora runs the guided setup as the admin of a new org with the team store, inits the app, links it to the org and commits and pushes it with git.
 2. Cora adds the staff from a CSV that has a malformed email and a duplicate: one run names every bad line by its file line (`line 3:`, `line 4: … is already on line 2`) and writes nothing.
 3. Cora fixes the CSV and adds Lio, Nia and Ruth in one run, then adds a company rule to the org store from the app (`lore rule add --to acme/org --body …`). The team store does not move until Cora runs `lore sync`; then it does.
+3a. From `~/code` (the parent of the clones, inside the setup's folders, not a repo) Cora reads what she wrote: `rule list --to acme/org`, `search --query … --to acme/org`, and with no flag `rule list`, `lint` and `actor list` (the org's stores). Nothing says "run git init", and `~/code` stays a plain folder (D-421).
 4. Day 8: Nia joins on her own laptop by the store url (she is on the roster, matched by her email), `lore whoami` names the org and her email, and she sees the company rule.
 5. Cora gives Ruth two tasks.
 6. Day 15: Cora removes Ruth: the output lists her two open tasks and the hand-over line (`lore task reassign --from …`); Cora runs it, both tasks go to Nia, and Ruth shows as left.
@@ -31,11 +32,13 @@ The story replays the company's timeline in one world; the details of each part 
 - Staff from a CSV, roles, teams, joining by email: [tests/journeys/staff_test.go](../journeys/staff_test.go); the printed join line on a fresh machine and without a terminal (D-24): [staff_joinline_test.go](../journeys/staff_joinline_test.go).
 - Removing a member, their unsynced writes after removal, undoing it: [staff_remove_test.go](../journeys/staff_remove_test.go); the hand-over and `--assign` naming a leaver (D-25, D-86): [team_handover_test.go](../journeys/team_handover_test.go).
 - A client store and the contractor's wall (D-21, D-23): [orgstoreadd_test.go](../journeys/orgstoreadd_test.go); a client repo stays quiet (D-28, D-63..D-66, D-76, D-77, D-92, D-93): [clientrepo_quiet_test.go](../journeys/clientrepo_quiet_test.go).
+- Reads, `repo add --project` and a resource of an org-folder kind from a plain folder (D-421, D-422): [outside_reads_test.go](../journeys/outside_reads_test.go).
 - A second org on one laptop (D-38): [setup_secondorg_test.go](../journeys/setup_secondorg_test.go).
+- The admin setup run through the admin's coding agent: the org's first rows and commits are the admin's, no agent actor and no `Lore-Agent:` trailer, and an agent actor merged into its person from a folder that is no repo (devco D-424): [agent_setup_credit_test.go](../journeys/agent_setup_credit_test.go).
 - A new laptop with only git access (D-39): [newlaptop_join_test.go](../journeys/newlaptop_join_test.go).
 - A day offline, then sync (D-41): [offline_test.go](../journeys/offline_test.go).
 - A finding in an ordinary repo file and its allow line: [allow_file_test.go](../journeys/allow_file_test.go).
 
 ## Findings it guards
 
-D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.
+D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.

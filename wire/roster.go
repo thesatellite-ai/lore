@@ -531,8 +531,10 @@ func storeOnlyApp(ctx context.Context, opts Options, one attach.Store) (*App, er
 // writes only there outside any repo: the roster commands and a write
 // naming its store with --to (targetoutside.go). An App opened before is
 // closed first. Its repo-only state refuses with E_NOT_A_STORE.
-func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.Source) error {
-	st, err := openDetachedHere(ctx, a.opts, &one, here) // a.opts: New filled the defaults (Wall)
+// also are attached beside one for reads (the org's company folder above
+// a project folder, so its kinds resolve); writes still go to one.
+func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.Source, also ...attach.Store) error {
+	st, err := openDetachedHere(ctx, a.opts, &one, here, also...) // a.opts: New filled the defaults (Wall)
 	if err != nil {
 		return err
 	}
@@ -545,7 +547,7 @@ func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.
 	}
 	a.opened, a.st, a.err = true, st, nil
 	a.cfgOpened = true
-	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; outside one only a write naming its store (--to) and the roster commands run").
+	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; outside one only the commands that name their store (--to, --store) or read the setup's org store run").
 		WithHint("run it inside a git repository")
 	return nil
 }

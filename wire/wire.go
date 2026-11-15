@@ -710,11 +710,16 @@ func (a *App) Actor(ctx context.Context) (ids.ID[ids.Actor], error) {
 // detected agent (Options.PersonOnly), for a server whose callers are not
 // its own process. It must run before the App opens; called later it
 // reopens the state so the identity is resolved again.
-func (a *App) ServeAsPerson() {
+func (a *App) ServeAsPerson() { a.reopenAsPerson(true) }
+
+// reopenAsPerson sets Options.PersonOnly (and, for a server, watchPlaces)
+// and drops an opened state, so the next call resolves the person again
+// (ServeAsPerson, creditPerson).
+func (a *App) reopenAsPerson(watch bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.opts.PersonOnly = true
-	a.watchPlaces = true
+	a.watchPlaces = a.watchPlaces || watch
 	if a.opened && a.st != nil {
 		_ = a.st.close()
 	}
@@ -1028,6 +1033,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// does not change, which it must leave as it was (wire/storefolders.go).
 	if a.setupOnlyHere(ctx, e.Spec().Name) || a.setURLWithoutRepo(ctx, e.Spec().Name) {
 		return a.runSetupOnly(ctx, e, d, c)
+	}
+	// actor merge outside any repo (devco D-424): MergeActor finds the
+	// org store holding both actors (or the one --store names) and opens
+	// it alone; the repo open here would refuse with E_NOT_A_STORE
+	if e.Spec().Name == opsinfra.OpActorMerge && !insideWorkTree(ctx, a.opts.RepoDir) {
+		return runDirect(op.WithConfirmed(ctx, c.Yes), e, d)
 	}
 	// a write naming its store (--to acme/org) outside any repo runs on
 	// that store alone (targetoutside.go)

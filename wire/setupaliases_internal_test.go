@@ -572,3 +572,27 @@ func TestStoreWriteFixVariant(t *testing.T) {
 		t.Errorf("ok write got variant %q", r.Vars[onboard.VarFixVariant])
 	}
 }
+
+// store.private on a store url typed with a host alias of github.com
+// (`git@octo-p:org/store.git`, ~/.ssh/config maps octo-p to github.com)
+// that is not the setup's route alias: the team step checks the repo as on
+// github.com, as the github step knows the alias, never skips it as "not a
+// github.com url" (devco r10read). A host no Host block maps to github.com
+// is still skipped.
+func TestStorePrivateSSHAliasURL(t *testing.T) {
+	t.Parallel()
+	sp, home := aliasWorld(t)
+	writeGH(t, home, `printf 'true\ntrue\n'`)
+	req := func(u string) opssetup.ProbeRequest {
+		return opssetup.ProbeRequest{Check: onboard.Check{ID: onboard.CheckStorePrivate, Level: onboard.LevelWarn},
+			Answers: onboard.Answers{onboard.QIDStoreURL: {Text: u}}}
+	}
+	r := sp.Probe(context.Background(), []opssetup.ProbeRequest{req("git@octo-p:octo-personal/notes.git")})[0]
+	if r.Status != onboard.StatusOK || r.Vars[onboard.VarOwner] != "octo-personal" || r.Vars[onboard.VarRepo] != "notes" {
+		t.Errorf("alias url: %+v, want ok for octo-personal/notes", r)
+	}
+	r = sp.Probe(context.Background(), []opssetup.ProbeRequest{req("git@git.example.test:octo-personal/notes.git")})[0]
+	if r.Status != onboard.StatusSkip || r.Detail != skipNotGitHub {
+		t.Errorf("non-github host: %+v, want skipped as not github", r)
+	}
+}

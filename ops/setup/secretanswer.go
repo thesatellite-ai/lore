@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"slices"
 	"strings"
 
@@ -16,7 +17,7 @@ const ruleSecretAnswer = "no_secret"
 // answer. The write flags of a row (--secret-ref, --secret-unstored,
 // --not-a-secret) do not exist on setup apply: an answer is saved as
 // typed into ~/.lore/config.yaml, so the only way on is a different answer.
-const secretAnswerHint = "edit that answer so it holds no secret (setup answers are saved as typed in ~/.lore/config.yaml) and run the same `lore setup apply --setup <name> --step <step> --answers '{…}'` again"
+const secretAnswerHint = "edit that answer so it holds no secret (setup answers are saved as typed in <config>) and run the same `lore setup apply --setup <name> --step <step> --answers '{…}'` again"
 
 // secretAnswerErrors refuses every answer the default secret rules flag,
 // one FieldError per question, naming the rule and the hash, never the
@@ -58,5 +59,5 @@ func hasSecretAnswer(fe []onboard.FieldError) bool {
 
 // secretHint is secretAnswerHint with the setup and step filled in.
 func secretHint(name string, step onboard.StepID) string {
-	return strings.NewReplacer("<name>", name, "<step>", string(step)).Replace(secretAnswerHint)
+	return strings.NewReplacer("<name>", name, "<step>", string(step), "<config>", lorehome.Shown()+"/config.yaml").Replace(secretAnswerHint)
 }

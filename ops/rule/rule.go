@@ -33,6 +33,7 @@ import (
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -135,6 +136,8 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
 
@@ -146,7 +149,6 @@ type AddIn struct {
 	Globs      string   `json:"globs,omitempty" flag:"globs" desc:"JSON array of glob patterns (when activation=glob)"`
 	AppliesTo  string   `json:"applies_to_description,omitempty" flag:"applies-to" desc:"when activation=semantic: words describing where the rule applies (lore context matches them)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
-	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance pointer"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"rule_id (rul_*) this entry replaces"`
 	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`

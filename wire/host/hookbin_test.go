@@ -107,7 +107,10 @@ func TestHookPinTarget(t *testing.T) {
 		{"same file on PATH, LORE_HOME set: pinned with the home", self, "", "/h/.lore-dev", onPath(self), hookTarget{prog: filepath.ToSlash(fspath.Canonical(self)), home: "/h/.lore-dev"}, true},
 		{"another lore on PATH: pinned", self, "", "", onPath(other), hookTarget{prog: filepath.ToSlash(fspath.Canonical(self))}, true},
 		{"no lore on PATH: pinned", self, "", "", none, hookTarget{prog: filepath.ToSlash(fspath.Canonical(self))}, true},
-		{"LORE_HOOK_BIN names the wrapper: the wrapper", self, wrapper, "/h/.lore-dev", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper)}, true},
+		// devco D-423: the wrapper pin carries the installer's home too
+		{"LORE_HOOK_BIN names the wrapper: the wrapper with the home", self, wrapper, "/h/.lore-dev", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper), home: "/h/.lore-dev"}, true},
+		{"LORE_HOOK_BIN, default home: the wrapper alone", self, wrapper, "", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper)}, true},
+		{"LORE_HOOK_BIN, a quote in LORE_HOME: the wrapper alone", self, wrapper, "/h/it's", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper)}, true},
 		{"LORE_HOOK_BIN not executable: ignored", self, filepath.Join(dir, "missing"), "", onPath(self), hookTarget{}, false},
 		{"a quote in LORE_HOME: bare", self, "", "/h/it's", onPath(other), hookTarget{}, false},
 	}

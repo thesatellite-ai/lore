@@ -4,7 +4,7 @@
 
 **Why.** Before `LORE_HOME` moved the whole home, the newer build kept its machine state in `~/.lore` too: one run rewrote 0.1.17's `~/.lore/config.yaml` (with `orgs:` and `personal:` blocks 0.1.17 cannot read) and its store clones, and plain `lore` broke.
 
-**Test.** `TestJourneyLoreHomeBesideOldLore` and `TestJourneyLoreHomeMovesTheWholeHome` (tests/journeys/lorehome_test.go); the resolver itself: `TestResolveLoreHome` (adapters/lorehome).
+**Test.** `TestJourneyLoreHomeBesideOldLore` and `TestJourneyLoreHomeMovesTheWholeHome` (tests/journeys/lorehome_test.go), `TestJourneyLoreHomeStoreHandCommit` (tests/journeys/lorehome_storehook_test.go); the resolver itself: `TestResolveLoreHome` (adapters/lorehome).
 
 ## Steps
 
@@ -24,3 +24,4 @@
 ## Findings it guards
 
 - `owner:LORE_HOME` (REGRESSIONS.md).
+- `devco:D-423` (REGRESSIONS.md): a hand `git commit` in a store clone under `LORE_HOME`, from a shell that does not set it, passes lore's pre-commit hook (the hook exports the home it was installed under; `lore doctor --fix` rewrites an older hook); `lore store doctor` names `<home>/config.yaml`.

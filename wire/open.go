@@ -1298,7 +1298,9 @@ func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state,
 
 // openDetachedHere is openDetached; a non-empty here names the attached
 // store that answers for the repo store (engine.WithRepoAlias, storehere.go).
-func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here store.Source) (*state, error) {
+// also are attached beside one (never the default target): the company
+// folder a store-only open on a project folder reads kinds and policy from.
+func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here store.Source, also ...attach.Store) (*state, error) {
 	st := &state{actorDone: map[store.Source]bool{}}
 	if err := st.resolveActor(ctx, opts, true); err != nil {
 		return nil, err
@@ -1314,17 +1316,28 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	target := store.SourceMachine
 	var attached []attach.Opened
+	urlOf := map[store.Source]string{}
 	if one != nil {
 		target = one.Name
-		raw := one.URL
+		raws := []string{one.URL}
 		if one.URL, err = canonical(*one); err != nil {
 			return nil, errs.Prefix("wire: store "+string(one.Name), err)
 		}
-		openers, oerr := storeOpeners(reg, originsOf(raw), opts)
+		stores := []attach.Store{*one}
+		urlOf[one.Name] = one.URL
+		for _, s := range also {
+			raws = append(raws, s.URL)
+			if s.URL, err = canonical(s); err != nil {
+				return nil, errs.Prefix("wire: store "+string(s.Name), err)
+			}
+			stores = append(stores, s)
+			urlOf[s.Name] = s.URL
+		}
+		openers, oerr := storeOpeners(reg, originsOf(raws...), opts)
 		if oerr != nil {
 			return nil, oerr
 		}
-		if attached, err = attach.Open(ctx, attach.Config{Stores: []attach.Store{*one}}, openers, opts.openOptions()); err != nil {
+		if attached, err = attach.Open(ctx, attach.Config{Stores: stores}, openers, opts.openOptions()); err != nil {
 			return nil, err
 		}
 	}
@@ -1332,7 +1345,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	for i := range attached {
 		st.backends = append(st.backends, attached[i].Backend)
 		attached[i].Level = levelOf(attached[i])
-		attached[i].Location = location(one.URL, attached[i].Folder)
+		attached[i].Location = location(urlOf[attached[i].Name], attached[i].Folder)
 		if opts.WrapBackend != nil {
 			if attached[i].Backend, err = wrapBackend(ctx, opts, attached[i].Name, attached[i].Folder, attached[i].Backend); err != nil {
 				return fail(err)
