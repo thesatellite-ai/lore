@@ -7,6 +7,7 @@ package wire
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func landRequestOf(key branchlayer.Key, in opsbranch.LandIn) (git.LandRequest, e
 	case in.Take != takeBranch && in.Take != takeMain:
 		return req, errs.New(errs.InvalidInput, "--take "+in.Take+": use branch or main").WithHint("--take branch keeps the branch's text, --take main the shared notes'")
 	default:
-		named, err := parseIDs(in.IDs)
+		named, err := parseIDs(in.IDs, key.Branch)
 		if err != nil {
 			return req, err
 		}
@@ -68,8 +69,11 @@ func landRequestOf(key branchlayer.Key, in opsbranch.LandIn) (git.LandRequest, e
 	return req, nil
 }
 
-// parseIDs reads comma separated or repeated row ids.
-func parseIDs(raw []string) ([]ids.AnyID, error) {
+// parseIDs reads comma separated or repeated row ids. branch names the
+// code branch whose notes the ids come from ("" when not known yet): a bad
+// id names why it is not one and where the branch's ids are listed
+// (devco:V-6: it said only "--ids mem_doesnotexist").
+func parseIDs(raw []string, branch string) ([]ids.AnyID, error) {
 	var out []ids.AnyID
 	for _, r := range raw {
 		for p := range strings.SplitSeq(r, ",") {
@@ -78,12 +82,29 @@ func parseIDs(raw []string) ([]ids.AnyID, error) {
 			}
 			id, err := ids.ParseAny(p)
 			if err != nil {
-				return nil, errs.Wrap(errs.InvalidID, "--ids "+p, err)
+				return nil, badRowID(p, branch, err)
 			}
 			out = append(out, id)
 		}
 	}
 	return out, nil
+}
+
+// badRowID is the refusal of an --ids value that is no row id: the value,
+// why (a row id is a kind prefix, an underscore and 32 hex digits, as
+// mem_0193f2a7c4b77e1d8a3f5b6c7d8e9f00) and where the real ids are listed.
+func badRowID(p, branch string, cause error) error {
+	list := "lore branch show --branch <branch> lists the notes of a branch with their ids"
+	if branch != "" {
+		list = "lore branch show --branch " + branch + " lists the notes of " + branch + " with their ids"
+	}
+	why := cause.Error()
+	var e *errs.Error
+	if errors.As(cause, &e) {
+		why = e.Message // the cause's own words, not its code a second time
+	}
+	return errs.Wrap(errs.InvalidID, "--ids "+p+" is not a row id ("+why+"): a row id is a kind prefix, an underscore and 32 hex digits, such as mem_0193f2a7c4b77e1d8a3f5b6c7d8e9f00", cause).
+		WithHint(list)
 }
 
 // reviewRows asks keep or drop for every row (land --review) and returns

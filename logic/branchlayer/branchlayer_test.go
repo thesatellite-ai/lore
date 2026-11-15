@@ -126,7 +126,8 @@ func TestRefsRoundTrip(t *testing.T) {
 func TestFactsRoundTrip(t *testing.T) {
 	t.Parallel()
 	f := Facts{Repo: "github.com/acme/app", Folder: "app", Branch: "feat/x", BaseBranch: "main", Split: "9f3c", CodeHead: "77ab",
-		Started: time.Date(2026, 11, 20, 9, 12, 0, 0, time.UTC), By: "act_1", State: StateLanded, Landed: "1a2b", Parent: "feat/a"}
+		Started: time.Date(2026, 11, 20, 9, 12, 0, 0, time.UTC), By: "act_1", State: StateLanded, Landed: "1a2b", Parent: "feat/a",
+		Restored: time.Date(2026, 11, 21, 8, 0, 0, 0, time.UTC)}
 	msg := "lore: 2 rows on feat/x (app)\n\n" + f.Trailers()
 	got, ok := ParseFacts(msg)
 	if !ok || got != f {

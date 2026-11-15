@@ -24,7 +24,7 @@ const HomeReadmeFile = "README.md"
 
 // homeLayoutVersion changes whenever homeLayout changes what it says, so
 // every home's README is rewritten once by the next lore that runs.
-const homeLayoutVersion = "2026-11-12.4"
+const homeLayoutVersion = "2026-11-15.1"
 
 // homeReadmeStamp starts the README's first line; the version follows.
 const homeReadmeStamp = "<!-- written by lore, layout "

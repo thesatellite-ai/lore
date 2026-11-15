@@ -1143,10 +1143,16 @@ func sortedIDs(m map[ids.ID[ids.MetaKey]]meta.Entry) []ids.ID[ids.MetaKey] {
 // MetaFlags are the one shared metadata flag set (3.2, R13): an add or edit
 // input embeds it (no json tag) and Run binds it to the command's write,
 // so every entity reads --meta, --meta-json and --meta-stdin the same way.
+// It also carries --no-layer: every row an add or edit writes can go into
+// a branch layer, so every add and edit can send it to the shared notes
+// instead (devco:V-5: decision add had no way to; bindInputLive reads it).
 type MetaFlags struct {
 	Meta      []string `json:"meta,omitempty" flag:"meta" desc:"set metadata: key=value, key:type=value, project:key=value (repeatable)"`
 	MetaJSON  []string `json:"meta_json,omitempty" flag:"meta-json" desc:"set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
 	MetaStdin string   `json:"meta_stdin,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin (keeps it out of shell history)"`
+	// NoLayer writes to the shared notes on a code branch that keeps its
+	// own notes in a store (BRANCH_LAYERS 13).
+	NoLayer bool `json:"no_layer,omitempty" flag:"no-layer" desc:"on a code branch with its own notes (a branch layer), write this row to the shared notes instead"`
 }
 
 // Input field names of MetaFlags (Run reads them from any input).

@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"sort"
 	"strconv"
@@ -27,7 +26,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -125,12 +123,17 @@ func ageOf(t, now time.Time) string {
 
 // codeState is merged or orphaned for an open layer of this repo, with
 // why; "" when it is plainly open. A branch that still exists is merged
-// when its tip (local, else origin's) is in origin/<default> and is not the
-// split commit itself (a branch with no commit of its own is not
-// "merged"). A branch gone from both places is merged when the last code
-// head a write saw is in origin/<default> and past the split; otherwise it
-// is orphaned: deleted unmerged, or squash-merged, which lore cannot tell
-// apart without the host, so the person (or the CI step) decides.
+// only when every copy of it this clone sees (local, origin's) is in
+// origin/<default> past the split commit, and the commits the notes last
+// saw (the code head of the newest write) are in the default branch too,
+// by commit or by patch (devco V-9: a branch reset to main's tip has no
+// commit of its own left, yet its own work never merged). A branch gone
+// from both places is merged when the last code head a write saw is in
+// origin/<default> and past the split; otherwise it is orphaned: deleted
+// unmerged, or squash-merged, which lore cannot tell apart without the
+// host, so the person (or the CI step) decides. Only a clone that wrote
+// the notes itself (l.Local) can tell a deleted branch from one that
+// lives only on its author's laptop (devco V-7): elsewhere it stays open.
 func codeState(ctx context.Context, lb *layerBackend, l git.Layer) (string, string) {
 	if l.Key.RepoKey != lb.key.RepoKey {
 		return "", "" // another repo of the folder: its branches are not here
@@ -147,24 +150,64 @@ func codeState(ctx context.Context, lb *layerBackend, l git.Layer) (string, stri
 		_, err := liveGit(ctx, top, "merge-base", "--is-ancestor", tip, main)
 		return err == nil
 	}
-	tip := ""
+	var tips []string
 	for _, ref := range []string{"refs/heads/" + b, "refs/remotes/origin/" + b} {
 		if out, err := liveGit(ctx, top, "rev-parse", "--verify", "--quiet", ref+"^{commit}"); err == nil {
-			tip = strings.TrimSpace(string(out))
-			break
+			tips = append(tips, strings.TrimSpace(string(out)))
 		}
 	}
 	landHint := b + " merged into " + def + ": land its notes with lore branch land --branch " + b
-	if tip != "" {
-		if merged(tip) {
-			return opsbranch.StateMerged, landHint
+	if len(tips) > 0 {
+		for _, tip := range tips {
+			if !merged(tip) {
+				return "", ""
+			}
 		}
-		return "", ""
+		if !ownWorkIn(ctx, top, main, l.Facts.Split, l.Facts.CodeHead) {
+			return "", ""
+		}
+		return opsbranch.StateMerged, landHint
 	}
 	if merged(l.Facts.CodeHead) {
 		return opsbranch.StateMerged, landHint
 	}
+	if !l.Local {
+		return "", ""
+	}
 	return opsbranch.StateOrphaned, b + " is gone (deleted without merging, or squash-merged): land it (lore branch land --branch " + b + ") or drop it (lore branch drop --branch " + b + ")"
+}
+
+// ownWorkIn reports whether the branch's own commits up to head (the code
+// head a note was written at, past split) are all in main, by commit or
+// as the same patch (a rebased merge). It is true when nothing can be
+// told: no head recorded, the head is the split, or this clone lacks the
+// head commit (a teammate never fetched it).
+func ownWorkIn(ctx context.Context, top, main, split, head string) bool {
+	if head == "" || head == split {
+		return true
+	}
+	if _, err := liveGit(ctx, top, "cat-file", "-e", head+"^{commit}"); err != nil {
+		return true
+	}
+	if _, err := liveGit(ctx, top, "merge-base", "--is-ancestor", head, main); err == nil {
+		return true
+	}
+	args := []string{"cherry", main, head}
+	if split != "" {
+		if _, err := liveGit(ctx, top, "cat-file", "-e", split+"^{commit}"); err == nil {
+			args = append(args, split)
+		}
+	}
+	out, err := liveGit(ctx, top, args...)
+	if err != nil {
+		return true
+	}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.HasPrefix(line, "+") {
+			return false // a commit of the branch whose change main does not have
+		}
+	}
+	return true
 }
 
 // BranchList implements opsbranch.Env.
@@ -329,7 +372,7 @@ func (a *App) BranchMode(ctx context.Context, in opsbranch.ModeIn) (opsbranch.Mo
 	out := opsbranch.ModeOut{Branch: branch, Repo: lb.code.Remote, Folder: lb.key.Folder, Store: string(name)}
 	if branch == "" {
 		out.Branch, out.Mode = "(detached HEAD)", string(branchlayer.Shared)
-		out.Why = "a detached HEAD has no branch: reads show the shared notes, writes are refused (E_DETACHED) unless --no-layer"
+		out.Why = "a detached HEAD has no branch: reads show the shared notes, writes are refused (E_DETACHED) unless LORE_LAYER=off (or --no-layer on an add or edit)"
 		return out, nil
 	}
 	s := branchlayer.DefaultSettings()
@@ -340,7 +383,11 @@ func (a *App) BranchMode(ctx context.Context, in opsbranch.ModeIn) (opsbranch.Mo
 	}
 	d := branchlayer.Classify(branch, lb.code.Default, s)
 	out.Mode, out.Step, out.Why = string(d.Mode), int(d.Step), d.Why(lb.code.Default)
-	if os.Getenv(EnvLayer) == envLayerOff {
+	off, err := envLayerSetting()
+	if err != nil {
+		return out, err
+	}
+	if off {
 		out.Why += " (LORE_LAYER=off: this shell writes to the shared notes anyway)"
 	}
 	return out, nil
@@ -372,13 +419,19 @@ func (a *App) BranchLand(ctx context.Context, in opsbranch.LandIn) (opsbranch.La
 	if err != nil {
 		return opsbranch.LandOut{}, err
 	}
+	var out opsbranch.LandOut
 	if in.Into != "" {
 		if _, ferr := lb.gb.LayerFetch(ctx); ferr != nil {
 			return opsbranch.LandOut{}, ferr
 		}
-		return landInto(ctx, lb.gb, key, in)
+		out, err = landInto(ctx, lb.gb, key, in)
+	} else {
+		out, err = landLayer(ctx, lb.gb, key, lb.code.Remote, in)
 	}
-	return landLayer(ctx, lb.gb, key, lb.code.Remote, in)
+	if err == nil && !in.DryRun {
+		forgetLayerCache(a.opts.Home, lb, key.Branch) // devco:V-17
+	}
+	return out, err
 }
 
 // landLayer lands key's layer through gb.
@@ -389,7 +442,7 @@ func landLayer(ctx context.Context, gb *git.Backend, key branchlayer.Key, repo s
 		return out, err
 	}
 	dry := req
-	dry.DryRun = true
+	dry.DryRun, dry.Predict = true, in.DryRun
 	plan, err := gb.LayerLand(ctx, dry)
 	if err != nil {
 		return out, err
@@ -484,6 +537,7 @@ func (a *App) BranchDrop(ctx context.Context, in opsbranch.DropIn) (opsbranch.Do
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
+	forgetLayerCache(a.opts.Home, lb, key.Branch) // devco:V-17
 	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ dropped the notes of " + key.Branch + " (" + what + ") to the trash (" + trash + "); lore branch restore --branch " + key.Branch + " brings them back"}}, nil
 }
 
@@ -538,7 +592,8 @@ func (a *App) BranchRestore(ctx context.Context, in opsbranch.RestoreIn) (opsbra
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
-	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ restored the notes of " + key.Branch + " (" + opsbranch.RowsText(rowCounts(rows)) + "); a landing made before stays on " + lb.gb.Branch()}}, nil
+	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ restored the notes of " + key.Branch + " (" + opsbranch.RowsText(rowCounts(rows)) + "); a landing made before stays on " + lb.gb.Branch() +
+		"; lore sync keeps them open until the branch writes again or lore branch drop --branch " + key.Branch + " drops them"}}, nil
 }
 
 // BranchPurge implements opsbranch.Env.
@@ -581,6 +636,9 @@ func (a *App) BranchPurge(ctx context.Context, in opsbranch.PurgeIn) (opsbranch.
 		return opsbranch.PurgeOut{}, ferr
 	}
 	refs, err := lb.gb.LayerPurge(ctx, key, cutoff, true)
+	if err == nil && len(refs) > 0 {
+		forgetLayerCache(a.opts.Home, lb, key.Branch) // devco:V-17
+	}
 	return opsbranch.PurgeOut{Purged: refs}, err
 }
 
@@ -600,18 +658,13 @@ func parseAge(s string) (time.Duration, error) {
 
 // BranchPromote implements opsbranch.Env.
 func (a *App) BranchPromote(ctx context.Context, in opsbranch.PromoteIn) (opsbranch.DoneOut, error) {
-	var want []ids.AnyID
-	for _, raw := range in.IDs {
-		for p := range strings.SplitSeq(raw, ",") {
-			if p = strings.TrimSpace(p); p == "" {
-				continue
-			}
-			id, err := ids.ParseAny(p)
-			if err != nil {
-				return opsbranch.DoneOut{}, errs.Wrap(errs.InvalidID, "--ids "+p, err)
-			}
-			want = append(want, id)
-		}
+	branch := ""
+	if top := gitTopLevel(ctx, a.projectDir()); top != "" {
+		branch = readCodeBranch(ctx, top).Branch
+	}
+	want, err := parseIDs(in.IDs, branch)
+	if err != nil {
+		return opsbranch.DoneOut{}, err
 	}
 	if len(want) == 0 {
 		return opsbranch.DoneOut{}, errs.New(errs.InvalidInput, "lore branch promote needs --ids").WithHint("lore branch show lists this branch's rows")

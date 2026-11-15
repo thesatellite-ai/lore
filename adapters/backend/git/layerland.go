@@ -45,6 +45,10 @@ type LandRequest struct {
 	Trailers []string
 	// DryRun lists what would land and changes nothing.
 	DryRun bool
+	// Predict makes a dry run also refuse with the E_LAND_CONFLICT the real
+	// landing would hit (lore branch land --dry-run, devco V-15); a dry run
+	// that only plans the rows leaves it false.
+	Predict bool
 	// Kinds, when set, lands only rows of these tables; the others stay in
 	// the layer, which is rebased onto the landing (BRANCH_LAYERS 9).
 	Kinds []row.Table
@@ -161,7 +165,18 @@ func (b *Backend) layerLandLocked(ctx context.Context, req LandRequest) (LandRes
 		}
 	}
 	res.Kept = left
+	if req.DryRun && !req.Predict {
+		return res, nil
+	}
 	if req.DryRun {
+		// devco V-15: a dry run says what the real landing would stop on
+		clashes, cerr := b.predictClashes(ctx, l, res.Rows, req.Take)
+		if cerr != nil {
+			return res, cerr
+		}
+		if len(clashes) > 0 {
+			return res, landConflict(req.Key.Branch, b.branch, clashes, true)
+		}
 		return res, nil
 	}
 	if len(res.Rows) == 0 {
@@ -209,6 +224,104 @@ func (b *Backend) layerLandLocked(ctx context.Context, req LandRequest) (LandRes
 	}
 	res.Trash = trash
 	return res, nil
+}
+
+// landClash is one row a landing cannot merge: its id and the fields
+// whose text both sides changed ("" fields when they cannot be named).
+type landClash struct {
+	id     string
+	fields []string
+}
+
+// landConflict is E_LAND_CONFLICT for clashes: it names each row and
+// field and the --take ways out with the real ids (devco V-15). dry marks
+// a --dry-run's prediction.
+func landConflict(branch, storeBranch string, clashes []landClash, dry bool) error {
+	var rows, idList []string
+	for _, c := range clashes {
+		r := c.id
+		if len(c.fields) > 0 {
+			r += " (" + strings.Join(c.fields, ", ") + ")"
+		}
+		rows = append(rows, r)
+		idList = append(idList, c.id)
+	}
+	ids := strings.Join(idList, ",")
+	msg := branch + " and " + storeBranch + " both changed the same text of " + strings.Join(rows, ", ") + "; nothing was landed"
+	if dry {
+		msg = branch + " and " + storeBranch + " both changed the same text of " + strings.Join(rows, ", ") + ": the landing would stop here (dry run, nothing changed)"
+	}
+	land := "lore branch land --branch " + branch
+	return errs.New(errs.LandConflict, msg).
+		WithHint("keep one side's text of those fields (every other field still merges): " + land + " --take branch --ids " + ids +
+			" keeps the branch's, " + land + " --take main --ids " + ids + " keeps " + storeBranch + "'s; or edit the row on one side so both agree, then land again")
+}
+
+// clashFields names the fields whose text both sides changed, when the
+// Merger can (ClashNamer); nil otherwise.
+func (b *Backend) clashFields(base, ours, theirs []byte) []string {
+	cn, ok := b.cfg.merger.(ClashNamer)
+	if !ok || ours == nil || theirs == nil {
+		return nil
+	}
+	f, err := cn.Clashes(base, ours, theirs)
+	if err != nil {
+		return nil
+	}
+	return f
+}
+
+// predictClashes is what a landing of rows would refuse, read without
+// touching the clone: each row the store branch (its newest known tip)
+// also changed since the layer base is merged in memory; one the Merger
+// cannot merge, and --take does not settle, is a clash.
+func (b *Backend) predictClashes(ctx context.Context, l Layer, rows []store.Row, take map[ids.AnyID]bool) ([]landClash, error) {
+	if b.cfg.merger == nil || len(rows) == 0 {
+		return nil, nil
+	}
+	main, err := b.head(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if remote, rerr := b.resolve(ctx, b.work, trackingRefNS+b.branch); rerr == nil && remote != "" && remote != main {
+		if in, aerr := b.isAncestor(ctx, main, remote); aerr == nil && in {
+			main = remote // the landing merges the remote's newer notes first
+		}
+	}
+	if main == "" {
+		return nil, nil
+	}
+	var names []string
+	for _, r := range rows {
+		p := b.folder.StorePath(r.Table, r.ID)
+		names = append(names, l.Base+":"+p, main+":"+p, l.Tip+":"+p)
+	}
+	blobs, err := b.readBlobs(ctx, names)
+	if err != nil {
+		return nil, err
+	}
+	var out []landClash
+	for _, r := range rows {
+		if _, settled := take[r.ID]; settled {
+			continue
+		}
+		p := b.folder.StorePath(r.Table, r.ID)
+		base, ours, theirs := blobs[l.Base+":"+p], blobs[main+":"+p], blobs[l.Tip+":"+p]
+		if ours == nil || theirs == nil || string(ours) == string(base) || string(ours) == string(theirs) {
+			continue // main kept the base's copy, or both agree: no clash
+		}
+		if cn, ok := b.cfg.merger.(ClashNamer); ok {
+			// named without a merge report: a dry run tells nobody "kept the newer edit"
+			if fields, cerr := cn.Clashes(base, ours, theirs); cerr == nil && len(fields) > 0 {
+				out = append(out, landClash{id: r.ID.String(), fields: fields})
+			}
+			continue
+		}
+		if _, conflict, merr := b.cfg.merger.Merge(base, ours, theirs); merr == nil && conflict {
+			out = append(out, landClash{id: r.ID.String()})
+		}
+	}
+	return out, nil
 }
 
 // short is a commit's first 7 characters.
@@ -312,7 +425,7 @@ func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest) 
 		return "", nil, errors.Join(err, b.abortLanding(ctx))
 	}
 	var merged []ids.AnyID
-	var conflicts []string
+	var conflicts []landClash
 	for _, p := range paths {
 		if id, taken, terr := b.takeSide(ctx, p, req.Take); terr != nil {
 			return "", nil, errors.Join(terr, b.abortLanding(ctx))
@@ -320,19 +433,22 @@ func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest) 
 			merged = append(merged, id)
 			continue
 		}
+		stages, serr := b.readBlobs(ctx, []string{stageBase + p, stageOurs + p, stageTheirs + p})
+		if serr != nil {
+			return "", nil, errors.Join(serr, b.abortLanding(ctx))
+		}
 		id, refusal, rerr := b.resolveRow(ctx, p)
 		if rerr != nil {
 			return "", nil, errors.Join(rerr, b.abortLanding(ctx))
 		}
 		if refusal != nil {
-			conflicts = append(conflicts, refusal.ID.String())
+			conflicts = append(conflicts, landClash{id: refusal.ID.String(), fields: b.clashFields(stages[stageBase+p], stages[stageOurs+p], stages[stageTheirs+p])})
 			continue
 		}
 		merged = append(merged, id)
 	}
 	if len(conflicts) > 0 {
-		return "", nil, errors.Join(errs.New(errs.LandConflict, "the branch and "+b.branch+" both changed the same text of "+strings.Join(conflicts, ", ")+"; nothing was landed").
-			WithHint("edit the row on one side so both agree (lore show --id <id> on the branch and on "+b.branch+"), then run lore branch land again"), b.abortLanding(ctx))
+		return "", nil, errors.Join(landConflict(req.Key.Branch, b.branch, conflicts, false), b.abortLanding(ctx))
 	}
 	msg := b.cfg.withTrailers(req.Subject, req.Trailers...)
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", msg}, env: env}); err != nil {

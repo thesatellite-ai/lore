@@ -184,6 +184,12 @@ type Engine struct {
 	// machinePolicy are this machine's stricter local policy values
 	// (WithMachinePolicy, FQ11); storeSettings resolves them with the rows.
 	machinePolicy []policy.Entry
+	// notice prints a one-line note for the person (WithNotice); nil
+	// prints nothing. unknownSaid keeps each ignored policy key to one
+	// note per process (devco:V-16).
+	notice      func(string)
+	unknownMu   sync.Mutex
+	unknownSaid map[policy.Key]bool
 	// machine: the machine store (store.SourceMachine) is attached in
 	// stores but kept out of order (WithMachineStore, P3-LOCAL-1).
 	machine bool
@@ -341,6 +347,11 @@ func WithSettings(s Settings) Option { return func(e *Engine) error { e.settings
 func WithMachinePolicy(entries []policy.Entry) Option {
 	return func(e *Engine) error { e.machinePolicy = entries; return nil }
 }
+
+// WithNotice sets where the engine's one-line notes for the person go
+// (stderr in the CLI). Today: a policy row whose key this build does not
+// know, ignored (devco:V-16). nil (the default) prints nothing.
+func WithNotice(f func(string)) Option { return func(e *Engine) error { e.notice = f; return nil } }
 
 // WithActor sets the actor every write is stamped with (required).
 func WithActor(a ids.ID[ids.Actor]) Option { return func(e *Engine) error { e.actor = a; return nil } }

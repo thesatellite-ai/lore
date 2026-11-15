@@ -65,7 +65,16 @@ type Effective struct {
 // Set is the effective value of every key.
 type Set struct {
 	m map[Key]Effective
+	// unknown are the rows whose key this build does not know: written by
+	// a newer lore (forward compatible, devco:V-16), they are ignored.
+	unknown []Entry
 }
+
+// Unknown returns the policy rows Resolve ignored because this build does
+// not know their key (a newer lore wrote them), in resolution order. A
+// caller says so once ("ignored; a newer lore knows it") instead of
+// failing every read and write in the folder (devco:V-16).
+func (s Set) Unknown() []Entry { return slices.Clone(s.unknown) }
 
 // Defaults is the Set with no rows at any level.
 func Defaults() Set {
@@ -77,9 +86,16 @@ func Defaults() Set {
 }
 
 // Resolve combines entries from every level: per key the stricter value
-// wins (OQ24). It fails closed with E_CONFIG_INVALID, naming the row, on an
-// unknown key or a value of the wrong shape: a broken policy row must stop
-// writes, never be skipped. Levels must be valid.
+// wins (OQ24). It fails closed with E_CONFIG_INVALID, naming the row, on a
+// value of the wrong shape for a key this build knows: a broken policy row
+// must stop writes, never be skipped. A key this build does not know is a
+// newer lore's (branches.* reached 0.1.18 builds without branch layers,
+// devco:V-16): it is ignored and listed in Set.Unknown, so a teammate one
+// release behind keeps reading and writing; in a namespace that guards
+// writes (guardNamespaces) it still fails closed, with the upgrade hint. Behaviour a newer key needs on
+// writes is guarded by the folder's format features (formatgate), not by
+// the policy row. `lore policy set` still refuses a key it does not know.
+// Levels must be valid.
 func Resolve(entries []Entry) (Set, error) {
 	es := slices.Clone(entries)
 	byLevel(es, func(e Entry) Level { return e.Level })
@@ -93,7 +109,12 @@ func Resolve(entries []Entry) (Set, error) {
 		}
 		d, ok := Lookup(e.Key)
 		if !ok {
-			return Set{}, configErr(e.Source, "has an unknown key "+string(e.Key))
+			if guardsWrites(e.Key) {
+				return Set{}, errs.New(errs.ConfigInvalid, "policy row "+e.Source.String()+" sets "+string(e.Key)+", a key this lore does not know; its namespace guards writes (who may write, secrets, deletes), so lore stops rather than skip it").
+					WithHint("lore upgrade gets the lore that knows it (a teammate on a newer lore set it); or remove the row: lore policy unset --key " + string(e.Key) + " --yes")
+			}
+			s.unknown = append(s.unknown, e)
+			continue
 		}
 		if err := check(d, e.Value); err != nil {
 			return Set{}, configErr(e.Source, err.Error())
@@ -106,6 +127,20 @@ func Resolve(entries []Entry) (Set, error) {
 		s.m[d.Key] = next
 	}
 	return s, nil
+}
+
+// guardNamespaces are the policy namespaces whose keys refuse or guard a
+// write (who may write, secret handling, deletes): an unknown key there
+// may be a newer lore's stricter rule, so it fails closed instead of being
+// ignored (devco:V-16: "unless the key is strict and a write depends on
+// it"). Every other namespace (branches, tasks, context, …) is forward
+// compatible.
+var guardNamespaces = []string{"agents", "secrets", "delete"}
+
+// guardsWrites reports whether k is in a guard namespace.
+func guardsWrites(k Key) bool {
+	ns, _, _ := strings.Cut(string(k), ".")
+	return slices.Contains(guardNamespaces, ns)
 }
 
 // stricter folds entry e (levels arrive nearest first) into cur.

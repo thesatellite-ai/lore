@@ -25,6 +25,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -44,8 +46,42 @@ import (
 // to the shared notes and reads them alone, like --no-layer.
 const EnvLayer = "LORE_LAYER"
 
-// envLayerOff is EnvLayer's value that turns layers off.
+// envLayerOff is EnvLayer's value that turns layers off (the one hints name).
 const envLayerOff = "off"
+
+// envLayerOffWords and envLayerOnWords are every EnvLayer value lore
+// accepts, compared without case (devco:V-4: LORE_LAYER=OFF or 0 used to
+// be ignored without a word and the row went into the layer).
+var (
+	envLayerOffWords = []string{envLayerOff, "0", "false"}
+	envLayerOnWords  = []string{"on", "1", "true"}
+)
+
+// envLayerSetting reads EnvLayer: off is true for off/0/false in any case;
+// unset, empty and on/1/true leave layers on. Any other value is refused
+// (E_INVALID_INPUT naming the accepted values), never silently ignored.
+func envLayerSetting() (off bool, err error) {
+	v := strings.TrimSpace(os.Getenv(EnvLayer))
+	if v == "" {
+		return false, nil
+	}
+	if slices.ContainsFunc(envLayerOffWords, func(w string) bool { return strings.EqualFold(v, w) }) {
+		return true, nil
+	}
+	if slices.ContainsFunc(envLayerOnWords, func(w string) bool { return strings.EqualFold(v, w) }) {
+		return false, nil
+	}
+	return false, errs.New(errs.InvalidInput, EnvLayer+"="+v+" is not a value lore knows (it takes "+strings.Join(envLayerOffWords, ", ")+" to write to the shared notes, or "+strings.Join(envLayerOnWords, ", ")+" for branch layers)").
+		WithHint("LORE_LAYER=off for the shared notes, or unset it: unset LORE_LAYER")
+}
+
+// envLayerIsOff is envLayerSetting where no error can be returned: a value
+// lore does not know counts as on here, and the read or write path that
+// follows (isolated, Write) refuses it.
+func envLayerIsOff() bool {
+	off, err := envLayerSetting()
+	return err == nil && off
+}
 
 // layerCursorPrefix starts a cursor the layer wrapper issued.
 const (
@@ -136,6 +172,12 @@ type layerBackend struct {
 	decision   branchlayer.Decision
 	decideErr  error
 
+	// parentOnce finds, once per command, the branch a not-yet-written
+	// layer would stack on (parentBranch), so the branch reads its parent's
+	// notes before its own first note (devco V-11)
+	parentOnce  sync.Once
+	parentGuess string
+
 	mu      sync.Mutex
 	tip     string                  // the tip rows was read at
 	rows    map[store.Key]store.Row // the layer's changed rows at tip
@@ -171,10 +213,42 @@ func (l *layerBackend) Unwrap() store.Backend { return l.inner }
 // (BRANCH_LAYERS 6.3): "" on the default branch and a detached HEAD, which
 // read the shared notes only and keep the folder's own cache file.
 func (l *layerBackend) LayerCacheDir() string {
-	if l.code.Branch == "" || l.code.Branch == l.code.Default || os.Getenv(EnvLayer) == envLayerOff {
+	if l.code.Branch == "" || l.code.Branch == l.code.Default || envLayerIsOff() {
 		return ""
 	}
-	return "_layers/" + l.key.RepoKey + "/" + branchlayer.BranchKey(l.code.Branch)
+	return layerCacheSeg + "/" + l.key.RepoKey + "/" + branchlayer.BranchKey(l.code.Branch)
+}
+
+// layerCacheSeg is the cache folder of the branch layers of one store
+// branch: <store cache>/<store branch>/_layers/<repo key>/<branch key>/
+// (BRANCH_LAYERS 6.3; the lore home README explains it).
+const layerCacheSeg = "_layers"
+
+// layerCacheFolder is the cache folder of branch's layer in lb's store
+// folder on this machine, "" when the store has no permanent id (cachePath
+// then names the folder by the attached name, which the caller does not
+// know here).
+func layerCacheFolder(home string, lb *layerBackend, branch string) string {
+	m, ok := concrete(lb.inner).(markerOf)
+	if !ok || m.Marker().ID.IsZero() || branch == "" {
+		return ""
+	}
+	return filepath.Join(writableHome(home), cacheDir, cacheStoresDir, m.Marker().ID.String(), filepath.FromSlash(lb.gb.Branch()),
+		layerCacheSeg, lb.key.RepoKey, filepath.FromSlash(branchlayer.BranchKey(branch)))
+}
+
+// forgetLayerCache removes the cache of branch's layer once its notes left
+// the layer (landed, dropped, moved to the trash or purged): the cache is
+// derived, and keeping it let _layers/ pile up a folder per branch ever
+// read (devco:V-17). The branch this command runs on keeps its open cache.
+// Best effort: a cache that stays is only disk space (lore cache prune).
+func forgetLayerCache(home string, lb *layerBackend, branch string) {
+	if lb == nil || branch == lb.code.Branch {
+		return
+	}
+	if dir := layerCacheFolder(home, lb, branch); dir != "" {
+		_ = os.RemoveAll(dir) // best effort, see above
+	}
 }
 
 // decide classifies the code branch once per command.
@@ -196,7 +270,10 @@ func (l *layerBackend) decide(ctx context.Context) (branchlayer.Decision, error)
 
 // isolated reports whether this command reads and writes the layer.
 func (l *layerBackend) isolated(ctx context.Context) (bool, error) {
-	if layersOff(ctx) || os.Getenv(EnvLayer) == envLayerOff || l.code.Detached || l.code.Branch == "" {
+	if off, err := envLayerSetting(); err != nil || off {
+		return false, err
+	}
+	if layersOff(ctx) || l.code.Detached || l.code.Branch == "" {
 		return false, nil
 	}
 	d, err := l.decide(ctx)
@@ -214,9 +291,15 @@ func (l *layerBackend) layerRows(ctx context.Context) (string, map[store.Key]sto
 	}
 	// a stacked layer reads its parent's notes under its own (BRANCH_LAYERS 12)
 	var parent git.Layer
-	if ly.Exists() && ly.Facts.Parent != "" {
+	parentName := ly.Facts.Parent
+	if !ly.Exists() {
+		// no note of its own yet: the parent its first write will record
+		l.parentOnce.Do(func() { l.parentGuess = l.parentBranch(ctx) })
+		parentName = l.parentGuess
+	}
+	if parentName != "" {
 		pk := l.key
-		pk.Branch = ly.Facts.Parent
+		pk.Branch = parentName
 		if parent, err = l.gb.LayerOpen(ctx, pk); err != nil {
 			return "", nil, err
 		}
@@ -324,7 +407,11 @@ func (l *layerBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (
 
 // Write implements store.Backend.
 func (l *layerBackend) Write(ctx context.Context, changes []store.Change) error {
-	if store.NoLayer(ctx) || layersOff(ctx) || os.Getenv(EnvLayer) == envLayerOff {
+	off, err := envLayerSetting()
+	if err != nil && !store.NoLayer(ctx) && !layersOff(ctx) {
+		return err
+	}
+	if store.NoLayer(ctx) || layersOff(ctx) || off {
 		return l.inner.Write(ctx, changes)
 	}
 	if l.code.Detached {
@@ -334,7 +421,7 @@ func (l *layerBackend) Write(ctx context.Context, changes []store.Change) error 
 		}
 		if d.Step != branchlayer.StepOff {
 			return errs.New(errs.Detached, "the code repo "+l.code.Top+" has a detached HEAD, so this write has no branch to keep its notes with").
-				WithHint("check out a branch (git switch <branch>), or write to the shared notes with --no-layer (LORE_LAYER=off)")
+				WithHint("check out a branch (git switch <branch>), or run the same command with LORE_LAYER=off in front to write to the shared notes")
 		}
 		return l.inner.Write(ctx, changes)
 	}
@@ -614,7 +701,7 @@ func (l *layerBackend) WritePurgeAudited(ctx context.Context, changes []store.Ch
 // writesToLayer reports whether a write with ctx goes to the layer (the
 // test Write itself makes; a detached HEAD's refusal is Write's to give).
 func (l *layerBackend) writesToLayer(ctx context.Context) bool {
-	if store.NoLayer(ctx) || layersOff(ctx) || os.Getenv(EnvLayer) == envLayerOff {
+	if store.NoLayer(ctx) || layersOff(ctx) || envLayerIsOff() {
 		return false
 	}
 	if l.code.Detached {

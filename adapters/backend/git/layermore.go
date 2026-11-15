@@ -146,17 +146,24 @@ func (b *Backend) takeSide(ctx context.Context, p string, take map[ids.AnyID]boo
 	if !named {
 		return id, false, nil
 	}
-	stage := stageOurs
-	if branch {
-		stage = stageTheirs
-	}
-	blobs, err := b.readBlobs(ctx, []string{stage + p})
+	blobs, err := b.readBlobs(ctx, []string{stageBase + p, stageOurs + p, stageTheirs + p})
 	if err != nil {
 		return id, false, err
 	}
-	doc, found := blobs[stage+p]
+	chosen := stageOurs
+	if branch {
+		chosen = stageTheirs
+	}
+	doc, found := blobs[chosen+p]
 	if !found {
 		return id, false, errs.New(errs.Internal, "git: "+p+" has no side to take")
+	}
+	// devco V-14: --take settles only the clashing fields with the chosen
+	// side; a field only the other side changed keeps that change
+	if pm, can := b.cfg.merger.(PreferMerger); can && blobs[stageOurs+p] != nil && blobs[stageTheirs+p] != nil {
+		if m, merr := pm.MergePrefer(blobs[stageBase+p], blobs[stageOurs+p], blobs[stageTheirs+p], branch); merr == nil {
+			doc = m
+		}
 	}
 	if err := b.root.WriteFile(p, doc); err != nil {
 		return id, false, err
