@@ -31,7 +31,7 @@ New to lore? Set up a repo with [Your first project](../knowledge/first-project.
 
 ## Working with other people and agents
 
-Some task features only make sense with more than one person: assigning a task to Bob (an agency developer, `@bob`), an agent claiming a task so nobody else takes it, `lore task next` (lore picks the next free task for you), heartbeats (an agent saying "I am still working"), and gates that wait for a person's approval. They are on the team pages:
+Some task features only make sense with more than one person: assigning a task to Bob (an agency developer, `@bob`), an agent claiming a task so nobody else takes it, `lore task next` (lore shows the next free task and why; `--claim` takes it), heartbeats (an agent saying "I am still working"), and gates that wait for a person's approval. They are on the team pages:
 
 - [Agents](../team/agents.md): the loop an agent follows (claim, heartbeat, note, done).
 - [Team commands › Tasks and missions (team flags)](../team/commands.md#tasks-and-missions-team-flags) and [Agent coordination](../team/commands.md#agent-coordination).

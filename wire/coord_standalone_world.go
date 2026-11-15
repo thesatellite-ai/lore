@@ -125,6 +125,9 @@ type sigSpot struct {
 // no git repo, a caller that is neither agent nor person, a linked repo.
 func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	a := h.a
+	if sc, ok := storeHere(a.opts.RepoDir); ok {
+		return nil, errCoordInStore(sc)
+	}
 	top, err := a.repoTop(ctx)
 	if err != nil || top == "" {
 		return nil, errs.New(errs.Unsupported, "coordination needs a git repository").
@@ -1121,7 +1124,7 @@ func coordErr(err error) error {
 		case coord.FenceLost:
 			code = errs.LostClaim
 		}
-		return errs.New(code, fe.Error()).WithHint("stop work on this task; `lore task next` finds other work")
+		return errs.New(code, fe.Error()).WithHint("stop work on this task; `lore task next --claim` takes other work")
 	case errors.As(err, &off) && off.RacesLost:
 		// Reachable, but another writer won every attempt: contention, not
 		// a network problem (the remote answered each push).
@@ -1140,9 +1143,9 @@ func coordErr(err error) error {
 		if he.SameActor {
 			// P2-TASK-3: waiting will not help. devco:M-8: the other session
 			// keeps it; this one picks other work or works under its own name.
-			return errs.New(errs.Refused, msg).WithHint("lore task next picks other work; the other session finishes or releases this one")
+			return errs.New(errs.Refused, msg).WithHint("lore task next --claim takes other work; the other session finishes or releases this one")
 		}
-		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or pick other work with `lore task next`")
+		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or take other work with `lore task next --claim`")
 	case errors.As(err, &we):
 		// B-ERRS-4: the WIP limit, a poisoned task and a task that is not
 		// open are refusals by rule or by the data's state (E_REFUSED,
@@ -1176,14 +1179,14 @@ func coordErr(err error) error {
 	case errors.Is(err, coord.ErrNotOpen):
 		// devco:M-9: one plain refusal, never the package's "coord:" text;
 		// the next step is the next ready task.
-		const hint = "lore task next claims the next ready task; lore task list shows the open ones"
+		const hint = "lore task next shows the next ready task (--claim takes it); lore task list shows the open ones"
 		if ad, ok := coord.IsAlreadyDone(err); ok {
 			return errs.New(errs.Refused, ad.Error()).WithHint(hint)
 		}
 		if rv, ok := coord.IsRevoked(err); ok {
 			// devco:S-13: the person who revoked it decides who works on it.
 			return errs.New(errs.Refused, rv.Error()).
-				WithHint("lore task next claims other work; a person hands it back with `lore task reassign --id " + rv.Task + " --assign @<handle>`")
+				WithHint("lore task next --claim takes other work; a person hands it back with `lore task reassign --id " + rv.Task + " --assign @<handle>`")
 		}
 		msg := strings.TrimPrefix(err.Error(), coord.ErrNotOpen.Error()+": ")
 		return errs.New(errs.Refused, msg+"; only an open task can be claimed").WithHint(hint)
@@ -1229,3 +1232,13 @@ func unknownCoordID(err error) ids.AnyID {
 // markOK is a coordination outcome line's success mark (v0.1.17
 // style.Success without colour: the op's text is plain).
 const markOK = "✓"
+
+// errCoordInStore refuses coordination (task next, claims, inbox) inside a
+// store clone with the real reason (devco D-434): the folder is a git
+// repo, but a store's, and claims live on refs/lore/signals of a code
+// repo's remote. Decision: coordination stays a code-repo feature; the
+// hint names where it runs and what works here instead.
+func errCoordInStore(sc storeCheckout) error {
+	return errs.New(errs.Unsupported, "coordination (task next, claims, inbox) runs in a code repo: "+sc.shown+" is a lore store clone, not a code repo").
+		WithHint("run it in a code repo linked to this folder (`lore org link --org <org> --project <folder>`); here, `lore task list` lists the tasks and `lore task edit --id <id> --assign @<handle>` assigns one")
+}

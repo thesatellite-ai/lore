@@ -94,8 +94,8 @@ func Ops(env Env) []op.Entry {
 			op.Example{Title: "renew one claim", CLI: "lore task heartbeat --id tsk_<id>", Want: "renewed"}), o.heartbeat),
 		op.Define(with(write, OpTaskMerged, "Record that a done task's work reached the default branch",
 			op.Example{Title: "mark merged", CLI: "lore task merged --id tsk_<id>", Want: "merged"}), o.merged),
-		op.Define(with(write, OpTaskNext, "Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)",
-			op.Example{Title: "rank without claiming", CLI: "lore task next --mission msn_<id> --why --dry-run", Want: "nothing written"}), o.next),
+		op.Define(with(write, OpTaskNext, "Show the next ready task and why it is next (resume-first, leaves only, dependencies, gates, urgency); --claim takes it",
+			op.Example{Title: "see what is next (writes nothing)", CLI: "lore task next --mission msn_<id> --why", Want: "nothing written"}), o.next),
 		// mayAsk (devco:S-7): the note text is scanned for secrets, and the
 		// refusal names --secret-ref / --secret-unstored / --not-a-secret,
 		// so task note takes them as memory add does.

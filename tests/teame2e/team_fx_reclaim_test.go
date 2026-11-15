@@ -35,7 +35,7 @@ func TestF07_ReclaimKeepsTheRecordedWorkBranch(t *testing.T) {
 	heir.SetNow(t0.Add(time.Minute))
 	hc.MustLore("task", "list")
 	heir.SetNow(t0.Add(leaseTTL + leaseGrace + time.Minute))
-	r := hc.MustLore("task", "next")
+	r := hc.MustLore("task", "next", "--claim")
 	r.Says(t, id, "reclaim", "work branch "+deadBranch)
 	if strings.Contains(r.Out(), heirBranch) {
 		t.Fatalf("the reclaim must not name the reclaimer's own branch:\n%s", r)

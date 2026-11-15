@@ -319,6 +319,15 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		next.SetInt(keyEpoch, plan.Epoch)
 		next.SetInt(keyAttempts, plan.Attempts)
+		// devco:D-427: what a release puts back. A reclaim, or a claim of a
+		// task an expired claim left in_progress, continues that chain and
+		// records nothing (the release reads the chain's first Before); any
+		// other claim records the row as it is, in_progress included when a
+		// person had started the task.
+		var before *ClaimBefore
+		if _, chained := claimBefore(doc.ClaimLog()); !plan.Reclaim && (doc.Status() != statusInProgress || !chained) {
+			before = &ClaimBefore{Status: doc.Status(), StartedAt: doc.Str(keyStartedAt)}
+		}
 		if doc.Status() != statusInProgress {
 			next.SetStr(keyStatus, statusInProgress)
 			if doc.Time(keyStartedAt).IsZero() {
@@ -329,7 +338,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			next.SetStr(keyWorkBranch, workBranch)
 		}
 		entry := ClaimLogEntry{At: now.UTC().Truncate(time.Second), Event: ClaimEventClaim,
-			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: plan.Epoch}
+			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: plan.Epoch, Before: before}
 		if plan.Reclaim && plan.Prev != nil {
 			entry.Event = ClaimEventReclaim
 			entry.PrevActorID = plan.Prev.Holder
@@ -522,8 +531,23 @@ func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 	return renewed, err
 }
 
+// noWorkSpan is the longest claim a release counts as no work when the
+// lease was never renewed (devco:D-427): a claim given back within it
+// writes no time entry, so `claim` then `release` leaves no agent time and
+// switches no time feature on. A heartbeat, or holding it longer, is work.
+const noWorkSpan = time.Minute
+
+// claimSawWork reports whether claim s, released at now, counts as work
+// whose span is recorded: renewed at least once, or held at least
+// noWorkSpan.
+func claimSawWork(s signals.Signal, now time.Time) bool {
+	return s.RenewedSeq > 0 || now.Sub(s.Since) >= noWorkSpan
+}
+
 // Release gives a claim back (F7 "release"): the claim leaves the signals
-// ref and the row gets one claim_log entry, atomically.
+// ref and the row gets one claim_log entry, atomically. The row goes back
+// to the status and started_at it had before the claim (devco:D-427); the
+// holder's span is recorded only when the claim saw work (claimSawWork).
 func Release(ctx context.Context, env Env, id string) error {
 	now := env.Signals.Clock.Now()
 	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
@@ -548,9 +572,12 @@ func Release(ctx context.Context, env Env, id string) error {
 			return ch, nil, nil
 		}
 		next := doc.Clone()
-		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
-			return signals.Change{}, nil, err
+		if claimSawWork(s, v.Now) {
+			if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
+				return signals.Change{}, nil, err
+			}
 		}
+		next.restoreBefore() // reads the log before the release entry ends the chain
 		if err := next.AppendClaimLog(ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: ClaimEventRelease,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: s.ClaimEpoch}); err != nil {
 			return signals.Change{}, nil, err

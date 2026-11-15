@@ -176,6 +176,7 @@ type privatePlan struct {
 	files     []privateFile  // store files, then index.md
 	locals    []privateLocal // one per profile private file to write or clean
 	rows      int            // rows shown in the store files
+	pinned    int            // pinned rules and hotfixes in the store files' cores (always shown)
 	leftOut   int            // "Other notes" rows the budget left out (P3-CTX-2)
 	budget    int            // context.budget.internal
 	coreBytes int            // the store files' cores (never cut)
@@ -215,6 +216,9 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 		return err
 	}
 	if dryRun {
+		if p.budget > 0 && p.coreBytes > p.budget {
+			fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
+		}
 		for _, f := range p.files {
 			fmt.Fprintf(w, "\n==> %s (private, not written: --dry-run)\n%s", f.path, f.body)
 		}
@@ -272,15 +276,24 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 		left := ""
 		if p.leftOut > 0 {
 			left = fmt.Sprintf(", %d more left out by %s %d", p.leftOut, policy.KeyContextBudgetInternal, p.budget)
+			if p.budget > 0 && p.coreBytes > p.budget {
+				left += fmt.Sprintf(" (the pinned rules and hotfixes alone are %d bytes, never cut)", p.coreBytes)
+			}
 		}
 		fmt.Fprintf(w, "%s private context → %s (%s, %s%s, outside the checkout); %s\n",
 			h.decor.check(), h.redact(p.dir), plural.Count(len(p.stores), "store"), plural.Count(p.rows, "row"), left, where)
 	}
 	if p.budget > 0 && p.coreBytes > p.budget {
-		fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut: unpin some or raise the key",
-			p.coreBytes, policy.KeyContextBudgetInternal, p.budget)))
+		fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
 	}
 	return nil
+}
+
+// privateOverCoreWarn is the warning when the pinned part alone is over
+// context.budget.internal (a real render and, D-430, the dry run too).
+func privateOverCoreWarn(p *privatePlan) string {
+	return fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut: unpin some or raise the key",
+		p.coreBytes, policy.KeyContextBudgetInternal, p.budget)
 }
 
 // loadInternalBudget reads context.budget.internal (6.1).
@@ -368,6 +381,9 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	p.budget = h.loadInternalBudget(ctx)
 	fit := fitPrivate(bodies, p.budget)
 	p.rows, p.leftOut, p.coreBytes = fit.shown, fit.leftOut, fit.coreBytes
+	for _, b := range bodies {
+		p.pinned += b.pinned
+	}
 	for i, s := range internal {
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
 		body := withPrivateStamp(fit.texts[i], bodies[i].origins, p.budget)
@@ -521,7 +537,7 @@ func fitPrivate(bodies []privateBody, budget int) privateFit {
 		}
 		switch {
 		case left > 0:
-			fmt.Fprintf(&t, "\n_%s left out by %s %d bytes: run `lore search`._\n", plural.Of(left, "more note", "more notes"), policy.KeyContextBudgetInternal, budget)
+			fmt.Fprintf(&t, "\n_%s_\n", leftOutLine(left, budget, out.coreBytes))
 		case shown == 0:
 			t.WriteString(privateEmpty)
 		}
@@ -530,6 +546,31 @@ func fitPrivate(bodies []privateBody, budget int) privateFit {
 		out.leftOut += left
 	}
 	return out
+}
+
+// privateTrustAttr is a rule's ` trust="0.80"`, "" when its trust_score
+// is unset or the default (devco D-430: every rule of a store read
+// trust="0.50", which said nothing; a raised or lowered trust still shows,
+// and review="…" still marks an unapproved rule).
+func privateTrustAttr(r row.Row) string {
+	if tr := renderTrust(r); tr != renderDefaultTrust {
+		return fmt.Sprintf(" trust=\"%.2f\"", tr)
+	}
+	return ""
+}
+
+// leftOutLine is the private file's last line when notes were left out.
+// Why (devco D-430): "left out by context.budget.internal 8000 bytes" on
+// a 21 KB file read as a budget lore ignored; the budget holds for the
+// notes, while the pinned rules and hotfixes are never cut, so when they
+// alone are over it the line says so with both sizes.
+func leftOutLine(left, budget, coreBytes int) string {
+	notes := plural.Of(left, "more note", "more notes")
+	if budget > 0 && coreBytes > budget {
+		return fmt.Sprintf("%s left out: %s is %d bytes and the pinned rules and hotfixes above already take %d bytes (never cut; unpin some or raise the key); run `lore search`.",
+			notes, policy.KeyContextBudgetInternal, budget, coreBytes)
+	}
+	return fmt.Sprintf("%s left out by %s %d bytes: run `lore search`.", notes, policy.KeyContextBudgetInternal, budget)
 }
 
 // buildPrivateStore renders one internal store's file before the budget:
@@ -596,7 +637,7 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 	if len(rules) > 0 {
 		b.WriteString("\n## Rules\n\n")
 		for _, r := range rules {
-			fmt.Fprintf(&b, "<rule id=\"%s\" severity=\"%s\" trust=\"%.2f\"%s>\n", r.ID, renderRuleSeverityMust, renderTrust(r), reviewAttr(!trust.Approved(renderTrust(r))))
+			fmt.Fprintf(&b, "<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r))))
 			b.WriteString(mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true))
 			b.WriteString("\n</rule>\n")
 		}

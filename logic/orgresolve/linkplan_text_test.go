@@ -35,8 +35,11 @@ func TestPlanLinkRefusalTexts(t *testing.T) {
 		{name: "--store not the entry's", mod: func(r *LinkRequest) { r.StoreURL = "git@github.com:betalabs/lore" },
 			msg:  "--store github.com/betalabs/lore is not one of northwind's stores",
 			next: "pass one of them: git@github.com:northwind/lore; or add it to the org first: lore org store add --org northwind --url git@github.com:betalabs/lore"}, // B-4
-		{name: "--own on a client repo", mod: func(r *LinkRequest) { r.Own = true },
-			msg:  "--own is only for repos matching the org entry's own: patterns: github.com/acme/app does not match northwind's own: patterns (github.com/northwind/*)",
+		{name: "--own on a client repo", mod: func(r *LinkRequest) { r.Own = true }, // D-428: a repos: client entry is never made own by a link
+			msg:  "--own is refused for a repo the org lists as a client's (repos: pattern): github.com/acme/app matches northwind's repos: pattern github.com/acme/*, so it stays a client repo and keeps its leak guards",
+			next: "link it without --own (lore org link --org northwind --project acme); if it really is northwind's own repo, an admin removes it from repos: in northwind's lore-org.yaml first, then runs lore org refresh --org northwind"},
+		{name: "--own on an unlisted repo", mod: func(r *LinkRequest) { r.Own = true; r.Remotes = []string{"github.com/other/x"} },
+			msg:  "--own is only for repos matching the org entry's own: patterns: github.com/other/x does not match northwind's own: patterns (github.com/northwind/*)",
 			next: "link it without --own (as a client repo), or add a matching pattern to own: in northwind's lore-org.yaml and run lore org refresh --org northwind"},
 		{name: "no remote", mod: func(r *LinkRequest) { r.Remotes = nil },
 			msg:  "this repo has no hosted remote; a link names a project id and a remote",

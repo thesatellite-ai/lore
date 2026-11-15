@@ -945,7 +945,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore task import` | Import tasks from a CSV or JSON file (one batch) | [tasks/tasks › Step 12 — Move tasks in and out with files](../../docs/tasks/tasks.md#step-12--move-tasks-in-and-out-with-files) |
 | `lore task list` | List tasks | [tasks/tasks › Step 2 — See your list](../../docs/tasks/tasks.md#step-2--see-your-list) |
 | `lore task merged` | Record that a done task's work reached the default branch | [tasks/link-commits › Step 5 — Mark a task merged by hand](../../docs/tasks/link-commits.md#step-5--mark-a-task-merged-by-hand) |
-| `lore task next` | Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency) | [team/commands › lore task next](../../docs/team/commands.md#lore-task-next) |
+| `lore task next` | Show the next ready task and why it is next (resume-first, leaves only, dependencies, gates, urgency); --claim takes it | [team/commands › lore task next](../../docs/team/commands.md#lore-task-next) |
 | `lore task note` | Record a progress note on a task (a live row; your next `lore sync` or `git push` sends it) | [team/commands › lore task note](../../docs/team/commands.md#lore-task-note) |
 | `lore task reassign` | Assign a task to someone else, dropping any claim (human override); --from reassigns every open task of a person as one batch | [team/agents › Step 3 — Give the task to someone else: lore task reassign](../../docs/team/agents.md#step-3--give-the-task-to-someone-else-lore-task-reassign) |
 | `lore task recur` … | A repeating task's schedule (show, edit, skip, stop) | [tasks/task-tools › Step 9 — Make a task repeat](../../docs/tasks/task-tools.md#step-9--make-a-task-repeat) |

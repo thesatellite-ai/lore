@@ -286,7 +286,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 		lines = append(lines, line)
 	}
 	lines = append(lines, "  teammates join with: lore setup join --invite "+url+" (after lore member add puts them on the roster)",
-		"  use the store in a repo with no lore data (written only into the store): lore org link --org "+in.Org+" --project <folder> (a repo matching the org's own: patterns links as an own repo, any other as a client repo)")
+		"  use the store in a repo with no lore data (written only into the store): lore org link --org "+in.Org+" --project <folder> (a repo matching the org's own: patterns and none of its repos: patterns links as an own repo, any other as a client repo)")
 	return opsorgcmd.Report{Lines: lines}, nil
 }
 

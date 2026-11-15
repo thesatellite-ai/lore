@@ -86,20 +86,32 @@ type NextIn struct {
 	Role    string   `json:"role,omitempty" flag:"role" desc:"plan role (e.g. coordinator)"`
 	Owns    []string `json:"owns,omitempty" flag:"owns" desc:"paths the claim owns"`
 	Why     bool     `json:"why,omitempty" flag:"why" desc:"explain the urgency score term by term"`
-	DryRun  bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain without claiming (nothing written)"`
-	// Push: as ClaimIn.Push, for the claim task next takes.
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	// Claim makes task next take the task it shows (devco:D-426): without
+	// it task next only reads, so an agent or a script that runs it to look
+	// never claims and commits by accident. The claim is task claim's.
+	Claim bool `json:"claim,omitempty" flag:"claim" desc:"claim the task shown (resume the one you hold); without it task next only shows it and writes nothing"`
+	// DryRun is the ranking's old "write nothing" switch, kept so scripts
+	// that pass it keep working: it wins over --claim and prints the
+	// v0.1.17 ranking ("would claim …", "nothing written (--dry-run)").
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain in the old form, never claiming even with --claim (nothing written)"`
+	// Push: as ClaimIn.Push, for the claim task next --claim takes.
+	Push bool `json:"push,omitempty" flag:"push" desc:"with --claim: push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
 }
 
-// NextOut is the output of task.next. With --dry-run, Ready and Waiting are
-// the ranking (TASK 13.3, the v0.1.17 --dry-run --json shape); a claim
+// NextOut is the output of task.next. Without --claim (a read, or
+// --dry-run) Ready and Waiting are the ranking (TASK 13.3, the v0.1.17
+// --dry-run --json shape) and DryRun is true: nothing was written. A claim
 // fills Claimed. Lines is the human form either way.
 type NextOut struct {
 	Ready   []Ranked  `json:"ready"`
 	Waiting []Waiting `json:"waiting"`
-	DryRun  bool      `json:"dry_run"`
-	// Claimed is the task next claimed or resumed ("" with --dry-run).
-	Claimed string   `json:"claimed,omitempty"`
+	// DryRun is true when nothing was written: every run without --claim.
+	DryRun bool `json:"dry_run"`
+	// Claimed is the task next claimed or resumed (only with --claim).
+	Claimed string `json:"claimed,omitempty"`
+	// Holding is, on a read, the task this session already holds, which
+	// next --claim would resume rather than claim another.
+	Holding string   `json:"holding,omitempty"`
 	Lines   []string `json:"-"`
 }
 

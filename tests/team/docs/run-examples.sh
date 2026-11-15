@@ -600,11 +600,12 @@ Y
   start_agent agent-backend work/agents/api
   ag agent-backend work/agents/api "lore inbox"
   ag agent-backend work/agents/api "lore task next --mission $mis --repo api"
+  ag agent-backend work/agents/api "lore task next --claim --mission $mis --repo api"
   local tb; tb=$(id tsk)
   start_agent agent-frontend work/agents/app
-  ag! agent-frontend work/agents/app "lore task next --mission $mis --repo app"
+  ag! agent-frontend work/agents/app "lore task next --claim --mission $mis --repo app"
   start_agent agent-infra work/agents/infra
-  ag agent-infra work/agents/infra "lore task next --mission $mis --repo infra --owns nginx/sites/invite.conf"
+  ag agent-infra work/agents/infra "lore task next --claim --mission $mis --repo infra --owns nginx/sites/invite.conf"
   local tp; tp=$(id tsk)
 
   note "shared fact"
@@ -617,10 +618,10 @@ Y
   ag agent-backend work/agents/api "lore task note --id $tb --text 'the API sends the invite email and returns a link; the email text is in invite.html'"
   ag agent-backend work/agents/api "git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite"
   ag agent-backend work/agents/api "lore task done --id $tb --commit \$(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'"
-  ag! agent-frontend work/agents/app "lore task next --mission $mis --repo app"
+  ag! agent-frontend work/agents/app "lore task next --claim --mission $mis --repo app"
   on alice work/api "git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main"
   on alice work/api "lore task list"
-  ag agent-frontend work/agents/app "lore task next --mission $mis --repo app"
+  ag agent-frontend work/agents/app "lore task next --claim --mission $mis --repo app"
   local tf; tf=$(id tsk)
 
   note "crash and reclaim"
@@ -631,22 +632,22 @@ Y
   ag agent-coord work/api "lore mission status --id $mis"
   quiet alice work/agents "mkdir -p fe2 && cd fe2 && git clone -q https://github.com/client2/app"
   start_agent agent-frontend-2 work/agents/fe2/app
-  ag agent-frontend-2 work/agents/fe2/app "lore task next --mission $mis --repo app"
+  ag agent-frontend-2 work/agents/fe2/app "lore task next --claim --mission $mis --repo app"
   ag agent-frontend-2 work/agents/fe2/app "git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_HEAD"
   ag! agent-frontend work/agents/app "lore task done --id $tf"
   ag agent-frontend-2 work/agents/fe2/app "git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done --id $tf --commit \$(git rev-parse HEAD)"
   on alice work/app "git pull -q && git merge -q --no-ff --no-edit origin/agent-frontend-2/invite-route && git push -q origin main && lore task list >/dev/null"
 
   note "merged by hand"
-  ag! agent-coord work/api "lore task next --mission $mis --role coordinator"
+  ag! agent-coord work/api "lore task next --claim --mission $mis --role coordinator"
   on alice work/infra "lore task merged --id $tp"
 
   note "gate"
-  ag! agent-coord work/api "lore task next --mission $mis --role coordinator"
+  ag! agent-coord work/api "lore task next --claim --mission $mis --role coordinator"
   local tg; tg=$(grep -o 'tsk_[0-9a-f]\{32\}' <<<"$LAST_OUT" | head -1 || true)
   ag! agent-coord work/api "lore gate approve --id $tg"
   on alice work/api "lore gate approve --id $tg"
-  ag agent-coord work/api "lore task next --mission $mis --role coordinator"
+  ag agent-coord work/api "lore task next --claim --mission $mis --role coordinator"
 
   note "mission status"
   on alice work/infra "lore mission status --id $mis"

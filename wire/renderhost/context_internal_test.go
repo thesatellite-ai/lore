@@ -46,6 +46,12 @@ func internalStoreAt(t *testing.T, id string, vis rowfs.Visibility) string {
 // one memory in the repo store; the marker word is in every body.
 func internalApp(t *testing.T) *wire.App {
 	t.Helper()
+	return internalAppAs(t, false)
+}
+
+// internalAppAs is internalApp in an own (client=false) or client repo.
+func internalAppAs(t *testing.T, client bool) *wire.App {
+	t.Helper()
 	ctx := context.Background()
 	repo := t.TempDir()
 	cmd := exec.Command("git", "init", "-q")
@@ -62,7 +68,7 @@ func internalApp(t *testing.T) *wire.App {
 		t.Fatal(err)
 	}
 	a, err := wire.New(wire.Options{RepoDir: repo, Home: t.TempDir(), FlagActor: "human:alice@example.com",
-		RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
+		RepoIsClient: func(context.Context) (bool, error) { return client, nil }})
 	if err != nil {
 		t.Fatal(err)
 	}

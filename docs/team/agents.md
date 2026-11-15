@@ -29,7 +29,8 @@ Words used below:
  lore inbox                       # what is for me: assignments, handoffs, expired claims
    │
    ▼
- lore task next --mission <id> [--repo <name> | --role <role>] [--owns <paths>]
+ lore task next --claim --mission <id> [--repo <name> | --role <role>] [--owns <paths>]
+   │ (plain lore task next only shows the next task and why; --claim takes it)
    │ exit 0  → you hold a task (or the one you already held): read it, fetch its work branch
    │ exit 10 → nothing ready; the message says why each task waits. Stop or wait, do not spin.
    │ exit 11 → every claim lost a race; wait a little, then try again
@@ -44,7 +45,7 @@ Words used below:
  git commit/push your branch
  lore task done --id <id> --commit <sha> | --pr <n> [--lesson "<text>" | --no-lesson]
    │
-   └─▶ back to lore task next
+   └─▶ back to lore task next --claim
 ```
 
 ## Your coding agent acts as you
@@ -61,7 +62,8 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 |---|---|---|
 | session starts | `lore agent start --label agent-backend --owner @alice`, then export `LORE_ACTOR` and `LORE_SESSION` | you become your own actor on the org's roster; claims record your session |
 | before choosing work | `lore inbox`, `lore search --query "<topic>"` | handoffs and facts other agents saved change what you should do |
-| taking work | `lore task next --mission <id> --repo <name>` | resume-first, respects dependencies, gates, priority and races |
+| seeing what is next | `lore task next --mission <id> --repo <name>` | shows the next ready task and why it is next; writes nothing |
+| taking work | `lore task next --claim --mission <id> --repo <name>` | resume-first, respects dependencies, gates, priority and races |
 | a specific task | `lore task claim --id <id> [--owns <paths>]` | when a person told you which task |
 | during long steps (tests, builds) | `lore task heartbeat --daemon --id <id>` in the background, started from a process that lives as long as the step | a lease runs out after `lease.ttl` (20m) without a heartbeat; the daemon stops when the process that started it exits |
 | after each meaningful step | `lore task note --id <id> --text "…"` | a replacement agent reads your notes and fetches your pushed branch |
@@ -82,7 +84,7 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 |---|---|---|---|
 | 10 | `E_NO_WORK` | nothing is ready; the message lists why each task waits (dependency not merged, gate, claimed by someone) | stop, or wait and ask again later; report to the coordinator if a dependency looks stuck |
 | 11 | `E_CONTENDED` | ready work exists but other agents won every claim, or another writer won every attempt to push a claim, heartbeat or other coordination write | wait a few seconds (with some randomness) and run the command again (`task next` for a claim) |
-| 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next` for other work |
+| 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next --claim` for other work |
 | 13 | `E_CANCELLED` | a person cancelled the task while you held it | stop; do not finish it |
 | 14 | `E_REASSIGNED` | a person gave the task to someone else | stop; leave a note or handoff if you have useful state |
 | 15 | `E_OFFLINE` | the remote could not be reached, so it could not confirm the write; nothing was queued | retry when the network is back; never assume the write happened |
@@ -99,8 +101,8 @@ A real one, from the worked example: the crashed `agent-frontend` woke up after 
 ```console
 # agent-frontend, in agents/app
 $ lore task done --id tsk_54fe…28f2
-ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:01AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:49AM
-  hint: stop work on this task; `lore task next` finds other work
+ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:02AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:50AM
+  hint: stop work on this task; `lore task next --claim` takes other work
 (exit 12)
 ```
 <!-- /example -->
@@ -153,7 +155,7 @@ created 2026-11-02T10:09:20Z by alice · updated 2026-11-02T10:09:20Z by alice
 ```
 <!-- /example -->
 
-The task keeps its status (`in_progress`) and its attempt count; only the claim is gone. Anyone may now claim it, or `lore task next` hands it to the next agent.
+The task goes back to the status and `started_at` it had before the claim (here `todo`); its attempt count stays, and the claim and release are kept only in the task's claim log. A claim released within a minute with no heartbeat records no time on the task; a longer or renewed one keeps its time span. Anyone may now claim it, or `lore task next --claim` hands it to the next agent.
 
 ## Step 2 — Take a claim away: `lore task revoke`
 
@@ -185,12 +187,12 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store
 # agent-backend, in website
 $ lore task done --id tsk_c0f3…b5b8
 ERROR: [E_LOST_CLAIM] tsk_c0f3…b5b8: your claim (token ct_cb04f…) was revoked by @alice at 10:16AM
-  hint: stop work on this task; `lore task next` finds other work
+  hint: stop work on this task; `lore task next --claim` takes other work
 (exit 12)
 ```
 <!-- /example -->
 
-The revoke also keeps that agent off the task: its `lore task next` picks other work and lists the task under `waiting:` as `revoked from you by <person> at <time>`, and a `lore task claim --id <id>` from any session of the same agent is refused (`E_REFUSED`, naming `lore task reassign --id <id> --assign @<handle>`). Other agents and people may still claim it. The fence lasts until a person runs `lore task reassign` on the task, or for a week. The agent learns who revoked it from the signals ref, so its `E_LOST_CLAIM` names the person and the time even before the task row reaches its clone with a sync. In a code repo with a remote (no store), a revoke of a claimed task changes `refs/lore/signals` there, so it takes `--push` like a claim (`LORE_PUSH_CLAIMS=1` or `live.autopush: true` give the same go-ahead); without it lore refuses and writes nothing. Its success line says `pushed refs/lore/signals to <remote>`; the task row itself waits for your next `lore sync`. `lore task reassign` of a claimed or revoked task there takes `--push` for the same reason.
+The revoke also keeps that agent off the task: its `lore task next --claim` takes other work and lists the task under `waiting:` as `revoked from you by <person> at <time>`, and a `lore task claim --id <id>` from any session of the same agent is refused (`E_REFUSED`, naming `lore task reassign --id <id> --assign @<handle>`). Other agents and people may still claim it. The fence lasts until a person runs `lore task reassign` on the task, or for a week. The agent learns who revoked it from the signals ref, so its `E_LOST_CLAIM` names the person and the time even before the task row reaches its clone with a sync. In a code repo with a remote (no store), a revoke of a claimed task changes `refs/lore/signals` there, so it takes `--push` like a claim (`LORE_PUSH_CLAIMS=1` or `live.autopush: true` give the same go-ahead); without it lore refuses and writes nothing. Its success line says `pushed refs/lore/signals to <remote>`; the task row itself waits for your next `lore sync`. `lore task reassign` of a claimed or revoked task there takes `--push` for the same reason.
 
 ## Step 3 — Give the task to someone else: `lore task reassign`
 
@@ -212,7 +214,7 @@ store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 
 # bob, in website
 $ lore task claim --id tsk_d431…313a
-lore sync: store ssh://github.com/agency/notes: tasks/tsk_c0f3…b5b8: both sides changed claim_epoch, claim_log, started_at; kept the newer edit
+lore sync: store ssh://github.com/agency/notes: tasks/tsk_c0f3…b5b8: both sides changed claim_epoch, claim_log; kept the newer edit
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
 ✓ claimed tsk_d431…313a update the contact page (lease 20m, token ct_87f6f…) on refs/lore/signals/main
@@ -226,7 +228,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store
 # bob, in website
 $ lore task done --id tsk_d431…313a
 ERROR: [E_LOST_CLAIM] your claim is not on the signals ref; your token ct_87f6f… was dropped before its lease ended (10:39AM)
-  hint: stop work on this task; `lore task next` finds other work
+  hint: stop work on this task; `lore task next --claim` takes other work
 (exit 12)
 ```
 <!-- /example -->
@@ -276,7 +278,7 @@ $ lore hold claim --name full-suite --ttl 30m --push
 # bob, in billing
 $ lore hold claim --name full-suite --ttl 30m --push
 ERROR: [E_CONTENDED] full-suite is held by alice since 10:04AM (lease until 10:34AM)
-  hint: retry after the hold ends, or pick other work with `lore task next`
+  hint: retry after the hold ends, or take other work with `lore task next --claim`
 (exit 11)
 
 # alice, in billing
@@ -309,7 +311,7 @@ Running `lore hold claim` again while you hold it renews your hold. A typical li
 - Session hooks: `lore setup --agent-hooks --yes` installs two hooks for each coding tool set up in the repo (Claude Code in `.claude/settings.json`, Codex in `.codex/hooks.json`, Gemini CLI in `.gemini/settings.json`), plus the context hooks. At the start of a session, `lore agent start --tool <tool> --hook-stdin` records the session's details (such as the model) and pushes the store writes still waiting in a batch. At the end of a session, `lore agent end --tool <tool>` pushes the writes the session left waiting in a batch-mode store (see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote)). The end hook never holds up or fails the session: it prints nothing, always exits 0, and stops pushing after 15 seconds; what did not go out (a slow remote, no network) stays committed on your machine for the next lore command or `lore sync`. Claude Code's entry carries `"timeout": 30`, because Claude Code otherwise gives all session-end hooks 1.5 seconds together. `lore setup --agent-hooks --remove --yes` removes both, and `lore doctor` warns (`tools.hooks`) while either one is missing, so rerun `lore setup --agent-hooks --yes` once after upgrading to add the end hook to a repo that has only the start hook. `lore setup --agent-hooks` writes only those settings files: in a repo nobody ran `lore init` in it creates no `.lore/` folder and sets no git up, and `--dry-run` writes nothing at all.
 - Context: `lore render` writes the internal context outside the checkout, one private file per internal store under `~/.lore/render/<repo-id>/` (with an `index.md`); agents read it through `lore context` and the session hooks.
 - Heartbeats: either call `lore task heartbeat` from a hook of your agent tool, often enough to stay well inside `lease.ttl`, or run the daemon. `lore task heartbeat --daemon --id <id>` renews at once and then every `lease.renew_every`, and checks every 5 seconds that the process that started it is still running. When that process is gone, it stops (it also stops when the claim ends). So start it from a process that lives as long as the work: the agent's own long-running shell or wrapper script, or the same shell command as the long step (`lore task heartbeat --daemon --id <id> & go test ./...; kill $!`). A detached launch from a short-lived script or tool call (`setsid … &`, then the script exits) stops within seconds, together with that script. It needs the agent's `LORE_ACTOR` and `LORE_SESSION` in its environment.
-- Machine-readable output: `lore task next` and other commands print plain text. Branch on the exit status first. Use `--json` where a command offers it (`lore mission status --json`, `lore inbox --json`, `lore whoami --json`).
+- Machine-readable output: `lore task next --claim` and other commands print plain text. Branch on the exit status first. Use `--json` where a command offers it (`lore mission status --json`, `lore inbox --json`, `lore whoami --json`).
 
 ## Try it
 
@@ -320,10 +322,10 @@ The coordinator's one-screen check of a running mission is `lore mission status`
 # alice, in infra
 $ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
-  claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:32) 1m
-  done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:08 4m
-  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:05 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
-  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:26 12m (timebox 1h)
+  claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:34) 1m
+  done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:09 4m
+  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:07 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
+  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:28 12m (timebox 1h)
 ```
 <!-- /example -->
 
@@ -331,7 +333,7 @@ The whole run that leads to this screen, from `lore mission plan` to the gate, i
 
 ## Pitfalls
 
-- **A released task stays `in_progress`.** `lore task release` drops only the claim. If nobody should work on it, cancel it or move it back yourself.
+- **A released task goes back to how the claim found it.** `lore task release` drops the claim and puts the task's status and `started_at` back (a `todo` task is `todo` again; one a person had already started stays `in_progress`). The time spent stays on the task when the claim saw work (a heartbeat, or held a minute or more). If nobody should work on it, cancel it.
 - **Revoke and reassign need the holder to write once more to notice.** The agent finds out on its next heartbeat, note or `done`. An agent that never writes again keeps working on its copy. The claim is still gone, and its `done` is refused.
 - **Resources are per project in a repo without a store.** A linked client repo keeps its holds on the store's signals ref; only a client repo with no store link refuses `lore hold claim` with `E_UNSUPPORTED`, and `--on machine` answers `E_NOT_IMPLEMENTED` (use your machine's own lock tool, such as `flock`); run shared-resource scripts from the agency's own repos.
 - **The roster lives where `lore actor register` ran.** In a repo with no org, each person is a row in that repo's `.lore/data`, so commit it with your change, like any other row.

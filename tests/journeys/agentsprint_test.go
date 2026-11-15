@@ -93,7 +93,7 @@ func TestJourneyAgentSprint(t *testing.T) {
 			go func(a agent) {
 				defer wg.Done()
 				for round := 1; round <= sprintTasks; round++ {
-					r := a.c.Lore("task", "next", "--mission", mission, "--push")
+					r := a.c.Lore("task", "next", "--claim", "--mission", mission, "--push")
 					if r.Code == teamharness.ExitNoWork {
 						return
 					}

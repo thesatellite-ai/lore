@@ -394,6 +394,9 @@ type renderReport struct {
 	DirsOff bool        `json:"dir_files_off,omitempty"`
 	// TailsOut names the tail blocks left out for lack of room (FA-CTX-7).
 	TailsOut []string `json:"tails_left_out,omitempty"`
+	// Private is the private render's share (the attached internal
+	// stores, outside the checkout), nil when there is none (D-429).
+	Private *privateReport `json:"private,omitempty"`
 }
 
 // reasonHighLeftOut is --report's reason for a high hotfix left out.
@@ -649,6 +652,7 @@ func (r renderReport) reportText() string {
 		b.WriteString("  budget_exceeded: every must rule and critical/high hotfix is still written; shorten or supersede rules, or add summaries\n")
 	}
 	b.WriteString(dirReportText(r.Dirs, r.DirsOff))
+	b.WriteString(r.Private.text())
 	return b.String()
 }
 

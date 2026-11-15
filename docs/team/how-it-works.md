@@ -327,13 +327,13 @@ $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-
 ```
 <!-- /example -->
 
-A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` naming `--push`, and `lore task start --id <id>` works on a task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag. A claim on a linked store's signals ref (the example above: a client repo's task) needs no flag and never touches the client's remote.
+A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next --claim` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` naming `--push`, and `lore task start --id <id>` works on a task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag. A claim on a linked store's signals ref (the example above: a client repo's task) needs no flag and never touches the client's remote.
 
 | Operation | What is checked | What is written (claims on a task push signals and the task row together, atomically) |
 |---|---|---|
-| **claim** (`task claim`, `task next`) | task ready, no unexpired claim, you hold fewer than `agents.max_claims_per_agent` | a claim with a fresh `claim_token` and `expires = now + lease.ttl` (20m); the task row's `claim_epoch` goes up by one, status `in_progress`, `attempts` counted |
+| **claim** (`task claim`, `task next --claim`) | task ready, no unexpired claim, you hold fewer than `agents.max_claims_per_agent` | a claim with a fresh `claim_token` and `expires = now + lease.ttl` (20m); the task row's `claim_epoch` goes up by one, status `in_progress`, `attempts` counted |
 | **renew** (`task heartbeat`) | your token is on the ref and not expired | a later `expires`, `renewed_seq + 1`; the task row is not touched |
-| **release** | your token is on the ref | the claim is removed |
+| **release** | your token is on the ref | the claim is removed; the task row gets back the status and `started_at` it had before the claim, one `release` claim-log entry, and the holder's time span only when the claim saw work (a heartbeat, or held a minute or more) |
 | **done, note, gate request by the holder** | your token is on the ref **and** the row's `claim_epoch` matches your claim | the row change and the claim change, in one atomic push |
 | **revoke, cancel, reassign by a person** | a human identity | the claim is removed and `claim_epoch` goes up |
 | **expire** | `now > expires + lease.grace` **and** the same `renewed_seq` was seen for at least `lease.renew_every` | nothing: readers treat it as absent; the next writer drops it |
@@ -342,7 +342,7 @@ The `claim_token` is a ticket number for one claim. The row's `claim_epoch` coun
 
 **Fencing** means lore refuses a write from an agent whose claim already ran out. Its token is gone from the list, or the row's `claim_epoch` has moved on. So its `done` fails with `E_LOST_CLAIM` (exit 12), `E_CANCELLED` (13) or `E_REASSIGNED` (14). Expiry needs both the time check and an unchanged `renewed_seq`. So a reader with a fast clock cannot steal a lease that is still being renewed.
 
-**Reclaim:** an expired claim is free. The next `task next` takes the task, counts up `attempts` and names the previous holder. Past `agents.max_attempts` (3) the task becomes `blocked` ("failed 3 times") and goes to its owner's inbox.
+**Reclaim:** an expired claim is free. The next `task next --claim` takes the task, counts up `attempts` and names the previous holder. Past `agents.max_attempts` (3) the task becomes `blocked` ("failed 3 times") and goes to its owner's inbox.
 
 Claims for tasks of a linked client repo sit on the **store's** signals list, never on the client's. How the agency runs its agents is internal.
 
@@ -380,7 +380,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_2537…6bbb.json (s
   lesson → mem_2537…6bbb
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
@@ -391,12 +391,12 @@ $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && g
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
 lore: committed locally to store agency; lore sync sends it
-✓ tsk_162d…9666 merged 10:26 (found by: ancestry, 05513aa)
+✓ tsk_162d…9666 merged 10:28 (found by: ancestry, 05513aa)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_28f8…03df.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)

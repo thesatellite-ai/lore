@@ -54,7 +54,7 @@ func TestJourneyRevokeFencesAgent(t *testing.T) {
 
 	w.Step("day1/agent-is-told-who-and-kept-off", func() {
 		agent("task", "done", "--id", ids[0], "--no-lesson").Fails(t, 12, "was revoked by Ines Corva at").Never(t, "expired")
-		next := agent("task", "next", "--push").OK(t).Never(t, "claimed "+ids[0])
+		next := agent("task", "next", "--claim", "--push").OK(t).Never(t, "claimed "+ids[0])
 		got := asTaskID.FindString(next.Out())
 		if got == "" || got == ids[0] {
 			t.Fatalf("task next after a revoke must claim other work:\n%s", next)
@@ -118,9 +118,9 @@ func TestJourneySoloRepoClaimsLocally(t *testing.T) {
 	})
 
 	w.Step("day1/the-agent-claims-locally", func() {
-		jAgentsRun(solo, c, &jClaude, sess, "task", "next").OK(t).
+		jAgentsRun(solo, c, &jClaude, sess, "task", "next", "--claim").OK(t).
 			Says(t, "claimed "+id, "local: this repo has no remote").Never(t, "E_OFFLINE", "autopush")
-		jAgentsRun(solo, c, &jClaude, sess, "task", "next", "--push").OK(t).Says(t, "you hold "+id)
+		jAgentsRun(solo, c, &jClaude, sess, "task", "next", "--claim", "--push").OK(t).Says(t, "you hold "+id)
 		jAgentsRun(solo, c, &jClaude, sess, "task", "list").OK(t).Says(t, id, "working: ") // the board reads the local claim
 		jAgentsRun(solo, c, &jClaude, sess, "task", "done", "--id", id, "--no-lesson").OK(t).Says(t, id+" done")
 	})

@@ -79,7 +79,8 @@ Full guide with real examples: [docs/team](../docs/team/README.md).
 | An internal row reached the client's live ref | `lore live purge --ids <id> --confirm`, then `lore live compact` |
 | Start an agent session | `lore agent start --label <name> --owner @<you>` and export what it prints |
 | Create a mission and its tasks from a file (re-run adds nothing) | `lore mission apply --file <file>` |
-| Take the next ready task as an agent | `lore task next --mission <id> [--repo <name>]` (exit 10: nothing ready) |
+| See the next ready task and why | `lore task next --mission <id> [--repo <name>]` (writes nothing) |
+| Take the next ready task as an agent | `lore task next --claim --mission <id> [--repo <name>]` (exit 10: nothing ready) |
 | Keep an agent's claim alive | `lore task heartbeat --daemon --id <id>`, started from a process that lives as long as the agent (it stops when the process that started it exits), or `lore task heartbeat` from the agent tool's hook |
 | Record progress and push the work branch | `lore task note --id <id> --text "<text>"` |
 | Finish with the code that did it | `lore task done --id <id> --commit <sha>` (or `--pr <n>`) |

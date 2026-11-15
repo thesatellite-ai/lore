@@ -236,6 +236,9 @@ func Resolve(in Inputs) (Result, error) {
 	// <staging entry>` finds the folder linked on the staging branch
 	// (cookbook 13). A LinkSource may therefore return staging links.
 	var links, known []Link
+	// D-428: a recorded own link of a repo the entry lists under repos: is
+	// a client link (one rule for every path: classify.go).
+	in.Links.Links, in.Links.Moved = clampLinks(cfg, in.Links.Links), clampLinks(cfg, in.Links.Moved)
 	for _, l := range in.Links.Links {
 		if cfg.FindOrg(l.Entry) == nil {
 			continue
@@ -363,10 +366,8 @@ func Resolve(in Inputs) (Result, error) {
 			if staging[o.Name] {
 				continue
 			}
-			if p := firstMatch(o.Repos, in.Remotes); p != "" {
-				hits[o.Name], hitPattern[o.Name] = RoleClient, p // fail closed: client wins over own
-			} else if p := firstMatch(o.Own, in.Remotes); p != "" {
-				hits[o.Name], hitPattern[o.Name] = RoleOwn, p
+			if c := ClassifyRemote(o, in.Remotes); c.Role != RoleNone {
+				hits[o.Name], hitPattern[o.Name] = c.Role, c.Pattern // fail closed: client wins over own
 			}
 		}
 		names := sortedKeys(hits)
@@ -587,10 +588,7 @@ func explicitRole(o *orgconf.Org, links []Link, remotes []string) Role {
 		}
 		return RoleClient
 	}
-	if matchesAny(o.Repos, remotes) {
-		return RoleClient
-	}
-	if matchesAny(o.Own, remotes) {
+	if ClassifyRemote(o, remotes).Role == RoleOwn {
 		return RoleOwn
 	}
 	return RoleClient

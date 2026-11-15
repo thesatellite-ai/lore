@@ -20,6 +20,7 @@ package wire
 import (
 	"context"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -64,7 +65,8 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		return op.Result{}, false, nil
 	}
 	if inStore(a.opts.RepoDir) {
-		return op.Result{}, false, nil
+		// a store clone's top, or a read naming its scope there (scope.go)
+		return a.runInStoreClone(ctx, e, d, c)
 	}
 	if insideWorkTree(ctx, a.opts.RepoDir) {
 		// A git repo lore is not set up in counts as no repo for a write
@@ -94,6 +96,19 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 	if err != nil {
 		return op.Result{}, true, err
 	}
+	// a write naming a row by id (edit, delete, move --id) runs on the org
+	// folder holding the row, beside the folder `to` names (devco D-433):
+	// before it every such write outside a repo needed one
+	var holder []attach.Store
+	if write {
+		if h, ok := a.rowFolderOutside(ctx, in); ok {
+			if to == "" {
+				to, useDefault = string(h.Name), false
+			} else if string(h.Name) != to {
+				holder = append(holder, h)
+			}
+		}
+	}
 	if useDefault {
 		return a.runOnDefaultStore(ctx, e, d, c)
 	}
@@ -109,7 +124,12 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 	// the org's company folder of the same store is attached beside it, as
 	// a linked repo's open attaches it, so kinds and policy defined there
 	// resolve (D-422)
-	if err := a.openStoreOnlyOn(ctx, target, target.Name, a.companyFolderOf(ctx, target)...); err != nil {
+	also := append(a.companyFolderOf(ctx, target), holder...)
+	if !write {
+		// `--store <org>` reads every folder of the org's stores (D-431)
+		also = append(also, a.orgWideFolders(ctx, to, target)...)
+	}
+	if err := a.openStoreOnlyOn(ctx, target, target.Name, also...); err != nil {
 		return op.Result{}, true, err
 	}
 	eng, err := a.Engine(ctx)
@@ -319,4 +339,46 @@ func plainFolder(ctx context.Context, dir string) bool {
 		return true // not a git repository: a plain folder
 	}
 	return !strings.Contains(string(out), "true")
+}
+
+// idField is the input field naming one row (`--id`).
+const idField = "id"
+
+// rowFolderOutside is the org-store folder holding the row the input names
+// by id (its file <folder>/<table>/<id>.json in the store's clone), as a
+// writable attach entry named <org>/<folder>; ok is false when the input
+// names no id or no folder of the org's stores holds it.
+func (a *App) rowFolderOutside(ctx context.Context, in op.Input) (attach.Store, bool) {
+	id := ""
+	for _, tv := range in.Texts() {
+		if tv.Field == idField {
+			id = strings.TrimSpace(tv.Text)
+		}
+	}
+	if id == "" || strings.ContainsAny(id, `/\*?[`) {
+		return attach.Store{}, false
+	}
+	for _, f := range a.orgFolders(ctx).Folders {
+		if f.Dir == "" {
+			continue
+		}
+		hits, _ := filepath.Glob(filepath.Join(f.Dir, filepath.FromSlash(f.Folder), "*", id+".json"))
+		if len(hits) == 0 {
+			continue
+		}
+		// the name --to takes for it: the org entry attaching this very
+		// folder, else <org>/<folder>
+		k := placeKey(f.URL, f.Branch)
+		for _, s := range orgStores(ctx, a.opts, "") {
+			if strings.Trim(s.Folder, "/") == f.Folder && placeKey(s.URL, s.Branch) == k {
+				return attach.Store{Name: s.Name, URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
+			}
+		}
+		base := f.Org
+		if base == "" {
+			base = f.Label
+		}
+		return attach.Store{Name: store.Source(base + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
+	}
+	return attach.Store{}, false
 }

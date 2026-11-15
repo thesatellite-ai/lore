@@ -320,6 +320,7 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 					old, _ := readLinks(ctx, dir, tip) // best effort: only reads attach by them (LinkResult.Old)
 					for _, l := range old {
 						l.entry, l.storeNorm = o.Name, norm
+						l.Own = orgresolve.EffectiveOwn(o, l.Remote, l.Own) // D-428: a repos: client entry wins
 						stale = append(stale, l)
 					}
 				}
@@ -339,6 +340,10 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		}
 		for _, l := range links {
 			l.entry, l.storeNorm = o.Name, norm
+			// D-428: a link recorded as own for a repo the entry lists under
+			// repos: is read as a client link, so every reader (F10, the
+			// write target, relink, unlink) sees one classification.
+			l.Own = orgresolve.EffectiveOwn(o, l.Remote, l.Own)
 			out = append(out, l)
 		}
 	}

@@ -781,7 +781,7 @@ error E_LOST_CLAIM: tsk_31 is held by agent-frontend-2 since 13:58 (your token c
 |---|---|---|
 | claim | task ready (§7.3), no unexpired claim, caller holds fewer than `max_claims_per_agent` | signals: new claim with fresh `claim_token`, `claim_epoch = row.claim_epoch + 1`, `expires = now + lease.ttl`. Atomic with live: task row `claim_epoch++`, `status = in_progress` on first claim, `attempts = 1` on the first claim and `attempts++` on each reclaim (a claim after a voluntary release keeps the count), one `claim_log` entry |
 | renew (heartbeat) | caller's token is on the ref and not expired | signals only: `expires`, `renewed_seq++`. Never touches the row or its status |
-| release | caller's token on the ref | signals: remove the claim. Atomic with live: one `claim_log` entry |
+| release | caller's token on the ref | signals: remove the claim. Atomic with live: one `claim_log` entry; the row's status and `started_at` go back to what the claim found (recorded as `before` on the claim's `claim_log` entry, devco:D-427); the holder's time span is written only when the claim saw work (renewed, or held at least a minute) |
 | done / note / gate request by the holder | token on the ref, not expired, and row `claim_epoch` equals the claim's | atomic: signals (drop or keep the claim) + live (the row change) |
 | revoke / cancel / reassign by a human | human actor from the identity file | atomic: signals (remove the claim) + live (`claim_epoch++`, status or assignee) |
 | expire | `now > expires + lease.grace` on the reader's clock **and** the reader has seen the same `renewed_seq` for at least `lease.renew_every` | readers treat it as absent; the next writer drops the file |
@@ -1550,6 +1550,8 @@ Several agents (agent sessions on a laptop, tmux sessions on a dev server, other
 | **Mission status** | `lore mission status mis_12 [--json]` with columns ready / waiting / gated / claimed / expired / blocked / done | view |
 
 ### 7.3 `lore task next`
+
+Plain `lore task next` reads (devco:D-426): it runs steps 1-2 and the ranking without writing and prints the task step 4 would claim, why (its urgency terms) and what waits. `lore task next --claim` runs every step below; `--dry-run` prints the older ranking form and never claims.
 
 ```text
 in:   caller (agent actor + session), --mission, --repo, --role, --owns, clock

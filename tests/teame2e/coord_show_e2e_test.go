@@ -19,7 +19,7 @@ func TestF01_TaskShowWalksEverySource(t *testing.T) {
 	g := newGlobexGroup(t, th.Cmd("task", "note"), th.Cmd("gate", "request"))
 	g.beAgent.SetNow(t0)
 	g.alice.SetNow(t0.Add(time.Minute))
-	g.beClone.MustLore("task", "next", "--mission", g.mission, "--repo", "backend").Says(t, g.t30)
+	g.beClone.MustLore("task", "next", "--claim", "--mission", g.mission, "--repo", "backend").Says(t, g.t30)
 	g.beClone.MustLore("task", "note", g.t30, "mutation inviteUser(email) returns token")
 	g.aliceFE.MustLore("gate", "request", g.t31)
 
@@ -55,9 +55,9 @@ func TestWorkedExample75_StatusNamesAgentsByLabel(t *testing.T) {
 	fe2c := fe2.Clone(g.frontend, "frontend")
 	// The first look starts the two-part expiry watch; the second, a
 	// renew interval later, may reclaim.
-	fe2c.Lore("task", "next", "--mission", g.mission, "--repo", "frontend").Fails(t, th.ExitNoWork)
+	fe2c.Lore("task", "next", "--claim", "--mission", g.mission, "--repo", "frontend").Fails(t, th.ExitNoWork)
 	fe2.Advance(leaseRenew + time.Minute)
-	fe2c.MustLore("task", "next", "--mission", g.mission, "--repo", "frontend").Says(t, id, "reclaim")
+	fe2c.MustLore("task", "next", "--claim", "--mission", g.mission, "--repo", "frontend").Says(t, id, "reclaim")
 	g.alice.SetNow(t0.Add(leaseTTL + leaseGrace + 20*time.Minute))
 	g.aliceBE.MustLore("mission", "status", g.mission).Says(t, "invite form", "frontend-1", "frontend-2").Never(t, "act_")
 }

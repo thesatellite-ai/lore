@@ -95,3 +95,9 @@ func (a *App) ClientRepo(ctx context.Context) (bool, error) {
 	}
 	return st.eng.IsClient(store.SourceRepo), nil
 }
+
+// LinkedByRemote is the remote a store link names this repo by when the
+// repo holds no lore data (no .lore/ at its top), "" otherwise. render
+// asks it (devco D-429): a linked own repo with no .lore folder gets the
+// private render instead of the not-set-up refusal.
+func (a *App) LinkedByRemote(ctx context.Context) string { return linkedByRemote(ctx, a.opts) }

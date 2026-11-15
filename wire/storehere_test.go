@@ -19,6 +19,8 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
+	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
@@ -112,14 +114,25 @@ func TestStoreCheckoutIsNoCodeRepo(t *testing.T) {
 		}
 	}
 
-	// at the store top the command works on the root folder
+	// at the store top a read covers every folder of the store, each row
+	// labelled by its folder (devco D-454: it listed the empty root folder)
 	top := openWith(t, clone, Options{Home: home})
 	got, err = run(t, top, opstask.OpList, `{}`, false)
 	if err != nil {
 		t.Fatalf("task list at the store top: %v", err)
 	}
-	if strings.Contains(got, id) {
-		t.Fatalf("the root folder lists client_a's task: %s", got)
+	if !strings.Contains(got, id) || !strings.Contains(got, "kb/client_a") {
+		t.Fatalf("task list at the store top misses client_a's task or its folder label: %s", got)
+	}
+	// lore sql there reads the same folders (it refused "a source needs a
+	// name and a path": a store-only open has no repo cache)
+	sqlOut, err := run(t, openWith(t, clone, Options{Home: home}), opssql.OpRun, `{"query":"select count(*) as n from tasks_all"}`, false)
+	if err != nil || !strings.Contains(sqlOut, `"value":"1"`) {
+		t.Fatalf("lore sql at the store top: %s %v", sqlOut, err)
+	}
+	// coordination says what the folder is and where it runs (devco D-434)
+	if _, err = run(t, openWith(t, folder, Options{Home: home}), opscoord.OpTaskNext, `{}`, false); !errs.Has(err, errs.Unsupported) || !strings.Contains(err.Error(), "store clone, not a code repo") {
+		t.Fatalf("task next in a store folder: %v, want E_UNSUPPORTED naming the store clone", err)
 	}
 
 	// a command that edits a code repo is refused, naming the store

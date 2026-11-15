@@ -49,7 +49,7 @@ func TestAgentFirstWritesWithSessionFinish(t *testing.T) {
 	}
 	// task next answers 0 with a task or an error code; either way it
 	// must return.
-	if code, out, errOut = w.loreWithin(t, dir, agentWriteTimeout, "task", "next"); code != 0 && !strings.Contains(errOut, "E_") {
+	if code, out, errOut = w.loreWithin(t, dir, agentWriteTimeout, "task", "next", "--claim"); code != 0 && !strings.Contains(errOut, "E_") {
 		t.Fatalf("task next: exit %d without an error code\n%s\n%s", code, out, errOut)
 	}
 	if code, out, errOut = w.loreWithin(t, dir, agentWriteTimeout, "task", "add", "agent task", "--commitment", "accepted"); code != 0 {

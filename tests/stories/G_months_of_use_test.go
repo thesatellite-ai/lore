@@ -341,7 +341,7 @@ func TestStoryGManyAgents(t *testing.T) {
 			var next []*teamharness.Pending
 			for i := 0; i < agents; i++ {
 				c := ines.C.As(ines.M.Agent(fmt.Sprintf("agent-%d", i)))
-				next = append(next, c.Prepare("task", "next", "--push", "--yes", "--json"))
+				next = append(next, c.Prepare("task", "next", "--claim", "--push", "--yes", "--json"))
 			}
 			seen := map[string]bool{}
 			for _, r := range s.Simultaneously(next...) {
@@ -384,7 +384,7 @@ const (
 )
 
 // gManyAgentsStayFast (D-159): ten agent sessions in one clone each run
-// task next --push, comment add and task done back to back, all at once;
+// task next --claim --push, comment add and task done back to back, all at once;
 // the 95th percentile of their command times stays under five seconds.
 // Every command of a clone takes the clone's live lock in turn, so on a
 // saturated loop each waits about the other nine commands: before the fix
@@ -438,7 +438,7 @@ func gManyAgentsStayFast(t *testing.T, ines gMember) {
 		go func() {
 			defer wg.Done()
 			for round := 0; round < gManyAgentsRounds; round++ {
-				r := run(c, "task next", "task", "next", "--push", "--yes", "--json")
+				r := run(c, "task next", "task", "next", "--claim", "--push", "--yes", "--json")
 				id := fTaskID.FindString(r.Stdout)
 				if r.Code != 0 || id == "" {
 					continue // nothing left to hand out is an answer, not a slow command
@@ -487,7 +487,7 @@ const gManyAgentsFairness = 3
 func gLoneCommand(t *testing.T, lone *teamharness.Clone, body string) time.Duration {
 	t.Helper()
 	start := time.Now()
-	id := fTaskID.FindString(lone.Lore("task", "next", "--push", "--yes", "--json").OK(t).Stdout)
+	id := fTaskID.FindString(lone.Lore("task", "next", "--claim", "--push", "--yes", "--json").OK(t).Stdout)
 	if id == "" {
 		t.Fatal("the lone agent got no task to time")
 	}

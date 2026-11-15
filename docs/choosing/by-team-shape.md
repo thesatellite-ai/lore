@@ -23,7 +23,7 @@
 - **If people join and leave,** keep the org's roster in its store and bring people in with an invite (`lore team invite --email <email>`, then `lore setup join` on their side), and take their GitHub access away when they leave.
 - **If each person uses several setups on one machine** (own projects and a team's), make one setup each with `lore setup plan`, `check` and `apply` ([Setups from the command line](../team/setup-cli.md)); lore picks the setup from the folder you are in. The prebuilt binaries add a browser page for the same steps.
 - **If two people may run different lore versions,** pin one version in `.lore/data/_meta.json`; `lore upgrade` then installs that version and `lore doctor` says when someone is on another.
-- **If agents run unattended,** give each its own label with `lore agent start`, put a gate on every step a person must approve, and stop an agent when `lore task next` exits with status 10 (nothing ready) instead of letting it loop.
+- **If agents run unattended,** give each its own label with `lore agent start`, put a gate on every step a person must approve, and stop an agent when `lore task next --claim` exits with status 10 (nothing ready) instead of letting it loop.
 - **If CI only checks the notes,** set `LORE_READ_ONLY=1` and act on the exit code of `lore doctor`. If CI must merge pull requests whose notes conflict on GitHub, add the action with `lore sync install-action`.
 
 ## Pitfalls

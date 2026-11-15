@@ -40,8 +40,10 @@ package renderhost
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -189,6 +191,12 @@ func (h *Host) renderLiveRows(ctx context.Context, table row.Table) ([]renderRow
 	if err != nil {
 		return nil, err
 	}
+	return h.liveRowsFrom(ctx, srcs, table)
+}
+
+// liveRowsFrom is renderLiveRows over the given sources (context reads
+// more of them than a committed render: contextSources).
+func (h *Host) liveRowsFrom(ctx context.Context, srcs []store.Source, table row.Table) ([]renderRow, error) {
 	var out []renderRow
 	for _, src := range srcs {
 		rows, err := h.app.List(ctx, src, table)
@@ -218,10 +226,31 @@ func renderField(r row.Row, name string) string {
 	if !ok || v == nil {
 		return ""
 	}
+	text := v.String()
+	if name == renderFieldBody {
+		text = dropRowFileSources(text)
+	}
 	// I-16: a control character in a row (ESC[8m conceals text in a
 	// terminal) is written escaped into every rendered file; the row
 	// keeps its bytes.
-	return textnorm.EscapeControls(v.String())
+	return textnorm.EscapeControls(text)
+}
+
+// rowFileSourceLine is a body line that only points at a lore row file
+// ("Source: app/.lore/data/hotfixes/hfx_….json"), e.g. kept by rows
+// imported from a repo's .lore/data.
+var rowFileSourceLine = regexp.MustCompile(`(?m)^[ \t]*Source:[ \t]*\S*\.lore/data/\S+\.json[ \t]*\r?$\n?`)
+
+// dropRowFileSources removes rowFileSourceLine lines from a body for
+// display (devco D-430: 9 pinned hotfixes of a private render carried
+// "Source: <repo>/.lore/data/….json" lines naming a file of another repo
+// that no longer holds the row; the tag already names the row id). The
+// row keeps its bytes; only rendered and context text drops the line.
+func dropRowFileSources(body string) string {
+	if !strings.Contains(body, ".lore/data/") {
+		return body
+	}
+	return strings.TrimRight(rowFileSourceLine.ReplaceAllString(body, ""), "\n")
 }
 
 // renderTrust is trust_score as a float (the ent default when absent or

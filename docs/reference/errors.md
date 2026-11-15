@@ -37,7 +37,7 @@ The [full list](#the-full-list) below links every code with its exit status.
 |---|---|
 | 0 | the command worked |
 | 1 | something unexpected failed: `E_INTERNAL` |
-| 10 | `E_NO_WORK`: `lore task next` found nothing ready to do |
+| 10 | `E_NO_WORK`: `lore task next --claim` found nothing ready to do |
 | 11 | `E_CONTENDED`: there was work, but another agent claimed it first every time; wait a moment and try again |
 | 12 | `E_LOST_CLAIM`: your claim on the task ran out or was taken back; stop working on it |
 | 13 | `E_CANCELLED`: a person cancelled the task while you held it; stop |
@@ -337,7 +337,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NO_WORK` | 10 | `lore task next` found no ready task; the message says why each one is blocked | wait, or unblock a task |
+| `E_NO_WORK` | 10 | `lore task next --claim` found no ready task; the message says why each one is blocked | wait, or unblock a task |
 | `E_CONTENDED` | 11 | ready work exists but every claim lost the race to another agent, or another writer won every attempt to push a coordination write | wait a moment and try again |
 | `E_LOST_CLAIM` | 12 | your claim is no longer on the server (it ran out or was taken back); lore fetched once and retried before answering this, so it is not stale | stop working on this task |
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it | stop working on this task |
@@ -353,12 +353,12 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 | `E_OLD_LORE` | 19 | this lore is older than the live rows here allow; reading still works | upgrade lore |
 | `E_CONFIG_INVALID` | 20 | `~/.lore/config.yaml` has a mistake | run `lore config check`; it lists every problem |
 
-Two of them for real: `lore task next` in a repo with no open task, and a write while `LORE_ORG` names another org than the repo's store link:
+Two of them for real: `lore task next --claim` in a repo with no open task, and a write while `LORE_ORG` names another org than the repo's store link:
 
 <!-- example: reference#no-work -->
 ```console
 # alice, in landing
-$ lore task next --push
+$ lore task next --claim --push
 ERROR: [E_NO_WORK] nothing ready: no open task matches
   hint: lore task add makes a task; lore task list shows the open ones
 (exit 10)

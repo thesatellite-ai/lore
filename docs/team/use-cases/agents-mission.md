@@ -98,6 +98,10 @@ export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 $ lore inbox
 (inbox empty)
 $ lore task next --mission msn_2ad3…f891 --repo api
+next tsk_162d…9666 send the invite email from the API   urgency 7.90
+  why: +3.90  priority medium; +4.00  blocks 1 open task (tsk_54fe…28f2)
+nothing written; take it: lore task next --claim (or lore task claim --id tsk_162d…9666)
+$ lore task next --claim --mission msn_2ad3…f891 --repo api
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_b4f4…a5b0.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
@@ -113,7 +117,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_28f8…03df.json (store a
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (claimed by agent:agent-backend)
   hint: lore task board shows what each task waits on
@@ -128,7 +132,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_4c59…6c38.json (store a
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 
 # agent-infra, in agents/infra
-$ lore task next --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invite.conf
+$ lore task next --claim --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invite.conf
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_4c59…6c38.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
@@ -187,7 +191,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_2537…6bbb.json (s
   lesson → mem_2537…6bbb
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
@@ -198,12 +202,12 @@ $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && g
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
 lore: committed locally to store agency; lore sync sends it
-✓ tsk_162d…9666 merged 10:26 (found by: ancestry, 05513aa)
+✓ tsk_162d…9666 merged 10:28 (found by: ancestry, 05513aa)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_28f8…03df.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
@@ -234,7 +238,7 @@ msn_2ad3…f891  EXPIRED  agent-frontend tsk_54fe…28f2 claimed by agent-fronte
 $ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 2 done · 0 claimed · 0 ready · 1 waiting · 0 gated · 1 expired · 0 blocked
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  not merged yet 4m
-  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:26 12m (timebox 1h)
+  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:28 12m (timebox 1h)
   expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 0s (timebox 1h)
   waiting   tsk_c0f3…b5b8  deploy to staging                         waits for tsk_54fe…28f2 to be merged (in_progress)
 ```
@@ -253,7 +257,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_0aae…a61f.json (store a
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 
 # agent-frontend-2, in agents/fe2/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_0aae…a61f.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
@@ -265,8 +269,8 @@ dfd8dc8 invite page
 
 # agent-frontend, in agents/app
 $ lore task done --id tsk_54fe…28f2
-ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:01AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:49AM
-  hint: stop work on this task; `lore task next` finds other work
+ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:02AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:50AM
+  hint: stop work on this task; `lore task next --claim` takes other work
 (exit 12)
 
 # agent-frontend-2, in agents/fe2/app
@@ -286,7 +290,7 @@ The deploy task waits for every task it depends on to be merged. `agent-infra` f
 <!-- example: agents#merged-by-hand -->
 ```console
 # agent-coord, in api
-$ lore task next --mission msn_2ad3…f891 --role coordinator
+$ lore task next --claim --mission msn_2ad3…f891 --role coordinator
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: waits for tsk_05e9…4603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
@@ -296,7 +300,7 @@ ERROR: [E_NO_WORK] nothing ready:
 $ lore task merged --id tsk_05e9…4603
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency)
-✓ tsk_05e9…4603 merged (marked by hand, 11:08)
+✓ tsk_05e9…4603 merged (marked by hand, 11:09)
 ```
 <!-- /example -->
 
@@ -305,7 +309,7 @@ Now the deploy task is ready except for its gate. The coordinator stops there. A
 <!-- example: agents#gate -->
 ```console
 # agent-coord, in api
-$ lore task next --mission msn_2ad3…f891 --role coordinator
+$ lore task next --claim --mission msn_2ad3…f891 --role coordinator
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve --id tsk_c0f3…b5b8)
   hint: lore task board shows what each task waits on
@@ -322,7 +326,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (stor
 ✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash 34ee2105…
 
 # agent-coord, in api
-$ lore task next --mission msn_2ad3…f891 --role coordinator
+$ lore task next --claim --mission msn_2ad3…f891 --role coordinator
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ claimed tsk_c0f3…b5b8 deploy to staging (lease 20m, token ct_3de87…) on refs/lore/signals/main
@@ -339,10 +343,10 @@ From any of the client 2 repos:
 # alice, in infra
 $ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
-  claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:32) 1m
-  done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:08 4m
-  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:05 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
-  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:26 12m (timebox 1h)
+  claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:34) 1m
+  done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:09 4m
+  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:07 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
+  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:28 12m (timebox 1h)
 $ lore task show --id tsk_c0f3…b5b8 --from agency/client2
 tsk_c0f3…b5b8
   title:    deploy to staging
@@ -357,8 +361,8 @@ tsk_c0f3…b5b8
   source:   agency/client2
   claim:    active, held by agent-coord (session s-10e90368, devbox)
   token:    ct_3de87…  epoch 1
-  expires:  2026-11-02T11:32:50Z  renewed_seq 0
-created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:12:50Z by agent-coord
+  expires:  2026-11-02T11:34:00Z  renewed_seq 0
+created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:14:00Z by agent-coord
 $ lore task show --id tsk_54fe…28f2
 tsk_54fe…28f2
   title:    build the invite page
@@ -375,12 +379,12 @@ tsk_54fe…28f2
   attempts: 2
   branch:   agent-frontend/invite-route
   commit:   cf563f339644
-  merged:   2026-11-02T11:05:50Z
+  merged:   2026-11-02T11:07:00Z
   source:   agency/client2
   notes:
-    2026-11-02 10:31  route + loader done, form next  [agency/client2]
+    2026-11-02 10:32  route + loader done, form next  [agency/client2]
   claim:    none on refs/lore/signals/main
-created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:05:50Z by alice
+created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:07:00Z by alice
 ```
 <!-- /example -->
 

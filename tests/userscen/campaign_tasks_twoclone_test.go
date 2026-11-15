@@ -40,7 +40,7 @@ func TestCampaignTasks_TwoCloneSplitClaimMove(t *testing.T) {
 	// sub-tasks is never handed out by next.
 	tm.cb.MustLore("task", "claim", kids[0]).Says(t, "claimed")
 	tm.ca.Lore("task", "claim", kids[0]).Fails(t, th.ExitContended, "E_CONTENDED")
-	tm.ca.MustLore("task", "next").Never(t, parent, kids[0])
+	tm.ca.MustLore("task", "next", "--claim").Never(t, parent, kids[0])
 
 	// Move: alice moves a sub-task to another list and under another
 	// parent; bob sees both moves.

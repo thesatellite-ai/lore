@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -109,6 +110,56 @@ func TestReadNamingStoreOutsideARepo(t *testing.T) {
 	_, err = app().Run(ctx, list, op.JSONDecoder{Body: []byte(`{}`)}, op.Caller{})
 	if hint := errs.EnvelopeOf(err).Error.Hint; !errs.Has(err, errs.NotAStore) || !strings.Contains(hint, "--to") || strings.Contains(hint, "git init") {
 		t.Fatalf("rule list with no store, no org: %v (hint %q), want E_NOT_A_STORE naming --to, not git init", err, hint)
+	}
+	if entries, rerr := os.ReadDir(plain); rerr != nil || len(entries) != 0 {
+		t.Fatalf("the folder it ran in got files: %v %v", entries, rerr)
+	}
+}
+
+// TestEditByIDOutsideARepo: an edit naming its row by id from a folder
+// that is no repo finds the org folder holding the row (devco D-433:
+// `memory edit --id …` gave E_NOT_A_STORE "run git init here first").
+func TestEditByIDOutsideARepo(t *testing.T) {
+	t.Parallel()
+	ctx := background()
+	orgURL := folderStoreAt(t, orgStoreID, rowfs.VisibilityInternal)
+	hook := func(context.Context) ([]attach.Store, error) {
+		return []attach.Store{{Name: rosterStore, URL: orgURL, Folder: "org"}}, nil
+	}
+	plain, home := t.TempDir(), t.TempDir()
+	app := func() *App {
+		a, err := New(Options{RepoDir: plain, Home: home, FlagActor: testEmail, OrgStores: hook, Wall: time.Now})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = a.Close() })
+		return a
+	}
+	a := app()
+	add, _ := a.Registry().Lookup("memory.add")
+	res, err := a.Run(ctx, add, op.JSONDecoder{Body: []byte(`{"body":"the staging box reboots on sundays","to":"` + string(rosterStore) + `"}`)}, op.Caller{Yes: true})
+	if err != nil {
+		t.Fatalf("memory add --to %s: %v", rosterStore, err)
+	}
+	out, _ := res.JSON()
+	var added struct {
+		ID string `json:"id"`
+	}
+	if err = json.Unmarshal(out, &added); err != nil || added.ID == "" {
+		t.Fatalf("memory add output %s: %v", out, err)
+	}
+	edit, _ := a.Registry().Lookup("memory.edit")
+	const body = "the staging box reboots on mondays"
+	if _, err = app().Run(ctx, edit, op.JSONDecoder{Body: []byte(`{"id":"` + added.ID + `","body":"` + body + `"}`)}, op.Caller{Yes: true}); err != nil {
+		t.Fatalf("memory edit --id outside a repo: %v", err)
+	}
+	list, _ := a.Registry().Lookup("memory.list")
+	res, err = app().Run(ctx, list, op.JSONDecoder{Body: []byte(`{"store":"` + string(rosterStore) + `"}`)}, op.Caller{})
+	if err != nil {
+		t.Fatalf("memory list --store %s: %v", rosterStore, err)
+	}
+	if got, _ := res.JSON(); !strings.Contains(string(got), body) {
+		t.Fatalf("the edit did not land: %s", got)
 	}
 	if entries, rerr := os.ReadDir(plain); rerr != nil || len(entries) != 0 {
 		t.Fatalf("the folder it ran in got files: %v %v", entries, rerr)

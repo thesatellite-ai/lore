@@ -613,7 +613,7 @@ This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/c
 ✓ act_8567…366f Ana Lima (@ana) registered in acme org/
 ✓ you are acme's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
   teammates join with: lore setup join --invite git@github.com:acme/lore-notes (after lore member add puts them on the roster)
-  use the store in a repo with no lore data (written only into the store): lore org link --org acme --project <folder> (a repo matching the org's own: patterns links as an own repo, any other as a client repo)
+  use the store in a repo with no lore data (written only into the store): lore org link --org acme --project <folder> (a repo matching the org's own: patterns and none of its repos: patterns links as an own repo, any other as a client repo)
 $ lore org rename --old acme --new acme-studio
 ✓ org entry acme is now acme-studio (this machine)
   id prj_67e2…291e recorded (the org folder's project id; it never changes)

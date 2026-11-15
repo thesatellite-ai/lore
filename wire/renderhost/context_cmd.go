@@ -37,6 +37,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -50,6 +51,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Caps (6.8): the default output cap, the hook cap when the policy cannot
@@ -272,11 +274,15 @@ var contextKinds = []struct {
 }
 
 // loadKnowledge lists the live, not superseded rows of every context
-// table across the committed-render sources.
+// table across the context sources (contextSources).
 func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
+	srcs, err := h.contextSources(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []knowledgeRow
 	for _, k := range contextKinds {
-		rows, err := h.renderLiveRows(ctx, k.table)
+		rows, err := h.liveRowsFrom(ctx, srcs, k.table)
 		if err != nil {
 			return nil, err
 		}
@@ -288,6 +294,45 @@ func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
 		}
 	}
 	return out, nil
+}
+
+// contextSources are the stores `lore context` picks from: the committed
+// render's (the repo store and the shareable stores) and, in a repo that
+// is not a client's, every attached internal org store (the linked store
+// folder and the org folder, the stores the private render reads). Why
+// (devco D-429): an own repo linked with `lore org link --own` keeps its
+// notes in the store folder, not in the repo, so --for-file and
+// --for-prompt said "nothing in the store applies here" while the private
+// render held 29 rules. context only prints to the agent, never into a
+// file of the checkout, so internal rows are safe here; a client repo
+// keeps the committed-render sources (its agent context stays as before),
+// and personal stores stay out (they are not the project's knowledge).
+func (h *Host) contextSources(ctx context.Context) ([]store.Source, error) {
+	srcs, err := h.renderSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	client, err := h.app.ClientRepo(ctx)
+	if err != nil || client {
+		return srcs, err
+	}
+	idents, err := h.app.StoreIdentities(ctx)
+	if err != nil {
+		return nil, err
+	}
+	personal := map[string]bool{}
+	if list, lerr := h.app.ListStores(ctx); lerr == nil {
+		for _, e := range list {
+			personal[e.Name] = e.Personal
+		}
+	}
+	for _, si := range idents {
+		if si.Shareable || personal[string(si.Name)] || slices.Contains(srcs, si.Name) {
+			continue
+		}
+		srcs = append(srcs, si.Name)
+	}
+	return srcs, nil
 }
 
 // groupOf is the section a kind prints under.
