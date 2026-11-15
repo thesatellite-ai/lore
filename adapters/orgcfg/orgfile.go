@@ -233,6 +233,10 @@ type Suggestion struct {
 	// Path is where the file was read (orgFilePath, or the old place in a
 	// store not moved yet).
 	Path string
+	// Held are the changes to the file that were not applied: made by
+	// someone who is not an admin of the org (orgauthority.go, R-7).
+	// Doc, Version and Path are the last accepted version.
+	Held []HeldOrgChange
 }
 
 // parseOrgFileDoc decodes a store's lore-org.yaml: a value of the wrong

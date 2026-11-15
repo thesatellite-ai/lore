@@ -1033,3 +1033,43 @@ func TestStaffAddRestoresSameDay(t *testing.T) {
 		}
 	}
 }
+
+// TestJoinOfALeaverNamesLeft: devco R-18. A person removed from the org
+// who runs the member join line again was told "not a member … ask an
+// admin to run lore member add"; they are on the roster, marked as left,
+// so the refusal now says so and names the admin's rejoin line. Nothing
+// is written.
+func TestJoinOfALeaverNamesLeft(t *testing.T) {
+	x := newFixture(t)
+	delete(x.e.origins, "agency")
+	if _, err := x.ops().staffAdd(op.WithConfirmed(x.ctx, true), StaffAddIn{Email: "ann@agency.example", Name: "Ann", Handle: "ann"}); err != nil {
+		t.Fatal(err)
+	}
+	left, err := value.TextOf(schema.ActorStatusLeft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended, err := value.DateOf("2026-11-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range x.e.All(schema.TableActors) {
+		if fieldText(a, fieldStableKey) == humanKeyPrefix+"ann@agency.example" {
+			a.Fields[schema.FieldActorStatus] = left
+			a.Fields[schema.FieldActorLeftAt] = txt(t, "2026-11-05T10:00:00Z")
+			x.e.Put(a)
+		}
+	}
+	for _, p := range x.e.All(schema.TableActorPeriods) {
+		p.Fields[schema.FieldPeriodEndedOn] = ended
+		x.e.Put(p)
+	}
+	x.joiner()
+	_, err = ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"ann@agency.example"}, Name: "Ann", Handle: "ann"})
+	wantCode(t, "join of a leaver", err, errs.Refused)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "marked as left since 2026-11-05") || strings.Contains(e.Message, "not a member") ||
+		!strings.Contains(e.Hint, "lore actor rejoin --actor @ann --type employee") {
+		t.Errorf("refusal = %v; want the left cause and the admin's rejoin line", err)
+	}
+}

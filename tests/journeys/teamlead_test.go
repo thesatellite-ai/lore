@@ -351,6 +351,11 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		tlApply(t, ann, dir, tlTeamSetup, "kind", map[string]any{"kind": "admin", "name": tlTeamSetup})
 		tlApply(t, ann, dir, tlTeamSetup, "team", map[string]any{"org": tlOrg, "store_url": tt.store.SSHURL()})
 		tt.lore(tlAnn, "setup", "list").OK(t).Says(t, tlTeamSetup, "admin", tlOrg)
+		// R-6: the roster says who is admin, not a local setup: Lee (the
+		// admin) gives Ann the admin role before he hands over
+		tt.lore(tlLee, "actor", "period", "edit", "@ann", "--org-role", "admin", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
+		tt.lore(tlAnn, "sync").OK(t)
 		// Lee hands over and leaves the team.
 		tt.lore(tlAnn, "actor", "offboard", "@lee", "--reason", "moved to another team", "--yes").OK(t).Says(t, "left")
 		tt.lore(tlAnn, "sync").OK(t) // C5: the offboard reaches the team with Ann's sync

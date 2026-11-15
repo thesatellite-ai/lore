@@ -107,7 +107,7 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		// hook in every session)
 		rend := opsdoctor.FixStep{Step: opsdoctor.StepRender, Where: filepath.Join(top, filepath.FromSlash(opsrender.DefaultOut)), Result: skippedNoLoreProject}
 		hooks := opsdoctor.FixStep{Step: opsdoctor.StepAgentHooks, Where: top, Result: skippedNoLoreProject}
-		return []opsdoctor.FixStep{mig, scopes, rend, hooks, a.fixOldClones(ctx, dry)}
+		return a.withOutsideClones(ctx, dry, []opsdoctor.FixStep{mig, scopes, rend, hooks, a.fixOldClones(ctx, dry)})
 	}
 	// E-6: a failed migrate never reaches fixRender, which writes LORE.md,
 	// LORE.full.md and the pointer file; replacing its result afterwards
@@ -116,7 +116,7 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 	if !mig.Failed {
 		rend = a.fixRender(ctx, top, dry, mig.Changed)
 	}
-	steps := []opsdoctor.FixStep{mig, scopes, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
+	steps := a.withOutsideClones(ctx, dry, []opsdoctor.FixStep{mig, scopes, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)})
 	if !mig.Failed && !(dry && mig.Changed) {
 		// B4-7: once migrate is current (a dry run that would migrate
 		// cannot tell yet), lore 0.1.17's database and backups go

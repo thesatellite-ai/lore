@@ -160,7 +160,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		for _, s := range org {
 			optional[s.Name] = true
 		}
-		if attached, st.unreachable, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, org, personal), optional); err != nil {
+		if attached, st.unreachable, st.untrusted, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, org, personal), optional); err != nil {
 			return fail(err)
 		}
 	}
@@ -339,6 +339,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		return fail(err)
 	}
 	st.defaultTarget = store.SourceRepo
+	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
@@ -352,9 +353,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil {
 		return fail(err)
 	}
-	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
-	st.refuseOrgFolderIfContractor(ctx, attached)   // contractorgate.go: a contractor writes only to their client folders (J-15)
-	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
+	st.refuseWritesIfLeft(ctx, opts.Home, attached)           // leftgate.go: a removed person writes only to their personal store (B2-12)
+	st.refuseOrgFolderIfContractor(ctx, attached, repoClient) // contractorgate.go: a contractor writes only to their client folders (J-15, R-16)
+	st.armLeftHold(opts.Home, attached)                       // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
 		// agent in a client repo is recorded as its owning person; an org
@@ -514,15 +515,18 @@ func renameOrgClashes(org []attach.Store, top string) []attach.Store {
 // reads keep working offline (spec 5.4) and each write decides how to
 // fail closed (App.unreachableGuard). Any other failure, and any failure
 // of a committed or personal store, still fails the open.
-func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store, optional map[store.Source]bool) (opened []attach.Opened, unreachable map[store.Source]error, err error) {
+func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store, optional map[store.Source]bool) (opened []attach.Opened, unreachable map[store.Source]error, untrusted []untrustedStore, err error) {
 	home := opts.Home
 	cfg, err := readStoresFile(repoTop)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err = cleanStoresFileURLs(repoTop, cfg); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+	// devco R-9: a committed store on a host outside the org that nobody
+	// attached here waits for the person's `lore store trust`
+	cfg.Stores, untrusted = heldCommittedStores(ctx, home, repoTop, cfg.Stores)
 	for _, x := range extra {
 		// The committed file wins a name clash (an org store the repo
 		// also attaches by hand, or a recorded folder target).
@@ -532,7 +536,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	}
 	mc, err := readMachineConfig(home)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// ONBOARDING 3.4: the active setup's personal_store replaces it.
 	// B4-22: a lore 0.1.17 local personal store already attached as `me`
@@ -573,13 +577,13 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	raws := make([]string, 0, len(cfg.Stores))
 	for i, s := range cfg.Stores {
 		if cfg.Stores[i].URL, err = canonical(s); err != nil {
-			return nil, nil, errs.Prefix("wire: store "+string(s.Name), err)
+			return nil, nil, nil, errs.Prefix("wire: store "+string(s.Name), err)
 		}
 		raws = append(raws, s.URL)
 	}
 	openers, err := storeOpeners(reg, originsOf(raws...), opts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var strict, maybe attach.Config
 	for _, s := range cfg.Stores {
@@ -592,7 +596,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 	}
 	if opened, err = attach.Open(ctx, strict, openers, opts.openOptions()); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, s := range maybe.Stores {
 		one, oerr := attach.Open(ctx, attach.Config{Stores: []attach.Store{s}}, openers, opts.openOptions())
@@ -607,7 +611,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 			for _, o := range opened {
 				_ = o.Backend.Close() // best effort: the open error is what the caller needs
 			}
-			return nil, nil, oerr
+			return nil, nil, nil, oerr
 		}
 		opened = append(opened, one...)
 	}
@@ -620,7 +624,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		opened[i].Location = location(urls[opened[i].Name], opened[i].Folder)
 	}
 	afterAttach(ctx, home, repoTop, opened, urls) // orgsource.go, storeaddr.go: SOURCE_OF_TRUTH rows 7 and 9
-	return opened, unreachable, nil
+	return opened, unreachable, untrusted, nil
 }
 
 // location is engine.Attached.Location for a store opened from the
@@ -1292,6 +1296,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		// own default (the first store) has nothing to pick.
 		engOpts = append(engOpts, engine.WithDefaultTarget(store.SourceMachine))
 	}
+	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
@@ -1302,9 +1307,9 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil { // TEAM_PROFILES 6.3, as in open
 		return fail(err)
 	}
-	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: inside a store clone too (B2-25)
-	st.refuseOrgFolderIfContractor(ctx, attached)   // contractorgate.go (J-15)
-	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
+	st.refuseWritesIfLeft(ctx, opts.Home, attached)     // leftgate.go: inside a store clone too (B2-25)
+	st.refuseOrgFolderIfContractor(ctx, attached, true) // contractorgate.go (J-15); a store clone has no code repo
+	st.armLeftHold(opts.Home, attached)                 // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	// rowState: App.finishOpen reads the formats before the first write
 	if !st.refreshPending {
 		if err = st.readFormats(ctx, opts); err != nil {

@@ -2,6 +2,7 @@ package period
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -924,5 +925,42 @@ func TestOffboardPreviewHandsLedTasksOverInOneLine(t *testing.T) {
 	out, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira"})
 	if err != nil || out.Handover != line {
 		t.Fatalf("handover %q, err %v", out.Handover, err)
+	}
+}
+
+// TestOffboardNeedsAnAdmin: devco R-6. A plain member could offboard any
+// teammate with the normal command; the roster now decides: a caller
+// without an open admin stint is refused E_REFUSED naming the admin's
+// line, and nothing is written. The same holds for rejoin and for
+// marking someone left with actor status.
+func TestOffboardNeedsAnAdmin(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	boss := testID(t, ids.PrefixActor, 40)
+	stint := func(id int, actor ids.AnyID, role string) {
+		w.f.Put(row.Row{Table: schema.TableActorPeriods, ID: testID(t, ids.PrefixActorPeriod, id), Fields: map[string]value.Value{
+			schema.FieldPeriodActor: ref(t, actor), schema.FieldPeriodType: txt(t, schema.PeriodTypeEmployee),
+			schema.FieldPeriodStartedOn: date(t, "2026-01-01"), schema.FieldPeriodOrgRole: txt(t, role)}})
+	}
+	stint(41, boss, orgRoleAdmin)
+	stint(42, w.sam, "member")
+	before := w.snapshot()
+	_, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"})
+	wantCode(t, err, errs.Refused)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "only an admin") || !strings.Contains(e.Hint, "lore member remove --who") {
+		t.Errorf("refusal = %v; want the cause and the admin's line", err)
+	}
+	if !reflect.DeepEqual(before, w.snapshot()) {
+		t.Error("a refused offboard wrote rows")
+	}
+	_, err = w.ops().status(yes(), ActorStatusIn{Actor: "@mira", To: schema.ActorStatusLeft})
+	wantCode(t, err, errs.Refused)
+	_, err = w.ops().rejoin(yes(), RejoinIn{Actor: "@mira", Type: schema.PeriodTypeEmployee})
+	wantCode(t, err, errs.Refused)
+	// Sam made admin: the offboard runs
+	stint(42, w.sam, orgRoleAdmin)
+	if _, err = w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"}); err != nil {
+		t.Fatalf("an admin's offboard: %v", err)
 	}
 }

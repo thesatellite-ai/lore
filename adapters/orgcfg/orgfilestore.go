@@ -71,6 +71,7 @@ func (g *GitLinks) AddOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (OrgF
 			if !found {
 				return nil, fmt.Errorf("%w: %s has no %s", ErrNoOrgFile, norm, path)
 			}
+			raw = acceptedOrgRaw(ctx, dir, tip, a.OrgFolder, raw)
 			body, existed, aerr := appendOrgFileStore(raw, want, a.Store)
 			if aerr != nil {
 				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, aerr)

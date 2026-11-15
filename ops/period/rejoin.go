@@ -101,6 +101,9 @@ func (o ops) rejoin(ctx context.Context, in RejoinIn) (RejoinOut, error) {
 	if err != nil {
 		return RejoinOut{}, err
 	}
+	if err = requireAdmin(ctx, r, actRejoin); err != nil {
+		return RejoinOut{}, err
+	}
 	a, err := r.ResolveActor(ctx, in.Actor)
 	if err != nil {
 		return RejoinOut{}, err

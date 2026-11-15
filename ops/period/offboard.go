@@ -174,6 +174,9 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 	if err != nil {
 		return OffboardOut{}, err
 	}
+	if err = requireAdmin(ctx, r, actOffboard); err != nil {
+		return OffboardOut{}, err
+	}
 	a, err := r.ResolveActor(ctx, in.Actor)
 	if err != nil {
 		return OffboardOut{}, err
@@ -456,3 +459,47 @@ func handoverLine(a row.Row, ref string) string {
 	}
 	return "lore task reassign --from " + who + " --assign " + handoverTo + " --yes"
 }
+
+// orgRoleAdmin is the org_role of an admin's stint (ops/team OrgRoleAdmin).
+const orgRoleAdmin = "admin"
+
+// requireAdmin refuses a caller who is not an admin of the org (devco
+// R-6): offboarding ends a teammate's stint, and every teammate's lore
+// holds back a stint change whose author is not an admin
+// (adapters/backend/git authority.go), so a member's offboard would only
+// be refused later, on everyone's machine. A roster with no admin stint
+// at all (an org from before org roles) refuses nobody; `lore doctor
+// --fix` gives its first admin one.
+func requireAdmin(ctx context.Context, r profilestore.Roster, what adminAct) error {
+	rows, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return err
+	}
+	caller := r.Caller().String()
+	anyAdmin := false
+	for _, p := range rows {
+		if text(p, schema.FieldPeriodEndedOn) != "" || text(p, schema.FieldPeriodOrgRole) != orgRoleAdmin {
+			continue
+		}
+		if text(p, schema.FieldPeriodActor) == caller {
+			return nil
+		}
+		anyAdmin = true
+	}
+	if !anyAdmin {
+		return nil
+	}
+	return errs.New(errs.Refused, "only an admin of the org can "+what.does+", and you are not one on "+r.Where()+"'s roster; nothing was written").
+		WithHint("ask an admin of the org to run: " + what.line)
+}
+
+// adminAct is a roster change only an admin makes: what it does, and the
+// line the admin runs.
+type adminAct struct{ does, line string }
+
+// The admin-only roster changes of this package.
+var (
+	actOffboard = adminAct{"offboard a teammate or remove a member", "lore member remove --who <email|@handle> --yes (or lore actor offboard --actor <@handle> --yes)"}
+	actRejoin   = adminAct{"bring back a person who left", "lore actor rejoin --actor <@handle> --type employee --yes"}
+	actStatus   = adminAct{"change another person's status, or mark anyone left or archived", "lore actor status --actor <@handle> --to <status>"}
+)

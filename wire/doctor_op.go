@@ -54,6 +54,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckRowBOM, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorRowBOM(c, fix) }},               // doctor_projectmeta.go (I-15)
 		{DoctorCheckRowFile, a.DoctorRowFiles},
 		{DoctorCheckUntrustedHost, a.DoctorUntrustedHost},
+		{DoctorCheckStoreTrust, a.DoctorStoreTrust}, // storetrust.go (devco R-2, R-7, R-9)
 		{DoctorCheckTrash, a.DoctorTrash},
 		{DoctorCheckSharedMachine, a.DoctorSharedMachines},
 		{DoctorCheckTeamVersions, a.DoctorTeamVersions},
@@ -80,6 +81,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                                   // doctor_dupactors.go
 		{DoctorCheckSharedKeys, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorSharedKeys(c, fix) }},         // actor_merge.go
 		{DoctorCheckPendingInvites, a.DoctorPendingInvites},                                                                     // doctor_invites.go
+		{DoctorCheckHeldChanges, a.DoctorHeldChanges},                                                                           // rosterhold.go
 		{DoctorCheckOrgAdmin, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOrgAdmin(c, fix) }},             // doctor_orgadmin.go
 		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }},            // doctor_emptyref.go
 		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                                     // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)

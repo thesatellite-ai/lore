@@ -830,6 +830,9 @@ func (a *App) folderExists(ctx context.Context, src attach.Store, f string) (boo
 // file:// store, the lore-owned worktree of a git store (of src's pinned
 // branch, when it names one).
 func (a *App) storeDir(ctx context.Context, src attach.Store) (string, error) {
+	if err := a.untrustedStoreErr(ctx, src); err != nil {
+		return "", err
+	}
 	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return "", err
@@ -1024,6 +1027,9 @@ func (a *App) findStore(ctx context.Context, verb, name string) (attach.Store, e
 // it returns are committed (gitCommitFilesAs: org identity or FLAG4) and
 // pushed in one sync. edit returning no paths commits nothing.
 func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string, edit func(dir string) ([]string, error)) error {
+	if err := a.untrustedStoreErr(ctx, src); err != nil {
+		return err
+	}
 	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return err

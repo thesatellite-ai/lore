@@ -212,6 +212,21 @@ func storeOfflineCause(url, detail string) string {
 // report lines are printed first on stderr, since a failed run has no
 // stdout.
 func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut, error) {
+	out, err := s.syncRun(ctx, in)
+	if err == nil {
+		// devco R-7 / R-2: what the stores hold but lore did not take (a
+		// non-admin's change to lore-org.yaml, files lore does not own) is
+		// named with the commit, its author and the step that settles it.
+		for _, line := range s.app.storeTrustLines(ctx) {
+			out.Lines = append(out.Lines, line)
+			out.Data.Warnings = append(out.Data.Warnings, line)
+		}
+	}
+	return out, err
+}
+
+// syncRun is SyncRun before the store trust lines.
+func (s syncRows) syncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut, error) {
 	if s.app.setupSyncHere(ctx) {
 		return s.app.SyncSetup(ctx) // no code repo here: every store of the setup (syncsetup.go)
 	}
@@ -307,6 +322,9 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			out.Lines = append(out.Lines, "  "+p)
 		}
 	}
+	// R-5/R-6/R-18: changes no one with authority made, read as their
+	// last accepted version, named here (rosterhold.go)
+	out.Lines = append(out.Lines, s.app.heldSyncLines(ctx)...)
 	if serr == nil {
 		if f := opsrun.FlushOutbox(ctx, s.app); f.Written > 0 || f.Failed != "" {
 			if f.Failed != "" {
