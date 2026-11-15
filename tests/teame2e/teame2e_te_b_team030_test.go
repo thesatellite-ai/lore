@@ -61,7 +61,7 @@ func TestTeB_Team030Matrix(t *testing.T) {
 			teamTitle := "teb team task " + name
 			r := rp.c.Lore(append(addArgs(teamTitle), "--assign", "@backend")...)
 			if refused {
-				r.Refused(t, "E_INVALID_INPUT", "TEAM-030")
+				r.Refused(t, "E_INVALID_INPUT", team030Refusal)
 			} else {
 				r.OK(t)
 			}
@@ -74,7 +74,7 @@ func TestTeB_Team030Matrix(t *testing.T) {
 			}
 			r = rp.c.Lore("task", "edit", plain, "--assign", "@backend")
 			if refused {
-				r.Refused(t, "E_INVALID_INPUT", "TEAM-030")
+				r.Refused(t, "E_INVALID_INPUT", team030Refusal)
 			} else {
 				r.OK(t)
 			}

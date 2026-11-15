@@ -165,6 +165,10 @@ type Engine struct {
 	// repoAlias answers for the repo store when none is attached
 	// (WithRepoAlias): a command run inside a store's folder.
 	repoAlias store.Source
+	// aliases are other names of attached stores (WithStoreAlias): an org
+	// store's short name from lore-org.yaml answers for the name it is
+	// attached under here (devco T-5).
+	aliases   map[store.Source]store.Source
 	cache     store.Cache
 	reg       *schema.Registry
 	scanner   scan.Scanner
@@ -282,6 +286,34 @@ func WithDefaultTarget(name store.Source) Option {
 // default write target).
 func WithRepoAlias(name store.Source) Option {
 	return func(e *Engine) error { e.repoAlias = name; return nil }
+}
+
+// WithStoreAlias makes alias name the attached store name wherever an
+// operation names a store (--to, --from). Why (devco T-5): an org store is
+// attached under its org's name ("agency", "agency/org") in a linked repo,
+// so the name its admin gave it (`lore store init --name clientco`,
+// lore-org.yaml `name:`) answered E_NOT_FOUND there. An alias never hides
+// a store attached under that very name.
+func WithStoreAlias(alias, name store.Source) Option {
+	return func(e *Engine) error {
+		if e.aliases == nil {
+			e.aliases = map[store.Source]store.Source{}
+		}
+		e.aliases[alias] = name
+		return nil
+	}
+}
+
+// StoreName is name, or the attached store an alias names (WithStoreAlias)
+// when no store is attached under name itself.
+func (e *Engine) StoreName(name store.Source) store.Source {
+	if _, ok := e.stores[name]; ok {
+		return name
+	}
+	if to, has := e.aliases[name]; has {
+		return to
+	}
+	return name
 }
 
 // WithCache sets the cache port (required).
@@ -421,6 +453,7 @@ func (e *Engine) attached(name store.Source) (Attached, error) {
 	if !ok && name == store.SourceRepo && e.repoAlias != "" {
 		a, ok = e.stores[e.repoAlias]
 	}
+
 	if !ok {
 		return Attached{}, errs.New(errs.NotFound, "no store named "+string(name)+" is attached").
 			WithHint("run `lore store list` to see the stores this repo attaches")

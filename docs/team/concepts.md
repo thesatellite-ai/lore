@@ -218,6 +218,7 @@ The **repo role** decides which guards apply. A leak guard is a check that stops
 | Role | When | Leak guards |
 |---|---|---|
 | **client repo** | matched by `repos:`, or linked without `--own` when no `own:` pattern matches it | on: internal kinds default to the store, commits are checked |
+| **moved own repo** | no `own:` pattern matches its remote any more, nothing links it as a client, and its lore data was written as an own repo (actor rows lore keeps out of client repos) | off: it stays an own repo; `lore whoami` names the move and both fixes (an admin adds the new owner under `own:`, or `lore org link --org <org> --project <folder> --yes` makes it a client repo) |
 | **own repo** | matched by `own:`, or linked with `--own` (a repo `own:` matches links as own without it) | off |
 | **no org** | nothing matched | off; only your `everywhere/` personal notes load |
 

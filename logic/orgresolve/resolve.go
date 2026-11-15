@@ -134,6 +134,14 @@ type Inputs struct {
 	// Setup is the active setup's org hint (ONBOARDING_DESIGN 3.3/3.4);
 	// zero when no setup is active or it names no org.
 	Setup SetupHint
+	// OwnData reports that the repo's committed .lore/data was written as
+	// an org's own repo: an actor row in it holds more than the client
+	// projection {id, display name, kind}, which lore never writes into a
+	// client repo. Why (devco T-17): an own repo the host moved to another
+	// owner matches no own: pattern any more; without this the fail-closed
+	// default called it a client repo, refused every write with a wrong
+	// cause and blocked plain code commits on its own actor rows.
+	OwnData bool
 }
 
 // SetupHint is the org of the active setup (member/admin) and why that
@@ -421,6 +429,19 @@ func Resolve(in Inputs) (Result, error) {
 		}
 	}
 
+	// ── Moved own repo (devco T-17) ────────────────────────────────────
+	// Client only by the fail-closed default (no client link, no repos:
+	// pattern, no moved client link), yet the repo's own lore data was
+	// written as this org's own repo: its remote moved away from the own:
+	// patterns. It stays an own repo until a person decides, and the move
+	// is named with both ways out.
+	if decided && r.Role == RoleClient && in.OwnData && in.ProjectID != "" && r.MovedLink == nil &&
+		!ClientByMatch(r.Org, links, in.Remotes) && len(in.Remotes) > 0 {
+		r.Role = RoleOwn
+		r.MatchedBy += "; own repo by its lore data (its remote matches no own: pattern)"
+		r.Warnings = append(r.Warnings, MovedOwnWarning(r.Org, in.Remotes))
+	}
+
 	// ── Rule 6: none ───────────────────────────────────────────────────
 	if decided {
 		notReached(StepNone)
@@ -452,6 +473,26 @@ func Resolve(in Inputs) (Result, error) {
 		}
 	}
 	return r, nil
+}
+
+// MovedOwnWarning names an own repo whose remote left the org's own:
+// patterns (devco T-17): what moved, why lore still treats it as own, and
+// the two ways out with every flag named.
+func MovedOwnWarning(o *orgconf.Org, remotes []string) string {
+	pattern := ownerPattern(remotes[0])
+	return fmt.Sprintf("this repo's remote %s matches none of %s's own: patterns (%s), yet its lore data was written as %s's own repo: it moved on the git host. "+
+		"lore keeps it an own repo until someone decides: if %s moved it, an admin adds %s under own: in %s in the org's store and runs `lore org refresh --org %s`; "+
+		"if it now belongs to a client, run `lore org link --org %s --project <folder> --yes` here",
+		strings.Join(remotes, ", "), o.Name, listOrNone(o.Own), o.Name, o.Name, pattern, orgconf.OrgFileName, o.Name, o.Name)
+}
+
+// ownerPattern is the own: pattern covering every repo of remote's owner
+// ("git.host/owner/*"), or the remote itself when it has no owner part.
+func ownerPattern(remote string) string {
+	if i := strings.LastIndex(remote, "/"); i > 0 {
+		return remote[:i] + "/*"
+	}
+	return remote
 }
 
 // movedClientLink is the first client link (non-staging, known entry) of

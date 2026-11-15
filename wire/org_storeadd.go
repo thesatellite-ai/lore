@@ -41,12 +41,24 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 		}
 		sc = &o.Stores[0]
 	}
+	named := ""
+	if in.Name == "" {
+		// devco T-5: the name the person gave the store in this repo
+		// (`lore store init --name clientco`) goes into lore-org.yaml, so it
+		// is the store's name in every repo of the org, not its repo name
+		if n := storesFileName(gitTop(ctx, h.reg.dir()), want); n != "" {
+			in.Name, named = n, "  named "+n+" (its name in this repo's .lore/stores.yaml; --name sets another)"
+		}
+	}
 	file := orgcfg.OrgFilePath(sc.OrgFolder) + " in " + sc.URL
 	push := "committed in this machine's clone of the store; not pushed without --push"
 	if in.Push {
 		push = "committed and pushed to the org store"
 	}
 	lines := []string{"add store " + want + " to org " + in.Org + ":", "  " + file + " lists it (" + push + ")", "  this machine's org entry " + in.Org + " copies it"}
+	if named != "" {
+		lines = append(lines, named)
+	}
 	if !yes {
 		return opsorgcmd.Report{Lines: lines, Ask: "Add it?"}, nil
 	}
@@ -80,6 +92,24 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	lines = append(lines, "✓ org entry "+in.Org+" lists it (version "+short(sg.Version)+")",
 		"  next: lore org link --org "+in.Org+" --project <folder> --store "+in.URL)
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// storesFileName is the name top's .lore/stores.yaml gives the store of
+// normalised url want ("" when top is "" or nothing there names it).
+func storesFileName(top, want string) string {
+	if top == "" {
+		return ""
+	}
+	cfg, err := readStoresFile(top)
+	if err != nil {
+		return ""
+	}
+	for _, st := range cfg.Stores {
+		if n, nerr := repourl.NormalizeStore(st.URL); nerr == nil && n == want {
+			return string(st.Name)
+		}
+	}
+	return ""
 }
 
 // compile-time check: the org host offers org.store.add.

@@ -782,7 +782,16 @@ func (b *Backend) resolve(ctx context.Context, dir, ref string) (string, error) 
 }
 
 // head is the worktree's HEAD commit, "" on an unborn branch.
-func (b *Backend) head(ctx context.Context) (string, error) { return b.resolve(ctx, b.work, "HEAD") }
+//
+// It is read from the clone's ref files when they can answer
+// (RefFromFiles): a store Get resolved HEAD per row, ~20 git processes per
+// imported task (T-3).
+func (b *Backend) head(ctx context.Context) (string, error) {
+	if oid, ok := RefFromFiles(b.work, "HEAD"); ok {
+		return oid, nil
+	}
+	return b.resolve(ctx, b.work, "HEAD")
+}
 
 // checkMarker reads lore-store.yaml at HEAD. An empty store has no commit
 // and passes (its first writer adds the marker), as does one whose commits

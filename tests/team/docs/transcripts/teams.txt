@@ -72,8 +72,8 @@ ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
   hint: check the handle with lore actor list; a new person runs lore actor register (or joins from an invite) first
 (exit 27)
 tomas (work)$ lore team show --handle @ops
-ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
-  hint: lore team list shows the teams; lore team add --handle @ops --members <people> makes it
+ERROR: [E_NOT_FOUND] no team @ops on your copy of the roster in agency org/
+  hint: a teammate may have made it since your last sync: lore sync fetches the roster, then run this again; lore team list shows the teams you have
 (exit 27)
 
 ### remove

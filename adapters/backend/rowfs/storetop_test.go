@@ -24,6 +24,8 @@ func TestStoreTop(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// root unresolved on purpose: on macOS t.TempDir is under /var, a link
+	// to /private/var, and StoreTop returns the resolved top (D-389)
 	root := t.TempDir()
 	clone := filepath.Join(root, "stores", "acme", "notes")
 	mk(filepath.Join(clone, ".git"))
@@ -33,7 +35,7 @@ func TestStoreTop(t *testing.T) {
 	mk(deep)
 	for _, dir := range []string{clone, filepath.Join(clone, "client_a"), deep} {
 		top, isGit, ok := StoreTop(dir)
-		if !ok || !isGit || top != clone {
+		if !ok || !isGit || !samePathForTest(t, top, clone) {
 			t.Fatalf("StoreTop(%s) = %s %v %v, want %s git", dir, top, isGit, ok, clone)
 		}
 	}
@@ -52,7 +54,58 @@ func TestStoreTop(t *testing.T) {
 	shelf := filepath.Join(root, "shelf")
 	touch(filepath.Join(shelf, MarkerFile))
 	mk(filepath.Join(shelf, "topic"))
-	if top, isGit, ok := StoreTop(filepath.Join(shelf, "topic")); !ok || isGit || top != shelf {
+	if top, isGit, ok := StoreTop(filepath.Join(shelf, "topic")); !ok || isGit || !samePathForTest(t, top, shelf) {
 		t.Fatalf("folder store: %s %v %v", top, isGit, ok)
+	}
+}
+
+// samePathForTest reports whether a and b name the same folder once
+// symlinks are resolved: StoreTop returns resolved paths, a test builds its
+// own under t.TempDir, which on macOS sits under the /var -> /private/var
+// link (D-389).
+func samePathForTest(t *testing.T, a, b string) bool {
+	t.Helper()
+	ra, err := filepath.EvalSymlinks(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, err := filepath.EvalSymlinks(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ra == rb
+}
+
+// TestStoreTopThroughLink pins D-389 on every OS: a store reached through
+// a symlinked folder (as every t.TempDir on macOS is, under /var ->
+// /private/var) is found with its resolved top, and StoreFolderAt names
+// the folder whether it is given the linked or the resolved top.
+func TestStoreTopThroughLink(t *testing.T) {
+	base := t.TempDir()
+	realTop := filepath.Join(base, "real", "notes")
+	for _, p := range []string{filepath.Join(realTop, ".git"), filepath.Join(realTop, "client_a", "tasks")} {
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{filepath.Join(realTop, MarkerFile), filepath.Join(realTop, "client_a", MetaFileName)} {
+		if err := os.WriteFile(p, []byte("x\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(filepath.Join(base, "real"), link); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	linked := filepath.Join(link, "notes")
+	deep := filepath.Join(linked, "client_a", "tasks")
+	top, isGit, ok := StoreTop(deep)
+	if !ok || !isGit || !samePathForTest(t, top, realTop) {
+		t.Fatalf("StoreTop(%s) = %s %v %v, want %s git", deep, top, isGit, ok, realTop)
+	}
+	for _, givenTop := range []string{linked, top} {
+		if f := StoreFolderAt(givenTop, deep); f != "client_a" {
+			t.Errorf("StoreFolderAt(%s, deep) = %q, want client_a", givenTop, f)
+		}
 	}
 }

@@ -82,7 +82,38 @@ func (d ArgsDecoder) stray(word string) error {
 		return nil
 	}
 	return errs.New(errs.InvalidInput, "unexpected value "+strconv.Quote(word)+" after --"+sw+" (a switch takes no value)").
-		WithHint("give --" + sw + " alone; every value goes with its own flag (--name \"value\"); the command's --help lists its flags")
+		WithHint("give --" + sw + " alone; every value goes with its own flag; the command's --help lists its flags")
+}
+
+// strayHint is the hint for a value no positional or flag of the command
+// takes. It names the command's own flags that are still free (T-2, T-6:
+// a made-up --name sent people looking for a flag the command lacks), and
+// says to quote words that belong together when a positional took a word.
+func strayHint(fields []FieldInfo, given map[string][]string, filled int) string {
+	var parts []string
+	if filled > 0 {
+		parts = append(parts, "quote words that belong together as one value (\"two words\")")
+	}
+	var free []string
+	for _, f := range fields {
+		// a positional's flag is its quiet alias: the typed word already
+		// filled it, so it is not free
+		if f.Flag == "" || f.Type == TypeBool || f.Group || f.Arg != NoArg || f.ArgOf != "" {
+			continue
+		}
+		if _, ok := given[f.Flag]; ok {
+			continue
+		}
+		free = append(free, "--"+f.Flag+" \"value\"")
+		if len(free) == 3 {
+			break
+		}
+	}
+	if len(free) > 0 {
+		parts = append(parts, "give each other value with its flag ("+strings.Join(free, ", ")+")")
+	}
+	parts = append(parts, "the command's --help lists its flags")
+	return strings.Join(parts, "; ")
 }
 
 // Decode implements Decoder.
@@ -182,7 +213,7 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 			return err
 		}
 		return errs.New(errs.InvalidInput, "unexpected value "+strconv.Quote(d.Args[slots])).
-			WithHint("give every value with its flag (--name \"value\"); the command's --help lists its flags")
+			WithHint(strayHint(fields, flags, slots))
 	}
 	for name := range flags {
 		if !used[name] {

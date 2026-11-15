@@ -56,6 +56,7 @@ alice (work/website)$ lore audit log
 2026-11-02T10:00:00Z  repos.write                  repos/rep_05e99e22e9e86e96fe4daa7777994603  by alice
 2026-11-02T10:00:00Z  projects.write               projects/prj_c0f3c11a5724b0cfd74b256190d9b5b8  by alice
 2026-11-02T10:00:00Z  actors.write                 actors/act_76bd560aff0771fab8457dbfa9823f10  by alice
+· this log lists this repo's own rows; a write to a store (--to <store>, roster changes) is a commit in that store: lore member show --who <person> --history lists a person's commits in the org's stores
 alice (work/website)$ lore audit verify
 ✓ audit chain intact (7 entries)
 

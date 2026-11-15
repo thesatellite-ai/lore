@@ -55,13 +55,81 @@ func revBlobs(ctx context.Context, top string, env []string, rev string, paths [
 	if len(batch) == 0 {
 		return out, nil
 	}
+	names := make([]string, len(batch))
+	for i, p := range batch {
+		names[i] = rev + ":" + p
+	}
+	if rev != "" && len(batch) >= revTreeMin {
+		// "<rev>:<path>" makes git walk the tree from the commit for every
+		// path: a live ref with 5,000 rows in one folder rescanned that
+		// folder 5,000 times (15 s per read, T-12/T-20). One ls-tree gives
+		// every blob id; cat-file then reads by id.
+		oids, terr := treeBlobOIDs(ctx, top, env, rev)
+		if terr != nil {
+			return nil, terr
+		}
+		kept := batch[:0:0]
+		names = names[:0]
+		for _, p := range batch {
+			if oid, ok := oids[p]; ok {
+				kept = append(kept, p)
+				names = append(names, oid)
+			}
+		}
+		batch = kept
+	}
+	bodies, err := catFileBatch(ctx, top, env, names)
+	if err != nil {
+		return nil, err
+	}
+	for i, p := range batch {
+		if bodies[i] != nil {
+			out[p] = bodies[i]
+		}
+	}
+	return out, nil
+}
+
+// revTreeMin is the path count from which revBlobs lists the tree once and
+// reads by blob id instead of naming "<rev>:<path>" per path.
+const revTreeMin = 32
+
+// treeBlobOIDs maps every blob path in rev's tree (from the repo root) to
+// its blob id, through one `git ls-tree -r -z --full-tree`.
+func treeBlobOIDs(ctx context.Context, top string, env []string, rev string) (map[string]string, error) {
+	listing, err := (gitRun{dir: top, env: env, args: []string{"ls-tree", "-r", "-z", "--full-tree", rev}}).output(ctx)
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "wire: git ls-tree "+rev, err)
+	}
+	out := map[string]string{}
+	for _, entry := range bytes.Split(listing, []byte{0}) {
+		meta, path, ok := strings.Cut(string(entry), "\t")
+		if !ok {
+			continue
+		}
+		f := strings.Fields(meta) // mode type oid
+		if len(f) == 3 && f[1] == "blob" {
+			out[path] = f[2]
+		}
+	}
+	return out, nil
+}
+
+// catFileBatch reads each object name (a blob id, "<rev>:<path>" or
+// ":<path>") through one `git cat-file --batch`; the body is nil for a name
+// that is missing or is not a blob.
+func catFileBatch(ctx context.Context, top string, env []string, names []string) ([][]byte, error) {
+	out := make([][]byte, len(names))
+	if len(names) == 0 {
+		return out, nil
+	}
 	bin, err := exec.LookPath(gitbackend.DefaultBinary)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "wire: git is not installed", err)
 	}
 	var in bytes.Buffer
-	for _, p := range batch {
-		in.WriteString(rev + ":" + p + "\n")
+	for _, n := range names {
+		in.WriteString(n + "\n")
 	}
 	// Built directly, as gitRun does: an absolute LookPath'd binary, fixed
 	// argv entries, no shell; runCancellable kills it when ctx ends.
@@ -72,7 +140,7 @@ func revBlobs(ctx context.Context, top string, env []string, rev string, paths [
 		return nil, errs.Wrap(errs.Internal, "wire: git cat-file: "+strings.TrimSpace(stderr.String()), rerr)
 	}
 	rd := bufio.NewReader(&stdout)
-	for _, p := range batch {
+	for i := range names {
 		hdr, rerr := rd.ReadString('\n')
 		if rerr != nil {
 			return nil, errs.New(errs.Internal, "wire: git cat-file: output ended early")
@@ -87,7 +155,7 @@ func revBlobs(ctx context.Context, top string, env []string, rev string, paths [
 		}
 		_, _ = rd.ReadByte() // the newline after each object
 		if typ == "blob" {
-			out[p] = body
+			out[i] = body
 		}
 	}
 	return out, nil

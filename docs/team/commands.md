@@ -856,6 +856,7 @@ Flags:
       --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
       --mission string           mission_id (msn_*) to attach to
+      --no-layer                 on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --no-live                  keep this row with the code (this branch's .lore/data)
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --parent string            the parent task (tsk_…): add as a sub-task, inheriting mission, tasklist, plan, repo, commitment, priority
@@ -927,6 +928,7 @@ Flags:
       --meta-json stringArray         set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string             read the value of this key from stdin (keeps it out of shell history)
       --mission string                attach to mission_id (msn_*)
+      --no-layer                      on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --no-live                       keep this row with the code (this branch's .lore/data)
       --no-parent                     detach: make it a top-level task
       --not-a-secret                  keep a detected secret as a false positive (needs --reason; --yes without a terminal)

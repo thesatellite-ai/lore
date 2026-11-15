@@ -56,3 +56,27 @@ func TestAdminSetupFromOrgRole(t *testing.T) {
 		t.Fatalf("another org's member setup: %v, want E_REFUSED", err)
 	}
 }
+
+// devco T-18: an admin setup whose person the synced roster names a
+// member now (an admin demoted them) is refused up front with the real
+// cause: the role and since when, never "✓ added" then a hold at sync.
+// Someone the roster names admin, or does not hold yet, keeps the setup.
+func TestAdminSetupRefusesDemotedAdmin(t *testing.T) {
+	x := newFixture(t)
+	x.e.setups = fakeSetups{active: "agency", why: setup.WhyOrg, cfg: onboard.Config{Setups: []onboard.SetupEntry{{Name: "agency", Kind: onboard.KindAdmin, Org: "agency"}}}}
+	ctx := context.Background()
+	if got, err := adminSetup(ctx, x.e); err != nil || got.Kind != onboard.KindAdmin {
+		t.Fatalf("admin setup, caller not on the roster yet: %+v, %v", got, err)
+	}
+	ref, rerr := value.RefOf(x.admin.Any())
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	x.e.Put(row.Row{Table: schema.TableActorPeriods, ID: testID[ids.ActorPeriod](t, ids.PrefixActorPeriod).Any(), Fields: map[string]value.Value{
+		schema.FieldPeriodActor: ref, schema.FieldPeriodType: txt(t, schema.PeriodTypeEmployee),
+		schema.FieldPeriodStartedOn: txt(t, "2026-09-01"), schema.FieldPeriodOrgRole: txt(t, "member")}})
+	_, err := adminSetup(ctx, x.e)
+	if !errs.Has(err, errs.Refused) || !strings.Contains(err.Error(), "you are a member of agency since 2026-09-01") || !strings.Contains(err.Error(), "only an admin adds or invites people") {
+		t.Fatalf("demoted admin: %v, want E_REFUSED naming the member role and its date", err)
+	}
+}

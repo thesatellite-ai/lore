@@ -1037,7 +1037,7 @@ func decorate(f forest, b *Brief, r row.Row) {
 // that involve the task, and with --tree the subtree.
 func (o ops) showTree(ctx context.Context, full *Full, r row.Row, withTree bool) error {
 	full.Rank, full.CloseReason = work.Field(r, fieldRank), work.Field(r, fieldCloseReason)
-	f, err := o.forest(ctx, work.Field(r, work.FieldProject))
+	f, err := o.showTreeOf(ctx, r) // showforest.go: not every task for one
 	if err != nil {
 		return err
 	}

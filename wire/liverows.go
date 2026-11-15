@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -64,7 +65,10 @@ const (
 type liveRow struct {
 	ref  string // the ref it was read from
 	path string // its path in the ref's tree
-	row  row.Row
+	// oid is the blob id the row was read from: two refs holding the same
+	// blob hold the same row, so readLiveRows merges nothing for it (T-12).
+	oid string
+	row row.Row
 	// writer is the bare writer name the live block's hlc carried in
 	// place of an act_ id ("agent"), "" when it named an actor; the row's
 	// HLC then names LiveWriterActor(writer) instead (LiveStamp).
@@ -120,8 +124,17 @@ func liveGit(ctx context.Context, top string, args ...string) ([]byte, error) {
 
 // liveRefExists reports whether ref names a commit in top.
 func liveRefExists(ctx context.Context, top, ref string) bool {
-	_, err := liveGit(ctx, top, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
-	return err == nil
+	_, ok := liveRefCommit(ctx, top, ref)
+	return ok
+}
+
+// liveRefCommit is the commit ref names in top (ok=false when it names none).
+func liveRefCommit(ctx context.Context, top, ref string) (string, bool) {
+	out, err := liveGit(ctx, top, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(out)), true
 }
 
 // readLiveRows returns the live rows of the tables in want from refs (in
@@ -129,13 +142,20 @@ func liveRefExists(ctx context.Context, top, ref string) bool {
 // row on several refs is merged (logic/merge, no common base: the newer
 // side wins per field), so a clone that fetched but never integrated still
 // sees the remote's newer edit. A ref that does not exist adds nothing.
-func readLiveRows(ctx context.Context, dir string, refs []string, folder string, want map[row.Table]bool) ([]liveRow, error) {
+//
+// oldOnly keeps only rows older than the current format (the ones a
+// migration brings in); a current-format row is then recognised from its
+// bytes and never decoded (liveRowCurrent).
+func readLiveRows(ctx context.Context, dir string, refs []string, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, error) {
 	byKey := map[store.Key]liveRow{}
+	read := map[string]bool{} // commits already read: a tracking ref at the local ref's commit adds nothing (T-12)
 	for _, ref := range refs {
-		if !liveRefExists(ctx, dir, ref) {
+		commit, ok := liveRefCommit(ctx, dir, ref)
+		if !ok || read[commit] {
 			continue
 		}
-		got, err := readLiveRef(ctx, dir, ref, folder, want)
+		read[commit] = true
+		got, err := readLiveRef(ctx, dir, ref, folder, want, oldOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -145,6 +165,9 @@ func readLiveRows(ctx context.Context, dir string, refs []string, folder string,
 			if !seen {
 				byKey[k] = lr
 				continue
+			}
+			if prev.oid == lr.oid {
+				continue // the same blob on both refs: the same row, nothing to merge (T-12)
 			}
 			m, err := mergeRow(prev.row, lr.row)
 			if err != nil {
@@ -172,13 +195,14 @@ func readLiveRows(ctx context.Context, dir string, refs []string, folder string,
 }
 
 // readLiveRef lists one ref's rows of the wanted tables.
-func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Table]bool) ([]liveRow, error) {
+func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Table]bool, oldOnly bool) ([]liveRow, error) {
 	listing, err := liveGit(ctx, top, "ls-tree", "-r", "-z", "--full-tree", ref)
 	if err != nil {
 		return nil, err
 	}
 	type wanted struct {
 		path  string
+		oid   string
 		table row.Table
 	}
 	var rows []wanted
@@ -195,24 +219,28 @@ func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Tabl
 		if !ok || !want[table] || (folder != "" && liveRowFolder(path) != folder) {
 			continue
 		}
-		rows = append(rows, wanted{path: path, table: table})
+		rows = append(rows, wanted{path: path, oid: fields[2], table: table})
 	}
 	// One git cat-file --batch for every row (B1-16: a git process per
-	// live row made each command start hundreds of them in a big repo).
-	paths := make([]string, len(rows))
+	// live row made each command start hundreds of them in a big repo), by
+	// blob id: "<ref>:<path>" rescanned the folder per row (T-12).
+	oids := make([]string, len(rows))
 	for i, w := range rows {
-		paths[i] = w.path
+		oids[i] = w.oid
 	}
-	blobs, err := revBlobs(ctx, top, nil, ref, paths)
+	blobs, err := catFileBatch(ctx, top, nil, oids)
 	if err != nil {
 		return nil, err
 	}
 	var out []liveRow
-	for _, w := range rows {
+	for i, w := range rows {
 		path, table := w.path, w.table
-		b, ok := blobs[path]
-		if !ok {
+		b := blobs[i]
+		if b == nil {
 			return nil, errs.New(errs.Internal, "wire: live row "+path+" could not be read from "+ref)
+		}
+		if oldOnly && liveRowCurrent(b) {
+			continue
 		}
 		r, writer, err := decodeLiveRow(b)
 		if err != nil {
@@ -221,7 +249,10 @@ func readLiveRef(ctx context.Context, top, ref, folder string, want map[row.Tabl
 		if r.Table != table {
 			continue // a row filed under another table's folder: not ours to guess
 		}
-		out = append(out, liveRow{ref: ref, path: path, row: r, writer: writer})
+		if oldOnly && r.SourceVersion >= row.FormatVersion {
+			continue
+		}
+		out = append(out, liveRow{ref: ref, path: path, oid: w.oid, row: r, writer: writer})
 	}
 	return out, nil
 }
@@ -247,6 +278,33 @@ func liveRowFolder(path string) string {
 		return ""
 	}
 	return strings.Join(parts[:len(parts)-2], "/")
+}
+
+// liveTopVersion is how lore writes a row's format at the top level of a
+// live document (two-space indented JSON, the `_v` key on its own line).
+var liveTopVersion = []byte("\n  \"" + row.KeyVersion + "\": ")
+
+// liveRowCurrent reports whether live document b is surely in the current
+// row format, read from its bytes without decoding it: the top-level `_v`
+// line names row.FormatVersion or newer. Anything else (another layout, a
+// v0.1.17 document) is false, and the caller decodes the row to know. A
+// repo with 5,000 open tasks decoded every one on each command only to
+// find none was old (T-20).
+func liveRowCurrent(b []byte) bool {
+	i := bytes.Index(b, liveTopVersion)
+	if i < 0 {
+		return false
+	}
+	rest := b[i+len(liveTopVersion):]
+	n := 0
+	for n < len(rest) && rest[n] >= '0' && rest[n] <= '9' {
+		n++
+	}
+	if n == 0 || n > 4 || (n < len(rest) && rest[n] != ',' && rest[n] != '\n') {
+		return false
+	}
+	v, err := strconv.Atoi(string(rest[:n]))
+	return err == nil && v >= row.FormatVersion
 }
 
 // decodeLiveRow turns a live document into a row: the `_live` block's hlc
@@ -347,7 +405,7 @@ func liveResourceNote(ctx context.Context, st *state) string {
 		return ""
 	}
 	for _, src := range srcs {
-		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, map[row.Table]bool{schema.TableResources: true})
+		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, map[row.Table]bool{schema.TableResources: true}, false)
 		if err != nil {
 			return ""
 		}
@@ -488,12 +546,13 @@ func pendingLiveRowsOf(ctx context.Context, st *state, fetchAll, skipRepo bool) 
 // with 2,400 open live tasks no longer pays a store read per row on every
 // lore doctor and lore fix.
 func pendingOldLiveRows(ctx context.Context, st *state) ([]pendingLive, error) {
-	return pendingLiveRowsWhere(ctx, st, false, false, func(lr liveRow) bool { return lr.row.SourceVersion < row.FormatVersion })
+	return pendingLiveRowsWhere(ctx, st, false, false, func(store.Source) bool { return true })
 }
 
-// pendingLiveRowsWhere is pendingLiveRowsOf for the live rows keep accepts
-// (nil: every row), filtered before any store lookup.
-func pendingLiveRowsWhere(ctx context.Context, st *state, fetchAll, skipRepo bool, keep func(liveRow) bool) ([]pendingLive, error) {
+// pendingLiveRowsWhere is pendingLiveRowsOf that, for each source oldOnly
+// names (nil: none), keeps only the live rows older than the current
+// format, filtered before any decode or store lookup.
+func pendingLiveRowsWhere(ctx context.Context, st *state, fetchAll, skipRepo bool, oldOnly func(store.Source) bool) ([]pendingLive, error) {
 	var out []pendingLive
 	srcs, serr := liveSources(ctx, st)
 	if serr != nil {
@@ -506,15 +565,12 @@ func pendingLiveRowsWhere(ctx context.Context, st *state, fetchAll, skipRepo boo
 		if src.branch != "" && (fetchAll || src.v017) && !openFetched(ctx, st.byName[src.name]) {
 			fetchStoreLive(ctx, src)
 		}
-		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, liveTables())
+		rows, err := readLiveRows(ctx, src.dir, src.refs, src.folder, liveTables(), oldOnly != nil && oldOnly(src.name))
 		if err != nil {
 			return nil, err
 		}
 		b := st.byName[src.name]
 		for _, lr := range rows {
-			if keep != nil && !keep(lr) {
-				continue
-			}
 			sr, err := b.Get(ctx, lr.row.Table, lr.row.ID)
 			if errors.Is(err, store.ErrNotFound) {
 				if src.name == store.SourceRepo {
@@ -606,7 +662,15 @@ func liveNote(ctx context.Context, st *state) string {
 	// store attached none can be, so they are not read at all: decoding the
 	// whole live ref a second time was a third of every agent command under
 	// the live lock (D-159).
-	p, err := pendingLiveRowsOf(ctx, st, false, serves && !hasNonRepoStore(st))
+	//
+	// With a store that serves the live ref, only the repo's rows older than
+	// the current format can be a 0.1.17 copy a newer lore moved away: a
+	// current-format live row is this lore's own (MigrateLive leaves it out
+	// for the same reason). Looking every open task up in every attached
+	// store (a git process each) made whoami and every write grow with the
+	// open tasks: 10-30 s at 5,000 (T-12, T-20).
+	oldOnly := func(src store.Source) bool { return serves && src == store.SourceRepo }
+	p, err := pendingLiveRowsWhere(ctx, st, false, serves && !hasNonRepoStore(st), oldOnly)
 	p = slices.DeleteFunc(p, func(x pendingLive) bool { return x.leftOut }) // nothing to bring in (migrate_moved.go)
 	if serves {
 		// The repo store's live overlay (cmd/lore) shows the repo's live
@@ -740,10 +804,18 @@ func (a *App) MigrateLive(ctx context.Context, dryRun bool) ([]string, error) {
 // builtinDef is the built-in definition of table (ok=false when the core
 // does not define it).
 func builtinDef(table row.Table) (schema.TableDef, bool) {
-	for _, d := range schema.Builtin() {
-		if d.Name == table {
-			return d, true
-		}
-	}
-	return schema.TableDef{}, false
+	d, ok := builtinDefs()[table]
+	return d, ok
 }
+
+// builtinDefs is schema.Builtin by table name, built once per process:
+// mergeRow runs per live row and rebuilding every definition each time was
+// a tenth of a big repo's command (T-20).
+var builtinDefs = sync.OnceValue(func() map[row.Table]schema.TableDef {
+	defs := schema.Builtin()
+	m := make(map[row.Table]schema.TableDef, len(defs))
+	for _, d := range defs {
+		m[d.Name] = d
+	}
+	return m
+})

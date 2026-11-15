@@ -583,7 +583,7 @@ The actor id never changes, so the person's old commits, tasks and time entries 
 
 ## Step 9 — Create or rename an org
 
-Profiles live in an org's store, so a team without an org starts with `lore org create`. It needs a lore store to hold the org folder (`lore store init`), writes the org's suggested entry into that store, adds the entry to your `~/.lore/config.yaml` with your identity, and puts you on the roster. `lore org rename` changes only the entry's name on this machine: the org's id and every row stay.
+Profiles live in an org's store, so a team without an org starts with `lore org create`. It needs a lore store to hold the org folder (`lore store init`), writes the org's suggested entry into that store, adds the entry to your `~/.lore/config.yaml` with your identity, and puts you on the roster. `lore org rename` changes only the entry's name on this machine: the org's id and every row stay. Everything on this machine that names the entry follows it: `lore org use` choices, `defaults.client_repos` targets and every setup's `org:` (a setup named after the org keeps its own name; `lore setup rename --name <old> --to <new>` changes it). Store clone folders under `~/.lore/stores` keep their names, because a clone's folder is its store url's path, not the org label.
 
 <!-- example: profiles#org-create-and-rename -->
 ```console
@@ -618,6 +618,7 @@ $ lore org rename --old acme --new acme-studio
 ✓ org entry acme is now acme-studio (this machine)
   id prj_67e2…291e recorded (the org folder's project id; it never changes)
   rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there
+  store clones under ~/.lore/stores keep their folders: a clone's folder is its store url's path, not the org label
   written to ~/.lore/config.yaml
 $ lore whoami
 org        acme-studio  (matched by: own pattern github.com/acme/* of acme-studio)

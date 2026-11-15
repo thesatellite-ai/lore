@@ -192,7 +192,7 @@ The revoke also keeps that agent off the task: its `lore task next` picks other 
 
 ## Step 3 — Give the task to someone else: `lore task reassign`
 
-Use it when the work should move to another person. The old holder's next write fails with `E_REASSIGNED` (exit 14):
+Use it when the work should move to another person; to give a task to a team, use `lore task edit --id <id> --assign @team` (a reassign to a team handle is refused and names that command). The old holder's next write fails with `E_REASSIGNED` (exit 14):
 
 <!-- example: team-ops#reassign -->
 ```console

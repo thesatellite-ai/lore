@@ -36,11 +36,17 @@ func (a *App) AuditSecret(ctx context.Context, action engine.Action, s engine.Se
 }
 
 // Create implements opsmemory.Env.
+//
+// devco:T-4: where a row with no --to goes is decided before the write
+// gate (writeStateFor), so the gate asks about the store the row really
+// lands in: in a linked client repo still on the 0.1.17 format a memory
+// routed to the org's client folder is not refused for the repo's format.
 func (a *App) Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error) {
-	st, err := a.writeStateFor(ctx, target)
+	st, err := a.state(ctx)
 	if err != nil {
 		return engine.Written{}, err
 	}
+	target = st.eng.StoreName(target) // devco T-5: an org store's own name answers for it
 	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
 		return engine.Written{}, uerr
 	}
@@ -56,6 +62,9 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 		if to != store.SourceRepo {
 			target = to
 		}
+	}
+	if st, err = a.writeStateFor(ctx, target); err != nil {
+		return engine.Written{}, err
 	}
 	if target == "" || target == store.SourceRepo {
 		if gerr := a.guard(ctx, q, target == store.SourceRepo); gerr != nil {
@@ -669,6 +678,7 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 	if err != nil {
 		return engine.Written{}, err
 	}
+	to = st.eng.StoreName(to)
 	if uerr := a.unreachableGuard(ctx, st, explicitTarget(to)); uerr != nil {
 		return engine.Written{}, uerr
 	}
@@ -694,11 +704,16 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 // key+scope, a var name, a kind name) after a soft delete, because the
 // tombstone keeps the natural id forever (DQ) and a plain Create would
 // collide with it; they pass a fresh random id instead.
+//
+// The write gate asks about target, the store the row lands in (devco:T-4:
+// task add's default task list in a linked client repo goes to the org's
+// client folder, and the repo's 0.1.17 format refused it).
 func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error) {
-	st, err := a.writeState(ctx)
+	st, err := a.writeStateFor(ctx, target)
 	if err != nil {
 		return engine.Written{}, err
 	}
+	target = st.eng.StoreName(target)
 	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
 		return engine.Written{}, uerr
 	}

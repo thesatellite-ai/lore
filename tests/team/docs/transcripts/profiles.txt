@@ -363,6 +363,7 @@ ana (work/handbook)$ lore org rename --old acme --new acme-studio
 ✓ org entry acme is now acme-studio (this machine)
   id prj_67e20cdd829de837b50a73f9dc3c291e recorded (the org folder's project id; it never changes)
   rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there
+  store clones under ~/.lore/stores keep their folders: a clone's folder is its store url's path, not the org label
   written to ~/.lore/config.yaml
 ana (work/handbook)$ lore whoami
 org        acme-studio  (matched by: own pattern github.com/acme/* of acme-studio)

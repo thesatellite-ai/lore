@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -457,7 +458,16 @@ func orgRenameLines(o opsorgcmd.RenameOut) []string {
 	if o.Defaults > 0 {
 		lines = append(lines, fmt.Sprintf("  %d defaults.client_repos target(s) moved to %s", o.Defaults, o.To))
 	}
+	if len(o.Setups) > 0 {
+		lines = append(lines, fmt.Sprintf("  %d setup(s) now name org %s: %s", len(o.Setups), o.To, strings.Join(o.Setups, ", ")))
+		if slices.Contains(o.Setups, o.From) {
+			// T-21: a setup named after the org keeps its own name (a setup
+			// name is the person's label); one command gives it the new one
+			lines = append(lines, fmt.Sprintf("  setup %s keeps its name; rename it with `lore setup rename --name %s --to %s`", o.From, o.From, o.To))
+		}
+	}
 	return append(lines, "  rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there",
+		"  store clones under "+lorehome.Shown()+"/stores keep their folders: a clone's folder is its store url's path, not the org label",
 		"  written to "+o.Config)
 }
 
@@ -507,6 +517,19 @@ func renameOrgNode(root *yaml.Node, oldName, newName, id string, out *opsorgcmd.
 					v.Value += orgconf.RefSep + folder
 				}
 				out.Defaults++
+			}
+		}
+	}
+	if seq := mapGet(root, configKeySetups); seq != nil && seq.Kind == yaml.SequenceNode {
+		// T-19: a setup's org: names the entry by label; left on the old
+		// label, the config no longer validates and every org write of
+		// the setup is refused
+		for _, item := range seq.Content {
+			if o := mapGet(item, orgKeyOrg); item.Kind == yaml.MappingNode && o != nil && o.Value == oldName {
+				o.Value = newName
+				if n := mapGet(item, configKeyName); n != nil {
+					out.Setups = append(out.Setups, n.Value)
+				}
 			}
 		}
 	}

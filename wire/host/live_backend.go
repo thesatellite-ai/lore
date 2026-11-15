@@ -29,6 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
@@ -297,6 +298,20 @@ func (d *liveDecoded) storeRow(oid string, k live.RowKey, f live.File) (store.Ro
 	return r, nil
 }
 
+// keepStored records r as live file k's backend row of commit oid (a row
+// the row mirror held, live_mirror.go), so Get reuses it.
+func (d *liveDecoded) keepStored(oid string, k live.RowKey, r store.Row) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.oid != oid {
+		return
+	}
+	if d.stored == nil {
+		d.stored = map[live.RowKey]store.Row{}
+	}
+	d.stored[k] = r
+}
+
 // liveStoreRow is the backend row of a live file: its `_v: 2` body, with the
 // block's stamp as `_hlc` for a v0.1.17 body that has none.
 func liveStoreRow(k live.RowKey, f live.File) (store.Row, error) {
@@ -395,7 +410,10 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	if s == nil {
 		return b.readNoSession(ctx, cursor)
 	}
-	oid, files, err := b.liveFiles(ctx, s)
+	// The commit alone decides whether the cache is current: decoding every
+	// live row first made a read with nothing new (the cache current) cost
+	// as much as a full one, 0.4 s per command at 5,000 open tasks (T-20).
+	oid, _, err := s.ref.Repo.ResolveRef(ctx, s.ref.Name)
 	if err != nil {
 		return nil, "", err
 	}
@@ -415,8 +433,18 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		// each with its own live copy. Converting every live row again here
 		// was the floor of every command on a big repo (2,400 live tasks:
 		// most of a `lore memory add`, ~4 s under load).
-		return b.readSince(ctx, s, oid, files, innerCur, seenNow)
+		return b.readSince(ctx, s, innerCur, seenNow)
 	}
+	if prev, ic, ok := movedLiveOnly(cursor, oid, s.landedCursorPart(ctx)); ok {
+		if rows, next, ok, err := b.readMoved(ctx, s, prev, ic, seenNow); err != nil || ok {
+			return rows, next, err
+		}
+	}
+	oid, files, err := b.liveFiles(ctx, s)
+	if err != nil {
+		return nil, "", err
+	}
+	seenNow = oid + s.landedCursorPart(ctx)
 	// A one-table read (store.WithTables, a full read only) converts and
 	// returns only the live rows of those tables: the policy and actor
 	// lookups of every command asked for a handful of rows and paid for
@@ -430,15 +458,18 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		return nil, "", err
 	}
 	lives := map[store.Key]store.Row{}
-	for k, f := range files {
+	var keys []live.RowKey
+	for k := range files {
 		t := row.Table(k.Table)
-		if !wanted(t) || !readsLive(s, t) {
-			continue
+		if wanted(t) && readsLive(s, t) {
+			keys = append(keys, k)
 		}
-		lr, err := s.decoded.storeRow(oid, k, f)
-		if err != nil {
-			return nil, "", err
-		}
+	}
+	conv, err := b.liveConverted(ctx, s, oid, files, keys) // live_mirror.go: kept by blob on disk
+	if err != nil {
+		return nil, "", err
+	}
+	for _, lr := range conv {
 		lives[lr.Key()] = lr
 	}
 	out := make([]store.Row, 0, len(rows)+len(lives))
@@ -489,11 +520,21 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 // and the landed read-through unchanged): the wrapped backend's rows
 // changed since innerCur, each shown with its live copy when it has one
 // (as a full read shows it); the live rows themselves are not returned
-// again, the cache holds them from the read that wrote the cursor.
-func (b *liveBackend) readSince(ctx context.Context, s *liveSession, oid string, files map[live.RowKey]live.File, innerCur store.Cursor, seenNow string) ([]store.Row, store.Cursor, error) {
+// again, the cache holds them from the read that wrote the cursor. The
+// live tree is decoded only when a changed branch row may have a live copy.
+func (b *liveBackend) readSince(ctx context.Context, s *liveSession, innerCur store.Cursor, seenNow string) ([]store.Row, store.Cursor, error) {
 	rows, next, err := b.inner.Read(ctx, innerCur)
 	if err != nil {
 		return nil, "", err
+	}
+	var (
+		oid   string
+		files map[live.RowKey]live.File
+	)
+	if slices.ContainsFunc(rows, func(r store.Row) bool { return readsLive(s, r.Table) }) {
+		if oid, files, err = b.liveFiles(ctx, s); err != nil {
+			return nil, "", err
+		}
 	}
 	out := make([]store.Row, 0, len(rows))
 	for _, r := range rows {
@@ -509,6 +550,96 @@ func (b *liveBackend) readSince(ctx context.Context, s *liveSession, oid string,
 		out = append(out, newer(lr, r))
 	}
 	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
+}
+
+// movedLiveOnly reports whether cursor was written by a full read of live
+// commit prev (not oid) with the same landed read-through part: only the
+// live ref moved since, so readMoved can read what changed on it. ic is
+// the cursor's inner part.
+func movedLiveOnly(cursor store.Cursor, oid, landed string) (prev string, ic store.Cursor, ok bool) {
+	rest, ok := strings.CutPrefix(string(cursor), liveCursorPrefix)
+	if !ok || oid == "" {
+		return "", "", false
+	}
+	seen, inner, ok := strings.Cut(rest, liveCursorSep)
+	if !ok || inner == "" {
+		return "", "", false
+	}
+	prev, ok = strings.CutSuffix(seen, landed)
+	if !ok || prev == "" || prev == oid || strings.Trim(prev, "0123456789abcdef") != "" {
+		return "", "", false
+	}
+	return prev, store.Cursor(inner), true
+}
+
+// readMoved is Read for a cursor whose live commit prev is an ancestor
+// state of the current one (movedLiveOnly): the wrapped backend's rows
+// changed since ic (with their live copies, as readSince), plus each row
+// whose live file changed between prev and now (its live copy, or the
+// branch copy when it left the live ref). Every write moves the live ref,
+// and re-reading and re-applying every live row into the cache after each
+// one made a command cost ~2-12 s at 5,000 open tasks (T-12). ok is false
+// when the diff cannot be read (prev gone): the caller does a full read.
+func (b *liveBackend) readMoved(ctx context.Context, s *liveSession, prev string, ic store.Cursor, seenNow string) ([]store.Row, store.Cursor, bool, error) {
+	oid, files, err := b.liveFiles(ctx, s)
+	if err != nil {
+		return nil, "", false, err
+	}
+	diff, derr := s.ref.Repo.Run(ctx, gitref.Invocation{Args: []string{"diff-tree", "-r", "-z", "--no-renames", "--name-only", prev, oid}})
+	if derr != nil {
+		return nil, "", false, nil
+	}
+	rows, next, err := b.inner.Read(ctx, ic)
+	if err != nil {
+		return nil, "", false, err
+	}
+	out := make([]store.Row, 0, len(rows))
+	seen := map[live.RowKey]bool{}
+	for _, r := range rows {
+		k := keyOf(r)
+		seen[k] = true
+		f, ok := files[k]
+		if !ok || !readsLive(s, r.Table) {
+			out = append(out, r)
+			continue
+		}
+		lr, err := s.decoded.storeRow(oid, k, f)
+		if err != nil {
+			return nil, "", false, err
+		}
+		out = append(out, newer(lr, r))
+	}
+	for _, p := range strings.Split(string(diff), "\x00") {
+		folder, k, ok := live.ParseRowPath(p)
+		if !ok || folder != b.folder || seen[k] || !readsLive(s, row.Table(k.Table)) {
+			continue
+		}
+		seen[k] = true
+		id, perr := ids.ParseAny(k.ID)
+		if perr != nil {
+			continue
+		}
+		branchRow, berr := b.inner.Get(ctx, row.Table(k.Table), id)
+		if berr != nil && !errors.Is(berr, store.ErrNotFound) {
+			return nil, "", false, berr
+		}
+		f, ok := files[k]
+		if !ok { // the row left the live ref: its branch copy, if any
+			if berr == nil {
+				out = append(out, branchRow)
+			}
+			continue
+		}
+		lr, err := s.decoded.storeRow(oid, k, f)
+		if err != nil {
+			return nil, "", false, err
+		}
+		if berr == nil {
+			lr = newer(lr, branchRow)
+		}
+		out = append(out, lr)
+	}
+	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), true, nil
 }
 
 // readNoSession is Read in a run with no live session (a git hook, live

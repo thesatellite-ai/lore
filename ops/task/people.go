@@ -414,7 +414,7 @@ func (o ops) showMore(ctx context.Context, full *Full, src store.Source, r row.R
 	if err != nil {
 		return err
 	}
-	f, err := o.forest(ctx, work.Field(r, work.FieldProject))
+	f, err := o.showTreeOf(ctx, r) // the subtree estimate: r's descendants only (showforest.go)
 	if err != nil {
 		return err
 	}

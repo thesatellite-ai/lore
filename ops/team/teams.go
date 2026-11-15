@@ -444,8 +444,11 @@ func teamMissErr(h, where string) error {
 		return errs.New(errs.NotFound, "no team "+h+" on the roster in "+where).
 			WithHint("lore team list shows the teams (lore team list --all also the removed ones)")
 	}
-	return errs.New(errs.NotFound, "no team @"+h+" on the roster in "+where).
-		WithHint("lore team list shows the teams; lore team add --handle @" + h + " --members <people> makes it")
+	// devco:T-6: the likely cause is a team a teammate made after this
+	// clone's last sync; sending the person to team add would make a
+	// second @h, so the hint names lore sync first.
+	return errs.New(errs.NotFound, "no team @"+h+" on your copy of the roster in "+where).
+		WithHint("a teammate may have made it since your last sync: lore sync fetches the roster, then run this again; lore team list shows the teams you have")
 }
 
 // resolveMembers turns references into actor ids, in order, each once. A

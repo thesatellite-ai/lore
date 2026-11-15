@@ -779,6 +779,9 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 	if actor != "" && s.left(actor) && !invited {
 		return "written by " + c.author + " after they were marked as left"
 	}
+	if why := s.addsPerson(c, actor, docOf); why != "" {
+		return why
+	}
 	for _, f := range c.changes {
 		table := tableOfPath(f.path)
 		if (!rosterTables[table] && !membershipTables[table]) || !isRowFile(f.path) {
@@ -833,6 +836,48 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 		}
 	}
 	return ""
+}
+
+// addsPerson names what commit c does when it puts a new person on the
+// roster (a new actor row that is neither the author's own nor owned by
+// them), with an admin stint when one of its new stints has org_role
+// admin: "" when it adds nobody. Why (devco T-18): the refusal named the
+// first row file it met ("changes another person's contacts") for each of
+// the three rows a member add writes, never what the commit did.
+func (s *rosterState) addsPerson(c replayCommit, actor string, docOf func(string) (rosterDoc, bool)) string {
+	who, admin := "", false
+	for _, f := range c.changes {
+		if !isRowFile(f.path) || zeroBlob(f.newBlob) {
+			continue
+		}
+		if _, hadOld := s.docs[f.path]; hadOld {
+			continue
+		}
+		next, ok := docOf(f.newBlob)
+		if !ok {
+			continue
+		}
+		switch tableOfPath(f.path) {
+		case schema.TableActors:
+			if next.ID != actor && (actor == "" || next.Owner != actor) {
+				who = next.ID
+				if next.DisplayName != "" {
+					who = next.DisplayName + " (" + next.ID + ")"
+				}
+			}
+		case schema.TableActorPeriods:
+			if next.OrgRole == orgRoleAdmin && next.ActorID != actor {
+				admin = true
+			}
+		}
+	}
+	switch {
+	case who == "":
+		return ""
+	case admin:
+		return "adds a person, " + who + ", to the roster with an admin stint and " + c.author + " is not an admin"
+	}
+	return "adds a person, " + who + ", to the roster and " + c.author + " is not an admin"
 }
 
 // membershipRefusal judges a non-admin's change of one project_members

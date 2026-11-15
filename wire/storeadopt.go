@@ -261,7 +261,7 @@ func (a *App) readAdoptSource(ctx context.Context, top string) ([]adoptRow, map[
 	}
 	// the v0.1.17 live ref: rows only there, or newer there
 	if folder, ferr := repoLiveFolder(ctx, top); ferr == nil {
-		live, lerr := readLiveRows(ctx, top, []string{liveRefLocal, liveRefTracking}, folder, liveTables())
+		live, lerr := readLiveRows(ctx, top, []string{liveRefLocal, liveRefTracking}, folder, liveTables(), false)
 		if lerr != nil {
 			return nil, nil, nil, lerr
 		}

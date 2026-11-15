@@ -336,3 +336,32 @@ func TestOwnAgentOfAMemberIsAccepted(t *testing.T) {
 		t.Errorf("write of a held row: %v; want E_POLICY_DENIED naming the hold and its commit", err)
 	}
 }
+
+// devco T-18: a non-admin's commit that puts a new person on the roster
+// with an admin stint is held with a reason that says so, on every row it
+// wrote, never "changes another person's contacts".
+func TestHeldMemberAddNamesTheAddedPerson(t *testing.T) {
+	t.Parallel()
+	h := newHandStore(t)
+	boss, hiro, intruder := newPerson(t, "boss@example.test"), newPerson(t, "hiro@example.test"), newPerson(t, "intruder@example.test")
+	h.commit(boss.email, map[string]string{
+		orgPath("actors", boss.actor): boss.actorRow(), orgPath("actor_periods", boss.period): boss.periodRow("admin", ""),
+		orgPath("actors", hiro.actor): hiro.actorRow(), orgPath("actor_periods", hiro.period): hiro.periodRow("member", ""),
+	})
+	h.commit(hiro.email, map[string]string{
+		orgPath("actors", intruder.actor): intruder.actorRow(), orgPath("actor_periods", intruder.period): intruder.periodRow("admin", ""),
+	})
+	b := orgFolderClone(t, h.remote)
+	held, err := b.Held(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(held) != 2 {
+		t.Fatalf("held = %+v, want the actor row and the stint", held)
+	}
+	for _, hc := range held {
+		if !strings.Contains(hc.Reason, "adds a person") || !strings.Contains(hc.Reason, "admin stint") || strings.Contains(hc.Reason, "contacts") {
+			t.Errorf("held %s: reason %q does not name what the commit does", hc.Table, hc.Reason)
+		}
+	}
+}

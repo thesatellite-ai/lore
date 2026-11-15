@@ -163,6 +163,10 @@ func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error
 			r.reloadLinkConfig()
 		}
 	}
+	if !r.done && uncachedSituation(ctx) {
+		sit, err := r.gatherWithSetup(ctx)
+		return sit, maskOrgErr(err)
+	}
 	if !r.done {
 		// the stamp is taken before the gather: a write made during it is
 		// seen as a change on the next call
@@ -171,6 +175,25 @@ func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error
 		r.done, r.stamp = true, stamp
 	}
 	return r.sit, r.err
+}
+
+// uncachedSituationKey marks a ctx whose Situation call keeps nothing.
+type uncachedSituationKey struct{}
+
+// withUncachedSituation marks ctx so a Situation not computed yet is
+// gathered for this call only and not kept. devco:D-388-init: lore init's
+// client-repo question (ConfirmClientRepoInit, T-1) runs before init sets
+// the project up; the situation it gathered then (the repo root's project,
+// in a monorepo package) stayed for init's own writes, whose leak check
+// refused the new project's repos row as "a row of another project".
+func withUncachedSituation(ctx context.Context) context.Context {
+	return context.WithValue(ctx, uncachedSituationKey{}, true)
+}
+
+// uncachedSituation reports whether ctx carries withUncachedSituation.
+func uncachedSituation(ctx context.Context) bool {
+	v, _ := ctx.Value(uncachedSituationKey{}).(bool)
+	return v
 }
 
 // configStamp is config.yaml's size and modification time under home
@@ -283,6 +306,16 @@ func (r *OrgResolution) ClientRepo(ctx context.Context) ClientRepo {
 	return out
 }
 
+// storeAliases is the short name of org store sc (lore-org.yaml `name:`,
+// else its repo name) when it differs from the name it is attached under
+// (devco T-5: `--to <the store's name>` in a linked repo).
+func storeAliases(sc *orgconf.Store, attachedAs string) []store.Source {
+	if n := sc.ShortName(); n != "" && n != attachedAs {
+		return []store.Source{store.Source(n)}
+	}
+	return nil
+}
+
 // LinkedByRemote is Options.RepoLinkedByRemote: the remote a store link
 // names this repo by when it holds no project id of its own (orgcfg
 // Situation.LinkedByRemote); "" when it has one, or nothing links it.
@@ -379,7 +412,7 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 	switch {
 	case linked != nil:
 		if sc := org.StoreFor(linked.StoreURL); sc != nil {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder, Branch: attachBranch(sc)})
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder, Branch: attachBranch(sc), Aliases: storeAliases(sc, org.Name)})
 		}
 	case s.Result.MovedLink != nil && s.Result.MovedLink.Entry == org.Name && org.StoreFor(s.Result.MovedLink.StoreURL) != nil:
 		// The client repo moved: its old link's folder is attached so its

@@ -34,7 +34,13 @@ func TestB11_ReadThroughRowEditAndLocalDelete(t *testing.T) {
 	if r := c.Lore("memory", "archive", id); r.Code != 27 || !strings.Contains(r.Stderr, "E_NOT_FOUND") {
 		t.Fatalf("a row deleted in this checkout is not found: %+v", r)
 	}
-	c.Git("commit", "-q", "-m", "rm")
+	// devco:D-388: since S-8 a commit that drops a row file by hand is
+	// refused naming the row; this test is about a drop made on purpose
+	// (still on origin/main, read through), so it takes the escape.
+	if r := c.TryGit("commit", "-q", "-m", "rm"); r.Code == 0 || !strings.Contains(r.Stderr+r.Stdout, "LORE_ALLOW_ROW_DROP=1") {
+		t.Fatalf("a hand drop must be refused naming the escape: %+v", r)
+	}
+	c.With("LORE_ALLOW_ROW_DROP=1").Git("commit", "-q", "-m", "rm")
 	if r := c.Lore("memory", "archive", id); r.Code != 0 {
 		t.Fatalf("an edit of a read-through row must write, not E_STALE: %+v", r)
 	}

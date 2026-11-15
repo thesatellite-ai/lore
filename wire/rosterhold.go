@@ -28,6 +28,13 @@ const rosterHeldNext = "an admin who agrees makes the change with lore (or rever
 type heldChange struct {
 	src  store.Source
 	held gitbackend.HeldChange
+	// url and folder are the clone the hold was read from (its remote)
+	// and the folder src attaches, as this process opened them. Why
+	// (devco T-23): the line named the store by src's place in the org
+	// resolution made after sync fetched new links, so a team-store hold
+	// read through "globex" was named under the client store "globex"
+	// meant after the fetch.
+	url, folder string
 }
 
 // heldChanges lists the held files of every attached git store, once
@@ -42,8 +49,10 @@ func (a *App) heldChanges(ctx context.Context) []heldChange {
 		return nil
 	}
 	backends := make(map[store.Source]store.Backend, len(a.st.byName))
+	folders := make(map[store.Source]string, len(a.st.byName))
 	for n, b := range a.st.byName {
 		backends[n] = b
+		folders[n] = a.st.folders[n]
 	}
 	a.mu.Unlock()
 	names := make([]store.Source, 0, len(backends))
@@ -68,7 +77,7 @@ func (a *App) heldChanges(ctx context.Context) []heldChange {
 				continue
 			}
 			seen[key] = true
-			out = append(out, heldChange{src: n, held: h})
+			out = append(out, heldChange{src: n, held: h, url: g.RemoteURL(), folder: folders[n]})
 		}
 	}
 	return out
@@ -76,7 +85,17 @@ func (a *App) heldChanges(ctx context.Context) []heldChange {
 
 // heldLine is the one line of a held change.
 func (a *App) heldLine(ctx context.Context, h heldChange) string {
-	return "held back in " + a.shownStoreName(ctx, string(h.src)) + ": " + h.held.Table + " " + h.held.ID + " (commit " + h.held.Short() + " by " + h.held.Author + "): " + h.held.Reason
+	return "held back in " + a.heldStoreName(ctx, h) + ": " + h.held.Table + " " + h.held.ID + " (commit " + h.held.Short() + " by " + h.held.Author + "): " + h.held.Reason
+}
+
+// heldStoreName names the store a hold was read from by its clone's own
+// remote (storeOwnName), never by where the attached name points after a
+// later link fetch; a clone no org lists keeps the attached name.
+func (a *App) heldStoreName(ctx context.Context, h heldChange) string {
+	if h.url == "" {
+		return a.shownStoreName(ctx, string(h.src))
+	}
+	return storeShown(string(h.src), storeOwnName(a.opts.Home, h.url, h.folder))
 }
 
 // heldSyncLines are the held-change lines a sync prints after the store

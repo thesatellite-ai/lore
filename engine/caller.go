@@ -32,3 +32,13 @@ func AccessOf(ctx context.Context) (op.Access, bool) {
 	}
 	return c.access, true
 }
+
+// WithAccess is ctx marked as running an operation of access a (keeping
+// the rest of a running call), as Run marks it. Code that must behave as a
+// read outside Run uses it, and tests use it to drive the read paths that
+// AccessOf gates (devco:T-11: a read must never create a row).
+func WithAccess(ctx context.Context, a op.Access) context.Context {
+	c, _ := ctx.Value(callKey{}).(call)
+	c.access = a
+	return context.WithValue(ctx, callKey{}, c)
+}

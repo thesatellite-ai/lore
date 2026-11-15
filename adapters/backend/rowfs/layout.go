@@ -70,8 +70,9 @@ const staleTmpAge = time.Minute
 // who clones it, so its files get git's usual work-tree modes: 0666/0777
 // less the writer's umask, as git checks files out (I-11: they were capped
 // at 0644/0755, so under umask 002 a teammate in a shared group checkout
-// could not edit a row). In a setgid folder (a group's shared checkout)
-// they are made group-readable and -writable whatever the umask (groupDir).
+// could not edit a row). In a folder a group shares (setgid or
+// group-writable, owned by that group) they are made group-readable and
+// -writable whatever the umask (groupWiden; D-390 on macOS).
 const (
 	dirMode  = 0o750
 	fileMode = 0o600
@@ -79,7 +80,7 @@ const (
 	// before the umask.
 	sharedDirMode  = 0o777
 	sharedFileMode = 0o666
-	// groupBits are what a setgid folder adds to a shared write: group
+	// groupBits are what a shared folder adds to a shared write: group
 	// read and write (and search on a folder).
 	groupFileBits = 0o060
 	groupDirBits  = 0o070

@@ -20,17 +20,27 @@ import (
 // an org store (the invite rows) and read this machine's setup.
 // The org's members (member add|edit|remove …) and teams are roster rows of
 // the org store too (B1-1: `lore member add` in a repo installed hooks and
-// edited its .gitignore before being refused).
+// edited its .gitignore before being refused), and so are a person's
+// stints and status (actor period …, status, offboard, rejoin: App.Roster
+// refuses a roster write with no org store). These runs read the repo's
+// live ref as it is and never take its live lock (liveHost.around, T-13).
 var storeOnlyOps = []string{opssetup.OpTeamInvite, opssetup.OpTeamInviteList, opssetup.OpTeamInviteRevoke, opssetup.OpTeamInviteResend,
 	profilestore.OpStaffAdd, profilestore.OpStaffList, profilestore.OpStaffShow, profilestore.OpStaffEdit, profilestore.OpStaffRemove,
-	profilestore.OpTeamAdd, profilestore.OpTeamList, profilestore.OpTeamShow, profilestore.OpTeamRemove, profilestore.OpTeamRename, profilestore.OpTeamMemberAdd, profilestore.OpTeamMemberRemove}
+	profilestore.OpTeamAdd, profilestore.OpTeamList, profilestore.OpTeamShow, profilestore.OpTeamRemove, profilestore.OpTeamRename, profilestore.OpTeamMemberAdd, profilestore.OpTeamMemberRemove,
+	profilestore.OpActorStatus, profilestore.OpActorOffboard, profilestore.OpActorRejoin, profilestore.OpPeriodList, profilestore.OpPeriodAdd, profilestore.OpPeriodEdit}
 
 // leavesWorkRepo reports whether the operation name changes only a store
 // or this machine's files, never the repo it runs in: every store
 // operation but the .lore/stores.yaml writers (opsstores.LeavesRepo), and
 // storeOnlyOps.
 func leavesWorkRepo(name string) bool {
-	return opsstores.LeavesRepo(name) || slices.Contains(storeOnlyOps, name)
+	return opsstores.LeavesRepo(name) || storeOnly(name)
+}
+
+// storeOnly reports whether the operation name writes only an org store
+// (storeOnlyOps), never the repo's rows or its live ref.
+func storeOnly(name string) bool {
+	return slices.Contains(storeOnlyOps, name)
 }
 
 // tracksOnlyLoreData are the operations that may change no tracked file of

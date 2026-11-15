@@ -589,6 +589,10 @@ func (o ops) setDates(ctx context.Context, target store.Source, fields map[strin
 // byKey finds the live task added with --key in the same project and
 // mission (v0.1.17 findByKey).
 func (o ops) byKey(ctx context.Context, project, mission, key string) (work.Sourced, bool, error) {
+	if idx := keyIndexOf(ctx); idx != nil { // an import: listed once (keyindex.go)
+		s, ok := idx.byKey[taskKey(project, mission, key)]
+		return s, ok, nil
+	}
 	all, err := work.ListAll(ctx, o.env, table, "")
 	if err != nil {
 		return work.Sourced{}, false, err
@@ -1197,6 +1201,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
+	ctx = withShowTree(ctx) // showforest.go: the tree is read once for the show
 	full := fullOf(work.LabelerOf(o.env), src, r)
 	mb := metashow.Row(ctx, o.env, r) // METADATA 3.17: metadata on every read
 	full.Meta, full.MetaMasked = mb.Meta, mb.MetaMasked

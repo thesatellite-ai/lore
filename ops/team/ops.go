@@ -148,7 +148,51 @@ func adminSetup(ctx context.Context, env Env) (onboard.SetupEntry, error) {
 		return onboard.SetupEntry{}, errs.New(errs.Refused, "setup "+e.Name+" is a "+string(e.Kind)+" setup; people are added and invited from an admin setup of the org").
 			WithHint("run with --setup <an admin setup>, or ask the org admin to invite")
 	}
+	if err := demotedAdmin(ctx, env, e); err != nil {
+		return onboard.SetupEntry{}, err
+	}
 	return e, nil
+}
+
+// demotedAdmin refuses an admin setup whose person the org's roster (as
+// last synced) no longer names an admin. Why (devco T-18): the setup kind
+// is this machine's memory of the role; after an admin demoted someone,
+// their member add --role admin said "✓ added" and was only held back at
+// sync, with a reason about contacts. The roster is the truth: a caller
+// with an open stint of another org role is refused here with that role
+// and the date it started. A roster that cannot be read, or that does not
+// hold the caller yet (the org's first steps), keeps the setup's answer:
+// the store's own check still holds back what a non-admin pushes.
+func demotedAdmin(ctx context.Context, env Env, e onboard.SetupEntry) error {
+	r, done, err := env.Roster(ctx, false)
+	defer done()
+	if err != nil || r.Caller().IsZero() {
+		return nil
+	}
+	if org, _, _ := strings.Cut(string(r.Source()), orgconf.RefSep); org != e.Org {
+		return nil
+	}
+	rows, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return nil
+	}
+	caller := r.Caller().String()
+	for _, p := range rows {
+		if fieldText(p, schema.FieldPeriodActor) != caller || fieldText(p, schema.FieldPeriodEndedOn) != "" {
+			continue
+		}
+		role := fieldText(p, schema.FieldPeriodOrgRole)
+		if role == "" || role == OrgRoleAdmin {
+			return nil
+		}
+		since := fieldText(p, schema.FieldPeriodStartedOn)
+		if since != "" {
+			since = " since " + since
+		}
+		return errs.New(errs.Refused, "you are a "+role+" of "+e.Org+since+" (the org roster as last synced); only an admin adds or invites people, and setup "+e.Name+" still says admin only on this machine").
+			WithHint("ask an admin of " + e.Org + " to run it (lore member list --json names them); if you were made admin again, run `lore sync` first")
+	}
+	return nil
 }
 
 // orgAdminHere is the admin setup the team ops act for when no setup is

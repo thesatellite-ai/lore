@@ -69,7 +69,7 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	named := false
 	for _, tv := range in.Texts() {
 		if tv.Field == InputTarget && tv.Text != "" {
-			cl.target, named = store.Source(tv.Text), true
+			cl.target, named = e.StoreName(store.Source(tv.Text)), true
 		}
 	}
 	if _, err := e.attached(cl.target); err != nil {

@@ -422,6 +422,11 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 	// so far is committed first and the record is written on its own, as
 	// before; file order is kept either way.
 	tree := inTree(recs)
+	// T-3: add's --key rule answers from one listing of the tasks, not a
+	// listing per row (keyindex.go).
+	if bctx, err = o.withKeyIndex(bctx); err != nil {
+		return ImportOut{}, err
+	}
 	sctx := engine.Staging(store.WithCommitTitle(bctx, "task import: "+strconv.Itoa(len(recs)-out.existing())+" tasks from "+from))
 	defer func() { engine.Discard(sctx) }() // no-op once committed
 	flush := func() error {
@@ -441,15 +446,16 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		if out.Rows[i].Existing {
 			continue
 		}
+		if k := keyOfRecord(r); k != "" && stagedKeys[k] != "" {
+			out.Rows[i].ID = stagedKeys[k] // add's --key rule: already added by this batch
+			continue
+		}
 		wctx := sctx
 		if tree[i] {
 			if err = flush(); err != nil {
 				return ImportOut{}, err
 			}
 			wctx = bctx
-		} else if k := keyOfRecord(r); k != "" && stagedKeys[k] != "" {
-			out.Rows[i].ID = stagedKeys[k] // add's --key rule: already added by this batch
-			continue
 		}
 		// XQ9 / PROVENANCE 5.1: the row's _o.import names the importer
 		// kind and the external id (no ext_ source record for a file).
@@ -480,7 +486,7 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 				strconv.Itoa(i)+" of "+strconv.Itoa(len(recs))+" tasks; the ones written are in batch "+out.Batch))
 		}
 		out.Rows[i].ID = got.Data.ID
-		if k := keyOfRecord(r); k != "" && !tree[i] {
+		if k := keyOfRecord(r); k != "" {
 			stagedKeys[k] = got.Data.ID
 		}
 		for _, d := range dropped[i] {

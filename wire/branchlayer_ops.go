@@ -43,6 +43,12 @@ func noLayerFolder(top string) error {
 		WithHint("branch layers apply to a repo linked to a store folder (lore org link --org <org> --project <folder>); a repo's own .lore/data already follows its branches")
 }
 
+// noLayerFolderLine is lore branch list's line in a repo with no project
+// folder in a git store: no branch notes, and why.
+func noLayerFolderLine(top string) string {
+	return "no branch notes: the notes of " + top + " are not in a project folder of a git store (a repo's own .lore/data already follows its branches; branch layers apply to a repo linked with lore org link --org <org> --project <folder>)"
+}
+
 // branchTarget is the layer wrapper of the repo's project folder and its
 // store's name.
 func (a *App) branchTarget(ctx context.Context) (*state, *layerBackend, store.Source, error) {
@@ -160,7 +166,13 @@ func codeState(ctx context.Context, lb *layerBackend, l git.Layer) (string, stri
 
 // BranchList implements opsbranch.Env.
 func (a *App) BranchList(ctx context.Context, in opsbranch.ListIn) (opsbranch.ListOut, error) {
-	_, lb, name, err := a.branchTarget(ctx)
+	st, lb, name, err := a.branchTarget(ctx)
+	if lb == nil && st != nil {
+		// devco:D-388-branchlist: a listing with nothing to list is an empty
+		// list, as every read in a repo with no store folder answers (a
+		// repo's own .lore/data keeps no branch layers); the line says why.
+		return opsbranch.ListOut{Layers: []opsbranch.Layer{}, Lines: []string{noLayerFolderLine(st.repoTop)}}, nil
+	}
 	if err != nil {
 		return opsbranch.ListOut{}, err
 	}
