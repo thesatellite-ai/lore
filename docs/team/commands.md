@@ -1369,6 +1369,7 @@ Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
       --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
+      --push          push the revoke to this code repo's remote now (refs/lore/signals); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)
       --read-only     refuse writes (also LORE_READ_ONLY=1)
       --yes           answer yes to the confirmation without a terminal
 ```
@@ -1393,6 +1394,7 @@ Flags:
       --id string                the task id (tsk_…); leave out with --from
       --json                     print the result (or the error) as JSON
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --push                     push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)
       --read-only                refuse writes (also LORE_READ_ONLY=1)
       --reason string            why the detected text is not a secret (with --not-a-secret)
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
@@ -1602,7 +1604,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `lease.renew_every` | `5m` | heartbeat interval; also how long a reader must see an unchanged renewal before calling a claim expired |
 | `lease.grace` | `2m` | extra time after `expires` before a claim counts as expired |
 | `lease.push_retries` | `5` | retries of a rejected push |
-| `agents.max_claims_per_agent` | `1` | claims one agent session may hold at once; a person's claims count per worktree |
+| `agents.max_claims_per_agent` | `1` | claims one agent session may hold at once; a person's claims count per worktree; may only lower the team policy of the same name (`lore policy set --key agents.max_claims_per_agent --value <n>`) |
 | `agents.max_attempts` | `3` | holders a task may have before it becomes `blocked` |
 | `merge_check.adapter` | `none` | `github` asks `gh` whether a done task's pull request merged |
 | `default_branch` | from `origin/HEAD` | override the default branch |

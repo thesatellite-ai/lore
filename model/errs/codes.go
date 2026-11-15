@@ -283,6 +283,11 @@ const (
 	// binary's skill; lore never writes through a link into a folder it does
 	// not own unless told how (--link replace|update).
 	SkillLinked Code = "E_SKILL_LINKED"
+	// GitMissing: no git program on PATH. Every store and live row goes
+	// through git, so the fix is the person's (install it, or put its
+	// folder on PATH), never a bug report (devco:U-5: it was E_INTERNAL
+	// with a hint naming a way to "pass its path" that does not exist).
+	GitMissing Code = "E_GIT_MISSING"
 )
 
 // Def is the registry entry of one code: everything a surface needs to print
@@ -473,6 +478,7 @@ var table = map[Code]entry{
 	InviteUsed:            {class: ClassRefused, desc: "the invite was already used by another person; ask the inviter for a new one"},
 	InviteEmail:           {class: ClassBadInput, desc: "the invite is for another email; use that address or ask for a new invite"},
 	FixRefused:            {class: ClassBadInput, desc: "a fix command failed re-validation and was not run"},
+	GitMissing:            {class: ClassRefused, desc: "no git program on PATH; install git, or put the folder that holds it on PATH"},
 	SkillLinked:           {class: ClassRefused, desc: "the tool's skill folder is a symbolic link to a folder that does not hold this lore's skill; choose --link replace (lore's own copy replaces the link) or --link update (write into the link's target)"},
 }
 

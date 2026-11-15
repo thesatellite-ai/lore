@@ -1167,10 +1167,10 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 	e.openMu.Unlock()
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
-		return nil, err
+		return nil, cacheFailed(rows, err)
 	}
 	if err := e.cache.Apply(ctx, source, rows, cur); err != nil {
-		return nil, err
+		return nil, cacheFailed(rows, err)
 	}
 	j, _ := e.stores[source].Backend.(store.AuditJournal)
 	mine := make(map[store.Key]hlc.HLC, len(rows))
@@ -1267,8 +1267,34 @@ func (e *Engine) auditView(ctx context.Context, source store.Source, ev Event) E
 // (cl-wire: the cause was hidden, also under --json).
 func auditFailed(id ids.AnyID, cause error) error {
 	code := errs.CodeOf(cause)
-	return errs.Wrap(code, "the row "+id.String()+" is stored but its audit record failed: "+cause.Error(), cause).
+	e := errs.Wrap(code, "the row "+id.String()+" is stored but its audit record failed: "+cause.Error(), cause).
 		WithHint("do not rerun the write (it would store the row again); fix the cause, then check `lore audit verify`")
+	e.Written = true // devco:U-7: a recoding hook keeps this text
+	return e
+}
+
+// cacheFailed is the error of rows stored whose cache update failed (a
+// full disk under the cache, devco:U-7): the row files and their audit
+// journal are written, so the message says so and the hint says not to
+// rerun; the next command reads the rows from their files into the cache
+// (the cursor is behind them). Before, the bare cache error became
+// E_DISK_FULL "nothing was changed" and the retry it asked for stored a
+// duplicate row.
+func cacheFailed(rows []store.Row, cause error) error {
+	what := "the rows of this write are"
+	if len(rows) == 1 {
+		what = "the row " + rows[0].ID.String() + " is"
+	}
+	reason := cause.Error()
+	var le *errs.Error
+	if errors.As(cause, &le) && le.Message != "" {
+		reason = le.Message // the reason without its "[E_…]" prefix
+	}
+	code := errs.CodeOf(cause) // the reason is in the message above, not hidden
+	e := errs.Wrap(code, what+" written, but the cache could not be updated ("+reason+")", cause).
+		WithHint("do not rerun the command (it would store the row again); fix the cause (a full disk: free some space, df -h, df -i) and the next lore command catches the cache up")
+	e.Written = true
+	return e
 }
 
 // writePurge is WritePurge plus, when the backend can

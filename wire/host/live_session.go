@@ -302,6 +302,7 @@ func (s *liveSession) prepare(ctx context.Context) {
 	if live.ShouldFetch(live.FetchInputs{
 		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: ttl,
 		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
+		LastFailure: live.FetchFailed(s.stateDir), Backoff: s.cfg.FetchTTL, // devco:U-6
 	}) {
 		s.fetch(ctx, now)
 	}
@@ -336,6 +337,14 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 	}
 	if err != nil {
 		s.fetchErr = err
+		if errors.Is(err, gitremote.ErrUnconfirmed) {
+			// the remote was not reached (offline, a connect timeout): the
+			// next commands back off for live.fetch_ttl instead of waiting
+			// for the network again (devco:U-6)
+			if werr := live.WriteFetchFailed(s.stateDir, now); werr != nil {
+				s.warn(werr.Error())
+			}
+		}
 		return
 	}
 	s.fetched = true
@@ -355,7 +364,9 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 // It fetches like a rejected push does (FetchAlways): the coordination op
 // already reached the remote for the signals ref.
 func (s *liveSession) refetch(ctx context.Context) bool {
-	if s.lock == nil || s.fetched || s.blocked != nil || s.ref.Remote == nil {
+	// a fetch of this run that failed is not tried again: offline, the
+	// second try only waited for the network's timeout once more (devco:U-6)
+	if s.lock == nil || s.fetched || s.fetchErr != nil || s.blocked != nil || s.ref.Remote == nil {
 		return false
 	}
 	s.fetch(ctx, s.clk.Now())

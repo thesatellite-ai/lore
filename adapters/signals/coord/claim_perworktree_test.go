@@ -39,7 +39,7 @@ func TestPersonClaimsOnePerWorktree(t *testing.T) {
 		t.Fatalf("a second claim in one worktree is refused: %v", err)
 	}
 	msg := err.Error()
-	for _, want := range []string{"this worktree already holds tsk_1", "agents.max_claims_per_agent 1", "lore config set --key agents.max_claims_per_agent --value 2", "another worktree"} {
+	for _, want := range []string{"this worktree already holds tsk_1", "agents.max_claims_per_agent 1", "raise the team limit (lore policy set --key agents.max_claims_per_agent --value 2)", "another worktree"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("refusal %q lacks %q", msg, want)
 		}

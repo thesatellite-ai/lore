@@ -99002,6 +99002,10 @@
                     "type": "string",
                     "description": "the task id (tsk_…); leave out with --from"
                   },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -103502,6 +103506,10 @@
                     "type": "string",
                     "description": "reassign every open task of this person"
                   },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -103943,6 +103951,10 @@
                   "from": {
                     "type": "string",
                     "description": "the source of the id: repo | \u003corg\u003e | \u003corg\u003e/\u003cfolder\u003e"
+                  },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the revoke to this code repo's remote now (refs/lore/signals); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
                   }
                 },
                 "additionalProperties": false

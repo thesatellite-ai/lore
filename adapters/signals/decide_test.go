@@ -2,6 +2,7 @@ package signals
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -256,5 +257,25 @@ func TestCodecAndPaths(t *testing.T) {
 	b2, bad := ParseBoard(map[string][]byte{"_root/claims/tsk_30.json": b, "_root/claims/tsk_31.json": []byte("junk"), "README": []byte("x")})
 	if len(b2) != 1 || len(bad) != 2 {
 		t.Fatalf("board %v bad %v", b2, bad)
+	}
+}
+
+// TestWIPRefusalSendsAgentsToAPerson (devco:S-20): the WIP refusal an
+// agent session sees tells it to ask a person and names the team policy
+// command, never `lore config set` (which let an agent lift its own cap);
+// a person is told how to raise the team limit, or their own lowered one.
+func TestWIPRefusalSendsAgentsToAPerson(t *testing.T) {
+	held := []Held{{Path: "p/claims/tsk_a.json", Signal: Signal{Task: "tsk_a"}}}
+	agent := (&WIPError{Held: held, Max: 1, Team: 1}).Error()
+	if !strings.Contains(agent, "ask a person to raise the team limit (lore policy set --key agents.max_claims_per_agent --value 2)") || strings.Contains(agent, "lore config set") {
+		t.Fatalf("agent refusal: %q", agent)
+	}
+	person := (&WIPError{Held: held, Max: 1, Team: 1, PerCheckout: true}).Error()
+	if !strings.Contains(person, "raise the team limit (lore policy set --key agents.max_claims_per_agent --value 2)") {
+		t.Fatalf("person refusal: %q", person)
+	}
+	lowered := (&WIPError{Held: held, Max: 1, Team: 3, PerCheckout: true}).Error()
+	if !strings.Contains(lowered, "up to the team's 3 (lore config set --key agents.max_claims_per_agent --value 2)") {
+		t.Fatalf("person with a lowered limit: %q", lowered)
 	}
 }

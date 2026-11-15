@@ -47,6 +47,10 @@ type Agents struct {
 	// let one person hold one task on the whole machine; with a worktree
 	// per task each worktree (its own held-claims record) holds its own.
 	PerCheckout bool
+	// TeamMaxClaims is the team's cap (policy agents.max_claims_per_agent,
+	// devco:S-20); MaxClaims is at most this. The WIP refusal names the
+	// command that raises whichever of the two stopped the claim.
+	TeamMaxClaims int
 }
 
 // Env is one project's coordination context.
@@ -256,6 +260,11 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			if doc.Status() == statusDone {
 				return signals.Change{}, nil, doneRowError(id, doc)
 			}
+			// devco:S-13: a task a person revoked from this actor stays
+			// off it until a person reassigns it (or the marker expires).
+			if err := RevokedFrom(v, env.Folder, id, env.Caller.ActorID); err != nil {
+				return signals.Change{}, nil, err
+			}
 		}
 		if !claimable(mission, doc.Status()) {
 			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
@@ -284,7 +293,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		plan, err := signals.DecideClaim(v, signals.ClaimRequest{
 			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: exemptFromWIP(ctx, env, v, opts),
-			MaxClaims: env.Agents.MaxClaims, PerCheckout: env.Agents.PerCheckout, MaxAttempts: env.Agents.MaxAttempts,
+			MaxClaims: env.Agents.MaxClaims, TeamMaxClaims: env.Agents.TeamMaxClaims, PerCheckout: env.Agents.PerCheckout, MaxAttempts: env.Agents.MaxAttempts,
 			Row: signals.RowState{Epoch: doc.Epoch(), Attempts: doc.Int(keyAttempts)}, Token: tok,
 			WorkBranch: workBranch, Owns: opts.Owns,
 		})
@@ -419,13 +428,37 @@ func classify(ctx context.Context, env Env, id string, cause error) error {
 	}
 	detail := nh.Error()
 	if rec, had := env.Held.Get(env.Caller.Session, id); had {
-		if ev, ok := lastRevokeSince(doc, rec.Claimed); ok && nh.Current == nil {
+		switch m, byMarker := revokeOf(nh, rec.Token); {
+		case byMarker:
+			// devco:S-12: the revoke's row change has not reached this
+			// clone; the marker on the signals ref names the person.
+			detail = fmt.Sprintf("%s: your claim (token %s…) was revoked by %s at %s", id, prefix(rec.Token), revokerName(m), m.Since.UTC().Format(time.Kitchen))
+		case nh.Current == nil && hasRevokeSince(doc, rec.Claimed):
+			ev, _ := lastRevokeSince(doc, rec.Claimed)
 			detail = fmt.Sprintf("%s: your claim (token %s…) was revoked by %s at %s", id, prefix(rec.Token), ev.ActorID, ev.At.UTC().Format(time.Kitchen))
-		} else {
+		case rec.Expires.After(env.Signals.Clock.Now()):
+			// The lease has not run out: never call it expired.
+			detail += fmt.Sprintf("; your token %s… was dropped before its lease ended (%s)", prefix(rec.Token), rec.Expires.UTC().Format(time.Kitchen))
+		default:
 			detail += fmt.Sprintf("; your token %s… expired %s", prefix(rec.Token), rec.Expires.UTC().Format(time.Kitchen))
 		}
 	}
 	return &FencedError{Kind: FenceLost, Task: id, Detail: detail}
+}
+
+// revokeOf is the revoke marker that names the caller's token, read from
+// the fencing error's view of the board.
+func revokeOf(nh *signals.NotHeldError, token string) (signals.Signal, bool) {
+	if nh.Revoke == nil || token == "" || nh.Revoke.ClaimToken != token {
+		return signals.Signal{}, false
+	}
+	return *nh.Revoke, true
+}
+
+// hasRevokeSince reports a revoke in the row's claim log since the claim.
+func hasRevokeSince(doc Doc, since time.Time) bool {
+	_, ok := lastRevokeSince(doc, since)
+	return ok
 }
 
 // lastRevokeSince returns the newest revoke in the row's claim log at or
@@ -686,6 +719,7 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 				return signals.Change{}, nil, err
 			}
 		}
+		ch = withRevokeMarker(ch, env, v, id, kind, removed)
 		next.touch(v.Now)
 		if ch, err = withDoneMarker(ch, env, v, id, next); err != nil {
 			return signals.Change{}, nil, err
@@ -693,6 +727,27 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 		return ch, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	return removed, err
+}
+
+// withRevokeMarker adds the revoke marker of a claim a person revoked
+// (devco:S-12, S-13), and drops the marker on a reassign: the person
+// chose who works on the task next, so nobody stays fenced off it.
+func withRevokeMarker(ch signals.Change, env Env, v signals.View, id string, kind OverrideKind, removed *signals.Signal) signals.Change {
+	p := signals.RevokedPath(env.Folder, id)
+	switch {
+	case kind == OverrideReassign:
+		if _, ok := v.Board[p]; ok {
+			ch.Delete = append(ch.Delete, p)
+		}
+	case kind == OverrideRevoke && removed != nil:
+		if m, ok := revokeMarker(env, v, id, *removed); ok {
+			if ch.Put == nil {
+				ch.Put = map[string]signals.Signal{}
+			}
+			ch.Put[p] = m
+		}
+	}
+	return ch
 }
 
 // GateHash is the approval hash over title and body (§7.4: editing either

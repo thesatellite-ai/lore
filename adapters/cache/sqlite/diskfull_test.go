@@ -52,3 +52,26 @@ func TestExplainDiskFull(t *testing.T) {
 		t.Fatal("nil stays nil")
 	}
 }
+
+// TestExplainDiskFullKeepsWritten (devco:U-7): a disk-full failure that
+// came after the rows were written (errs.Error.Written, the cache commit
+// failed behind them) becomes E_DISK_FULL but keeps its own "is written,
+// do not rerun" text, never the generic "nothing was changed ... run the
+// command again" whose retry stored a duplicate row; also under an outer
+// E_INTERNAL wrapper.
+func TestExplainDiskFullKeepsWritten(t *testing.T) {
+	t.Parallel()
+	w := errs.Wrap(errs.Internal, "the row mem_x is written, but the cache could not be updated (commit)",
+		fmt.Errorf("commit: %w", syscall.ENOSPC)).WithHint("do not rerun the command")
+	w.Written = true
+	for name, in := range map[string]error{"bare": w, "wrapped": errs.Wrap(errs.Internal, "wire: write", w)} {
+		got := ExplainDiskFull(in)
+		var le *errs.Error
+		if !errors.As(got, &le) || le.Code != errs.DiskFull {
+			t.Fatalf("%s: code = %v, want E_DISK_FULL", name, got)
+		}
+		if le.Message != w.Message || le.Hint != w.Hint {
+			t.Fatalf("%s: text changed to %q / %q", name, le.Message, le.Hint)
+		}
+	}
+}

@@ -86,7 +86,7 @@ func (o ops) reassign(ctx context.Context, in ReassignIn) (ReassignOut, error) {
 	actor, _ := ids.Parse[ids.Actor](plan.Actor) // zero when the host's caller has no v2 actor id: the event omits it
 	out := ReassignOut{Batch: batch.String(), Tasks: []string{}}
 	for _, t := range plan.Tasks {
-		r, rerr := h.TaskReassign(bctx, ReassignIn{ID: t.ID, Assign: in.Assign})
+		r, rerr := h.TaskReassign(bctx, ReassignIn{ID: t.ID, Assign: in.Assign, Push: in.Push})
 		out.Lines = append(out.Lines, r.Lines...)
 		if rerr != nil {
 			// Partial failure names the batch, so the tasks already changed

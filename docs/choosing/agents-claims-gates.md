@@ -32,7 +32,7 @@
 - **The 5-minute cache.** Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds (`lore sync` always fetches). A teammate's claim from a few seconds ago may not show yet; the claim itself always checks the server.
 - **`lore task next` uses exit statuses.** `0` means you hold a task, `10` means nothing is ready (the message says why each task waits), `11` means another agent got every task you tried first. On `10`, stop or wait; do not loop.
 - **One label per session.** Two sessions started with the same `--label` are one actor (one name on the roster), and their claims collide.
-- **One claim per agent by default** (`agents.max_claims_per_agent: 1`), and after 3 agents have tried a task (`agents.max_attempts`) it is marked `blocked` and needs a person.
+- **One claim per agent by default** (the team policy `agents.max_claims_per_agent`, 1 unless a person sets more; an agent's own config may only lower it), and after 3 agents have tried a task (`agents.max_attempts`) it is marked `blocked` and needs a person.
 - **A released task stays `in_progress`.** `lore task release` drops only the claim; cancel the task or move it back if nobody should work on it.
 - **Teams stay internal.** In a linked client repo, assigning a whole team is refused; assign a person.
 - **Holds in a client repo need a store link.** In a client repo linked to the agency's store, a hold is kept on the store's signals ref, never in the client's repo. A client repo matched only by a `repos:` pattern has no store to keep it on, so `lore hold claim` is refused with `E_UNSUPPORTED`; link it with `lore org link`. `--on machine` answers `E_NOT_IMPLEMENTED`: use your machine's own lock tool, such as `flock`.

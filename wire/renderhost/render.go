@@ -124,6 +124,14 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	if f.trend { // 6.11: read-only, from render_history
 		return h.renderTrend(ctx, projectID, f)
 	}
+	if !f.check && !f.report {
+		// a render writes its history row and the private render under the
+		// lore home: refused up front there when lore cannot write it
+		// (devco:U-4), as a writing command is
+		if err := wire.RefuseWriteInReadOnlyHome(h.opts.Home); err != nil {
+			return err
+		}
+	}
 
 	root, err := os.Getwd()
 	if err != nil {

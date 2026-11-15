@@ -21,6 +21,10 @@ const fullMarker = "database or disk is full"
 const (
 	diskFullMessage = "the disk is full: lore could not write (nothing was changed)"
 	diskFullHint    = "free some space or files on that disk (df -h, df -i) and run the command again; the row files and the cache are intact"
+	// writtenDiskFullHint is the hint of a disk-full failure that came
+	// after the rows were written (errs.Error.Written) when the caller set
+	// none: rerunning would store the row twice.
+	writtenDiskFullHint = "do not rerun the command (the row is already stored); free some space on that disk (df -h, df -i)"
 )
 
 // IsDiskFull reports whether err means the disk holding a lore file is
@@ -49,6 +53,12 @@ func IsDiskFull(err error) bool {
 	if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_IOERR_WRITE && fileSizeLimited() {
 		return true
 	}
+	// SQLITE_IOERR_SHMSIZE: the cache could not grow its -shm file, which
+	// only fails when the disk (or `ulimit -f`) has no room for it; it
+	// read as E_INTERNAL "disk I/O error (4874)" at cache open (devco:U-7).
+	if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_IOERR_SHMSIZE {
+		return true
+	}
 	return errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT) || errors.Is(err, syscall.EFBIG) ||
 		strings.Contains(err.Error(), fullMarker)
 }
@@ -67,6 +77,16 @@ func ExplainDiskFull(err error) error {
 	var le *errs.Error
 	if errors.As(err, &le) && le.Code != errs.Internal {
 		return err
+	}
+	if w := errs.WrittenOf(err); w != nil {
+		// the rows are stored: keep the caller's "is written, do not rerun"
+		// text, only the code says what ran out (devco:U-7)
+		c := *w
+		c.Code = errs.DiskFull
+		if c.Hint == "" {
+			c.Hint = writtenDiskFullHint
+		}
+		return &c
 	}
 	return errs.Wrap(errs.DiskFull, diskFullMessage, err).WithHint(diskFullHint)
 }

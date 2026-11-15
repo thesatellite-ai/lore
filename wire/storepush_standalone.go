@@ -133,6 +133,10 @@ type storePush struct {
 	waitSaid bool
 	// localSaid: this command already said a write stayed local (sayLocal).
 	localSaid bool
+	// backingOff: the remote was out of reach less than live.fetch_ttl ago
+	// (live.BackingOff), so this command neither fetches nor pushes it
+	// (devco:U-6).
+	backingOff bool
 	// hold keeps local commits a person made after the org removed them
 	// from being pushed (leftgate.go armLeftHold, F-9); nil = none.
 	hold gitbackend.PushHoldFunc
@@ -246,6 +250,9 @@ func (b *storePush) refresh(ctx context.Context) {
 		return
 	}
 	b.fetched = true
+	if gb := gitOf(b.inner); gb != nil && gb.Unwritable() {
+		return // a clone lore may not write reads as it is: no fetch (devco:U-4)
+	}
 	autopush, ttl := b.settings(ctx)
 	in := live.FetchInputs{Now: b.res.now(), TTL: ttl, Kind: live.FetchCached, Autopush: autopush, HasRemote: true}
 	if b.res != nil && b.res.fetchAlways {
@@ -256,6 +263,14 @@ func (b *storePush) refresh(ctx context.Context) {
 	}
 	if b.stateDir != "" {
 		in.LastFetch = live.FetchStamp(b.stateDir)
+		in.LastFailure, in.Backoff = live.FetchFailed(b.stateDir), ttl // devco:U-6
+	}
+	if live.BackingOff(in) {
+		// the remote was out of reach less than live.fetch_ttl ago: no
+		// fetch, no retried push, so an offline command never waits for the
+		// network's timeout again; `lore sync` always tries (devco:U-6)
+		b.backingOff = true
+		return
 	}
 	held := b.held()
 	// No hidden magic (2026-11-12): a read never pushes. It fetches when
@@ -306,6 +321,9 @@ func (b *storePush) refresh(ctx context.Context) {
 	b.carry(rep, err)
 	if push || len(rep.Refused) > 0 {
 		b.observeSync(ctx, rep, err) // a fetch-only sync cannot clear a refusal
+	}
+	if rep.Offline {
+		b.markUnreachable(in.Now)
 	}
 	if err != nil || rep.Offline || b.stateDir == "" {
 		return
@@ -445,6 +463,7 @@ func (b *storePush) pushNow(ctx context.Context) {
 	case err != nil:
 		b.note("pushing failed")
 	case rep.Offline:
+		b.markUnreachable(b.res.now())
 		b.note(b.offlineWhy(rep))
 	case len(rep.Refused) > 0:
 		if own, _ := splitHeld(rep.Refused); len(own) == 0 {
@@ -525,6 +544,10 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 	if b.pushFailed {
 		return
 	}
+	if b.backingOff && (b.res == nil || !b.res.fetchAlways) {
+		b.sayBackingOff() // devco:U-6: no push while the remote was just out of reach
+		return
+	}
 	if autopush, _ := b.settings(ctx); !autopush {
 		b.sayLocal()
 		return
@@ -547,6 +570,30 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		return
 	}
 	b.pushNow(ctx)
+}
+
+// markUnreachable records that the store's remote could not be reached at
+// now (live.WriteFetchFailed), so the next commands back off for
+// live.fetch_ttl instead of waiting for the network again (devco:U-6).
+// Best effort: a lost stamp only means the next command tries again.
+func (b *storePush) markUnreachable(now time.Time) {
+	if b.stateDir != "" {
+		_ = live.WriteFetchFailed(b.stateDir, now)
+	}
+}
+
+// backoffWhy is the note of a write kept local while the store backs off
+// (devco:U-6): it names why lore did not try the remote.
+const backoffWhy = "the remote was out of reach a moment ago, so lore did not try it again (it tries once live.fetch_ttl has passed)"
+
+// sayBackingOff says once per command and store that a write stayed in the
+// local clone because the remote was out of reach lately.
+func (b *storePush) sayBackingOff() {
+	if b.localSaid || b.notes == nil {
+		return
+	}
+	b.localSaid = true
+	b.note(backoffWhy)
 }
 
 // sayLocal says once per command and store that a write stayed in the

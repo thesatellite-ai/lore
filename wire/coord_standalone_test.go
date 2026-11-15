@@ -93,18 +93,23 @@ func TestStandaloneNote(t *testing.T) {
 	if n := countRows(t, a, schema.TableComments); n != 2 {
 		t.Fatalf("--to repo writes one comment: %d comments", n)
 	}
-	// Claims are taken here now (P3-SIGCOORD-2); a repo without a remote
-	// cannot confirm one, so the write fails closed and nothing is queued.
-	for name, input := range map[string]string{opscoord.OpTaskClaim: `{"id":"` + id + `"}`, opscoord.OpTaskRelease: `{"id":"` + id + `"}`, opscoord.OpHoldRelease: `{"name":"suite"}`} {
-		if _, err := run(t, a, name, input, true); !errs.Has(err, errs.Offline) {
-			t.Errorf("%s: %v, want E_OFFLINE", name, err)
+	// Claims are taken here now (P3-SIGCOORD-2). devco:D-362: a repo
+	// without a remote keeps its signals ref in its own git directory, so a
+	// claim and its release work locally (they used to fail E_OFFLINE), and
+	// releasing a hold nobody took is the plain E_LOST_CLAIM.
+	for _, name := range []string{opscoord.OpTaskClaim, opscoord.OpTaskRelease} {
+		if _, err := run(t, a, name, `{"id":"`+id+`"}`, true); err != nil {
+			t.Errorf("%s in a repo with no remote: %v, want it to work locally", name, err)
 		}
+	}
+	if _, err := run(t, a, opscoord.OpHoldRelease, `{"name":"suite"}`, true); !errs.Has(err, errs.LostClaim) {
+		t.Errorf("hold.release of a hold nobody took: %v, want E_LOST_CLAIM", err)
 	}
 }
 
-// writeTrackedClaim puts one claim on task id held by holder into the
-// tracking copy of refs/lore/signals (what a fetch by the release binary
-// leaves), expiring in 15 minutes.
+// writeTrackedClaim puts one claim on task id held by holder on this
+// repo's own refs/lore/signals and its local tracking copy (a repo with no
+// remote keeps its signals there, devco:D-362), expiring in 15 minutes.
 func writeTrackedClaim(t *testing.T, repo, id, holder, session string) {
 	t.Helper()
 	r, err := gitref.Open(background(), repo, nil)
@@ -126,13 +131,15 @@ func writeTrackedClaim(t *testing.T, repo, id, holder, session string) {
 	folder := git("040000 tree "+claims+"\tclaims\n", "mktree")
 	root := git("040000 tree "+folder+"\t_root\n", "mktree")
 	commit := git("", "-c", "user.name=t", "-c", "user.email=t@example.com", "commit-tree", root, "-m", "lore: signals")
-	git("", "update-ref", "refs/lore-remote/origin/signals", commit)
+	git("", "update-ref", "refs/lore/signals", commit)
+	git("", "update-ref", "refs/lore-remote/local/signals", commit)
 }
 
 // TestStandaloneNoteFencedForHolder: a note by the task's holder (this
 // actor in this session, v0.1.17 readClaim) is a fenced write on the
-// signals ref (P3-SIGCOORD-6); in a repo without a remote it cannot be
-// confirmed, so it fails closed and writes nothing. Someone else's claim
+// signals ref (P3-SIGCOORD-6); in a repo without a remote that ref is the
+// repo's own (devco:D-362), so the fenced note is confirmed there and
+// written (it used to fail E_OFFLINE). Someone else's claim
 // does not stop the note. The board also fills the STATE column and Claim
 // answers.
 func TestStandaloneNoteFencedForHolder(t *testing.T) {
@@ -148,11 +155,11 @@ func TestStandaloneNoteFencedForHolder(t *testing.T) {
 	}
 	host, _ := os.Hostname() // the session's host part; empty is still one session
 	writeTrackedClaim(t, repo, id, me.String(), who.StableKey+humanSessionSeparator+host)
-	if _, nerr := noteLines(t, a, `{"id":"`+id+`","text":["held"]}`); !errs.Has(nerr, errs.Offline) {
-		t.Fatalf("note by the holder: %v, want E_OFFLINE (fenced, no remote to confirm it)", nerr)
+	if _, nerr := noteLines(t, a, `{"id":"`+id+`","text":["held"]}`); nerr != nil {
+		t.Fatalf("note by the holder in a repo with no remote: %v, want it confirmed on the local signals ref", nerr)
 	}
-	if n := countRows(t, a, schema.TableComments); n != 0 {
-		t.Fatalf("a fenced note wrote %d comments", n)
+	if n := countRows(t, a, schema.TableComments); n != 1 {
+		t.Fatalf("the holder's note wrote %d comments, want 1", n)
 	}
 	other := "act_00000000000000000000000000000001"
 	writeTrackedClaim(t, repo, id, other, "ses_x")

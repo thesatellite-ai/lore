@@ -64,6 +64,11 @@ func (b *Backend) MarkReadOnlyBecause(err error) {
 	b.readOnly, b.readOnlyErr = true, err
 }
 
+// Unwritable reports whether the clone was opened read-only because lore
+// may not write it (a read-only lore home, devco:U-4): a caller skips its
+// fetch and sync, which could only fail.
+func (b *Backend) Unwritable() bool { return b.unwritable }
+
 // refusedWrite is the error a write to a read-only handle answers.
 func (b *Backend) refusedWrite() error {
 	if b.readOnlyErr != nil {

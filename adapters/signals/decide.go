@@ -58,14 +58,18 @@ var ErrWIPLimit = errors.New("signals: work-in-progress limit reached")
 type WIPError struct {
 	Held []Held
 	Max  int
+	// Team is the team policy's cap (devco:S-20; 0 = not known). When Max
+	// is below it, the person's own config.yaml lowered the limit.
+	Team int
 	// PerCheckout is true for a person (devco:Q-1): the limit counts the
 	// claims held in this checkout (one worktree), not a session, so the
 	// message says "this worktree" and offers another worktree.
 	PerCheckout bool
 }
 
-// maxClaimsKey is the config key of the WIP limit, spelled out in the
-// refusal so `lore config set --key` takes it as printed.
+// maxClaimsKey is the key of the WIP limit, a team policy that a
+// personal config.yaml may only lower (devco:S-20), spelled out in the
+// refusal so `lore policy set --key` takes it as printed.
 const maxClaimsKey = "agents.max_claims_per_agent"
 
 func (e *WIPError) Error() string {
@@ -84,8 +88,23 @@ func (e *WIPError) Error() string {
 	if e.PerCheckout {
 		holder, other = "this worktree", "claim it from another worktree (git worktree add)"
 	}
-	return fmt.Sprintf("%s already holds %s (%s %d); finish it (lore task done --id %s) or release it (lore task release --id %s) first; or %s; or raise the limit (lore config set --key %s --value %d)",
-		holder, ids, maxClaimsKey, e.Max, first, first, other, maxClaimsKey, e.Max+1)
+	return fmt.Sprintf("%s already holds %s (%s %d); finish it (lore task done --id %s) or release it (lore task release --id %s) first; or %s; or %s",
+		holder, ids, maxClaimsKey, e.Max, first, first, other, e.raise())
+}
+
+// raise is the last way out of a WIP refusal (devco:S-20). The cap is a
+// team policy: an agent is told to ask a person, never to lift its own
+// limit; a person whose own config.yaml set it below the team's cap is
+// told how to raise it back, else how to raise the team's cap.
+func (e *WIPError) raise() string {
+	policyCmd := fmt.Sprintf("lore policy set --key %s --value %d", maxClaimsKey, e.Max+1)
+	switch {
+	case !e.PerCheckout:
+		return "ask a person to raise the team limit (" + policyCmd + ")"
+	case e.Team > e.Max:
+		return fmt.Sprintf("raise your own limit, up to the team's %d (lore config set --key %s --value %d)", e.Team, maxClaimsKey, e.Max+1)
+	}
+	return "raise the team limit (" + policyCmd + ")"
 }
 
 // Unwrap lets errors.Is(err, ErrWIPLimit) match.
@@ -104,6 +123,9 @@ type NotHeldError struct {
 	// Reason is a short explanation ("no claim", "lease expired at …",
 	// "claim epoch 3 ≠ row epoch 4").
 	Reason string
+	// Revoke is the revoke marker of the subject on the board, if any
+	// (devco:S-12): the holder's error names the person from it.
+	Revoke *Signal
 }
 
 func (e *NotHeldError) Error() string {
@@ -152,6 +174,8 @@ type ClaimRequest struct {
 	Exempt func(task string) bool
 	// MaxClaims is agents.max_claims_per_agent (0 = unlimited).
 	MaxClaims int
+	// TeamMaxClaims is the team policy's cap (0 = not known); see WIPError.
+	TeamMaxClaims int
 	// PerCheckout marks a person's claim (devco:Q-1): Exempt already drops
 	// the claims held in other checkouts, and the refusal names the
 	// worktree instead of a session.
@@ -227,7 +251,7 @@ func DecideClaim(v View, req ClaimRequest) (ClaimPlan, error) {
 			}
 		}
 		if len(held) >= req.MaxClaims {
-			return ClaimPlan{}, &WIPError{Held: held, Max: req.MaxClaims, PerCheckout: req.PerCheckout}
+			return ClaimPlan{}, &WIPError{Held: held, Max: req.MaxClaims, Team: req.TeamMaxClaims, PerCheckout: req.PerCheckout}
 		}
 	}
 	plan.Attempts = req.Row.Attempts
@@ -277,6 +301,11 @@ func notHeld(v View, p, reason string) error {
 	if cur, ok := v.Board[p]; ok {
 		c := cur
 		e.Current = &c
+	}
+	if k, ok := ParsePath(p); ok && k.Kind == KindClaim {
+		if m, live := v.Active(RevokedPath(k.Folder, k.Subject)); live && m.Kind == KindRevoke {
+			e.Revoke = &m
+		}
 	}
 	return e
 }

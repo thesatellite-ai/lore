@@ -330,7 +330,7 @@ A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 | `lease.renew_every` | `5m` | how often an agent renews its claim; must be shorter than `ttl` |
 | `lease.grace` | `2m` | extra time after a claim runs out before others may take the task |
 | `lease.push_retries` | `5` | how many times lore retries a push the remote turned down |
-| `agents.max_claims_per_agent` | `1` | how many tasks one agent session may hold at once; for a person it counts per worktree, so a worktree per task holds one claim each (raise it with `lore config set --key agents.max_claims_per_agent --value 3`) |
+| `agents.max_claims_per_agent` | `1` | how many tasks one agent session may hold at once; for a person it counts per worktree, so a worktree per task holds one claim each. The cap is the team policy of the same name (`lore policy set --key agents.max_claims_per_agent --value 3`, default 1); this setting may only lower it, and a value above the team's cap is ignored |
 | `agents.max_attempts` | `3` | how many agents may try a task before it is marked `blocked` |
 | `merge_check.adapter` | `none` | `none` learns about merges from commits only; `github` also asks the `gh` tool about merged pull requests |
 | `link_index.max_age` | `1h` | how old the saved list of linked client repos may be when the store cannot be reached; past it lore still attaches the folders the saved list names, so reads show the rows fetched last, but a write that needs to know whether this is a client repo is refused until a sync |

@@ -81,7 +81,7 @@ func TestTaskReaderOpenTasksClaims(t *testing.T) {
 		}
 		files[signals.ClaimPath(signalsRootFolder, c.task)] = string(b)
 	}
-	tracking, ok := gitremote.TrackingRef("origin", signals.CodeRepoRef)
+	tracking, ok := gitremote.TrackingRef(localSignalsRemoteName, signals.CodeRepoRef) // no remote here: local claims (devco:D-362)
 	if !ok {
 		t.Fatal("no tracking ref for the signals ref")
 	}

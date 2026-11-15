@@ -18,7 +18,9 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -461,9 +463,15 @@ func outsideRepo(ctx context.Context, env Env) bool {
 // (E_NOT_A_STORE) is skipped, not a warning: the skips become one note
 // and do not degrade.
 func addChecks(r *Report, runs []CheckRun, outside bool) {
+	var noGit []string // checks that could not run without git (devco:U-5)
+	var gitErr error
 	for _, c := range runs {
 		if c.Err != nil && outside && errs.Has(c.Err, errs.NotAStore) {
 			r.repoSkipped++
+			continue
+		}
+		if c.Err != nil && errs.Has(c.Err, errs.GitMissing) {
+			noGit, gitErr = append(noGit, c.Check), c.Err
 			continue
 		}
 		if c.Err != nil {
@@ -495,6 +503,29 @@ func addChecks(r *Report, runs []CheckRun, outside bool) {
 	if r.repoSkipped > 0 {
 		r.Notes = append(r.Notes, fmt.Sprintf(noteRepoSkipped, r.repoSkipped))
 	}
+	if len(noGit) > 0 {
+		// one error naming git and its fix, not a scatter of "could not
+		// run" warnings: nothing that needs git works, so it is broken
+		line := gitMissingLine(gitErr, noGit)
+		r.note(line, findingMeta{check: CheckError, broken: true})
+		r.Errors = append([]string{line}, r.Errors...)
+		r.Status = StatusBroken
+	}
+}
+
+// gitMissingLine is doctor's one line for a machine with no git on PATH
+// (devco:U-5): the error's own message and hint, and the checks it stopped.
+func gitMissingLine(err error, checks []string) string {
+	msg, hint := err.Error(), ""
+	var le *errs.Error
+	if errors.As(err, &le) {
+		msg, hint = le.Message, le.Hint
+	}
+	line := "git: " + msg + "; " + strconv.Itoa(len(checks)) + " check(s) could not run (" + strings.Join(checks, ", ") + ")"
+	if hint != "" {
+		line += "; " + hint
+	}
+	return line
 }
 
 // degrade lowers healthy to degraded (broken stays broken).

@@ -14,8 +14,9 @@ import (
 // reached: Name's url is read from the repo's config only then, so a run
 // without --trace costs nothing extra (issue 15).
 func (g *Git) run(ctx context.Context, args []string) ([]byte, error) {
+	start := time.Now()
 	out, err := g.runOnce(ctx, args)
-	if err == nil || !neverConnected(err) {
+	if err == nil || !neverConnected(err) || !RetryAfter(time.Since(start)) {
 		return out, err
 	}
 	// L-12 / L-10: one dropped connection (a flaky link, a timed-out ssh
@@ -30,6 +31,17 @@ func (g *Git) run(ctx context.Context, args []string) ([]byte, error) {
 	}
 	return g.runOnce(ctx, args)
 }
+
+// retryWithin is how long a failed first try may have taken for the one
+// retry to run: a drop that came fast (a reset handshake, an instant
+// "unreachable") is worth one more try, but a try that already waited out
+// a connect timeout is not: offline, the retry only doubled every
+// command's wait (devco:U-6, 20 s reads behind a 10 s timeout).
+const retryWithin = 2 * time.Second
+
+// RetryAfter reports whether a call that never connected and took took
+// gets its one retry (retryWithin); the store clones' runner asks it too.
+func RetryAfter(took time.Duration) bool { return took < retryWithin }
 
 // RetryPause is the wait before the one retry of a call that never
 // connected (run here, and the store clones' runner, which shares
