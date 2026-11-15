@@ -88,6 +88,8 @@ ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes:
 
 Fix: remove the code repo from `stores:`. To make a store, create a new, empty repo and run `lore store init --name <name> --url <url>` on it. A code repo can never be a store.
 
+A repo that has `lore-store.yaml` at its top is never refused this way: files lore does not own that someone pushed into it are skipped, and `lore sync` names them with the commit that added them ([What lore takes from a store](identity-and-stores.md#what-lore-takes-from-a-store-and-from-whom)).
+
 ## `E_ORG_AMBIGUOUS`
 
 An **org** is one company setup in your config: its stores, its people and the repos it owns. Here two org entries match the repo at the same rule, so lore will not pick one:

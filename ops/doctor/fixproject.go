@@ -74,6 +74,10 @@ const (
 	StepRender     = "render"
 	StepAgentHooks = "agent hooks"
 	StepOldClones  = "old clones"
+	// StepOutsideClones removes, with --yes, store clones no org, setup
+	// or repo of the machine uses (left by an earlier lore that followed
+	// a store list it should not have; devco R-7).
+	StepOutsideClones = "outside clones"
 	// StepOldFiles removes lore 0.1.17's database and backups from the
 	// repo once every row they hold is accounted for (B4-7).
 	StepOldFiles = "0.1.17 files"

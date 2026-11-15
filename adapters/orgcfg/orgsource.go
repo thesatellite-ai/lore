@@ -91,10 +91,23 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 // readSuggestionFile reads the lore-org.yaml at p in tip (folder its org
 // folder); found is false when tip has no file there.
 func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, storeID string) (Suggestion, bool, error) {
-	raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p)
-	if rerr != nil {
+	if _, rerr := gitRun(ctx, "-C", dir, "cat-file", "-e", tip+":"+p); rerr != nil {
 		return Suggestion{}, false, nil // no lore-org.yaml here
 	}
+	// R-7 (C30): only an admin's change to the org file is read; a
+	// change by anyone else is held back and named (orgauthority.go).
+	at, held := acceptedOrgFile(ctx, dir, tip, folder)
+	if len(held) > 0 && at == "" {
+		return Suggestion{Held: held}, false, fmt.Errorf("%w: %s@%s (every version of %s was held back: %s)", ErrNoOrgFile, norm, branch, p, held[0])
+	}
+	if at == "" {
+		at = tip
+	}
+	raw, ap, ok := readFirstBlob(ctx, dir, at, orgFilePaths(folder))
+	if !ok {
+		return Suggestion{}, false, nil
+	}
+	p = ap
 	doc, perr := parseOrgFileDoc(raw)
 	if perr != nil {
 		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, perr)
@@ -102,11 +115,11 @@ func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, 
 	if serr := doc.checkShortNames(); serr != nil {
 		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, serr)
 	}
-	blob, berr := gitRun(ctx, "-C", dir, "rev-parse", tip+":"+p)
+	blob, berr := gitRun(ctx, "-C", dir, "rev-parse", at+":"+p)
 	if berr != nil {
 		return Suggestion{}, false, berr
 	}
-	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p}, true, nil
+	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p, Held: held}, true, nil
 }
 
 // Shared is the suggestion's shared fields as an org entry holds them.
@@ -175,6 +188,7 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 			if !found {
 				return nil, fmt.Errorf("%w: %s@%s", ErrNoOrgFile, norm, branch)
 			}
+			old = acceptedOrgRaw(ctx, dir, tip, cur.Folder, old)
 			doc, perr := parseOrgFileDoc(string(old))
 			if perr != nil {
 				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, perr)

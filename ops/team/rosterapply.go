@@ -1178,9 +1178,38 @@ func CheckMember(ctx context.Context, profiles profilestore.Store, org string, e
 	}
 	a, matched := findMember(ctx, r, emails)
 	if matched == "" {
+		if err := leftMember(ctx, r, org, r.Where(), emails); err != nil {
+			return err
+		}
 		return notMember(ctx, org, r.Where(), emails)
 	}
 	return addressClash(ctx, r, emails, a.ID.String())
+}
+
+// leftMember is the refusal of a join by someone on org's roster who was
+// offboarded (devco R-18: the join said "not a member" and asked for
+// member add, which a person still on the roster does not need); nil
+// when the primary email names no such person.
+func leftMember(ctx context.Context, r profilestore.Roster, org, where string, emails []string) error {
+	for _, e := range emails[:min(1, len(emails))] {
+		for _, ref := range []string{"email:" + e, humanKeyPrefix + e} {
+			a, err := r.ResolveActor(ctx, ref)
+			if err != nil || isMember(ctx, r, a) {
+				continue
+			}
+			since := ""
+			if t, perr := time.Parse(time.RFC3339Nano, fieldText(a, schema.FieldActorLeftAt)); perr == nil {
+				since = " since " + t.UTC().Format(time.DateOnly)
+			}
+			handle := a.ID.String()
+			if h := fieldText(a, schema.FieldActorHandle); h != "" {
+				handle = "@" + h
+			}
+			return errs.New(errs.Refused, e+" is on "+org+"'s roster ("+where+") but marked as left"+since+"; nothing was written").
+				WithHint("ask an admin of " + org + " to run: lore actor rejoin --actor " + handle + " --type employee (or contractor, intern, client_contact), then run the join line again")
+		}
+	}
+	return nil
 }
 
 // memberEmails are the normalized, distinct addresses of emails.

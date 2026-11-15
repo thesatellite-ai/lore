@@ -43,13 +43,14 @@ func TestOrgRefreshCopiesDefaults(t *testing.T) {
 		t.Fatalf("lore-org.yaml of a new org already has defaults:\n%s", base)
 	}
 	// publish writes lore-org.yaml with defaults (none when extra is "")
-	// and pushes it, as a teammate changing the team's file would.
+	// and pushes it, as the org's admin changing the team's file by plain
+	// git would (a change by anyone else is held back, devco R-7).
 	publish := func(extra, msg string) {
 		t.Helper()
 		if err := os.WriteFile(orgFile, append(append([]byte{}, base...), extra...), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		orgGit(t, clone, "commit", "-q", "-am", msg)
+		orgGit(t, clone, "-c", "user.name=Mira", "-c", "user.email=mira@agency.example", "commit", "-q", "-am", msg)
 		orgGit(t, clone, "push", "-q", "origin", "main")
 	}
 	entryDefaults := func() map[string]string {

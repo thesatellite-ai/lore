@@ -55,6 +55,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
@@ -234,10 +235,42 @@ type StaffRefIn struct {
 	Who string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
 }
 
+// StaffShowIn is the input of member.show.
+type StaffShowIn struct {
+	Who string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	// History lists the person's commits in the org's store clones
+	// (devco R-18: no view showed what a person who left did, and when).
+	History bool `json:"history,omitempty" flag:"history" desc:"also list their commits in the org's stores, newest first, held-back ones marked"`
+}
+
+// HistoryEntry is one store commit a person authored (member show --history).
+type HistoryEntry struct {
+	Commit  string `json:"commit"`
+	At      string `json:"at"`
+	Store   string `json:"store"`
+	Subject string `json:"subject"`
+	Files   int    `json:"files"`
+	// Held: every reader holds this commit's changes back (a roster
+	// change by a non-admin, or a write after the person left).
+	Held bool `json:"held,omitempty"`
+}
+
+// MemberHistory is the upgrade that reads a person's commits in the
+// store clones this machine has (wire: the git history of each clone).
+type MemberHistory interface {
+	MemberHistory(ctx context.Context, emails []string) ([]HistoryEntry, error)
+}
+
+// historyNoReader is the note of a --history no store clone can answer.
+const historyNoReader = "no store history here: run it where the org's store is attached"
+
 // StaffShowOut is member.show's answer.
 type StaffShowOut struct {
 	Member StaffRow `json:"member"`
 	Where  string   `json:"where"`
+	// History is set by --history (nil otherwise; empty when none).
+	History     []HistoryEntry `json:"history,omitempty"`
+	HistoryNote string         `json:"history_note,omitempty"`
 }
 
 // Text is the person, one fact per line.
@@ -252,7 +285,29 @@ func (o StaffShowOut) Text() string {
 		}
 	}
 	b.WriteString("  roster:   " + o.Where + "\n")
+	if o.History != nil || o.HistoryNote != "" {
+		b.WriteString(fmt.Sprintf("  history:  %d commit(s) in the org's stores", len(o.History)))
+		if o.HistoryNote != "" {
+			b.WriteString(" (" + o.HistoryNote + ")")
+		}
+		b.WriteString("\n")
+		for _, h := range o.History {
+			line := fmt.Sprintf("    %s  %s  %s: %s (%d file(s))", h.At, shortSHA(h.Commit), h.Store, h.Subject, h.Files)
+			if h.Held {
+				line += "  [held back]"
+			}
+			b.WriteString(line + "\n")
+		}
+	}
 	return b.String()
+}
+
+// shortSHA is a commit id cut to seven hex digits.
+func shortSHA(c string) string {
+	if len(c) > 7 {
+		return c[:7]
+	}
+	return c
 }
 
 // StaffEditIn is the input of member.edit.
@@ -385,7 +440,7 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 		op.Define(op.Spec{Name: OpStaffShow, Summary: "Show one person on the org roster",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: base,
 			Examples: []op.Example{{Title: "by email", CLI: "lore member show --who mira@agency.example", Want: "email"}}},
-			func(ctx context.Context, in StaffRefIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
+			func(ctx context.Context, in StaffShowIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
 		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle or org-level role",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
 			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit --who mira@agency.example --role pm", Want: "updated"}}},
@@ -1034,7 +1089,7 @@ func staffFind(ctx context.Context, r profilestore.Roster, who string) (row.Row,
 	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on "+r.Where()+"'s roster").WithHint("lore member list")
 }
 
-func (o ops) staffShow(ctx context.Context, in StaffRefIn) (StaffShowOut, error) {
+func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error) {
 	r, done, err := o.env.Roster(ctx, false)
 	defer done()
 	if err != nil {
@@ -1044,7 +1099,22 @@ func (o ops) staffShow(ctx context.Context, in StaffRefIn) (StaffShowOut, error)
 	if err != nil {
 		return StaffShowOut{}, err
 	}
-	return StaffShowOut{Member: m, Where: r.Where()}, nil
+	out := StaffShowOut{Member: m, Where: r.Where()}
+	if !in.History {
+		return out, nil
+	}
+	hr, ok := upgrade.As[MemberHistory](o.env)
+	if !ok || m.Email == "" {
+		out.HistoryNote = historyNoReader
+		return out, nil
+	}
+	if out.History, err = hr.MemberHistory(ctx, []string{m.Email}); err != nil {
+		return StaffShowOut{}, err
+	}
+	if out.History == nil {
+		out.History = []HistoryEntry{}
+	}
+	return out, nil
 }
 
 func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) {

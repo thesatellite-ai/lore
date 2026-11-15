@@ -115,8 +115,11 @@ func TestF12_StoreInitOnlyOnAnEmptyRepo(t *testing.T) {
 	}
 }
 
-// F12 matrix: allowed files keep a store valid; anything else makes every
-// use refuse with E_NOT_A_STORE.
+// F12 matrix: allowed files keep a store valid. Anything else pushed into
+// a store (it has lore-store.yaml) is skipped and named by lore doctor
+// with the commit that added it, never a refusal of every command (devco
+// R-2: one plain-git push locked the whole org out); a repo without the
+// marker that holds code is still refused (orgcfg TestCheckStoreTreePlainLayout).
 func TestF12_StoreAllowedFiles(t *testing.T) {
 	cases := []struct {
 		path string
@@ -136,11 +139,12 @@ func TestF12_StoreAllowedFiles(t *testing.T) {
 			sc.WriteFile(tc.path, "x\n")
 			sc.CommitAll("add " + tc.path)
 			sc.AdminPush("origin", "main")
-			r := a.aliceApp.Lore("whoami")
+			a.aliceApp.Lore("whoami").OK(t).Never(t, "E_NOT_A_STORE")
+			d := a.aliceApp.Lore("doctor")
 			if tc.ok {
-				r.OK(t)
+				d.Never(t, "store_trust")
 			} else {
-				r.Fails(t, th.ExitGuard, "E_NOT_A_STORE")
+				d.Says(t, "store_trust", tc.path, "lore does not own").Never(t, "E_NOT_A_STORE")
 			}
 		})
 	}

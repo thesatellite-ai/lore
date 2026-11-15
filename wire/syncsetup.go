@@ -405,6 +405,8 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 	if err != nil {
 		return fail(err)
 	}
+	// R-5/R-6/R-18: changes held back on read, named under the store's line (rosterhold.go)
+	r.Problems = append(r.Problems, x.heldSyncLines(ctx)...)
 	switch {
 	case r.Offline:
 		if cause, next, gone := storeGone(detail, one.URL, string(one.Name)); gone {

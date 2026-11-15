@@ -50,10 +50,14 @@ const (
 
 // Backend is one open data folder of a git store.
 type Backend struct {
-	cfg      config
-	git      runner
-	mode     mode
-	readOnly bool
+	// rosterMu guards rosterFrom: the org roster a store with no org
+	// folder is checked against (SetRosterSource, authority.go).
+	rosterMu   sync.Mutex
+	rosterFrom rosterFunc
+	cfg        config
+	git        runner
+	mode       mode
+	readOnly   bool
 	// readOnlyErr, when set (MarkReadOnlyBecause), is what a refused write
 	// answers instead of the bare store.ErrReadOnly, so the refusal names the
 	// store, why it takes no writes and what to do instead (devco N-8).
@@ -166,6 +170,13 @@ func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 		if b.unmergedPaths(ctx)[path] {
 			return b.rowAtHead(ctx, path, table, id)
 		}
+		if h, herr := b.headIfHeld(ctx, path); herr == nil && h != "" {
+			if auth, _ := b.authorityOf(ctx, h); auth != nil {
+				if blob, held := auth.heldBlob(path); held {
+					return b.rowAtBlob(ctx, blob, table, id)
+				}
+			}
+		}
 	}
 	return b.folder.Get(table, id)
 }
@@ -195,6 +206,19 @@ func (b *Backend) unmergedPaths(ctx context.Context) map[string]bool {
 // brings in).
 func (b *Backend) rowAtHead(ctx context.Context, path string, table row.Table, id ids.AnyID) (store.Row, error) {
 	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", "HEAD:" + path}})
+	if err != nil {
+		return store.Row{}, store.ErrNotFound
+	}
+	return rowfs.DecodeRowFile(rowfs.RowPath(table, id), out)
+}
+
+// rowAtBlob is the row in blob (a git object id); store.ErrNotFound for
+// "" (a held-back file with no accepted version, authority.go).
+func (b *Backend) rowAtBlob(ctx context.Context, blob string, table row.Table, id ids.AnyID) (store.Row, error) {
+	if blob == "" {
+		return store.Row{}, store.ErrNotFound
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", blob}})
 	if err != nil {
 		return store.Row{}, store.ErrNotFound
 	}

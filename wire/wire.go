@@ -484,6 +484,10 @@ type state struct {
 	// because they have no local copy and cannot be reached, with that
 	// error; nil when every store opened (openAttached, unreachableGuard).
 	unreachable map[store.Source]error
+	// untrusted holds the stores the repo's committed stores.yaml attaches
+	// that open left out until the person trusts them (storetrust.go,
+	// devco R-9); nil when none.
+	untrusted []untrustedStore
 	// repoClassNote says why the repo store is client-class without a
 	// positive answer (no RepoIsClient hook, or its error); empty when the
 	// hook answered.

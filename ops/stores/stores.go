@@ -518,6 +518,7 @@ func Ops(m Manager) []op.Entry {
 		adoptOp(m),
 		setURLOp(m),
 		useOp(m),
+		trustOp(m),
 	}, append(append(cloneOps(m), pushOps(m)...), pushNowOp(m))...)
 }
 

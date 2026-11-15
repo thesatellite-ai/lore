@@ -1003,7 +1003,10 @@ init:  refuse if the target branch has any file outside the allowed list; write 
 use (every time a store from stores: is read or written, after its fetch):
   git ls-tree -r --name-only <store branch> (no checkout)
   no lore-store.yaml                 → E_NOT_A_STORE "not a lore store; create one with lore store init in a new empty repo"
-  any path outside the allowed list  → E_NOT_A_STORE "store contains non-lore files: <first 3>"
+  no lore-store.yaml + other paths   → E_NOT_A_STORE "store contains non-lore files: <first 3>"
+  lore-store.yaml + other paths      → a store: those files are skipped, and lore sync / doctor name
+                                       each with the commit and author that added it (devco R-2:
+                                       one plain-git push by any member must never lock the org out)
   allowed: lore-store.yaml, README*, LICENSE*, .gitattributes, .github/workflows/lore-*.yml, <folder>/.lore/**
 out:  ok, cached per store commit (a new commit is checked again)
 ```

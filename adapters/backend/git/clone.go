@@ -809,17 +809,40 @@ func (b *Backend) readCommits(ctx context.Context, cursor store.Cursor) ([]store
 	}
 	names := make([]string, 0, len(paths))
 	rels := make(map[string]string, len(paths))
+	// R-5/R-6/R-18: a change no one with authority made is read as its
+	// last accepted version, or not at all (authority.go)
+	auth, _ := b.authorityOf(ctx, h)
 	for _, p := range paths {
 		if rel, ok := b.folder.FileRel(p); ok {
-			names = append(names, h+":"+p)
-			rels[h+":"+p] = rel
+			name := h + ":" + p
+			if blob, held := auth.heldBlob(p); held {
+				if blob == "" {
+					continue
+				}
+				name = blob
+			}
+			names = append(names, name)
+			rels[name] = rel
 		}
+	}
+	// round-6 follow-up: a row held back after the cache already took it
+	// (rows cached before this check existed, or a hold a later roster
+	// change made) is served again as its accepted version, or hidden
+	var hidden []store.Row
+	if from != "" {
+		more, tombs := b.heldRecheck(ctx, auth, h, paths)
+		for name, rel := range more {
+			names = append(names, name)
+			rels[name] = rel
+		}
+		hidden = tombs
 	}
 	blobs, err := b.readBlobs(ctx, names)
 	if err != nil {
 		return nil, "", err
 	}
-	rows := make([]store.Row, 0, len(blobs))
+	rows := make([]store.Row, 0, len(blobs)+len(hidden))
+	rows = append(rows, hidden...)
 	for _, name := range names {
 		doc, ok := blobs[name]
 		if !ok || len(doc) > rowfs.MaxFileSize {

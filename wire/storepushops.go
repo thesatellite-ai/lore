@@ -39,6 +39,9 @@ const storeSetSubject = "lore: store set "
 
 // openGitStore opens src's store as a git clone (the caller closes it).
 func (a *App) openGitStore(ctx context.Context, src attach.Store) (*git.Backend, func(), error) {
+	if err := a.untrustedStoreErr(ctx, src); err != nil {
+		return nil, nil, err // devco R-9: never cloned before the person's yes
+	}
 	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return nil, nil, err

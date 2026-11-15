@@ -128,6 +128,20 @@ $ git reset -q -- _store/tasks/tsk_2ad3…f891.json && git checkout -- _store/ta
 
 While a `git pull` (merge), rebase, cherry-pick, revert or bisect of yours is unfinished in a store clone, lore leaves that clone alone: it never aborts or resets it, a read does not pick up hand edits there and says so in one line, a row file the merge left unmerged (conflict markers inside its values) is read as your last commit has it and is not reported as a broken file, and a write or `lore sync` that would touch the clone is refused with `store clone <path> is in the middle of a git merge` and the commands that end it (`git add` the files and `git commit`, or `git merge --abort`). Finish it, then run the lore command again.
 
+## Who may change a row
+
+Every teammate's lore replays the history of each store clone it reads and checks each commit against the roster as the accepted commits left it, so the rules do not depend on the writer's own lore ([Who may change the roster](../team/members.md) covers roster changes and people who left):
+
+- the writer a row states (`updated_by`, and `created_by` when the commit added the file) must be the commit's author, or an agent that author runs; a row that carries the stamp (`_hlc`) of a version its stated writer committed before passes too, so settling a conflict with `lore sync resolve` or reverting a change works as before; the author is matched to the roster by the email of the commit (a contact of the actor, or the person's identity email);
+- a contractor's commit may touch only their own roster rows and the folders of their projects; a store with no org folder (a client store) is checked against the roster of the org's store;
+- a merge commit is checked for the rows whose merged version neither side had; lore's own field merge keeps a side's stamp, so it passes.
+
+A change that fails is held back: lists, search and the rendered agent files read the row as its last accepted version (or leave it out when there is none), and `lore sync` and `lore doctor` name it as `held back in <store>: <table> <id> (commit <sha> by <author>): <reason>`. The other rows are read as always, and a row a reader had already taken before this check is put back on its next read. An admin's commit (a `git revert` that restores rows other people wrote) passes. To end a hold an admin makes the change with lore or runs `git revert <commit>` in the store clone; the real writer can also save the row again with lore.
+
+Each command replays a clone's history once per new commit and keeps the result in memory: a store with a long history pays one `git log` and one read of its row versions after each sync.
+
+Security note: git lets anyone who can push write any author name and email into a commit, so these checks raise the bar (a hand-made row no longer passes as the admin's by default) but are not proof of who wrote it. Repository permissions stay the access control; signed changes are not part of this release.
+
 ## Files that are not rows
 
 A note (`notes.txt`), a folder of your own or any other file that is not a row is left alone: lore never deletes it and never reads it. `lore doctor` names such files in each store clone so you can keep them or move them out. Do not commit them: a store may hold only lore's files (plus `README*`, `LICENSE*`, `.gitattributes` and lore's GitHub workflows), and lore refuses an org store whose branch holds anything else (`E_NOT_A_STORE`).
