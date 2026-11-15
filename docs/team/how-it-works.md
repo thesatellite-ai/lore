@@ -100,10 +100,9 @@ Commands in one clone take turns on its live list: each waits for the one before
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
 # bob, in billing
-$ lore sync
+$ lore sync && git switch -q -c feat/payments
 lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -376,9 +375,9 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_2537…6bbb.json (store agency)
 ✓ tsk_162d…9666 done (commit 86dbae4, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 86dbae41af28); waiting for merge
-  lesson → mem_3b62…e913
+  lesson → mem_2537…6bbb
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
@@ -392,14 +391,14 @@ $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && g
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
 lore: committed locally to store agency; lore sync sends it
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 05513aa)
+✓ tsk_162d…9666 merged 10:26 (found by: ancestry, 05513aa)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
 $ lore task next --mission msn_2ad3…f891 --repo app
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_28f8…03df.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show --id tsk_54fe…28f2

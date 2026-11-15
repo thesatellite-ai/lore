@@ -97,7 +97,7 @@ A real one, from the worked example: the crashed `agent-frontend` woke up after 
 ```console
 # agent-frontend, in agents/app
 $ lore task done --id tsk_54fe…28f2
-ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 10:57AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:45AM
+ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:01AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:49AM
   hint: stop work on this task; `lore task next` finds other work
 (exit 12)
 ```
@@ -299,6 +299,7 @@ Running `lore hold claim` again while you hold it renews your hold. A typical li
 - **One label per session.** Two sessions with the same label are one actor; start each session with its own `--label`. Two auto-detected coding-agent windows of one person (two Claude Code or Codex sessions, no `--label`) are one actor but two sessions: each holds its own claims (`max_claims_per_agent` counts per session), and neither can take or release the other's.
 - **The claim cap is your team's.** `agents.max_claims_per_agent` is a team policy (default 1): when a second claim is refused, finish or release the first, or ask a person to raise it with `lore policy set --key agents.max_claims_per_agent --value <n>`. Your own `config.yaml` may only lower it; never try to raise it yourself.
 - **Do not run `--no-verify`** on commits or pushes in a client repo: the commit and push hooks are the leak check.
+- **Work on a shared branch.** With branch layers, your claim, notes and done on an isolated work branch stay with that branch until it lands, so your coordinator does not see them. Work on a branch your person marked with `lore branch share --branch <b>` (or on the default branch); `lore branch mode` says which you are on ([branch layers](concepts.md#branch-layers-notes-that-follow-the-code-branch)).
 - **Push your work branch** (or let `lore task note` do it) before any step that might kill your session.
 
 ## Hooking an agent tool
@@ -317,10 +318,10 @@ The coordinator's one-screen check of a running mission is `lore mission status`
 # alice, in infra
 $ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready · 0 waiting · 0 gated · 0 expired · 0 blocked
-  claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:29) 1m
-  done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:04 4m
-  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:02 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
-  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:23 12m (timebox 1h)
+  claimed   tsk_c0f3…b5b8  deploy to staging            agent-coord  working (until 11:32) 1m
+  done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  merged 11:08 4m
+  done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:05 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
+  done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:26 12m (timebox 1h)
 ```
 <!-- /example -->
 

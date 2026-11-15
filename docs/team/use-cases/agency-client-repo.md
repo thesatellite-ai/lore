@@ -124,12 +124,12 @@ $ git status --short
 
 The memory went to `agency/client` in the store and was pushed there. The rule is a file in the client's repo, to be committed with the code.
 
-Alice adds an internal task for Bob, from any branch. Bob sees it in his list and inbox, and finishes it from the client's repo. Nothing in the client's repo changes:
+Alice adds an internal task for Bob from the default branch: a task added on a feature branch would stay in that branch's notes until it lands ([branch layers](../concepts.md#branch-layers-notes-that-follow-the-code-branch)). Bob sees it in his list and inbox, and finishes it from the client's repo before he starts his own feature branch. Nothing in the client's repo changes:
 
 <!-- example: agency#internal-task -->
 ```console
 # alice, in website
-$ lore sync >/dev/null; git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
+$ lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
 lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
@@ -143,16 +143,17 @@ store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refuse
 store agency/org: up to date
 
 # bob, in website
-$ lore sync >/dev/null; git switch -q -c feat/login && lore task list
+$ lore sync >/dev/null; lore task list
 ○ tsk_b4f4…a5b0 send invoice reminder before demo [medium]  [agency/client]
 $ lore inbox
 -  assigned              tsk_b4f4…a5b0  send invoice reminder before demo (lead)
-$ lore task done --id tsk_b4f4…a5b0
+$ lore task done --id tsk_b4f4…a5b0 && lore sync >/dev/null && git switch -q -c feat/login
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
 $ git status --short
 ```
 <!-- /example -->

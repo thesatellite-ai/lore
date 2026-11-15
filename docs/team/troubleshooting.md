@@ -31,10 +31,9 @@ Lore fetches once per command; a read reuses that fetch for 5 minutes, a write f
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
 # bob, in billing
-$ lore sync
+$ lore sync && git switch -q -c feat/payments
 lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine

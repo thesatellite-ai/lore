@@ -474,6 +474,8 @@ const (
 	whyStoreUse    = "points lore at a person's own git clone of a store, made with git clone first; wire TestStoreUse runs it"
 	whySyncFixture = "needs a conflict, a second branch or a live remote; the sync tests run it"
 	whySupport     = "writes a support bundle to send; the support-bundle tests run it"
+	whyBranchLayer = "needs a code repo linked to a store folder, on a feature branch with a layer (and a merge, a remote or a workflow file for land, adopt and install-action); the BL stories (tests/stories BL_*) run it"
+	whyOrgStoreRm  = "removes a store from an org made first with org create + org store add; the journey r7torg tests run it"
 	whySourceCopy  = "rewrites copies from their one source of truth (SOURCE_OF_TRUTH), which needs a stale copy, a leftover or an org store; the sot_* tests and the doctor fixes in the env, repos and foreign tests run it"
 )
 
@@ -535,4 +537,10 @@ var notUserRun = map[string]string{
 	"support-bundle run": whySupport,
 
 	"actor refresh": whySourceCopy, "identity migrate": whySourceCopy, "org refresh": whySourceCopy,
+
+	"branch adopt": whyBranchLayer, "branch drop": whyBranchLayer, "branch install-action": whyBranchLayer, "branch isolate": whyBranchLayer,
+	"branch land": whyBranchLayer, "branch list": whyBranchLayer, "branch mode": whyBranchLayer, "branch promote": whyBranchLayer,
+	"branch purge": whyBranchLayer, "branch rename": whyBranchLayer, "branch restore": whyBranchLayer, "branch share": whyBranchLayer,
+	"branch show":      whyBranchLayer,
+	"org store remove": whyOrgStoreRm,
 }

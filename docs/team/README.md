@@ -55,7 +55,7 @@ Two developers, one repo, two branches. Bob (an agency developer) gives Alice (a
 <!-- example: small-team#assign-across-branches only=1,3 -->
 ```console
 # bob, in billing
-$ git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice
+$ git pull -q && lore task add --title 'check the checkout page on a phone' --assign @alice
 lore: wrote task_lists/tlt_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json is unchanged)
 lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
