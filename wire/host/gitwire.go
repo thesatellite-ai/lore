@@ -203,6 +203,14 @@ func hookBlocks(rel string) map[string]struct {
 	// commit and is printed once.
 	oneCall := "lore_cm_ok=; ( " + absMsg + cd + guard + `o="$(` + bn + ` task hook commit-msg --check-leaks "$m" 2>&1)" && { [ -z "$o" ] || printf '%s\n' "$o" >&2; } ) && lore_cm_ok=1 || true`
 	fallback := `[ -n "$lore_cm_ok" ] || `
+	// devco:S-10: an older lore first on PATH cannot read 0.1.18 rows, and
+	// its leak check refused every commit, a README one too, as if the
+	// commit were a lore write. A commit that carries no row file, in a
+	// repo the last check did not find to be a client repo, goes through
+	// (the pre-commit block skips it the same way); one that carries rows,
+	// or any commit in a client repo, is refused naming the binary and
+	// the fix (needsCore).
+	oldLoreCommit := `if [ "$(git config --get ` + wire.ClientRepoGitKey + `)" = true ] || ! git diff --cached --quiet -- .lore/data 2>/dev/null; then `
 	return map[string]block{
 		hookPreCommit:    {marker, []string{"( " + cd + noRows + "if command -v " + bn + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + bn + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"}},
 		hookPostCheckout: {marker, refresh(hookPostCheckout, "")},
@@ -211,7 +219,7 @@ func hookBlocks(rel string) map[string]struct {
 		hookCommitMsg: {marker, []string{
 			oneCall,
 			fallback + "( " + absMsg + cd + guard + bn + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
-			fallback + "( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
+			fallback + "( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + hasV2 + " && ! " + coreProbe + "; then " + oldLoreCommit + needsCore + "; fi; elif command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
 		}},
 		hookPostCommit: {rideHookMarker, rideHookLines[hookPostCommit]},
 		hookPrePush:    {rideHookMarker, rideHookLines[hookPrePush]},
@@ -483,7 +491,10 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			sort.Strings(team)
 			note += fmt.Sprintf(trackedHooksCreated, dir, strings.Join(team, ", "))
 		}
-		s.cmdNotice(ctx, "set up git for lore's row files in this clone: "+strings.Join(changed, "; ")+note+" (`lore where` lists everything lore keeps here)")
+		text := "set up git for lore's row files in this clone: " + strings.Join(changed, "; ") + note + " (`lore where` lists everything lore keeps here)"
+		if !holdSetupNote(ctx, text, func(t string) { s.cmdNotice(ctx, t) }) { // said once the write goes through (setupnotes.go)
+			s.cmdNotice(ctx, text)
+		}
 	}
 	if skipped != "" && !wire.ReadNoticeSaid(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp) {
 		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, skipped, dir))

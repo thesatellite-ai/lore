@@ -127,21 +127,25 @@ func (s *setupSnapshot) rel(p string) string {
 	return p
 }
 
-// GuardSetUp snapshots the git set-up files of the clone dir is in (the
-// same set the Runner protects for every write, B1-1) and returns the undo
-// a command run outside the Runner calls with its error: on a non-nil error
-// it puts those files back as they were, says so on stderr, and returns err
-// unchanged; on nil it does nothing. `lore init` needs it (devco
-// D-281-initundo): the CLI runs repo.init directly, so a failed init used
-// to keep the lore.initedhere key SeedRepoMeta had already written to
-// .git/config, while `lore repo init` (through the Runner) put it back.
-func GuardSetUp(ctx context.Context, dir string) func(err error) error {
+// GuardSetUpQuiet snapshots the git set-up files of the clone dir is in
+// (the set the Runner protects for every write, B1-1) for a command run
+// outside the Runner: `lore init` (devco D-281-initundo: a failed init
+// used to keep the lore.initedhere key SeedRepoMeta had already written to
+// .git/config, while `lore repo init` put it back). ctx holds the set-up
+// lines the command's git set-up prints; done(nil) prints them, done(err)
+// drops them and puts the set-up back without a word, as the Runner does
+// for a refused write, and returns err unchanged.
+func GuardSetUpQuiet(ctx context.Context, dir string) (context.Context, func(err error) error) {
 	snap := takeSetupSnapshot(ctx, dir)
-	return func(err error) error {
+	ctx, notes := withSetupNotes(ctx)
+	return ctx, func(err error) error {
 		if err != nil {
-			announceUndo(os.Stderr, snap.restore())
+			notes.drop()
+			_ = snap.restore()
+			return err
 		}
-		return err
+		notes.flush()
+		return nil
 	}
 }
 

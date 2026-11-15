@@ -238,9 +238,20 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			snap = takeSetupSnapshot(ctx, wd)
 		}
 	}
+	// S-11: the set-up lines of a write are said when it goes through; a
+	// refused write drops them with the set-up it undoes (setupnotes.go)
+	var notes *setupNotes
+	if snap != nil {
+		ctx, notes = withSetupNotes(ctx)
+	}
 	undo := func(err error) error {
 		defer fresh.restore()
-		undone := append(snap.restore(), tree.restore(ctx)...)
+		notes.drop()
+		// the git set-up goes back without a word: its own line was never
+		// said, and the clone is as it was; only the work-tree files a
+		// first write migrated and rendered (W-6) are named
+		_ = snap.restore()
+		undone := tree.restore(ctx)
 		slices.Sort(undone)
 		announceUndo(os.Stderr, slices.Compact(undone))
 		return err
@@ -260,6 +271,7 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 	res, err := r.around(ctx, run, 0)
 	if err == nil {
 		fresh.settle() // D-282: a set-up run that set nothing up leaves no empty .lore/
+		notes.flush()
 		return res, nil
 	}
 	for _, h := range r.hooks {

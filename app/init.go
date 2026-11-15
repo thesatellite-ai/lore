@@ -133,11 +133,13 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			// (.git/config keys, hooks, info/exclude, .gitattributes,
 			// .gitignore) as it found it, as `lore repo init` does through
 			// the Runner; RootAt's undo covers only .lore/
-			undo := hosthooks.GuardSetUp(cmd.Context(), wd)
-			ctx, written := wire.WithWriteLog(cmd.Context())
+			// S-11: its set-up line is said once it went through, as for
+			// `lore repo init`; refused, only the error is printed
+			ctx, done := hosthooks.GuardSetUpQuiet(cmd.Context(), wd)
+			ctx, written := wire.WithWriteLog(ctx)
 			out, err := repoinit.Run(ctx, ih, in)
-			if err != nil {
-				return undo(err)
+			if err = done(err); err != nil {
+				return err
 			}
 			if os.Getenv(hosthooks.EnvSyncQuiet) != "1" {
 				for _, l := range wire.WrittenLines(written.Files()) {
