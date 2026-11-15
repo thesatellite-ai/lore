@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,13 +133,17 @@ func readField(t *testing.T, b *Backend, id ids.AnyID, field string) (string, bo
 	return "", false
 }
 
-// jsonField is a quick string field lookup in a row file.
+// jsonField is a string field of a row file ("" when absent or not a
+// string); any layout, a canonical re-encode included.
 func jsonField(doc, field string) string {
-	_, after, ok := strings.Cut(doc, `"`+field+`":"`)
-	if !ok {
+	var m map[string]json.RawMessage
+	if json.Unmarshal([]byte(doc), &m) != nil {
 		return ""
 	}
-	v, _, _ := strings.Cut(after, `"`)
+	var v string
+	if json.Unmarshal(m[field], &v) != nil {
+		return ""
+	}
 	return v
 }
 

@@ -78,17 +78,23 @@ func newOrgTeam(t *testing.T) orgTeam {
 	return o
 }
 
-// TestAuthorityHoldsForeignRows (devco R-4, R-15): a row whose stated
-// writer is not the commit's author, and a row a contractor wrote outside
-// their projects, are held back on every reader and named; a member's own
-// row, and a version carrying a stamp its stated writer committed before
-// (a conflict settled with --take other), are read.
+// TestAuthorityHoldsForeignRows (devco R-4, R-15, C35): a roster or
+// project row whose stated writer is not the commit's author, and a row a
+// contractor wrote outside their projects, are held back on every reader
+// and named; an ordinary row whose stated writer is someone else (a
+// teammate's plain-git hand edit, or a borrowed name) is read with the
+// commit's author named as its writer, never the borrowed name; a
+// member's own row, and a version carrying a stamp its stated writer
+// committed before (a conflict settled with --take other), are read as
+// they are.
 func TestAuthorityHoldsForeignRows(t *testing.T) {
 	t.Parallel()
 	o := newOrgTeam(t)
 	own, spoof, shared, cyRow := mustID[ids.Memory](t), mustID[ids.Memory](t), mustID[ids.Memory](t), mustID[ids.Memory](t)
+	proj := mustID[ids.Project](t)
 	o.h.commit(o.max.email, map[string]string{orgPath("memories", own): stampedRow(own, o.max.actor, "2026-01-02T00:00:00.000Z", "mine")})
 	o.h.commit(o.max.email, map[string]string{orgPath("memories", spoof): stampedRow(spoof, o.boss.actor, "2026-01-02T00:00:01.000Z", "says the admin")})
+	o.h.commit(o.max.email, map[string]string{orgPath("projects", proj): rowJSON("projects", proj, map[string]string{"name": `"planted"`, "updated_by": `"` + o.boss.actor.String() + `"`})})
 	o.h.commit(o.boss.email, map[string]string{orgPath("memories", shared): stampedRow(shared, o.boss.actor, "2026-01-02T00:00:02.000Z", "v1")})
 	o.h.commit(o.max.email, map[string]string{orgPath("memories", shared): stampedRow(shared, o.max.actor, "2026-01-02T00:00:03.000Z", "v2")})
 	// max settles a conflict with --take other: the admin's v1, stamp kept
@@ -102,14 +108,27 @@ func TestAuthorityHoldsForeignRows(t *testing.T) {
 	if body, read := readField(t, b, shared, "body"); !read || body != "v1" {
 		t.Errorf("the settled conflict reads %q (read %v), want v1", body, read)
 	}
-	if _, read := readField(t, b, spoof, "body"); read {
-		t.Error("a row that claims the admin wrote it was read")
+	if w, _ := readField(t, b, shared, "updated_by"); w != o.boss.actor.String() {
+		t.Errorf("the settled conflict names %q as its writer, want the admin", w)
 	}
-	if why := heldReason(t, b, spoof); !strings.Contains(why, "claims to be written by") || !strings.Contains(why, o.max.email) {
-		t.Errorf("hold of the spoofed row = %q; want the claimed writer and the author named", why)
+	if body, read := readField(t, b, spoof, "body"); !read || body != "says the admin" {
+		t.Errorf("an ordinary row naming another writer reads %q (read %v, held %q); C35 reads it", body, read, heldReason(t, b, spoof))
 	}
-	if _, err := b.Get(context.Background(), memories, spoof); err == nil {
-		t.Error("Get served the spoofed row")
+	if w, _ := readField(t, b, spoof, "updated_by"); w != o.max.actor.String() {
+		t.Errorf("an ordinary row naming the admin is shown as written by %q, want the committer %s", w, o.max.actor)
+	}
+	got, err := b.Get(context.Background(), memories, spoof)
+	if err != nil {
+		t.Fatalf("Get of the credited row: %v", err)
+	}
+	if w := jsonField(string(got.Doc), "updated_by"); w != o.max.actor.String() {
+		t.Errorf("Get names %q as the writer, want the committer %s", w, o.max.actor)
+	}
+	if _, read := readField(t, b, proj, "name"); read {
+		t.Error("a project row that claims the admin wrote it was read")
+	}
+	if why := heldReason(t, b, proj); !strings.Contains(why, "claims to be written by") || !strings.Contains(why, o.max.email) {
+		t.Errorf("hold of the spoofed project row = %q; want the claimed writer and the author named", why)
 	}
 	if _, read := readField(t, b, cyRow, "body"); read {
 		t.Error("a contractor's org-folder row was read")
@@ -135,8 +154,17 @@ func TestAuthorityHoldsForeignRows(t *testing.T) {
 			hidden[r.ID.String()] = true
 		}
 	}
-	if !hidden[spoof.String()] || !hidden[cyRow.String()] {
-		t.Errorf("incremental read at HEAD hid %v; want the spoofed and the contractor's rows hidden from an old cache", hidden)
+	if !hidden[proj.String()] || !hidden[cyRow.String()] {
+		t.Errorf("incremental read at HEAD hid %v; want the spoofed project and the contractor's rows hidden from an old cache", hidden)
+	}
+	credited := false
+	for _, r := range rows {
+		if r.ID == spoof && jsonField(string(r.Doc), "updated_by") == o.max.actor.String() {
+			credited = true
+		}
+	}
+	if !credited {
+		t.Error("an old cache that took the borrowed writer was not served the row with the committer credited")
 	}
 	if again, _, _ := c.Read(context.Background(), store.Cursor(h)); len(again) != 0 {
 		t.Errorf("a second read re-served %d rows; the hold set did not change", len(again))
@@ -144,7 +172,8 @@ func TestAuthorityHoldsForeignRows(t *testing.T) {
 }
 
 // TestEvilMergeIsChecked: a merge commit whose tree adds a row neither
-// parent had is judged like any commit, while the rows each side wrote
+// parent had is judged like any commit (an ordinary row is credited to
+// the merger, C35), while the rows each side wrote
 // pass through the merge.
 func TestEvilMergeIsChecked(t *testing.T) {
 	t.Parallel()
@@ -162,8 +191,8 @@ func TestEvilMergeIsChecked(t *testing.T) {
 	if _, read := readField(t, b, side, "body"); !read {
 		t.Error("the side branch's own row was not read")
 	}
-	if why := heldReason(t, b, planted); !strings.Contains(why, "claims to be written by") {
-		t.Errorf("a row planted in a merge commit: hold = %q, want it held", why)
+	if w, _ := readField(t, b, planted, "updated_by"); w != o.max.actor.String() {
+		t.Errorf("a row planted in a merge commit names %q as its writer, want the merger %s (C35)", w, o.max.actor)
 	}
 }
 

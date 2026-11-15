@@ -88,9 +88,10 @@ func TestMembershipIsAdminOrLeadOnly(t *testing.T) {
 	}
 }
 
-// TestStampCarryNeedsSameContent (devco D-329): a version that carries
-// a stamp its stated writer committed is read only when its content is
-// what they committed; the same stamp on changed content is held back.
+// TestStampCarryNeedsSameContent (devco D-329, C35): a version that
+// carries a stamp its stated writer committed keeps that writer only when
+// its content is what they committed; the same stamp on changed content
+// is read with the commit's author named as the writer.
 func TestStampCarryNeedsSameContent(t *testing.T) {
 	t.Parallel()
 	o := newOrgTeam(t)
@@ -101,11 +102,11 @@ func TestStampCarryNeedsSameContent(t *testing.T) {
 	o.h.commit(o.max.email, map[string]string{orgPath("memories", shared): stampedRow(shared, o.boss.actor, "2026-01-02T00:00:02.000Z", "changed")})
 
 	b := orgFolderClone(t, o.h.remote)
-	if body, _ := readField(t, b, shared, "body"); body == "changed" {
-		t.Error("changed content under the admin's old stamp was read")
+	if writer, _ := readField(t, b, shared, "updated_by"); writer != o.max.actor.String() {
+		t.Errorf("changed content under the admin's old stamp names %q as its writer, want the committer %s", writer, o.max.actor)
 	}
-	if why := heldReason(t, b, shared); !strings.Contains(why, "claims to be written by") || !strings.Contains(why, o.max.email) {
-		t.Errorf("hold = %q; want the claimed writer and the author named", why)
+	if why := heldReason(t, b, shared); why != "" {
+		t.Errorf("an ordinary row was held: %q; C35 reads it with the committer credited", why)
 	}
 
 	// the same content re-encoded (keys in another order, spaces between them)
@@ -118,5 +119,8 @@ func TestStampCarryNeedsSameContent(t *testing.T) {
 	c := orgFolderClone(t, o.h.remote)
 	if body, read := readField(t, c, again, "body"); !read || body != "w1" {
 		t.Errorf("re-encoded settled conflict reads %q (read %v, held %q), want w1", body, read, heldReason(t, c, again))
+	}
+	if writer, _ := readField(t, c, again, "updated_by"); writer != o.boss.actor.String() {
+		t.Errorf("the settled conflict names %q as its writer, want the admin who wrote it", writer)
 	}
 }

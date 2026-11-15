@@ -170,6 +170,9 @@ var reads = []sweepStep{
 	// adapters/backend/git TestSyncRefusesAResetRemote).
 	{Cmd: "store push", Args: []string{"repo"}, In: inRepo},
 	{Cmd: "store push", Args: []string{"repo", "--restore", "--yes"}, In: inRepo},
+	// store trust: no committed .lore/stores.yaml attaches a store of that
+	// name, a documented refusal (E_NOT_FOUND) that names nothing as trusted
+	{Cmd: "store trust", Args: []string{"--name", "notes"}, In: inRepo},
 	{Cmd: "repo list", In: inBoth},
 	{Cmd: "project list", In: inBoth},
 	{Cmd: "project shared-list", In: inRepo},

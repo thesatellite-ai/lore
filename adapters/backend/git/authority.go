@@ -30,7 +30,7 @@ package git
 //	   making the change themselves, or reverting it) ends the hold
 //
 // The same replay checks every row file a commit changes (devco R-4,
-// R-15, round-6 follow-up):
+// R-15, round-6 follow-up; coordinator decision C35):
 //
 //	  ┌ the writer a row states (updated_by; created_by and
 //	  │   created_by_actor_id on a new file) is not the commit's author,
@@ -38,7 +38,14 @@ package git
 //	  │   stated writer committed before, same stamp (_hlc) and same
 //	  │   content (a conflict settled with `lore sync resolve`, a partial
 //	  │   push or a revert carries another person's edit with its stamp;
-//	  │   devco D-329) ─▶ that file is held back
+//	  │   devco D-329):
+//	  │     a roster, membership or project row (authority-gated), or an
+//	  │       author not on the roster ─▶ that file is held back
+//	  │     any other row (a memory, a rule, a task…) by a member ─▶ read,
+//	  │       with the commit's author credited as its writer (updated_by,
+//	  │       and created_by on a new file, rewritten on read): a
+//	  │       teammate's plain-git hand edit keeps working, and the
+//	  │       borrowed name is never shown as the writer
 //	  └ the author's open stint is a contractor's and the file is neither
 //	      one of their own roster rows nor in a folder that holds one of
 //	      their projects ─▶ that file is held back
@@ -79,7 +86,9 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -237,6 +246,11 @@ var wallTables = map[string]bool{schema.TableProjectMembers: true, schema.TableP
 // row it is (devco D-328). The one exception is a person taking up what
 // a pending invite of theirs names (lore team join).
 var membershipTables = map[string]bool{schema.TableProjectMembers: true, schema.TableTeams: true}
+
+// gated reports whether table's rows are authority-gated (C35): a
+// stated writer that is not the commit's author holds such a row back,
+// where any other row is read with the author credited.
+func gated(table string) bool { return rosterTables[table] || wallTables[table] }
 
 // kept reports whether the replay keeps table's rows in its state.
 func kept(table string) bool { return rosterTables[table] || wallTables[table] }
@@ -489,10 +503,23 @@ type authority struct {
 	held    map[string]HeldChange // path ─▶ hold
 	trusted map[string]string     // held path ─▶ last accepted blob ("" = none)
 	refused map[string]bool       // every commit the replay refused
+	// credited is, per path, the HEAD version whose stated writer is not
+	// its commit's author, read with the author credited (C35)
+	credited map[string]credit
 	// admins is who is an admin after each commit, by the trusted roster
 	// (AdminAt): one source of "admin at a commit" for the roster check
 	// here and the org file check of adapters/orgcfg
 	admins map[string]*adminSet
+}
+
+// credit is one row version read with its commit's author credited as
+// the writer, in place of the writer the file states (C35).
+type credit struct {
+	actor   string // the commit author's actor id, the writer shown
+	claimed string // the updated_by the file states
+	hlc     string // the version's stamp: only that version is rewritten
+	created bool   // the commit added the file: created_by is the author's too
+	commit  string
 }
 
 // adminSet is the admins of the trusted roster at one point of the replay.
@@ -668,7 +695,7 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 			st, orgHead = base.forOrgless(), h
 		}
 	}
-	a := &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}}
+	a := &authority{head: head, orgHead: orgHead, state: st, admins: map[string]*adminSet{}, held: map[string]HeldChange{}, trusted: map[string]string{}, refused: map[string]bool{}, credited: map[string]credit{}}
 	accepted := map[string]string{} // path ─▶ last accepted blob ("" = absent)
 	snap := st.adminSnapshot()
 	for _, c := range commits {
@@ -683,8 +710,9 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 				continue
 			}
 			reason := reason
+			credited := false
 			if reason == "" {
-				reason = st.fileRefusal(c, actor, f, docOf)
+				reason, credited = st.fileRefusal(c, actor, f, docOf)
 			}
 			if reason != "" {
 				a.refused[c.id] = true
@@ -710,6 +738,7 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 			}
 			delete(a.held, f.path)
 			delete(a.trusted, f.path)
+			delete(a.credited, f.path) // a held change keeps serving the accepted version, credit and all
 			rosterMoved = rosterMoved || rosterTables[tableOfPath(f.path)]
 			if zeroBlob(f.newBlob) {
 				accepted[f.path] = ""
@@ -718,6 +747,9 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 			}
 			accepted[f.path] = f.newBlob
 			if d, ok := docOf(f.newBlob); ok {
+				if credited {
+					a.credited[f.path] = credit{actor: actor, claimed: d.UpdatedBy, hlc: d.HLC, created: zeroBlob(f.oldBlob), commit: c.id}
+				}
 				st.stamp(f.path, d.HLC, actor, d.content)
 				if t := tableOfPath(f.path); kept(t) && (!st.orgless || t == schema.TableProjects) {
 					st.docs[f.path] = d
@@ -875,21 +907,24 @@ func (s *rosterState) authorActor(c replayCommit, docOf func(string) (rosterDoc,
 }
 
 // fileRefusal is why one file of commit c may not be read ("" = it may):
-// the writer the row states is not the author (R-4), or the author is a
-// contractor writing outside their own roster rows and projects (R-15).
-func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, docOf func(string) (rosterDoc, bool)) string {
+// the writer an authority-gated row states is not the author (R-4), or
+// the author is a contractor writing outside their own roster rows and
+// projects (R-15). credit is true when the file is read with the author
+// credited as its writer: an ordinary row whose stated writer is someone
+// else, committed by a member (C35).
+func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, docOf func(string) (rosterDoc, bool)) (reason string, credit bool) {
 	if zeroBlob(f.newBlob) || (!s.orgless && !s.hasAdmin()) {
-		return "" // a removed file (rowfs reports a missing row), or no org yet
+		return "", false // a removed file (rowfs reports a missing row), or no org yet
 	}
 	d, ok := docOf(f.newBlob)
 	if !ok {
-		return "" // not a row: rowfs reports the file
+		return "", false // not a row: rowfs reports the file
 	}
 	if c.merge && s.stampKnown(f.path, d.HLC) {
-		return "" // lore's field merge keeps an accepted side's stamp
+		return "", false // lore's field merge keeps an accepted side's stamp
 	}
 	if actor != "" && s.isAdmin(actor) {
-		return ""
+		return "", false
 	}
 	claimed := []string{d.UpdatedBy}
 	if zeroBlob(f.oldBlob) {
@@ -902,35 +937,38 @@ func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, do
 		if actor == "" && !s.known(w) {
 			continue // neither side is on the roster: nothing to compare
 		}
-		return "claims to be written by " + s.name(w) + ", but the commit's author is " + c.author
+		if actor == "" || gated(tableOfPath(f.path)) {
+			return "claims to be written by " + s.name(w) + ", but the commit's author is " + c.author, false
+		}
+		credit = true // C35: read, with the author named as the writer
 	}
 	if actor == "" || !s.contractor(actor) {
-		return ""
+		return "", credit
 	}
 	switch tableOfPath(f.path) {
 	case schema.TableActors:
 		if d.ID == actor || d.Owner == actor {
-			return ""
+			return "", credit
 		}
 	case schema.TableActorContacts, schema.TableActorPeriods:
 		if d.ActorID == actor {
-			return ""
+			return "", credit
 		}
 	case schema.TableProjectMembers, schema.TableTeams:
 		// refusal already allowed it (a lead's change, or their own invite
 		// taken up); a membership row lives in the org folder
 		if d.ActorID == actor || d.Members.has(actor) || s.leads(actor, d.ProjectID) {
-			return ""
+			return "", credit
 		}
 	case schema.TableInvites:
 		if strings.EqualFold(d.Email, c.author) {
-			return ""
+			return "", credit
 		}
 	}
 	if folder, _, ok := rowPlace(f.path); ok && s.folderHoldsProjectOf(folder, actor) {
-		return ""
+		return "", credit
 	}
-	return "written by " + c.author + ", a contractor in this org, outside their projects' folders"
+	return "written by " + c.author + ", a contractor in this org, outside their projects' folders", false
 }
 
 // forOrgless is a copy of s's roster for checking a store with no org
@@ -1073,15 +1111,17 @@ func (a *authority) heldBlob(p string) (string, bool) {
 	return a.trusted[p], true
 }
 
-// headIfHeld is HEAD when the clone's last replay holds path back or no
-// replay ran yet, "" otherwise: Get skips the git call for the common
-// case of a file nobody's hold names.
+// headIfHeld is HEAD when the clone's last replay holds path back,
+// credits its writer (C35) or no replay ran yet, "" otherwise: Get skips
+// the git call for the common case of a file nobody's hold names.
 func (b *Backend) headIfHeld(ctx context.Context, p string) (string, error) {
 	authorityCache.Lock()
 	a := authorityCache.byWork[b.work]
 	authorityCache.Unlock()
 	if a != nil {
-		if _, ok := a.held[p]; !ok && len(a.held) == 0 {
+		_, held := a.held[p]
+		_, credited := a.credited[p]
+		if !held && !credited && len(a.held) == 0 {
 			return "", nil
 		}
 	}
@@ -1148,11 +1188,12 @@ func (b *Backend) CommitsBy(ctx context.Context, emails []string) ([]AuthoredCom
 // the clone's git dir), so heldRecheck re-serves only when it changes.
 const heldSeenFile = "lore-held-seen-"
 
-// heldRecheck lists, for an incremental read, the held files of this
-// folder the read did not already cover (changed is the read's paths):
-// those with an accepted version as blob names to read (name ─▶ folder
-// path), and those with none as tombstones that hide the row in the
-// cache. Why: a cache filled before the check existed, or before a later
+// heldRecheck lists, for an incremental read, the held and credited
+// files of this folder the read did not already cover (changed is the
+// read's paths): held ones with an accepted version, and credited ones
+// (C35, read at head for creditRow), as blob names to read (name ─▶
+// root-relative path), and held ones with none as tombstones that hide
+// the row in the cache. Why: a cache filled before the check existed, or before a later
 // roster change made a hold, still has the held version; it must never
 // stay readable. Runs only when the folder's hold set changed since the
 // last time it ran (one small file per folder in the git dir).
@@ -1168,6 +1209,11 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 	for p, hc := range a.held {
 		if _, ok := b.folder.FileRel(p); ok {
 			keys = append(keys, p+"="+hc.Commit)
+		}
+	}
+	for p, c := range a.credited {
+		if _, ok := b.folder.FileRel(p); ok {
+			keys = append(keys, p+"=credit:"+c.commit)
 		}
 	}
 	sort.Strings(keys)
@@ -1188,7 +1234,7 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 			continue
 		}
 		if blob := a.trusted[p]; blob != "" {
-			names[blob] = rel
+			names[blob] = p
 			continue
 		}
 		docs, err := b.readBlobs(ctx, []string{head + ":" + p})
@@ -1205,6 +1251,63 @@ func (b *Backend) heldRecheck(ctx context.Context, a *authority, head string, ch
 		}
 		tombs = append(tombs, t)
 	}
+	for p := range a.credited {
+		if _, held := a.held[p]; held || covered[p] {
+			continue
+		}
+		if _, ok := b.folder.FileRel(p); ok {
+			names[head+":"+p] = p // a cache that took the stated writer gets the committer
+		}
+	}
 	_ = os.WriteFile(seen, []byte(sig), 0o600) // best effort: the worst case is serving the holds again
 	return names, tombs
+}
+
+// fieldCreatedByActorID is the content tables' creator field (schema
+// builtin_content.go contentCreatedBy).
+const fieldCreatedByActorID = "created_by_actor_id"
+
+// creditRow is r (the row file at root-relative path p) with the commit
+// author credited as its writer when the replay credited that version
+// (C35): updated_by, and on a version that added the file created_by
+// and created_by_actor_id, name the person who committed it, never the
+// writer the file states. Any other row, or a version other than the
+// credited one (a later write of lore's own), is returned as it is.
+func (a *authority) creditRow(p string, r store.Row) store.Row {
+	if a == nil || r.Deleted {
+		return r
+	}
+	c, ok := a.credited[p]
+	if !ok {
+		return r
+	}
+	var stated struct {
+		HLC       string `json:"_hlc"`
+		UpdatedBy string `json:"updated_by"`
+	}
+	if json.Unmarshal(r.Doc, &stated) != nil || stated.HLC != c.hlc || stated.UpdatedBy != c.claimed {
+		return r
+	}
+	writer, err := ids.Parse[ids.Actor](c.actor)
+	if err != nil {
+		return r
+	}
+	m, err := r.Decode()
+	if err != nil {
+		return r
+	}
+	m.UpdatedBy = writer
+	if c.created {
+		m.CreatedBy = writer
+		if _, has := m.Fields[fieldCreatedByActorID]; has {
+			if v, terr := value.TextOf(c.actor); terr == nil {
+				m.Fields[fieldCreatedByActorID] = v
+			}
+		}
+	}
+	out, err := store.FromRow(m)
+	if err != nil {
+		return r
+	}
+	return out
 }
