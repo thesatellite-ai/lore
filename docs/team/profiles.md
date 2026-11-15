@@ -272,7 +272,7 @@ ERROR: [E_PERIOD_OVERLAP] period 2026-01-12 → now is still open while 2026-02-
 ```
 <!-- /example -->
 
-The first `period add` replaces the stint lore had read from the roster (see [Existing actors](#existing-actors)). Stints never overlap, a person has at most one open stint, and a stint never ends before it starts. A date that breaks one of these is `E_PERIOD_OVERLAP`.
+The first `period add` replaces the stint lore had read from the roster (see [Existing actors](#existing-actors)), and likewise the open admin stint `lore org create` writes for its creator from the day it ran (`source: migrated`, a guess at the start): record your real first day with `period add --started-on <day>` and it takes that stint's place, keeping org role admin. Stints never overlap, a person has at most one open stint, and a stint never ends before it starts. A date that breaks one of these is `E_PERIOD_OVERLAP`.
 
 ## Step 5 — Add people to projects, with roles
 

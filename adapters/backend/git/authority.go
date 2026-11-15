@@ -17,6 +17,10 @@ package git
 //	  │   not an admin, and the commit changes a stint (actor_periods),
 //	  │     another person's actor or contact row, or an invite not
 //	  │     theirs ─▶ held back
+//	  │   not an admin nor a lead of the project, and the commit changes
+//	  │     who is on a project or team (project_members, teams; their
+//	  │     own row too) beyond what their pending invite names ─▶ held
+//	  │     back (devco D-328)
 //	  └ otherwise accepted: its files become the trusted version
 //	─▶ readCommits / Get serve a held file as its last accepted version
 //	   (or not at all when no commit of it was accepted): not in lists,
@@ -30,10 +34,11 @@ package git
 //
 //	  ┌ the writer a row states (updated_by; created_by and
 //	  │   created_by_actor_id on a new file) is not the commit's author,
-//	  │   not an agent the author runs, and the row's stamp (_hlc) is not
-//	  │   one the stated writer committed before (a conflict settled with
-//	  │   `lore sync resolve`, a partial push or a revert carries another
-//	  │   person's edit with its stamp) ─▶ that file is held back
+//	  │   not an agent the author runs, and the row is not a version the
+//	  │   stated writer committed before, same stamp (_hlc) and same
+//	  │   content (a conflict settled with `lore sync resolve`, a partial
+//	  │   push or a revert carries another person's edit with its stamp;
+//	  │   devco D-329) ─▶ that file is held back
 //	  └ the author's open stint is a contractor's and the file is neither
 //	      one of their own roster rows nor in a folder that holds one of
 //	      their projects ─▶ that file is held back
@@ -59,16 +64,20 @@ package git
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
@@ -128,6 +137,77 @@ type rosterDoc struct {
 	CreatedByID string `json:"created_by_actor_id"`
 	HLC         string `json:"_hlc"`
 	ProjectID   string `json:"project_id"`
+	// project and team membership (devco D-328): a membership's roles and
+	// stint, a team's handle and actors, an invite's projects and teams
+	Roles    strList         `json:"roles"`
+	Members  strList         `json:"member_actor_ids"`
+	Projects strList         `json:"projects"`
+	Teams    strList         `json:"teams"`
+	Handle   string          `json:"handle"`
+	Active   json.RawMessage `json:"active,omitempty"`
+	LeftAt   string          `json:"left_at"`
+	// content is the row's content key (contentKey), not a file field:
+	// the stamp carry is accepted only for content the stated writer
+	// committed (devco D-329)
+	content string
+}
+
+// strList is a list of text in a row file: a JSON array, or (v0.1.17
+// rows) a string holding one.
+type strList []string
+
+// UnmarshalJSON reads either shape; anything else is an empty list.
+func (l *strList) UnmarshalJSON(b []byte) error {
+	var list []string
+	if json.Unmarshal(b, &list) == nil {
+		*l = list
+		return nil
+	}
+	var inner string
+	if json.Unmarshal(b, &inner) == nil && json.Unmarshal([]byte(inner), &list) == nil {
+		*l = list
+		return nil
+	}
+	*l = nil
+	return nil
+}
+
+// has reports whether v is in l.
+func (l strList) has(v string) bool { return v != "" && slices.Contains(l, v) }
+
+// contentFormatKey is the row file key a format migration rewrites
+// without changing the row ("_v"): content keys leave it out.
+const contentFormatKey = "_v"
+
+// contentKey is a digest of a row file's content: its keys sorted, each
+// value compacted, the format version left out. Two files with the same
+// row content (a revert, a partial push, a conflict settled with the
+// other side's version, re-encoded by another lore) have the same key.
+func contentKey(raw []byte) string {
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(bytes.TrimSpace(raw), &obj) != nil {
+		return ""
+	}
+	keys := make([]string, 0, len(obj))
+	for k := range obj {
+		if k != contentFormatKey {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	h := sha256.New()
+	var buf bytes.Buffer
+	for _, k := range keys {
+		buf.Reset()
+		if json.Compact(&buf, obj[k]) != nil {
+			buf.Write(obj[k])
+		}
+		h.Write([]byte(strconv.Quote(k)))
+		h.Write([]byte{0})
+		h.Write(buf.Bytes())
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // deleted reports a tombstone.
@@ -150,7 +230,13 @@ var rosterTables = map[string]bool{
 // wallTables are the further tables the replay keeps for the contractor
 // wall: who is a member of which project, and which folder holds which
 // project.
-var wallTables = map[string]bool{schema.TableProjectMembers: true, schema.TableProjects: true}
+var wallTables = map[string]bool{schema.TableProjectMembers: true, schema.TableProjects: true, schema.TableTeams: true}
+
+// membershipTables are the tables that say who is on a project or a
+// team: only an admin, or a lead of that project, changes them, whoever's
+// row it is (devco D-328). The one exception is a person taking up what
+// a pending invite of theirs names (lore team join).
+var membershipTables = map[string]bool{schema.TableProjectMembers: true, schema.TableTeams: true}
 
 // kept reports whether the replay keeps table's rows in its state.
 func kept(table string) bool { return rosterTables[table] || wallTables[table] }
@@ -159,8 +245,9 @@ func kept(table string) bool { return rosterTables[table] || wallTables[table] }
 type rosterState struct {
 	docs map[string]rosterDoc // path ─▶ row (kept tables only)
 	// stamps maps each row file to the _hlc stamps of its accepted
-	// versions and the actors whose commits wrote them
-	stamps map[string]map[string][]string
+	// versions: the actors whose commits wrote them and the content each
+	// version had
+	stamps map[string]map[string][]stampRec
 	// orgless is set for a store with no org folder checked against its
 	// org's roster (SetRosterSource): no admin-only roster rules apply
 	orgless bool
@@ -168,18 +255,23 @@ type rosterState struct {
 
 // newRosterState is an empty state.
 func newRosterState() *rosterState {
-	return &rosterState{docs: map[string]rosterDoc{}, stamps: map[string]map[string][]string{}}
+	return &rosterState{docs: map[string]rosterDoc{}, stamps: map[string]map[string][]stampRec{}}
 }
 
-// stamp records that actor's accepted commit wrote p with stamp hlc.
-func (s *rosterState) stamp(p, hlc, actor string) {
+// stampRec is one accepted version of a row file with a given stamp: who
+// committed it and its content key.
+type stampRec struct{ actor, content string }
+
+// stamp records that actor's accepted commit wrote p with stamp hlc and
+// content key content.
+func (s *rosterState) stamp(p, hlc, actor, content string) {
 	if hlc == "" {
 		return
 	}
 	if s.stamps[p] == nil {
-		s.stamps[p] = map[string][]string{}
+		s.stamps[p] = map[string][]stampRec{}
 	}
-	s.stamps[p][hlc] = append(s.stamps[p][hlc], actor)
+	s.stamps[p][hlc] = append(s.stamps[p][hlc], stampRec{actor: actor, content: content})
 }
 
 // stampKnown reports whether an accepted version of p carries hlc.
@@ -188,15 +280,42 @@ func (s *rosterState) stampKnown(p, hlc string) bool {
 	return ok && hlc != ""
 }
 
-// stampBy reports whether an accepted version of p with stamp hlc was
-// committed by claimed, or by the person who runs the agent claimed.
-func (s *rosterState) stampBy(p, hlc, claimed string) bool {
-	for _, a := range s.stamps[p][hlc] {
-		if a != "" && (a == claimed || s.owns(a, claimed)) {
+// stampBy reports whether an accepted version of p with stamp hlc and
+// the same content was committed by claimed, or by the person who runs
+// the agent claimed. The content must match, not only the stamp: an old
+// stamp of the stated writer on changed content is a forgery (devco
+// D-329).
+func (s *rosterState) stampBy(p, hlc, claimed, content string) bool {
+	for _, r := range s.stamps[p][hlc] {
+		if r.actor != "" && content != "" && r.content == content && (r.actor == claimed || s.owns(r.actor, claimed)) {
 			return true
 		}
 	}
 	return false
+}
+
+// leads reports whether actor has an open membership of project with the
+// lead role.
+func (s *rosterState) leads(actor, project string) bool {
+	if actor == "" || project == "" {
+		return false
+	}
+	for _, d := range s.byTable(schema.TableProjectMembers) {
+		if d.ActorID == actor && d.ProjectID == project && d.EndedOn == "" && d.Roles.has(teamprofile.RoleLead) {
+			return true
+		}
+	}
+	return false
+}
+
+// pendingInvite is the pending invite for email, if any.
+func (s *rosterState) pendingInvite(email string) (rosterDoc, bool) {
+	for _, d := range s.byTable(schema.TableInvites) {
+		if email != "" && strings.EqualFold(d.Email, email) && d.Status == schema.InviteStatusPending {
+			return d, true
+		}
+	}
+	return rosterDoc{}, false
 }
 
 // name is actor's display name, else the id.
@@ -528,6 +647,7 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 	for sha, raw := range raws {
 		var d rosterDoc
 		if json.Unmarshal(bytes.TrimSpace(raw), &d) == nil {
+			d.content = contentKey(raw)
 			parsed[sha] = d
 		}
 	}
@@ -598,7 +718,7 @@ func (b *Backend) replay(ctx context.Context, head string, commits []replayCommi
 			}
 			accepted[f.path] = f.newBlob
 			if d, ok := docOf(f.newBlob); ok {
-				st.stamp(f.path, d.HLC, actor)
+				st.stamp(f.path, d.HLC, actor, d.content)
 				if t := tableOfPath(f.path); kept(t) && (!st.orgless || t == schema.TableProjects) {
 					st.docs[f.path] = d
 				}
@@ -628,7 +748,7 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 	}
 	for _, f := range c.changes {
 		table := tableOfPath(f.path)
-		if !rosterTables[table] || !isRowFile(f.path) {
+		if (!rosterTables[table] && !membershipTables[table]) || !isRowFile(f.path) {
 			continue
 		}
 		old, hadOld := s.docs[f.path]
@@ -668,9 +788,73 @@ func (s *rosterState) refusal(c replayCommit, docOf func(string) (rosterDoc, boo
 			if !hadOld || !strings.EqualFold(subject.Email, c.author) {
 				return "changes an invite and " + c.author + " is not an admin"
 			}
+		case schema.TableProjectMembers, schema.TableTeams:
+			if why := s.membershipRefusal(c.author, actor, table, old, hadOld, next, hasNext); why != "" {
+				return why
+			}
 		}
 	}
 	return ""
+}
+
+// membershipRefusal judges a non-admin's change of one project_members
+// or teams row (devco D-328): a lead of the row's project may make it;
+// otherwise only a person taking up their own pending invite (their own
+// membership of a project the invite names, with roles it or the stint
+// already gave; or adding only themselves to a team it names). Anything
+// else, a person's own row included, is held back: a hand-made
+// membership row would otherwise open another project's folders to a
+// contractor.
+func (s *rosterState) membershipRefusal(author, actor, table string, old rosterDoc, hadOld bool, next rosterDoc, hasNext bool) string {
+	what := "who is on a project"
+	if table == schema.TableTeams {
+		what = "who is on a team"
+	}
+	why := "changes " + what + " and " + author + " is neither an admin nor a lead of that project"
+	if actor == "" {
+		return why
+	}
+	if (hadOld || hasNext) && (!hadOld || s.leads(actor, old.ProjectID)) && (!hasNext || s.leads(actor, next.ProjectID)) {
+		return ""
+	}
+	inv, ok := s.pendingInvite(author)
+	if !ok || !hasNext || next.deleted() {
+		return why
+	}
+	if table == schema.TableProjectMembers {
+		own := next.ActorID == actor && (!hadOld || (old.ActorID == actor && old.ProjectID == next.ProjectID && !old.deleted()))
+		if !own || next.EndedOn != "" || !inv.Projects.has(next.ProjectID) {
+			return why
+		}
+		for _, r := range next.Roles {
+			if !inv.Roles.has(r) && !(hadOld && old.Roles.has(r)) {
+				return why
+			}
+		}
+		return ""
+	}
+	// a team: the joiner adds only themselves to a team the invite names
+	if !hadOld || old.deleted() || !inv.Teams.has(old.Handle) || !sameTeam(old, next) {
+		return why
+	}
+	for _, m := range next.Members {
+		if m != actor && !old.Members.has(m) {
+			return why
+		}
+	}
+	for _, m := range old.Members {
+		if !next.Members.has(m) {
+			return why
+		}
+	}
+	return ""
+}
+
+// sameTeam reports whether two versions of a team row differ at most in
+// their actors.
+func sameTeam(a, b rosterDoc) bool {
+	return a.Handle == b.Handle && a.ProjectID == b.ProjectID && a.DisplayName == b.DisplayName &&
+		string(a.Active) == string(b.Active) && a.LeftAt == b.LeftAt && string(a.Deleted) == string(b.Deleted)
 }
 
 // authorActor is the actor of commit c's author: by the roster before
@@ -712,7 +896,7 @@ func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, do
 		claimed = append(claimed, d.CreatedBy, d.CreatedByID)
 	}
 	for _, w := range claimed {
-		if w == "" || w == actor || (actor != "" && s.owns(actor, w)) || s.stampBy(f.path, d.HLC, w) {
+		if w == "" || w == actor || (actor != "" && s.owns(actor, w)) || s.stampBy(f.path, d.HLC, w, d.content) {
 			continue
 		}
 		if actor == "" && !s.known(w) {
@@ -728,8 +912,14 @@ func (s *rosterState) fileRefusal(c replayCommit, actor string, f fileChange, do
 		if d.ID == actor || d.Owner == actor {
 			return ""
 		}
-	case schema.TableActorContacts, schema.TableActorPeriods, schema.TableProjectMembers:
+	case schema.TableActorContacts, schema.TableActorPeriods:
 		if d.ActorID == actor {
+			return ""
+		}
+	case schema.TableProjectMembers, schema.TableTeams:
+		// refusal already allowed it (a lead's change, or their own invite
+		// taken up); a membership row lives in the org folder
+		if d.ActorID == actor || d.Members.has(actor) || s.leads(actor, d.ProjectID) {
 			return ""
 		}
 	case schema.TableInvites:

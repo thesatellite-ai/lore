@@ -964,3 +964,31 @@ func TestOffboardNeedsAnAdmin(t *testing.T) {
 		t.Fatalf("an admin's offboard: %v", err)
 	}
 }
+
+// TestPeriodAddReplacesOrgCreateStint (devco:D-327): `lore org create`
+// writes its creator an open admin stint from the actor's first day with
+// source migrated (a guess, like the stint read from the roster). The
+// person's real stint, starting earlier, takes that row over instead of
+// being refused as a second open stint; the org role admin stays.
+func TestPeriodAddReplacesOrgCreateStint(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	guess := testID(t, ids.PrefixActorPeriod, 90)
+	w.f.Put(row.Row{Table: schema.TableActorPeriods, ID: guess, Fields: map[string]value.Value{
+		schema.FieldPeriodActor: ref(t, w.mira), schema.FieldPeriodType: txt(t, schema.PeriodTypeEmployee),
+		schema.FieldPeriodStartedOn: date(t, "2026-11-14"), schema.FieldPeriodOrgRole: txt(t, "admin"),
+		schema.FieldPeriodSource: txt(t, schema.PeriodSourceMigrated)}})
+	out, err := w.ops().periodAdd(ctx, PeriodAddIn{Actor: "@mira", Type: schema.PeriodTypeEmployee, StartedOn: "2026-01-12"})
+	if err != nil || !out.Replaced || out.Period.OrgRole != "admin" {
+		t.Fatalf("add over org create's stint: %+v %v", out, err)
+	}
+	ps := w.f.All(schema.TableActorPeriods)
+	if len(ps) != 1 || ps[0].ID != guess || text(ps[0], schema.FieldPeriodSource) != "" || text(ps[0], schema.FieldPeriodOrgRole) != "admin" ||
+		text(ps[0], schema.FieldPeriodStartedOn) != "2026-01-12" {
+		t.Fatalf("one real stint, org role kept: %v", ps)
+	}
+	// A hand-written open stint (no source) is no guess: a second open one
+	// is still refused.
+	_, err = w.ops().periodAdd(ctx, PeriodAddIn{Actor: "@mira", Type: schema.PeriodTypeContractor, StartedOn: "2025-06-01"})
+	wantCode(t, err, errs.PeriodOverlap)
+}

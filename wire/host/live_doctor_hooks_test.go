@@ -51,7 +51,10 @@ func TestLiveDoctorFixInstallsRideHooks(t *testing.T) {
 			blockLines = append(blockLines, l)
 		}
 	}
-	if len(blockLines) != 1 || !strings.Contains(blockLines[0], "run `lore fix` to restore them") || strings.Contains(blockLines[0], "lore sync") {
+	// devco:D-326: that one line names the post-commit block too (no guard
+	// hook, it went unreported).
+	if len(blockLines) != 1 || !strings.Contains(blockLines[0], "run `lore fix` to restore them") || strings.Contains(blockLines[0], "lore sync") ||
+		!strings.Contains(blockLines[0], "pre-push") || !strings.Contains(blockLines[0], "the post-commit hook block is missing too, so rows cannot ride along") {
 		t.Fatalf("a read: warnings %q, want one missing-block warning pointing at lore fix", read.Warnings)
 	}
 	if got := missingRideHooks(dir); len(got) != 2 {

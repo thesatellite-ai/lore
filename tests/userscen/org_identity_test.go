@@ -244,15 +244,18 @@ func TestOrgOddNames(t *testing.T) {
 
 // TestOrgTeamInvitesNeedAnAdminSetup: inviting is written from an admin
 // setup; a plain member is refused with the way to get one, and nothing
-// is listed.
+// is listed. The org's creator is its admin since devco P-5 (org create
+// writes her admin stint), so the member here is a teammate who joined
+// (devco:D-327).
 func TestOrgTeamInvitesNeedAnAdminSetup(t *testing.T) {
 	o := newOrgScen(t)
+	_, bc := o.join(t, "bob", orgBobEmail, orgBobName, "bob")
 	for _, args := range [][]string{
-		{"team", "invite", "carol@example.com", "--role", "dev", "--yes"},
+		{"team", "invite", "carol@example.com", "--yes"},
 		{"team", "invite", "resend", "carol@example.com"},
 		{"team", "invite", "revoke", "carol@example.com", "--yes"},
 	} {
-		o.app.Lore(args...).Fails(t, th.ExitRefused, "E_REFUSED", "admin setup", "lore setup list")
+		bc.Lore(args...).Fails(t, th.ExitRefused, "E_REFUSED", "admin setup", "lore setup list")
 	}
 	if v := orgJSON[struct {
 		Invites []struct {

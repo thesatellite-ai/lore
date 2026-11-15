@@ -141,9 +141,10 @@ func TestOrgOffboardThenRejoin(t *testing.T) {
 	bc.MustLore("agent", "start", "--label", "bob-fe").Says(t, "agent bob-fe (owner @bob) registered")
 }
 
-// TestOrgPeriodsAddEditAndOverlaps: the stint read from the roster, then
-// hand-written stints: what overlaps or is malformed is refused with the
-// rule, the rest is kept in date order.
+// TestOrgPeriodsAddEditAndOverlaps: the admin stint org create wrote for
+// its creator (devco P-5, D-327: a row from her first day, source
+// migrated), then hand-written stints: what overlaps or is malformed is
+// refused with the rule, the rest is kept in date order.
 func TestOrgPeriodsAddEditAndOverlaps(t *testing.T) {
 	o := newOrgScen(t)
 	o.mira.SetNow(orgDay(t, "2026-11-07"))
@@ -153,10 +154,11 @@ func TestOrgPeriodsAddEditAndOverlaps(t *testing.T) {
 		Periods []orgPeriod `json:"periods"`
 	}
 	p0 := orgJSON[periods](t, o.app.MustLore("actor", "period", "list", "@mira", "--json"))
-	if len(p0.Periods) != 1 || p0.Periods[0].ID != "" || p0.Periods[0].Source != "migrated" || p0.Periods[0].Type != "employee" {
-		t.Fatalf("an actor with no period rows shows one stint read from the roster: %+v", p0)
+	if len(p0.Periods) != 1 || !strings.HasPrefix(p0.Periods[0].ID, "apd_") || p0.Periods[0].Source != "migrated" || p0.Periods[0].Type != "employee" ||
+		p0.Periods[0].OrgRole != "admin" || p0.Periods[0].EndedOn != "" {
+		t.Fatalf("the org's creator has one open admin stint, written by org create: %+v", p0)
 	}
-	o.app.MustLore("actor", "period", "list", "@mira").Says(t, "(no row yet)", "(from the roster: active/left_at)")
+	o.app.MustLore("actor", "period", "list", "@mira").Says(t, p0.Periods[0].ID, "→ now", "employee", "admin")
 
 	added := o.app.MustLore("actor", "period", "add", "@mira", "--type", "intern", "--started-on", "2020-01-01", "--ended-on", "2020-06-30",
 		"--org-role", "Intern", "--end-reason", "studies").Says(t, "2020-01-01 → 2020-06-30", "intern")

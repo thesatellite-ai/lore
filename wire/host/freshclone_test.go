@@ -32,7 +32,7 @@ func TestDoctorHooksFreshCloneIsANote(t *testing.T) {
 	s := &liveSession{repo: repo, top: dir, h: &liveHost{}} // no leak checker: the guard scan finds nothing
 	check := func() (warns, notes []string) {
 		s.doctorHooks(ctx, "main", false, func(w string) { warns = append(warns, w) }, func(n string) { notes = append(notes, n) })
-		return append(s.doctorGuard(ctx), warns...), notes
+		return append(s.doctorGuard(ctx, "main"), warns...), notes
 	}
 	warns, notes := check()
 	if len(warns) != 0 || len(notes) != 1 || !strings.Contains(notes[0], "git hook block missing in post-commit, pre-push") || !strings.Contains(notes[0], "not set up for lore yet") {

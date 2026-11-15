@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/ops/setup"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -39,10 +40,15 @@ func TestAdminSetupFromOrgRole(t *testing.T) {
 	if err != nil || got.Kind != onboard.KindAdmin || got.Org != "agency" {
 		t.Fatalf("admin stint: %+v, %v; want an admin setup of agency", got, err)
 	}
-	// a member setup of the same org: the admin stint still wins
-	x.e.setups = fakeSetups{active: "agency", cfg: onboard.Config{Setups: []onboard.SetupEntry{{Name: "agency", Kind: onboard.KindMember, Org: "agency"}}}}
+	// a member setup of the same org lore picked: the admin stint still wins
+	x.e.setups = fakeSetups{active: "agency", why: setup.WhyOrg, cfg: onboard.Config{Setups: []onboard.SetupEntry{{Name: "agency", Kind: onboard.KindMember, Org: "agency"}}}}
 	if got, err = adminSetup(ctx, x.e); err != nil || got.Kind != onboard.KindAdmin {
 		t.Fatalf("member setup + admin stint: %+v, %v", got, err)
+	}
+	// devco:D-327: a solo setup named with --setup is kept, and refused
+	x.e.setups = fakeSetups{active: "personal", cfg: onboard.Config{Setups: []onboard.SetupEntry{{Name: "personal", Kind: onboard.KindSolo}}}}
+	if _, err = adminSetup(ctx, x.e); !errs.Has(err, errs.Refused) || !strings.Contains(err.Error(), "solo setup") {
+		t.Fatalf("--setup personal with an admin stint: %v, want E_REFUSED naming the solo setup", err)
 	}
 	// a member setup of another org: refused as before
 	x.e.setups = fakeSetups{active: "acme", cfg: onboard.Config{Setups: []onboard.SetupEntry{{Name: "acme", Kind: onboard.KindMember, Org: "acme"}}}}

@@ -78,8 +78,16 @@ func (p Profile) StitchPointer(content string, link Link) string {
 // is placed into as LF and keeps CRLF; an unchanged block leaves it byte
 // for byte as it was. The block used to be matched with its LF newline,
 // so every render left one more blank line after it and dirtied a
-// tracked file (devco:Q-11).
+// tracked file (devco:Q-11). CRLF throughout, never LF lines in a CRLF
+// file: git warns on a mixed file ("LF will be replaced by CRLF") and an
+// editor rewrites it on the next save (devco:D-326).
+//
+// A leading byte-order mark stays the first bytes of the file, before the
+// block: in the middle it marks nothing and shows as a stray character.
 func (p Profile) Place(content, block string, re *regexp.Regexp) string {
+	if rest, ok := strings.CutPrefix(content, byteOrderMark); ok {
+		return byteOrderMark + p.Place(rest, block, re)
+	}
 	norm := strings.ReplaceAll(content, "\r\n", "\n")
 	if norm == content {
 		return p.placeLF(content, block, re)
@@ -90,6 +98,10 @@ func (p Profile) Place(content, block string, re *regexp.Regexp) string {
 	}
 	return strings.ReplaceAll(out, "\n", "\r\n")
 }
+
+// byteOrderMark is the UTF-8 byte-order mark some Windows editors write
+// at the start of a text file.
+const byteOrderMark = "\ufeff"
 
 // placeLF is Place for LF text.
 func (p Profile) placeLF(content, block string, re *regexp.Regexp) string {

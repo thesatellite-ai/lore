@@ -25,7 +25,9 @@ git worktree add -q "$TMP/wt0" "$BARE" >/dev/null 2>&1 || fail "git worktree add
 cd "$TMP/wt0"
 [ -f .git ] || fail "worktree .git is not a regular file"
 OUT=$($LORE memory add --body "should-refuse" 2>&1); RC=$?
-[ "$RC" -eq 27 ] || fail "worktree without a project: exit $RC, want 27 ($OUT)"
+# devco:Q-4: every refusal for a checkout of a lore repo without .lore/ here
+# is E_NOT_A_STORE (exit 19), on a read or a write (devco:D-326).
+[ "$RC" -eq 19 ] || fail "worktree without a project: exit $RC, want 19 ($OUT)"
 # D-8 (0.1.18): the refusal says the checkout is at a commit from before lore
 # was added and that lore reads and writes nothing here.
 echo "$OUT" | grep -q "from before lore was added" || fail "worktree without a project should refuse: $OUT"

@@ -106,6 +106,8 @@ mem_b69e…5ed7 [retrieved] I write short commit messages [me]
 ```
 <!-- /example -->
 
+A flag that takes a value takes the next word, so a value that is another flag of the command (`--title --json`, as left by an empty shell variable after `--title`) is refused as a missing value (E_INVALID_INPUT, exit 20). To give a value that starts with `--`, glue it on with `=`: `lore task edit --id <id> --title=--json`; the refusal names that form.
+
 `lore task reassign --from @handle` is different: there `--from` names a person, and every open task of that person is reassigned.
 
 ## Confirming and trying first
