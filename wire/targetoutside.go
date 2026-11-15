@@ -19,6 +19,7 @@ package wire
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -77,6 +78,13 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		if !write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "" {
 			return op.Result{}, false, nil
 		}
+	}
+	if !plainFolder(ctx, a.opts.RepoDir) {
+		// no git on PATH, a bare repository or a .git folder: the usual
+		// path names what the folder is and the way out (E_GIT_MISSING,
+		// "bare repository … git clone", ".git folder"); a store-only open
+		// here would hide it behind "no store to read"
+		return op.Result{}, false, nil
 	}
 	in, derr := e.Decode(d)
 	if derr != nil {
@@ -295,4 +303,20 @@ func (a *App) outsideTarget(ctx context.Context, to string, create bool) (attach
 	}
 	target := attach.Store{Name: name, URL: src.URL, Folder: folderName, ReadOnly: src.ReadOnly, Branch: src.Branch}
 	return target, newFolder{target: name, folder: folderName}, nil
+}
+
+// plainFolder reports whether dir is a folder in no git repository at all,
+// with git on PATH: the only place the outside-repo resolution serves.
+// No git, a bare repository or a .git folder answer false, so the usual
+// path reports them (E_GIT_MISSING; "bare repository … git clone"; ".git
+// folder"), never "no store to read" (devco D-421 follow-up).
+func plainFolder(ctx context.Context, dir string) bool {
+	if _, err := exec.LookPath("git"); err != nil {
+		return false
+	}
+	out, err := gitRun{dir: dir, args: []string{"rev-parse", "--is-bare-repository", "--is-inside-git-dir"}}.output(ctx)
+	if err != nil {
+		return true // not a git repository: a plain folder
+	}
+	return !strings.Contains(string(out), "true")
 }

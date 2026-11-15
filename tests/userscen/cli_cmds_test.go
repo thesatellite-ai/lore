@@ -46,6 +46,25 @@ const cliNotAStore = "ERROR: [E_NOT_A_STORE] git: the folder is not inside a git
 // cliNotAStoreHint is E_NOT_A_STORE's next step outside git.
 const cliNotAStoreHint = "cd into a git checkout, or run git init here first"
 
+// cliNoStoreMsg and cliNoStoreHint are the refusal of a row read or
+// write outside a repo that names no store, in a folder no org's setup
+// covers (devco D-421): the hint names --to, never "git init".
+const (
+	cliNoStoreMsg  = "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read"
+	cliNoStoreHint = "name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo"
+)
+
+// cliRefusal reports whether stderr is one of the two outside-repo
+// refusals: the repo one (init, render, policy …) or the row one.
+func cliRefusal(stderr string) (msg, hint string, ok bool) {
+	for _, p := range [][2]string{{"git: the folder is not inside a git work tree", cliNotAStoreHint}, {cliNoStoreMsg, cliNoStoreHint}} {
+		if stderr == "ERROR: [E_NOT_A_STORE] "+p[0]+"\n  hint: "+p[1]+"\n" {
+			return p[0], p[1], true
+		}
+	}
+	return "", "", false
+}
+
 // cliSolo is one person's initialised checkout.
 func cliSolo(t *testing.T) (*th.World, *th.Actor, *th.Clone) {
 	t.Helper()
@@ -150,8 +169,9 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 	}
 	for _, args := range needRepo {
 		r := a.Lore(dir, args...)
-		if r.Code != th.ExitGuard || r.Stderr != cliNotAStore || r.Stdout != "" {
-			t.Errorf("lore %v outside a repo: want exit %d and exactly %q: %s", args, th.ExitGuard, cliNotAStore, r)
+		msg, hint, ok := cliRefusal(r.Stderr)
+		if r.Code != th.ExitGuard || !ok || r.Stdout != "" {
+			t.Errorf("lore %v outside a repo: want exit %d and exactly one of the two refusals: %s", args, th.ExitGuard, r)
 		}
 		if args[0] == "init" {
 			continue // init takes no --json
@@ -163,7 +183,7 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 		}
 		if err != nil || jr.Code != th.ExitGuard || doc.Error == nil || doc.Error.Code != "E_NOT_A_STORE" || doc.Error.Exit != th.ExitGuard ||
-			doc.Error.Class != "guard" || doc.Error.Message != "git: the folder is not inside a git work tree" || doc.Error.Hint != cliNotAStoreHint || jr.Stderr != "" {
+			doc.Error.Class != "guard" || doc.Error.Message != msg || doc.Error.Hint != hint || jr.Stderr != "" {
 			t.Errorf("lore %v --json outside a repo: want the E_NOT_A_STORE object (exit 19, class guard) and an empty stderr: %s", args, jr)
 		}
 	}

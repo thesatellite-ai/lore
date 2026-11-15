@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1767 |
+| fixed | 1768 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -747,6 +747,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-423 | finding | owner: under LORE_HOME=~/.lore-dev a hand `git commit` in a store clone was refused (E_LEAK_BLOCKED "a clone of store … that lore does not use"): the clone's pre-commit hook ran lore without LORE_HOME, and a LORE_HOOK_BIN code-repo hook pin dropped the home; store doctor and other messages named ~/.lore/config.yaml | fixed | TestStoreHookCarriesTheHome, TestHookPinTarget, TestStoreDoctorNamesTheResolvedHome, TestJourneyLoreHomeStoreHandCommit | the hook exports the installer's LORE_HOME (default home: unchanged); doctor --fix and the next write rewrite an older block; story K1 |
 | devco:D-424 | finding | owner: setup run through a coding agent registered "<person> via <tool>" (agent:auto/…) in the new org, stamped its first rows with it and added Lore-Agent trailers before any agent label was chosen; `actor merge` of that actor into the person failed E_NOT_FOUND inside the store clone and E_NOT_A_STORE outside a repo | fixed | TestSetupTeamStepUnderAnAgentCreditsThePerson, TestOrgCreateUnderAnAgentCreditsThePerson, TestSetupTeamStepCreditedStillPolicyChecked, TestActorMergeFromAnywhere, TestJourneyAgentSetupCreditsThePerson | setup apply (identity, personal_store, join, team) and org create credit the person and say so; the agents.* policies still see the agent; actor merge takes --store <org>/<folder> and finds the org store holding both; an agent merges into its owner; story B |
 | devco:D-425 | finding | owner: hotfix, pattern and playbook add had no --source-ref (memory, rule and decision had it), so sources went into the body | fixed | TestEveryAddKeepsSourceRef | one shared flag (ops/internal/sourceref) on every add whose row keeps source_ref: memory, rule, decision, hotfix, pattern, playbook, snapshot |
+| devco:D-457 | finding | after-land of batch 66: with no git on PATH, in a bare repository or in a .git folder, row reads answered "no store to read" instead of E_GIT_MISSING / "bare repository … git clone" / ".git folder" | fixed | TestJourneyGitMissingFromPath, TestReposKinds, TestCLI_OutsideGitRepo | wire/targetoutside.go plainFolder: the outside-repo resolution serves only a plain folder with git on PATH; every other place takes the usual path and its own refusal |
 
 ## lore-adoptfix
 

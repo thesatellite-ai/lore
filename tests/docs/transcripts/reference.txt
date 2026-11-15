@@ -1,8 +1,8 @@
 
 ### an error
 alice (work)$ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo
 (exit 19)
 
 ### errors with json
@@ -10,8 +10,8 @@ alice (work)$ lore rule list --json
 {
   "error": {
     "code": "E_NOT_A_STORE",
-    "message": "git: the folder is not inside a git work tree",
-    "hint": "cd into a git checkout, or run git init here first",
+    "message": "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read",
+    "hint": "name the store: --to \u003corg\u003e/\u003cfolder\u003e (or --store); lore store list shows the stores this folder can name, or cd into a repo",
     "exit": 19,
     "class": "guard",
     "retryable": false,
@@ -153,8 +153,8 @@ ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row f
   hint: run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 alice$ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo
 (exit 19)
 alice$ cd work/website && lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
