@@ -12,6 +12,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // fakeRepo makes a folder that the fleet walk takes for a git repo (a .git
@@ -30,7 +31,7 @@ func fakeRepo(t *testing.T, dir string, lore bool) string {
 			t.Fatal(err)
 		}
 	}
-	return resolvedPath(dir)
+	return fspath.Canonical(dir)
 }
 
 // symlink links link to target or fails the test.
@@ -48,7 +49,7 @@ func symlink(t *testing.T, target, link string) {
 // saw the link as a file and dropped it silently.
 func TestFixRepoWalkFollowsLinkedRepo(t *testing.T) {
 	t.Parallel()
-	work := resolvedPath(t.TempDir())
+	work := fspath.Canonical(t.TempDir())
 	fleet, elsewhere := filepath.Join(work, "fleet"), filepath.Join(work, "elsewhere")
 	alpha := fakeRepo(t, filepath.Join(fleet, "alpha"), true)
 	gamma := fakeRepo(t, filepath.Join(elsewhere, "gamma"), true)
@@ -99,7 +100,7 @@ func sortedCopy(p ...string) []string {
 // flag replaces the list); none when a setup's folders hold the repo.
 func TestLinkedRepoNextNamesTheSetupEdit(t *testing.T) {
 	t.Parallel()
-	work := resolvedPath(t.TempDir())
+	work := fspath.Canonical(t.TempDir())
 	fleet, elsewhere := filepath.Join(work, "fleet"), filepath.Join(work, "elsewhere")
 	gamma := fakeRepo(t, filepath.Join(elsewhere, "gamma"), true)
 	cfg := onboard.Config{Setups: []onboard.SetupEntry{{Name: "fleet", Folders: []string{fleet + "/**"}}}}
@@ -123,7 +124,7 @@ func TestLinkedRepoNextNamesTheSetupEdit(t *testing.T) {
 func TestSetupStoreKnownReposReadsUseRecords(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
-	work := resolvedPath(t.TempDir())
+	work := fspath.Canonical(t.TempDir())
 	migrated := fakeRepo(t, filepath.Join(work, "migrated"), true)
 	plain := fakeRepo(t, filepath.Join(work, "plain"), false)
 	root := filepath.Join(home, cacheDir)

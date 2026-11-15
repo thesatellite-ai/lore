@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 const (
@@ -124,7 +125,7 @@ func (e Env) Shown() string {
 	// a home under the user's home reads as the other lines spell it
 	// (~/.lore-dev/stores/...)
 	if uh, uerr := e.UserHome(); uerr == nil && uh != "" {
-		if rel, rerr := filepath.Rel(filepath.Clean(uh), h.Dir); rerr == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if rel, inside := fspath.Rel(uh, h.Dir); inside && rel != "." {
 			return "~/" + filepath.ToSlash(rel)
 		}
 	}

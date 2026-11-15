@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // fakeLore writes an executable script at dir/name that prints tag and the
@@ -70,7 +72,7 @@ func TestHookPinRunsInstallingBuild(t *testing.T) {
 		t.Fatalf("an unpinned block must run the lore on PATH: %q", got)
 	}
 	back, ok := pinnedHookProgram("#!/bin/sh\n" + strings.Join(lines, "\n"))
-	if !ok || back.prog != filepath.ToSlash(dev) || back.home != "/home/someone/.lore-dev" || back.line() != pin {
+	if !ok || back.prog != filepath.ToSlash(fspath.Canonical(dev)) || back.home != "/home/someone/.lore-dev" || back.line() != pin {
 		t.Fatalf("pinnedHookProgram: %+v %v, want %s", back, ok, dev)
 	}
 	if err := os.Remove(dev); err != nil {
@@ -102,9 +104,9 @@ func TestHookPinTarget(t *testing.T) {
 		pinned               bool
 	}{
 		{"same file on PATH, default home: bare lore", self, "", "", onPath(self), hookTarget{}, false},
-		{"same file on PATH, LORE_HOME set: pinned with the home", self, "", "/h/.lore-dev", onPath(self), hookTarget{prog: filepath.ToSlash(self), home: "/h/.lore-dev"}, true},
-		{"another lore on PATH: pinned", self, "", "", onPath(other), hookTarget{prog: filepath.ToSlash(self)}, true},
-		{"no lore on PATH: pinned", self, "", "", none, hookTarget{prog: filepath.ToSlash(self)}, true},
+		{"same file on PATH, LORE_HOME set: pinned with the home", self, "", "/h/.lore-dev", onPath(self), hookTarget{prog: filepath.ToSlash(fspath.Canonical(self)), home: "/h/.lore-dev"}, true},
+		{"another lore on PATH: pinned", self, "", "", onPath(other), hookTarget{prog: filepath.ToSlash(fspath.Canonical(self))}, true},
+		{"no lore on PATH: pinned", self, "", "", none, hookTarget{prog: filepath.ToSlash(fspath.Canonical(self))}, true},
 		{"LORE_HOOK_BIN names the wrapper: the wrapper", self, wrapper, "/h/.lore-dev", onPath(other), hookTarget{prog: filepath.ToSlash(wrapper)}, true},
 		{"LORE_HOOK_BIN not executable: ignored", self, filepath.Join(dir, "missing"), "", onPath(self), hookTarget{}, false},
 		{"a quote in LORE_HOME: bare", self, "", "/h/it's", onPath(other), hookTarget{}, false},

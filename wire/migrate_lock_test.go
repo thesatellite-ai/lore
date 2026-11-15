@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // deadPID is a pid no process has (above every default pid_max).
@@ -132,7 +133,8 @@ func TestMigrateLockOtherMachineNotTaken(t *testing.T) {
 	if !strings.Contains(e.Message, "pid "+strconv.Itoa(deadPID)+" on other-machine.invalid") {
 		t.Fatalf("message does not name the machine: %q", e.Message)
 	}
-	if !strings.Contains(e.Hint, "never takes over") || !strings.Contains(e.Hint, "`rm "+path+"`") {
+	// the lock sits under the git top, the canonical folder (devco D-413)
+	if !strings.Contains(e.Hint, "never takes over") || !strings.Contains(e.Hint, "`rm "+fspath.Canonical(path)+"`") {
 		t.Fatalf("hint: %q", e.Hint)
 	}
 	if len(notes) != 0 {

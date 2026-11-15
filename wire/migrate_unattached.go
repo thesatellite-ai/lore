@@ -27,7 +27,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -37,6 +36,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
@@ -83,7 +83,7 @@ func storePlaceOf(home string, b store.Backend) (rawURL, branch, dir string, ok 
 			return "", "", "", false
 		}
 		for _, br := range []string{"", c.Branch()} {
-			if d, _, err := gitbackend.CloneDirOf(home, c.RemoteURL(), br); err == nil && sameDir(d, c.Dir()) {
+			if d, _, err := gitbackend.CloneDirOf(home, c.RemoteURL(), br); err == nil && fspath.Same(d, c.Dir()) {
 				return c.RemoteURL(), br, c.Dir(), true
 			}
 		}
@@ -240,7 +240,7 @@ func (a *App) rewriteFolder(ctx context.Context, u unattachedFolder, tables []ro
 		return nil, errs.Prefix("migrate: open store folder "+u.place, err)
 	}
 	defer func() { _ = b.Close() }()
-	if _, _, dir, ok := storePlaceOf(a.opts.Home, b); !ok || !sameDir(dir, u.dir) {
+	if _, _, dir, ok := storePlaceOf(a.opts.Home, b); !ok || !fspath.Same(dir, u.dir) {
 		return nil, errs.New(errs.Internal, "migrate: store folder "+u.place+" opened outside its checkout "+u.dir+"; nothing rewritten there").
 			WithHint("lore store add --name <name> --url " + u.src.URL + " --folder " + u.src.Folder + " --yes attaches it, then lore migrate run upgrades it")
 	}
@@ -249,18 +249,6 @@ func (a *App) rewriteFolder(ctx context.Context, u unattachedFolder, tables []ro
 		return nil, errs.Prefix("migrate: store folder "+u.place, err)
 	}
 	return got, nil
-}
-
-// sameDir reports whether two local paths name one folder (symlinks
-// resolved; an unresolvable path is compared as written).
-func sameDir(a, b string) bool {
-	if ra, err := filepath.EvalSymlinks(a); err == nil {
-		a = ra
-	}
-	if rb, err := filepath.EvalSymlinks(b); err == nil {
-		b = rb
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // statusUnattached adds a place and a pending line (a note when the store

@@ -50,7 +50,13 @@ func TestMain(m *testing.M) {
 	if os.Getenv(envCLIChild) == "1" {
 		Main() // exits with lore's own status
 	}
-	os.Exit(m.Run())
+	// the macOS temp-folder shape on every system (devco D-413): $TMPDIR
+	// is a symlink to the real folder, as macOS /var links to
+	// /private/var, so a path compared without model/fspath fails here too
+	cleanup := testenv.LinkTemp("lore-app-")
+	code := m.Run()
+	cleanup()
+	os.Exit(code)
 }
 
 // personAuthor is the git identity the multi-clone tests commit with.

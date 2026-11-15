@@ -42,6 +42,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -113,7 +114,7 @@ func (a *App) migrateMachineLocal(ctx context.Context, dryRun bool) ([]string, i
 //   - this machine's setups name folders (`lore setup list`) and none
 //     holds the checkout: a scratch copy outside the person's code.
 func (a *App) notOwnCheckout(ctx context.Context, st *state) string {
-	top := resolvedPath(st.repoTop)
+	top := fspath.Canonical(st.repoTop)
 	if meta, ok, err := rowfs.ReadRepoMeta(st.repoTop); err == nil && ok && meta.RepoID != "" {
 		if rows, lerr := st.eng.List(ctx, store.SourceMachine, schema.TableKnownRepos); lerr == nil {
 			for _, r := range rows {

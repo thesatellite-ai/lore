@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // strayDepth is how deep under stores/ a clone sits (<owner>/<repo>, or a
@@ -65,7 +66,7 @@ func otherBranchClone(root string, want git.Remote, dir, p string) bool {
 	home := filepath.Dir(root) // DefaultCloneDir puts clones at <home>/stores/...
 	for _, branch := range []string{"", headBranch(p)} {
 		def, err := git.DefaultCloneDir(home, want, branch)
-		if err == nil && sameFolder(def, p) && !sameFolder(def, dir) {
+		if err == nil && fspath.Same(def, p) && !fspath.Same(def, dir) {
 			return true
 		}
 	}

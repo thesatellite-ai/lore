@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -596,7 +597,7 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 			if base == "" {
 				base, _ = os.Getwd()
 			}
-			if r, rerr := filepath.Rel(base, p); rerr == nil && !strings.HasPrefix(r, "..") {
+			if r, inside := fspath.Rel(base, p); inside {
 				p = r
 			}
 		}

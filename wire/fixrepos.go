@@ -39,6 +39,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 )
@@ -71,7 +72,7 @@ func (a *App) FixRepos(ctx context.Context, dirs []string) (opsfix.Found, error)
 	if err != nil {
 		return opsfix.Found{}, err
 	}
-	w := fixRepoWalk{loreHome: resolvedPath(a.opts.Home)}
+	w := fixRepoWalk{loreHome: fspath.Canonical(a.opts.Home)}
 	for _, k := range known {
 		w.known = append(w.known, k.Root)
 	}
@@ -206,7 +207,7 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 	skipped := map[string]bool{}
 	var walked bool // the folder walk (not a known repo): repos with no lore data count
 	consider := func(p string) {
-		root := resolvedPath(p)
+		root := fspath.Canonical(p)
 		if seen[root] || skipped[root] {
 			return
 		}
@@ -256,7 +257,7 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 				// repo reached twice counts once, and the link is never
 				// walked through (a link can loop)
 				consider(p)
-				if root := resolvedPath(p); root != p && seen[root] {
+				if root := fspath.Canonical(p); root != p && seen[root] {
 					if out.Links == nil {
 						out.Links = map[string]string{}
 					}
@@ -304,7 +305,7 @@ func (w fixRepoWalk) inLoreStore(dir string) bool {
 
 // isLoreHome reports whether root's .lore folder is lore's own home.
 func (w fixRepoWalk) isLoreHome(root string) bool {
-	return w.loreHome != "" && resolvedPath(filepath.Join(root, rowfs.LoreDir)) == w.loreHome
+	return w.loreHome != "" && fspath.Canonical(filepath.Join(root, rowfs.LoreDir)) == w.loreHome
 }
 
 // isLinked reports whether one of dir's remotes is named by a store link.
@@ -374,7 +375,9 @@ func linkedRepoNext(cfg onboard.Config, home, link, root string) string {
 	for _, e := range cfg.Enabled() {
 		for _, g := range e.Folders {
 			base := GlobBase(onboard.ExpandHome(g, home))
-			if !strings.HasPrefix(link, base+string(filepath.Separator)) {
+			// the link itself is not resolved (its end is the repo outside the
+			// setup); the folder holding it is compared canonically (devco D-413)
+			if !fspath.Within(filepath.Dir(link), base) {
 				continue
 			}
 			cmd := "lore setup edit --name " + e.Name

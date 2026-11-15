@@ -16,6 +16,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -265,7 +266,7 @@ func unwritableErr(dir, home string, denied error) error {
 	if le != nil && le.Hint != "" {
 		hint = le.Hint
 	}
-	if home != "" && strings.HasPrefix(dir, home+string(filepath.Separator)) {
+	if home != "" && !fspath.Same(dir, home) && fspath.Within(dir, home) {
 		hint = "lore cannot write its home " + home + ": make it writable (chmod -R u+rwX " + home + "), or point LORE_HOME at a writable folder (a new home has no stores yet: lore setup join --invite <invite> joins them there)"
 	}
 	return errs.Wrap(errs.ReadOnlyFS, "the store clone "+dir+" is read-only for lore ("+reason+"): reads work, writes and syncs do not", fmt.Errorf("%w: %w", store.ErrReadOnly, denied)).WithHint(hint)

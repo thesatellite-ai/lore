@@ -33,6 +33,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // EnvHookBin names the program a wrapper wants lore's git hooks to run (the
@@ -182,8 +183,8 @@ func hooksDirInWorkTree(top, dir string) bool {
 			return false
 		}
 	}
-	rel, err := filepath.Rel(top, dir)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	rel, inside := fspath.Rel(top, dir)
+	if !inside {
 		return false
 	}
 	return strings.SplitN(filepath.ToSlash(rel), "/", 2)[0] != ".git"

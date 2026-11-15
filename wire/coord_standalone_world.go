@@ -42,6 +42,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -175,7 +176,7 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		a: a, repo: repo, stateDir: filepath.Join(strings.TrimSpace(string(gitDir)), signalsStateDir),
 		folder: signalsRootFolder, who: who, actorID: actor.String(), sit: sit.Result,
 	}
-	if rel, rerr := filepath.Rel(top, a.projectDir()); rerr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+	if rel, inside := fspath.Rel(top, a.projectDir()); inside && rel != "." {
 		w.folder = filepath.ToSlash(rel)
 	}
 	if sit.Result.Org != nil {

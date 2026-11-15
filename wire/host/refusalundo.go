@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/gitenv"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // setupFile is one file the first write's set-up may change, as it was.
@@ -121,7 +122,7 @@ func (s *setupSnapshot) restore() []string {
 
 // rel is p relative to the repo top when inside it.
 func (s *setupSnapshot) rel(p string) string {
-	if r, err := filepath.Rel(s.top, p); err == nil && !strings.HasPrefix(r, "..") {
+	if r, inside := fspath.Rel(s.top, p); inside {
 		return r
 	}
 	return p

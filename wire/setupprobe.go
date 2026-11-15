@@ -33,6 +33,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsrepoinit "github.com/thesatellite-ai/lore/ops/repoinit"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -1653,7 +1654,7 @@ func (sp setupProber) hooks(ctx context.Context, r opssetup.ProbeRequest) opsset
 	if root == "" {
 		return skip(skipNotInRepo)
 	}
-	if top := sp.hereTop(ctx); top == "" || resolvedPath(top) != resolvedPath(root) {
+	if top := sp.hereTop(ctx); top == "" || fspath.Canonical(top) != fspath.Canonical(root) {
 		return skip(detailHooksOther)
 	}
 	if !loreReady(root) {

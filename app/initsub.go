@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // rootInitAt makes wd the root the repo store opens for `lore init`:
@@ -89,7 +90,7 @@ func checkoutRepoMetas(ctx context.Context, wd string) (map[string]rowfs.RepoMet
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "init: list the projects of this checkout", err)
 	}
-	self := realPath(wd)
+	self := fspath.Canonical(wd)
 	metas := map[string]rowfs.RepoMeta{}
 	for _, p := range strings.Split(string(list), "\x00") {
 		if p == "" {
@@ -100,7 +101,7 @@ func checkoutRepoMetas(ctx context.Context, wd string) (map[string]rowfs.RepoMet
 			rel = "."
 		}
 		dir := filepath.Join(top, filepath.FromSlash(rel))
-		if realPath(dir) == self || metas[rel].RepoID != "" {
+		if fspath.Canonical(dir) == self || metas[rel].RepoID != "" {
 			continue
 		}
 		m, exists, rerr := rowfs.ReadRepoMeta(dir)
@@ -112,17 +113,6 @@ func checkoutRepoMetas(ctx context.Context, wd string) (map[string]rowfs.RepoMet
 		}
 	}
 	return metas, nil
-}
-
-// realPath is p with symlinks resolved (p itself when that fails).
-func realPath(p string) string {
-	if abs, err := filepath.Abs(p); err == nil {
-		p = abs
-	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
 }
 
 // chooseRepoMeta is the one repo identity the projects of a checkout share

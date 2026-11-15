@@ -44,6 +44,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -290,7 +291,7 @@ func asClientDataPrefix(top, root string) string {
 // root that does not exist yet through its deepest existing folder; plain
 // EvalSymlinks left such a root unresolved and the prefix fell back to the
 // top's .lore/data/.
-func realGitPath(p string) string { return resolvedPath(p) }
+func realGitPath(p string) string { return fspath.Canonical(p) }
 
 // trackedItems reads every tracked file of the checkout at top (work tree
 // copy) as a leak-check item; large files, symlinks and submodules are

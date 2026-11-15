@@ -28,6 +28,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -123,8 +124,8 @@ func (s *liveSession) guardOff(ctx context.Context, dir string) []string {
 // hooksInWorkTree reports whether dir is inside the work tree and outside
 // the git folder: a hooks folder committed with the repo (husky's .husky).
 func (s *liveSession) hooksInWorkTree(dir string) bool {
-	rel, err := filepath.Rel(s.top, dir)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+	rel, inside := fspath.Rel(s.top, dir)
+	if !inside {
 		return false
 	}
 	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]

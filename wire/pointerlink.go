@@ -38,6 +38,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // PointerSkippedMark is in render's note for a pointer file it left as it
@@ -62,7 +63,7 @@ func PointerLinkEnd(root, path string) (end string, isLink bool, skip string) {
 	if !isLink {
 		return path, false, ""
 	}
-	rootReal := resolvedPath(root)
+	rootReal := fspath.Canonical(root)
 	inside := insideOf(rootReal, end)
 	fi, err := os.Stat(end)
 	switch {
@@ -82,7 +83,7 @@ func PointerLinkEnd(root, path string) (end string, isLink bool, skip string) {
 	if aerr != nil {
 		return "", true, "cannot resolve " + path + ": " + aerr.Error()
 	}
-	linkAt := filepath.Join(resolvedPath(filepath.Dir(at)), filepath.Base(at))
+	linkAt := filepath.Join(fspath.Canonical(filepath.Dir(at)), filepath.Base(at))
 	if inside || !insideOf(rootReal, linkAt) {
 		return end, true, ""
 	}

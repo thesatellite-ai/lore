@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -120,7 +121,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 			}
 			rel := v
 			if filepath.IsAbs(v) {
-				if r, rerr := filepath.Rel(root, v); rerr == nil && !strings.HasPrefix(r, "..") {
+				if r, inside := fspath.Rel(root, v); inside {
 					rel = r
 				}
 			}

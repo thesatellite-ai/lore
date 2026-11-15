@@ -37,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/op"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 
@@ -734,7 +735,7 @@ func (h *Host) resolveTargets(ctx context.Context, root string, values []string,
 		}
 		rel := v
 		if filepath.IsAbs(v) {
-			if r, rerr := filepath.Rel(root, v); rerr == nil && !strings.HasPrefix(r, "..") {
+			if r, inside := fspath.Rel(root, v); inside {
 				rel = r
 			}
 		}
@@ -819,7 +820,7 @@ func (h *Host) stitchPointers(w *strings.Builder, root string, targets []context
 		}
 		key := pt.absAgent // a skipped file stays on its own
 		if pt.skip == "" {
-			key = resolvedOrSelf(pt.writeAt)
+			key = fspath.Canonical(pt.writeAt)
 		}
 		if _, seen := groups[key]; !seen {
 			order = append(order, key)
@@ -890,15 +891,6 @@ func resolvePointerTarget(root string, t contextTarget, outFile string) (pointer
 	// as it is with a note naming it and why; the render goes on.
 	writeAt, isLink, skip := wire.PointerLinkEnd(root, absAgent)
 	return pointerTarget{t: t, absAgent: absAgent, writeAt: writeAt, isLink: isLink, skip: skip, link: link}, nil
-}
-
-// resolvedOrSelf is p with every link resolved, p itself when it cannot be
-// (a file not written yet): the key two names of one file share.
-func resolvedOrSelf(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
 }
 
 // stitchPointerFile ensures the one file of group carries the lore pointer

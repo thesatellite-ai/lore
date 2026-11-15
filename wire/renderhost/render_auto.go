@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -138,8 +139,11 @@ func (h *Host) keepRenderLocal(ctx context.Context, w io.Writer, root string, qu
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(root, p) // the out paths are relative to the project root
 		}
-		rel, rerr := filepath.Rel(top, p)
-		if rerr != nil || strings.HasPrefix(rel, "..") {
+		// canonical: git's top is the real folder, root may be spelled
+		// through a link (macOS /var); a plain Rel read every file as
+		// outside and none was kept local (devco D-413)
+		rel, inside := fspath.Rel(top, p)
+		if !inside {
 			continue // outside this checkout (an --out elsewhere)
 		}
 		rel = filepath.ToSlash(rel)

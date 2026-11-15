@@ -34,6 +34,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opswhere "github.com/thesatellite-ai/lore/ops/where"
@@ -102,7 +103,7 @@ func (a *App) Where(ctx context.Context, in opswhere.ShowIn) (opswhere.Out, erro
 	out.Entries, out.Unknown = whereHome(home, uses, in.All)
 	out.Entries = append(out.Entries, a.whereStores(ctx, home)...)
 	if top := whereRepoTop(ctx, a.opts.RepoDir); top != "" {
-		if storeTop, _, isStore := rowfs.StoreTop(top); !isStore || resolvedPath(storeTop) != resolvedPath(top) { // StoreTop resolves links, top may not (D-389)
+		if storeTop, _, isStore := rowfs.StoreTop(top); !isStore || fspath.Canonical(storeTop) != fspath.Canonical(top) { // StoreTop resolves links, top may not (D-389)
 			out.Repo = top
 			out.Entries = append(out.Entries, whereRepo(ctx, top)...)
 			// the repo's cache sits under the lore home, never in the repo

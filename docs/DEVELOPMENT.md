@@ -97,6 +97,10 @@ What does not scale: a timeout that is the behaviour under test (lock waits, fet
 
 Guards (`internal/testtime`): the factor is 1 on a 48-core Linux machine and is applied to a sample deadline, the shell helper computes the same factor as the Go one, no Taskfile or test script passes a raw `-timeout` or `timeout N` or runs `go test` without a `-timeout`, and every test that compares a measured time with a literal or a `…Budget` either goes through `testtime.SpeedBar`/`Scale` or is listed, with its reason, as a behaviour bound (`TestSpeedBarsScale`).
 
+## Paths: one rule for comparing and storing them
+
+The same folder can be spelled two ways: on macOS every temp folder sits under `/var`, a symlink to `/private/var`, so `$TMPDIR`, `t.TempDir` and a person's `$PWD` say `/var/...` while `git rev-parse` and resolved paths say `/private/var/...`. `model/fspath` is the one rule: store a path canonically when it will be compared later (records, map keys, lock owners) with `fspath.Canonical`, and compare with `fspath.Same`, `fspath.Within` or `fspath.Rel`, never with `==`, `strings.HasPrefix` or a bare `filepath.Rel` across two sources. Output never rewrites what the person typed; a folder lore derived from their path is echoed in their spelling with `fspath.InTyped`. The packages that compare paths most (`adapters/backend/rowfs`, `wire`, `wire/host`, `wire/renderhost`, `app`, `logic/origin`, `tests/teame2e`) run their tests with `$TMPDIR` behind a symlink (`internal/testenv.LinkTemp` in their `TestMain`), the macOS shape on Linux, so the gate catches a path compared the old way.
+
 ## Journeys: every feature adds its steps
 
 A feature that changes what a person does over time (a new command, a new kind of store, a new sync mode, a new refusal, a new setup step) adds, in the same change, the journey steps where a real person would meet it, in the persona who would (`tests/journeys/<persona>_test.go`). A rule that must hold everywhere becomes a shared invariant instead. How: [tests/journeys/README.md](../tests/journeys/README.md).

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 )
 
@@ -38,8 +39,8 @@ func TestResolvedPathMissingTail(t *testing.T) {
 		filepath.Join(link, "missing"): filepath.Join(real, "missing"),
 		filepath.Join(link, "missing", "a", "b.md"): filepath.Join(real, "missing", "a", "b.md"),
 	} {
-		if got := resolvedPath(in); got != want {
-			t.Errorf("resolvedPath(%s) = %s, want %s", in, got, want)
+		if got := fspath.Canonical(in); got != want {
+			t.Errorf("fspath.Canonical(%s) = %s, want %s", in, got, want)
 		}
 	}
 }
