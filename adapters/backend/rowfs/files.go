@@ -253,9 +253,38 @@ func mkdirModes(dir string, m fileModes) error {
 	if err := os.MkdirAll(dir, m.dir); err != nil {
 		return err
 	}
+	if emulateBSDMkdir {
+		if err := clearSetgid(made); err != nil {
+			return err
+		}
+	}
 	for i := len(made) - 1; i >= 0; i-- { // parents first: a child checks its parent's bit
 		if err := groupWiden(made[i], filepath.Dir(made[i]), m.dir, groupDirBits); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// emulateBSDMkdir, when true, makes mkdirModes clear the setgid bit of
+// each folder it creates, right after creating it, as mkdir does on macOS
+// and the BSDs (a new folder takes its parent's group but never the bit).
+// Why: the guard test TestSharedWriteBSDMkdir runs the macOS path on Linux,
+// where mkdir copies the bit and hid the D-390 bug (devco D-416). Only a
+// non-parallel test sets it; product code never does.
+var emulateBSDMkdir bool
+
+// clearSetgid removes the setgid bit from each folder of dirs.
+func clearSetgid(dirs []string) error {
+	for _, d := range dirs {
+		fi, err := os.Stat(d)
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&fs.ModeSetgid != 0 {
+			if err := os.Chmod(d, fi.Mode().Perm()); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

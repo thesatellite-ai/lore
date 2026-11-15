@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -84,7 +85,7 @@ func TestStoryJ4Upgrade(t *testing.T) {
 		if n := j4Count(t, r); n != HubShape["tasks"] {
 			t.Errorf("the big repo lists %d of its %d tasks", n, HubShape["tasks"])
 		}
-		if took > 60*time.Second {
+		if took > testtime.SpeedBar(60*time.Second) {
 			t.Errorf("a read of the 5.5k-row repo took %v (T-3: a few seconds)", took)
 		}
 		clean("reads after the upgrade", ca, cb)

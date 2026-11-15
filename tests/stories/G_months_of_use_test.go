@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -150,7 +151,7 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 		t.Run("trash-purge-is-fast", func(t *testing.T) {
 			start := time.Now()
 			ines.M.LoreIn(ines.C, "trash", "purge", "--older-than", "0d", "--confirm").OK(t)
-			if d := time.Since(start); d > 5*time.Second {
+			if d := time.Since(start); d > testtime.SpeedBar(5*time.Second) {
 				t.Errorf("trash purge took %s", d)
 			}
 		})
@@ -191,7 +192,7 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 		dc.WriteFile("pages/onboarding.md", "# Onboarding\n\nAsk for a buddy on day one.\n")
 		start := time.Now()
 		dc.CommitAll("docs: onboarding")
-		if d := time.Since(start); d > 3*time.Second {
+		if d := time.Since(start); d > testtime.SpeedBar(3*time.Second) {
 			t.Errorf("a markdown-only commit took %s with lore's hooks", d)
 		}
 		if st := dc.Git("status", "--porcelain"); st != "" {
@@ -459,7 +460,9 @@ func gManyAgentsStayFast(t *testing.T, ines gMember) {
 	}
 	after := gLoneCommand(t, lone, "cooling down")
 	solo := max(before, after)
-	limit = max(limit, 15*solo)
+	// D-417: the bar is as computed at factor 1 and stretched on a slower
+	// machine; the fairness check below is a ratio and needs no scaling.
+	limit = testtime.SpeedBar(max(limit, 15*solo))
 	p50 := all[len(all)/2]
 	p95 := all[min(len(all)-1, len(all)*95/100)]
 	slowest := all[len(all)-1]

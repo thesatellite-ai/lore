@@ -195,3 +195,9 @@ func machineStoreExists(home string) bool {
 	_, err := os.Stat(filepath.Join(home, filepath.FromSlash(MachineStoreFile)))
 	return err == nil
 }
+
+// isDirAt reports whether path is an existing folder.
+func isDirAt(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
+}

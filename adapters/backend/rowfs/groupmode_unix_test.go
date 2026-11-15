@@ -90,6 +90,44 @@ func TestSharedWriteInSetgidFolder(t *testing.T) {
 	}
 }
 
+// TestSharedWriteBSDMkdir (devco D-416, Mac finding M-14) runs the macOS
+// and BSD rules on any unix: a new folder takes its parent's group but
+// mkdir never copies the setgid bit (emulateBSDMkdir clears it right after
+// mkdir). In a group's setgid checkout a deep row write must still be group
+// read/write at every depth, owned by the checkout's group, with no setgid
+// on the new folders (the group-writable mark carries the share down). Not
+// parallel: it sets emulateBSDMkdir.
+func TestSharedWriteBSDMkdir(t *testing.T) {
+	old := syscall.Umask(0o022)
+	t.Cleanup(func() { syscall.Umask(old) })
+	emulateBSDMkdir = true
+	t.Cleanup(func() { emulateBSDMkdir = false })
+	top := t.TempDir()
+	if err := os.Chmod(top, 0o750|fs.ModeSetgid); err != nil {
+		t.Skip("cannot set setgid here:", err)
+	}
+	if info, err := os.Stat(top); err != nil || info.Mode()&fs.ModeSetgid == 0 {
+		t.Skip("setgid not kept on this file system")
+	}
+	full := filepath.Join(top, "data", "playbooks", "deep", "pbk_1.json")
+	if err := writeAtomic(full, []byte("{}\n"), sharedModes); err != nil {
+		t.Fatal(err)
+	}
+	assertSharedWrite(t, top, full, false)
+	for d := filepath.Dir(full); d != top; d = filepath.Dir(d) {
+		if di, err := os.Stat(d); err != nil || di.Mode()&fs.ModeSetgid != 0 {
+			t.Errorf("folder %s: setgid copied (%v, %v); BSD mkdir never copies it", d, di.Mode(), err)
+		}
+	}
+	priv := filepath.Join(top, "private", "deep", "j.json")
+	if err := writeAtomic(priv, []byte("{}\n"), privateModes); err != nil {
+		t.Fatal(err)
+	}
+	if pi, _ := os.Stat(priv); pi.Mode().Perm()&0o077 != 0 {
+		t.Errorf("owner-only write widened to %v", pi.Mode())
+	}
+}
+
 // TestSharedWriteInGroupWritableFolder pins D-390's portable mark: a
 // group-writable folder owned by the writer's group counts as shared with
 // no setgid bit (macOS never copies setgid to a new folder, so below the

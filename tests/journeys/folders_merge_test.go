@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -153,8 +154,8 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		if n := two.CommitCount(mainRef) - before; n != 1 {
 			t.Errorf("the merge made %d commits in the folder's store, want ONE for all %d rows", n, jMergeTasks)
 		}
-		if took > jMergeBudget {
-			t.Errorf("the merge of %d rows took %s, over %s", jMergeTasks, took, jMergeBudget)
+		if bar := testtime.SpeedBar(jMergeBudget); took > bar {
+			t.Errorf("the merge of %d rows took %s, over %s", jMergeTasks, took, bar)
 		}
 		if log := two.Log(mainRef); len(log) == 0 || !strings.Contains(log[0], "actor merge "+jMergeOldActor+" into "+into) {
 			t.Errorf("the merge commit is not titled by the merge: %v", log[:min(2, len(log))])

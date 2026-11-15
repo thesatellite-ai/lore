@@ -286,7 +286,7 @@ $ lore render
 ```
 <!-- /example -->
 
-When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename; folder names in any script, with spaces or accents, are recognised), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
+When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename; folder names in any script, with spaces or accents, are recognised, and so is a rename that only changes case, such as `src/Charts` to `src/charts`, also on macOS and Windows, where the file system ignores case: there a folder scope counts as present only when the folder is spelled exactly as the scope names it), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
 
 <!-- example: render#scope-move -->
 ```console
@@ -312,7 +312,8 @@ To copy the lore skill into your coding tool's skill folder and keep it current,
 ## Pitfalls
 
 - <!-- ds:block id=render-pins-buj9dujv --> **Only the strongest notes are pinned.** Render pins rules with severity `must` and hotfixes with severity `critical` or `high`. `should` and `may` rules, memories, decisions and every other kind are left for `lore search`, which the directive tells the tool to run. If a note must be seen every time, make it a `must` rule.
-- **`lore scope move` does not move files.** Rename the folder with `git mv` yourself, then run `scope move` so the scope's label follows it.
+- **`lore scope move` does not move files.** Rename the folder with `git mv` yourself, then run `scope move` so the scope's label follows it. On macOS or Windows a rename that only changes case needs two steps (`git mv src/Charts src/charts.tmp`, then `git mv src/charts.tmp src/charts`).
+- **A folder scope names the folder as it is spelled on disk.** Where the file system ignores case, `--scope dir:SRC/charts` for the folder `src/charts` is refused (`no such folder in the repo`), since no file path would ever match it.
 - **Archived rules and hotfixes are dropped** from the rendered file on the next render.
 - **Never edit `.lore/LORE.md` by hand.** The next render replaces it. Edit the rows and render again.
 - **Write your own notes outside the markers.** Everything between `<!-- lore:pointer:start -->` and `<!-- lore:pointer:end -->` belongs to lore and is replaced on every render.

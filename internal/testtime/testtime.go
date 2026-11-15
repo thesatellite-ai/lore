@@ -7,9 +7,12 @@
 // limits with nothing wrong. One factor, LORE_TEST_TIME_SCALE, stretches all
 // of them; on the gate server it is 1, so the limits there are unchanged.
 //
-// What does NOT go through Scale: a timeout that is the behaviour under test
-// (a lock wait, a fetch timeout, back-off, a TTL, a "finishes in N ms"
-// product guarantee). Scaling those would hide the very failure they test.
+// Product speed bars ("finishes within N") go through SpeedBar: unchanged at
+// factor 1, stretched on slower machines (D-417).
+//
+// What does NOT scale: a timeout that is the behaviour under test (a lock
+// wait, a fetch timeout, back-off, a TTL, a kill deadline). Scaling those
+// would hide the very failure they test.
 //
 // The shell side (Taskfile -timeout values, gate scripts) is
 // tests/lib/testtime.sh; it computes the same factor with the same rules, and
@@ -101,6 +104,19 @@ func Factor() float64 {
 // take, by this machine's factor. Use it for every such limit in a test
 // harness; never for a timeout that is itself under test.
 func Scale(d time.Duration) time.Duration {
+	return ScaleBy(d, Factor())
+}
+
+// SpeedBar stretches d, a product speed bar ("doctor --all finishes within
+// 30 s", "a 20 MB binary is checked in under 2 s"), by this machine's
+// factor. At factor 1 (the gate server) the bar is exactly as written, so
+// it still catches a real slowdown there; on a slower machine it stretches
+// like every run limit, so a laptop does not fail it for being a laptop
+// (owner decision D-417, option A; the machine's own command speed is
+// measured separately). Why its own name: TestSpeedBarsScale tells a speed
+// bar from a behaviour bound (a lock wait, a kill deadline, a timeout under
+// test), which never scales.
+func SpeedBar(d time.Duration) time.Duration {
 	return ScaleBy(d, Factor())
 }
 

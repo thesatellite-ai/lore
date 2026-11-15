@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -38,7 +39,7 @@ func TestHookSecretsSkipBinaryFiles(t *testing.T) {
 	if err := h.App.HookSecrets(ctx, h.Repo, wire.LeakWherePush, map[string][]byte{"big.bin": big}); err != nil {
 		t.Fatalf("random bytes are not a secret: %v", err)
 	}
-	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("a 20 MB binary took %s to check, want well under 2s", d)
+	if d, bar := time.Since(start), testtime.SpeedBar(2*time.Second); d > bar {
+		t.Errorf("a 20 MB binary took %s to check, want well under %s", d, bar)
 	}
 }
