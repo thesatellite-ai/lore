@@ -36,6 +36,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // EnvOrg chooses the org entry for this shell (F10 rule 1).
@@ -254,7 +255,7 @@ func workTreeTop(ctx context.Context, dir string) (top string, ok bool) {
 	if err != nil {
 		return "", false
 	}
-	return realPath(strings.TrimSpace(out)), true
+	return fspath.Canonical(strings.TrimSpace(out)), true
 }
 
 // ProjectRoot is the nearest folder from dir up to its git work tree top
@@ -276,9 +277,9 @@ func ProjectRoot(ctx context.Context, dir, home string) (root string, ok bool) {
 func projectRootUnder(top, dir, home string) (root string, ok bool) {
 	homeLore := ""
 	if home != "" {
-		homeLore = realPath(home)
+		homeLore = fspath.Canonical(home)
 	}
-	for d := realPath(dir); ; d = filepath.Dir(d) {
+	for d := fspath.Canonical(dir); ; d = filepath.Dir(d) {
 		rel, rerr := filepath.Rel(top, d)
 		if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return "", false // dir is not under the top (a symlinked path)
@@ -291,18 +292,6 @@ func projectRootUnder(top, dir, home string) (root string, ok bool) {
 			return "", false
 		}
 	}
-}
-
-// realPath is p made absolute with its symlinks resolved, as far as that
-// works (p itself when it does not).
-func realPath(p string) string {
-	if abs, err := filepath.Abs(p); err == nil {
-		p = abs
-	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		p = r
-	}
-	return filepath.Clean(p)
 }
 
 // Remotes reads dir's git remote urls as written in git config (never
@@ -359,20 +348,10 @@ func repoTopProjectID(ctx context.Context, root string) string {
 		return ""
 	}
 	top := strings.TrimSpace(out)
-	if top == "" || sameDir(top, root) {
+	if top == "" || fspath.Same(top, root) {
 		return ""
 	}
 	return ProjectID(top)
-}
-
-// sameDir reports whether a and b name one folder (symlinks resolved).
-func sameDir(a, b string) bool {
-	ra, aerr := filepath.EvalSymlinks(a)
-	rb, berr := filepath.EvalSymlinks(b)
-	if aerr != nil || berr != nil {
-		return filepath.Clean(a) == filepath.Clean(b)
-	}
-	return ra == rb
 }
 
 // clientPatternMatches reports whether a repos: (client) pattern of any

@@ -27,12 +27,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
+
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
@@ -42,6 +43,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
@@ -458,7 +460,7 @@ func (a *App) localClaims(ctx context.Context) (localBoard, error) {
 	if err != nil {
 		return localBoard{}, errs.Wrap(errs.Internal, "claims: locate the git dir", err)
 	}
-	if rel, rerr := filepath.Rel(top, a.projectDir()); rerr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+	if rel, inside := fspath.Rel(top, a.projectDir()); inside && rel != "." {
 		b.folder = filepath.ToSlash(rel)
 	}
 	remote := strings.TrimSpace(os.Getenv(envLiveRemote))

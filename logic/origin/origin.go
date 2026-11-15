@@ -7,12 +7,11 @@ package origin
 
 import (
 	"cmp"
-	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 )
@@ -227,15 +226,14 @@ func RelDir(repoRoot, workDir string) string {
 	if repoRoot == "" || workDir == "" {
 		return ""
 	}
-	rel, err := filepath.Rel(filepath.Clean(repoRoot), filepath.Clean(workDir))
-	if err != nil {
+	// canonical: the root comes from git (the real folder), the cwd from
+	// $PWD (on macOS /var, a link to /private/var); a plain Rel stored no
+	// work dir there (devco D-413)
+	rel, inside := fspath.Rel(repoRoot, workDir)
+	if !inside || rel == "." {
 		return ""
 	}
-	rel = filepath.ToSlash(rel)
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, "../") || path.IsAbs(rel) {
-		return ""
-	}
-	return rel
+	return filepath.ToSlash(rel)
 }
 
 // Client is what a client repo already holds or can see, the test of

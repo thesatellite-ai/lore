@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -95,7 +96,7 @@ func (a *App) touchOn(ctx context.Context, st *state, r onboard.KnownRepo) error
 	if st.format.check() != nil || !st.eng.HasMachineStore() {
 		return nil
 	}
-	repoID, root, now := r.RepoID, resolvedPath(r.Root), r.LastSeen
+	repoID, root, now := r.RepoID, fspath.Canonical(r.Root), r.LastSeen
 	if now.IsZero() {
 		now = a.opts.Wall()
 	}
@@ -239,7 +240,7 @@ func ScanLoreRepos(ctx context.Context, bases []string, depth int) ([]onboard.Kn
 				return stop()
 			}
 			if fi, serr := os.Stat(filepath.Join(p, rowfs.LoreDir)); serr == nil && fi.IsDir() {
-				root := resolvedPath(p)
+				root := fspath.Canonical(p)
 				if !seen[root] {
 					seen[root] = true
 					m, _, _ := rowfs.ReadRepoMeta(p) // no id yet still lists the folder
@@ -267,30 +268,4 @@ func levels(base, p string) int {
 		return 0
 	}
 	return strings.Count(filepath.ToSlash(rel), "/") + 1
-}
-
-// resolvedPath is p absolute with symlinks resolved (ONB 3.3 compares
-// paths that way). When p, or part of it, does not exist yet (a dangling
-// link's end, a folder about to be created), its deepest existing folder
-// is resolved and the missing names are kept after it, so the result still
-// compares with a resolved root. Before, such a p came back unresolved:
-// on macOS, where the temp and many home folders sit under a link
-// (/var -> /private/var), a path inside the repository then looked outside
-// it. p as given (made absolute) when nothing of it resolves.
-func resolvedPath(p string) string {
-	if abs, err := filepath.Abs(p); err == nil {
-		p = abs
-	}
-	var tail []string
-	for cur := p; ; {
-		if r, err := filepath.EvalSymlinks(cur); err == nil {
-			return filepath.Join(append([]string{r}, tail...)...)
-		}
-		parent := filepath.Dir(cur)
-		if parent == cur {
-			return p
-		}
-		tail = append([]string{filepath.Base(cur)}, tail...)
-		cur = parent
-	}
 }

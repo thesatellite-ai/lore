@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // TestWriteThroughLink: a write to a tool file lands at the end of its
@@ -83,7 +84,7 @@ func TestWriteThroughLink(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root := resolvedPath(t.TempDir())
+			root := fspath.Canonical(t.TempDir())
 			path, want := c.setup(t, root)
 			if want == "" {
 				want = path
@@ -98,7 +99,7 @@ func TestWriteThroughLink(t *testing.T) {
 			if err != nil {
 				t.Fatalf("want allowed, got %v", err)
 			}
-			if resolvedPath(filepath.Dir(got)) != resolvedPath(filepath.Dir(want)) || filepath.Base(got) != filepath.Base(want) {
+			if fspath.Canonical(filepath.Dir(got)) != fspath.Canonical(filepath.Dir(want)) || filepath.Base(got) != filepath.Base(want) {
 				t.Fatalf("write lands on %s, want %s", got, want)
 			}
 		})
@@ -108,8 +109,8 @@ func TestWriteThroughLink(t *testing.T) {
 // TestWriteThroughLinkNamesLinkAndEnd: the refusal names the link and the
 // end of its chain (not its first hop) and says how to fix it.
 func TestWriteThroughLinkNamesLinkAndEnd(t *testing.T) {
-	root := resolvedPath(t.TempDir())
-	end := filepath.Join(resolvedPath(t.TempDir()), "end.md")
+	root := fspath.Canonical(t.TempDir())
+	end := filepath.Join(fspath.Canonical(t.TempDir()), "end.md")
 	lwLink(t, end, filepath.Join(root, "hop.md"))
 	at := lwLink(t, "hop.md", filepath.Join(root, "CLAUDE.md"))
 	_, err := WriteThroughLink(root, at)
@@ -126,7 +127,7 @@ func TestWriteThroughLinkNamesLinkAndEnd(t *testing.T) {
 // TestLinkEndLongChain: a chain of maxLinkHops links is followed; one more
 // is a loop.
 func TestLinkEndLongChain(t *testing.T) {
-	dir := resolvedPath(t.TempDir())
+	dir := fspath.Canonical(t.TempDir())
 	end := lwWrite(t, filepath.Join(dir, "end.md"))
 	prev := "end.md"
 	for i := range maxLinkHops {
@@ -205,7 +206,7 @@ func TestEditRepoFileThroughLinks(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, outside := resolvedPath(t.TempDir()), resolvedPath(t.TempDir())
+			root, outside := fspath.Canonical(t.TempDir()), fspath.Canonical(t.TempDir())
 			end := c.setup(t, root, outside)
 			a := &App{opts: Options{RepoDir: root}}
 			_, err := a.EditRepoFile(t.Context(), "AGENTS.md", func(string, bool) (string, bool) { return "placeholder directive", true })

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 )
@@ -29,7 +30,7 @@ func TestFixMigrateRewiresInTheSameRun(t *testing.T) {
 	}}
 	ctx := WithHostWiring(opsdoctor.WithMigrate(background()), hw)
 	steps := a.FixSteps(ctx, false)
-	if len(asked) != 1 || asked[0] != repo {
+	if len(asked) != 1 || !fspath.Same(asked[0], repo) { // the git top: repo canonical (devco D-413)
 		t.Fatalf("Rewire asked for %v, want once for %s", asked, repo)
 	}
 	i := slices.IndexFunc(steps, func(s opsdoctor.FixStep) bool { return s.Step == opsdoctor.StepGitWiring })

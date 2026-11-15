@@ -21,6 +21,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // pfMemoryID finds a memory id in command output.
@@ -151,7 +153,7 @@ func TestReadsNeverWriteOrPush(t *testing.T) {
 	}
 	memID := pfMemoryID.FindString(out + errOut)
 	// the write names the row file it wrote, in lore's clone of the store
-	if want := "lore: wrote " + filepath.Join(home, ".lore", "stores", "acme", "notes") + string(filepath.Separator); !strings.Contains(errOut, want) || !strings.Contains(errOut, memID+".json (store notes)") {
+	if want := "lore: wrote " + fspath.Canonical(filepath.Join(home, ".lore", "stores", "acme", "notes")) + string(filepath.Separator); !strings.Contains(errOut, want) || !strings.Contains(errOut, memID+".json (store notes)") {
 		t.Fatalf("the write does not name its row file (want %q… %s.json (store notes)):\n%s", want, memID, errOut)
 	}
 

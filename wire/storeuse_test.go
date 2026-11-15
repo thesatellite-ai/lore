@@ -15,6 +15,7 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/wire/internal/isolate"
@@ -73,7 +74,8 @@ func TestStoreUse(t *testing.T) {
 	if again := useOut(t, mustRun(t, repo, opsstores.OpUse, `{"path":"`+mine+`"}`)); again.Changed {
 		t.Fatalf("a second use changed something: %+v", again)
 	}
-	if rec := gitbackend.ReadCloneRecord(home).Clones["example.test/acme/kb"]; rec.Path != mine || rec.Why != gitbackend.WhyOwn {
+	// stored canonically (devco D-413), compared as one folder
+	if rec := gitbackend.ReadCloneRecord(home).Clones["example.test/acme/kb"]; !fspath.Same(rec.Path, mine) || rec.Path != fspath.Canonical(mine) || rec.Why != gitbackend.WhyOwn {
 		t.Fatalf("record: %+v", rec)
 	}
 
@@ -98,7 +100,7 @@ func TestStoreUse(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range scan {
-		if c.Paths.Dir == mine && c.Own && c.State == gitbackend.CloneWhole {
+		if fspath.Same(c.Paths.Dir, mine) && c.Own && c.State == gitbackend.CloneWhole {
 			found = true
 		}
 	}
@@ -130,7 +132,7 @@ func TestStoreUse(t *testing.T) {
 
 	// back to lore's own clone: the record goes, my clone stays
 	back := useOut(t, mustRun(t, repo, opsstores.OpUse, `{"default":"kb"}`))
-	if !back.Changed || back.Own || back.Path != lores || back.Previous != mine {
+	if !back.Changed || back.Own || back.Path != lores || !fspath.Same(back.Previous, mine) { // the record holds it canonically
 		t.Fatalf("store use --default = %+v", back)
 	}
 	if _, ok := gitbackend.ReadCloneRecord(home).Clones["example.test/acme/kb"]; ok {

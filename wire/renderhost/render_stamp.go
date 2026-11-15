@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	"github.com/thesatellite-ai/lore/wire"
@@ -208,7 +209,7 @@ func (h *Host) copiesOf(ctx context.Context, root, out string, p *committedPlan)
 			}
 			fullRel := filepath.ToSlash(filepath.Join(filepath.Dir(out), fullFileName))
 			if fk == opsrender.CopyMissing {
-				if rel, rerr := filepath.Rel(root, fullPath); rerr == nil && !tracked(ctx, root, filepath.ToSlash(rel)) {
+				if rel, inside := fspath.Rel(root, fullPath); inside && !tracked(ctx, root, filepath.ToSlash(rel)) {
 					// devco O-8: the repo never carried it (a migrated
 					// repo, or one whose LORE.full.md was never added), so
 					// a fresh clone has nothing to compare: a note, not a

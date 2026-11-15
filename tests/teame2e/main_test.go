@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/wire"
@@ -32,6 +33,10 @@ func TestMain(m *testing.M) { os.Exit(runMain(m)) }
 
 func runMain(m *testing.M) int {
 	flag.Parse()
+	// the macOS temp-folder shape on every system (devco D-413, M-12):
+	// $TMPDIR is a symlink to the real folder, as macOS /var links to
+	// /private/var, so the old-build compat tests meet it on Linux too
+	defer testenv.LinkTemp("lore-teame2e-link-")()
 	defer removeOldLore() // the v0.1.17 build some tests make (fin_compat)
 	if os.Getenv(envTeamBin) != "" || testing.Short() {
 		return m.Run()

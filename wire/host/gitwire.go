@@ -33,6 +33,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -356,8 +357,8 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		s.warn("git wiring: " + err.Error())
 		return
 	}
-	rel, rerr := filepath.Rel(s.top, root)
-	if rerr != nil || strings.HasPrefix(rel, "..") {
+	rel, inside := fspath.Rel(s.top, root)
+	if !inside {
 		rel = ""
 	}
 	bin := mergeDriverBinary()

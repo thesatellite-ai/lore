@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -93,9 +94,12 @@ func excludeInGitAs(ctx context.Context, root, name, comment string) error {
 	if !filepath.IsAbs(excl) {
 		excl = filepath.Join(root, excl)
 	}
-	rel, err := filepath.Rel(top, filepath.Join(root, name))
-	if err != nil {
-		return errs.Wrap(errs.Internal, "locate "+name, err)
+	// canonical: git's top is the real folder while root may be spelled
+	// through a link (macOS /var); a plain Rel gave a ../ pattern that
+	// excluded nothing (devco D-413)
+	rel, inside := fspath.Rel(top, filepath.Join(root, name))
+	if !inside {
+		return errs.New(errs.Internal, "locate "+name+": not inside the checkout "+top)
 	}
 	pattern := "/" + filepath.ToSlash(rel)
 	cur, err := os.ReadFile(filepath.Clean(excl))

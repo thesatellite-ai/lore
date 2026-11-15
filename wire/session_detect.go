@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // sessionShells are the process names skipped when the synthetic key looks
@@ -86,7 +87,7 @@ func SessionDetailsOf(who identity.Resolved, actorID, home, top, cwd string) (Se
 	}
 	if top != "" {
 		d.Repo = filepath.Base(top)
-		if rel, err := filepath.Rel(top, cwd); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, inside := fspath.Rel(top, cwd); inside {
 			d.Cwd = filepath.ToSlash(rel)
 		}
 	}

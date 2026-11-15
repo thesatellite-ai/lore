@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -417,7 +418,7 @@ func (s setupStore) KnownRepos(ctx context.Context) ([]onboard.KnownRepo, error)
 		if root == "" {
 			continue
 		}
-		root = resolvedPath(root)
+		root = fspath.Canonical(root)
 		if seen[root] || !loreFolderAt(root) {
 			continue
 		}
@@ -434,6 +435,6 @@ func (s setupStore) TouchRepo(ctx context.Context, r onboard.KnownRepo) error {
 	if r.LastSeen.IsZero() {
 		r.LastSeen = s.a.opts.Wall()
 	}
-	r.Root = resolvedPath(r.Root)
+	r.Root = fspath.Canonical(r.Root)
 	return s.a.TouchRepo(ctx, r)
 }

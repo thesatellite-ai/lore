@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // maxLinkHops is how many links in a row LinkEnd follows before it calls
@@ -68,7 +69,7 @@ func LinkEnd(path string) (end string, isLink bool, err error) {
 	if !isLink {
 		return path, false, nil
 	}
-	return filepath.Join(resolvedPath(filepath.Dir(cur)), filepath.Base(cur)), true, nil
+	return filepath.Join(fspath.Canonical(filepath.Dir(cur)), filepath.Base(cur)), true, nil
 }
 
 // WriteThroughLink is where a write to path (a tool file of the
@@ -89,8 +90,8 @@ func WriteThroughLink(root, path string) (string, error) {
 	if err != nil {
 		return "", errs.Wrap(errs.BadPath, "resolve "+path, err)
 	}
-	rootReal := resolvedPath(root)
-	linkAt := filepath.Join(resolvedPath(filepath.Dir(at)), filepath.Base(at))
+	rootReal := fspath.Canonical(root)
+	linkAt := filepath.Join(fspath.Canonical(filepath.Dir(at)), filepath.Base(at))
 	if insideOf(rootReal, linkAt) && !insideOf(rootReal, end) {
 		return "", errs.New(errs.Refused, "refusing to write "+path+": it is a symbolic link to "+end+", outside the repository").
 			WithHint("remove the link (lore writes a plain " + filepath.Base(path) + "), or point it at a file inside the repository")

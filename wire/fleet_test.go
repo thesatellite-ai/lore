@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // TestFixRepoWalkCountsReposWithoutLoreData (K-10): the folder walk
@@ -41,12 +42,12 @@ func TestFixRepoWalkCountsReposWithoutLoreData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{resolvedPath(empty), resolvedPath(plain)}
+	want := []string{fspath.Canonical(empty), fspath.Canonical(plain)}
 	slices.Sort(want)
 	if !slices.Equal(got.NoLore, want) {
 		t.Fatalf("repos without lore data %v, want %v", got.NoLore, want)
 	}
-	if !slices.Equal(got.Roots, []string{resolvedPath(withLore)}) {
+	if !slices.Equal(got.Roots, []string{fspath.Canonical(withLore)}) {
 		t.Fatalf("roots %v", got.Roots)
 	}
 }

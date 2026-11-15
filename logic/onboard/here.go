@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // HereState is the closed set of answers about the current folder.
@@ -221,7 +223,7 @@ func folderGlob(root, home string) string {
 		return ""
 	}
 	if home != "" {
-		if rel, err := filepath.Rel(home, root); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if rel, inside := fspath.Rel(home, root); inside {
 			if rel == "." {
 				return "~/**"
 			}

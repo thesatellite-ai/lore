@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
@@ -63,7 +64,10 @@ func (a *App) UseClone(ctx context.Context, in opsstores.UseIn) (opsstores.UseOu
 	}
 	home := a.opts.Home
 	key := gitbackend.CloneKey(r, e.Branch)
-	out := opsstores.UseOut{Store: e.Name, URL: e.URL, Branch: e.Branch, Path: top, Own: true}
+	// top is canonical (stored and compared that way); the answer names it
+	// in the person's own spelling of --path (devco D-413: macOS /var)
+	shown := fspath.InTyped(in.Path, top)
+	out := opsstores.UseOut{Store: e.Name, URL: e.URL, Branch: e.Branch, Path: shown, Own: true}
 	prev, prevOwn, err := gitbackend.CloneDirFor(home, r, e.Branch)
 	if err != nil {
 		return opsstores.UseOut{}, err
@@ -73,16 +77,16 @@ func (a *App) UseClone(ctx context.Context, in opsstores.UseIn) (opsstores.UseOu
 	if err != nil {
 		return opsstores.UseOut{}, err
 	}
-	if sameFolder(top, def) || (!prevOwn && sameFolder(top, prev)) {
+	if fspath.Same(top, def) || (!prevOwn && fspath.Same(top, prev)) {
 		// lore's own clone: nothing to record (a stale own record goes)
 		out.Own, out.Path = false, prev
 		if prevOwn {
-			out.Changed, out.Path = true, top
+			out.Changed, out.Path = true, shown
 			return out, gitbackend.ForgetCloneRecord(home, key)
 		}
 		return out, nil
 	}
-	if prevOwn && sameFolder(top, prev) {
+	if prevOwn && fspath.Same(top, prev) {
 		return out, nil
 	}
 	if !prevOwn && isDirPath(filepath.Join(prev, ".git")) {

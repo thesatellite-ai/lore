@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // MaxStoreFolders bounds how many folders one FolderStores call walks
@@ -91,7 +93,7 @@ func FolderStores(ctx context.Context, s StoreScan) StoreScanResult {
 // inside reports whether p is one of bases or below one.
 func inside(p string, bases []string) bool {
 	for _, b := range bases {
-		if p == b || strings.HasPrefix(p, strings.TrimSuffix(b, string(filepath.Separator))+string(filepath.Separator)) {
+		if fspath.Within(p, b) {
 			return true
 		}
 	}

@@ -30,13 +30,18 @@ import (
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/store"
 )
 
 // storeCheckout is the store a command runs inside.
 type storeCheckout struct {
-	// top is the store's top folder (lore-store.yaml there).
+	// top is the store's top folder (lore-store.yaml there), canonical:
+	// stored and compared that way (model/fspath, devco D-413).
 	top string
+	// shown is top in the spelling of the folder the command ran in (on
+	// macOS /var stays /var, never /private/var): what messages name.
+	shown string
 	// folder is the store folder the command runs in (rowfs.FolderRoot at
 	// the top or outside every folder).
 	folder string
@@ -50,7 +55,7 @@ func storeHere(dir string) (storeCheckout, bool) {
 	if !ok {
 		return storeCheckout{}, false
 	}
-	return storeCheckout{top: top, folder: rowfs.StoreFolderAt(top, dir), isGit: isGit}, true
+	return storeCheckout{top: top, shown: fspath.InTyped(dir, top), folder: rowfs.StoreFolderAt(top, dir), isGit: isGit}, true
 }
 
 // inStore reports whether dir is inside a store's checkout.
@@ -61,7 +66,7 @@ func inStore(dir string) bool {
 
 // errInStore refuses a command that needs a code repo inside a store.
 func errInStore(sc storeCheckout) error {
-	return errs.New(errs.NotAStore, "wire: "+sc.top+" is a lore store ("+rowfs.MarkerFile+" at its top), not a code repo; this command needs a code repo").
+	return errs.New(errs.NotAStore, "wire: "+sc.shown+" is a lore store ("+rowfs.MarkerFile+" at its top), not a code repo; this command needs a code repo").
 		WithHint("run it in a code repo; inside a store folder lore reads and writes that folder (`lore task list`, `lore task add …`)")
 }
 
@@ -78,27 +83,27 @@ func storeHereEntry(home string, sc storeCheckout) (attach.Store, error) {
 	name := filepath.Base(sc.top)
 	if !sc.isGit {
 		one.URL = fileuri.URL(sc.top, "")
-		if p := personalFolderOf(home); p != "" && sameFolder(p, sc.top) {
+		if p := personalFolderOf(home); p != "" && fspath.Same(p, sc.top) {
 			name = attach.ReservedMe
 		}
 	} else {
 		origin := gitbackend.OriginAt(sc.top)
 		r, err := gitbackend.RemoteOfRaw(origin)
 		if err != nil {
-			return attach.Store{}, errs.New(errs.NotAStore, "wire: "+sc.top+" is a store clone whose origin is not a store url lore can read").
-				WithHint("point its origin at the store (`git -C " + sc.top + " remote set-url origin <store url>`), or run lore in a code repo")
+			return attach.Store{}, errs.New(errs.NotAStore, "wire: "+sc.shown+" is a store clone whose origin is not a store url lore can read").
+				WithHint("point its origin at the store (`git -C " + sc.shown + " remote set-url origin <store url>`), or run lore in a code repo")
 		}
 		one.URL = origin
 		used, _, err := gitbackend.CloneDirFor(home, r, "")
 		if err != nil {
 			return attach.Store{}, err
 		}
-		if !sameFolder(used, sc.top) {
+		if !fspath.Same(used, sc.top) {
 			branch := headBranch(sc.top)
 			pinned, _, perr := gitbackend.CloneDirFor(home, r, branch)
-			if perr != nil || branch == "" || !sameFolder(pinned, sc.top) {
-				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.top+" is a clone of store "+repourl.ShownStore(r.Norm)+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
-					WithHint("make lore use this clone: lore store use --path " + sc.top + " (or work in " + used + ")")
+			if perr != nil || branch == "" || !fspath.Same(pinned, sc.top) {
+				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.shown+" is a clone of store "+repourl.ShownStore(r.Norm)+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
+					WithHint("make lore use this clone: lore store use --path " + sc.shown + " (or work in " + used + ")")
 			}
 			one.Branch = branch
 		}
@@ -127,16 +132,6 @@ func headBranch(dir string) string {
 		return ""
 	}
 	return br
-}
-
-// sameFolder reports whether a and b name one folder (symlinks resolved).
-func sameFolder(a, b string) bool {
-	ra, ea := filepath.EvalSymlinks(a)
-	rb, eb := filepath.EvalSymlinks(b)
-	if ea != nil || eb != nil {
-		return filepath.Clean(a) == filepath.Clean(b)
-	}
-	return ra == rb
 }
 
 // sameStoreURL reports whether two git urls name one store (host/path).

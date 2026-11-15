@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -221,7 +222,7 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		if err = folder.Init(dir, m, a.opts.rowfsOptions()...); err != nil {
 			return rowfs.Marker{}, false, err
 		}
-		if sameFolder(dir, personalFolderDir(a.opts.Home)) {
+		if fspath.Same(dir, personalFolderDir(a.opts.Home)) {
 			// N-13: the personal folder is the one a person may later put in git by hand
 			err = folder.IgnoreState(dir)
 		}

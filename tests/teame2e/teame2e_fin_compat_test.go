@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/model/fspath"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 	"github.com/thesatellite-ai/lore/tests/tmpworld"
 )
@@ -90,7 +91,11 @@ func buildOldLore() (string, error) {
 		return "", err
 	}
 	oldBinDir = dir
-	src := filepath.Join(dir, "src")
+	// canonical (devco D-413, M-12): go build compares GOWORK with the
+	// folder it runs in, which it reads resolved; under a linked temp
+	// folder (macOS /var -> /private/var) the two spellings differed and
+	// go refused the build ("not one of the workspace modules")
+	src := filepath.Join(fspath.Canonical(dir), "src")
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		return "", err
 	}
