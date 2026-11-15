@@ -3,8 +3,10 @@ package git
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -60,12 +62,24 @@ var hlcActor = func() ids.ID[ids.Actor] {
 	return id
 }()
 
+// rowHLCTime is the wall time of every hand-made test row's clock
+// (rowJSON); rowJSONAt takes another.
+const rowHLCTime = "2026-01-01T00:00:00.000Z"
+
 // rowJSON is a minimal row file of table with id and fields (raw JSON values).
 func rowJSON(table string, id ids.AnyID, fields map[string]string) string {
+	return rowJSONAt(table, id, rowHLCTime, fields)
+}
+
+// rowJSONAt is rowJSON with the clock's wall time at. Fields are written
+// in sorted order: the same row is the same bytes on every run (devco
+// D-334: map order made two writes of one row differ only sometimes, and
+// a test's later commit of the same content then had nothing to commit).
+func rowJSONAt(table string, id ids.AnyID, at string, fields map[string]string) string {
 	var b strings.Builder
-	b.WriteString(`{"_table":"` + table + `","_v":2,"_hlc":"2026-01-01T00:00:00.000Z/0000/` + hlcActor.String() + `","id":"` + id.String() + `"`)
-	for k, v := range fields {
-		b.WriteString(`,"` + k + `":` + v)
+	b.WriteString(`{"_table":"` + table + `","_v":2,"_hlc":"` + at + `/0000/` + hlcActor.String() + `","id":"` + id.String() + `"`)
+	for _, k := range slices.Sorted(maps.Keys(fields)) {
+		b.WriteString(`,"` + k + `":` + fields[k])
 	}
 	b.WriteString("}\n")
 	return b.String()
@@ -96,11 +110,17 @@ func (p person) actorRow() string {
 }
 
 func (p person) periodRow(role, ended string) string {
+	return p.periodRowAt(rowHLCTime, role, ended)
+}
+
+// periodRowAt is periodRow written at the clock's wall time at (a later
+// write of the same stint, as lore stamps every write).
+func (p person) periodRowAt(at, role, ended string) string {
 	f := map[string]string{"actor_id": `"` + p.actor.String() + `"`, "type": `"employee"`, "started_on": `"2026-01-01"`, "org_role": `"` + role + `"`}
 	if ended != "" {
 		f["ended_on"] = `"` + ended + `"`
 	}
-	return rowJSON("actor_periods", p.period, f)
+	return rowJSONAt("actor_periods", p.period, at, f)
 }
 
 func newPerson(t *testing.T, email string) person {
@@ -190,8 +210,8 @@ func TestRosterChangeByMemberIsHeldOnRead(t *testing.T) {
 			t.Errorf("held change %+v does not name the author, commit and cause", hc)
 		}
 	}
-	// an admin makes the change: accepted, the hold ends
-	h.commit(boss.email, map[string]string{orgPath("actor_periods", carol.period): carol.periodRow("member", "2026-02-01")})
+	// an admin makes the change (a later write, so its own clock): accepted, the hold ends
+	h.commit(boss.email, map[string]string{orgPath("actor_periods", carol.period): carol.periodRowAt("2026-02-01T00:00:00.000Z", "member", "2026-02-01")})
 	syncOK(t, b)
 	if ended, _ := readField(t, b, carol.period, "ended_on"); ended != "2026-02-01" {
 		t.Errorf("the admin's offboard of carol read as %q", ended)
