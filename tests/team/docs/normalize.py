@@ -58,10 +58,43 @@ TRACE_TIME = re.compile(r"(?m)^(trace: .* \()[0-9.]+(?:ns|µs|ms|s|m[0-9.]+s)(, 
 # folder, so main() fails when one survives.
 HOME_PATH = re.compile(r"(?<![\w.~])/(?:home|Users)(?=/)/[A-Za-z0-9._-]+")
 LOCAL_PATH = re.compile(r"/(?:home|Users|Volumes|space)(?=/)")
+# Output lore orders by row id: the plan and tasklist list lines ("<id>  <title> [<status>]
+# (<n> tasks)", ops/internal/work ListLine; work.ListAll sorts by id) and the ids of a
+# ride-along landing commit (`lore: added "lore: land N rows (…)" to main (<ids>)`, sorted by
+# path, so by kind, then id). The ids are random per run, and the default tasklist's id is a
+# hash of the (random) project id while other ids start with their creation time, so the
+# default list sorted first in a few runs out of hundreds and last in the rest (devco:D-412).
+# Lore's order is the same for the same rows; only the ids differ. After the stand-ins are in,
+# such a run of lines (or such an id list) is sorted by its stand-in ids again, so the page
+# shows lore's real rule (by id) on the ids it prints.
+ID_LIST_LINE = re.compile(r"^(?:tlt|pln)_[0-9a-f]{32}\s.*\(\d+ tasks?\)")
+RIDE_IDS = re.compile(r'(?m)^(.*added "lore: land [^"]*" to \S+ \()([^)]*)(\))$')
 
 
 def stand_in(kind: str, n: int, length: int) -> str:
     return hashlib.sha256(f"{kind}:{n}".encode()).hexdigest()[:length]
+
+
+def sort_by_id(text: str) -> str:
+    """Re-sort, by stand-in id, the output lore orders by id (ID_LIST_LINE runs, RIDE_IDS)."""
+    out, run = [], []
+    for line in text.split("\n") + [None]:
+        if line is not None and ID_LIST_LINE.match(line):
+            run.append(line)
+            continue
+        out.extend(sorted(run))
+        run.clear()
+        if line is not None:
+            out.append(line)
+
+    def ride(m: re.Match) -> str:
+        # Keep the kinds in the order lore printed them (by folder); ids sorted within a kind.
+        kinds: dict[str, list[str]] = {}
+        for i in m.group(2).split(", "):
+            kinds.setdefault(i.split("_", 1)[0], []).append(i)
+        return m.group(1) + ", ".join(i for ids in kinds.values() for i in sorted(ids)) + m.group(3)
+
+    return RIDE_IDS.sub(ride, "\n".join(out))
 
 
 def sort_ties(lines: list[str]) -> list[str]:
@@ -141,6 +174,7 @@ def main(path: str) -> None:
     full_prefix = {m.group("rowhex"): m.group("row") for m in TOKEN.finditer(text) if m.group("row")}
     text = TOKEN.sub(lambda m: repl(m), "\n".join(sort_ties(text.split("\n"))))
     text = SHORT_ID.sub(lambda m: short_repl(m), text)
+    text = sort_by_id(text)
     times: dict[str, str] = {}
     text = NANOTIME.sub(lambda m: times.setdefault(m.group(0), f"2026-11-02T10:00:00.{len(times) + 1:09d}Z"), text)
     text = BACKUP.sub("20261102-100000.000000000-pre-sync", text)
