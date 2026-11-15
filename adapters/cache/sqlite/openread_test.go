@@ -6,11 +6,13 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // openBesideWriterWait bounds TestOpenCurrentCacheTakesNoWriteLock's open
 // beside a held write lock (see the comment at its use).
-const openBesideWriterWait = 2 * time.Minute
+var openBesideWriterWait = testtime.Scale(2 * time.Minute)
 
 // TestOpenCurrentCacheTakesNoWriteLock (devco:D-159): opening a cache that
 // is already current needs no write lock, so a lore process opens it while

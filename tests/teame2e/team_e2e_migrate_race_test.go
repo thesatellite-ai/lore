@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -245,7 +246,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 			continue
 		}
 		// Locked out: once the winner released, a rerun completes (7.8).
-		deadline := time.Now().Add(30 * time.Second)
+		deadline := time.Now().Add(testtime.Scale(30 * time.Second))
 		for {
 			rr := clones[i].Lore("migrate", "run", "--team-lock")
 			if raceOutcome(t, rr) == "ok" {

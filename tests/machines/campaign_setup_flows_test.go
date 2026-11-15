@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // TestCampaignSetup_MachineProfiles: a label needs an own store (an empty
@@ -270,7 +272,7 @@ func TestCampaignSetup_PageCommands(t *testing.T) {
 			var url string
 			select {
 			case url = <-found:
-			case <-time.After(30 * time.Second):
+			case <-time.After(testtime.Scale(30 * time.Second)):
 			}
 			if url == "" {
 				cancel()

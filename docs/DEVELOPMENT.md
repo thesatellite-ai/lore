@@ -85,6 +85,16 @@ Measured on a 48-core Linux machine: the quick tier takes about 48 s with an emp
 
 The quick tier stays fast only while no unit package is slow: a package that takes minutes is a test-design bug, not a reason to drop it from the tier: time it with `go test -json`, then make it fast without weakening it (independent tests `t.Parallel()` with their own temp dirs, fixtures and binaries built once per package, events or short deadline polls instead of sleeps). The end-to-end suites are behind build tags (`userscen`, `teame2e`, `setupe2e`, `machines`, `journeys`) or are shell/node runners, so `go test ./...` never starts them.
 
+## Test time limits
+
+Every limit on how long a whole run may take was tuned on the 48-core Linux gate server; a 10-core Mac runs each step 3-5x slower, and the steps died at their 15/20/40/60 minute limits with nothing wrong. One factor stretches all of them: `LORE_TEST_TIME_SCALE` when set (a number >= 1, for example `LORE_TEST_TIME_SCALE=4 task check`), else computed from the machine as `max(1, 48 / cores)` capped at 6, times 1.5 on macOS. It is 1 on the gate server, so the limits there are unchanged; a 10-core Mac gets 7.2, a 24-core Linux machine 2. A value that is not a number >= 1 is refused, never ignored.
+
+What scales: every `go test -timeout` in the Taskfiles (the gate steps call those tasks; a `go test` that named none got Go's fixed 10 minutes and now names it), written `-timeout $({{.TEST_TIME}} 40m)` (`tests/lib/testtime.sh`, which prints the scaled limit); the harness waits for a slow process or a whole run in `tests/*` and in unit tests (a lore run's deadline in teamharness, the machines and setupe2e run and page deadlines, "printed no link/listening line" waits, deadlock and hang guards), through `testtime.Scale(d)` (`internal/testtime`); and the shell runners' waits (`testtime_secs` in the docs runners, the chaos and scenario scripts). `TEAMHARNESS_CMD_TIMEOUT` and `ANSWER_TIMEOUT`, when set, are used as given.
+
+What does not scale: a timeout that is the behaviour under test (lock waits, fetch and probe timeouts, back-off, TTLs and leases, a server's shutdown timeout, a "did not finish in 700ms" stop), product speed bars ("doctor --all within its budget", "adopting 5,000 rows under a minute", the p95 of agent commands) and git-run counts. Scaling those would hide the very failure they test.
+
+Guards (`internal/testtime`): the factor is 1 on a 48-core Linux machine and is applied to a sample deadline, the shell helper computes the same factor as the Go one, and no Taskfile or test script passes a raw `-timeout` or `timeout N` or runs `go test` without a `-timeout`.
+
 ## Journeys: every feature adds its steps
 
 A feature that changes what a person does over time (a new command, a new kind of store, a new sync mode, a new refusal, a new setup step) adds, in the same change, the journey steps where a real person would meet it, in the persona who would (`tests/journeys/<persona>_test.go`). A rule that must hold everywhere becomes a shared invariant instead. How: [tests/journeys/README.md](../tests/journeys/README.md).

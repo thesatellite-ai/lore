@@ -16,6 +16,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -88,7 +89,7 @@ func aliasWorld(t *testing.T) (setupProber, string) {
 
 // aliasAnswerGuard bounds waitAliasAnswers: far past any probe's own time
 // limit, so it only ends a test whose background probe never reports.
-const aliasAnswerGuard = 2 * time.Minute
+var aliasAnswerGuard = testtime.Scale(2 * time.Minute)
 
 // waitAliasAnswers returns once the alias cache holds an answer for every
 // alias in names (the background sweep a check started), failing with

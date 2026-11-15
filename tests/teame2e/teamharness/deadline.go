@@ -15,24 +15,29 @@ import (
 	"os/exec"
 	"sync/atomic"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // CmdTimeout is how long one lore run may take before it is stopped with
 // a goroutine dump. Generous: a loaded gate machine makes a normal run
-// several times slower; only a hang should reach it.
+// several times slower; only a hang should reach it. It is the limit on
+// the 48-core gate server: cmdTimeout stretches it by the machine factor
+// (internal/testtime).
 const CmdTimeout = 5 * time.Minute
 
 // cmdKillGrace is how long a process that got SIGQUIT has to print its
-// goroutines and exit before it is killed.
-const cmdKillGrace = 10 * time.Second
+// goroutines and exit before it is killed (times the machine factor: a
+// slow machine prints the dump slower too).
+var cmdKillGrace = testtime.Scale(10 * time.Second)
 
-// cmdTimeout is CmdTimeout, or TEAMHARNESS_CMD_TIMEOUT (a Go duration)
-// when set and valid.
+// cmdTimeout is CmdTimeout times the machine factor, or
+// TEAMHARNESS_CMD_TIMEOUT (a Go duration, used as given) when set and valid.
 func cmdTimeout() time.Duration {
 	if d, err := time.ParseDuration(os.Getenv("TEAMHARNESS_CMD_TIMEOUT")); err == nil && d > 0 {
 		return d
 	}
-	return CmdTimeout
+	return testtime.Scale(CmdTimeout)
 }
 
 // runWithDeadline runs cmd; past d it sends the dump signal (quitProcess)

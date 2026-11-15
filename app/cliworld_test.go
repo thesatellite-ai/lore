@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
@@ -268,7 +269,7 @@ func (w *cliWorld) loreWithin(t *testing.T, dir string, d time.Duration, args ..
 // fails at once with the command named and the child killed, instead of
 // holding the package until go test's 10-minute alarm and leaving the
 // child running after it (seen 2026-11-08: `move --yes` deadlocked).
-const cliRunDeadline = 3 * time.Minute
+var cliRunDeadline = testtime.Scale(3 * time.Minute)
 
 // loreRun starts this test binary as lore in dir (envCLIChild set) and
 // waits for it; deadline 0 is cliRunDeadline.

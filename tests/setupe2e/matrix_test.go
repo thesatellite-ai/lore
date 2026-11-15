@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 func TestAPIMatrix(t *testing.T) {
@@ -51,7 +53,7 @@ const teamPushCase = "team-push-batch"
 // the team store's lore-store.yaml (on the fake GitHub) says push batch,
 // in one settings commit made after the team was created.
 func runTeamPush(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), testtime.Scale(5*time.Minute))
 	defer cancel()
 	s := Shape{GHAccounts: 1, GHActive: ActiveFirst, SSH: SSHSeveral, Keys: KeysWithPub, LoreHome: HomeEmpty, Start: StartPlain, Push: PushBatch}
 	w, err := Build(ctx, t.TempDir(), s, loreBin)
@@ -92,7 +94,7 @@ func runTeamPush(t *testing.T) {
 }
 
 func runAPIShape(t *testing.T, s Shape) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), testtime.Scale(5*time.Minute))
 	defer cancel()
 	w, err := Build(ctx, t.TempDir(), s, loreBin)
 	if err != nil {

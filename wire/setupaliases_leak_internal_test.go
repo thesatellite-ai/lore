@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
 
@@ -41,7 +42,7 @@ func TestKeyMatchesBackgroundProbesEndWithApp(t *testing.T) {
 	}
 	// github-slow (sleeps 10 s) is still probing in the background: wait
 	// until its ssh has started, so Close has something to end.
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(testtime.Scale(5 * time.Second))
 	for sshCalls(t, home, "github-slow") == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("github-slow was never probed")

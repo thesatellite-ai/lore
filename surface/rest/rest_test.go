@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -517,7 +518,7 @@ func TestServeShutdownWithFreshConnection(t *testing.T) {
 		}
 	})
 	// Give the server time to accept all three (they enter StateNew).
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(testtime.Scale(2 * time.Second))
 	for time.Now().Before(deadline) {
 		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+ln.Addr().String()+"/v1/memories", nil)
 		if resp, err := http.DefaultClient.Do(req); err == nil {

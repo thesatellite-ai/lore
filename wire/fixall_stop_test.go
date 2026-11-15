@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/execfile"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // fakeFixChild writes a shell script standing in for a `lore fix --all`
@@ -66,7 +67,7 @@ func TestFixAllStopReleasesChildLock(t *testing.T) {
 				t.Fatal(err)
 			}
 			helper, _ := strconv.Atoi(strings.TrimSpace(string(b)))
-			deadline := time.Now().Add(2 * time.Second)
+			deadline := time.Now().Add(testtime.Scale(2 * time.Second))
 			for processAlive(helper) && time.Now().Before(deadline) {
 				time.Sleep(20 * time.Millisecond)
 			}

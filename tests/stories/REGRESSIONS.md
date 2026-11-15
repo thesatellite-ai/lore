@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1743 |
+| fixed | 1744 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -723,6 +723,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | bl:F7 | finding | restore --revert after a drop reverted an older landing instead of saying the restored copy was never landed | fixed | TestStoryBL13RestoreRevert | pkg adapters/backend/git |
 | bl:F6 | finding | the layer wrapper hid the audit journal and purge recording of the store clone: a purge in a linked folder was refused E_UNSUPPORTED (found by the journeys) | fixed | TestJourneyAgencyFirstWeeks, TestJourneyTeamLeadUndo | pkg wire |
 | bl:BL-24 | scenario | LORE_LAYER in any case, a decision shared at once with --no-layer, refusals naming only what works, honest sync counts, layer caches gone with their notes | fixed | TestStoryBL24ShareNowAndHonestCounts | story tests/stories (BL) |
+| devco:D-410 | finding | owner Mac (10 cores): test steps died at their 15/20/40/60 min go test -timeout and harness deadlines with nothing wrong; every limit was tuned on a 48-core Linux server | fixed | TestFactorFor, TestScaleBySampleDeadline, TestShellHelperAgrees, TestNoRawTimeoutInGateScripts, TestGuardSeesARawTimeout | pkg internal/testtime and tests/lib/testtime.sh: one factor LORE_TEST_TIME_SCALE (default max(1, 48/cores) capped at 6, x1.5 on macOS; 1 on the gate server) on every whole-run limit |
 
 ## lore-adoptfix
 

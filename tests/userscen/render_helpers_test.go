@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -164,7 +165,7 @@ func renderStartAPI(t *testing.T, c *th.Clone) *renderAPI {
 	var base string
 	select {
 	case base = <-found:
-	case <-time.After(30 * time.Second):
+	case <-time.After(testtime.Scale(30 * time.Second)):
 		t.Fatal("lore api did not print its listening line")
 	}
 	if !strings.HasPrefix(base, "http://") {

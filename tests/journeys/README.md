@@ -18,7 +18,7 @@ Run: `task lore:test:journeys` (all), `task lore:test:journeys:<persona>` (one),
 | `frame_test.go` | the harness's own tests: every action once, every invariant bites, `Pending` records |
 | `<persona>_test.go` | one persona's journey |
 
-A lore run that takes over 5 minutes (`TEAMHARNESS_CMD_TIMEOUT`, a Go duration, changes it) is stopped with SIGQUIT and the step fails naming the command, its folder and the goroutine dump of that lore (`tests/teame2e/teamharness/deadline.go`), so a hang under load names the command instead of only the test's own goroutines.
+A lore run that takes over 5 minutes times the machine factor (`LORE_TEST_TIME_SCALE`, docs/DEVELOPMENT.md "Test time limits"; `TEAMHARNESS_CMD_TIMEOUT`, a Go duration used as given, replaces it) is stopped with SIGQUIT and the step fails naming the command, its folder and the goroutine dump of that lore (`tests/teame2e/teamharness/deadline.go`), so a hang under load names the command instead of only the test's own goroutines.
 
 ## Add a persona
 
