@@ -362,6 +362,11 @@ const (
 	TrailerState      = "Lore-Layer-State"
 	TrailerLanded     = "Lore-Layer-Landed"
 	TrailerParent     = "Lore-Layer-Parent"
+	// TrailerRestored marks the commit `lore branch restore` adds on top of
+	// a layer brought back from the trash (devco V-8): lore sync never moves
+	// such a layer to the trash on its own; the next write drops the mark
+	// and the orphan clock starts from that write.
+	TrailerRestored = "Lore-Layer-Restored"
 	// layerVersion is TrailerLayer's value.
 	layerVersion = "1"
 )
@@ -381,6 +386,9 @@ type Facts struct {
 	// Parent is the code branch whose layer this one is stacked on (it
 	// started from that layer's tip); "" for a layer on the shared notes.
 	Parent string
+	// Restored is when a person brought the layer back from the trash, set
+	// only on that restore commit (TrailerRestored); zero otherwise.
+	Restored time.Time
 }
 
 // Trailers renders f as git trailer lines (one "Key: value" per line).
@@ -405,6 +413,9 @@ func (f Facts) Trailers() string {
 	line(TrailerState, string(f.State))
 	line(TrailerLanded, f.Landed)
 	line(TrailerParent, f.Parent)
+	if !f.Restored.IsZero() {
+		line(TrailerRestored, f.Restored.UTC().Format(time.RFC3339))
+	}
 	return b.String()
 }
 
@@ -449,6 +460,10 @@ func ParseFacts(message string) (Facts, bool) {
 			f.Landed = v
 		case TrailerParent:
 			f.Parent = v
+		case TrailerRestored:
+			if t, err := time.Parse(time.RFC3339, v); err == nil {
+				f.Restored = t
+			}
 		}
 	}
 	return f, seen

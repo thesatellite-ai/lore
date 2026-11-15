@@ -213,6 +213,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		break
 	}
 	b.markHeld(rep.Refused)
+	var layers LayerPushReport
 	if !rep.Offline && !o.NoPush && len(rep.Refused) == 0 {
 		// BRANCH_LAYERS 16: lore sync also sends this clone's branch
 		// layers (every folder of the store branch): one sync of a clone
@@ -221,13 +222,29 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		if lerr != nil {
 			return rep, lerr
 		}
+		layers = lr
 		rep.Offline = rep.Offline || lr.Offline
-		pushed = pushed || len(lr.Pushed) > 0
 		for _, r := range lr.Refused {
 			rep.Refused = append(rep.Refused, store.Refusal{Code: errs.Refused, Reason: "branch notes not pushed: " + r})
 		}
 	}
-	return b.count(ctx, rep, before, pushedOver, pushed)
+	// the store branch's own push is counted over the remote tip it went
+	// onto; a push of branch layers alone adds the rows those layers
+	// carried, never every row of the folder (devco:V-13: pushedOver stays
+	// "" when only layers moved, and count read that as a first push)
+	rep, err = b.count(ctx, rep, before, pushedOver, pushed)
+	if err != nil || len(layers.Pushed) == 0 {
+		return rep, err
+	}
+	rep.Pushed = true
+	for f, n := range layers.Rows {
+		if f == rep.Folder {
+			rep.Sent += n
+			continue
+		}
+		rep.Others = addFolderCount(rep.Others, f, store.FolderCount{Sent: n})
+	}
+	return rep, nil
 }
 
 // markHeld marks the refusals of rows in another folder of the store than

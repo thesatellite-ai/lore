@@ -168,7 +168,7 @@ func newTeamWorld(t *testing.T, caps ...th.Cap) *th.World {
 	w.RequireTestClock() // LORE_NOW is honoured only by -tags loretest builds
 	w.Require(caps...)
 	// The team suite tests live rows, claims and landings on every branch,
-	// as 0.1.18 shares them; branch layers (lore 0.1.19: a feature branch
+	// as 0.1.18 shares them; branch layers (lore 0.1.18: a feature branch
 	// keeps its new rows) are replayed by tests/stories BL-1..BL-15.
 	w.SetEnv("LORE_LAYER", "off")
 	if os.Getenv(envLockRanks) == "1" { // FORMAT_EVOLUTION 7.8 TestLockOrderRanks over the whole suite

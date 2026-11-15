@@ -35,7 +35,7 @@ type repoBranchCache struct {
 // the classification cannot be read).
 func (a *App) RepoBranchIsolated(ctx context.Context) bool {
 	a.repoBranch.once.Do(func() {
-		if os.Getenv(EnvLayer) == envLayerOff {
+		if envLayerIsOff() {
 			return
 		}
 		top := gitTopLevel(ctx, a.projectDir())

@@ -58,8 +58,12 @@ func (a *App) sweepLayers(ctx context.Context) []string {
 				lines = append(lines, "branch notes of "+e.Layer.Key.Branch+" not landed: "+lerr.Error())
 				continue
 			}
+			forgetLayerCache(a.opts.Home, lb, e.Layer.Key.Branch) // devco:V-17
 			lines = append(lines, "branches.auto_land: "+out.Text())
 		case opsbranch.StateOrphaned:
+			if !e.Layer.Facts.Restored.IsZero() {
+				continue // a person restored it: kept until written again or dropped (devco V-8)
+			}
 			last, terr := lb.gb.LayerTipTime(ctx, e.Layer)
 			if terr != nil || now.Sub(last) < time.Duration(days)*24*time.Hour {
 				continue
@@ -69,10 +73,20 @@ func (a *App) sweepLayers(ctx context.Context) []string {
 				lines = append(lines, "branch notes of "+e.Layer.Key.Branch+" not moved to the trash: "+derr.Error())
 				continue
 			}
-			lines = append(lines, "lore: "+e.Layer.Key.Branch+" was deleted without merging and its notes waited "+strconv.FormatInt(days, 10)+" days: moved them to the trash ("+trash+"); lore branch restore --branch "+e.Layer.Key.Branch+" brings them back")
+			forgetLayerCache(a.opts.Home, lb, e.Layer.Key.Branch) // devco:V-17
+			lines = append(lines, orphanTrashedLine(e.Layer.Key.Branch, trash, int64(now.Sub(last)/(24*time.Hour)), days))
 		}
 	}
 	return lines
+}
+
+// orphanTrashedLine is the sweep's line for notes of a deleted branch it
+// moved to the trash: how long ago they were last written (not the
+// policy's number, devco V-8) and how to bring them back.
+func orphanTrashedLine(branch, trash string, ago, days int64) string {
+	return "lore: " + branch + " was deleted without merging and its notes were last written " + strconv.FormatInt(ago, 10) +
+		" days ago (branches.orphan_days is " + strconv.FormatInt(days, 10) + "): moved them to the trash (" + trash +
+		"); lore branch restore --branch " + branch + " brings them back"
 }
 
 // syncWasOffline reports whether any store of the sync could not reach

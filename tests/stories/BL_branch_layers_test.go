@@ -346,7 +346,7 @@ func TestStoryBL6SameRowBothSides(t *testing.T) {
 
 // TestStoryBL7WorktreesDetachedReuse (BL-7): two worktrees (two agents in
 // parallel) keep two layers; a detached HEAD refuses a store write with
-// E_DETACHED unless --no-layer; a reused branch name with an older layer
+// E_DETACHED (naming LORE_LAYER=off) unless --no-layer; a reused branch name with an older layer
 // is refused with E_LAYER_STALE; promote shares one row at once.
 func TestStoryBL7WorktreesDetachedReuse(t *testing.T) {
 	s := New(t, "BL")
@@ -369,7 +369,8 @@ func TestStoryBL7WorktreesDetachedReuse(t *testing.T) {
 	})
 	s.Step("day1/detached-head", func() {
 		w.aapp.Git("switch", "-q", "--detach", "HEAD")
-		w.admin.LoreIn(w.aapp, "memory", "add", "--body", "bisect finding").Refused(t, "E_DETACHED", "--no-layer")
+		// the hint names LORE_LAYER=off, which every command takes (devco:V-10)
+		w.admin.LoreIn(w.aapp, "memory", "add", "--body", "bisect finding").Refused(t, "E_DETACHED", "LORE_LAYER=off")
 		w.admin.LoreIn(w.aapp, "memory", "add", "--body", "bisect finding", "--no-layer").OK(t)
 		w.admin.LoreIn(w.aapp, "task", "list").OK(t).Never(t, "agent a work")
 		w.aapp.Git("switch", "-q", "main")
@@ -395,8 +396,8 @@ func TestStoryBL7WorktreesDetachedReuse(t *testing.T) {
 
 // TestStoryBL8StandingRules (BL-8): a write never pushes; the client repo
 // stays byte-identical; the first layer declares branch_layers (lore
-// 0.1.19) in the folder's _meta.json on the store's main so a 0.1.18 lore
-// refuses to write there; a fake secret on a branch is refused and never
+// 0.1.18, the release that ships them: devco:V-1) in the folder's
+// _meta.json on the store's main so an older lore refuses to write there; a fake secret on a branch is refused and never
 // printed; LORE_LAYER=off writes to the shared notes.
 func TestStoryBL8StandingRules(t *testing.T) {
 	s := New(t, "BL")
@@ -417,8 +418,13 @@ func TestStoryBL8StandingRules(t *testing.T) {
 		s.Untouched(t, w.aapp.Dir, tree, "branch writes")
 		w.admin.LoreIn(w.aapp, "sync").OK(t)
 		meta, ok := w.notes.Read("refs/heads/main", blFolder+"/_meta.json")
-		if !ok || !strings.Contains(meta, "branch_layers") || !strings.Contains(meta, "0.1.19") {
-			t.Fatalf("the folder does not declare branch_layers for lore 0.1.19: %q", meta)
+		if !ok || !strings.Contains(meta, "branch_layers") || !strings.Contains(meta, `"0.1.18"`) || strings.Contains(meta, "0.1.19") {
+			t.Fatalf("the folder does not declare branch_layers for lore 0.1.18: %q", meta)
+		}
+		for _, msg := range w.notes.Log("refs/heads/main") {
+			if strings.Contains(msg, "uses branch layers") && !strings.Contains(msg, "needs lore 0.1.18 or later") {
+				t.Fatalf("the declaration commit names another release: %q", msg)
+			}
 		}
 		// LORE_LAYER=off for one shell writes to the shared notes
 		w.aapp.With("LORE_LAYER=off").Lore("memory", "add", "--body", "shared on purpose").OK(t).Never(t, "feat/rules notes")

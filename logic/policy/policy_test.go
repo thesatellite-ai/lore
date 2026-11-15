@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -112,7 +113,6 @@ func TestResolveStricterWins(t *testing.T) {
 
 func TestResolveFailsClosed(t *testing.T) {
 	cases := map[string]Entry{
-		"unknown key":   {Level: LevelRepo, Key: "secrets.whatever", Value: txt("x"), Source: src(1)},
 		"bad choice":    {Level: LevelRepo, Key: KeyOnDetect, Value: txt("ignore"), Source: src(1)},
 		"bad kind":      {Level: LevelRepo, Key: KeyMetaMaxBytes, Value: txt("big"), Source: src(1)},
 		"over ceiling":  {Level: LevelRepo, Key: KeyTasksMaxDepth, Value: value.Int(9), Source: src(1)},
@@ -124,6 +124,37 @@ func TestResolveFailsClosed(t *testing.T) {
 		_, err := Resolve([]Entry{e})
 		if !errs.Has(err, errs.ConfigInvalid) || !strings.Contains(err.Error(), src(1).String()) {
 			t.Errorf("%s: err = %v, want E_CONFIG_INVALID naming the row", name, err)
+		}
+	}
+}
+
+// TestResolveIgnoresUnknownKey (devco:V-16): a key a newer lore wrote
+// (branches.isolated before this build knew branch layers) is ignored and
+// listed, never E_CONFIG_INVALID on every read and write; the known keys
+// beside it still resolve.
+func TestResolveIgnoresUnknownKey(t *testing.T) {
+	newer := Entry{Level: LevelRepo, Key: "branches.from_the_future", Value: txt("x"), Source: src(1)}
+	known := Entry{Level: LevelRepo, Key: KeyOnDetect, Value: txt("refuse"), Source: src(2)}
+	s, err := Resolve([]Entry{newer, known})
+	if err != nil {
+		t.Fatalf("an unknown key failed the resolve: %v", err)
+	}
+	if u := s.Unknown(); len(u) != 1 || u[0].Key != newer.Key || u[0].Source != newer.Source {
+		t.Fatalf("unknown = %+v", u)
+	}
+	if s.OnDetect() != OnDetectRefuse {
+		t.Fatalf("the known key beside it did not resolve: %s", s.OnDetect())
+	}
+	if _, set := s.Get(newer.Key); set {
+		t.Fatal("the unknown key resolved to a value")
+	}
+	// a namespace that guards writes fails closed, naming the key and the
+	// upgrade (a newer lore's stricter rule must not be skipped)
+	for _, k := range []Key{"agents.from_the_future", "secrets.from_the_future", "delete.from_the_future"} {
+		_, err := Resolve([]Entry{{Level: LevelRepo, Key: k, Value: txt("x"), Source: src(1)}})
+		var e *errs.Error
+		if !errors.As(err, &e) || e.Code != errs.ConfigInvalid || !strings.Contains(e.Message, string(k)) || !strings.Contains(e.Hint, "lore upgrade") {
+			t.Errorf("%s: %v, want E_CONFIG_INVALID naming it and lore upgrade", k, err)
 		}
 	}
 }

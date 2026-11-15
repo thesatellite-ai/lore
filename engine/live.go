@@ -17,16 +17,15 @@ import (
 type LiveFlags struct {
 	Live   bool `json:"live,omitempty" flag:"live" desc:"share this row with everyone at once on the live ref (refs/lore/live)"`
 	NoLive bool `json:"no_live,omitempty" flag:"no-live" desc:"keep this row with the code (this branch's .lore/data)"`
-	// NoLayer writes to the shared notes on a code branch that keeps its
-	// own notes in a store (BRANCH_LAYERS 13).
-	NoLayer bool `json:"no_layer,omitempty" flag:"no-layer" desc:"on a code branch with its own notes (a branch layer), write this row to the shared notes instead"`
+	// --no-layer moved to MetaFlags (devco:V-5): every add and edit takes
+	// it, not only task|rule|memory; bindInputLive still reads it.
 }
 
 // Input field names of LiveFlags.
 const (
 	inputLive   = "live"
 	inputNoLive = "no_live"
-	// inputNoLayer is LiveFlags.NoLayer's input name.
+	// inputNoLayer is MetaFlags.NoLayer's input name.
 	inputNoLayer = "no_layer"
 )
 

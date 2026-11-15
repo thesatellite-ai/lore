@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -128,7 +129,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	remote := ""
 	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) && !settingUpHere(ctx, repo.Dir()) {
 		if remote = opts.RepoLinkedByRemote(ctx); remote != "" {
-			repo.MarkReadOnlyBecause(clientRepoWriteRefusal(remote, orgAliases(ctx, opts, repo.Dir())[attach.ReservedTeam]))
+			// devco:V-3: an own repo linked to a store folder is not called a
+			// client repo (repoIsClient fails closed: an unknown answer keeps
+			// the client wording)
+			client, _ := repoIsClient(ctx, opts)
+			repo.MarkReadOnlyBecause(clientRepoWriteRefusal(remote, orgAliases(ctx, opts, repo.Dir())[attach.ReservedTeam], !client))
 		}
 	}
 	st.linkedByRemote = remote
@@ -343,6 +348,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		}
 	}
 	engOpts = append(engOpts, engine.WithMachinePolicy(machinePol))
+	if opts.Notice != nil && !repoOnly {
+		engOpts = append(engOpts, engine.WithNotice(opts.Notice)) // devco:V-16: a newer lore's policy key is a note, not an error
+	}
 	// P3-LOCAL-2: this machine's machine store, when a table needs it.
 	if engOpts, err = st.withMachine(ctx, opts.Home, reg, exp, engOpts); err != nil {
 		return fail(err)
@@ -855,15 +863,50 @@ func storeMergeReport(u *url.URL, notice func(string)) func(merge.Result) {
 			return
 		}
 		at := storeMergeReportPrefix + where + ": " + string(res.Row.Table) + "/" + res.Row.ID.String() + ": "
-		if len(res.NewerWins) > 0 {
+		if len(res.NewerWins) > 0 || len(res.Replaced) > 0 {
 			// TE-F-2: a field both sides changed is settled newer-wins;
-			// the teammate's older value never vanishes silently.
-			notice(at + "both sides changed " + strings.Join(res.NewerWins, ", ") + "; kept the newer edit")
+			// the teammate's older value never vanishes silently. A text
+			// settled that way (two copies of a branch layer, devco V-12)
+			// names the value it replaced, as the live rows do (D-219).
+			notice(at + replacedLine(res))
 		}
 		if res.Trash != "" {
 			notice(at + string(res.Trash))
 		}
 	}
+}
+
+// maxReplacedText bounds one replaced value in a merge notice.
+const maxReplacedText = 80
+
+// replacedLine is "both sides changed priority, title; kept the newer
+// edit (replaced title \"old\")": every field settled newer-wins, and the
+// older value of each text it replaced.
+func replacedLine(res merge.Result) string {
+	fields := slices.Clone(res.NewerWins)
+	var replaced []string
+	for _, r := range res.Replaced {
+		if !slices.Contains(fields, r.Field) {
+			fields = append(fields, r.Field)
+		}
+		if slices.Contains(res.NewerWins, r.Field) {
+			continue // not a text: the field name says enough
+		}
+		old := "(none)"
+		if r.Older != nil {
+			if old = r.Older.String(); len([]rune(old)) > maxReplacedText {
+				old = string([]rune(old)[:maxReplacedText]) + "…"
+			}
+			old = strconv.Quote(old)
+		}
+		replaced = append(replaced, r.Field+" "+old)
+	}
+	slices.Sort(fields)
+	line := "both sides changed " + strings.Join(fields, ", ") + "; kept the newer edit"
+	if len(replaced) > 0 {
+		line += " (replaced " + strings.Join(replaced, ", ") + ")"
+	}
+	return line
 }
 
 // markerOf is implemented by both 0.1.18 backends: the store's
@@ -1307,6 +1350,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		engine.WithActor(st.actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(storeOnlyProvenance{inner: newProvenance(opts, "")}),
 		engine.WithMachinePolicy(machinePol),
+		engine.WithNotice(opts.Notice), // devco:V-16: a newer lore's policy key is a note, not an error
 	}
 	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go (C19)
 	for _, o := range attached {

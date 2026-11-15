@@ -272,13 +272,14 @@ func TestLayerDeclaresFormatFeature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// a 0.1.18 lore does not know the feature (Since 0.1.19) and the floor
-	// is above it: either alone makes it read-only there
-	if f, ok := formatgate.Lookup(formatgate.BranchLayers); !ok || f.Since != "0.1.19" || d.MinLoreVersion != "0.1.19" {
+	// branch layers ship in 0.1.18 (devco:V-1): the floor is that release,
+	// so an older lore is told to upgrade to 0.1.18 (not 0.1.19) and a
+	// released 0.1.18 writes its own folder
+	if f, ok := formatgate.Lookup(formatgate.BranchLayers); !ok || f.Since != "0.1.18" || d.MinLoreVersion != "0.1.18" {
 		t.Fatalf("declaration %+v, feature %+v", d, f)
 	}
-	if v := formatgate.Check("0.1.19", d); !v.Writable {
-		t.Fatalf("0.1.19 may not write: %+v", v)
+	if v := formatgate.Check("0.1.18", d); !v.Writable {
+		t.Fatalf("0.1.18 may not write: %+v", v)
 	}
 	key2 := key
 	key2.Branch = "feat/y"
@@ -370,5 +371,40 @@ func TestLayerPushRetiresTrashedLayer(t *testing.T) {
 	}
 	if list, _ := a.LayerList(context.Background(), "", true); len(list) < 2 {
 		t.Fatalf("trash list: %+v", list)
+	}
+}
+
+// TestSyncCountsLayerRowsNotTheFolder (devco:V-13): a sync that pushed
+// only a branch layer (the store branch had nothing new) reported the
+// whole folder's rows as sent ("pushed (sent 42 …)") on every run. It now
+// reports the rows the layer carried, and a sync with nothing new reports
+// nothing pushed and nothing sent.
+func TestSyncCountsLayerRowsNotTheFolder(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	b := clone(t, remote, WithMerger(newestMerger{}))
+	g := newGen(t)
+	for _, body := range []string{"seed one", "seed two", "seed three", "seed four"} {
+		write(t, b, store.Change{Row: g.row(newID(t), body, hlc.HLC{})})
+	}
+	syncOK(t, b)
+	key := layerKey("feat/x")
+	layerWrite(t, b, key, store.Change{Row: g.row(newID(t), "branch only", hlc.HLC{})})
+	rep, err := b.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Pushed || rep.Sent != 1 {
+		t.Fatalf("first sync with a new layer row: pushed %v sent %d, want pushed and 1 sent", rep.Pushed, rep.Sent)
+	}
+	layerWrite(t, b, key, store.Change{Row: g.row(newID(t), "branch two", hlc.HLC{})})
+	if rep, err = b.Sync(ctx); err != nil || !rep.Pushed || rep.Sent != 1 {
+		t.Fatalf("second layer row: %+v %v, want pushed and 1 sent", rep, err)
+	}
+	for range 2 {
+		if rep, err = b.Sync(ctx); err != nil || rep.Pushed || rep.Sent != 0 {
+			t.Fatalf("a sync with nothing new: %+v %v, want nothing pushed or sent", rep, err)
+		}
 	}
 }

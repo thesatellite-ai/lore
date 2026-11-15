@@ -452,7 +452,7 @@ var table = map[Code]entry{
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	PortInUse:             {class: ClassRefused, desc: "the --port is held by another program (or another lore api / setup page); pick another --port, or --port 0 for a free one"},
 	PushAgain:             {class: ClassRefused, desc: "lore's pre-push hook added a commit of finished live rows to the branch being pushed, so this push stopped once; run the same git push again (it sends that commit too)"},
-	Detached:              {class: ClassRefused, desc: "the code repo's HEAD is detached, so a write meant for a branch layer has no code branch; check out a branch, or write to the real notes with --no-layer (LORE_LAYER=off)"},
+	Detached:              {class: ClassRefused, desc: "the code repo's HEAD is detached, so a write meant for a branch layer has no code branch; check out a branch, or run the command with LORE_LAYER=off in front to write to the shared notes (an add or edit also takes --no-layer)"},
 	LandConflict:          {class: ClassRefused, desc: "the branch and the store branch changed the same text of a row; nothing was landed; settle the rows named, then land again"},
 	LayerStale:            {class: ClassRefused, desc: "an open branch layer of that name belongs to an older branch (a reused name); land or drop it first (lore branch land|drop --branch <b>)"},
 	FormatOld:             {class: ClassMigrate, desc: "the project is on an older lore format; only lore migrate run upgrades it, and this lore writes nothing there until then"},

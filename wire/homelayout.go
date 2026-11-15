@@ -89,7 +89,9 @@ var homeLayout = []homeEntry{
 	// (stores/<host>/<owner>/<repo>/<branch>/<folder>/.lore/…); a store id
 	// never holds a dot, a host does
 	{Pattern: "cache/stores/*.*", Dir: true, Collapse: true, What: "lore 0.1.17's store caches (stores/<host>/<owner>/<repo>/…); this lore does not read them", ByHand: "safe to delete; `lore cache prune` removes them"},
-	{Pattern: "cache/stores", Dir: true, What: "one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)", ByHand: byHandRebuilt, Readme: true},
+	{Pattern: "cache/stores", Dir: true, What: "one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each); a code branch other than the default reads a store folder through its own cache, stores/<store id>/<branch>/" + layerCacheSeg + "/<repo key>/<branch key>/<folder>.db (repo key: 12 hex digits of the repo's remote; branch key: the branch name with / written %2F), removed when that branch's notes are landed, dropped or purged, and by `lore cache prune` once no repo reads it", ByHand: byHandRebuilt, Readme: true},
+	// devco:V-17: the branch-layer caches, explained in the row above
+	{Pattern: "cache/stores/*/*/" + layerCacheSeg + "/**", What: "a code branch's cache of a store folder (its branch layer on top of the shared notes)", ByHand: byHandRebuilt},
 	{Pattern: "cache/stores/**", What: "a store folder's cache", ByHand: byHandRebuilt},
 	{Pattern: "cache/combined", Dir: true, What: "one cache per repo that attaches more stores than get a file each: combined/<hash of the repo path>.db", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/combined/**", What: "a repo's combined cache", ByHand: byHandRebuilt},

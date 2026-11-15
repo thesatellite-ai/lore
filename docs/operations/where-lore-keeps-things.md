@@ -27,7 +27,7 @@ lore's home: ~/.lore
   cache/repo/website-<hash>.db
       a code repo's cache; used by ~/work/website
   cache/stores
-      one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)
+      one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each); a code branch other than the default reads a store folder through its own cache, stores/<store id>/<branch>/_layers/<repo key>/<branch key>/<folder>.db (repo key: 12 hex digits of the repo's remote; branch key: the branch name with / written %2F), removed when that branch's notes are landed, dropped or purged, and by `lore cache prune` once no repo reads it
   cache/stores/sto_7a67…9504/main/root.db
       a store folder's cache; store notes; used by ~/work/website
   cache/uses
@@ -141,7 +141,7 @@ machine.json
 state
 stores
 $ head -20 ~/.lore/README.md
-<!-- written by lore, layout 2026-11-12.4; lore rewrites this file when its layout changes -->
+<!-- written by lore, layout 2026-11-15.1; lore rewrites this file when its layout changes -->
 # lore's home on this machine
 This folder is where lore keeps what belongs to this machine: its settings, the stores it cloned, caches and small state files. Your notes themselves live in stores (git repositories or folders) and in your code repos' .lore/data folders; nothing here is synced by itself.
 `lore where` lists every file lore keeps on this machine and in the repo you run it in, one line each, with the store and repo each cache file belongs to (`lore where --json` for scripts). It also names anything in this folder lore does not recognise; lore never deletes such a file.

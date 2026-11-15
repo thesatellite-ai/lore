@@ -4682,6 +4682,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -5636,6 +5640,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "rebind_master": {
                     "type": "boolean",
@@ -7019,6 +7027,10 @@
                     "type": "string",
                     "description": "title (required)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -7959,6 +7971,10 @@
                   "name": {
                     "type": "string",
                     "description": "new name (same as title)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "title": {
                     "type": "string",
@@ -10677,6 +10693,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "on_id": {
                     "type": "string",
                     "description": "target entity id"
@@ -13252,6 +13272,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -14200,6 +14224,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "title": {
                     "type": "string",
                     "description": "new title"
@@ -14810,6 +14838,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "no_meta": {
                     "type": "boolean",
@@ -16057,6 +16089,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "project": {
                     "type": "string",
@@ -18471,6 +18507,10 @@
                     "type": "string",
                     "description": "source name"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -19966,6 +20006,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "project": {
                     "type": "string",
@@ -21739,6 +21783,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "no_meta": {
                     "type": "boolean",
                     "description": "with --supersedes: do not copy the replaced row's metadata"
@@ -22953,6 +23001,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "overrides": {
                     "type": "string",
@@ -24555,6 +24607,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -25540,6 +25596,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "ref": {
                     "type": "array",
@@ -38376,6 +38436,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "plan": {
                     "type": "string",
                     "description": "plan_id (pln_*) this mission carries out"
@@ -40153,6 +40217,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "plan": {
                     "type": "string",
@@ -42969,6 +43037,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -44136,6 +44208,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "rebind_master": {
                     "type": "boolean",
@@ -46058,6 +46134,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -47172,6 +47252,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "status": {
                     "type": "string",
                     "description": "draft | approved | in_progress | done | dropped"
@@ -47721,6 +47805,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "project": {
                     "type": "string",
@@ -48875,6 +48963,10 @@
                   "name": {
                     "type": "string",
                     "description": "new name (same as title)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "title": {
                     "type": "string",
@@ -52439,6 +52531,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -53582,6 +53678,10 @@
                     "type": "string",
                     "description": "new name (same as title)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "title": {
                     "type": "string",
                     "description": "new name"
@@ -54461,6 +54561,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "on_id": {
                     "type": "string",
@@ -59537,6 +59641,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "prompt": {
                     "type": "array",
                     "description": "type this field's value at the terminal, hidden when sensitive (repeatable; @required = every missing required field)",
@@ -59751,6 +59859,10 @@
                   "name": {
                     "type": "string",
                     "description": "the resource name (snake_case, or DNS / IP under the kind's name format)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "prompt": {
                     "type": "array",
@@ -62638,6 +62750,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "prompt": {
                     "type": "array",
@@ -79862,6 +79978,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -85351,6 +85471,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -86298,6 +86422,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "status": {
                     "type": "string",
@@ -96465,6 +96593,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -97572,6 +97704,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "status": {
                     "type": "string",
@@ -107884,6 +108020,10 @@
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -108817,6 +108957,10 @@
                   "meta_stdin": {
                     "type": "string",
                     "description": "read the value of this key from stdin (keeps it out of shell history)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "scope": {
                     "type": "string",
@@ -111642,6 +111786,10 @@
                   "name": {
                     "type": "string",
                     "description": "doc name (required)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "project": {
                     "type": "string",
@@ -116466,6 +116614,10 @@
                     "type": "string",
                     "description": "title (required)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
@@ -117407,6 +117559,10 @@
                     "type": "string",
                     "description": "new name (same as title)"
                   },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
+                  },
                   "title": {
                     "type": "string",
                     "description": "new name"
@@ -117928,6 +118084,10 @@
                   "name": {
                     "type": "string",
                     "description": "title (required)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "project": {
                     "type": "string",
@@ -118869,6 +119029,10 @@
                   "name": {
                     "type": "string",
                     "description": "new name (same as title)"
+                  },
+                  "no_layer": {
+                    "type": "boolean",
+                    "description": "on a code branch with its own notes (a branch layer), write this row to the shared notes instead"
                   },
                   "title": {
                     "type": "string",

@@ -287,6 +287,7 @@ $ lore task list
 - **Run `lore config check` after every config edit.** A wrong key is reported there, before any command uses it.
 - **A teammate's new row shows after your next fetch, once they have run `lore sync` or `git push`.** Run `lore sync` to fetch now. Nothing you write is pushed until you do the same.
 - **Every teammate needs the same or a newer lore.** A live ref records the lowest version allowed to write to it; an older binary can only read there and answers `E_OLD_LORE` to a write.
+- **A team rule set by a newer lore.** A policy key this lore does not know (a teammate on a newer release set it, such as `branches.isolated` before branch layers) is ignored with one note naming the key and `lore upgrade`, so reads and writes go on. A new key under `agents.`, `secrets.` or `delete.` may be a stricter rule, so it stops reads and writes (`E_CONFIG_INVALID`, with the upgrade hint) instead of being skipped.
 
 ## Related
 

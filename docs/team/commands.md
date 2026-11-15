@@ -1142,6 +1142,7 @@ Flags:
       --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
       --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --no-layer                 on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --plan string              plan_id (pln_*) this mission carries out
       --project string           the project (prj_ id or name; default the repo's one project)
@@ -1517,6 +1518,7 @@ Flags:
       --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
       --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --no-layer                 on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --project string           the project (prj_ id or name; default the repo's one project)
       --read-only                refuse writes (also LORE_READ_ONLY=1)

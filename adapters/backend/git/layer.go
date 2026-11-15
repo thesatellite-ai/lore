@@ -409,7 +409,13 @@ func (b *Backend) declareLayers(ctx context.Context) (string, error) {
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"add", "--", rel}}); err != nil {
 		return "", errs.Wrap(errs.Internal, "git: stage the folder's format declaration", err)
 	}
-	msg := "lore: " + b.folder.Name() + " uses branch layers (needs lore 0.1.19 or later)"
+	// the floor named is the feature's own release, so the commit and the
+	// upgrade line a teammate gets never disagree (devco:V-1)
+	since := "0.1.18"
+	if f, ok := formatgate.Lookup(formatgate.BranchLayers); ok {
+		since = f.Since
+	}
+	msg := "lore: " + b.folder.Name() + " uses branch layers (needs lore " + since + " or later)"
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(msg), "--", rel}, env: env}); err != nil {
 		return "", errs.Wrap(errs.Internal, "git: commit the folder's format declaration", err)
 	}
@@ -777,6 +783,19 @@ func (b *Backend) layerRestoreLocked(ctx context.Context, key branchlayer.Key, a
 	if err != nil || tip == "" {
 		return Layer{}, errs.Wrap(errs.Internal, "git: read the trashed layer", err)
 	}
+	// devco V-8: one commit on top says a person brought the notes back,
+	// so lore sync keeps them (their tip time and the mark are new) instead
+	// of moving them to the trash again on the next sync
+	restored, err := b.fillFacts(ctx, Layer{Key: key, Tip: tip})
+	if err != nil {
+		return Layer{}, err
+	}
+	f := restored.Facts
+	f.State, f.Landed, f.Restored = "", "", b.cfg.now()
+	msg := "lore: restore the notes of " + key.Branch + " (" + key.Folder + ")\n\n" + f.Trailers() + TrailerStoreBase + ": " + restored.Base + "\n"
+	if tip, err = b.commitOnto(ctx, tip, nil, nil, msg); err != nil {
+		return Layer{}, err
+	}
 	if err := b.casRef(ctx, key.Ref(), tip, ""); err != nil {
 		return Layer{}, err
 	}
@@ -882,6 +901,11 @@ type LayerPushReport struct {
 	// holds in the trash: removed here, never pushed back.
 	Retired []string
 	Offline bool
+	// Rows counts the row files the pushed layer refs carried over the
+	// remote's copy (a new layer: over the store commit it started from),
+	// by data folder: what lore sync reports as sent for the layers
+	// (devco:V-13: the whole folder's rows were reported instead).
+	Rows map[string]int
 }
 
 // trashedElsewhere reports whether a trash copy of the layer at ref (local
@@ -998,8 +1022,37 @@ func (b *Backend) layerPushLocked(ctx context.Context, prefix string) (LayerPush
 			continue
 		}
 		rep.Pushed = append(rep.Pushed, ref)
+		n, err := b.layerRowsSent(ctx, local, remote)
+		if err != nil {
+			return rep, err
+		}
+		for f, c := range n {
+			if rep.Rows == nil {
+				rep.Rows = map[string]int{}
+			}
+			rep.Rows[f] += c
+		}
 	}
 	return rep, nil
+}
+
+// layerRowsSent counts the row files a layer push of local carried over
+// remote (the remote's copy before the push); a layer new on the remote
+// counts over the store commit it shares with this clone's store branch,
+// never every row of the folder (devco:V-13). Best effort: a base git
+// cannot find counts nothing rather than failing the sync.
+func (b *Backend) layerRowsSent(ctx context.Context, local, remote string) (map[string]int, error) {
+	from := remote
+	if from == "" {
+		h, err := b.head(ctx)
+		if err != nil || h == "" {
+			return nil, err
+		}
+		if from, err = b.mergeBase(ctx, local, h); err != nil || from == "" {
+			return nil, nil // no shared commit: nothing to count against
+		}
+	}
+	return b.countRows(ctx, from, local)
 }
 
 // mergeLayers merges a teammate's copy (remote) into the local layer
@@ -1040,6 +1093,16 @@ func (b *Backend) mergeLayers(ctx context.Context, ref, local, remote string) (s
 		}
 		if b.cfg.merger == nil {
 			return "", "both copies of the layer changed " + p + " and no merger is configured", nil
+		}
+		if nm, ok := b.cfg.merger.(NewerTextMerger); ok {
+			// devco V-12 (the D-219 rule on a layer): the newer text wins and
+			// the merger's report names the one it replaced; never a refusal
+			m, merr := nm.MergeNewerText(blobs[base+":"+p], o, t)
+			if merr != nil {
+				return "", "", errs.Wrap(errs.Internal, "git: merge a layer row", merr)
+			}
+			puts[p] = m
+			continue
 		}
 		m, conflict, merr := b.cfg.merger.Merge(blobs[base+":"+p], o, t)
 		if merr != nil {

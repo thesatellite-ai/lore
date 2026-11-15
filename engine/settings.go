@@ -111,6 +111,7 @@ func (s storeSettings) Policy(ctx context.Context, _ store.Source) (policy.Set, 
 	if err != nil {
 		return policy.Set{}, policy.Rules{}, err
 	}
+	s.e.noteUnknownPolicy(set.Unknown())
 	rs, err := s.settingsRows(ctx, schema.TableSecretRules)
 	if err != nil {
 		return policy.Set{}, policy.Rules{}, err
@@ -186,3 +187,31 @@ func textOf(r row.Row, f string) string {
 // defaults levelOf applies. An unknown name gets levelOf's zero-Attached
 // answer; callers check Stores() first.
 func (e *Engine) Level(name store.Source) policy.Level { return levelOf(e.stores[name]) }
+
+// noteUnknownPolicy says once per key and process that a policy row a
+// newer lore wrote is ignored here, with the upgrade line (devco:V-16):
+// the row neither fails the command nor goes unmentioned.
+func (e *Engine) noteUnknownPolicy(unknown []policy.Entry) {
+	if e.notice == nil || len(unknown) == 0 {
+		return
+	}
+	e.unknownMu.Lock()
+	defer e.unknownMu.Unlock()
+	if e.unknownSaid == nil {
+		e.unknownSaid = map[policy.Key]bool{}
+	}
+	for _, u := range unknown {
+		if e.unknownSaid[u.Key] {
+			continue
+		}
+		e.unknownSaid[u.Key] = true
+		e.notice(UnknownPolicyNote(u))
+	}
+}
+
+// UnknownPolicyNote is the line for a policy row this build does not know
+// (devco:V-16): it names the key and the row, says it is ignored and how
+// to get the build that knows it.
+func UnknownPolicyNote(u policy.Entry) string {
+	return "note: policy " + string(u.Key) + " (row " + u.Source.String() + ") was set by a newer lore and is ignored here; run `lore upgrade` to use it"
+}
