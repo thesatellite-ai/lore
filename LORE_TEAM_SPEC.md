@@ -1167,7 +1167,8 @@ CheckLeaks(staged files + commit message | live write | landing commit | PR body
            every landing commit, `lore check pr-body` (agents run it before opening a PR or posting a comment)
   cannot decide (store unreadable, no cached index) → block with "cannot check: store unreachable"
       (the hook fails closed; bypassing it is the user's deliberate --no-verify)
-CI mode (`lore check leaks --ci`, in the client's CI): no store access, ids and structure only (an id prefix or
+CI mode (`lore check leaks --ci`, in the client's CI): no store access; secrets in the files (and names) the pushed commits
+  add or change (built-in rules, the repo's .gitleaks.toml, committed secret_allows; hash only), then ids and structure (an id prefix or
   project id that is not this repo's, a reference field pointing outside), output names no internal id, store or org
 out:  findings; with --explain the rule, the source and the matched words
 ```
@@ -1509,7 +1510,7 @@ Hooks are local and optional, so a determined or careless person can always leak
 | Path | Why hooks miss it | What remains |
 |---|---|---|
 | `git commit --no-verify` | the commit hooks never run | the pre-push leak check (same rules, fails closed) |
-| `git push --no-verify`, a changed `core.hooksPath`, a teammate without lore | no hook runs | the client CI check (ids and structure only); the leak is caught late or not at all for plain text |
+| `git push --no-verify`, a changed `core.hooksPath`, a teammate without lore | no hook runs | the client CI check (secrets, ids and structure); the leak is caught late or not at all for plain text |
 | edits in the GitHub web UI | no local hook | the client CI check |
 | an agent writing internal text into a PR body, issue comment, chat or a screenshot | not a commit | the fixed "never quote" header in the render, `lore check pr-body`, and the agent's own instructions |
 | text paraphrased rather than copied | the text rule matches runs of words | nothing technical; this is a people problem |

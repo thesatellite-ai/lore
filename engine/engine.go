@@ -186,6 +186,11 @@ type Engine struct {
 	// written is set by the first write (refuseNeverClient); RebindActor
 	// refuses after it (TEAM_PROFILES 6.3).
 	written writeMark
+	// readMask is the read-side secret masking state (readmask.go,
+	// devco:R-14), made on first use.
+	readMaskOnce sync.Once
+	readMask     *readMasks
+	readScanner  scan.Scanner // nil: reads are not masked (WithReadScanner)
 }
 
 // Option configures New.

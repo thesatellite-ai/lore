@@ -216,7 +216,7 @@ Two more purge flags, `--clear-identity` and `--clear-personal-store`, also remo
 
 ## Step 7 — Save setup steps from a script
 
-The page is a list of steps, and each step is also a command: `lore setup plan --kind <k>` lists the steps of a kind (and the saved progress of setups being made), `lore setup check --setup <setup> --step <id> --answers '<json>'` validates one step's answers and runs its checks (it saves only the progress), and `lore setup apply` saves the step once every error-level check passes. Steps are saved in order: a step whose earlier steps are not done is `E_SETUP_STEP_ORDER`.
+The page is a list of steps, and each step is also a command: `lore setup plan --kind <k>` lists the steps of a kind (and the saved progress of setups being made), `lore setup check --setup <setup> --step <id> --answers '<json>'` validates one step's answers and runs its checks (it saves only the progress), and `lore setup apply` saves the step once every error-level check passes. Steps are saved in order: a step whose earlier steps are not done is `E_SETUP_STEP_ORDER`. An answer that looks like a secret (a token pasted into the name, for example) is refused with the other answer checks, `E_INVALID_INPUT` naming the question, the rule and a hash, never the value; nothing is saved (answers are kept as typed in `~/.lore/config.yaml`), so edit the answer and run the same command again. Only the first setup of a machine starts with "Use this setup when no folder matches" on; a later setup, solo or team, leaves the existing default alone unless you answer `default: true`.
 
 <!-- example: setup-cli#steps -->
 ```console

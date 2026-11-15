@@ -40,7 +40,7 @@ func WithProvenance(p Provenance) Option {
 func (e *Engine) originOf(ctx context.Context, opName string, st Attached) (value.JSON, error) {
 	var f origin.Facts
 	if e.prov != nil {
-		f = e.prov.Place(ctx)
+		f = e.scrubPlace(e.prov.Place(ctx))
 	}
 	if imp, ok := importOf(ctx); ok {
 		f.Import = imp // XQ9 / PROV9: the importer's source and external id
@@ -66,6 +66,30 @@ func (e *Engine) originOf(ctx context.Context, opName string, st Attached) (valu
 	// the reduced block at write time; it was born here, so dir and git
 	// (minus a local-only branch) are the client's own facts.
 	return origin.ClientFilter(o, e.clientOf(ctx, st, f.Repo, true))
+}
+
+// scrubPlace keeps a secret out of what `_o` records about the checkout
+// (devco:R-10): a branch or folder name is chosen by a person and can hold
+// a token ("feat/<token>"); it was written into every row made there and
+// pushed with it, and no leak check read `_o`. Each name is scanned with
+// the write rules: a branch that matches is recorded as
+// origin.RedactedBranch (the state and commit stay), a folder that matches
+// is left out.
+func (e *Engine) scrubPlace(f origin.Facts) origin.Facts {
+	if e.scanner == nil {
+		return f
+	}
+	if f.Git.Branch != "" {
+		if found, _ := e.scanText(origin.KeyGit+"."+origin.KeyGitBranch, f.Git.Branch); len(found) > 0 {
+			f.Git.Branch = origin.RedactedBranch
+		}
+	}
+	if f.Dir != "" {
+		if found, _ := e.scanText(origin.KeyDir, f.Dir); len(found) > 0 {
+			f.Dir = ""
+		}
+	}
+	return f
 }
 
 // noOriginCopy reports whether a row of table created in st is written with

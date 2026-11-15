@@ -1014,11 +1014,11 @@ func entryValue(step onboard.StepID, q onboard.Question, e onboard.SetupEntry, e
 
 // kindDefault is the 4.1 starting answer of the kind step when nothing
 // else gives one: the plan's kind; a solo setup is named "personal" while
-// that name is free; the first solo setup is the default one.
+// that name is free; the first setup of the machine is the default one (takesDefault).
 func kindDefault(step onboard.StepID, q onboard.Question, kind onboard.Kind, e onboard.SetupEntry, cfg onboard.Config) (onboard.Answer, bool) {
 	if step != onboard.StepKind {
 		if step == onboard.StepFolders && q.ID == onboard.QIDDefault {
-			return boolAnswer(!hasDefault(cfg)), true
+			return boolAnswer(takesDefault(cfg, e.Name)), true
 		}
 		return onboard.Answer{}, false
 	}
@@ -1033,9 +1033,21 @@ func kindDefault(step onboard.StepID, q onboard.Question, kind onboard.Kind, e o
 			return textAnswer(defaultSetupName), true
 		}
 	case onboard.QIDDefault:
-		return boolAnswer(!hasDefault(cfg)), true
+		return boolAnswer(takesDefault(cfg, e.Name)), true
 	}
 	return onboard.Answer{}, false
+}
+
+// takesDefault is the starting answer of "use this setup when no folder
+// matches": only the first setup of the machine starts as the default.
+//
+// Why (devco R-17): the old rule was "no setup is marked default yet", and
+// a team setup is never marked (default is a solo question), so a solo
+// setup made later silently took the default over the team setup the
+// person already used. A person who wants the new one to be the default
+// answers default: true; the old one stays the default otherwise.
+func takesDefault(cfg onboard.Config, name string) bool {
+	return !slices.ContainsFunc(cfg.Setups, func(s onboard.SetupEntry) bool { return s.Default || s.Name != name })
 }
 
 // hasDefault reports whether some setup is the default one already.

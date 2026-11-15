@@ -41,7 +41,7 @@ All valid changes of one folder become one commit authored by you: your git iden
 
 The author of a hand-edit commit is always a person, never an agent: when an agent ran the command that picked the edit up, it is named in a `Lore-Agent:` trailer.
 
-lore never changes the envelope fields from your file (`_hlc`, `created_by`, `updated_by`, `updated_at`, `_o`): the write stamps them anew. Metadata (`meta`) changed by hand is refused; change it with lore's metadata commands.
+lore never changes the envelope fields from your file (`_hlc`, `created_by`, `updated_by`, `updated_at`, `_o`): the write stamps them anew. A row file that arrives with a secret in it (a teammate's commit made with the hooks off) is never printed or rendered with the secret: every read shows the match as `[redacted <rule>]`, render leaves the row out and names it, and `lore check leaks --rows` gives the allow line. Metadata (`meta`) changed by hand is refused; change it with lore's metadata commands.
 
 A row file deleted by hand goes to the trash:
 

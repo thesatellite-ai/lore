@@ -194,6 +194,12 @@ func (h *Host) renderLiveRows(ctx context.Context, table row.Table) ([]renderRow
 			if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
 				continue
 			}
+			// devco:R-14: a row whose stored text matches a secret rule
+			// (it reached the store without lore's write scan) is never
+			// written into a rendered file; Render names it.
+			if h.app.WasMasked(ctx, r.ID) {
+				continue
+			}
 			out = append(out, renderRow{source: src, Row: r})
 		}
 	}

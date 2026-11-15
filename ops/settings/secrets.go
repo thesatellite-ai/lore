@@ -638,6 +638,9 @@ func (o ops) allow(ctx context.Context, in AllowIn) (RowOut, error) {
 	if strings.TrimSpace(in.File) != "" {
 		return o.allowFile(ctx, in)
 	}
+	// devco:R-14: reads mask a stored secret match; the allow entry is
+	// keyed by the stored match, so this read takes the stored text.
+	ctx = engine.WithRawRead(ctx)
 	rowID, err := ids.ParseAny(strings.TrimSpace(in.Row))
 	if err != nil {
 		return RowOut{}, lookup.BadID("secrets allow: "+quote(in.Row)+" is not a row id; "+allowFileHint, err)

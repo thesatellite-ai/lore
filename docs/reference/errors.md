@@ -4,7 +4,7 @@
 
 ## How an error looks
 
-The first line starts with `ERROR:` and the code. The line under it, starting with `hint:`, says what to do. Both go to the error output (stderr), and the command ends with a non-zero exit status:
+The first line starts with `ERROR:` and the code. The line under it, starting with `hint:`, says what to do. Both go to the error output (stderr), and the command ends with a non-zero exit status. When an error repeats something you typed (an id, a store name, a config key) and that value looks like a secret, it is shown as `[redacted <rule> sha256:…]` instead, in the CLI, its `--json` error and `lore api` answers alike, so a token pasted into the wrong argument never lands in scrollback or logs:
 
 <!-- example: reference#an-error -->
 ```console
