@@ -69,6 +69,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -926,6 +936,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1632,6 +1652,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -4330,6 +4360,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "repo",
             "in": "query",
             "required": false,
@@ -6706,6 +6746,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -9800,6 +9850,9 @@
                     "code_head": {
                       "type": "string"
                     },
+                    "hint": {
+                      "type": "string"
+                    },
                     "layer": {
                       "type": "object",
                       "properties": {
@@ -9858,6 +9911,24 @@
                         "tip"
                       ]
                     },
+                    "on_main": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "count"
+                        ]
+                      }
+                    },
                     "rows": {
                       "type": "array",
                       "items": {
@@ -9892,7 +9963,8 @@
                   "required": [
                     "layer",
                     "base",
-                    "rows"
+                    "rows",
+                    "on_main"
                   ]
                 }
               }
@@ -10381,6 +10453,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -12051,6 +12133,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -12884,6 +12976,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -14430,6 +14532,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -18094,6 +18206,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -19563,6 +19685,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -21325,6 +21457,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -24141,6 +24283,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -25869,6 +26021,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -27683,6 +27845,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -29975,6 +30147,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -37782,6 +37964,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -42427,6 +42619,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "repo",
             "in": "query",
             "required": false,
@@ -44503,6 +44705,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -45588,6 +45800,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -47203,6 +47425,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -49850,6 +50082,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -50712,6 +50954,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -51901,6 +52153,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -53969,6 +54231,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -55189,6 +55461,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -58943,6 +59225,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -63879,6 +64171,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -65889,6 +66191,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -68844,6 +69156,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -69447,6 +69769,10 @@
                   "all_repos": {
                     "type": "boolean",
                     "description": "search every repo (ignore --repo)"
+                  },
+                  "born_branch": {
+                    "type": "string",
+                    "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
                   },
                   "include_archived": {
                     "type": "boolean",
@@ -70407,6 +70733,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -72525,6 +72861,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -79226,6 +79572,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -84726,6 +85082,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -88381,6 +88747,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -91617,6 +91993,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -94582,6 +94968,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -95814,6 +96210,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -97928,6 +98334,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -99628,6 +100044,10 @@
                   "assignee": {
                     "type": "string",
                     "description": "filter by assignee: actor_id (act_*)"
+                  },
+                  "born_branch": {
+                    "type": "string",
+                    "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
                   },
                   "claimed_by": {
                     "type": "string",
@@ -107198,6 +107618,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -108587,6 +109017,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -109512,6 +109952,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -110913,6 +111363,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -112216,6 +112676,16 @@
               "type": "boolean",
               "description": "this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash"
             }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
           }
         ],
         "responses": {
@@ -112376,6 +112846,276 @@
           },
           "409": {
             "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "trash.add",
+        "summary": "Move every note created on a code branch to the trash (also after it landed), as one batch; prints the count per kind; needs --yes",
+        "tags": [
+          "trash"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "born_branch": {
+                    "type": "string",
+                    "description": "required: move every note created on this code branch (its origin's git branch), also after the branch landed"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "print the count per kind and the rows; write nothing"
+                  },
+                  "kind": {
+                    "type": "array",
+                    "description": "only rows of this kind: a table or its singular (task, memory, rule, …; repeatable)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "born_branch"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "batch": {
+                      "type": "string"
+                    },
+                    "born_branch": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "dependents": {
+                      "type": "integer"
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "kept": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "batch": {
+                            "type": "string"
+                          },
+                          "deleted_at": {
+                            "type": "string"
+                          },
+                          "deleted_by": {
+                            "type": "string"
+                          },
+                          "dependent": {
+                            "type": "boolean"
+                          },
+                          "git_restore": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "last_content_in": {
+                            "type": "string"
+                          },
+                          "overruled": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "removed_by_commit": {
+                            "type": "boolean"
+                          },
+                          "store": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "store",
+                          "title",
+                          "deleted_at",
+                          "deleted_by",
+                          "batch"
+                        ]
+                      }
+                    },
+                    "kinds": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "count"
+                        ]
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "batch": {
+                            "type": "string"
+                          },
+                          "deleted_at": {
+                            "type": "string"
+                          },
+                          "deleted_by": {
+                            "type": "string"
+                          },
+                          "dependent": {
+                            "type": "boolean"
+                          },
+                          "git_restore": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "last_content_in": {
+                            "type": "string"
+                          },
+                          "overruled": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "removed_by_commit": {
+                            "type": "boolean"
+                          },
+                          "store": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "store",
+                          "title",
+                          "deleted_at",
+                          "deleted_by",
+                          "batch"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "born_branch",
+                    "kinds",
+                    "rows",
+                    "count"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_PARENT_DELETED, E_PARENT_PURGED, E_PURGED, E_STALE, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -113572,6 +114312,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {
@@ -115446,6 +116196,16 @@
             }
           },
           {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -116896,6 +117656,16 @@
             "schema": {
               "type": "string",
               "description": "only rows this actor changed last (act_ id, or unknown)"
+            }
+          },
+          {
+            "name": "born_branch",
+            "in": "query",
+            "required": false,
+            "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)",
+            "schema": {
+              "type": "string",
+              "description": "only rows created on this code branch (their origin's git branch; still found after the branch landed)"
             }
           },
           {

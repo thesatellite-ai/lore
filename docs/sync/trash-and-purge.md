@@ -147,7 +147,7 @@ mem_2537…6bbb [retrieved] The demo is on Friday at 10.
 ```
 <!-- /example -->
 
-`lore trash list` takes filters: `--type memories`, `--by @handle`, `--since 7d`, `--reason <text>`, `--search <text>`, `--batch <bat_id>`, `--to <store>`, and `--limit` / `--page` for long lists. `--from-history` lists rows that were purged or deleted for good, read from git history; `lore trash show --id <id> --from-history` shows such a row's last content, but it never comes back.
+`lore trash list` takes filters: `--type memories`, `--by @handle`, `--since 7d`, `--reason <text>`, `--search <text>`, `--batch <bat_id>`, `--to <store>`, `--born-branch <branch>` (rows created on that code branch), and `--limit` / `--page` for long lists. `--from-history` lists rows that were purged or deleted for good, read from git history; `lore trash show --id <id> --from-history` shows such a row's last content, but it never comes back.
 
 ## Step 5 — Undo a bulk delete
 
@@ -195,6 +195,8 @@ mem_6a86…ed8c [retrieved] Production deploys on Tuesday.
 <!-- /example -->
 
 Preview a bulk delete with `--dry-run`; it writes nothing, so it never asks. A batch's `rows` count is the rows it wrote, each once: the single-row delete restored in Step 4 stays `1 rows (repo 1)`, and its list line adds `; restore 1, trash 1`. `lore batch list` filters with `--kind task|meta|delete|resource|import|secrets`, `--by` and `--since`; `lore batch show --all` lists every row instead of a sample. `lore trash restore --id <bat_id>` also brings back a whole delete batch.
+
+`lore trash add --born-branch <branch>` is the bulk delete for everything a code branch left behind: every note created on that branch (its origin's git branch), also after the branch landed on `main`. `--kind task` (repeatable) narrows it, `--dry-run` prints the count per kind and the rows, and without `--dry-run` it asks first (`--yes` answers) and moves them as one batch; `lore trash restore --id <id>` brings one back, `--id <bat_id>` all of them. See [Branch layers](../team/concepts.md#branch-layers-notes-that-follow-the-code-branch).
 
 ## Try it — the old local safety copies
 

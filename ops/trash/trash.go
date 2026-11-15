@@ -16,6 +16,8 @@
 //	       with it (INTEG-TRASH-6); --dry-run lists them (Env.PurgePlan)
 //	    └► --archived-before: ArchivedPurger.PurgeArchived (DEL-ARCH, 3.12):
 //	       archived rows of the row files ─► tombstones (not lore.db)
+//	lore trash add --born-branch <b> [--kind <k>] [--dry-run] --yes
+//	    └► every note created on the branch (_o.git.branch) ─► one batch (born.go)
 //	lore trash purge --local --purged [--dry-run | --confirm]
 //	    └► this machine's safety copies of ids in .lore/data/_purged.json
 //	       ─► LocalCopyDropper (local_purged.go, DELETION 3.10)
@@ -39,6 +41,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -111,6 +114,9 @@ type ListIn struct {
 	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"list rows purged or hard-deleted, read from this place's git history"`
 	// Local lists this machine's safety copies instead (local.go, DQ1).
 	Local bool `json:"local,omitempty" flag:"local" desc:"this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash"`
+	// Born is --born-branch, the one flag every list shares (D-392):
+	// the rows `lore trash add --born-branch` moved here.
+	metalist.Born
 }
 
 // defaultPageRows is --limit when only --page is given (DELETION 4.5:
@@ -309,6 +315,10 @@ func Ops(env Env) []op.Entry {
 			Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "bring a row back", CLI: "lore trash restore --id rul_1f3a"}, {Title: "undo a whole bulk delete", CLI: "lore trash restore --id bat_9e02"}}}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good, with their comments and links (a tombstone stays forever); needs --confirm",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported), Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore trash purge --older-than 180d --dry-run"}, {Title: "remove one row for good", CLI: "lore trash purge --id rul_1f3a --confirm"}}}, o.purge),
+		op.Define(op.Spec{Name: OpAdd, Summary: "Move every note created on a code branch to the trash (also after it landed), as one batch; prints the count per kind; needs --yes",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported),
+			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
+			Examples: []op.Example{{Title: "see what a branch left on main", CLI: "lore trash add --born-branch feat/x --dry-run"}, {Title: "trash only the tasks of a branch", CLI: "lore trash add --born-branch feat/x --kind task --yes"}}}, o.add),
 		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
 			Examples: []op.Example{{Title: "trash counts as JSON", CLI: "lore trash stats --json", Want: `"tombstones"`}}}, o.stats),
@@ -338,6 +348,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.FromHistory {
 		return o.listHistory(ctx, in, since, by)
 	}
+	born, err := engine.ParseBornBranch(in.BornBranch)
+	if err != nil {
+		return ListOut{}, err
+	}
 	all, err := o.env.Trashed(ctx)
 	if err != nil {
 		return ListOut{}, err
@@ -351,6 +365,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 		case in.To != "" && it.Store != strings.TrimSpace(in.To):
 		case in.Type != "" && !typeMatches(it.Table, in.Type):
 		case by != "" && it.DeletedBy != by:
+		case born != "" && !engine.BornOn(t.Row, born):
 		case in.Batch != "" && it.Batch != strings.TrimSpace(in.Batch):
 		case in.Reason != "" && !strings.Contains(strings.ToLower(it.Reason), strings.ToLower(in.Reason)):
 		case in.Search != "" && !matches(it, in.Search):

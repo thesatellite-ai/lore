@@ -972,6 +972,7 @@ Flags:
       --all                   show everything: done/cancelled + proposed/someday + deferred
       --all-repos             every repo of the project (the default)
       --assignee string       filter by assignee: actor_id (act_*)
+      --born-branch string    only rows created on this code branch (their origin's git branch; still found after the branch landed)
       --claimed-by string     only tasks claimed right now by @handle (or actor id)
       --columns stringArray   columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line
       --commitment string     filter: accepted | proposed | someday

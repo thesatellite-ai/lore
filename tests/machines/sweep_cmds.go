@@ -213,6 +213,10 @@ var reads = []sweepStep{
 	{Cmd: "batch list", In: inRepo},
 	{Cmd: "trash list", In: inBoth},
 	{Cmd: "trash stats", In: inRepo},
+	// D-392: the born-branch reads; a dry run writes nothing
+	{Cmd: "trash add", Args: []string{"--born-branch", "feat/sweep", "--dry-run"}, In: inRepo},
+	{Cmd: "trash list", Args: []string{"--born-branch", "feat/sweep"}, In: inRepo},
+	{Cmd: "memory list", Args: []string{"--born-branch", "feat/sweep"}, In: inRepo},
 	{Cmd: "sync trash list", In: inRepo},
 	{Cmd: "session list", In: inRepo},
 	{Cmd: "actor list", In: inRepo},

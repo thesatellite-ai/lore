@@ -430,6 +430,38 @@ func Text(o value.JSON, key string) string {
 	return ""
 }
 
+// Branch returns `_o.git.branch`: the code branch the row was born on
+// ("" when the row has no origin, no git block, or was born outside a
+// branch). Why: the --born-branch list filter, `lore trash add
+// --born-branch` and `lore branch adopt` / `branch show` all ask the same
+// question of a row, and a land, an adopt or a revert copies the row
+// whole, so the answer is the same on the branch and after it lands
+// (D-392).
+func Branch(o value.JSON) string {
+	if o.IsZero() {
+		return ""
+	}
+	ms, err := canon.Members(o.Raw())
+	if err != nil {
+		return ""
+	}
+	for _, m := range ms {
+		if m.Key != KeyGit {
+			continue
+		}
+		gs, gerr := canon.Members(m.Raw)
+		if gerr != nil {
+			return ""
+		}
+		for _, g := range gs {
+			if g.Key == gitBranch {
+				return textOf(g.Raw)
+			}
+		}
+	}
+	return ""
+}
+
 // With returns o with the string member key set to v (added or
 // replaced); a zero o starts an empty object.
 func With(o value.JSON, key, v string) (value.JSON, error) {

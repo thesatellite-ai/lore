@@ -1,6 +1,6 @@
 # Story BL — notes that follow the code branch (branch layers)
 
-Lore 0.1.19 work (design: branch layers spec). Replayed by `TestStoryBL1SharedLayer` … `TestStoryBL9TwoLandings` in `BL_branch_layers_test.go` and `TestStoryBL10CodeRepoMode` … `TestStoryBL15InstallAction` in `BL_more_test.go` (build tag `stories`); the nine parts run in parallel, about 35 seconds together.
+Lore 0.1.19 work (design: branch layers spec). Replayed by `TestStoryBL1SharedLayer` … `TestStoryBL9TwoLandings` in `BL_branch_layers_test.go`, `TestStoryBL10CodeRepoMode` … `TestStoryBL15InstallAction` in `BL_more_test.go`, and `TestStoryBL16BornBranch`, `TestStoryBL16OriginKept` in `BL_born_test.go` (build tag `stories`); the parts run in parallel, about 35 seconds together.
 
 ## Who
 
@@ -27,6 +27,7 @@ Lore 0.1.19 work (design: branch layers spec). Replayed by `TestStoryBL1SharedLa
 13. **BL-13** Notes landed too early come back with `restore --revert`, which adds a revert commit on top of the landing (no history rewrite) and pushes it; after a drop, `--revert` says the notes were never landed.
 14. **BL-14** A memory written on `feat/old` into the shared notes (before layers) is moved into the branch's notes with `lore branch adopt` (`--dry-run` first); `main` no longer shows it; landing the branch brings it back.
 15. **BL-15** In a client repo the CI workflow is never offered and `install-action --yes` is refused (`E_LEAK_BLOCKED`); in an own repo with branch notes `lore branch list` offers it, `--dry-run` prints it, without `--yes` it is refused (`E_NEEDS_CONFIRM`) and nothing is written, with `--yes` it is written and no longer offered.
+16. **BL-16** Notes made on `feat/x` (a memory, two tasks, a rule) are merged and landed; each row's origin still names `feat/x`, also after a stacked land `--into`, an adopt and a `restore --revert`. On `main`, `--born-branch feat/x` lists only them in `memory|task|rule list` and `lore search`; `lore branch show --branch feat/x` counts them on main and names the list and trash commands. `lore trash add --born-branch feat/x --kind task` prints the counts with `--dry-run`, is refused without `--yes` (`E_NEEDS_CONFIRM`), and with `--yes` moves only the two tasks as one batch; `trash list --born-branch` lists them; `lore trash restore --id` brings one back; the memory, the rule and main's own memory are untouched; the client repo stays byte-identical.
 
 ## What must hold
 

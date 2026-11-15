@@ -64,14 +64,19 @@ type searchScope struct {
 	// only is --store: the one store whose hits are kept ("" = every
 	// store).
 	only store.Source
+	// born is --born-branch (D-392): only rows created on that branch.
+	born string
 }
+
+// bornOK reports whether r passes --born-branch (always without one).
+func (sc searchScope) bornOK(r row.Row) bool { return sc.born == "" || engine.BornOn(r, sc.born) }
 
 // fromStore reports whether a hit from src passes --store.
 func (sc searchScope) fromStore(src store.Source) bool { return opsmemory.FromStore(sc.only, src) }
 
 // keeps reports whether repo row r passes t's v0.1.17 filters under sc.
 func (sc searchScope) keeps(t opssearch.Target, r row.Row) bool {
-	if r.Deleted {
+	if r.Deleted || !sc.bornOK(r) {
 		return false
 	}
 	if t.HasProject && sc.projectID != "" {
@@ -99,7 +104,7 @@ func (sc searchScope) keeps(t opssearch.Target, r row.Row) bool {
 // project/repo scope does not apply to another store's rows; the deleted
 // and archived filters do.
 func (sc searchScope) keepsStoreRow(t opssearch.Target, r row.Row) bool {
-	if r.Deleted {
+	if r.Deleted || !sc.bornOK(r) {
 		return false
 	}
 	return !t.HasArchived || sc.includeArchived || searchField(r, searchFieldArchived) == ""
@@ -197,6 +202,11 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 // (a rep_ id or mount name).
 func (a *App) searchScope(ctx context.Context, r opssearch.Request) (searchScope, error) {
 	sc := searchScope{allRepos: r.AllRepos, masterOnly: r.MasterOnly, includeArchived: r.IncludeArchived}
+	born, err := engine.ParseBornBranch(r.BornBranch)
+	if err != nil {
+		return searchScope{}, err
+	}
+	sc.born = born
 	only, err := opsmemory.SearchStore(a, "search", r.Store)
 	if err != nil {
 		return searchScope{}, err
