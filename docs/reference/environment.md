@@ -26,8 +26,8 @@ ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row f
   hint: run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 $ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo
 (exit 19)
 $ cd work/website && lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
