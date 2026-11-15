@@ -93,7 +93,7 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 		// devco R-12: secrets in what the checkout carries, in every repo
 		// (a client repo with no .lore folder above all: its CI is the
 		// backstop for a push that skipped the hooks), then the structure.
-		serr := checkCISecrets(ctx, root)
+		serr := checkCISecrets(ctx, root, in.Since, os.Getenv)
 		if UntouchedRepo(ctx, root) != "" {
 			// F-3: a client repo holds no lore files by design, so --ci
 			// (run from its root or any subfolder) has no rows to check:

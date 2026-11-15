@@ -698,6 +698,7 @@ Flags:
       --explain             print the rule, the source and the matched words of each finding
       --json                print the result (or the error) as JSON
       --rows                re-scan every stored row of every attached store with today's secret rules
+      --since string        with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits
       --staged              check the staged files (default unless --commit-msg is given alone)
 ```
 <!-- /help -->

@@ -69,6 +69,7 @@ const prBodyClean = "✓ nothing internal found (a copy-paste check: a paraphras
 // LeaksIn is the input of check.leaks.
 type LeaksIn struct {
 	CI        bool   `json:"ci,omitempty" flag:"ci" desc:"CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal"`
+	Since     string `json:"since,omitempty" flag:"since" desc:"with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits"`
 	Explain   bool   `json:"explain,omitempty" flag:"explain" desc:"print the rule, the source and the matched words of each finding"`
 	Staged    bool   `json:"staged,omitempty" flag:"staged" desc:"check the staged files (default unless --commit-msg is given alone)"`
 	CommitMsg string `json:"commit_msg,omitempty" flag:"commit-msg" desc:"also check this commit message file (the commit-msg hook's $1)"`
@@ -159,6 +160,10 @@ func Ops(c Checker) []op.Entry {
 			if in.CI && in.AsClient {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --ci and --as-client cannot be used together").
 					WithHint("--ci is the client's CI check; --as-client is the hand-over check of an own repo")
+			}
+			if in.Since != "" && !in.CI {
+				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --since is a --ci option").
+					WithHint("lore check leaks --ci --since <the last commit CI checked>")
 			}
 			if in.Rows && (in.CI || in.AsClient || in.Staged || in.CommitMsg != "") {
 				return LeaksOut{}, errs.New(errs.InvalidInput, "check leaks: --rows checks the stored rows alone").

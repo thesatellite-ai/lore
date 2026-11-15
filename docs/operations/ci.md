@@ -116,6 +116,31 @@ $ lore context --internal
 
 `--table rules` limits it to one kind of row, `--search <text>` to rows that contain a word, and `--json` gives the same rows for scripts. Never paste this output into anything the client can read (the first line says so too); see [Lore for teams](../team/README.md).
 
+## Which commits `lore check leaks --ci` scans
+
+`lore check leaks --ci` is the backstop for a commit or push that skipped lore's hooks (`--no-verify`): it scans the files the pushed commits add or change, and their names, for secrets. It picks the commits in this order, so a push of several commits straight to the default branch is scanned in full, not only its last commit:
+
+1. `--since <commit>`: every commit after that one (give the last commit CI checked). A commit the clone does not have fails with E_INVALID_INPUT and names the fetch to run.
+2. The range the CI names: on GitHub Actions the event payload (`pull_request.base.sha`, `merge_group.base_sha`, else the push's `before`), on GitLab `CI_MERGE_REQUEST_DIFF_BASE_SHA`, else `CI_COMMIT_BEFORE_SHA`. A value the clone does not have (a shallow clone) or all zeros (a new branch) is skipped.
+3. On a branch, the commits since the default branch (`origin/HEAD`).
+4. Else the last 50 commits. A clone with less history (`fetch-depth: 1`, a young repo) has every tracked file scanned.
+
+In every case a value the same file already held before the first scanned commit is not new, as at commit and push. Steps 1 and 2 start from the merge-base of that commit and HEAD, so a force push is scanned in full too. Give the job the history the range needs: with the default `fetch-depth: 1` GitHub Actions has no earlier commit, so lore scans every tracked file and a key committed before lore was set up fails the job until it is removed or allowed (`lore secrets allow`). A GitHub Actions job that reads the push range from the event needs no flag:
+
+```yaml
+jobs:
+  lore-leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the commits before this push, so lore can read the range
+      - run: curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
+      - run: lore check leaks --ci
+```
+
+On another CI, pass the last commit the job checked yourself, for example `lore check leaks --ci --since "$LAST_CHECKED_SHA"`. A run that fails must be fixed before the next push: the next run starts after the commits the failed run saw.
+
 ## Try it
 
 Clone a repo that uses lore into a new folder, as a CI job would, and list its rules with `LORE_READ_ONLY=1` and `LORE_NO_STALE_WARN=1` set in the environment, as in Step 3. The first command builds the local cache and wires git in the clone; nothing is written to `.lore/data`:
