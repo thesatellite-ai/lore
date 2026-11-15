@@ -354,7 +354,7 @@ alice (work/website)$ lore task stale --close --yes
 lore: wrote 9 live row(s) on this clone's refs/lore/live (not pushed yet; their files are unchanged)
 ✓ 9 tasks cancelled (close_reason stale, batch bat_06b12747c0fad05aadf714f05f1d3d1c); lore batch show --id bat_06b12747c0fad05aadf714f05f1d3d1c
 alice (work/website)$ lore task list
+○ tsk_71f07e3f4ec7ebaeff7d0686d814c07d Back up the shop database [medium] due:2026-11-16
 ○ tsk_2ad3618e878ebbf527d34d446ef4f891 Write the launch email [high] 0/0
 ○ tsk_162df51b7f78b785c97c26b41ea89666 Pick the product photos [low] 0/0
 ○ tsk_bfed655e145f36ce2ef425180e72eeea Release 1.4 [high] 0/0
-○ tsk_71f07e3f4ec7ebaeff7d0686d814c07d Back up the shop database [medium] due:2026-11-16

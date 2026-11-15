@@ -10,8 +10,8 @@ The first line starts with `ERROR:` and the code. The line under it, starting wi
 ```console
 # alice, in ~
 $ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo
 (exit 19)
 ```
 <!-- /example -->
@@ -467,8 +467,8 @@ $ lore rule list --json
 {
   "error": {
     "code": "E_NOT_A_STORE",
-    "message": "git: the folder is not inside a git work tree",
-    "hint": "cd into a git checkout, or run git init here first",
+    "message": "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read",
+    "hint": "name the store: --to \u003corg\u003e/\u003cfolder\u003e (or --store); lore store list shows the stores this folder can name, or cd into a repo",
     "exit": 19,
     "class": "guard",
     "retryable": false,
