@@ -1,6 +1,6 @@
 # Local REST API
 
-**In short:** `lore api` serves every lore command as an HTTP route on your own machine, so a tool that cannot run a shell command can still read and write your notes. It listens on `127.0.0.1` only, and every request needs the token lore keeps in `~/.lore/api-token`. A route runs the same operation as the command, with the same checks, errors and audit entry.
+**In short:** `lore api` serves every lore command as an HTTP route on your own machine, so a tool that cannot run a shell command can still read and write your notes. It listens on `127.0.0.1` only, answers only a request addressed to `localhost`, `127.0.0.1` or `[::1]` (any other `Host` header, such as a web page that points its own name at your machine, gets a plain 403 before anything else runs), and every request needs the token lore keeps in `~/.lore/api-token`. A route runs the same operation as the command, with the same checks, errors and audit entry.
 
 ## What it is and when you want it
 

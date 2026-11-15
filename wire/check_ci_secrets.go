@@ -4,10 +4,9 @@ package wire
 // R-12): the CI backstop scans what the checkout carries, not only ids and
 // structure.
 //
-//	base: merge-base of origin/HEAD and HEAD when HEAD is ahead of it (a
-//	      branch or pull request), else HEAD's first parent (the default
-//	      branch: the last commit, or everything a merge commit brought);
-//	      none in a clone with no parent (fetch-depth 1, a first commit)
+//	base: ciScanBase (check_ci_range.go, devco D-330): --since, else the
+//	      CI's push range, else the merge-base with origin/HEAD, else
+//	      HEAD~50; none (every tracked file) when the clone has less
 //	files: those the range base..HEAD adds or changes (every tracked file
 //	      when there is no base), as checked out
 //	  ─▶ content: the hook's scanner (built-in rules + the repo's
@@ -48,10 +47,11 @@ type ciNameHit struct {
 	f    scan.Finding
 }
 
-// checkCISecrets scans every tracked file of the checkout at root (content
-// and name) with the secret rules; nil when nothing is found or root is
-// not a git checkout. It needs no store and opens no App.
-func checkCISecrets(ctx context.Context, root string) error {
+// checkCISecrets scans the files of the checkout at root the range since
+// base adds or changes (content and name) with the secret rules; nil when
+// nothing is found or root is not a git checkout. since is --since, getenv
+// the CI environment (ciScanBase). It needs no store and opens no App.
+func checkCISecrets(ctx context.Context, root, since string, getenv func(string) string) error {
 	top := gitTop(ctx, root)
 	if top == "" {
 		return nil
@@ -68,7 +68,10 @@ func checkCISecrets(ctx context.Context, root string) error {
 	if err != nil {
 		return err
 	}
-	base := ciBase(ctx, top)
+	base, err := ciScanBase(ctx, top, since, getenv)
+	if err != nil {
+		return err
+	}
 	changed, err := ciChanged(ctx, top, base)
 	if err != nil {
 		return err
@@ -94,26 +97,6 @@ func checkCISecrets(ctx context.Context, root string) error {
 		}
 	}
 	return ciSecretRefusal(paths, hits, names)
-}
-
-// ciBase is the commit the CI secret scan compares with (see the file
-// comment), "" when there is none.
-func ciBase(ctx context.Context, top string) string {
-	head, err := liveGit(ctx, top, "rev-parse", "HEAD")
-	if err != nil {
-		return ""
-	}
-	if liveRefExists(ctx, top, "origin/HEAD") {
-		if mb, merr := liveGit(ctx, top, "merge-base", "origin/HEAD", "HEAD"); merr == nil {
-			if b := strings.TrimSpace(string(mb)); b != "" && b != strings.TrimSpace(string(head)) {
-				return b
-			}
-		}
-	}
-	if p, perr := liveGit(ctx, top, "rev-parse", "--verify", "-q", "HEAD^1"); perr == nil {
-		return strings.TrimSpace(string(p))
-	}
-	return ""
 }
 
 // ciChanged is the set of files base..HEAD adds or changes; nil (every

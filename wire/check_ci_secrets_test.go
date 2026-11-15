@@ -15,8 +15,7 @@ import (
 // TestCIScansTheCheckoutForSecrets (devco R-12): `lore check leaks --ci` is
 // the documented backstop for a commit or push that skipped the hooks
 // (--no-verify), so it scans the content and names of the files the last
-// push's commits add or change (base: HEAD's first parent on the default
-// branch) with the secret rules: a key in a committed file and a file named
+// push's commits add or change (base: --since, the commit CI checked last) with the secret rules: a key in a committed file and a file named
 // after a key are both refused, each named with its rule and hash, never
 // the value; the file finding carries its `lore secrets allow --file` line.
 // A clean checkout passes, and a value the same file already held at the
@@ -48,13 +47,13 @@ func TestCIScansTheCheckoutForSecrets(t *testing.T) {
 	}
 	write("README.md", "# widgets\n")
 	commit()
-	if err := checkCISecrets(ctx, dir); err != nil {
+	if err := checkCISecrets(ctx, dir, "", noCIEnv); err != nil {
 		t.Fatalf("a clean checkout was refused: %v", err)
 	}
 	write("deploy.env.example", "AWS_ACCESS_KEY_ID="+key+"\n")
 	write("cfg-"+nameKey+".txt", "nothing here\n")
 	commit()
-	err := checkCISecrets(ctx, dir)
+	err := checkCISecrets(ctx, dir, "", noCIEnv)
 	if !errs.Has(err, errs.LeakBlocked) {
 		t.Fatalf("err = %v, want E_LEAK_BLOCKED for a key pushed past the hooks", err)
 	}
@@ -67,10 +66,11 @@ func TestCIScansTheCheckoutForSecrets(t *testing.T) {
 	if strings.Contains(msg, key) || strings.Contains(msg, nameKey) {
 		t.Fatalf("the CI refusal printed a value:\n%s", msg)
 	}
+	seen := gitHead(t, dir) // the last commit CI checked
 	write("deploy.env.example", "# example\nAWS_ACCESS_KEY_ID="+key+"\n")
 	write("README.md", "# widgets, v2\n")
 	commit()
-	if err := checkCISecrets(ctx, dir); err != nil {
+	if err := checkCISecrets(ctx, dir, seen, noCIEnv); err != nil {
 		t.Fatalf("a value the file already held at the base was refused again: %v", err)
 	}
 }

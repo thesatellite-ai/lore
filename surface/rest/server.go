@@ -228,7 +228,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener, announce io.Writer,
 		return errs.Wrap(errs.Internal, "rest: announce", err)
 	}
 	srv := &http.Server{
-		Handler:           s.handler,
+		Handler:           guardHost(s.handler), // D-331: loopback Host names only
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
