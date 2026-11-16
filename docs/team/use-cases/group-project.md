@@ -52,7 +52,6 @@ The first link created `client2/` in the store. The others joined it. Now add a 
 # alice, in api
 $ lore mission add --title 'Invite landing page' --to agency/client2 --key invite
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_05e9…4603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/missions/msn_c0f3…b5b8.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/projects/prj_76bd…3f10.json (store agency)
 ✓ msn_c0f3…b5b8 — Invite landing page → [agency/client2]

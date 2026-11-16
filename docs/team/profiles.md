@@ -477,7 +477,6 @@ A leave that has passed its end date does not end on its own: `actor show` and `
 # tomas, in acme-hub
 $ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/actors/act_4f89…b64b.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency)
 ✓ tsk_b4d3…11aa — move the invoice export to the new API [medium] → [agency/acme-hub]
@@ -506,10 +505,10 @@ offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   status     active → left
 ✓ act_7a67…9504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)
 $ lore actor list
-act_4f89…b64b [human] Tomas Weber         agency, agency/org
+act_4f89…b64b [human] Tomas Weber         agency/org
 act_7a67…9504 [human] Mira Patel  (left)  agency/org
 act_77cb…76c4 [human] carol               repo
-3 actors across 3 stores
+3 actors across 2 stores
 $ lore task add --title 'review the refund flow' --to agency --assign @mira
 ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) left agency on 2026-09-30; --assign takes only people still in the org
   hint: lore member list shows who is in the org; lore task reassign --from @mira --assign @<someone> --yes hands their tasks over
@@ -519,10 +518,10 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): left → archived
 $ lore actor list --archived
-act_4f89…b64b [human] Tomas Weber             agency, agency/org
+act_4f89…b64b [human] Tomas Weber             agency/org
 act_7a67…9504 [human] Mira Patel  (archived)  agency/org
 act_77cb…76c4 [human] carol                   repo
-3 actors across 3 stores
+3 actors across 2 stores
 ```
 <!-- /example -->
 

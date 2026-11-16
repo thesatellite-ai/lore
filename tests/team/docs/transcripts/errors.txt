@@ -65,7 +65,7 @@ alice (work/website)$ lore sync
 lore: pushed store agency/client, agency/org: commit 601d285 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): pushed (sent 4, received 0, merged 0, refused 0)
+store agency/client (here: agency): pushed (sent 3, received 0, merged 0, refused 0)
 store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 
 ### store branch missing

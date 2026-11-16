@@ -117,7 +117,6 @@ lore: wrote ~/work/website/.lore/data/memories/mem_76bd560aff0771fab8457dbfa9823
   scope: [project]
 alice (work/website)$ lore move --id mem_76bd560aff0771fab8457dbfa9823f10 --to agency --yes
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd560aff0771fab8457dbfa9823f10.json (store agency)
 lore: wrote ~/work/website/.lore/data/memories/mem_76bd560aff0771fab8457dbfa9823f10.json
 ✓ mem_76bd560aff0771fab8457dbfa9823f10 moved to store agency (same id; the old copy is tombstoned)

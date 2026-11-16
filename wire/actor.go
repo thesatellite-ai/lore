@@ -126,6 +126,23 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if st.actorDone[target] {
 		return nil
 	}
+	// devco D-486: a folder of a store clone whose sibling folder (the
+	// roster's, org/) holds the row needs no copy: refs resolve across
+	// the attached stores. A row no sibling holds yet (an agent's first
+	// write in the clone) goes to the folder holding the person's row,
+	// once, as their own roster row, never into the folder written
+	// (actorhome.go).
+	home, herr := a.actorHomeFor(ctx, st, target)
+	if herr != nil {
+		return herr
+	}
+	if home != target {
+		st.actorDone[target] = true
+		if home == "" || st.actorDone[home] {
+			return nil
+		}
+		target, ctx = home, withOwnRosterRow(engine.Unstaged(ctx))
+	}
 	if w, ok := st.storeWho[target]; ok {
 		// C19: an org store's rows are stamped with the person's identity
 		// in that org (orgstoreactor.go), so that actor's row goes there.
