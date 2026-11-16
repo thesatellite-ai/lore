@@ -559,6 +559,7 @@ func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.
 		return err
 	}
 	st.here = here                     // "" for the roster: its rows name no project folder
+	st.storeOnly = true                // its folders are the read's whole scope (lensFolders)
 	st.eng.SetRedactHook(a.redactTask) // D21, as App.state does
 	a.mu.Lock()
 	defer a.mu.Unlock()

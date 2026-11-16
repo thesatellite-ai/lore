@@ -57,3 +57,7 @@ Steps for findings still being fixed are written as they should behave and skipp
 | r3 G-19 | (no D- id yet) | old store clone left after set-url | `TestJourneyTeamLeadStoreMoved`; `TestStoryGRenames` step still empty (skipped) |
 | r3 G-20 | (no D- id yet) | `task stale --days 0` runs with 60 | `TestStoryGMonthsOfUse` |
 | D-460 | (devco) | `task list` put a recurring task's next instance first or last by its hashed id, not when it was made | `TestJourneyRecurringKeepsTheClock`; `TestListAllCreationOrderNotIDOrder` |
+| D-437 | (devco) | parallel `add --to <store>/<folder>` printed "wrote" but left rows untracked; the first parallel writes into a new folder answered E_STALE | `TestJourneyParallelWritersOneStore`; `TestPickUpWaitsForAWriterOfTheClone`; `TestParallelFirstWritesIntoANewFolder` |
+| D-439 | (devco) | rule, decision, pattern and playbook add had no `--key` for an agent's safe retry | `TestEveryAddTakesKey`; `TestCreateFillsCreatorColumn` |
+| D-465 | (devco) | after the D-437 fix every read in a repo with uncommitted rows took `.lore/lock`: refusals changed the tree and parallel `task next` lost every claim (E_CONTENDED) | `TestReadLeavesTheRepoLockAlone`; `TestJourneyAgentSprint`; `TestStoryGManyAgents` |
+| D-470 | (devco) | six parallel first writes into a new store folder, three from agent sessions: now and then one failed with E_STALE | `TestJourneyParallelWritersOneStore`; `TestActorBatchRetriesEachLostRace` |

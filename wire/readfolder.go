@@ -75,8 +75,11 @@ func (a *App) attachReadFolder(ctx context.Context, e op.Entry, d op.Decoder) er
 		return cerr // attached under another name: that name reads it
 	}
 	exists, err := a.folderExists(ctx, src, folderName)
-	if err != nil || !exists {
-		return err // a read never creates a folder: the engine says "no store named …"
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return a.readMissingFolder(ctx, src, base, folderName) // a read never creates a folder (D-472)
 	}
 	a.attachExtra(attach.Store{Name: store.Source(name), URL: src.URL, Folder: folderName, Branch: src.Branch, ReadOnly: true})
 	_, _ = fmt.Fprintf(os.Stderr, "lore: %s is not attached in this repo; read from the store's clone for this command (lore store add … --folder %s attaches it for good)\n", name, folderName)

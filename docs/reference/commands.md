@@ -482,7 +482,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | Command | What it does | Guide |
 |---|---|---|
 | `lore org` … | Choose and inspect which org a repo belongs to | — |
-| `lore org config` … | lore org config commands | — |
+| `lore org config` … | Read and edit the org file's own and repos patterns (get, set) | — |
 | `lore org config get` | Show the org's shared lore-org.yaml: own and repos patterns, stores | — |
 | `lore org config set` | Change the org's shared lore-org.yaml (admin only): own or repos patterns; committed in the org store and copied to this machine's org entry | — |
 | `lore org create` | Start a new org on a lore store: suggest it to teammates, add it with your identity, join its roster | [team/profiles › Step 9 — Create or rename an org](../../docs/team/profiles.md#step-9--create-or-rename-an-org) |

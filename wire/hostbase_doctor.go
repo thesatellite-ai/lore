@@ -92,9 +92,12 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	note := func(msg string) { b.Notes = append(b.Notes, msg) }
 	// The base checks below share one read of each store
 	// (engine.WithReadSnapshot, item 41); the fixing one after them gets
-	// its own.
+	// its own. devco D-474: they are reads under --fix too, as in a plain
+	// doctor (D-441): with the fix's write access the stale-link check's
+	// project lookup made a store folder's missing project row, a store
+	// commit no repair asked for. Only the repair below writes.
 	fixCtx := ctx
-	ctx = engine.WithReadSnapshot(ctx)
+	ctx = engine.WithAccess(engine.WithReadSnapshot(ctx), op.AccessRead)
 	b.Sync = a.doctorSync(ctx, warn, note)             // hostbase_doctor_sync.go (E-GAPS-1 G4)
 	waits := a.doctorStoreConflicts(ctx, b.Sync, warn) // doctor_store_conflicts.go (I-1)
 	a.doctorPushModes(ctx, warn, note, waits)          // storepushops.go: each store's push mode

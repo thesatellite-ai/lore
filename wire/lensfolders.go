@@ -26,9 +26,17 @@ import (
 // no attachment reads yet: what the sql lens attaches beside them. The
 // personal store (me) is not expanded: its folders are other projects'
 // personal notes. None outside a code repo (the store-only opens choose
-// their folders themselves, scope.go).
+// their folders themselves, scope.go), and none on a store-only open
+// anywhere (--store <org>[/<folder>], D-473): that open chose the read's
+// folders, and the repo's attachments are not its scope.
 func (a *App) lensFolders(ctx context.Context) []attach.Store {
 	if _, in := storeHere(a.opts.RepoDir); in {
+		return nil
+	}
+	a.mu.Lock()
+	storeOnly := a.st != nil && a.st.storeOnly
+	a.mu.Unlock()
+	if storeOnly {
 		return nil
 	}
 	top, err := a.storeRepoTop(ctx)

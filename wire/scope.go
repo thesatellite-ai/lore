@@ -170,7 +170,8 @@ func (a *App) cloneScope(ctx context.Context, sc storeCheckout, root attach.Stor
 				return t, cloneCompanyFolder(org, t), true, nil
 			}
 		}
-		return attach.Store{}, nil, false, nil
+		// a read names a folder no store of the org has (D-472)
+		return attach.Store{}, nil, false, a.readMissingFolder(ctx, root, b, folder)
 	case project != "":
 		for _, f := range scan.Folders {
 			if f.Folder == project || f.ID.String() == project {

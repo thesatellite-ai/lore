@@ -264,10 +264,18 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 	var stores []one
 	if name != "" {
 		src, err := a.lookupStore(ctx, verb, name)
-		if err != nil {
+		switch org := a.orgConfigStores(name); {
+		case err != nil && len(org) > 0:
+			// an org of the home's setup, named from any folder (D-471):
+			// every store of the org
+			for _, s := range org {
+				stores = append(stores, one{name, s})
+			}
+		case err != nil:
 			return opsstores.FolderListOut{}, err
+		default:
+			stores = append(stores, one{a.storeLabel(name, src), src})
 		}
-		stores = append(stores, one{a.storeLabel(name, src), src})
 	} else {
 		seen := map[string]bool{}
 		used := map[string]bool{}

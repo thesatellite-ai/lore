@@ -50,3 +50,6 @@ Dev-company round 3, track H. Replayed by `TestStoryHCorruption`, `TestStoryHRew
 | D-144 | r3 H-17 | new laptop: local personal store lost silently | `TestLocalPersonalStoreNote`, `TestJoinLinesSayLocalIsMachineOnly` (story H has no setup with a local personal store) |
 | D-141 | r3 H-18 | hooks taken over: doctor silent about the leak guard | `TestStoryHLostRemotes` |
 | D-142 | r3 H-19 | husky: lore adds hook files to tracked `.husky` | `TestStoryHLostRemotes` (new files; a changed tracked hook skipped until stories:H-1) |
+| D-438 | (devco) | `lore doctor` reported its own store lock as another command at work | `TestDoctorStoreLocks` |
+| D-441 | (devco) | a plain `lore doctor` at a store clone's top committed a nameless project row | `TestPlainDoctorChecksAreReads` |
+| D-466 | (devco) | after the D-438 fix `lore doctor` no longer named a held lock whose holder was its parent process (a shell, a script) | `TestDoctorOwnProcessIsThisPidOnly`; `TestDoctorLock_HeldLockIsNamedThenClears` |
