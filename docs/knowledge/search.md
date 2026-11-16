@@ -29,7 +29,7 @@ memory    mem_2ad3…f891  Old payments page is gone  (score=0.950)
 
 ## Step 2 — Search one kind
 
-`--tables` keeps the search to the kinds you name (`memory`, `rule`, `decision`, `task`, …; several with commas). Each kind also has its own search command, such as `lore decision search`, which prints the row the way `list` does.
+`--tables` keeps the search to the kinds you name (`memory`, `rule`, `decision`, `task`, …; several with commas). Each kind also has its own search command, such as `lore decision search`, which prints the row the way `list` does. It reads your words the way `lore search` does (a question works, any form of a word matches) and lists the kind's rows in the same order, with the same `score` (higher is better).
 
 <!-- example: search#search-one-kind -->
 ```console
@@ -128,7 +128,7 @@ memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.9
 
 ## Try it: whole words, prefixes and several words
 
-Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. Other forms of a word match too: `invoice` finds "invoices", `deploy` finds "deploying" and "deployment". Put `*` at the end to match every word that starts with those letters. Several words list the rows that hold all of them first, then the rows that hold most of them.
+Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. Other forms of a word match too: `invoice` finds "invoices", `deploy` finds "deploying" and "deployment". Put `*` at the end to match every word that starts with those letters; a title word that starts with them counts as a word in the title. Several words list the rows that hold all of them first, then the rows that hold most of them.
 
 <!-- example: search#word-forms only=2,3,4,5 -->
 ```console
@@ -143,8 +143,8 @@ memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.950)
 task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
 $ lore search --query 'invoi*'
 Found 2 hits for "invoi*" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.650)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.650)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.950)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
 $ lore search --query 'client Fridays'
 Found 3 hits for "client Fridays" across 2 entity types:
 memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.967)

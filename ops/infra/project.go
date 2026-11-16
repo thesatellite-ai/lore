@@ -263,8 +263,8 @@ func withRows(line string, rows int, counted bool) string {
 
 // projectShow shows one project (a prj_ id or a name, work.ProjectRef)
 // with its repos.
-func (o ops) projectShow(ctx context.Context, in ProjectRefIn) (ProjectShowOut, error) {
-	pid, err := work.ProjectRef(ctx, o.env, NounProject, in.ID)
+func (o ops) projectShow(ctx context.Context, in ProjectShowIn) (ProjectShowOut, error) {
+	pid, err := o.showProject(ctx, in.ID)
 	if err != nil {
 		return ProjectShowOut{}, err
 	}
@@ -334,6 +334,22 @@ type DeletePreviewer interface {
 // value may be a name too (work.ProjectRef).
 type ProjectRefIn struct {
 	ID string `json:"id" arg:"0" desc:"the project: a name or prj_ id"`
+}
+
+// ProjectShowIn is the input of project.show: the id may be left out to
+// show the project of the folder the command runs in (devco D-449: inside
+// a store folder or a linked repo `project show` needed --id).
+type ProjectShowIn struct {
+	ID string `json:"id,omitempty" arg:"0" desc:"the project: a name or prj_ id (default the project of this folder)"`
+}
+
+// showProject is the project ref names, or with no ref the project the
+// current folder or repo belongs to.
+func (o ops) showProject(ctx context.Context, ref string) (ids.ID[ids.Project], error) {
+	if strings.TrimSpace(ref) == "" {
+		return work.Project(ctx, o.env, NounProject, "")
+	}
+	return work.ProjectRef(ctx, o.env, NounProject, ref)
 }
 
 // ProjectDeleteIn is the input of project.delete.

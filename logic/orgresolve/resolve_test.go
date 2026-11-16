@@ -384,3 +384,36 @@ func TestResolveMovedOwnRepoStaysOwn(t *testing.T) {
 		t.Fatalf("a repos: pattern match must stay client whatever its data, got %s", r.Role)
 	}
 }
+
+// TestPartialPatternNeverTurnsClientOwn: with `*` inside a segment the
+// client pattern still wins over an own pattern that matches the same
+// repo (devco D-453; fail closed as for whole-segment patterns).
+func TestPartialPatternNeverTurnsClientOwn(t *testing.T) {
+	cfg := &orgconf.Config{
+		Orgs: []orgconf.Org{{
+			Name:     "northwind",
+			Identity: orgconf.OrgIdentity{Key: "human:alice@northwind.example"},
+			Stores:   []orgconf.Store{{URL: "git@github.com:northwind/lore", OrgFolder: "org"}},
+			Own:      []string{"github.com/northwind/*", "github.com/northwind/client*"},
+			Repos:    []string{"github.com/northwind/client-*", "github.com/northwind/*-shop"},
+		}},
+		RepoOrgs: map[string]orgconf.RepoOrg{},
+	}
+	for _, c := range []struct {
+		remote string
+		want   Role
+	}{
+		{"github.com/northwind/client-acme", RoleClient},
+		{"github.com/northwind/acme-shop", RoleClient},
+		{"github.com/northwind/clientele", RoleOwn},
+		{"github.com/northwind/api", RoleOwn},
+	} {
+		res, err := Resolve(Inputs{Config: cfg, Remotes: norm(t, c.remote)})
+		if err != nil {
+			t.Fatalf("%s: %v", c.remote, err)
+		}
+		if res.Role != c.want {
+			t.Errorf("%s: role %s (matched by %q), want %s", c.remote, res.Role, res.MatchedBy, c.want)
+		}
+	}
+}

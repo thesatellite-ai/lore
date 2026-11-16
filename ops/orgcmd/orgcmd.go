@@ -176,8 +176,8 @@ type UseIn struct {
 	Clear bool   `json:"clear,omitempty" flag:"clear" desc:"forget the choice for this project"`
 }
 
-// Ops returns every org operation bound to env.
-func Ops(env Env) []op.Entry {
+// baseOps returns the org verbs bound to env (Ops adds org config).
+func baseOps(env Env) []op.Entry {
 	o := ops{env: env}
 	codes := []errs.Code{errs.InvalidInput, errs.NotFound, errs.NotProjectRoot, errs.ConfigInvalid, errs.NotAStore,
 		errs.Offline, errs.StoreUnreachable, errs.OrgAmbiguous, errs.OrgDisagrees, errs.Unsupported, errs.NotImplemented, errs.Internal}
@@ -269,6 +269,20 @@ func Ops(env Env) []op.Entry {
 	}, refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...)),
 		storeRemoveOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...)),   // refresh.go, storeadd.go, storeremove.go
 		storeAudienceOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...))) // storeaudience.go
+}
+
+// Ops is every org operation: the org verbs and org config get/set
+// (orgconfig.go).
+func Ops(env Env) []op.Entry {
+	o := ops{env: env}
+	codes := []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.NotAStore,
+		errs.Offline, errs.StoreUnreachable, errs.OrgAmbiguous, errs.Unsupported, errs.Internal}
+	spec := func(name, summary string, errCodes []errs.Code, mayAsk bool, ex ...op.Example) op.Spec {
+		s := op.Spec{Name: name, Summary: summary, Permission: op.PermWrite, Access: op.AccessRead, Local: true, Errors: errCodes, Examples: ex}
+		s.Confirm.MayAsk = mayAsk
+		return s
+	}
+	return append(baseOps(env), configOps(o, spec, codes)...)
 }
 
 // ops binds the run functions to one Env.

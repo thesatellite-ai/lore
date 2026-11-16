@@ -216,7 +216,7 @@ func ValidateValue(r Rule, v string) (why string, ok bool) {
 			// fieldMsg names the value already: keep only the reason
 			why := strings.TrimPrefix(err.Error(), "repourl: ")
 			why = strings.TrimPrefix(strings.TrimPrefix(why, "pattern "+strconv.Quote(v)), ":")
-			return strings.TrimSpace(why) + "; write host/owner/repo with * or ** as whole segments, like " + RepoPatternExample, false
+			return strings.TrimSpace(why) + "; write host/owner/repo with ** as a whole segment and * as a segment or part of one (client-*), never in the host, like " + RepoPatternExample, false
 		}
 	default:
 		return "unknown rule " + strconv.Quote(string(r)), false

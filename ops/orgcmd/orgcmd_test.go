@@ -125,7 +125,8 @@ func TestRefusalsBeforeHost(t *testing.T) {
 		t.Fatalf("org folder default: %v %q", err, h.got.OrgFolder)
 	}
 	bodies := map[string]string{OpCreate: `{"org":"a","store":"s"}`, OpImport: `{"url":"u"}`, OpLink: `{"org":"a","project":"p"}`, OpUnlink: `{"org":"a"}`,
-		OpRename: `{"old":"a","new":"b"}`, OpSet: `{"org":"a","commit":true}`, OpUse: `{"entry":"a"}`, OpRefresh: `{"org":"a"}`, OpStoreAdd: `{"org":"a","url":"u"}`, OpStoreRemove: `{"org":"a","url":"u"}`, OpStoreAudience: `{"org":"a","url":"u","audience":"admins"}`}
+		OpRename: `{"old":"a","new":"b"}`, OpSet: `{"org":"a","commit":true}`, OpUse: `{"entry":"a"}`, OpRefresh: `{"org":"a"}`, OpStoreAdd: `{"org":"a","url":"u"}`, OpStoreRemove: `{"org":"a","url":"u"}`, OpStoreAudience: `{"org":"a","url":"u","audience":"admins"}`,
+		OpConfigGet: `{"org":"a"}`, OpConfigSet: `{"org":"a","key":"repos","add":["github.com/a/client-*"]}`}
 	for _, e := range Ops(env{nil}) {
 		in, err := e.Decode(op.JSONDecoder{Body: []byte(bodies[e.Spec().Name])})
 		if err != nil {

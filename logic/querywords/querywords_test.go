@@ -55,3 +55,14 @@ func TestStemHas(t *testing.T) {
 		t.Errorf("Coverage = %d, want 2", got)
 	}
 }
+
+// TestPrefixTerm (devco D-465): Terms keeps a prefix word's '*' and
+// Coverage counts a word starting with it.
+func TestPrefixTerm(t *testing.T) {
+	if got := querywords.Terms("invoi*"); len(got) != 1 || got[0] != "invoi*" {
+		t.Fatalf("Terms(invoi*) = %v", got)
+	}
+	if querywords.Coverage("Invoice numbering", []string{"invoi*"}) != 1 || querywords.Coverage("Quarterly report", []string{"invoi*"}) != 0 {
+		t.Error("prefix coverage")
+	}
+}

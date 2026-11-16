@@ -16,6 +16,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -208,7 +209,10 @@ type ListIn struct {
 	All        bool     `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"only decisions with this tag (repeatable: all must match)"`
-	Store      string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store and its folders, <store>/<folder> (default every attached store)"`
+	// Status keeps decisions in any of these statuses (devco D-449: "which
+	// decisions wait for the owner" had only --sort status).
+	Status []string `json:"status,omitempty" flag:"status" desc:"only decisions with this status: proposed, accepted, superseded, deprecated (repeatable: any may match)"`
+	Store  string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store and its folders, <store>/<folder> (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	kn.MetaFlags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -495,9 +499,20 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.All {
 		in.Archived = true // --all: the metadata narrowing keeps them too
 	}
+	for _, st := range in.Status {
+		if err := kn.OneOf(noun, "status", st, schema.DecisionStatuses()); err != nil {
+			return ListOut{}, err
+		}
+	}
 	keep, err := kn.HasTags(ctx, o.env, in.Tags)
 	if err != nil {
 		return ListOut{}, err
+	}
+	if len(in.Status) > 0 {
+		tagged := keep
+		keep = func(r row.Row) bool {
+			return slices.Contains(in.Status, content.Field(r, fieldStatus)) && (tagged == nil || tagged(r))
+		}
 	}
 	items, hid, err := kn.List(ctx, o.env, noun, kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project, All: in.All},
 		true, store.Source(in.Store), keep)
@@ -531,6 +546,11 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 
 // edit patches the given fields.
 func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	in.ID = id
 	if err := kn.OneOf(noun, "status", in.Status, schema.DecisionStatuses()); err != nil {
 		return WriteOut{}, err
 	}
@@ -569,6 +589,13 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 
 // archive sets archived_at.
 func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
+	if in.ID != "" {
+		id, err := o.resolveRef(ctx, in.ID)
+		if err != nil {
+			return WriteOut{}, err
+		}
+		in.ID = id
+	}
 	bulkForm, err := wheredel.ArchiveForm(noun.Name, in.ID, in.Where, in.DryRun)
 	if err != nil {
 		return WriteOut{}, err
@@ -585,6 +612,11 @@ func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
 
 // unarchive clears archived_at.
 func (o ops) unarchive(ctx context.Context, in IDIn) (WriteOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	in.ID = id
 	return o.stamp(ctx, in.ID, value.Null{}, "unarchived")
 }
 
@@ -599,6 +631,11 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 
 // delete writes the decision's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	in.ID = id
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	src, w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {

@@ -454,7 +454,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
-	hits, err := o.env.Search(ctx, table, in.Query, maxSearchLimit)
+	hits, err := opsmemory.SearchRanked(ctx, o.env, "comment", table, in.Query, maxSearchLimit) // D-461: read and ranked as `lore search`
 	if err != nil {
 		return SearchOut{}, err
 	}

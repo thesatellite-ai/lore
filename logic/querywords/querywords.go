@@ -40,12 +40,16 @@ func IsStop(w string) bool { return stopWords[w] }
 // space, punctuation trimmed from both ends ("orbit?" is orbit; inner
 // punctuation stays, so deploy.prod.yml is one word), lower-cased,
 // repeats and stop words dropped. When every word is a stop word the
-// words are kept ("the who" still searches for something).
+// words are kept ("the who" still searches for something). A word ending
+// in '*' is a prefix (invoi*) and keeps its '*' (Coverage, D-465).
 func Terms(q string) []string {
 	var all, topic []string
 	seen := map[string]bool{}
 	for _, f := range strings.Fields(q) {
 		w := strings.ToLower(strings.TrimFunc(f, func(r rune) bool { return unicode.IsPunct(r) }))
+		if w != "" && strings.HasSuffix(f, PrefixMark) {
+			w += PrefixMark
+		}
 		if w == "" || seen[w] {
 			continue
 		}
@@ -114,13 +118,25 @@ func Base(w string) string {
 // well-known, a CJK word) is looked for as written inside the text.
 func Has(text, term string) bool { return Coverage(text, []string{term}) == 1 }
 
-// Coverage is how many of terms text holds (Has).
+// PrefixMark ends a prefix term (invoi*): it matches every word starting
+// with the rest, as FTS5's prefix query does.
+const PrefixMark = "*"
+
+// Coverage is how many of terms text holds (Has). A prefix term (invoi*)
+// is held by a word of text starting with it, so a prefix query gives a
+// title its share like a word query does (D-465).
 func Coverage(text string, terms []string) int {
 	lower := strings.ToLower(text)
 	var bases map[string]bool // the Base of every word of text, made on first use
 	n := 0
 	for _, t := range terms {
 		t = strings.ToLower(t)
+		if p, ok := strings.CutSuffix(t, PrefixMark); ok && p != "" {
+			if hasPrefixWord(lower, p) {
+				n++
+			}
+			continue
+		}
 		if !plainWord(t) {
 			if strings.Contains(lower, t) {
 				n++
@@ -152,4 +168,15 @@ func plainWord(w string) bool {
 		}
 	}
 	return true
+}
+
+// hasPrefixWord reports whether a word of the lower-case text starts with
+// prefix (inner punctuation splits words, as the FTS5 index does).
+func hasPrefixWord(lower, prefix string) bool {
+	for _, w := range strings.FieldsFunc(lower, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if strings.HasPrefix(w, prefix) {
+			return true
+		}
+	}
+	return false
 }

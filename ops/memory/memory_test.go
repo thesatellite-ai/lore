@@ -137,12 +137,28 @@ func (f *fakeEnv) Search(_ context.Context, _ row.Table, match string, limit int
 	for _, s := range f.order {
 		for _, k := range slices.Sorted(maps.Keys(f.rows[s])) {
 			r := f.rows[s][k]
-			if !r.Deleted && strings.Contains(field(r, fieldBody), match) && len(out) < limit {
+			if !r.Deleted && fakeMatch(field(r, fieldBody), match) && len(out) < limit {
 				out = append(out, Hit{Source: s, ID: r.ID})
 			}
 		}
 	}
 	return out, nil
+}
+
+// fakeMatch is the fake's full-text match: the text as written, or, for
+// the FTS5 text the shared matcher sends (("gateway" OR "gateways")), any
+// of its quoted words.
+func fakeMatch(body, match string) bool {
+	if !strings.Contains(match, `"`) {
+		return strings.Contains(body, match)
+	}
+	parts := strings.Split(match, `"`)
+	for i := 1; i < len(parts); i += 2 {
+		if strings.Contains(body, parts[i]) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *fakeEnv) Project(context.Context) (ids.ID[ids.Project], error) { return f.project, nil }

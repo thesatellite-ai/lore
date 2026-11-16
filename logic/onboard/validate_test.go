@@ -57,7 +57,8 @@ func TestValidateValue(t *testing.T) {
 		{R(RuleRepoPattern), "git@github.com:agency/app.git", true},
 		{R(RuleRepoPattern), "*/acme_app", false},
 		{R(RuleRepoPattern), "**/app", false},
-		{R(RuleRepoPattern), "github.com/agency/app-*", false},
+		{R(RuleRepoPattern), "github.com/agency/app-*", true}, // devco D-453: * inside a segment
+		{R(RuleRepoPattern), "github.com/agency/app-**", false},
 		{R(RuleRepoPattern), "agency", false},
 		{Rule("nope"), "x", false},
 	}
