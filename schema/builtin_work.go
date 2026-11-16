@@ -107,6 +107,14 @@ const (
 	FieldTaskRecur = "recur"
 )
 
+// Provenance of a task (devco D-488): the same source_kind / source_ref
+// pair every knowledge and content row keeps, so `task add --source
+// --source-ref` records where a task came from as the other adds do.
+const (
+	FieldTaskSourceKind = "source_kind"
+	FieldTaskSourceRef  = "source_ref"
+)
+
 // Checklist, estimate and people fields (TASK_SYSTEM_DESIGN 7, 9, 14).
 const (
 	// FieldTaskChecklist is the list of checklist items (model/checklist),
@@ -224,6 +232,11 @@ func workDefs() []TableDef {
 			Text("work_branch", MergeBy(MergeNewest)),
 			Text("idempotency_key", MergeBy(MergeNewest)),
 			Text("role", MergeBy(MergeNewest)),
+			// devco D-488: where the task came from, as every knowledge
+			// and content row keeps it (task add --source / --source-ref);
+			// optional, so tasks written before stay valid.
+			Text(FieldTaskSourceKind, Describe("where the task came from: manual, agent-proposal, imported, … (task add --source)")),
+			Text(FieldTaskSourceRef, Describe("a free-form provenance pointer: a url, ticket, commit, file:line (task add --source-ref)")),
 			// Sub-tasks (DQ5, TASK 6.2): the parent is stored on the child
 			// only (T1: children are a query), rank orders siblings.
 			Ref(FieldTaskParent, TableTasks, Describe("the parent task (tsk_…); empty = top level")),

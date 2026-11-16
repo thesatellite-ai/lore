@@ -307,6 +307,8 @@ merged_at:
 work_branch:
 idempotency_key:
 role:
+source_kind:
+source_ref:
 parent_id:
 rank:
 close_reason:

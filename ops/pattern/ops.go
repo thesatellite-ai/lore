@@ -7,7 +7,9 @@
 package pattern
 
 import (
+	"cmp"
 	"context"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
@@ -131,7 +133,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	}
 	fields, err := content.Texts(Noun, map[string]string{
 		fieldTitle: in.Title, content.FieldBody: body, fieldLanguage: in.Language,
-		content.FieldSourceKind: content.DefaultSource, content.FieldSourceRef: in.SourceRef,
+		content.FieldSourceKind: cmp.Or(strings.TrimSpace(in.Source), content.DefaultSource), content.FieldSourceRef: in.SourceRef,
 	})
 	if err != nil {
 		return content.WriteOut{}, err

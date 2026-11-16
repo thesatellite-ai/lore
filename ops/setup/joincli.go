@@ -93,7 +93,7 @@ func joinCommands(name, answer string, id joinIdentity, plan PlanOut) []string {
 			continue
 		}
 		steps = append(steps, st)
-		include[st.ID] = !st.Optional || len(st.Values) > 0
+		include[st.ID] = !st.Optional || len(st.Values) > 0 || (st.ID == onboard.StepGitHub && id.GitHub != "")
 	}
 	for i := len(steps) - 1; i >= 0; i-- {
 		if include[steps[i].ID] {
@@ -122,6 +122,13 @@ func joinCommands(name, answer string, id joinIdentity, plan PlanOut) []string {
 					email = joinPlaceholderEmail
 				}
 				ans[onboard.QIDEmail] = onboard.Answer{Text: email}
+			}
+			if id.Name != "" {
+				ans[onboard.QIDName] = onboard.Answer{Text: id.Name}
+			}
+		case onboard.StepGitHub:
+			if id.GitHub != "" {
+				ans[onboard.QIDGitHubAccount] = onboard.Answer{Text: id.GitHub}
 			}
 		case onboard.StepJoin:
 			ans[onboard.QIDInvite] = onboard.Answer{Text: answer}
@@ -160,6 +167,12 @@ type joinIdentity struct {
 	// Note says why the line carries a placeholder instead of the git
 	// email ("" when it does not); JoinOut.Text prints it.
 	Note string
+	// Name and GitHub are the roster's name and GitHub login of Email
+	// (devco D-487); "" keeps the plan's prefill (global git, gh).
+	Name, GitHub string
+	// NameFrom and GitHubFrom say where the prefilled values came from
+	// (JoinOut.PrefillNote).
+	NameFrom, GitHubFrom string
 }
 
 // joinEmail is the identity of a join of org: the invite's address, else
@@ -291,4 +304,72 @@ func HereForJoin(ctx context.Context, h onboard.Here) onboard.Here {
 func JoinOf(ctx context.Context) JoinContext {
 	j, _ := ctx.Value(joinCtxKey{}).(JoinContext)
 	return j
+}
+
+// JoinPerson is what the org's roster says about the person joining
+// (devco D-487): the name and GitHub login the join lines prefill instead
+// of global git's user.name.
+type JoinPerson struct {
+	Name   string `json:"name,omitempty"`
+	GitHub string `json:"github,omitempty"`
+}
+
+// JoinPersonFinder is the optional Prober upgrade that reads the roster
+// entry of email in the org a join answer names (an org on this machine,
+// or a store url, read as the join step's own check reads it); ok false
+// when the roster cannot be read or has no member with that address.
+type JoinPersonFinder interface {
+	JoinPerson(ctx context.Context, setup, answer, email string) (JoinPerson, bool)
+}
+
+// joinPerson fills id's Name and GitHub from the roster entry of its
+// email in the org answer names, else from global git (name) and the
+// github step's own prefill; NameFrom and GitHubFrom say where each came
+// from (JoinOut.PrefillNote).
+func (e engine) joinPerson(ctx context.Context, id joinIdentity, setup, answer, org string) joinIdentity {
+	pr, err := e.env.SetupProber(ctx)
+	if err != nil {
+		return id
+	}
+	where := cmp.Or(org, setup)
+	if f, ok := pr.(JoinPersonFinder); ok && strings.Contains(id.Email, "@") && answer != "" {
+		if p, found := f.JoinPerson(ctx, setup, answer, id.Email); found {
+			// a name member add derived from the address (bob for
+			// bob@acme.example, no --name given) is a placeholder: git's
+			// user.name is a better guess then
+			local, _, _ := strings.Cut(id.Email, "@")
+			if p.Name != "" && !strings.EqualFold(p.Name, local) {
+				id.Name, id.NameFrom = p.Name, "the roster of "+where+" ("+id.Email+")"
+			}
+			if p.GitHub != "" {
+				id.GitHub, id.GitHubFrom = p.GitHub, "the roster of "+where+" ("+id.Email+")"
+			}
+		}
+	}
+	if id.NameFrom == "" {
+		if p, perr := pr.Prefill(ctx, onboard.PrefillGitUserName, onboard.SetupEntry{}); perr == nil && strings.TrimSpace(p.Value.Text) != "" {
+			id.NameFrom = "git config --global user.name (the roster of " + where + " gave none)"
+		}
+	}
+	return id
+}
+
+// prefillNote says where the join lines' name and GitHub account came
+// from; "" when neither is prefilled.
+func prefillNote(id joinIdentity, commands []string) string {
+	var parts []string
+	if id.NameFrom != "" {
+		parts = append(parts, "name from "+id.NameFrom)
+	}
+	hasGitHub := slices.ContainsFunc(commands, func(c string) bool { return strings.Contains(c, `"`+onboard.QIDGitHubAccount+`":`) })
+	switch {
+	case id.GitHubFrom != "":
+		parts = append(parts, "GitHub account from "+id.GitHubFrom)
+	case hasGitHub:
+		parts = append(parts, "GitHub account from this machine's gh login or ssh keys (the roster has no GitHub login for you)")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Prefilled: " + strings.Join(parts, "; ") + ". Change a value in its line if it is wrong."
 }

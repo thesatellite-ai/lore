@@ -61,3 +61,4 @@ Steps for findings still being fixed are written as they should behave and skipp
 | D-439 | (devco) | rule, decision, pattern and playbook add had no `--key` for an agent's safe retry | `TestEveryAddTakesKey`; `TestCreateFillsCreatorColumn` |
 | D-465 | (devco) | after the D-437 fix every read in a repo with uncommitted rows took `.lore/lock`: refusals changed the tree and parallel `task next` lost every claim (E_CONTENDED) | `TestReadLeavesTheRepoLockAlone`; `TestJourneyAgentSprint`; `TestStoryGManyAgents` |
 | D-470 | (devco) | six parallel first writes into a new store folder, three from agent sessions: now and then one failed with E_STALE | `TestJourneyParallelWritersOneStore`; `TestActorBatchRetriesEachLostRace` |
+| D-488 | (devco) | `task add` had neither `--source` nor `--source-ref`; pattern and playbook add had no `--source` | `TestEveryAddTakesTheSourcePair`; `TestTaskAddKeepsItsSource`; `TestEveryAddKeepsSourceRef` |

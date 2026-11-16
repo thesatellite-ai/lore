@@ -17,7 +17,7 @@ This page is for one person. Alice (an agency developer) keeps her to-do list fo
 
 ## Step 1 — Add tasks
 
-Give each task a short title that says what to do. Add `--priority` (`low`, `medium`, `high` or `urgent`; `medium` if you leave it out), `--due` for a date, and `--body` for the details.
+Give each task a short title that says what to do. Add `--priority` (`low`, `medium`, `high` or `urgent`; `medium` if you leave it out), `--due` for a date, and `--body` for the details. Where the task came from goes in `--source-ref` (a url, a ticket, a commit, `file:line`) and what kind of source it is in `--source` (`imported`, `agent-proposal`, …; empty if you leave it out), as on every other add; `lore task show --json` gives both back as `source_ref` and `source_kind`.
 
 <!-- example: tasks#add -->
 ```console

@@ -7,6 +7,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
@@ -35,6 +36,11 @@ type AddIn struct {
 	engine.MetaFlags
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425,
+	// D-488: task add had neither it nor --source).
+	sourceref.Flag
+	// Source is the task's source_kind (D-488), free-form like rule add's.
+	Source string `json:"source,omitempty" flag:"source" desc:"source_kind: where the task came from (manual, agent-proposal, imported, …; empty by default)"`
 	// Title is v0.1.17's positional <title> (quote a title of several
 	// words: an op argument is one value).
 	Title      string `json:"title,omitempty" arg:"0" rest:"true" desc:"the task title (several words are joined; omitted with --template)"`
@@ -201,6 +207,9 @@ type Full struct {
 	PlanID        string `json:"plan_id,omitempty"`
 	ProjectID     string `json:"project_id"`
 	RepoID        string `json:"repo_id,omitempty"`
+	// SourceKind and SourceRef are where the task came from (D-488).
+	SourceKind string `json:"source_kind,omitempty"`
+	SourceRef  string `json:"source_ref,omitempty"`
 	// Tree fields (6.2, 8.3) and the derived rollup (6.6).
 	ParentID    string          `json:"parent_id,omitempty"`
 	Rank        string          `json:"rank,omitempty"`

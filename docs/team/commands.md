@@ -873,6 +873,8 @@ Flags:
       --role string              plan role matched by task next --role (e.g. coordinator)
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
       --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --source string            source_kind: where the task came from (manual, agent-proposal, imported, …; empty by default)
+      --source-ref string        where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)
       --tasklist string          tasklist_id (tlt_*); default: the project's default list (created on demand)
       --template string          apply this task template (its name or ttp_ id); the title comes from the template
       --timebox duration         time box, e.g. 60m (active lease time summed across holders)

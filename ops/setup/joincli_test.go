@@ -94,3 +94,31 @@ func TestJoinCommandsNeverOfferAnotherOrgsEmail(t *testing.T) {
 		t.Fatalf("Text leaves out the identity note:\n%s", out)
 	}
 }
+
+// TestJoinCommandsTakeTheRosterNameAndGitHub (devco D-487): the roster's
+// name and GitHub login replace the plan's prefill (global git's
+// user.name, this machine's gh login) in the identity and github lines,
+// the github line is written even when the plan had nothing for it, and
+// the note says where each value came from.
+func TestJoinCommandsTakeTheRosterNameAndGitHub(t *testing.T) {
+	plan := PlanOut{Steps: []PlanStep{
+		{ID: onboard.StepIdentity, Kinds: []onboard.Kind{onboard.KindMember}, Values: onboard.Answers{"name": {Text: "gituser"}}},
+		{ID: onboard.StepGitHub, Kinds: []onboard.Kind{onboard.KindMember}, Optional: true},
+		{ID: onboard.StepJoin, Kinds: []onboard.Kind{onboard.KindMember}},
+	}}
+	id := joinIdentity{Email: "sam@acme.example", Name: "Sam Roster", GitHub: "sam-roster", NameFrom: "the roster of acme (sam@acme.example)", GitHubFrom: "the roster of acme (sam@acme.example)"}
+	cmds := joinCommands("acme", "acme", id, plan)
+	got := strings.Join(cmds, "\n")
+	for _, want := range []string{`"name":"Sam Roster"`, `--step github --answers '{"github_account":"sam-roster"}'`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("join lines lack %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "gituser") {
+		t.Errorf("join lines keep git's name:\n%s", got)
+	}
+	note := prefillNote(id, cmds)
+	if !strings.Contains(note, "name from the roster of acme") || !strings.Contains(note, "GitHub account from the roster of acme") {
+		t.Errorf("prefill note %q", note)
+	}
+}

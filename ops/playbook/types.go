@@ -36,6 +36,9 @@ type AddIn struct {
 	sourceref.Flag
 	// --key: a retry with the same key adds nothing (D-439, addkey).
 	addkey.Retry
+	// Source is the source_kind (D-488: every add takes --source with
+	// --source-ref; this one wrote "manual" always).
+	Source string `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 
 	Title       string `json:"title" flag:"title" alias:"name" desc:"title (required)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"one-line summary (default: the title)"`

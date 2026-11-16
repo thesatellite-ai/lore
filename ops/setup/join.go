@@ -95,13 +95,22 @@ func (e engine) Join(ctx context.Context, in JoinIn) (JoinOut, error) {
 		text = text[i:] // drop a pasted "lore setup join " in front
 	}
 	id := e.joinEmail(ctx, inv.Email, cmp.Or(inv.Org, name))
+	// the roster is read where the join step reads it: the org entry here,
+	// else the invite's store url (an invite of a new person finds none)
+	rosterAt := inv.Store
+	if e.knownOrg(ctx, inv.Org) {
+		rosterAt = inv.Org
+	}
+	id = e.joinPerson(ctx, id, name, rosterAt, inv.Org)
+	cmds := joinCommands(cmp.Or(name, joinFallbackName), text, id, plan)
 	return JoinOut{
 		Web:          WebStart{Setup: name, NoOpen: in.NoOpen, Invite: text},
 		Invite:       Invite(inv),
 		Plan:         plan,
-		Commands:     joinCommands(cmp.Or(name, joinFallbackName), text, id, plan),
+		Commands:     cmds,
 		Org:          inv.Org,
 		IdentityNote: id.Note,
+		PrefillNote:  prefillNote(id, cmds),
 	}, nil
 }
 
@@ -124,6 +133,8 @@ func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOu
 		return JoinOut{}, err
 	}
 	id := e.joinEmail(ctx, e.rosterEmail(ctx, name, org), cmp.Or(inv.Org, name))
+	id = e.joinPerson(ctx, id, name, org, inv.Org)
+	cmds := joinCommands(cmp.Or(name, joinFallbackName), org, id, plan)
 	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan,
-		Commands: joinCommands(cmp.Or(name, joinFallbackName), org, id, plan), Org: inv.Org, IdentityNote: id.Note}, nil
+		Commands: cmds, Org: inv.Org, IdentityNote: id.Note, PrefillNote: prefillNote(id, cmds)}, nil
 }

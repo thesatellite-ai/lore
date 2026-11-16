@@ -547,6 +547,10 @@ type JoinOut struct {
 	// of carrying git's email: that email is another org's identity on
 	// this machine (devco N-4); "" otherwise.
 	IdentityNote string `json:"identity_note,omitempty"`
+	// PrefillNote says where the lines' name and GitHub account came
+	// from: the org's roster entry for the joining email, else global git
+	// and this machine's gh login (devco D-487); "" when neither is set.
+	PrefillNote string `json:"prefill_note,omitempty"`
 }
 
 // Text implements op.Texter: the join lines (the page, when it opens,
@@ -560,6 +564,9 @@ func (o JoinOut) Text() string {
 	b.WriteString("Each line checks its step first and says what to fix; lore setup list then shows the setup.\n")
 	if o.IdentityNote != "" {
 		b.WriteString(o.IdentityNote + "\n")
+	}
+	if o.PrefillNote != "" {
+		b.WriteString(o.PrefillNote + "\n")
 	}
 	if slices.ContainsFunc(o.Commands, choosesLocalPersonal) {
 		b.WriteString(LocalPersonalWarningText() + "\n")

@@ -124,6 +124,7 @@ func fullOf(lab work.Labeler, src store.Source, r row.Row) Full {
 		StartedAt: work.TimeText(r, fieldStarted), CompletedAt: work.TimeText(r, work.FieldCompleted),
 		MissionID: work.Field(r, work.FieldMission), TaskListID: work.Field(r, work.FieldTasklist), PlanID: work.Field(r, work.FieldPlan),
 		ProjectID: work.Field(r, work.FieldProject), RepoID: work.Field(r, work.FieldRepo),
+		SourceKind: work.Field(r, schema.FieldTaskSourceKind), SourceRef: work.Field(r, schema.FieldTaskSourceRef),
 		ParentID: work.Field(r, fieldParent), Rank: work.Field(r, fieldRank), CloseReason: work.Field(r, fieldCloseReason),
 		CreatedAt: r.CreatedAt.UTC().Format(work.TimeLayout), TagIDs: work.TagIDs(r), Store: work.SourceOf(lab, src), Label: work.Label(lab, src), UpdatedAt: r.UpdatedAt.UTC().Format(work.TimeLayout), CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 	}
