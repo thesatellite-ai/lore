@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1835 |
+| fixed | 1836 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -816,6 +816,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-480 | finding | owner store test 2: in a member's home a read in their store clone's folder said "(no rules)" on the Mac (not reproduced on linux with url.insteadOf) | fixed | TestJourneyStoreCloneThroughSSHAliasIsTheOrgStore | reproduced with the clone origin through an ssh-config alias (`git@<alias>:…`, Host/HostName in ~/.ssh/config): the folder read listed only the folder's own rows, never the org's (a folder with none of its own reads "(no rules)"), because cloneOrgEntry matched the clone's origin to the org's store by the literal host; it now uses the one store identity (D-493) |
 | devco:D-493 | finding | store test 2 (st2member): a store clone whose origin uses an ssh host alias was not matched to the org's store entry (git@github.com: or https), so reads at the clone top labelled rows [<repo>/org] instead of [<org>/…] | fixed | TestRemoteNormResolvesSSHAlias, TestCloneDirForFindsAliasKeyedRecord, TestJourneyStoreCloneThroughSSHAliasIsTheOrgStore | git.Remote.Norm (host/path) resolves an ssh url's alias host to the HostName the person's ~/.ssh/config gives (read once per host per run, file only; a subdomain route such as ssh.github.com is kept as the host), so every comparison through Norm agrees: orgOfURL, cloneOrgEntry, sameStoreURL, CloneDirFor (an old alias-keyed clone record still found), store remove and push matching; https and ssh forms of one host/owner/repo were already one Norm |
 | devco:D-486 | finding | owner store test 2, new problem 6: one `task edit --assign --yes` in a member's store folder committed two actor rows into that folder plus a separate commit with a machines row | fixed | TestFolderWriteKeepsTheActorRowInItsSibling, TestJourneyStoreScope | wire/actorhome.go: a folder of a store clone whose sibling folder (the org folder) holds the caller's actor row gets no copy (refs resolve across the attached folders); an agent's missing row goes once to the folder holding its owner's row (its own roster row, outside the edit's batch), never the folder written; the machine profile goes to that folder too, so a product-folder write carries none; doctor's actor_roster counts the sibling's row; docs/team/identity-and-stores.md, docs/operations/doctor.md; story B; break-verified (unit: acme/ got the copy; journey: sync/actors in the commit) |
+| devco:D-495 | finding | after-land gate on dev 5151f30d: `lore sync` in a linked repo re-rendered the private file under sync's write access, so resolving the project made the linked folder's project row and committed it after the push; every such sync left a commit waiting and `actor merge` made two commits in the folder's store instead of one | fixed | TestJourneyFoldersMerge | the after-sync re-render runs as a read, as `lore render` does (wire/renderhost/render_private.go rerenderPrivateQuiet); broken by D-494 |
 
 ## lore-adoptfix
 
