@@ -108,7 +108,7 @@ An org's store, `me` or a store named by its `sto_` id lives in `~/.lore/config.
 
 ## Step 4 — Split a store into folders
 
-`lore store folder add --store <store> --folder <folder>` creates a folder inside the store, one per topic or per client. A folder name is snake_case and cannot be `org`. Write to it with `--to <store>/<folder>`; the first write attaches the folder in `.lore/stores.yaml` as its own entry, so a repo only shows the folders it uses. `lore store folder list [--store store]` lists a store's folders, who made each and whether this repo attaches it (`team`, `me` and an org's store work outside any repo too: [Client folders from the parent folder](../team/client-folders.md)):
+`lore store folder add --store <store> --folder <folder>` creates a folder inside the store, one per topic or per client. A folder name is snake_case and cannot be `org`. Write to it with `--to <store>/<folder>`; the first write attaches the folder in `.lore/stores.yaml` as its own entry, so a repo only shows the folders it uses. A store attached whole (an entry with no `folder:`) is every folder of it: `rule list`, `task list`, every other list, `search` and `lore sql` read all its folders, each row labelled `<store>/<folder>`, and `--store <store>` keeps just them. `lore store folder list [--store store]` lists a store's folders, who made each and whether this repo attaches it (`team`, `me` and an org's store work outside any repo too: [Client folders from the parent folder](../team/client-folders.md)):
 
 <!-- example: stores#store-folders -->
 ```console

@@ -111,6 +111,15 @@ func TestJourneyStoreReadsEverything(t *testing.T) {
 		lee.Lore(wt, "store", "add", "whole", tt.store.SSHURL(), "--yes").OK(t)
 		r := lee.Lore(wt, "sql", "--internal", "--query", "select source, body from rules_all order by body").OK(t)
 		r.Says(t, "whole/"+jsrOps, "whole/"+jsrSync, tlOrg+"/org", "(3 rows)").Never(t, "a source needs")
+		// D-484: lists and search read the same folders as sql
+		lee.Lore(wt, "rule", "list").OK(t).Says(t, jsrSync+" rule one", jsrOps+" rule one", "[whole/"+jsrOps+"]").Never(t, "(no rules)")
+		lee.Lore(wt, "task", "list").OK(t).Says(t, jsrSyncTask, jsrOpsTask)
+		lee.Lore(wt, "rule", "list", "--store", "whole").OK(t).Says(t, jsrSync+" rule one", jsrOps+" rule one").Never(t, "(no rules)")
+		lee.Lore(wt, "search", "--query", "renew domain").OK(t).Says(t, jsrOpsTask, "whole/"+jsrOps)
+		// D-485: --all-repos in one folder of the store covers every folder of it
+		ops := filepath.Join(storeDir, jsrOps)
+		lee.Lore(ops, "search", "--query", "rotate token").OK(t).Never(t, jsrSyncTask)
+		lee.Lore(ops, "search", "--query", "rotate token", "--all-repos").OK(t).Says(t, jsrSyncTask)
 	})
 	w.Step("day3/the-org-reads-the-same-everywhere", func() {
 		// D-471: --store <org> reads every folder of the org from a linked

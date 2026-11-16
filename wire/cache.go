@@ -38,6 +38,9 @@ type caches struct {
 	// combined is the one file shared by every attached store past
 	// MaxStoreCaches (CFG3 fallback), nil otherwise.
 	combined *sqlite.Cache
+	// combinedPath is the file of combined ("" without one): the lens
+	// attaches it (lensSources), on a repo's open and a store-only one.
+	combinedPath string
 	// healed are the notices of damaged cache files moved aside and
 	// rebuilt during open (openHealing); the App hands them to
 	// Options.Notice once the open succeeds.
@@ -45,7 +48,7 @@ type caches struct {
 }
 
 // Combined reports whether this repo uses the CFG3 combined cache (for
-// `lore doctor`: "more than 9 store folders: one combined cache").
+// `lore doctor`: "more than MaxStoreCaches store folders: one combined cache").
 func (a *App) Combined() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -88,6 +91,7 @@ func (c *caches) openCombined(ctx context.Context, names []store.Source, path st
 		c.order = append(c.order, n)
 	}
 	c.combined = f
+	c.combinedPath = path
 	return nil
 }
 
@@ -262,6 +266,7 @@ func (c *caches) Close() error {
 	c.paths = map[store.Source]string{}
 	c.order = nil
 	c.combined = nil
+	c.combinedPath = ""
 	return errors.Join(all...)
 }
 

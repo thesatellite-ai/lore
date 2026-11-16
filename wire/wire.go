@@ -1154,14 +1154,21 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err != nil {
 		return op.Result{}, err
 	}
-	eng, err := a.Engine(ctx)
-	if err != nil {
-		return op.Result{}, err
-	}
-	if uerr := a.unreachableTarget(e, d); uerr != nil {
-		return op.Result{}, uerr
-	}
-	res, err := eng.Run(ctx, e, d, c)
+	// D-484: a list or search reads every folder of a store the repo
+	// attaches whole, as sql does (readscope.go); attached for this run only
+	var res op.Result
+	err = a.withExtra(a.readScopeFolders(ctx, e), func() error {
+		eng, eerr := a.Engine(ctx)
+		if eerr != nil {
+			return eerr
+		}
+		if uerr := a.unreachableTarget(e, d); uerr != nil {
+			return uerr
+		}
+		var rerr error
+		res, rerr = eng.Run(ctx, e, d, c)
+		return rerr
+	})
 	if err == nil {
 		a.ensureFolderProject(ctx) // the folder written to has its project row
 		a.afterWrite(ctx, e)       // OV3 MACH-AUTO: the profile goes with the next ordinary write
