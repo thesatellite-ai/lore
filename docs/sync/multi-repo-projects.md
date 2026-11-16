@@ -17,7 +17,7 @@ If the client's product is several separate git repositories that should share o
 
 ## Step 1 — See the project
 
-`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos (`--json` adds the full list):
+`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos (`--json` adds the full list); with no `--id` it shows the project of the folder you are in (a linked repo, or a folder of a store clone):
 
 <!-- example: projects#project-list -->
 ```console

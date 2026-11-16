@@ -268,7 +268,7 @@ The keys of one `setups:` entry:
 | `agent_details` | `internal` | where agent work notes go in a client repo: `internal` keeps them in the agency's store, `client` writes them to the client repo |
 | `live`, `lease`, `agents`, `merge_check` | the top-level values | the same blocks as at the top level, for this org only |
 
-**Repo patterns.** A pattern is a repo address with `*` for exactly one part of the path and `**` for any number of parts. `github.com/client/*` matches `github.com/client/website` but not `github.com/client/web/site`; `github.com/client2/**` matches every repo under `client2`. The host (`github.com`) may not be a wildcard, `**` may appear once, and a part is either plain text or a whole wildcard (`web*` is refused). You can also paste a full remote URL as an exact pattern.
+**Repo patterns.** A pattern is a repo address with `*` for exactly one part of the path and `**` for any number of parts. `github.com/client/*` matches `github.com/client/website` but not `github.com/client/web/site`; `github.com/client2/**` matches every repo under `client2`. Inside a part `*` is any run of characters that stays in that part: `github.com/client/web-*` matches `web-shop` and `web-api`, `github.com/client/*-api` matches `shop-api`. The host (`github.com`) may not hold a wildcard, `**` may appear once and only as a whole part (`web**` is refused), and when a client pattern and an own pattern both match a repo, the client pattern wins. You can also paste a full remote URL as an exact pattern.
 
 ### Reaching stores through your own ssh alias (`access:`)
 
@@ -486,7 +486,7 @@ stores:
 
 ## `<org_folder>/lore-org.yaml`
 
-The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh --org <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
+The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh --org <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file. An admin changes the patterns with a command instead of editing the file: `lore org config get --org <org>` prints `own`, `repos` and `stores`, and `lore org config set --org <org> --key repos --add 'github.com/acme/client-*' --yes` (or `--key own`; `--remove <pattern>`, or `--value` repeated for the whole list) commits the change in the org store's clone (`--push` sends it now) and copies it into this machine's entry at once; teammates get it at their next `lore org refresh`. Stores have their own commands (`lore org store add`, `remove`, `audience`).
 
 | Key | What it means |
 |---|---|

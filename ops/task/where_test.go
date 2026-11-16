@@ -95,7 +95,7 @@ func TestListWhereSort(t *testing.T) {
 		{`{"where":["title>a"]}`, errs.InvalidInput, `">" compares numbers, dates and datetimes; title is text`},
 		{`{"where":["priority>=hi"]}`, errs.InvalidInput, `priority "hi" is not one of low, medium, high, urgent`},
 		{`{"where":["status=todoo"]}`, errs.InvalidInput, `status "todoo" is not one of`},
-		{`{"where":["due_at<soon"]}`, errs.InvalidInput, "want YYYY-MM-DD or RFC 3339"},
+		{`{"where":["due_at<soon"]}`, errs.InvalidInput, "want YYYY-MM-DD, RFC 3339, today, or a relative day"},
 		{`{"where":["nope=1"]}`, errs.InvalidInput, "unknown field nope (fields: "},
 		{`{"where":["claim_epoch=1"]}`, errs.InvalidInput, "unknown field claim_epoch"},                   // internal fields stay hidden
 		{`{"where":["meta.client=acme,beta"]}`, errs.InvalidInput, "a metadata key takes one value here"}, // r3-grammar: meta.<key> is read; OR-ed values have no --meta form

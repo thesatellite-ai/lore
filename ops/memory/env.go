@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/searchrank"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -139,9 +140,10 @@ func SourceOf(l Labeler, src store.Source) store.SourceRef {
 type Hit struct {
 	Source store.Source
 	ID     ids.AnyID
-	// Score is the FTS5 bm25 rank (lower is better, as v0.1.17 printed
-	// it) and Snippet the matched excerpt; both zero when the cache gave
-	// none.
+	// Score is the FTS5 bm25 rank (lower is better) as the cache gives
+	// it; SearchFields sets it to the relevance in [0, 1) (higher is
+	// better, as `lore search` scores, D-461). Snippet is the matched
+	// excerpt; both zero when the cache gave none.
 	Score   float64
 	Snippet string
 }
@@ -199,11 +201,10 @@ func SearchFields(ctx context.Context, env Env, noun string, table row.Table, ma
 	return kept, nil
 }
 
-// searchFields is SearchFields without the store filter.
-func searchFields(ctx context.Context, env Env, noun string, table row.Table, match string, fields []string, limit int) ([]Hit, error) {
-	if len(fields) == 0 {
-		return env.Search(ctx, table, match, limit)
-	}
+// searchFields is SearchFields without the store filter: the query read
+// and ranked as `lore search` reads it (Match, searchrank; D-461), the
+// hits best first with Score their relevance in [0, 1).
+func searchFields(ctx context.Context, env RankEnv, noun string, table row.Table, match string, fields []string, limit int) ([]Hit, error) {
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, noun+": built-in schema", err)
@@ -212,19 +213,32 @@ func searchFields(ctx context.Context, env Env, noun string, table row.Table, ma
 	if !ok {
 		return nil, errs.New(errs.Internal, noun+": no table "+string(table))
 	}
-	var cols []string
-	for _, c := range fields {
-		c = strings.TrimSpace(c)
-		if !slices.Contains(def.FTS, c) {
-			return nil, errs.New(errs.InvalidInput, noun+" search: unknown --column "+strconv.Quote(c)+" ("+string(table)+" has: "+strings.Join(def.FTS, ", ")+")")
+	run := MatchFunc(func(ctx context.Context, m string, n int) ([]Hit, error) { return env.Search(ctx, table, m, n) })
+	read := def.FTS
+	if len(fields) > 0 {
+		var cols []string
+		for _, c := range fields {
+			c = strings.TrimSpace(c)
+			if !slices.Contains(def.FTS, c) {
+				return nil, errs.New(errs.InvalidInput, noun+" search: unknown --column "+strconv.Quote(c)+" ("+string(table)+" has: "+strings.Join(def.FTS, ", ")+")")
+			}
+			if !slices.Contains(cols, c) {
+				cols = append(cols, c)
+			}
 		}
-		if !slices.Contains(cols, c) {
-			cols = append(cols, c)
+		cs, ok := env.(ColumnSearcher)
+		if !ok {
+			return nil, errs.New(errs.Unsupported, noun+" search: --column needs a column search this setup lacks")
 		}
+		run = func(ctx context.Context, m string, n int) ([]Hit, error) {
+			return cs.SearchColumns(ctx, table, m, cols, n)
+		}
+		read = cols
 	}
-	cs, ok := env.(ColumnSearcher)
-	if !ok {
-		return nil, errs.New(errs.Unsupported, noun+" search: --column needs a column search this setup lacks")
+	w := searchrank.Of(match)
+	hits, matched, err := Match(ctx, run, w, limit)
+	if err != nil {
+		return nil, err
 	}
-	return cs.SearchColumns(ctx, table, match, cols, limit)
+	return rankHits(ctx, env, table, w, hits, matched, read, len(hits))
 }

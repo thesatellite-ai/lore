@@ -58,6 +58,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/ops/member"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -236,12 +237,12 @@ func (o StaffListOut) Text() string {
 
 // StaffRefIn names one member.
 type StaffRefIn struct {
-	Who string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 }
 
 // StaffShowIn is the input of member.show.
 type StaffShowIn struct {
-	Who string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	// History lists the person's commits in the org's store clones
 	// (devco R-18: no view showed what a person who left did, and when).
 	History bool `json:"history,omitempty" flag:"history" desc:"also list their commits in the org's stores, newest first, held-back ones marked"`
@@ -275,6 +276,10 @@ type StaffShowOut struct {
 	// History is set by --history (nil otherwise; empty when none).
 	History     []HistoryEntry `json:"history,omitempty"`
 	HistoryNote string         `json:"history_note,omitempty"`
+	// ProjectNames are the names of Member.Projects, in the same order (an
+	// id whose project no attached store holds stays the id); the text
+	// form prints them (devco D-449: member show listed prj_ ids only).
+	ProjectNames []string `json:"project_names,omitempty"`
 }
 
 // Text is the person, one fact per line.
@@ -283,7 +288,7 @@ func (o StaffShowOut) Text() string {
 	var b strings.Builder
 	b.WriteString(m.ID + "  " + m.Name + "\n")
 	for _, kv := range [][2]string{{"email", m.Email}, {"handle", atOrEmpty(m.Handle)}, {"github", m.GitHub}, {"role", m.Role}, {"type", m.Type}, {"status", m.Status},
-		{"teams", joinAt(m.Teams)}, {"projects", strings.Join(m.Projects, ", ")}} {
+		{"teams", joinAt(m.Teams)}, {"projects", strings.Join(orIDs(o.ProjectNames, m.Projects), ", ")}} {
 		if kv[1] != "" {
 			b.WriteString(fmt.Sprintf("  %-9s %s\n", kv[0]+":", kv[1]))
 		}
@@ -316,7 +321,7 @@ func shortSHA(c string) string {
 
 // StaffEditIn is the input of member.edit.
 type StaffEditIn struct {
-	Who    string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who    string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	Name   string `json:"name,omitempty" flag:"name" desc:"new display name"`
 	Handle string `json:"handle,omitempty" flag:"handle" desc:"new @handle"`
 	Role   string `json:"role,omitempty" flag:"role" desc:"new org-level role (on their open stint)"`
@@ -324,7 +329,7 @@ type StaffEditIn struct {
 
 // StaffRemoveIn is the input of member.remove.
 type StaffRemoveIn struct {
-	Who    string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who    string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why they left"`
 }
 
@@ -1123,6 +1128,43 @@ func staffFind(ctx context.Context, r profilestore.Roster, who string) (row.Row,
 	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on "+r.Where()+"'s roster").WithHint("lore member list")
 }
 
+// orIDs is names when set, else the ids (a show built without names).
+func orIDs(names, pids []string) []string {
+	if len(names) > 0 {
+		return names
+	}
+	return pids
+}
+
+// projectNames names each prj_ id: the project finder of the attached
+// stores first, then the roster's own project rows; an id neither knows
+// stays as it is, so the list never loses an entry.
+func projectNames(ctx context.Context, env Env, r profilestore.Roster, pids []string) []string {
+	if len(pids) == 0 {
+		return nil
+	}
+	known := map[string]string{}
+	if rows, err := r.List(ctx, schema.TableProjects); err == nil {
+		for _, x := range rows {
+			if n := fieldText(x, fieldProjectName); !x.Deleted && n != "" {
+				known[x.ID.String()] = n
+			}
+		}
+	}
+	f, hasFinder := upgrade.As[member.ProjectFinder](env)
+	out := make([]string, 0, len(pids))
+	for _, id := range pids {
+		name := known[id]
+		if hasFinder {
+			if p, err := f.FindProject(ctx, id); err == nil && p.Name != "" {
+				name = p.Name
+			}
+		}
+		out = append(out, cmp.Or(name, id))
+	}
+	return out
+}
+
 func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error) {
 	r, done, err := o.env.Roster(ctx, false)
 	defer done()
@@ -1133,7 +1175,7 @@ func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error
 	if err != nil {
 		return StaffShowOut{}, err
 	}
-	out := StaffShowOut{Member: m, Where: r.Where()}
+	out := StaffShowOut{Member: m, Where: r.Where(), ProjectNames: projectNames(ctx, o.env, r, m.Projects)}
 	if !in.History {
 		return out, nil
 	}

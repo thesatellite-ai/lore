@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 )
@@ -61,7 +62,16 @@ type bound struct {
 
 // Bind checks every term against resolve: the key must exist, an ordering
 // operator needs an ordered kind, and every value must parse as the kind.
+// A date value may be relative to today (+90d, -30d, today; see
+// Relative), read on the system clock.
 func (f Filter) Bind(resolve Resolver) (Matcher, error) {
+	return f.BindAt(resolve, clock.Real{}.Now())
+}
+
+// BindAt is Bind with "today" taken from now, so a relative date in a
+// saved view or a test reads one fixed day (devco D-449: "expiring in the
+// next 90 days" could not be written without editing the date each day).
+func (f Filter) BindAt(resolve Resolver, now time.Time) (Matcher, error) {
 	var m Matcher
 	for _, t := range f.Terms {
 		fd, err := resolve(t.Key)
@@ -69,6 +79,14 @@ func (f Filter) Bind(resolve Resolver) (Matcher, error) {
 			return Matcher{}, err
 		}
 		b := bound{Term: t, field: fd, kind: scalarKind(fd)}
+		if b.kind == value.KindDate || b.kind == value.KindDateTime {
+			b.Values = slices.Clone(b.Values)
+			for i, v := range b.Values {
+				if d, ok := Relative(v, now); ok {
+					b.Values[i] = d
+				}
+			}
+		}
 		if err := b.check(); err != nil {
 			return Matcher{}, err
 		}
@@ -157,13 +175,48 @@ func (b bound) checkValue(v string) error {
 	return nil
 }
 
+// Relative reads a date relative to now's calendar day (UTC): "today",
+// or a sign, a count and a unit d (days), w (weeks), m (months) or y
+// (years), such as +90d or -2w. ok is false for any other text, which is
+// then checked as an absolute date.
+func Relative(v string, now time.Time) (string, bool) {
+	today := day(now)
+	if strings.EqualFold(v, "today") {
+		return today.Format(value.DateLayout), true
+	}
+	if len(v) < 3 || (v[0] != '+' && v[0] != '-') {
+		return "", false
+	}
+	n, err := strconv.Atoi(v[1 : len(v)-1])
+	if err != nil || n < 0 {
+		return "", false
+	}
+	if v[0] == '-' {
+		n = -n
+	}
+	var t time.Time
+	switch v[len(v)-1] {
+	case 'd':
+		t = today.AddDate(0, 0, n)
+	case 'w':
+		t = today.AddDate(0, 0, 7*n)
+	case 'm':
+		t = today.AddDate(0, n, 0)
+	case 'y':
+		t = today.AddDate(n, 0, 0)
+	default:
+		return "", false
+	}
+	return t.Format(value.DateLayout), true
+}
+
 // hintFor names the accepted form of a kind's values.
 func hintFor(k value.Kind) string {
 	switch k {
 	case value.KindDate:
-		return " (want YYYY-MM-DD)"
+		return " (want YYYY-MM-DD, today, or a relative day such as +90d or -2w)"
 	case value.KindDateTime:
-		return " (want YYYY-MM-DD or RFC 3339)"
+		return " (want YYYY-MM-DD, RFC 3339, today, or a relative day such as +90d or -2w)"
 	case value.KindBool:
 		return " (want true or false)"
 	case value.KindDuration:

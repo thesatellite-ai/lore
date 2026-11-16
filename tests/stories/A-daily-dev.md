@@ -34,6 +34,7 @@ A small product team with an org `acmedev` and a team store: Cleo (cto, the org 
 - Setup tools wired into render and init (A-9): `tests/journeys/setuptools_test.go`.
 - Killed agent writes and `lore api` next to the CLI: `tests/journeys/agents_test.go`.
 - Asking `lore search` a question in plain words (devco:D-435, D-436): `tests/journeys/search_question_test.go` (`TestJourneySearchQuestion`).
+- Asking one kind's own search (`lore decision search`, `rule search`, …) a question: the same words and order as `lore search`; a prefix (`invoi*`) counts a title word that starts with it (devco:D-461, D-468): `ops/search/kindsearch_test.go` (`TestKindSearchesMatchLikeSearch`, `TestPrefixQueryTitleShare`), `tests/journeys/kind_search_question_test.go` (`TestJourneyKindSearchQuestion`).
 
 ## Findings guarded
 

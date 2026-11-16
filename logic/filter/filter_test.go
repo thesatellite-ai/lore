@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -233,7 +234,7 @@ func TestBindRefused(t *testing.T) {
 		"priority>=hi":    `priority "hi" is not one of`,
 		"cost=abc":        `"abc" is not a number`,
 		"cost>1,2":        "takes one value",
-		"due_at<tomorrow": "want YYYY-MM-DD or RFC 3339",
+		"due_at<tomorrow": "want YYYY-MM-DD, RFC 3339, today, or a relative day",
 		"born=2026-13-01": "want YYYY-MM-DD",
 		"ok=yes":          "want true or false",
 		"took>soon":       "want a duration",
@@ -313,5 +314,50 @@ func TestAliasesAcceptedNotListed(t *testing.T) {
 	_, err = f.Bind(resolve)
 	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), `"nope" is not one of hetzner, amazon`) || strings.Contains(err.Error(), "val_") || strings.Contains(err.Error(), "Amazon Web Services") {
 		t.Fatalf("refusal %v: want the names only", err)
+	}
+}
+
+// TestRelativeDates: a date value may be relative to today (devco D-449:
+// "renews in the next 90 days" was `"+90d" is not a date`).
+func TestRelativeDates(t *testing.T) {
+	now := time.Date(2026, 11, 16, 15, 4, 5, 0, time.UTC)
+	cases := []struct {
+		where, have string
+		want        bool
+	}{
+		{"born<+90d", "2027-02-13", true},
+		{"born<+90d", "2027-02-14", false},
+		{"born>=-30d", "2026-10-17", true},
+		{"born>=-30d", "2026-10-16", false},
+		{"born=today", "2026-11-16", true},
+		{"born<+2w", "2026-11-29", true},
+		{"born<+1m", "2026-12-16", false},
+		{"born>-1y", "2025-11-17", true},
+		{"due_at<+1d", "2026-11-16T23:00:00.000000000Z", true},
+		{"due_at<+1d", "2026-11-17T01:00:00.000000000Z", false},
+	}
+	for _, c := range cases {
+		f, err := Parse([]string{c.where})
+		if err != nil {
+			t.Fatalf("%q: %v", c.where, err)
+		}
+		m, err := f.BindAt(resolve, now)
+		if err != nil {
+			t.Fatalf("%q bind: %v", c.where, err)
+		}
+		k := strings.FieldsFunc(c.where, func(r rune) bool { return r == '<' || r == '>' || r == '=' })[0]
+		if got := m.Match(func(key Key) []string {
+			if key.Name == k {
+				return []string{c.have}
+			}
+			return nil
+		}); got != c.want {
+			t.Errorf("%q on %s: got %v want %v", c.where, c.have, got, c.want)
+		}
+	}
+	for _, bad := range []string{"+90x", "+d", "90d", "+-3d"} {
+		if _, ok := Relative(bad, now); ok {
+			t.Errorf("Relative(%q) read as a date", bad)
+		}
 	}
 }

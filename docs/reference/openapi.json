@@ -14501,6 +14501,19 @@
             }
           },
           {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "only decisions with this status: proposed, accepted, superseded, deprecated (repeatable: any may match)",
+            "schema": {
+              "type": "array",
+              "description": "only decisions with this status: proposed, accepted, superseded, deprecated (repeatable: any may match)",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
             "name": "store",
             "in": "query",
             "required": false,
@@ -15743,10 +15756,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the decision id (dec_…)",
+            "description": "the decision id (dec_…), or the short ref its title opens with, such as D5 for a title that opens with D5",
             "schema": {
               "type": "string",
-              "description": "the decision id (dec_…)"
+              "description": "the decision id (dec_…), or the short ref its title opens with, such as D5 for a title that opens with D5"
             },
             "x-lore-field": "id"
           },
@@ -29566,6 +29579,12 @@
                         "display_name"
                       ]
                     },
+                    "project_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "where": {
                       "type": "string"
                     }
@@ -41227,6 +41246,316 @@
         }
       }
     },
+    "/v1/org/configs/get": {
+      "post": {
+        "operationId": "org.config.get",
+        "summary": "Show the org's shared lore-org.yaml: own and repos patterns, stores",
+        "tags": [
+          "org"
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "description": "only this key: own or repos (default every key)"
+                  },
+                  "org": {
+                    "type": "string",
+                    "description": "the org entry (default: the only org entry on this machine, else the active setup's org)"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string"
+                    },
+                    "org": {
+                      "type": "string"
+                    },
+                    "own": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "repos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "stores": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "org",
+                    "file",
+                    "own",
+                    "repos",
+                    "stores"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_ORG_AMBIGUOUS, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/org/configs/set": {
+      "post": {
+        "operationId": "org.config.set",
+        "summary": "Change the org's shared lore-org.yaml (admin only): own or repos patterns; committed in the org store and copied to this machine's org entry",
+        "tags": [
+          "org"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "add": {
+                    "type": "array",
+                    "description": "a pattern to add to the list (repeat; keeps the others)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "key": {
+                    "type": "string",
+                    "description": "the key to change: own (the org's own repo patterns) or repos (client repo patterns)"
+                  },
+                  "org": {
+                    "type": "string",
+                    "description": "the org entry (default: the only org entry on this machine, else the active setup's org)"
+                  },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                  },
+                  "remove": {
+                    "type": "array",
+                    "description": "a pattern to take out of the list (repeat)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "values": {
+                    "type": "array",
+                    "description": "the new list, one pattern per --value (repeat; replaces the whole list); host/owner/repo with * inside or as a segment, ** as a segment",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_ORG_AMBIGUOUS, E_REFUSED, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/org/stores": {
       "post": {
         "operationId": "org.store.add",
@@ -51919,10 +52248,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "the project: a name or prj_ id",
+            "description": "the project: a name or prj_ id (default the project of this folder)",
             "schema": {
               "type": "string",
-              "description": "the project: a name or prj_ id"
+              "description": "the project: a name or prj_ id (default the project of this folder)"
             },
             "x-lore-field": "id"
           }

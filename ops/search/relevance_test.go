@@ -72,6 +72,10 @@ var relevanceCases = []struct {
 	{query: "deploy", top: []string{"decLath", "decDeployProd", "decChecklist"}},
 	{query: "deploy -lath", top: []string{"decDeployProd", "decChecklist"}, never: []string{"decLath"}},
 	{query: "Pinecrest", top: []string{"taskRotate", "pbkRestore"}},
+	// D-468: a prefix query ranks title hits like a word query does
+	{query: "checkl*", first: "decChecklist"},
+	{query: "datab*", top: []string{"taskRotate", "pbkRestore"}},
+	{query: "orbi* outage", first: "incOutage"},
 }
 
 // seedRelevance writes relevanceRows and returns key -> id and id -> key.

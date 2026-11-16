@@ -40,6 +40,7 @@ The story replays the company's timeline in one world; the details of each part 
 - The org-wide view from a store clone's top, a folder and a plain folder; edits and moves by id from a plain folder; --assign and coordination in a store folder (devco D-431, D-433, D-434, D-454): [storescope_test.go](../journeys/storescope_test.go).
 - An admins-only store (servers, domains, accounts) in the same org: a member with no access to it joins, syncs and runs doctor with no error, never sees its notes, and keeps own/client guards; no repo links to it; a member made admin gets it on the next sync; the store is opened to everyone again with one command (devco D-442): [adminstore_test.go](../journeys/adminstore_test.go).
 - Row counts, member lists and org kinds in a store folder; show --json with everything and any row by id from any folder; --store <org>/<folder> and sql over every folder from a code repo (devco D-443, D-444, D-445, D-446, D-455, D-456, D-458): [storereads_test.go](../journeys/storereads_test.go).
+- Looking things up by the names people use: `--id` on every show, `decision show --id D5`, `decision list --status proposed`, `project show` in a store folder with no id, project names in `member show` (devco D-449): [showflags_test.go](../journeys/showflags_test.go).
 - A second org on one laptop (D-38): [setup_secondorg_test.go](../journeys/setup_secondorg_test.go).
 - A team named with a dash (`acme-ops`), and the admin's second laptop joining as `member`: saved as an admin setup and the join step says why (devco D-451, D-447); the setup texts name the lore home in use, the identity step's email, the roster's email among git's and an includeIf address (devco D-448): [r11misc_setup_test.go](../journeys/r11misc_setup_test.go).
 - The admin setup run through the admin's coding agent: the org's first rows and commits are the admin's, no agent actor and no `Lore-Agent:` trailer, and an agent actor merged into its person from a folder that is no repo (devco D-424): [agent_setup_credit_test.go](../journeys/agent_setup_credit_test.go).
@@ -49,4 +50,4 @@ The story replays the company's timeline in one world; the details of each part 
 
 ## Findings it guards
 
-D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-454, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.
+D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-449, D-454, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.

@@ -11,7 +11,7 @@ import (
 
 // ShowIn is the input of the show operation: the id flags plus --expand.
 type ShowIn struct {
-	ID      string `json:"id" arg:"0" desc:"the decision id (dec_…)"`
+	ID      string `json:"id" arg:"0" desc:"the decision id (dec_…), or the short ref its title opens with, such as D5 for a title that opens with D5"`
 	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
 	expand.Flag
 	expand.RevealFlag
@@ -23,6 +23,11 @@ type ShowIn struct {
 // --reveal implies --expand and also fills each ${secret:…} written in the
 // row after an audited ask (expand.ShowWith; SECRETS 2.7, SQ10, D18).
 func (o ops) showExpand(ctx context.Context, in ShowIn) (ShowOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return ShowOut{}, err
+	}
+	in.ID = id
 	out, err := o.show(ctx, IDIn{ID: in.ID, Project: in.Project})
 	if err != nil || (!in.Expand && !in.Reveal && !in.Force) {
 		return out, err

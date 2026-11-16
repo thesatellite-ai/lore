@@ -87,6 +87,7 @@ func nounDocs() map[string]NounDoc {
 		},
 		"mission":     {Short: "Manage missions (containers for tasks)"},
 		"org":         {Short: "Choose and inspect which org a repo belongs to"},
+		"org config":  {Short: "Read and edit the org file's own and repos patterns (get, set)"},
 		"org store":   {Short: "The stores of an org (add)"},
 		"pattern":     {Short: "Manage patterns"},
 		"pii-pattern": {Short: "Old spelling of lore secrets rule (custom secret detection patterns)"},

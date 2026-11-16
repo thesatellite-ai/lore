@@ -260,7 +260,7 @@ lore: wrote task_lists/tlt_b4f4…a5b0 on this clone's refs/lore/live (a live ro
 ## Step 11 — Save a filter under a name
 
 <!-- ds:block id=sync-syncedtables-fa4jung7 -->
-`lore task view add` stores a task filter under a name, such as `open_todo`, so you or a tool can reuse it. The filter uses the same `--where` grammar as `lore task list` (and `--sort`, `--group-by` if you like). `lore task list --view <name>` applies it. A saved view is a row in `.lore/data`, so it travels with git like your tasks.
+`lore task view add` stores a task filter under a name, such as `open_todo`, so you or a tool can reuse it. The filter uses the same `--where` grammar as `lore task list` (and `--sort`, `--group-by` if you like). `lore task list --view <name>` applies it. A date in any `--where` (tasks, resources, bulk archive and delete) may be relative to today: `today`, or a sign, a count and `d`, `w`, `m` or `y`, so `--where "due_at<+14d"` or `--where "renews_on<+90d"` keeps meaning "in the next two weeks" or "in the next 90 days" in a saved view, and `-30d` is thirty days ago. A saved view is a row in `.lore/data`, so it travels with git like your tasks.
 
 <!-- example: tasks#task-view -->
 ```console

@@ -58,4 +58,5 @@ Dev-company round 2, track F (plus the client-repo findings of track D). Replaye
 | D-99 | r2 F-16 | second org's first commit has the first org's email | `TestStoryFPeople` step 10 |
 | D-428 | store test LF-5 | org link without --own makes a client-listed repo OWN, guards off | `TestJourneyLinkNeverWeakensGuards`; `TestLinkNeverWeakensGuards` |
 | D-429 | store test LF-4 | linked own repo: context empty, render refused, report 0 | `TestJourneyLinkedOwnRepoGetsItsNotes`; `TestContextReadsInternalStoresInOwnRepo` |
+| D-453 | store test bullet 15 | no command edits lore-org.yaml; `repos:` patterns take `*` only as a whole segment, so client repos are listed one by one | `TestJourneyOrgConfig` (`org config set --key repos --add '…/client-*'`, then a `client-*` repo is a client repo while an own `…/*` matches it too); `TestPatternStarInsideASegment`; `TestPartialPatternNeverTurnsClientOwn` |
 | D-430 | store test LF-16 | private render over its stated budget, trust and Source noise | `TestPrivateBudgetLineStatesTheRealLimit`; `TestPrivateRenderDropsNoise`; `TestJourneyLinkedOwnRepoGetsItsNotes` |

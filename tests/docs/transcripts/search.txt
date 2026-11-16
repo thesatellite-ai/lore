@@ -121,8 +121,8 @@ task    tsk_76bd560aff0771fab8457dbfa9823f10  Send the invoice reminder before F
 alice (work/website)$ lore search --query 'invoi*'
 Found 2 hits for "invoi*" across 2 entity types:
 
-memory  mem_c0f3c11a5724b0cfd74b256190d9b5b8  The client sends invoices on Fridays  (score=0.650)
-task    tsk_76bd560aff0771fab8457dbfa9823f10  Send the invoice reminder before Friday  (score=0.650)
+memory  mem_c0f3c11a5724b0cfd74b256190d9b5b8  The client sends invoices on Fridays  (score=0.950)
+task    tsk_76bd560aff0771fab8457dbfa9823f10  Send the invoice reminder before Friday  (score=0.950)
 alice (work/website)$ lore search --query 'client Fridays'
 Found 3 hits for "client Fridays" across 2 entity types:
 

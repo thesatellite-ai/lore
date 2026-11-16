@@ -135,7 +135,7 @@ func TeamOps(env profilestore.Store) []op.Entry {
 
 // TeamAddIn is the input of team.add.
 type TeamAddIn struct {
-	Handle  string   `json:"handle" arg:"0" desc:"the team's @handle"`
+	Handle  string   `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle"`
 	Name    string   `json:"name,omitempty" flag:"name" desc:"the display name"`
 	Members []string `json:"members,omitempty" flag:"members" desc:"the people: @handle, act_ id or email, comma-separated or repeated (replaces the members of an existing team)"`
 }
@@ -153,18 +153,19 @@ type TeamListIn struct {
 
 // TeamRefIn names one team.
 type TeamRefIn struct {
-	Handle string `json:"handle" arg:"0" desc:"the team's @handle (or its tem_ id)"`
+	// --id is the lookup flag every show takes (devco D-449).
+	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle (or its tem_ id)"`
 }
 
 // TeamRenameIn is the input of team.rename.
 type TeamRenameIn struct {
-	Handle string `json:"handle" arg:"0" desc:"the team's @handle now (or its tem_ id)"`
+	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle now (or its tem_ id)"`
 	To     string `json:"to" flag:"to" desc:"the new @handle"`
 }
 
 // TeamMembersIn is the input of team.member.add|remove.
 type TeamMembersIn struct {
-	Handle  string   `json:"handle" arg:"0" desc:"the team's @handle"`
+	Handle  string   `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle"`
 	Members []string `json:"members" arg:"1" rest:"true" desc:"the people: @handle, act_ id or email (several, or comma-separated)"`
 }
 
