@@ -163,6 +163,10 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 	for _, t := range r.Targets {
 		var hits []opssearch.Hit
 		switch {
+		case t.Roster && (len(mconds) > 0 || len(conds) > 0 || r.Store != "" || r.Repo != "" || r.BornBranch != ""):
+			continue // people and teams carry no metadata, fields, store, repo or branch
+		case t.Roster:
+			hits, err = a.searchRoster(ctx, t, words, r.PerTable)
 		case len(mconds) > 0:
 			hits, err = a.searchMetaTable(ctx, eng, t, mconds, msens, narrow, sc, r.PerTable)
 			scoreInOrder(hits, words.Terms)
@@ -393,7 +397,7 @@ func (a *App) searchTrashed(ctx context.Context, eng *engine.Engine, targets []o
 	}
 	byTable := map[row.Table]opssearch.Target{}
 	for _, t := range targets {
-		if t.Entity != opssearch.EntityResource {
+		if t.Entity != opssearch.EntityResource && !t.Roster {
 			byTable[t.Table] = t
 		}
 	}

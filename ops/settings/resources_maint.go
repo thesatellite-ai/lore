@@ -51,6 +51,15 @@ const (
 	lintRemindUnset  = "remind_unset"
 	lintRemindPassed = "remind_passed"
 	lintDuplicate    = "duplicate"
+	// lintMissingUsual (devco D-490): a field most rows of the kind fill
+	// (renews_on on 13 of 15 domains) is empty on this one. The kind did
+	// not mark it required, so nothing else flagged the two gaps and lint
+	// said "no problems found".
+	lintMissingUsual = "missing_value"
+	// usualMinRows / usualShare: a field counts as usual for a kind with at
+	// least usualMinRows live rows when at least usualShare of them set it.
+	usualMinRows = 4
+	usualShare   = 0.75
 	// lintKindRoute: a kind (from an earlier build or a hand edit) named
 	// like a fixed resource command, so its REST route collides (G-META-9).
 	lintKindRoute = "kind_route_collision"
@@ -115,7 +124,11 @@ func (o ResLintOut) Text() string {
 		if f.Fixed {
 			fixed = "  (fixed)"
 		}
-		fmt.Fprintf(&b, "%-16s %-30s %s%s\n", f.Check, what, f.Detail, fixed)
+		id := ""
+		if f.Row != "" {
+			id = "  [" + f.Row + "]"
+		}
+		fmt.Fprintf(&b, "%-16s %-30s %s%s%s\n", f.Check, what, f.Detail, fixed, id)
 	}
 	fmt.Fprintf(&b, "%d findings\n", len(o.Findings))
 	return b.String()
@@ -285,6 +298,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 	now := opclock.Now(o.env)
 	out := ResLintOut{Findings: []LintFinding{}}
 	defs := map[string]kindDef{}
+	usual := usualFields(rows)
 	for _, r := range rows {
 		kid := text(r.Row, rKind)
 		d, ok := defs[kid]
@@ -328,6 +342,9 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 					add(lintRequired, fname, "required field has no value")
 				case remindWindow(f) > 0:
 					add(lintRemindUnset, fname, "has remind_before "+text(f.Row, fRemindBefore)+" but no date, so nothing will remind; set it: lore resource edit --id "+name+" --set "+fname+"=<YYYY-MM-DD>")
+				case usual[kid][fid] > 0:
+					add(lintMissingUsual, fname, fmt.Sprintf("has no value while %d of %d %s rows set it; set it: lore resource edit --id %s --set %s=<value> (or make it required: lore resource field edit --kind %s --field %s --required)",
+						usual[kid][fid], usual[kid][kindRowsKey], d.name(), name, fname, d.name(), fname))
 				}
 				continue
 			}
@@ -392,6 +409,51 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 	}
 	out.Count = len(out.Findings)
 	return out, nil
+}
+
+// kindRowsKey is usualFields' per-kind entry holding the live row count;
+// no field id is empty.
+const kindRowsKey = ""
+
+// usualFields counts, per kind id, the live (not archived) rows and how
+// many of them set each field; it keeps only fields set on at least
+// usualShare of a kind with usualMinRows rows or more (the count under
+// kindRowsKey is the kind's row count). A row that cannot be decoded is
+// left out; lint reports it on its own.
+func usualFields(rows []located) map[string]map[string]int {
+	counts := map[string]map[string]int{}
+	for _, r := range rows {
+		if text(r.Row, rArchivedAt) != "" {
+			continue
+		}
+		vals, err := decodeValues(r)
+		if err != nil {
+			continue
+		}
+		kid := text(r.Row, rKind)
+		c := counts[kid]
+		if c == nil {
+			c = map[string]int{}
+			counts[kid] = c
+		}
+		c[kindRowsKey]++
+		for fid := range vals.vals {
+			c[fid]++
+		}
+	}
+	for kid, c := range counts {
+		n := c[kindRowsKey]
+		for fid, k := range c {
+			if fid == kindRowsKey {
+				continue
+			}
+			if n < usualMinRows || k == n || float64(k) < usualShare*float64(n) {
+				delete(c, fid)
+			}
+		}
+		counts[kid] = c
+	}
+	return counts
 }
 
 func replacedNote(d kindDef, f located) string {

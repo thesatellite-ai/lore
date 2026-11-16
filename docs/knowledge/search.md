@@ -29,7 +29,7 @@ memory    mem_2ad3…f891  Old payments page is gone  (score=0.950)
 
 ## Step 2 — Search one kind
 
-`--tables` keeps the search to the kinds you name (`memory`, `rule`, `decision`, `task`, …; several with commas). Each kind also has its own search command, such as `lore decision search`, which prints the row the way `list` does. It reads your words the way `lore search` does (a question works, any form of a word matches) and lists the kind's rows in the same order, with the same `score` (higher is better).
+`--tables` keeps the search to the kinds you name (`memory`, `rule`, `decision`, `task`, …; several with commas). The org's people (`member`: name, handle, email) and teams (`team`: handle, name) are found too, so `lore search --query mira` lists the person beside the rows that name them; they are left out when you give `--store`, `--repo`, `--born-branch` or a `key:value` condition. Each kind also has its own search command, such as `lore decision search`, which prints the row the way `list` does. It reads your words the way `lore search` does (a question works, any form of a word matches) and lists the kind's rows in the same order, with the same `score` (higher is better).
 
 <!-- example: search#search-one-kind -->
 ```console

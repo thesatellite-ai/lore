@@ -459,9 +459,23 @@ func (a *App) RepoID(ctx context.Context, mountOrID string) (ids.ID[ids.Repo], e
 			return ids.As[ids.Repo](r.ID)
 		}
 	}
+	// devco D-491: in a store folder `--repo org` names a folder (a
+	// project of the store), which --project resolves; say so instead of
+	// a bare "no repo".
+	if prj, perr := eng.List(ctx, store.SourceRepo, schema.TableProjects); perr == nil {
+		for _, r := range prj {
+			if !r.Deleted && (r.ID.String() == mountOrID || textField(r, projectNameField) == mountOrID) {
+				return ids.ID[ids.Repo]{}, errs.New(errs.NotFound, "wire: "+strconv.Quote(mountOrID)+" is a project (a store folder), not a repo; --repo names a code repo mounted in this project").
+					WithHint("name the project with --project " + mountOrID + "; `lore repo list` shows the repos")
+			}
+		}
+	}
 	return ids.ID[ids.Repo]{}, errs.New(errs.NotFound, "wire: no repo "+strconv.Quote(mountOrID)+" in this project").
 		WithHint("run `lore repo list` to see the mount names")
 }
+
+// projectNameField is the projects field a --project name matches.
+const projectNameField = "name"
 
 // GroupRepoID resolves `--repo <name>` for a write whose target is to.
 //

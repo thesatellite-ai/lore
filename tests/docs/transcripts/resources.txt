@@ -393,7 +393,7 @@ alice (work/infra)$ lore resource edit --kind server --where provider=hetzner --
 lore: wrote ~/work/infra/.lore/data/resources/res_6a866bb99ce08addfe04ea845052ed8c.json
 edit 1 server resources; batch bat_7289a21d2911016c7434415f3dccc813 (undo: lore batch undo --id bat_7289a21d2911016c7434415f3dccc813)
 alice (work/infra)$ lore resource lint
-remind           server hub_prod_new.renews     2026-11-20 is within 30d
+remind           server hub_prod_new.renews     2026-11-20 is within 30d  [res_6a866bb99ce08addfe04ea845052ed8c]
 1 findings
 alice (work/infra)$ lore resource report
 resources   5 (service 4, server 1)

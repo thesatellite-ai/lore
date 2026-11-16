@@ -83,7 +83,18 @@ type Target struct {
 	HasProject  bool
 	HasRepo     bool
 	HasArchived bool
+	// Roster marks the org's people and teams (devco D-489): they live in
+	// the org roster, not in a store's cache, so wire matches them by
+	// name, handle and email instead of full text, search status lists
+	// no index for them, and --store / --repo (cache scopes) leave them out.
+	Roster bool
 }
+
+// EntityMember / EntityTeam are the roster entries of Targets.
+const (
+	EntityMember = "member"
+	EntityTeam   = "team"
+)
 
 // EntityResource is the resources entry (field:value conditions, RES 3.12).
 const EntityResource = "resource"
@@ -101,6 +112,8 @@ func Targets() []Target {
 		{Entity: "hotfix", Table: schema.TableHotfixes, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
 		{Entity: "incident", Table: schema.TableIncidents, Label: Label{Field: "title"}, HasProject: true},
 		{Entity: "memory", Table: schema.TableMemories, HasProject: true, HasRepo: true, HasArchived: true},
+		// the org's people (name, handle, email) and teams (handle, name), D-489
+		{Entity: EntityMember, Table: schema.TableActors, Label: Label{Field: "display_name"}, Roster: true},
 		{Entity: "mission", Table: schema.TableMissions, Label: Label{Field: "title"}, HasProject: true},
 		{Entity: "pattern", Table: schema.TablePatterns, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
 		{Entity: "plan", Table: schema.TablePlans, Label: Label{Field: "title"}, HasProject: true},
@@ -114,6 +127,7 @@ func Targets() []Target {
 		{Entity: "task", Table: schema.TableTasks, Label: Label{Field: "title"}, HasProject: true, HasRepo: true},
 		{Entity: "tasklist", Table: schema.TableTasklists, Label: Label{Field: "title"}, HasProject: true},
 		{Entity: "tastepref", Table: schema.TableTastePrefs, Label: Label{Field: "body", Trunc: true}, HasProject: true},
+		{Entity: EntityTeam, Table: schema.TableTeams, Label: Label{Field: "display_name"}, Roster: true},
 		{Entity: "techdoc", Table: schema.TableTechDocs, Label: Label{Field: "name"}, HasProject: true},
 		{Entity: "workflow", Table: schema.TableWorkflows, Label: Label{Field: "name"}, HasProject: true},
 		{Entity: "workspace", Table: schema.TableWorkspaces, Label: Label{Field: "name"}, HasProject: true},
@@ -558,7 +572,13 @@ func status(ctx context.Context, env Env, in StatusIn) (StatusOut, error) {
 	if err != nil {
 		return StatusOut{}, err
 	}
-	rows, err := env.SearchStatus(ctx, targets)
+	indexed := make([]Target, 0, len(targets))
+	for _, t := range targets {
+		if !t.Roster { // the roster has no full-text index (D-489)
+			indexed = append(indexed, t)
+		}
+	}
+	rows, err := env.SearchStatus(ctx, indexed)
 	if err != nil {
 		return StatusOut{}, err
 	}
