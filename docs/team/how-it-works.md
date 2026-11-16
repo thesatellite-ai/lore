@@ -290,20 +290,19 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 <!-- example: internals#signals only=2,3,4,5,6 -->
 ```console
 # agent-backend, in website
-$ lore task claim --id tsk_b4f4…a5b0
+$ lore task claim --id tsk_d431…313a
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147…5139.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
-✓ claimed tsk_b4f4…a5b0 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+✓ claimed tsk_d431…313a renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 
 # alice, in ~
 $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
-client/claims/tsk_b4f4…a5b0.json
+client/claims/tsk_d431…313a.json
 9b40ce7 lore: signals
 $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
-  "task": "tsk_b4f4…a5b0",
+  "task": "tsk_d431…313a",
   "project": "client",
   "holder": "act_f147…5139",
   "holder_label": "agent:agent-backend",
@@ -318,8 +317,8 @@ $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/sign
 }
 
 # agent-backend, in website
-$ lore task heartbeat --id tsk_b4f4…a5b0
-✓ tsk_b4f4…a5b0 renewed until 2026-11-02T10:21:25Z (seq 1)
+$ lore task heartbeat --id tsk_d431…313a
+✓ tsk_d431…313a renewed until 2026-11-02T10:21:25Z (seq 1)
 
 # alice, in ~
 $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git log --oneline refs/lore-remote/origin/signals/main
@@ -375,9 +374,9 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_2537…6bbb.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147…5139.json (store agency)
 ✓ tsk_162d…9666 done (commit 86dbae4, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 86dbae41af28); waiting for merge
-  lesson → mem_2537…6bbb
+  lesson → mem_f147…5139
 
 # agent-frontend, in agents/app
 $ lore task next --claim --mission msn_2ad3…f891 --repo app
@@ -398,7 +397,6 @@ lore: committed locally to store agency; lore sync sends it
 # agent-frontend, in agents/app
 $ lore task next --claim --mission msn_2ad3…f891 --repo app
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_28f8…03df.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
   read its notes: lore task show --id tsk_54fe…28f2

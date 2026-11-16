@@ -113,4 +113,52 @@ func TestJourneyStoreScope(t *testing.T) {
 		ann.Lore(annStore, "rule", "list").OK(t).Says(t, jssSyncRule, jssOpsRule)
 		ann.Lore(filepath.Join(annStore, jssSync), "rule", "list").OK(t).Says(t, jssSyncRule)
 	})
+
+	// devco:D-486: a one-field edit in a member's store folder commits only
+	// the task row, in one commit: actor and machine rows stay where the
+	// store keeps them, never copied into the folder the write touched.
+	w.Step("day3/a-members-folder-edit-commits-only-the-task", func() {
+		rel, err := filepath.Rel(lee.LorePath("stores"), storeDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		annStore := filepath.Join(ann.LorePath("stores"), rel)
+		annSync := filepath.Join(annStore, jssSync)
+		before := strings.TrimSpace(w.Git(annStore, "rev-parse", "HEAD"))
+		ann.Lore(annSync, "task", "edit", "--id", syncTask, "--assign", "@ann", "--yes").OK(t).Says(t, tlAnn.Name)
+		commits := strings.Fields(w.Git(annStore, "rev-list", before+"..HEAD"))
+		files := strings.Fields(w.Git(annStore, "diff", "--name-only", before, "HEAD"))
+		want := filepath.ToSlash(filepath.Join(jssSync, "tasks", syncTask+".json"))
+		if len(commits) != 1 || len(files) != 1 || files[0] != want {
+			t.Fatalf("task edit in %s: %d commit(s) touching %v, want 1 commit touching only %s", annSync, len(commits), files, want)
+		}
+		// her coding agent's session: its first write in the clone adds the
+		// agent's own row to the roster's folder (org/), once; the task
+		// commit holds only the task, and no folder gets actor or machine
+		// copies
+		folder := *tt.repo[tlAnn.Email]
+		folder.Dir = annSync
+		agent := jAgentsAs(&folder, &jClaude, "st-folder")
+		before = strings.TrimSpace(w.Git(annStore, "rev-parse", "HEAD"))
+		agent.Lore("task", "edit", "--id", syncTask, "--title", jssSyncTask+" again", "--yes").OK(t)
+		if msg := w.Git(annStore, "log", "-1", "--format=%B"); !strings.Contains(msg, "Lore-Agent:") {
+			t.Fatalf("the edit from the agent session was not credited to an agent: %s", msg)
+		}
+		if got := strings.Fields(w.Git(annStore, "show", "--name-only", "--format=", "HEAD")); len(got) != 1 || got[0] != want {
+			t.Fatalf("agent task edit commit touches %v, want only %s", got, want)
+		}
+		for _, f := range strings.Fields(w.Git(annStore, "diff", "--name-only", before, "HEAD")) {
+			if f != want && !strings.HasPrefix(f, "org/actors/") {
+				t.Fatalf("agent task edit in %s wrote %s, want only the task and the agent's own row in org/actors", annSync, f)
+			}
+		}
+		before = strings.TrimSpace(w.Git(annStore, "rev-parse", "HEAD"))
+		agent.Lore("task", "edit", "--id", syncTask, "--title", jssSyncTask+" once more", "--yes").OK(t)
+		commits = strings.Fields(w.Git(annStore, "rev-list", before+"..HEAD"))
+		files = strings.Fields(w.Git(annStore, "diff", "--name-only", before, "HEAD"))
+		if len(commits) != 1 || len(files) != 1 || files[0] != want {
+			t.Fatalf("second agent task edit in %s: %d commit(s) touching %v, want 1 commit touching only %s", annSync, len(commits), files, want)
+		}
+		ann.Lore(annSync, "doctor").Never(t, "actor_roster")
+	})
 }

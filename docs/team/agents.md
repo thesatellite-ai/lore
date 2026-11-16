@@ -120,7 +120,6 @@ Use it when you started a task and cannot finish it. The task is free at once, s
 # alice, in website
 $ lore task add --title 'send the invoice reminder before Friday' --to agency && lore sync
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_2ad3…f891.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_05e9…4603.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ tsk_c0f3…b5b8 — send the invoice reminder before Friday [medium] → [agency/client]
@@ -128,13 +127,12 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store
 lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): pushed (sent 3, received 0, merged 0, refused 0)
+store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: up to date
 
 # bob, in website
 $ lore task claim --id tsk_c0f3…b5b8
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_7a67…9504.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ claimed tsk_c0f3…b5b8 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
 $ lore task release --id tsk_c0f3…b5b8
@@ -173,7 +171,6 @@ export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 # agent-backend, in website
 $ lore task claim --id tsk_c0f3…b5b8
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_76bd…3f10.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ claimed tsk_c0f3…b5b8 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on refs/lore/signals/main
 
@@ -209,7 +206,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store
 lore: pushed store agency/client, agency/org: commit 9b40ce7 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): pushed (sent 3, received 0, merged 0, refused 0)
+store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 
 # bob, in website

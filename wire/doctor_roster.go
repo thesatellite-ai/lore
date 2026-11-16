@@ -138,7 +138,9 @@ func rosterHolds(ctx context.Context, st *state, src store.Source, id ids.ID[ids
 		return true, nil
 	}
 	if errs.Has(err, errs.NotFound) {
-		return false, nil
+		// devco D-486: a store clone keeps one actor row per person, in
+		// the folder that holds the roster; the other folders name it.
+		return actorHeldBySibling(ctx, st, src, want)
 	}
 	return false, err
 }

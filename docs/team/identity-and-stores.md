@@ -194,7 +194,6 @@ lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
   scope: [project]
 $ lore move --id mem_76bd…3f10 --to agency --yes
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_c0f3…b5b8.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency)
 lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
 ✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
@@ -294,6 +293,8 @@ Your personal store (`me`), your org's stores and the stores a repo attaches in 
 | `now` (your opt-in) | commits and pushes | at once, one commit per write, roster and link writes included |
 
 Each store commit is titled after what you did: the command and, for a kind with a short title (a task, a plan), the title, as in `lore: task add: Ship the beta`; other rows are named by id, as in `lore: memory add mem_01ab…` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+
+Your actor row and your machine profile live in one folder of a store, the folder that holds your row (the org folder, where the roster is), not in every folder you write to. A write in another folder of the same store (`task edit --id … --assign @lee` in `sync/`) commits only that row: one commit, with no `sync/actors/…` or `sync/machines/…` file beside it, since a folder's reads attach the org folder and find you there. A coding agent's first write in a store adds the agent's own row to that same folder, once, as its own commit; later writes carry only their rows. A folder of a store that holds no row of yours yet (a store with no org folder) still gets your actor row with your first write there.
 
 lore has no daemon, timer or background process, and never starts one. A batch goes out only when something runs lore: a command you (or your coding tool) run anyway checks the age of the oldest waiting write and, once it is `push_every` old, pushes the batch inside that command. That push gets a short time limit, so a slow or unreachable remote never holds your command up; what did not go out stays committed for the next command. If nothing runs lore, the batch simply stays on your machine, safe. `lore store show`, `lore sync status` and `lore doctor` show how old the oldest waiting write is, and `lore doctor` warns once it is more than a day old. Run `lore sync` to push it.
 
@@ -447,13 +448,13 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 ```console
 # alice, in website
 $ lore store compact --store agency --before 30d --dry-run
-would squash 7 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 7 row file(s); epoch 0 → 1
+would squash 6 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
 $ lore store compact --store agency --before 30d
-ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 7 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
+ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 6 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
+✓ compacted agency: 6 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
   pushed store agency: commit 05513aa to branch main
 ```
 <!-- /example -->
@@ -480,23 +481,22 @@ Nothing to do. On Bob's next sync lore sees the higher epoch, moves his copy ont
 # bob, in website
 $ lore memory add --body 'the client wants the invoice on the 1st' --to agency
 lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
-✓ mem_c0f3…b5b8 [agency/client]
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (store agency)
+✓ mem_05e9…4603 [agency/client]
   scope: [project]
 $ lore sync
 lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
-store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client (here: agency): pushed (sent 1, received 0, merged 0, refused 0)
 store agency/org: up to date
 $ lore memory list
-mem_76bd…3f10 [retrieved] the client signs off designs on Thursdays [agency/client]
-mem_d431…313a [retrieved] staging resets every Sunday night [agency/client]
-mem_c0f3…b5b8 [retrieved] the client wants the invoice on the 1st [agency/client]
+mem_c0f3…b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]
+mem_76bd…3f10 [retrieved] staging resets every Sunday night [agency/client]
+mem_05e9…4603 [retrieved] the client wants the invoice on the 1st [agency/client]
 $ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
-lore: actor register act_05e9…4603
+lore: actor register act_d431…313a
 lore: snapshot of the store history before 2026-10-03
 ```
 <!-- /example -->
