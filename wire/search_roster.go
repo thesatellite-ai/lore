@@ -93,7 +93,7 @@ func (a *App) runRosterList(ctx context.Context, name string, out interface{ Tex
 		return false, nil
 	}
 	c, _ := engine.CallerOf(ctx)
-	res, err := a.runAside(ctx, e, op.JSONDecoder{Body: []byte(`{}`)}, c)
+	res, err := a.runOnOpen(ctx, e, op.JSONDecoder{Body: []byte(`{}`)}, c)
 	if err != nil {
 		// no roster here, or one this place may not read (a client repo:
 		// E_LEAK_BLOCKED): a search of the content never fails on the
@@ -110,18 +110,21 @@ func (a *App) runRosterList(ctx context.Context, name string, out interface{ Tex
 	return true, nil
 }
 
-// runAside runs e as its own command on its own open and puts the App's
-// open back after: the search that asks for the roster is still reading
-// its stores (its engine, a store folder's --all-repos widening, extra
-// folders), and a nested Run would reopen the App on its own scope and
-// close the stores the search holds (devco D-489 with D-485).
-func (a *App) runAside(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
+// runOnOpen runs the roster list e on the open the search already holds:
+// the roster lists are direct ops (profilestore.IsDirect) that read the
+// roster through App.Roster, which reuses this App's state when the
+// roster is one of its stores. A fresh open per list (devco D-489's
+// runAside) re-statused every attached store's clone twice per search
+// (devco D-496, the D-418 git budget). Should the read still reopen the
+// App (App.rosterState's reopenForStore), that open is closed and the
+// search's own is put back, so its engine, a store folder's --all-repos
+// widening and extra folders stay as they were (devco D-485).
+func (a *App) runOnOpen(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
 	a.mu.Lock()
 	opened, st, serr, cfgOpened, cfgErr, cfg := a.opened, a.st, a.err, a.cfgOpened, a.cfgErr, a.cfg
 	extra := slices.Clone(a.extra)
-	a.opened, a.st, a.err = false, nil, nil
 	a.mu.Unlock()
-	res, err := a.Run(ctx, e, d, c)
+	res, err := runDirect(profileContext(ctx, c), e, d)
 	a.mu.Lock()
 	if a.st != nil && a.st != st {
 		_ = a.st.close()

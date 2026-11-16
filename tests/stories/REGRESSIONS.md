@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1837 |
+| fixed | 1838 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -818,6 +818,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-486 | finding | owner store test 2, new problem 6: one `task edit --assign --yes` in a member's store folder committed two actor rows into that folder plus a separate commit with a machines row | fixed | TestFolderWriteKeepsTheActorRowInItsSibling, TestJourneyStoreScope | wire/actorhome.go: a folder of a store clone whose sibling folder (the org folder) holds the caller's actor row gets no copy (refs resolve across the attached folders); an agent's missing row goes once to the folder holding its owner's row (its own roster row, outside the edit's batch), never the folder written; the machine profile goes to that folder too, so a product-folder write carries none; doctor's actor_roster counts the sibling's row; docs/team/identity-and-stores.md, docs/operations/doctor.md; story B; break-verified (unit: acme/ got the copy; journey: sync/actors in the commit) |
 | devco:D-495 | finding | after-land gate on dev 5151f30d: `lore sync` in a linked repo re-rendered the private file under sync's write access, so resolving the project made the linked folder's project row and committed it after the push; every such sync left a commit waiting and `actor merge` made two commits in the folder's store instead of one | fixed | TestJourneyFoldersMerge | the after-sync re-render runs as a read, as `lore render` does (wire/renderhost/render_private.go rerenderPrivateQuiet); broken by D-494 |
 | devco:D-497 | finding | after-land gate on dev 5151f30d: in an owned repo with no link (the org entry attaches its store's root folder), `memory list` listed the rows of a store folder the repo does not attach, while the write there said lists would not show them (D-484 widened the org entry's attach like a whole-store entry) | fixed | TestListsKeepTheOrgEntryAttachToItsPlace, TestKnowledgeLevels_OrgStoreFolders | wire/lensfolders.go: lists, search and sql widen only a stores.yaml entry with no folder and the org's company store; the org entry's own attach of the repo (bare org name) reads its one place (STORE TARGETS) |
+| devco:D-496 | finding | after-land gate on dev 5151f30d: `search` with a team store started 4 git processes, budget 3 (D-418): the people and teams lookup of D-489 ran member list and team list each on a fresh open of the App, which statused the team store clone again | fixed | TestJourneyGitExecBudgetTeam, TestJourneyStoreFolderFindsPeopleAndCounts, TestListsReadEveryFolderOfAStoreAttachedWhole | wire/search_roster.go runOnOpen: the roster lists run on the open the search already holds (App.Roster reuses its state); a reopen they still cause is closed and the search's own open put back, so D-485's --all-repos widening stays; search with a team store 4 -> 2 git processes |
 
 ## lore-adoptfix
 
