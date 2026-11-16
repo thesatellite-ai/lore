@@ -52,7 +52,9 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 	a.mu.Unlock()
 	attached := slices.Concat(cfg.Stores, a.orgStoresHere(ctx), extra)
 	seen := map[string]bool{}
+	names := map[store.Source]bool{} // a name in use elsewhere would refuse the open ("attached twice")
 	for _, s := range attached {
+		names[s.Name] = true
 		if loc, lerr := attachLocation(s, s.Folder); lerr == nil {
 			seen[loc] = true
 		}
@@ -72,11 +74,12 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 		}
 		for _, f := range folders {
 			loc, lerr := attachLocation(s, f)
-			if lerr != nil || seen[loc] {
+			name := store.Source(string(s.Name) + targetSep + f)
+			if lerr != nil || seen[loc] || names[name] {
 				continue
 			}
-			seen[loc] = true
-			out = append(out, attach.Store{Name: store.Source(string(s.Name) + targetSep + f), URL: s.URL, Folder: f, Branch: s.Branch, ReadOnly: true})
+			seen[loc], names[name] = true, true
+			out = append(out, attach.Store{Name: name, URL: s.URL, Folder: f, Branch: s.Branch, ReadOnly: true})
 		}
 	}
 	return out

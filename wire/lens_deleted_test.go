@@ -18,7 +18,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
-	"github.com/thesatellite-ai/lore/model/errs"
 	opsmemory "github.com/thesatellite-ai/lore/ops/memory"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
@@ -99,9 +98,11 @@ func TestSQLIncludeDeleted(t *testing.T) {
 	}
 }
 
-// TestSQLIncludeDeletedAttachLimit: repo + 9 store caches is 10 lens
-// sources, the most SQLite attaches; the deleted-rows file would be the
-// 11th.
+// TestSQLIncludeDeletedAttachLimit: a repo with 9 stores gave the lens
+// repo + 9 store caches, the most SQLite attaches, and refused the
+// deleted-rows file as the 11th (devco D-478). MaxStoreCaches keeps a slot
+// for it now: past 8 stores they share one combined cache, so
+// --include-deleted works too.
 func TestSQLIncludeDeletedAttachLimit(t *testing.T) {
 	// Heavy on SQLite: its own process keeps it off this process's
 	// allocator lock (see package isolate).
@@ -111,16 +112,15 @@ func TestSQLIncludeDeletedAttachLimit(t *testing.T) {
 	repo := gitRepo(t)
 	var b strings.Builder
 	b.WriteString("stores:\n")
-	for i := 1; i <= MaxStoreCaches; i++ {
+	for i := 1; i <= MaxStoreCaches+1; i++ {
 		fmt.Fprintf(&b, "  - name: s%d\n    url: %s\n", i, folderStoreAt(t, fmt.Sprintf("sto_01a1a5aca7f57659be7320c5f4b7%04d", 100+i), rowfs.VisibilityInternal))
 	}
 	writeStoresYAML(t, repo, b.String())
 	a := openWith(t, repo, Options{RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
 	if _, err := a.SQL(background(), opssql.Request{Query: `SELECT count(*) FROM memories_all`}); err != nil {
-		t.Fatalf("10 sources: %v", err)
+		t.Fatalf("9 stores: %v", err)
 	}
-	_, err := a.SQL(background(), opssql.Request{Query: `SELECT count(*) FROM memories_all`, IncludeDeleted: true})
-	if !errs.Has(err, errs.Unsupported) {
-		t.Fatalf("10 sources + deleted: %v, want E_UNSUPPORTED", err)
+	if _, err := a.SQL(background(), opssql.Request{Query: `SELECT count(*) FROM memories_all`, IncludeDeleted: true}); err != nil {
+		t.Fatalf("9 stores + deleted: %v", err)
 	}
 }

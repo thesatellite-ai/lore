@@ -94,7 +94,7 @@ var homeLayout = []homeEntry{
 	// devco:V-17: the branch-layer caches, explained in the row above
 	{Pattern: "cache/stores/*/*/" + layerCacheSeg + "/**", What: "a code branch's cache of a store folder (its branch layer on top of the shared notes)", ByHand: byHandRebuilt},
 	{Pattern: "cache/stores/**", What: "a store folder's cache", ByHand: byHandRebuilt},
-	{Pattern: "cache/combined", Dir: true, What: "one cache per repo that attaches more stores than get a file each: combined/<hash of the repo path>.db", ByHand: byHandRebuilt, Readme: true},
+	{Pattern: "cache/combined", Dir: true, What: "one cache per repo that attaches more stores than get a file each, and per set of store folders a read outside a repo covers past that: combined/<hash of the repo path or the folders>.db", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/combined/**", What: "a repo's combined cache", ByHand: byHandRebuilt},
 	{Pattern: "cache/" + repoCacheDir, Dir: true, What: "one cache per code repo checkout, of the rows in its .lore/data: " + repoCacheDir + "/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/" + repoCacheDir + "/**", What: "a code repo's cache", ByHand: byHandRebuilt},

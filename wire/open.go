@@ -65,10 +65,12 @@ const (
 	// combinedDir holds the CFG3 combined caches under cacheDir.
 	combinedDir = "combined"
 	// MaxStoreCaches is how many attached store folders get their own
-	// cache file; past it the repo uses one combined cache (CFG3, O10):
-	// a lens attaches at most sqlite.MaxLensSources files, one of them the
-	// repo's own.
-	MaxStoreCaches = sqlite.MaxLensSources - 1
+	// cache file; past it the open uses one combined cache (CFG3, O10):
+	// a lens attaches at most sqlite.MaxLensSources files, and two of them
+	// are kept free for the repo's own cache and the deleted-rows file of
+	// `lore sql --include-deleted` (devco D-478: a store-only open over 16
+	// folders, and a repo with 9 stores plus that file, went past it).
+	MaxStoreCaches = sqlite.MaxLensSources - 2
 	// cacheDirMode is the mode of cache folders lore creates (owner only:
 	// caches hold internal rows).
 	cacheDirMode = 0o700
@@ -1371,14 +1373,10 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	exp := refs.Expander{Resolver: rv}
 	st.byName = map[store.Source]store.Backend{}
 	st.folders = map[store.Source]string{}
+	if err = openDetachedCaches(ctx, opts.Home, st.caches, attached, reg, exp); err != nil {
+		return fail(err)
+	}
 	for _, o := range attached {
-		path, pathErr := cachePath(opts.Home, o)
-		if pathErr != nil {
-			return fail(pathErr)
-		}
-		if err = st.caches.open(ctx, o.Name, path, reg, exp); err != nil {
-			return fail(err)
-		}
 		st.byName[o.Name] = o.Backend
 		st.folders[o.Name] = o.Folder
 	}
@@ -1517,3 +1515,43 @@ func (a *App) LinkedRemoteProject(ctx context.Context) (ids.ID[ids.Project], str
 	}
 	return pid, remote, true
 }
+
+// openDetachedCaches opens the caches of a store-only open: one file per
+// store folder, or past MaxStoreCaches one combined file for all of them
+// (CFG3, O10), as a repo's open does. Without it a read at a store clone
+// root, a setup folder or `--setup <org>` over a store of more than ten
+// folders asked the lens to attach every folder's file and failed on
+// SQLite's attach limit (devco D-478). The combined file is named by the
+// attached places, so another read over the same folders reuses it.
+func openDetachedCaches(ctx context.Context, home string, c *caches, attached []attach.Opened, reg *schema.Registry, exp sqlite.Expander) error {
+	if len(attached) <= MaxStoreCaches {
+		for _, o := range attached {
+			path, err := cachePath(home, o)
+			if err != nil {
+				return err
+			}
+			if err = c.open(ctx, o.Name, path, reg, exp); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	places := make([]string, 0, len(attached))
+	names := make([]store.Source, len(attached))
+	layered := make([]store.Backend, len(attached))
+	for i, o := range attached {
+		places = append(places, string(o.Name)+"\x00"+o.Location)
+		names[i] = o.Name
+		layered[i] = o.Backend
+	}
+	slices.Sort(places)
+	path, err := combinedCachePath(home, detachedCombinedKey+strings.Join(places, "\x00"), layerSubOf(layered))
+	if err != nil {
+		return err
+	}
+	return c.openCombined(ctx, names, path, reg, exp)
+}
+
+// detachedCombinedKey starts the key of a store-only open's combined cache
+// file, so it never shares a name with a repo's (keyed by the repo path).
+const detachedCombinedKey = "store-only\x00"

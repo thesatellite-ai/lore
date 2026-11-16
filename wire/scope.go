@@ -39,6 +39,10 @@ type namedScope struct {
 	to, store, project string
 }
 
+// allReposField is the input field of a read's --all-repos (every repo's
+// rows; in a store folder, every folder of the store, D-485).
+const allReposField = "all_repos"
+
 // scopeOf reads the scope fields of in.
 func scopeOf(in op.Input) namedScope {
 	var n namedScope
@@ -80,7 +84,10 @@ func (a *App) runInStoreClone(ctx context.Context, e op.Entry, d op.Decoder, c o
 	if name == string(store.SourceRepo) {
 		return op.Result{}, false, nil
 	}
-	if name == "" && n.project == "" && sc.folder != rowfs.FolderRoot {
+	// D-485: --all-repos in one folder covers every folder of the store,
+	// as the clone's top does; without it the read keeps its folder
+	allRepos, _ := in.Bool(allReposField)
+	if name == "" && n.project == "" && sc.folder != rowfs.FolderRoot && !allRepos {
 		return op.Result{}, false, nil
 	}
 	root, err := storeHereEntry(a.opts.Home, storeCheckout{top: sc.top, shown: sc.shown, folder: rowfs.FolderRoot, isGit: sc.isGit})

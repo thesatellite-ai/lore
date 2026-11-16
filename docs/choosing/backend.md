@@ -21,7 +21,7 @@ The cache is never the truth. Lore keeps every row it read from the files and bu
 
 - Each clone and each git worktree has its own repo cache, `~/.lore/cache/repo/<repo folder>-<hash>.db`, in lore's home and never in the repo (a moved or renamed repo folder gets a fresh one).
 - Caches of store folders live under `~/.lore/cache/stores/`, named by the store's permanent id, so every repo on the machine that attaches the same store folder shares one file.
-- A repo that attaches more than nine store folders gets one combined cache, `~/.lore/cache/combined/<hash>.db`, instead of one file per folder.
+- A repo that attaches more than eight store folders, and a read over more than eight folders of a store from its clone, a setup folder or `--setup` / `--store <org>`, gets one combined cache, `~/.lore/cache/combined/<hash>.db`, instead of one file per folder, so search and `lore sql` read any number of folders.
 - `lore cache prune` lists the cache files of stores no repo on this machine attaches any more, and removes them after asking.
 
 ## If this, then that

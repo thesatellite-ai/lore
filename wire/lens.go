@@ -97,19 +97,11 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 	}
 	var extra []string
 	st.caches.mu.Lock()
-	combined := st.caches.combined != nil
+	path := st.caches.combinedPath // the file the open applied every store into
 	st.caches.mu.Unlock()
-	if combined {
+	if path != "" {
 		if client && !internal {
 			return srcs, nil, nil // the combined file mixes internal stores in (fail closed)
-		}
-		layered := make([]store.Backend, 0, len(st.byName))
-		for _, b := range st.byName {
-			layered = append(layered, b)
-		}
-		path, err := combinedCachePath(a.opts.Home, st.repoTop, layerSubOf(layered))
-		if err != nil {
-			return nil, nil, err
 		}
 		if client {
 			for _, name := range st.eng.Stores() {
