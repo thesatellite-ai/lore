@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
@@ -43,6 +44,12 @@ type Project struct {
 	OriginURL  string          `json:"origin_url,omitempty"`
 	ArchivedAt string          `json:"archived_at,omitempty"`
 	Store      store.SourceRef `json:"_source,omitempty,omitzero"`
+	// Rows counts the row files of a store folder's project (D-444: the
+	// list said "no rows yet" for folders holding dozens); counted is false
+	// for a project that is no store folder here (the repo's own), whose
+	// line has no count.
+	Rows    int `json:"rows,omitempty"`
+	counted bool
 	// line is the v0.1.17 human line of this project; label the [store]
 	// Text ends it with ("" for a repo row, whose line stays v0.1.17's).
 	line, label string
@@ -69,7 +76,7 @@ func (o ProjectListOut) Text() string {
 	}
 	var b strings.Builder
 	for _, p := range o.Data {
-		b.WriteString(withStoreLabel(p.line, p.label))
+		b.WriteString(withRows(withStoreLabel(p.line, p.label), p.Rows, p.counted))
 	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
@@ -192,11 +199,13 @@ type OrgFolderLister interface {
 	OrgFolderProjects(ctx context.Context) (folders []FolderProject, notes []string, err error)
 }
 
-// FolderProject is one folder of one of the org's stores.
+// FolderProject is one folder of one of the org's stores, with the
+// number of row files it holds.
 type FolderProject struct {
 	ID     string
 	Name   string
 	Source store.SourceRef
+	Rows   int
 }
 
 // appendFolderProjects adds the folders no listed row already names (a
@@ -210,16 +219,18 @@ func appendFolderProjects(data []Project, folders []FolderProject) []Project {
 	}
 	slices.SortFunc(folders, func(a, b FolderProject) int { return strings.Compare(a.Name, b.Name) })
 	for _, f := range folders {
+		rows := f.Rows
 		if i, ok := at[f.ID]; ok {
 			if data[i].Store.Store != "" { // a store row, not the repo's own
 				data[i].Store.Store = f.Source.Store
 				data[i].label = storeMark(f.Source.Store, f.Source.Folder)
+				data[i].Rows, data[i].counted = rows, true
 			}
 			continue
 		}
 		at[f.ID] = len(data)
-		data = append(data, Project{ID: f.ID, Name: f.Name, Store: f.Source,
-			line: f.ID + "  " + f.Name + folderOnlyMark + "\n", label: storeMark(f.Source.Store, f.Source.Folder)})
+		data = append(data, Project{ID: f.ID, Name: f.Name, Store: f.Source, Rows: rows, counted: true,
+			line: f.ID + "  " + f.Name + "\n", label: storeMark(f.Source.Store, f.Source.Folder)})
 	}
 	return data
 }
@@ -237,9 +248,18 @@ func withStoreLabel(line, label string) string {
 	return strings.TrimSuffix(line, "\n") + "  " + label + "\n"
 }
 
-// folderOnlyMark follows the name of a folder whose project row is not
-// written yet (store folder add made it; its first row writes the row).
-const folderOnlyMark = "  (folder, no rows yet)"
+// withRows ends a list line with the folder's row count ("1 row",
+// "39 rows"); a project with no count keeps its line.
+func withRows(line string, rows int, counted bool) string {
+	if !counted {
+		return line
+	}
+	unit := " rows"
+	if rows == 1 {
+		unit = " row"
+	}
+	return strings.TrimSuffix(line, "\n") + "  " + strconv.Itoa(rows) + unit + "\n"
+}
 
 // projectShow shows one project (a prj_ id or a name, work.ProjectRef)
 // with its repos.

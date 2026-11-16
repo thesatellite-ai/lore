@@ -299,13 +299,11 @@ origin (written once)
   repo       website  rep_d7c7956f4acfc4409bcde8bcf2627fe6  (https://github.com/client/website)
   git        branch main at 601d2850ffd0
   command    lore decision add
+  lore       dev
 
 who and when
   created    2026-11-02T10:00:50Z   alice (act_ada321d27469d49114b952fdeed0c018)
   updated    2026-11-02T10:01:15Z   alice (act_ada321d27469d49114b952fdeed0c018)
-
-last write
-  lore       dev
 
 lineage
   no moves

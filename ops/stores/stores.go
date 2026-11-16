@@ -115,6 +115,10 @@ type Entry struct {
 	// (SOURCE_OF_TRUTH row 7; store.list only, AddressNoter): "" when it
 	// has one.
 	Address string `json:"address,omitempty"`
+	// Audience is "admins" for an org store only the org's admins use
+	// (lore-org.yaml audience: admins, D-442; store.list only), "" for
+	// every other store.
+	Audience string `json:"audience,omitempty"`
 }
 
 // InitIn is the input of store.init.

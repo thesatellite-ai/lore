@@ -26,8 +26,8 @@ func TestAppendFolderProjects(t *testing.T) {
 	}
 	folders := []FolderProject{
 		{ID: thirdID, Name: "client_c", Source: store.SourceRef{Store: "acme", Folder: "client_c"}},
-		{ID: linkedID, Name: "client_a", Source: store.SourceRef{Store: twoURL, Folder: "client_a"}},
-		{ID: otherID, Name: "client_b", Source: store.SourceRef{Store: twoURL, Folder: "client_b"}},
+		{ID: linkedID, Name: "client_a", Source: store.SourceRef{Store: twoURL, Folder: "client_a"}, Rows: 39},
+		{ID: otherID, Name: "client_b", Source: store.SourceRef{Store: twoURL, Folder: "client_b"}, Rows: 1},
 	}
 	got := appendFolderProjects(data, folders)
 	var names []string
@@ -43,9 +43,10 @@ func TestAppendFolderProjects(t *testing.T) {
 	text := ProjectListOut{Data: got}.Text()
 	for _, want := range []string{
 		repoID + "  app\n",
-		linkedID + "  client_a  [" + twoURL + "/client_a]\n",
-		otherID + "  client_b  (folder, no rows yet)  [" + twoURL + "/client_b]\n",
-		thirdID + "  client_c  (folder, no rows yet)  [acme/client_c]\n",
+		// D-444: every store folder says how many rows it holds
+		linkedID + "  client_a  [" + twoURL + "/client_a]  39 rows\n",
+		otherID + "  client_b  [" + twoURL + "/client_b]  1 row\n",
+		thirdID + "  client_c  [acme/client_c]  0 rows\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text lacks %q:\n%s", want, text)

@@ -119,16 +119,42 @@ func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, 
 	if berr != nil {
 		return Suggestion{}, false, berr
 	}
-	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p, Held: held}, true, nil
+	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p, Held: held, dir: dir, at: at}, true, nil
 }
 
 // Shared is the suggestion's shared fields as an org entry holds them.
 func (s Suggestion) Shared() orgconf.Shared {
 	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos, Defaults: orgconf.OrgDefaults{ClientRepos: s.Doc.Defaults.ClientRepos}}
 	for _, st := range s.Doc.Stores {
-		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Name: st.Name, Branch: st.Branch, OrgFolder: st.OrgFolder})
+		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Name: st.Name, Branch: st.Branch, OrgFolder: st.OrgFolder, Audience: orgconf.Audience(st.Audience)})
 	}
 	return sh
+}
+
+// SharedFor is Shared as the org entry of the person with identity key
+// (human:<email>) holds it (D-442): the whole file for an admin of the
+// org (an open roster stint with org_role admin in the org folder, at the
+// commit the file was read at, as for an org-file change, R-7), else
+// without the admins-only stores, which come back as skipped. A file with
+// no admins-only store skips the roster read.
+func (s Suggestion) SharedFor(ctx context.Context, key string) (orgconf.Shared, []orgconf.Store) {
+	sh := s.Shared()
+	if !sh.HasAdminsOnly() {
+		return sh, nil
+	}
+	return sh.ForPerson(s.IsAdmin(ctx, key))
+}
+
+// IsAdmin reports whether the person with identity key is an admin of the
+// org at the commit the suggestion was read at. No key, or a suggestion
+// not read from a clone, is no admin (a member's copy: fail safe, they
+// only miss the admins' store).
+func (s Suggestion) IsAdmin(ctx context.Context, key string) bool {
+	email, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(key)), "human:")
+	if !ok || email == "" || s.dir == "" || s.at == "" {
+		return false
+	}
+	return orgAdminAt(ctx, s.dir, s.at, s.Folder, email)
 }
 
 // Source is the stamp a config copy of this suggestion carries.

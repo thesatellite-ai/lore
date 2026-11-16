@@ -163,6 +163,9 @@ func (o ops) setStatus(ctx context.Context, src store.Source, cur row.Row, statu
 	if err = closeFields(cur, status, work.Now(o.env), patch); err != nil {
 		return "", err
 	}
+	if err = markClaimStatusSet(cur, patch); err != nil { // devco:D-464: a release keeps this status
+		return "", err
+	}
 	open := TimeOpen(cur)
 	now := opclock.Now(o.env).UTC()
 	who := o.callerOf(ctx)

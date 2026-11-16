@@ -333,7 +333,7 @@ A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote
 |---|---|---|
 | **claim** (`task claim`, `task next --claim`) | task ready, no unexpired claim, you hold fewer than `agents.max_claims_per_agent` | a claim with a fresh `claim_token` and `expires = now + lease.ttl` (20m); the task row's `claim_epoch` goes up by one, status `in_progress`, `attempts` counted |
 | **renew** (`task heartbeat`) | your token is on the ref and not expired | a later `expires`, `renewed_seq + 1`; the task row is not touched |
-| **release** | your token is on the ref | the claim is removed; the task row gets back the status and `started_at` it had before the claim, one `release` claim-log entry, and the holder's time span only when the claim saw work (a heartbeat, or held a minute or more) |
+| **release** | your token is on the ref | the claim is removed; the task row gets back the status and `started_at` it had before the claim, one `release` claim-log entry, and the holder's time span only when the claim saw work (a heartbeat, or held a minute or more, or a status set during the claim: `lore task start` or `lore task edit --status`, which the release keeps) |
 | **done, note, gate request by the holder** | your token is on the ref **and** the row's `claim_epoch` matches your claim | the row change and the claim change, in one atomic push |
 | **revoke, cancel, reassign by a person** | a human identity | the claim is removed and `claim_epoch` goes up |
 | **expire** | `now > expires + lease.grace` **and** the same `renewed_seq` was seen for at least `lease.renew_every` | nothing: readers treat it as absent; the next writer drops it |

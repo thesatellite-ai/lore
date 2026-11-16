@@ -70,7 +70,7 @@ The first decision says `status: superseded` and names the decision that replace
 
 ## Show one row without the TUI
 
-When you already have an id, `lore show --id <id>` (also spelled `lore row show --id <id>`) prints every field of any row, whatever its kind. `--origin` adds where the row came from: the store, project, repo, branch and command that wrote it, who created and last changed it, and any moves between stores.
+When you already have an id, `lore show --id <id>` (also spelled `lore row show --id <id>`) prints every field of any row, whatever its kind, from any folder of the store or the org that holds it (in a store clone's folder too). `--origin` adds where the row came from: the store (by name and `sto_` id), project, repo, branch and command that wrote it, the lore version and machine of its last write, who created and last changed it, and any moves between stores. A git state other than a branch says why in words: `none: written from a store folder or a folder outside any code repo, not a code repo` for a row written from a store clone or a plain folder. `--json` always prints all of it (`origin`, `audit`, `write`, `lineage`, the row's tags by name and `referenced_by`, the rows whose fields name it), with list fields such as `watchers`, `assignees` and `tag_ids` as JSON arrays; `--origin` changes nothing there.
 
 <!-- example: knowledge#show-any-row only=2 -->
 ```console
@@ -92,11 +92,10 @@ origin (written once)
   repo       website  rep_d7c7…7fe6  (https://github.com/client/website)
   git        branch main at 601d2850ffd0
   command    lore decision add
+  lore       dev
 who and when
   created    2026-11-02T10:00:50Z   alice (act_ada3…c018)
   updated    2026-11-02T10:01:15Z   alice (act_ada3…c018)
-last write
-  lore       dev
 lineage
   no moves
 agent session
@@ -104,7 +103,7 @@ agent session
 ```
 <!-- /example -->
 
-`--expand` fills in `${var:…}` references (see [Variables and metadata](variables-and-metadata.md)), `--json` prints the row as JSON, and `--show-sensitive` prints sensitive values after asking.
+`--expand` fills in `${var:…}` references (see [Variables and metadata](variables-and-metadata.md)), `--json` prints the row and everything above as JSON, and `--show-sensitive` prints sensitive values after asking.
 
 These are all the `lore tui` flags:
 

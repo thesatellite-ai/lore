@@ -68,6 +68,11 @@ var (
 	ErrNotAStore = errors.New("orgcfg: not a lore store")
 	// ErrFolderElsewhere: --store names one store, the folder is in another.
 	ErrFolderElsewhere = errors.New("orgcfg: folder exists in another store")
+	// ErrAdminsOnlyLink: --store names a store only the org's admins use
+	// (audience: admins, D-442). A repo's notes must be readable by every
+	// member who works in it, and a member's link index never holds that
+	// store, so no repo links to it.
+	ErrAdminsOnlyLink = errors.New("orgcfg: the store is admins-only; repos are not linked to it")
 	// ErrLinkRace: every push lost a race.
 	ErrLinkRace = errors.New("orgcfg: store push still rejected")
 	// ErrStoreRefused: the store answered and refused the push for a
@@ -407,6 +412,12 @@ func (g *GitLinks) pickLinkStore(ctx context.Context, plan orgresolve.LinkPlan) 
 		n, nerr := repourl.NormalizeStore(sc.URL)
 		if nerr != nil {
 			return "", fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, nerr)
+		}
+		if sc.AdminsOnly() {
+			if n == plan.StoreURL {
+				return "", fmt.Errorf("%w: %s (audience: admins in %s's lore-org.yaml)", ErrAdminsOnlyLink, n, o.Name)
+			}
+			continue // never a link's holder: members could not read it (D-442)
 		}
 		if n == plan.StoreURL && named == "" {
 			named = n

@@ -9,6 +9,8 @@ package journeys
 // writes nothing (no ref moves, the task stays todo). `--claim` takes it.
 // A release then puts the task back as the claim found it: todo, no
 // started_at, no time entry, and no `time` feature switched on.
+// devco:D-464: a `task start` during a claim is work, so the release after
+// it keeps the task in_progress, its started_at and the span.
 
 import (
 	"encoding/json"
@@ -108,5 +110,16 @@ func TestJourneyNextReadsReleaseRestores(t *testing.T) {
 			t.Errorf("a claim given back with no work switched the time feature on:\n%s", meta)
 		}
 		jAgentsRun(kit, c, &jClaude, sess, "task", "next").OK(t).Says(t, "next "+top) // free again, top again
+	})
+
+	w.Step("day1/start-during-claim-survives-the-release", func() {
+		jAgentsRun(kit, c, &jClaude, sess, "task", "next", "--claim").OK(t).Says(t, "claimed "+top)
+		claimed := row(top)
+		jAgentsRun(kit, c, &jClaude, sess, "task", "start", "--id", top).OK(t).Says(t, top+" started")
+		jAgentsRun(kit, c, &jClaude, sess, "task", "release", "--id", top).OK(t).Says(t, "released "+top)
+		r := row(top)
+		if r.Status != "in_progress" || r.StartedAt == "" || r.StartedAt != claimed.StartedAt || len(r.TimeEntries) != 1 {
+			t.Errorf("after claim+start+release the task is %+v, want in_progress started at %q with one time entry", r, claimed.StartedAt)
+		}
 	})
 }

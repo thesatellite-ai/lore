@@ -118,7 +118,7 @@ func TestJourneyFoldersTeamFromLinkedRepo(t *testing.T) {
 		if stores["client_b"] == stores["client_c"] {
 			t.Errorf("client_b and client_c live in different stores, project list says %q", stores["client_b"])
 		}
-		lee.LoreIn(hub, "project", "list").OK(t).Says(t, "client_a", "client_b", "client_c", "(folder, no rows yet)")
+		lee.LoreIn(hub, "project", "list").OK(t).Says(t, "client_a", "client_b", "client_c", " row")
 	})
 
 	w.Step("day3/teams-outside-any-repo", func() {

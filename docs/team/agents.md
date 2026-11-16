@@ -155,7 +155,7 @@ created 2026-11-02T10:09:20Z by alice · updated 2026-11-02T10:09:20Z by alice
 ```
 <!-- /example -->
 
-The task goes back to the status and `started_at` it had before the claim (here `todo`); its attempt count stays, and the claim and release are kept only in the task's claim log. A claim released within a minute with no heartbeat records no time on the task; a longer or renewed one keeps its time span. Anyone may now claim it, or `lore task next --claim` hands it to the next agent.
+The task goes back to the status and `started_at` it had before the claim (here `todo`); its attempt count stays, and the claim and release are kept only in the task's claim log. A claim released within a minute with no heartbeat records no time on the task; a longer or renewed one keeps its time span. If someone set the status while the task was claimed (`lore task start`, `lore task edit --status`), that is work: the release keeps that status and `started_at`, and the time span. Anyone may now claim it, or `lore task next --claim` hands it to the next agent.
 
 ## Step 2 — Take a claim away: `lore task revoke`
 
@@ -333,7 +333,7 @@ The whole run that leads to this screen, from `lore mission plan` to the gate, i
 
 ## Pitfalls
 
-- **A released task goes back to how the claim found it.** `lore task release` drops the claim and puts the task's status and `started_at` back (a `todo` task is `todo` again; one a person had already started stays `in_progress`). The time spent stays on the task when the claim saw work (a heartbeat, or held a minute or more). If nobody should work on it, cancel it.
+- **A released task goes back to how the claim found it.** `lore task release` drops the claim and puts the task's status and `started_at` back (a `todo` task is `todo` again; one a person had already started stays `in_progress`, and so does one started with `lore task start` while it was claimed; a status set with `lore task edit --status` during the claim stays too). The time spent stays on the task when the claim saw work (a heartbeat, held a minute or more, or a status set during it). If nobody should work on it, cancel it.
 - **Revoke and reassign need the holder to write once more to notice.** The agent finds out on its next heartbeat, note or `done`. An agent that never writes again keeps working on its copy. The claim is still gone, and its `done` is refused.
 - **Resources are per project in a repo without a store.** A linked client repo keeps its holds on the store's signals ref; only a client repo with no store link refuses `lore hold claim` with `E_UNSUPPORTED`, and `--on machine` answers `E_NOT_IMPLEMENTED` (use your machine's own lock tool, such as `flock`); run shared-resource scripts from the agency's own repos.
 - **The roster lives where `lore actor register` ran.** In a repo with no org, each person is a row in that repo's `.lore/data`, so commit it with your change, like any other row.

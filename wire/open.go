@@ -102,6 +102,13 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if one.Folder != "" {
 			also = cloneCompanyFolder(cloneOrgEntry(opts.Home, one.URL), one)
 		}
+		// a folder attached for this one command (a row named by id in
+		// another folder of the clone, idfolder.go; D-458)
+		for _, x := range extra {
+			if x.Name != one.Name && !slices.ContainsFunc(also, func(s attach.Store) bool { return s.Name == x.Name }) {
+				also = append(also, x)
+			}
+		}
 		st, err := openDetachedHere(ctx, opts, &one, one.Name, also...)
 		if err != nil {
 			return nil, err

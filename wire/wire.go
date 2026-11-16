@@ -1138,6 +1138,11 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err = a.prepareSource(ctx, e, d); err != nil {
 		return op.Result{}, err
 	}
+	// D-458: a read naming a store folder this repo does not attach reads
+	// it from the store's clone (readfolder.go)
+	if err = a.attachReadFolder(ctx, e, d); err != nil {
+		return op.Result{}, err
+	}
 	// B2-21: a row named by id in a folder of the org's stores this repo
 	// does not attach (idfolder.go)
 	search, err := a.attachFolderOfID(ctx, e, d)

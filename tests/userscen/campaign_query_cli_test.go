@@ -447,9 +447,9 @@ func TestCampaignQuery_ShowLifecycle(t *testing.T) {
 	body := "first ‏עברית‏ 😀 \"quoted\" " + strings.Repeat("x", 2000)
 	id := cqAddID(t, c, "memory", "add", body)
 	type showOut struct {
-		ID     string            `json:"id"`
-		Table  string            `json:"table"`
-		Fields map[string]string `json:"fields"`
+		ID     string      `json:"id"`
+		Table  string      `json:"table"`
+		Fields shownFields `json:"fields"`
 		Origin *struct {
 			Cmd string `json:"cmd"`
 		} `json:"origin"`

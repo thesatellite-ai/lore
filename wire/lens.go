@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
@@ -140,7 +141,39 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 		srcs = append(srcs, sqlite.LensSource{Name: string(name), Path: path})
 	}
 	markShared(srcs)
-	return srcs, extra, nil
+	// a folder attached for this command (lensfolders.go, idfolder.go) is
+	// read through a cache file other opens fill under their own names
+	// (a store clone's reads name it <org>/<folder>): its views keep only
+	// the rows applied under the name it has here (D-443)
+	a.mu.Lock()
+	for i := range srcs {
+		if slices.ContainsFunc(a.extra, func(x attach.Store) bool { return string(x.Name) == srcs[i].Name }) {
+			srcs[i].Shared = true
+		}
+	}
+	a.mu.Unlock()
+	return onePerPlace(srcs), extra, nil
+}
+
+// onePerPlace keeps the first source of each cache file (devco D-443,
+// owner 2026-11-16, replacing the 2026-11-08 "both names" decision): two
+// names on one place (two stores.yaml entries, an org store and a link
+// over the same folder) made every `<table>_all` query see each row once
+// per name (78 rows for 39 rules). The kept source stays Shared, so its
+// views read only the rows applied under its own name.
+func onePerPlace(srcs []sqlite.LensSource) []sqlite.LensSource {
+	seen := map[string]bool{}
+	out := srcs[:0:0]
+	for _, s := range srcs {
+		if !s.Combined && !s.Deleted {
+			if seen[s.Path] {
+				continue
+			}
+			seen[s.Path] = true
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 // markShared sets Shared on every source whose cache file another source
@@ -265,6 +298,18 @@ const combinedLensName = "combined"
 // unless r.ShowSensitive), runs it under r.Timeout (E_SQL_TIMEOUT past it)
 // and closes the lens.
 func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) {
+	// D-443: every folder of a store attached whole joins this one query
+	var out opssql.Result
+	err := a.withExtra(a.lensFolders(ctx), func() error {
+		var qerr error
+		out, qerr = a.sqlOnce(ctx, r)
+		return qerr
+	})
+	return out, err
+}
+
+// sqlOnce is SQL over the stores attached now.
+func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, error) {
 	trashRows, err := a.lensTrash(ctx, !r.ShowSensitive) // DELETION 3.2: the cache keeps no trashed row
 	if err != nil {
 		return opssql.Result{}, err

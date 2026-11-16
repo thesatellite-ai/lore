@@ -236,7 +236,7 @@ func TestTrashShowAndStats(t *testing.T) {
 	if err := json.Unmarshal([]byte(h.JSON(h.Must(trash.OpShow, `{"id":"`+id+`"}`))), &s); err != nil {
 		t.Fatal(err)
 	}
-	if s.Data.ID != id || s.Data.Reason != "why not" || s.Fields["body"] != "shown body" {
+	if s.Data.ID != id || s.Data.Reason != "why not" || s.Fields["body"].String() != "shown body" {
 		t.Fatalf("show: %+v", s)
 	}
 	var st trash.StatsOut

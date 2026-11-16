@@ -491,6 +491,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore org store` … | The stores of an org (add) | — |
 | `lore org store add` | Add a store to an org: its lore-org.yaml (committed in the org store's clone; --push sends it) and this machine's org entry | — |
 | `lore org store remove` | Retire a store from an org (admin only): drop it from its lore-org.yaml so members stop cloning and fetching it; the store and its notes are kept | — |
+| `lore org store audience` | Set who in an org uses one of its stores (admin only): admins (members' lore never reads it) or everyone | — |
 | `lore org use` | Choose the org entry for this project on this machine (not committed) | [team/commands › lore org use](../../docs/team/commands.md#lore-org-use) |
 
 ### lore path

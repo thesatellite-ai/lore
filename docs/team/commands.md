@@ -260,7 +260,7 @@ Team profiles are in development for lore 0.1.18 (branch `feat/team-profiles`) a
 | `lore project member add` | `lore project member add --project <project> --actor <actor> --role a,b [--on d] [--note t]` | add someone to a project with roles |
 | `lore project member edit` | `lore project member edit --project <project> --actor <actor> --role a,b` | set the current membership's roles |
 | `lore project member remove` | `lore project member remove --project <project> --actor <actor> [--on d] [--reason t]` | end a membership (kept, with its dates) |
-| `lore project member list` | `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | members; `--history` adds ended memberships |
+| `lore project member list` | `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | members (inside a store clone's project folder, that folder's project by default); `--history` adds ended memberships; with a project, a warning per person of a team the project uses who is no member |
 | `lore role list` | `lore role list [--retired] [--json]` | built-in and added roles |
 | `lore role add` | `lore role add --name <name> [--label t] [--description t]` | add a role |
 | `lore role edit` | `lore role edit --name <name> [--label t] [--description t] [--retire] [--unretire]` | change or retire a role |

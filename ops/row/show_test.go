@@ -39,11 +39,13 @@ func TestShowAnyTable(t *testing.T) {
 			id := h.ID(h.MustYes(c.add, c.input))
 			for _, in := range []string{id, "  " + id + "\t"} {
 				out := showJSON(t, h, `{"id":`+opstest.Quote(in)+`}`)
-				if out.ID != id || out.Table != c.table || out.Store != "repo" || out.Fields[c.field] != c.want {
+				if out.ID != id || out.Table != c.table || out.Store != "repo" || out.Fields[c.field].String() != c.want {
 					t.Fatalf("show %q: %+v", in, out)
 				}
-				if out.Origin.Recorded || len(out.Audit.CreatedAt) != 0 {
-					t.Fatalf("show without --origin carries origin blocks: %+v", out)
+				// D-455: the JSON form always carries the origin blocks
+				// (the text form prints them only with --origin)
+				if !out.Origin.Recorded || len(out.Audit.CreatedAt) == 0 {
+					t.Fatalf("show without --origin lacks the origin blocks: %+v", out)
 				}
 			}
 			text := opstest.Text(h.Must(row.OpShow, `{"id":"`+id+`"}`))
@@ -65,7 +67,7 @@ func TestShowOrigin(t *testing.T) {
 	h := opstest.New(t)
 	id := h.ID(h.Must("memory.add", `{"body":"with origin"}`))
 	out := showJSON(t, h, `{"id":"`+id+`","origin":true}`)
-	if !out.Origin.Recorded || out.Origin.Store != "repo" || out.Audit.CreatedAt == "" || out.Audit.CreatedBy.ID == "" ||
+	if !out.Origin.Recorded || out.Origin.Store.ID != "repo" || out.Audit.CreatedAt == "" || out.Audit.CreatedBy.ID == "" ||
 		out.Lineage.Moves == nil || len(out.Lineage.Moves) != 0 {
 		t.Fatalf("origin: %+v", out)
 	}

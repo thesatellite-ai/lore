@@ -284,6 +284,13 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	}
 	fetched := g.prefetch(ctx, o, ttl)
 	for _, sc := range o.Stores {
+		if sc.AdminsOnly() {
+			// D-442: no repo links to an admins-only store, so the link
+			// index (and every client-repo check built on it) never reads
+			// it: an admin's guards are a member's guards, and an admins'
+			// store that is offline never makes a repo "unknown".
+			continue
+		}
 		norm, err := repourl.NormalizeStore(sc.URL)
 		if err != nil {
 			return nil, entryUnknown, "", fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, err)
@@ -373,8 +380,8 @@ func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Durati
 	seen := map[string]bool{}
 	for _, sc := range o.Stores {
 		norm, err := repourl.NormalizeStore(sc.URL)
-		if err != nil {
-			continue
+		if err != nil || sc.AdminsOnly() {
+			continue // entryLinks never reads an admins-only store (D-442)
 		}
 		dir, _ := cloneDir(g.Home, norm)
 		if seen[dir] {

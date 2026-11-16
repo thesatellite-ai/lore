@@ -4,12 +4,12 @@ package userscen
 
 // sync_store_dup_location_sql_test.go — `lore sql` over two stores.yaml
 // entries on ONE place (`stag` = `<url>?branch=staging`, `stag2` =
-// `<url> --branch staging`). Decision (2026-11-08): lists and search show
-// the place's rows once under the first name, but `lore sql` keeps both
-// names as sources, so a query over both sees each row exactly twice, once
-// per name. Before the fix the shared cache file (which holds each row
-// once per name) was read under each name, so every row came back four
-// times.
+// `<url> --branch staging`). Decision (owner 2026-11-16, devco D-443,
+// replacing 2026-11-08's "both names"): one source per place, the first
+// name, as lists and search show it: a query sees each row once (a store
+// test saw 78 rows for 39 rules). Before 2026-11-08 the shared cache file
+// (which holds each row once per name) was read under each name, so every
+// row came back four times.
 //
 // Matrix: the row written through each name (stag, stag2) plus a control
 // store (notes) × output (--format csv, the default table).
@@ -21,7 +21,7 @@ import (
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
-func TestSyncStores_DupLocationSQLKeepsBothNames(t *testing.T) {
+func TestSyncStores_DupLocationSQLOneSourcePerPlace(t *testing.T) {
 	st := newSyncTeam(t, 1)
 	a := st.clones[0]
 	r := st.w.Remote(syncSlugStore)
@@ -34,8 +34,8 @@ func TestSyncStores_DupLocationSQLKeepsBothNames(t *testing.T) {
 
 	q := "SELECT source, body FROM memories_all WHERE body LIKE 'dup %' ORDER BY body, source"
 	want := [][2]string{
-		{"stag", "dup alpha via stag"}, {"stag2", "dup alpha via stag"},
-		{"stag", "dup beta via stag2"}, {"stag2", "dup beta via stag2"},
+		{"stag", "dup alpha via stag"},
+		{"stag", "dup beta via stag2"},
 		{"notes", "dup gamma via notes"},
 	}
 	t.Run("csv", func(t *testing.T) {
@@ -51,7 +51,7 @@ func TestSyncStores_DupLocationSQLKeepsBothNames(t *testing.T) {
 	})
 	t.Run("table", func(t *testing.T) {
 		res := a.MustLore("sql", "run", q)
-		res.Says(t, "(5 rows)")
+		res.Says(t, "(3 rows)")
 		for _, w := range want {
 			assertSQLRow(t, res, w[0], w[1])
 		}
