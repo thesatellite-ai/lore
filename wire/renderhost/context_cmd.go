@@ -320,6 +320,12 @@ func (h *Host) contextSources(ctx context.Context) ([]store.Source, error) {
 	if err != nil {
 		return nil, err
 	}
+	// devco D-479: in a store folder the repo store already is the folder
+	// (srcs starts with it); its own name would read every row twice
+	alias, err := h.app.RepoStandsFor(ctx)
+	if err != nil {
+		return nil, err
+	}
 	personal := map[string]bool{}
 	if list, lerr := h.app.ListStores(ctx); lerr == nil {
 		for _, e := range list {
@@ -327,7 +333,7 @@ func (h *Host) contextSources(ctx context.Context) ([]store.Source, error) {
 		}
 	}
 	for _, si := range idents {
-		if si.Shareable || personal[string(si.Name)] || slices.Contains(srcs, si.Name) {
+		if si.Shareable || si.Name == alias || personal[string(si.Name)] || slices.Contains(srcs, si.Name) {
 			continue
 		}
 		srcs = append(srcs, si.Name)

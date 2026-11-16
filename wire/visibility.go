@@ -15,7 +15,10 @@ import (
 // lore-store.yaml marker reads visibility: shareable (CFG4/CFG6: a committed
 // render holds repo rows plus these stores only). A backend without a
 // marker, or a marker without a visibility, counts as internal (fail
-// closed). Order is the engine's Stores() order.
+// closed). Order is the engine's Stores() order. Inside a store folder the
+// folder's own store answers for the repo store (RepoStandsFor), so it is
+// left out too: a caller that reads the repo store and these would read
+// the folder twice (devco D-479).
 func (a *App) ShareableStores(ctx context.Context) ([]store.Source, error) {
 	st, err := a.state(ctx)
 	if err != nil {
@@ -23,7 +26,7 @@ func (a *App) ShareableStores(ctx context.Context) ([]store.Source, error) {
 	}
 	var out []store.Source
 	for _, name := range st.eng.Stores() {
-		if name == store.SourceRepo {
+		if name == store.SourceRepo || name == st.here {
 			continue
 		}
 		m, ok := concrete(st.byName[name]).(markerOf)
@@ -32,6 +35,21 @@ func (a *App) ShareableStores(ctx context.Context) ([]store.Source, error) {
 		}
 	}
 	return out, nil
+}
+
+// RepoStandsFor is the attached store that answers when an operation
+// names the repo store: inside a store folder (a clone's folder, not a code
+// repo) it is that folder's store (engine.WithRepoAlias, storehere.go);
+// "" in a code repo, whose repo store is its own. Why (devco D-479): a
+// caller that reads store.SourceRepo and then every attached store by
+// name must skip this one, or each row of the folder is read twice (in a
+// store folder `lore context` printed every rule and memory twice).
+func (a *App) RepoStandsFor(ctx context.Context) (store.Source, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return "", err
+	}
+	return st.here, nil
 }
 
 // StoreLevel implements settings.Leveler: the attached store's settings
