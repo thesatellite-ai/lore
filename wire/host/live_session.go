@@ -599,7 +599,7 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 		s.sayOnce(fmt.Sprintf("(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)", s.waiting(), out.Detail))
 		_ = s.writeNote(liveNoteRefused, out.Detail) // best effort: feeds `lore live doctor` only
 	case live.PushRetriesOut:
-		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; lost %d races, the next command retries)", s.waiting(), out.Attempts))
+		s.warn(fmt.Sprintf(liveRacesLost, s.waiting(), out.Attempts))
 	}
 }
 
@@ -784,6 +784,14 @@ func livePushWhere(out live.PushOutcome) string {
 	}
 	return " commit " + shortCommit(out.Commit) + " to " + out.Remote + " " + out.Ref
 }
+
+// liveRacesLost is the line of a write whose push lost every race to
+// teammates' pushes (live.PushRetriesOut): the write is committed on this
+// clone's live ref and exits 0, but no teammate sees it yet. A read never
+// pushes (S-1), so it names what does: the next write or `lore sync`
+// (devco:D-498; "the next command retries" left a note unsent when every
+// later command was a read or a claim on the signals ref).
+const liveRacesLost = "(live, not pushed yet: %d waiting; lost %d races to teammates' pushes: your next live write or `lore sync` sends them)"
 
 // The once-per-repo live.autopush lines (owner rule U-2: nothing pushes
 // without the person saying so, and a person who turned pushing on is

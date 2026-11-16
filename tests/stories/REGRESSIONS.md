@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1838 |
+| fixed | 1839 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -819,6 +819,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-495 | finding | after-land gate on dev 5151f30d: `lore sync` in a linked repo re-rendered the private file under sync's write access, so resolving the project made the linked folder's project row and committed it after the push; every such sync left a commit waiting and `actor merge` made two commits in the folder's store instead of one | fixed | TestJourneyFoldersMerge | the after-sync re-render runs as a read, as `lore render` does (wire/renderhost/render_private.go rerenderPrivateQuiet); broken by D-494 |
 | devco:D-497 | finding | after-land gate on dev 5151f30d: in an owned repo with no link (the org entry attaches its store's root folder), `memory list` listed the rows of a store folder the repo does not attach, while the write there said lists would not show them (D-484 widened the org entry's attach like a whole-store entry) | fixed | TestListsKeepTheOrgEntryAttachToItsPlace, TestKnowledgeLevels_OrgStoreFolders | wire/lensfolders.go: lists, search and sql widen only a stores.yaml entry with no folder and the org's company store; the org entry's own attach of the repo (bare org name) reads its one place (STORE TARGETS) |
 | devco:D-496 | finding | after-land gate on dev 5151f30d: `search` with a team store started 4 git processes, budget 3 (D-418): the people and teams lookup of D-489 ran member list and team list each on a fresh open of the App, which statused the team store clone again | fixed | TestJourneyGitExecBudgetTeam, TestJourneyStoreFolderFindsPeopleAndCounts, TestListsReadEveryFolderOfAStoreAttachedWhole | wire/search_roster.go runOnOpen: the roster lists run on the open the search already holds (App.Roster reuses its state); a reopen they still cause is closed and the search's own open put back, so D-485's --all-repos widening stays; search with a team store 4 -> 2 git processes |
+| devco:D-498 | finding | after-land gate teame2e-race on dev 29d2504b: TestMigrateRaceLiveWritesAndClaims said `note "w-1 note 13" reported success and is gone` (1 run in 5, not reproduced in 70 local runs): under load a looper's note push lost every retry, exited 0 with `(live, not pushed yet: 1 waiting; lost N races, the next command retries)` and stayed on its clone's live ref; its later rounds were claims, releases and heartbeats on the signals ref and the test's `task list` is a read, and a read never pushes (S-1), so nothing sent it | fixed | TestRacesLostLineNamesWhatSends, TestMigrateRaceLiveWritesAndClaims | the lost-races line now names what sends the write: "your next live write or `lore sync` sends them" (wire/host liveRacesLost; docs/team/how-it-works.md); the e2e counts writes that said `not pushed yet` and runs `lore sync` on that looper before checking every reported note is there; nothing is lost: the row was committed on the writer's live ref |
 
 ## lore-adoptfix
 
