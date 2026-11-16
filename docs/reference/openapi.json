@@ -12789,7 +12789,7 @@
                   },
                   "session_start": {
                     "type": "boolean",
-                    "description": "with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)"
+                    "description": "with --hook: answer SessionStart (in a repo with no LORE.md the always-on rules first, then in-flight tasks, rows changed since your last session)"
                   },
                   "table": {
                     "type": "string",

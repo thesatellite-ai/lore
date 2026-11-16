@@ -67,7 +67,7 @@ func TestJourneyRenderNoRepoFileAgrees(t *testing.T) {
 			r := mira.LoreIn(sync, args...).OK(t)
 			t.Logf("sync: lore %v\n%s", args, r.Out())
 			r.Says(t, "no LORE.md:", "nothing is written in the repo", "how a tool gets these notes", "CLAUDE.local.md",
-				"lore context --for-file <path>", "lore setup --agent-hooks", "Only (1) carries the always-on rules")
+				"lore context --for-file <path>", "lore setup --agent-hooks", "The always-on rules come with (1) and with the agent hooks' session start")
 		}
 		mira.LoreIn(sync, "render", "--yes").OK(t).Says(t, "private context →")
 		// the per-file context (what the PreToolUse agent hook runs) serves

@@ -201,6 +201,10 @@ type contextResult struct {
 	title string
 	picks []contextPick
 	more  string
+	// always is the bytes of the leading picks that are never cut (the
+	// SessionStart always-on rules, devco D-494); the hook adds it to its
+	// cap so they always go in full.
+	always int
 }
 
 // fit fits the picks under maxBytes, grouped under section headers, and
@@ -675,7 +679,7 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 	switch {
 	case capB > 0:
 	case startEvent:
-		capB = contextSessionStartCap
+		capB = contextSessionStartCap + res.always
 	default:
 		capB = contextHookCapFall
 		if set, ok := h.policySet(ctx); ok {
