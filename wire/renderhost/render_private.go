@@ -74,6 +74,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 	"github.com/thesatellite-ai/lore/wire"
@@ -921,7 +922,14 @@ func removeOwnFiles(dir string) error {
 // file is the only place its always-on rules are written (devco D-494: a
 // sync there left the file as the last explicit `lore render` wrote it).
 // A failure is a warning, never a failed sync.
+//
+// It runs as a read, as `lore render` does (ops/render: AccessRead), not
+// under sync's write access (devco D-495): resolving the project under a
+// write made the linked folder's project row (rosterProject), committed
+// after sync's push, so every sync in a linked repo left a commit waiting
+// and the next write's commit count was off by one.
 func (h *Host) rerenderPrivateQuiet(ctx context.Context, root string) {
+	ctx = engine.WithAccess(ctx, op.AccessRead)
 	var lines strings.Builder
 	var err error
 	if _, serr := os.Stat(filepath.Join(root, filepath.FromSlash(LoreMDRel))); serr == nil {
