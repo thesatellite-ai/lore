@@ -329,6 +329,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	fields, err := work.Texts(Noun, map[string]string{
 		work.FieldTitle: title, work.FieldBody: in.Body,
 		fieldPriority: priority, fieldCommitment: commitment, fieldRole: in.Role, work.FieldKey: in.Key,
+		schema.FieldTaskSourceKind: strings.TrimSpace(in.Source), schema.FieldTaskSourceRef: strings.TrimSpace(in.SourceRef),
 	})
 	if err != nil {
 		return AddOut{}, err

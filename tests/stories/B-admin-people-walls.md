@@ -49,6 +49,7 @@ The story replays the company's timeline in one world; the details of each part 
 - A code repo attaching the company store whole (no folder): `rule list`, `task list`, `search` and `lore sql` all read every folder of it, and `--store <store>` keeps the whole store's folders; inside one folder of the store clone `search --all-repos` covers every folder of that store (devco D-484, D-485): [storereads_test.go](../journeys/storereads_test.go).
 - A second org on one laptop (D-38): [setup_secondorg_test.go](../journeys/setup_secondorg_test.go).
 - A team named with a dash (`acme-ops`), and the admin's second laptop joining as `member`: saved as an admin setup and the join step says why (devco D-451, D-447); the setup texts name the lore home in use, the identity step's email, the roster's email among git's and an includeIf address (devco D-448): [r11misc_setup_test.go](../journeys/r11misc_setup_test.go).
+- A person the admin added with `--name` and `--github` joins on a laptop whose global git names someone else: the join lines carry the roster's name and GitHub account and a `Prefilled:` line says where each came from; a person added with neither keeps git's name (devco D-487): [join_rosterprefill_test.go](../journeys/join_rosterprefill_test.go).
 - The admin setup run through the admin's coding agent: the org's first rows and commits are the admin's, no agent actor and no `Lore-Agent:` trailer, and an agent actor merged into its person from a folder that is no repo (devco D-424): [agent_setup_credit_test.go](../journeys/agent_setup_credit_test.go).
 - A new laptop with only git access (D-39): [newlaptop_join_test.go](../journeys/newlaptop_join_test.go).
 - A day offline, then sync (D-41): [offline_test.go](../journeys/offline_test.go).
@@ -56,4 +57,4 @@ The story replays the company's timeline in one world; the details of each part 
 
 ## Findings it guards
 
-D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-437, D-440, D-441, D-449, D-454, D-470, D-478, D-479, D-484, D-485, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.
+D-7 (B-2), D-22 (B-7), D-25 (B-12), D-43 (B-16), D-421, D-431, D-433, D-434, D-437, D-440, D-441, D-449, D-454, D-470, D-478, D-479, D-484, D-485, D-487, and the owner's rule that no secret value is printed: rows in `tests/stories/REGRESSIONS.md`.

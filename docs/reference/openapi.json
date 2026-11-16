@@ -43615,6 +43615,10 @@
                     "type": "string",
                     "description": "where it attaches: global | project | repo | dir:\u003cpath\u003e (folder scopes rank it in lore context)"
                   },
+                  "source": {
+                    "type": "string",
+                    "description": "source_kind (default manual)"
+                  },
                   "source_ref": {
                     "type": "string",
                     "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
@@ -48401,6 +48405,10 @@
                   "project": {
                     "type": "string",
                     "description": "the project (prj_ id or name; default the repo's one project)"
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "source_kind (default manual)"
                   },
                   "source_ref": {
                     "type": "string",
@@ -77590,6 +77598,9 @@
                         "progress"
                       ]
                     },
+                    "prefill_note": {
+                      "type": "string"
+                    },
                     "web": {
                       "type": "object",
                       "properties": {
@@ -100327,6 +100338,14 @@
                     "type": "string",
                     "description": "plan role matched by task next --role (e.g. coordinator)"
                   },
+                  "source": {
+                    "type": "string",
+                    "description": "source_kind: where the task came from (manual, agent-proposal, imported, …; empty by default)"
+                  },
+                  "source_ref": {
+                    "type": "string",
+                    "description": "where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)"
+                  },
                   "tasklist": {
                     "type": "string",
                     "description": "tasklist_id (tlt_*); default: the project's default list (created on demand)"
@@ -100733,6 +100752,12 @@
                           ]
                         },
                         "sla": {
+                          "type": "string"
+                        },
+                        "source_kind": {
+                          "type": "string"
+                        },
+                        "source_ref": {
                           "type": "string"
                         },
                         "started_at": {
@@ -104663,6 +104688,12 @@
                           ]
                         },
                         "sla": {
+                          "type": "string"
+                        },
+                        "source_kind": {
+                          "type": "string"
+                        },
+                        "source_ref": {
                           "type": "string"
                         },
                         "started_at": {

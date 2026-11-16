@@ -5,6 +5,7 @@
 package playbook
 
 import (
+	"cmp"
 	"context"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
@@ -141,7 +142,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	}
 	fields, err := content.Texts(Noun, map[string]string{
 		content.FieldName: in.Title, fieldDescription: desc, content.FieldBody: body,
-		content.FieldSourceKind: content.DefaultSource, content.FieldSourceRef: in.SourceRef,
+		content.FieldSourceKind: cmp.Or(strings.TrimSpace(in.Source), content.DefaultSource), content.FieldSourceRef: in.SourceRef,
 	})
 	if err != nil {
 		return content.WriteOut{}, err
