@@ -76,6 +76,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 
 	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -180,7 +181,22 @@ type privatePlan struct {
 	leftOut   int            // "Other notes" rows the budget left out (P3-CTX-2)
 	budget    int            // context.budget.internal
 	coreBytes int            // the store files' cores (never cut)
+	pins      []privatePin   // the cores' rule and hotfix blocks, store files in order
 }
+
+// privatePin is one pinned row of a private file's core: a must rule or a
+// critical/high hotfix, as the file prints it.
+type privatePin struct {
+	id   string
+	kind string // privatePinRule or privatePinHotfix
+	text string // the <rule>/<hotfix> block, byte for byte as in the file
+}
+
+// Kinds of a privatePin (the tag the block uses).
+const (
+	privatePinRule   = "rule"
+	privatePinHotfix = "hotfix"
+)
 
 // privateLocal is one tool's private import file in the checkout.
 type privateLocal struct {
@@ -400,6 +416,7 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 	p.rows, p.leftOut, p.coreBytes = fit.shown, fit.leftOut, fit.coreBytes
 	for _, b := range bodies {
 		p.pinned += b.pinned
+		p.pins = append(p.pins, b.pins...)
 	}
 	for i, s := range internal {
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
@@ -485,8 +502,11 @@ type privateSection struct {
 // (header, pinned rules and hotfixes; never cut) and the "Other notes"
 // sections fitPrivate fills.
 type privateBody struct {
-	core     string
-	pinned   int // rows in core
+	core   string
+	pinned int // rows in core
+	// pins are the core's rule and hotfix blocks, in the core's order
+	// (the SessionStart hook serves them where no LORE.md is: devco D-494)
+	pins     []privatePin
 	sections []privateSection
 	// origins are the store, id and HLC of every row the file lists
 	// before the budget (render_stamp.go).
@@ -651,27 +671,30 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 			pinned[r.ID.String()] = true
 		}
 	}
+	var pins []privatePin
 	if len(rules) > 0 {
 		b.WriteString("\n## Rules\n\n")
 		for _, r := range rules {
-			fmt.Fprintf(&b, "<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r))))
-			b.WriteString(mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true))
-			b.WriteString("\n</rule>\n")
+			block := fmt.Sprintf("<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r)))) +
+				mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true) + "\n</rule>\n"
+			b.WriteString(block)
+			pins = append(pins, privatePin{id: r.ID.String(), kind: privatePinRule, text: block})
 		}
 		n += len(rules)
 	}
 	if len(hotfixes) > 0 {
 		b.WriteString("\n## Hotfixes (pinned, recurring warnings)\n\n")
 		for _, h := range hotfixes {
-			fmt.Fprintf(&b, "<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, renderField(h, renderFieldSeverity))
-			b.WriteString("**" + renderField(h, renderFieldTitle) + "**\n\n")
-			b.WriteString(mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true))
-			b.WriteString("\n</hotfix>\n")
+			block := fmt.Sprintf("<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, renderField(h, renderFieldSeverity)) +
+				"**" + renderField(h, renderFieldTitle) + "**\n\n" +
+				mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true) + "\n</hotfix>\n"
+			b.WriteString(block)
+			pins = append(pins, privatePin{id: h.ID.String(), kind: privatePinHotfix, text: block})
 		}
 		n += len(hotfixes)
 	}
 
-	out := privateBody{core: b.String(), pinned: n, origins: origins}
+	out := privateBody{core: b.String(), pinned: n, pins: pins, origins: origins}
 	for _, t := range privateTables {
 		sec := privateSection{heading: t.heading}
 		for _, r := range byTable[t.table] {
@@ -891,19 +914,31 @@ func removeOwnFiles(dir string) error {
 
 // rerenderPrivateQuiet refreshes the private per-store renders after a
 // sync (CONFIG_GUIDE: rebuilt after every sync), quietly and with the same
-// refusals as `lore render`. Only for a project that renders (LORE.md
-// exists) and when run from its root (render resolves the project from the
-// working directory); a failure is a warning, never a failed sync.
+// refusals as `lore render`. For a project that renders (LORE.md exists)
+// when run from its root (render resolves the project from the working
+// directory), and for a repo that never gets a repo file (noRepoFileOf: a
+// linked own repo or a client repo with no .lore folder), whose private
+// file is the only place its always-on rules are written (devco D-494: a
+// sync there left the file as the last explicit `lore render` wrote it).
+// A failure is a warning, never a failed sync.
 func (h *Host) rerenderPrivateQuiet(ctx context.Context, root string) {
-	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(LoreMDRel))); err != nil {
-		return
-	}
-	cwd, err := os.Getwd()
-	if err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
-		return
-	}
 	var lines strings.Builder
-	err = h.renderPrivate(ctx, &lines, root, false, true)
+	var err error
+	if _, serr := os.Stat(filepath.Join(root, filepath.FromSlash(LoreMDRel))); serr == nil {
+		cwd, werr := os.Getwd()
+		if werr != nil || filepath.Clean(cwd) != filepath.Clean(root) {
+			return
+		}
+		err = h.renderPrivate(ctx, &lines, root, false, true)
+	} else if n, ok := h.noRepoFileOf(ctx, root); ok {
+		if wire.RefuseWriteInReadOnlyHome(h.opts.Home) != nil {
+			return // a read-only home keeps what it has, as render --yes refuses there
+		}
+		// as render does here: a client repo gets no tool's import file
+		err = h.renderPrivateIn(ctx, &lines, n.top, false, true, !n.client)
+	} else {
+		return
+	}
 	fmt.Print(lines.String())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, h.decor.warn(syncLogPrefix+"re-render the private context: "+err.Error()))

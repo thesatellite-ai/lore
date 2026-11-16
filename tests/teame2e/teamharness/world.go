@@ -23,6 +23,7 @@ package teamharness
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -330,9 +331,16 @@ func (w *World) TryGit(dir string, args ...string) Result {
 // harness bug and fails the test; a non-zero exit is data.
 func (w *World) run(dir string, env []string, name string, args ...string) Result {
 	w.T.Helper()
+	return w.runStdin(dir, env, nil, name, args...)
+}
+
+// runStdin is run with stdin fed to the process (nil: none).
+func (w *World) runStdin(dir string, env []string, stdin io.Reader, name string, args ...string) Result {
+	w.T.Helper()
 	cmd := binCmd(name, args...)
 	cmd.Dir = dir
 	cmd.Env = env
+	cmd.Stdin = stdin
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if name != w.Bin {

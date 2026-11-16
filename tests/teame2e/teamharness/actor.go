@@ -238,6 +238,17 @@ func (a *Actor) Lore(dir string, args ...string) Result {
 	return a.w.run(dir, a.environ(nil), a.w.Bin, args...)
 }
 
+// LoreStdin is Lore with stdin fed to lore: an agent hook command
+// (`lore context --hook <tool> --hook-stdin`) reads the tool's JSON there.
+func (a *Actor) LoreStdin(dir, stdin string, args ...string) Result {
+	a.w.T.Helper()
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(a.Home, dir)
+	}
+	mustMkdir(a.w.T, dir)
+	return a.w.runStdin(dir, a.environ(nil), strings.NewReader(stdin), a.w.Bin, args...)
+}
+
 // Clone clones remote into <Root>/work/<actor>/<name> over its https URL. An
 // empty remote gets a first commit on main (pushed as an admin, so it works
 // even when main is protected).

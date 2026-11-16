@@ -129,16 +129,18 @@ const noLoreMDClientLine = "no LORE.md: %s is a client repo, which never holds l
 // written (devco D-482: the reply named only lore init, and nothing
 // pointed a tool at the private file). The per-file and per-prompt
 // context (lore context, the agent hooks) picks rows by path and words;
-// the always-on rules reach a tool only through the private file.
+// the always-on rules reach a tool through the private file and, where no
+// LORE.md is, the SessionStart agent hook (devco D-494).
 const noRepoFileHow = "how a tool gets these notes: (1) the private file below, which the tool's git-excluded local file imports when claude_code (CLAUDE.local.md) or cursor (.cursor/rules/lore-private.mdc) is one of the repo's tools; " +
 	"(2) per file or prompt: `lore context --for-file <path>` or `lore context --for-prompt <text>`, run by any agent, or by the agent hooks on their own (`lore setup --agent-hooks`; it needs the tool's folder here, such as .claude/). " +
-	"Only (1) carries the always-on rules"
+	"The always-on rules come with (1) and with the agent hooks' session start; per file or prompt only the rows that match"
 
 // noRepoFileClientHow is noRepoFileHow for a client repo: no import file
 // goes into its checkout (it holds nothing of lore's), so no tool loads
 // the private file on its own.
-const noRepoFileClientHow = "how a tool gets these notes: nothing of lore's goes into a client repo, so no tool loads the private file below on its own (point one at it from outside the repo, such as your user-level tool settings, to give it the always-on rules); " +
-	"per file or prompt, an agent runs `lore context --for-file <path>` or `lore context --for-prompt <text>`, or an agent hook runs it"
+const noRepoFileClientHow = "how a tool gets these notes: nothing of lore's goes into a client repo, so no tool loads the private file below on its own and `lore setup --agent-hooks` installs nothing here; " +
+	"for the always-on rules, add `" + clientSessionStartCmd + "` as a SessionStart hook in your user-level tool settings (outside the repo); " +
+	"per file or prompt, an agent runs `lore context --for-file <path>` or `lore context --for-prompt <text>`"
 
 // how is the how-a-tool-gets-these-notes line for n.
 func (n noRepoFile) how() string {
