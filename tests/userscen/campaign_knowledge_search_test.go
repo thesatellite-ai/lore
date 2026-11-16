@@ -4,9 +4,8 @@ package userscen
 
 // Knowledge campaign: search with the queries people really type, on every
 // kind. Words, phrases and prefixes find rows; a query the full-text
-// syntax refuses (a lone quote, a dangling AND, a stray "(" or "*", a
-// colon that reads as a column filter) is E_INVALID_INPUT with the reason
-// and a hint showing the syntax, the same on the CLI and over REST (it was
+// syntax refuses (a lone quote, a dangling AND, a stray "(" or "*") is
+// E_INVALID_INPUT with the reason and a hint showing the syntax, the same on the CLI and over REST (it was
 // "sqlite cache: search" with no reason and no hint); --limit outside
 // 1..1000 is refused; an empty query is refused.
 
@@ -17,8 +16,10 @@ import (
 	"testing"
 )
 
-// campBadQueries are queries the full-text syntax refuses.
-var campBadQueries = []string{`"`, `'`, `*`, `(`, `AND`, `a OR`, `NEAR(`, `body:`, `time:3pm`}
+// campBadQueries are queries the full-text syntax refuses. A word with a
+// colon (body:, time:3pm) is not one: every search reads it as text (D-475,
+// like `lore search`), so "error: timeout" finds its rows.
+var campBadQueries = []string{`"`, `'`, `*`, `(`, `AND`, `a OR`, `NEAR(`}
 
 func TestCampaignKnowledge_SearchQueriesEveryKind(t *testing.T) {
 	scenParallel(t)

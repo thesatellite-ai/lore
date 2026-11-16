@@ -25,12 +25,14 @@ type MatchFunc func(ctx context.Context, match string, limit int) ([]Hit, error)
 // Match runs w's search through match and, for a natural query, each
 // topic word's own search: it returns the hits (the any-word hits in
 // bm25 order, then rows only a word's search found) and how many words
-// each row holds by the index. A text FTS5 refuses as syntax is retried
-// once with every word quoted; a second refusal is returned as is.
+// each row holds by the index. Plain words FTS5 refuses are retried once
+// with every word quoted (searchrank.Words.Retry); a query written in
+// FTS5 syntax that FTS5 refuses, or a second refusal, is returned as is
+// (E_INVALID_INPUT with the reason, D-475).
 // Shared by `lore search` (wire) and SearchFields.
 func Match(ctx context.Context, match MatchFunc, w searchrank.Words, limit int) ([]Hit, map[ids.AnyID]int, error) {
 	hits, err := match(ctx, w.FTS, limit)
-	if errs.Has(err, errs.InvalidInput) {
+	if errs.Has(err, errs.InvalidInput) && w.Retry() {
 		if quoted := searchrank.Quoted(w.FTS); quoted != "" && quoted != w.FTS {
 			hits, err = match(ctx, quoted, limit)
 		}

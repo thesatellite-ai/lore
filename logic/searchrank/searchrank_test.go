@@ -40,3 +40,18 @@ func TestPlanNatural(t *testing.T) {
 		t.Errorf("syntax plan %+v", w)
 	}
 }
+
+// TestRetryPlainOnly (D-475): only plain words are retried quoted after a
+// refusal; FTS5 syntax and text with no word keep it.
+func TestRetryPlainOnly(t *testing.T) {
+	for _, q := range []string{"c++", "how do we deploy orbit", "foo-bar"} {
+		if !Of(q).Retry() {
+			t.Errorf("%q: no retry, want plain words retried quoted", q)
+		}
+	}
+	for _, q := range []string{`"`, `'`, `*`, `(`, `AND`, `a OR`, `NEAR(`, `"unclosed`, `NOT`, `a AND`} {
+		if Of(q).Retry() {
+			t.Errorf("%q: retried, want the refusal kept", q)
+		}
+	}
+}

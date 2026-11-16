@@ -293,13 +293,19 @@ func TestCampaignQuery_SearchStatusRebuild(t *testing.T) {
 	if rep := srv.post(t, "/v1/search/rebuild", `{"kind":"nope"}`); rep.status != http.StatusBadRequest || rep.err == nil || rep.err.Code != "E_INVALID_INPUT" || rep.err.Hint == "" {
 		t.Errorf("REST rebuild bad kind: %d %s", rep.status, rep.body)
 	}
-	for _, q := range []string{"deploy", `"blue green"`, "مرحبا", `"`, "deploy NOT friday"} {
+	for _, q := range []string{"deploy", `"blue green"`, "مرحبا", "deploy NOT friday"} {
 		cli := c.MustLore("search", "run", q, "--json").Stdout
 		body, _ := json.Marshal(map[string]string{"query": q})
 		rep := srv.post(t, "/v1/search/run", string(body))
 		if rep.status != http.StatusOK || !restJSONEqual([]byte(rep.body), []byte(cli)) {
 			t.Errorf("REST search %q differs: %d %.300s\nCLI %.300s", q, rep.status, rep.body, cli)
 		}
+	}
+	// A lone quote is no query (D-475): the same refusal on both.
+	cliErr := restCLIErr(c.Lore("search", "run", `"`, "--json"))
+	rep := srv.post(t, "/v1/search/run", `{"query":"\""}`)
+	if cliErr == nil || rep.err == nil || rep.status != http.StatusBadRequest || cliErr.Code != "E_INVALID_INPUT" || cliErr.Message != rep.err.Message || cliErr.Hint != rep.err.Hint {
+		t.Errorf("search lone quote: CLI %+v / REST %d %+v", cliErr, rep.status, rep.err)
 	}
 }
 
