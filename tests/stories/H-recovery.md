@@ -53,3 +53,4 @@ Dev-company round 3, track H. Replayed by `TestStoryHCorruption`, `TestStoryHRew
 | D-438 | (devco) | `lore doctor` reported its own store lock as another command at work | `TestDoctorStoreLocks` |
 | D-441 | (devco) | a plain `lore doctor` at a store clone's top committed a nameless project row | `TestPlainDoctorChecksAreReads` |
 | D-466 | (devco) | after the D-438 fix `lore doctor` no longer named a held lock whose holder was its parent process (a shell, a script) | `TestDoctorOwnProcessIsThisPidOnly`; `TestDoctorLock_HeldLockIsNamedThenClears` |
+| D-483 | (devco) | `lore store doctor` stopped at one E_INVALID_INPUT line when a store clone held a backup branch, and `setup list` showed `⚠ 1` with nothing naming it | `TestJourneyStoreDoctorWarnsSideBranch`; `TestStoreDoctorPrintsEveryStoreThenFails`; `TestDoctorAndUnpushed`; `TestListNamesHealthWarnings` |

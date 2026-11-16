@@ -204,7 +204,20 @@ func (a *App) DoctorClones(ctx context.Context) (opsstores.ClonesOut, error) {
 		if k, ok := storeKey(v.URL); !ok || !checked[k] {
 			continue
 		}
-		v.Problems = slices.DeleteFunc(v.Problems, func(p string) bool { return strings.HasPrefix(p, orgcfg.ProblemUnpushed) })
+		// devco D-483: only the refs CheckStores counts (the store's own
+		// branches and lore's refs); a side branch (a backup someone made
+		// in the clone) is reported nowhere else, so its warning stays.
+		v.Warnings = slices.DeleteFunc(v.Warnings, func(w string) bool {
+			ref, ok := orgcfg.UnpushedRef(w)
+			if !ok {
+				return false
+			}
+			if strings.HasPrefix(ref, "refs/lore/") {
+				return true
+			}
+			b, isHead := strings.CutPrefix(ref, "refs/heads/")
+			return isHead && (b == v.DefaultBranch || slices.Contains(v.Branches, b))
+		})
 	}
 	return out, nil
 }

@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -42,9 +43,35 @@ const (
 	ProblemUnpushedUnknown = "cannot list unpushed work: "
 	// ProblemUnreachable is a doctor fetch that could not reach the store.
 	ProblemUnreachable = "unreachable (using the last fetched state)"
-	// ProblemUnpushed prefixes the refs doctor found waiting.
+	// ProblemUnpushed prefixes the refs doctor found waiting. Since
+	// devco D-483 each ref is one warning of its own (UnpushedWarning),
+	// never a problem: work waiting in a clone is not a broken store.
 	ProblemUnpushed = "unpushed work: "
 )
+
+// UnpushedWarning is the doctor warning for one ref of the clone dir the
+// store does not hold (devco D-483). A branch of the store itself (one of
+// storeBranches) or a lore ref is lore's own waiting work: lore pushes it.
+// Any other branch (a backup someone made in the clone) is named with how
+// to push or delete it, so the person decides; lore never drops it.
+func UnpushedWarning(dir, ref string, storeBranches []string) string {
+	b, isHead := strings.CutPrefix(ref, "refs/heads/")
+	if !isHead || slices.Contains(storeBranches, b) {
+		return ProblemUnpushed + ref + " (commits the store does not have yet: the next lore command that reaches the store pushes them, or run `lore sync`)"
+	}
+	return fmt.Sprintf("%s%s (branch %s is not on the store: push it with `git -C %s push origin %s`, or delete it with `git -C %s branch -D %s`)", ProblemUnpushed, ref, b, dir, b, dir, b)
+}
+
+// UnpushedRef is the ref an UnpushedWarning names; ok=false for any other
+// line.
+func UnpushedRef(warning string) (string, bool) {
+	rest, ok := strings.CutPrefix(warning, ProblemUnpushed)
+	if !ok {
+		return "", false
+	}
+	ref, _, _ := strings.Cut(rest, " ")
+	return ref, ref != ""
+}
 
 // Ref namespaces the unpushed check compares (local, tracking).
 var unpushedPairs = [][2]string{
@@ -82,6 +109,9 @@ type CloneInfo struct {
 	DefaultBranch string
 	Unpushed      []string
 	Problems      []string
+	// Warnings need a decision but break nothing: Doctor's unpushed refs,
+	// one line each (UnpushedWarning).
+	Warnings []string
 }
 
 // CloneLink is one link of a store branch's cached index.
@@ -192,7 +222,10 @@ func (c Clones) Doctor(ctx context.Context, norm, url string, branches []string)
 	info.Problems = append(info.Problems, base.Problems...)
 	if len(base.Unpushed) > 0 {
 		info.Unpushed = base.Unpushed
-		info.Problems = append(info.Problems, ProblemUnpushed+strings.Join(base.Unpushed, ", "))
+		own := append(slices.Clone(branches), base.DefaultBranch)
+		for _, ref := range base.Unpushed {
+			info.Warnings = append(info.Warnings, UnpushedWarning(dir, ref, own))
+		}
 	}
 	return info
 }
