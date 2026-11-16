@@ -158,8 +158,12 @@ lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (s
 # agent-backend, in agents/api
 $ lore sync >/dev/null && lore search --query 'invite links'
 lore: pushed store agency/client2, agency/org: commit 601d285 to branch main
-Found 1 hit for "invite links" across 1 entity type:
-memory  mem_3b62…e913  invite links must use the public website address, not the server name  [agency/client2]  (score=0.017)
+Found 5 hits for "invite links" across 3 entity types:
+memory   mem_3b62…e913  invite links must use the public website address, not the server name  [agency/client2]  (score=0.967)
+mission  msn_2ad3…f891  Invite landing page  [agency/client2]  (score=0.533)
+task     tsk_54fe…28f2  build the invite page  [agency/client2]  (score=0.533)
+task     tsk_05e9…4603  allow /invite on the proxy  [agency/client2]  (score=0.483)
+task     tsk_162d…9666  send the invite email from the API  [agency/client2]  (score=0.467)
 
 # agent-infra, in agents/infra
 $ lore task done --id tsk_05e9…4603

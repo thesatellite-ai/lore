@@ -18,9 +18,9 @@ Tomas keeps his clients under `~/work/clients`, a plain folder. `team` is the or
 # tomas, in clients
 $ lore store list
 stores:
-  NAME        URL                          FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS
-  agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy  
-  agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy  
+  NAME        URL                          FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS  AUDIENCE
+  agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy           
+  agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy           
 count: 2
 $ lore store folder add --store team --folder client_north
 committed locally to store agency; lore sync sends it
