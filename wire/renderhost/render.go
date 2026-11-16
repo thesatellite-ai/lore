@@ -151,13 +151,16 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	rules, hotfixes, skips, dirs, dirBodies, dirReps, pathGroups := p.rules, p.hotfixes, p.skips, p.dirs, p.dirBodies, p.dirReps, p.pathGroups
 	report.File = f.outPath
 
-	// D-429: a repo linked as one of the org's own repos with no .lore
-	// folder keeps its notes in the store folder: it gets the private
-	// render (outside the checkout, imported by the tool's git-excluded
-	// local file), never a LORE.md, and --report counts those rows.
-	if !f.check && !f.scopes {
-		if top := h.linkedOwnUntouched(ctx, root); top != "" {
-			return h.renderLinkedOwn(ctx, f, top)
+	// D-429, D-481: a repo with no .lore folder that a store links as one
+	// of the org's own repos, or that is a client repo, keeps its notes in
+	// the store folder: it gets the private render (outside the checkout,
+	// imported by the tool's git-excluded local file), never a LORE.md or
+	// a pointer block. One decision (noRepoFileOf) for --report, --scopes,
+	// --dry-run and the write, so the preview never describes a file the
+	// write does not make.
+	if !f.check {
+		if n, ok := h.noRepoFileOf(ctx, root); ok {
+			return h.renderNoRepoFile(ctx, f, n)
 		}
 	}
 	if f.report && !f.scopes {
@@ -273,17 +276,8 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if f.quiet {
 			return nil
 		}
-		// F-2: a linked client repo must never hold lore files, so it gets
-		// no rendered files by design: say so and name what agents use
-		// there, instead of the not-set-up refusal whose hint (lore init)
-		// would put lore files into the client's repo.
-		if h.app != nil {
-			if client, cerr := h.app.ClientRepo(ctx); cerr == nil && client {
-				fmt.Fprintf(f.out(), "%s lore render: nothing written: %s is a client repo, which never holds lore files (no LORE.md, no pointer block); agents read its notes with %s, or through the agent hook\n",
-					h.decor.muted("·"), top, renderClientContextCmd)
-				return nil
-			}
-		}
+		// A client repo or a linked own repo was answered above
+		// (noRepoFileOf); this one is not set up.
 		return wire.UntouchedError(ctx, top)
 	}
 
@@ -1160,8 +1154,3 @@ func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
-
-// renderClientContextCmd is what render names in a client repo (F-2): the
-// agent's fetch command, which reads the linked internal project's notes
-// without writing a file into the client's tree.
-const renderClientContextCmd = "`lore context --for-file <path>` (or --for-task <id>)"

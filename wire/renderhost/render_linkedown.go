@@ -74,45 +74,103 @@ func (h *Host) privateReportOf(ctx context.Context, root string) *privateReport 
 		Budget: p.budget, Bytes: size, Core: p.coreBytes, OverCore: p.budget > 0 && p.coreBytes > p.budget}
 }
 
-// linkedOwnUntouched is the top of the repo at root when it holds no .lore
-// folder, a store links it by its remote and it is not a client repo; ""
-// otherwise. Errors read as "" (the caller's own branch then decides).
-func (h *Host) linkedOwnUntouched(ctx context.Context, root string) string {
+// noRepoFile is the one decision render's report, dry run and write take
+// in a repo that never gets a repo file (devco D-481): a repo with no
+// .lore folder that is a client repo, or that a store links as one of the
+// org's own repos. Why one decision: in a client repo --report showed a
+// `lore_md .lore/LORE.md` row and --dry-run a LORE.md body while --yes
+// (rightly) wrote nothing, because each path asked its own question.
+type noRepoFile struct {
+	// top is the repo's top folder.
+	top string
+	// client is set for a client repo (never holds lore files); unset for
+	// a linked own repo (holds none until lore init).
+	client bool
+}
+
+// noRepoFileOf is root's noRepoFile; ok=false when render writes the
+// repo's files as usual (it holds a .lore folder, or is neither linked
+// nor a client repo: the not-set-up refusal then decides). Errors read as
+// ok=false (the caller's own branch then decides).
+func (h *Host) noRepoFileOf(ctx context.Context, root string) (noRepoFile, bool) {
 	if h.app == nil {
-		return ""
+		return noRepoFile{}, false
 	}
 	top := wire.UntouchedRepo(ctx, root)
-	if top == "" || h.app.LinkedByRemote(ctx) == "" {
-		return ""
+	if top == "" {
+		return noRepoFile{}, false
 	}
-	if client, err := h.app.ClientRepo(ctx); err != nil || client {
-		return ""
+	client, err := h.app.ClientRepo(ctx)
+	if err != nil {
+		return noRepoFile{}, false
 	}
-	return top
+	if !client && h.app.LinkedByRemote(ctx) == "" {
+		return noRepoFile{}, false
+	}
+	return noRepoFile{top: top, client: client}, true
+}
+
+// line says why no repo file is written (no LORE.md, no pointer block).
+func (n noRepoFile) line() string {
+	if n.client {
+		return fmt.Sprintf(noLoreMDClientLine, n.top)
+	}
+	return fmt.Sprintf(noLoreMDLine, n.top)
 }
 
 // noLoreMDLine says why a linked own repo gets no LORE.md.
-const noLoreMDLine = "no LORE.md: %s has no .lore folder (a repo linked to the org store keeps its notes there; lore init adds a .lore folder if you want one)"
+const noLoreMDLine = "no LORE.md: %s has no .lore folder, so nothing is written in the repo (a repo linked to the org store keeps its notes there; lore init adds a .lore folder if you want a LORE.md)"
 
-// renderLinkedOwn is render, --dry-run and --report in a linked own repo
-// with no .lore folder (top): the private render only.
-func (h *Host) renderLinkedOwn(ctx context.Context, f *renderFlags, top string) error {
+// noLoreMDClientLine says why a client repo gets no LORE.md (F-2: a
+// client's repo never holds lore files).
+const noLoreMDClientLine = "no LORE.md: %s is a client repo, which never holds lore files (no LORE.md, no pointer block)"
+
+// noRepoFileHow says how a tool gets the notes when no repo file is
+// written (devco D-482: the reply named only lore init, and nothing
+// pointed a tool at the private file). The per-file and per-prompt
+// context (lore context, the agent hooks) picks rows by path and words;
+// the always-on rules reach a tool only through the private file.
+const noRepoFileHow = "how a tool gets these notes: (1) the private file below, which the tool's git-excluded local file imports when claude_code (CLAUDE.local.md) or cursor (.cursor/rules/lore-private.mdc) is one of the repo's tools; " +
+	"(2) per file or prompt: `lore context --for-file <path>` or `lore context --for-prompt <text>`, run by any agent, or by the agent hooks on their own (`lore setup --agent-hooks`; it needs the tool's folder here, such as .claude/). " +
+	"Only (1) carries the always-on rules"
+
+// noRepoFileClientHow is noRepoFileHow for a client repo: no import file
+// goes into its checkout (it holds nothing of lore's), so no tool loads
+// the private file on its own.
+const noRepoFileClientHow = "how a tool gets these notes: nothing of lore's goes into a client repo, so no tool loads the private file below on its own (point one at it from outside the repo, such as your user-level tool settings, to give it the always-on rules); " +
+	"per file or prompt, an agent runs `lore context --for-file <path>` or `lore context --for-prompt <text>`, or an agent hook runs it"
+
+// how is the how-a-tool-gets-these-notes line for n.
+func (n noRepoFile) how() string {
+	if n.client {
+		return noRepoFileClientHow
+	}
+	return noRepoFileHow
+}
+
+// renderNoRepoFile is render, --dry-run and --report (with or without
+// --scopes) in a repo that gets no repo file (n): the line saying why, how
+// a tool gets the notes, and the private render (outside the checkout;
+// in a client repo without any tool's import file), which all three show
+// the same way.
+func (h *Host) renderNoRepoFile(ctx context.Context, f *renderFlags, n noRepoFile) error {
 	if f.report {
-		pr := h.privateReportOf(ctx, top)
+		pr := h.privateReportOf(ctx, n.top)
 		if f.asJSON {
-			data, err := json.MarshalIndent(map[string]map[string]*privateReport{"data": {"private": pr}}, "", "  ")
+			data, err := json.MarshalIndent(map[string]noRepoFileJSON{"data": {NoLoreMD: n.line(), Private: pr}}, "", "  ")
 			if err != nil {
 				return errs.Wrap(errs.Internal, "encode report", err)
 			}
 			fmt.Fprintln(f.out(), string(data))
 			return nil
 		}
-		fmt.Fprintf(f.out(), noLoreMDLine+"\n", top)
+		fmt.Fprintln(f.out(), n.line())
 		if pr == nil {
 			fmt.Fprintln(f.out(), "no internal store is attached here, so there is no private context either")
 			return nil
 		}
-		fmt.Fprint(f.out(), strings.TrimPrefix(pr.text(), "\n"))
+		fmt.Fprintln(f.out(), n.how())
+		fmt.Fprint(f.out(), pr.text())
 		return nil
 	}
 	if !f.dryRun {
@@ -121,7 +179,16 @@ func (h *Host) renderLinkedOwn(ctx context.Context, f *renderFlags, top string) 
 		}
 	}
 	if !f.quiet {
-		fmt.Fprintf(f.out(), "%s "+noLoreMDLine+"\n", h.decor.muted("·"), top)
+		fmt.Fprintf(f.out(), "%s %s\n%s %s\n", h.decor.muted("·"), n.line(), h.decor.muted("·"), n.how())
 	}
-	return h.renderPrivate(ctx, f.out(), top, f.dryRun, f.quiet)
+	// a client repo gets the files outside the checkout only: no tool's
+	// import file goes into it
+	return h.renderPrivateIn(ctx, f.out(), n.top, f.dryRun, f.quiet, !n.client)
+}
+
+// noRepoFileJSON is render --report --json in a repo with no repo file.
+type noRepoFileJSON struct {
+	// NoLoreMD says why no LORE.md is written (noRepoFile.line).
+	NoLoreMD string         `json:"no_lore_md"`
+	Private  *privateReport `json:"private"`
 }

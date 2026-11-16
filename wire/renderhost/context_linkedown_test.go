@@ -8,18 +8,19 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// TestContextReadsInternalStoresInOwnRepo (devco D-429): in an own repo
-// `lore context` picks from the attached internal stores too (a repo
-// linked with org link --own keeps its notes in the store folder, and
-// --for-prompt said "nothing in the store applies here"); in a client
-// repo it keeps the committed render's sources (repo + shareable).
+// TestContextReadsInternalStoresInOwnRepo (devco D-429, D-481): `lore
+// context` picks from the attached internal stores too (a repo linked
+// with org link --own keeps its notes in the store folder, and
+// --for-prompt said "nothing in the store applies here"); so does a
+// client repo, whose notes live only in its linked folder (render names
+// lore context as the way agents read them).
 func TestContextReadsInternalStoresInOwnRepo(t *testing.T) {
 	ctx := context.Background()
 	for _, c := range []struct {
 		name   string
 		client bool
 		inner  bool
-	}{{"own repo", false, true}, {"client repo", true, false}} {
+	}{{"own repo", false, true}, {"client repo", true, true}} {
 		t.Run(c.name, func(t *testing.T) {
 			h := New(Options{App: internalAppAs(t, c.client), Home: t.TempDir()})
 			rows, err := h.loadKnowledge(ctx)
