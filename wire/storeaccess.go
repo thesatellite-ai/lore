@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
@@ -64,11 +65,28 @@ func sshAliasResolver(ctx context.Context) orgconf.AliasResolver {
 // the no-dot guess only for a host the config does not name. The config
 // is read on each question: it is asked only when a clone folder holds an
 // origin with the same path on another host.
+//
+// Since D-493 the backend also asks it for every ssh store url it parses
+// (Remote.Norm is the store's identity with the alias resolved), so the
+// answers are cached for the process: the ssh config is read once per
+// host per run, from the file only (no ssh process, no network).
 func init() {
+	var cache sync.Map // host → aliasAnswer
 	gitbackend.SetAliasHosts(func(host string) (string, bool) {
+		if v, ok := cache.Load(host); ok {
+			a := v.(aliasAnswer)
+			return a.hostName, a.ok
+		}
 		al, ok := sshAliasResolver(context.Background())(host)
+		cache.Store(host, aliasAnswer{hostName: al.HostName, ok: ok})
 		return al.HostName, ok
 	})
+}
+
+// aliasAnswer is one cached answer of the alias-host resolver.
+type aliasAnswer struct {
+	hostName string
+	ok       bool
 }
 
 // typedStoreURL is a store url a person typed for a shared file, after

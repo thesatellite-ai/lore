@@ -106,13 +106,16 @@ func orgOfURL(home, raw string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
-	want, err := canonical(attach.Store{URL: raw})
-	if err != nil {
+	want, ok := storeKey(raw)
+	if !ok {
 		return ""
 	}
 	for _, o := range cfg.Orgs {
 		for _, s := range o.Stores {
-			if c, cerr := canonical(attach.Store{URL: s.URL}); cerr == nil && c == want {
+			// One store identity (storeKey: host/path, an ssh alias
+			// resolved): a clone whose origin is git@<alias>:org/repo or
+			// the https url is still the org's store (D-493).
+			if k, kok := storeKey(s.URL); kok && k == want {
 				return o.Name
 			}
 		}

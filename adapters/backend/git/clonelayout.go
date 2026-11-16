@@ -139,7 +139,7 @@ func DefaultCloneDir(home string, r Remote, branch string) (string, error) {
 // creates nothing but the record entry of a new collision.
 func CloneDirFor(home string, r Remote, branch string) (dir string, own bool, err error) {
 	key := CloneKey(r, branch)
-	if e, ok := ReadCloneRecord(home).Clones[key]; ok && e.Path != "" {
+	if e, ok := recordedClone(ReadCloneRecord(home), r, branch); ok {
 		return e.Path, e.Why == WhyOwn, nil
 	}
 	def, err := DefaultCloneDir(home, r, branch)
@@ -161,6 +161,40 @@ func CloneDirFor(home string, r Remote, branch string) (dir string, own bool, er
 		}
 		return dir, false, nil
 	}
+}
+
+// recordedClone is rec's entry for r (pinned to branch when not ""): the
+// one under CloneKey, else one recorded under the key of an ssh alias of
+// r's host (a record written before Norm resolved aliases, D-493: the
+// same repository path on a host SameRepoViaAlias calls the same).
+func recordedClone(rec CloneRecord, r Remote, branch string) (CloneEntry, bool) {
+	if e, ok := rec.Clones[CloneKey(r, branch)]; ok && e.Path != "" {
+		return e, true
+	}
+	if r.isLocal() {
+		return CloneEntry{}, false
+	}
+	_, path, _ := strings.Cut(r.Norm, "/")
+	keys := make([]string, 0, len(rec.Clones))
+	for k := range rec.Clones {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // one answer when several old keys match
+	for _, k := range keys {
+		e := rec.Clones[k]
+		norm, br := k, ""
+		if i := strings.Index(k, branchCloneSep); i >= 0 {
+			norm, br = k[:i], k[i+len(branchCloneSep):]
+		}
+		h, p, _ := strings.Cut(norm, "/")
+		if e.Path == "" || br != branch || p != path || strings.HasPrefix(norm, LocalHost+"/") {
+			continue
+		}
+		if identityHost(h) != h && SameRepoViaAlias(Remote{Norm: norm}, r) {
+			return e, true
+		}
+	}
+	return CloneEntry{}, false
 }
 
 // CloneDirOf is CloneDirFor for a store url in any spelling lore accepts
@@ -225,8 +259,11 @@ func otherStoreAt(dir string, r Remote) bool {
 func SameRepoViaAlias(a, b Remote) bool {
 	ha, pa, _ := strings.Cut(a.Norm, "/")
 	hb, pb, _ := strings.Cut(b.Norm, "/")
-	if pa != pb || ha == hb {
+	if pa != pb {
 		return false
+	}
+	if ha == hb {
+		return true // one host: Norm already resolved both aliases (identityHost)
 	}
 	if f := aliasHosts.Load(); f != nil {
 		na, okA := (*f)(ha)
@@ -241,6 +278,29 @@ func SameRepoViaAlias(a, b Remote) bool {
 		}
 	}
 	return !strings.Contains(ha, ".") || !strings.Contains(hb, ".")
+}
+
+// identityHost is the host of a store's identity (Remote.Norm) for an ssh
+// url whose host is host: the HostName the person's ssh config renames it
+// to (SetAliasHosts), so `git@work-gh:acme/notes.git` (Host work-gh /
+// HostName github.com) is the same store as `git@github.com:acme/notes.git`
+// and `https://github.com/acme/notes` for every comparison lore makes
+// (org of a clone, clone folder, setup and link matching; D-493). Without
+// a resolver, or when the config does not rename host, host is kept. A
+// HostName that is a subdomain of host (github.com → ssh.github.com, the
+// port-443 route) is a route to the same host, not an alias, and is not
+// taken: the https url of that store names host.
+func identityHost(host string) string {
+	f := aliasHosts.Load()
+	if f == nil {
+		return host
+	}
+	n, ok := (*f)(host)
+	n = strings.ToLower(strings.TrimSpace(n))
+	if !ok || n == "" || n == host || strings.HasSuffix(n, "."+host) || !hostPattern.MatchString(n) {
+		return host
+	}
+	return n
 }
 
 // AliasHostFunc answers the host ssh connects to for host (its HostName);

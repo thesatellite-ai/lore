@@ -817,8 +817,8 @@ func samePlace(a, b attach.Store) bool {
 	if sameURL(a, b) {
 		return true
 	}
-	na, ea := repourl.NormalizeStore(a.URL)
-	nb, eb := repourl.NormalizeStore(b.URL)
+	na, ea := storeIdentity(a.URL)
+	nb, eb := storeIdentity(b.URL)
 	return ea == nil && eb == nil && na == nb && a.Branch == b.Branch
 }
 

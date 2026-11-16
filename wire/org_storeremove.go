@@ -12,7 +12,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
-	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 )
@@ -28,7 +27,7 @@ func (h *standaloneOrg) RemoveStore(ctx context.Context, in opsorgcmd.StoreRemov
 		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in "+lorehome.Shown()+"/config.yaml").
 			WithHint("entries: lore config check lists them")
 	}
-	want, err := repourl.NormalizeStore(in.URL)
+	want, err := storeIdentity(in.URL)
 	if err != nil {
 		return opsorgcmd.Report{}, errs.Wrap(errs.InvalidInput, "--url "+in.URL+" is not a store url", err).
 			WithHint("give the store's git url as lore store list shows it, e.g. --url git@github.com:agency/client-notes.git")
@@ -45,7 +44,7 @@ func (h *standaloneOrg) RemoveStore(ctx context.Context, in opsorgcmd.StoreRemov
 		}
 		sc = &o.Stores[0]
 	}
-	if n, nerr := repourl.NormalizeStore(sc.URL); nerr == nil && n == want {
+	if n, nerr := storeIdentity(sc.URL); nerr == nil && n == want {
 		return opsorgcmd.Report{}, errs.New(errs.Refused, "org store remove: "+want+" holds "+in.Org+"'s org folder (its roster, teams and lore-org.yaml) and is never retired").
 			WithHint("retire a client's store instead; lore store list names the org's stores (SOURCE org)")
 	}

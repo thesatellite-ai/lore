@@ -219,13 +219,15 @@ func cloneOrgEntry(home, url string) *orgconf.Org {
 	if err != nil || cfg == nil || url == "" {
 		return nil
 	}
-	want, err := canonical(attach.Store{URL: url})
-	if err != nil {
+	want, ok := storeKey(url)
+	if !ok {
 		return nil
 	}
 	for i := range cfg.Orgs {
 		for _, s := range cfg.Orgs[i].Stores {
-			if c, cerr := canonical(attach.Store{URL: s.URL}); cerr == nil && c == want {
+			// storeKey: one identity for every spelling of the store, an
+			// ssh alias origin included (D-493)
+			if k, kok := storeKey(s.URL); kok && k == want {
 				return &cfg.Orgs[i]
 			}
 		}
