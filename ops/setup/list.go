@@ -48,8 +48,9 @@ func (e engine) List(ctx context.Context, _ ListIn) (ListOut, error) {
 		if folders == nil {
 			folders = []string{}
 		}
+		rs := e.healthResults(ctx, st, hs, s.Name)
 		out.Setups = append(out.Setups, SetupSummary{Name: s.Name, Kind: s.Kind, Org: s.Org, Default: s.Default, Folders: folders,
-			Health: e.health(ctx, st, hs, s.Name), Disabled: s.Disabled, DisabledAt: s.DisabledAt, Note: s.Note,
+			Health: HealthCell(rs), Problems: Problems(rs), Disabled: s.Disabled, DisabledAt: s.DisabledAt, Note: s.Note,
 			Unfinished: unfinishedSteps(s)})
 	}
 	out.Trashed = len(cfg.Trash)
@@ -111,6 +112,7 @@ func (o ListOut) Text() string {
 		_, _ = tw.Write([]byte("  " + name + "\t" + string(s.Kind) + "\t" + s.Org + "\t" + def + "\t" + strings.Join(s.Folders, ", ") + "\t" + health + "\n"))
 	}
 	_ = tw.Flush()
+	writeHealthProblems(&b, o.Setups)
 	if len(o.Leftovers) > 0 {
 		b.WriteString("leftovers in " + lorehome.Shown() + "/config.yaml (no setup uses them; lore setup leftovers clear --what <kind>):\n")
 		for _, l := range o.Leftovers {
@@ -145,6 +147,44 @@ func (o ListOut) Text() string {
 		b.WriteString(onboard.HereLine(o.Here) + "\n")
 	}
 	return b.String()
+}
+
+// writeHealthProblems names what each setup's Health cell counts (devco
+// D-483): `acme-ops ⚠ 1` alone sent the person hunting for the
+// warning. One line per problem with its fix, then the command that
+// shows them again.
+func writeHealthProblems(b *strings.Builder, setups []SetupSummary) {
+	for _, s := range setups {
+		if len(s.Problems) == 0 {
+			continue
+		}
+		b.WriteString(s.Name + " " + s.Health + ":\n")
+		for _, p := range s.Problems {
+			b.WriteString("  " + problemLine(p) + "\n")
+		}
+		b.WriteString("  (lore setup show --name " + s.Name + " lists them with their fixes; lore doctor --all checks again)\n")
+	}
+}
+
+// problemLine is one check result as a line: its outcome as HealthCell
+// counts it (a warn-level fail is a warning), check, target, detail and
+// fix.
+func problemLine(r onboard.CheckResult) string {
+	st := r.Status
+	if st == onboard.StatusFail && r.Level != onboard.LevelError {
+		st = onboard.StatusWarn
+	}
+	line := string(st) + " " + string(r.Check)
+	if r.Target != "" {
+		line += " " + r.Target
+	}
+	if r.Detail != "" {
+		line += ": " + r.Detail
+	}
+	if r.Fix.Text != "" {
+		line += " (fix: " + r.Fix.Text + ")"
+	}
+	return line
 }
 
 // Show is setup.show: the 3.2 entry (keys and paths only; setups[] never
@@ -224,18 +264,9 @@ const (
 	healthNotChecked = "not checked yet (lore doctor --all)"
 )
 
-// health is setup name's Health cell from the newer of two sources: the
-// last doctor results the env recorded (HealthSource) and the last check
-// results of its unfinished steps (setup_progress). The newer one wins, so
-// a fresh doctor run and a later step re-check each show on Home (a
-// finished setup has no progress rows: doctor only). "" when neither has
-// results (never checked; `lore doctor --all` fills it). Nothing is probed.
-func (e engine) health(ctx context.Context, st Store, hs HealthSource, name string) string {
-	return HealthCell(e.healthResults(ctx, st, hs, name))
-}
-
-// healthResults are the results health counts (the newer of the two
-// sources), one per check and target (Latest): the same list setup show
+// healthResults are the results a setup's Health cell counts (HealthCell;
+// the newer of the two sources: the last doctor results the env recorded
+// and the last check results of its unfinished steps), one per check and target (Latest): the same list setup show
 // prints the problems of, so every count on Home is explained there.
 func (e engine) healthResults(ctx context.Context, st Store, hs HealthSource, name string) []onboard.CheckResult {
 	var doc []onboard.CheckResult

@@ -15,8 +15,16 @@ ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under sto
   hint: point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 alice$ lore store doctor
-ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes: unpushed work: refs/heads/main; git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
-  hint: fix each problem, then run `lore store doctor` again
+stores this repo and machine use:
+  none (no .lore/stores.yaml entry, no org store, no personal store)
+clones of the org stores in ~/.lore/config.yaml (orgs[].stores):
+✗ git@github.com:client2/docs  (entries agency; branches main)
+    fail: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+⚠ git@github.com:agency/notes  (entries agency; branches main)
+    warn: unpushed work: refs/heads/main (commits the store does not have yet: the next lore command that reaches the store pushes them, or run `lore sync`)
+summary: 2 store(s) checked: 0 ok, 1 warn, 1 fail
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+  hint: fix each fail line above, then run `lore store doctor` again
 (exit 20)
 
 ### org ambiguous

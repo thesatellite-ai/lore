@@ -109,6 +109,10 @@ type CloneView struct {
 	Unpushed      []string    `json:"unpushed"`
 	Links         []CloneLink `json:"links,omitempty"`
 	Problems      []string    `json:"problems"`
+	// Warnings need a decision but break nothing (devco D-483: a branch in
+	// the clone the store does not hold, with how to push or delete it);
+	// store doctor prints them and still exits 0.
+	Warnings []string `json:"warnings,omitempty"`
 	// Shown is URL as printed (redacted when output must name nothing).
 	Shown string `json:"-"`
 }
@@ -180,9 +184,31 @@ type ClonesOut struct {
 	// Here are the debug lines of this repo's links (show --links).
 	Here []string `json:"here,omitempty"`
 	// Push is one store's settings (store show <store>).
-	Push   PushView `json:"push,omitzero"`
+	Push PushView `json:"push,omitzero"`
+	// Summary counts store doctor's stores by outcome (store.doctor only).
+	Summary DoctorSummary `json:"summary,omitzero"`
+	// Error is the failure store doctor exits with after printing every
+	// store (devco D-483), "" when no store failed: --json is one
+	// document that still says why it failed.
+	Error  string `json:"error,omitempty"`
 	doctor bool
+	fail   error
 }
+
+// DoctorSummary is store doctor's last line: how many stores it checked
+// and how many came out ok, with a warning, or failing.
+type DoctorSummary struct {
+	Checked int `json:"checked"`
+	OK      int `json:"ok"`
+	Warn    int `json:"warn"`
+	Fail    int `json:"fail"`
+}
+
+// Failure implements op.Failer (devco D-483): store doctor prints every
+// store's lines and the summary, then fails when a store failed. As a
+// plain op error the run printed only the error line and none of the
+// other checks.
+func (o ClonesOut) Failure() error { return o.fail }
 
 // OpenOut is the output of store.open.
 type OpenOut struct {
@@ -234,6 +260,58 @@ const (
 	doctorNoOrgStore = "  none"
 )
 
+// Store doctor's line marks (the ✓ ⚠ ✗ of `lore doctor --all`) and the
+// prefixes of the lines under a store.
+const (
+	doctorMarkOK   = "✓"
+	doctorMarkWarn = "⚠"
+	doctorMarkFail = "✗"
+	doctorFailLine = "    fail: "
+	doctorWarnLine = "    warn: "
+)
+
+// doctorMark is a store's mark: ✗ with a problem, ⚠ with only warnings.
+func doctorMark(problems, warnings []string) string {
+	switch {
+	case len(problems) > 0:
+		return doctorMarkFail
+	case len(warnings) > 0:
+		return doctorMarkWarn
+	}
+	return doctorMarkOK
+}
+
+// summarize counts o's stores by outcome (both sections).
+func summarize(o ClonesOut) DoctorSummary {
+	var s DoctorSummary
+	count := func(problems, warnings []string) {
+		s.Checked++
+		switch doctorMark(problems, warnings) {
+		case doctorMarkFail:
+			s.Fail++
+		case doctorMarkWarn:
+			s.Warn++
+		default:
+			s.OK++
+		}
+	}
+	for _, c := range o.Checked {
+		count(c.Problems, nil)
+	}
+	for _, v := range o.Stores {
+		count(v.Problems, v.Warnings)
+	}
+	return s
+}
+
+// Text is the summary line.
+func (s DoctorSummary) Text() string {
+	if s.Checked == 0 {
+		return "summary: no store to check"
+	}
+	return fmt.Sprintf("summary: %d store(s) checked: %d ok, %d warn, %d fail", s.Checked, s.OK, s.Warn, s.Fail)
+}
+
 // doctorOrgHead heads the org stores section, naming config.yaml in the
 // home this run uses (devco D-423: under LORE_HOME it said ~/.lore). G-19:
 // a fresh setup's stores were filed under "v0.1.17 org stores".
@@ -250,13 +328,9 @@ func (o ClonesOut) Text() string {
 			b.WriteString(doctorNoneUsed + "\n")
 		}
 		for _, c := range o.Checked {
-			mark := "✓"
-			if len(c.Problems) > 0 {
-				mark = "!"
-			}
-			fmt.Fprintf(&b, "%s %s (%s, %s) %s\n", mark, c.Store, c.Source, c.Kind, c.Shown)
+			fmt.Fprintf(&b, "%s %s (%s, %s) %s\n", doctorMark(c.Problems, nil), c.Store, c.Source, c.Kind, c.Shown)
 			for _, p := range c.Problems {
-				b.WriteString("    " + p + "\n")
+				b.WriteString(doctorFailLine + p + "\n")
 			}
 			for _, n := range c.Notes {
 				b.WriteString("    " + n + "\n")
@@ -267,15 +341,15 @@ func (o ClonesOut) Text() string {
 			b.WriteString(doctorNoOrgStore + "\n")
 		}
 		for _, v := range o.Stores {
-			mark := "✓"
-			if len(v.Problems) > 0 {
-				mark = "!"
-			}
-			fmt.Fprintf(&b, "%s %s  (entries %s; branches %s)\n", mark, v.Shown, strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
+			fmt.Fprintf(&b, "%s %s  (entries %s; branches %s)\n", doctorMark(v.Problems, v.Warnings), v.Shown, strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
 			for _, p := range v.Problems {
-				b.WriteString("    " + p + "\n")
+				b.WriteString(doctorFailLine + p + "\n")
+			}
+			for _, w := range v.Warnings {
+				b.WriteString(doctorWarnLine + w + "\n")
 			}
 		}
+		b.WriteString(o.Summary.Text() + "\n")
 		return b.String()
 	}
 	if o.Push.Store != "" {
@@ -462,13 +536,19 @@ func cloneOps(m Manager) []op.Entry {
 			}
 			out = withEmptyLists(out)
 			out.doctor = true
-			return out, doctorVerdict(out)
+			out.Summary = summarize(out)
+			// devco D-483: a failing store never hides the others' lines;
+			// the run prints in full, then fails (op.Failer).
+			if out.fail = doctorVerdict(out); out.fail != nil {
+				out.Error = errs.EnvelopeOf(out.fail).Error.Message
+			}
+			return out, nil
 		}),
 	}
 }
 
-// doctorVerdict is nil when no store has a problem, else an error naming
-// each problem (P3-CFG-2: the op error carries what v0.1.17 printed
+// doctorVerdict is nil when no store has a problem (a warning is no
+// failure, devco D-483), else an error naming each problem (P3-CFG-2: the op error carries what v0.1.17 printed
 // before failing, so --json still shows every problem). A store whose
 // remote did not answer makes it E_STORE_UNREACHABLE (the offline exit),
 // not E_INVALID_INPUT: nothing the person typed was wrong (B3-12).
@@ -500,7 +580,7 @@ func doctorVerdict(out ClonesOut) error {
 			n++
 		}
 	}
-	hint := "fix each problem, then run `lore store doctor` again"
+	hint := "fix each fail line above, then run `lore store doctor` again"
 	if code == errs.StoreUnreachable {
 		hint = "lore keeps working offline: commits wait in the local clone and go out once the store answers; " + hint
 	}

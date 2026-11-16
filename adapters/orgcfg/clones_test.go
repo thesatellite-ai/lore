@@ -136,9 +136,26 @@ func TestDoctorAndUnpushed(t *testing.T) {
 	if !slices.Equal(info.Unpushed, []string{"refs/heads/main", "refs/lore/live"}) {
 		t.Fatalf("unpushed = %v", info.Unpushed)
 	}
-	if d := c.Doctor(ctx, testNorm, origin, []string{"main"}); !hasPrefix(d.Problems, ProblemUnpushed) {
-		t.Fatalf("doctor must name unpushed work: %v", d.Problems)
+	// devco D-483: waiting work is one warning per ref, naming how to
+	// push or delete it, never a problem (doctor goes on and exits 0)
+	testGit(t, dir, "update-ref", "refs/heads/backup-test", ahead) // a side branch only this clone has
+	d := c.Doctor(ctx, testNorm, origin, []string{"main"})
+	if hasPrefix(d.Problems, ProblemUnpushed) || len(d.Warnings) != 3 {
+		t.Fatalf("unpushed work must be warnings, one per ref: problems %v warnings %v", d.Problems, d.Warnings)
 	}
+	wantSide := UnpushedWarning(dir, "refs/heads/backup-test", []string{"main"})
+	if !slices.Contains(d.Warnings, wantSide) || !strings.Contains(wantSide, "push it with `git -C "+dir+" push origin backup-test`") ||
+		!strings.Contains(wantSide, "delete it with `git -C "+dir+" branch -D backup-test`") {
+		t.Fatalf("side branch warning %q not in %v", wantSide, d.Warnings)
+	}
+	if ref, ok := UnpushedRef(wantSide); !ok || ref != "refs/heads/backup-test" {
+		t.Fatalf("UnpushedRef = %q %v", ref, ok)
+	}
+	// the store's own branch is lore's waiting work: never "delete it"
+	if w := UnpushedWarning(dir, "refs/heads/main", []string{"main"}); !slices.Contains(d.Warnings, w) || strings.Contains(w, "branch -D") || !strings.Contains(w, "`lore sync`") {
+		t.Fatalf("store branch warning %q (all %v)", w, d.Warnings)
+	}
+	testGit(t, dir, "update-ref", "-d", "refs/heads/backup-test")
 	gone := filepath.Join(t.TempDir(), "gone.git")
 	testGit(t, dir, "remote", "set-url", "origin", gone)
 	if d := c.Doctor(ctx, testNorm, gone, []string{"main"}); !slices.Contains(d.Problems, ProblemUnreachable) {

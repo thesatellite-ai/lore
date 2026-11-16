@@ -74282,6 +74282,104 @@
                           "org": {
                             "type": "string"
                           },
+                          "problems": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "check": {
+                                  "type": "string"
+                                },
+                                "checked_at": {
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                },
+                                "fix": {
+                                  "type": "object",
+                                  "properties": {
+                                    "choices": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "command": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "label",
+                                          "command"
+                                        ]
+                                      }
+                                    },
+                                    "command": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "outward": {
+                                      "type": "boolean"
+                                    },
+                                    "runnable": {
+                                      "type": "boolean"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "why": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "text",
+                                    "command"
+                                  ]
+                                },
+                                "level": {
+                                  "type": "string",
+                                  "enum": [
+                                    "error",
+                                    "warn",
+                                    "info"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ok",
+                                    "warn",
+                                    "fail",
+                                    "skip",
+                                    "error"
+                                  ]
+                                },
+                                "target": {
+                                  "type": "string"
+                                },
+                                "took_ms": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "check",
+                                "status",
+                                "level"
+                              ]
+                            }
+                          },
                           "unfinished": {
                             "type": "array",
                             "items": {
@@ -83845,6 +83943,9 @@
                         ]
                       }
                     },
+                    "error": {
+                      "type": "string"
+                    },
                     "here": {
                       "type": "array",
                       "items": {
@@ -84008,6 +84109,12 @@
                           },
                           "url": {
                             "type": "string"
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
@@ -84019,6 +84126,29 @@
                           "problems"
                         ]
                       }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "checked": {
+                          "type": "integer"
+                        },
+                        "fail": {
+                          "type": "integer"
+                        },
+                        "ok": {
+                          "type": "integer"
+                        },
+                        "warn": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "checked",
+                        "ok",
+                        "warn",
+                        "fail"
+                      ]
                     }
                   },
                   "required": [
@@ -85713,6 +85843,9 @@
                         ]
                       }
                     },
+                    "error": {
+                      "type": "string"
+                    },
                     "here": {
                       "type": "array",
                       "items": {
@@ -85876,6 +86009,12 @@
                           },
                           "url": {
                             "type": "string"
+                          },
+                          "warnings": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
@@ -85887,6 +86026,29 @@
                           "problems"
                         ]
                       }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "checked": {
+                          "type": "integer"
+                        },
+                        "fail": {
+                          "type": "integer"
+                        },
+                        "ok": {
+                          "type": "integer"
+                        },
+                        "warn": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "checked",
+                        "ok",
+                        "warn",
+                        "fail"
+                      ]
                     }
                   },
                   "required": [

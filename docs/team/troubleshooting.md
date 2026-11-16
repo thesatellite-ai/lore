@@ -9,7 +9,7 @@ First steps for anything odd:
 - `lore whoami` (add `--explain`): which org, which identity, which store, and why.
 - `lore explain --id <id>`: every copy of a row, which one won, and its landing decision.
 - `lore doctor`: hooks, fetch settings, live rows waiting, clock skew (a warning `clock_skew` names a store whose newest commit is stamped more than 5 minutes ahead of this machine's clock, and who made it), stores.
-- `lore store doctor`: every store this repo and machine use (`.lore/stores.yaml`, the org's stores, your personal store `me`): reachable, unpushed commits and how old the oldest is, a refused push, the clone folders; then every v0.1.17 org store (`orgs[].stores` in `~/.lore/config.yaml`). `lore sync status` prints one line per store: ahead and behind its remote, and the last push. When two people edited the same row, the conflict is listed once, under `refused pushes`, for the store folder that holds the row; the store's other folders are listed under `held pushes` as `held: waiting on <folder>'s conflict (<row>)`, because one clone pushes every folder of a store at once. Settle that one row and run `lore sync`; every folder's commits go out together. These lines, `lore sync conflicts` and `lore explain` name a store folder by its own name, with this repo's name for it beside it when they differ (`store acme/web (here: acme)`), as `lore sync` does; a refusal seen in the store's own folder and settled in a code repo (or the other way round) is cleared wherever the push lands.
+- `lore store doctor`: every store this repo and machine use (`.lore/stores.yaml`, the org's stores, your personal store `me`): reachable, unpushed commits and how old the oldest is, a refused push, the clone folders; then every v0.1.17 org store (`orgs[].stores` in `~/.lore/config.yaml`). It prints every store, each marked ✓ (ok), ⚠ (a `warn:` line under it) or ✗ (a `fail:` line under it), then a `summary:` line counting them; it exits non-zero only when a store fails, after printing all of them (`--json` carries the same `summary` and the failure in `error`). A branch in a store clone that the store does not hold (a backup someone made there) is a warning naming the branch and the `git -C <clone> push origin <branch>` and `git -C <clone> branch -D <branch>` commands, never a failure. `lore sync status` prints one line per store: ahead and behind its remote, and the last push. When two people edited the same row, the conflict is listed once, under `refused pushes`, for the store folder that holds the row; the store's other folders are listed under `held pushes` as `held: waiting on <folder>'s conflict (<row>)`, because one clone pushes every folder of a store at once. Settle that one row and run `lore sync`; every folder's commits go out together. These lines, `lore sync conflicts` and `lore explain` name a store folder by its own name, with this repo's name for it beside it when they differ (`store acme/web (here: acme)`), as `lore sync` does; a refusal seen in the store's own folder and settled in a code repo (or the other way round) is cleared wherever the push lands.
 - `--trace` on any command (or `LORE_TRACE=1`): every git command lore runs for live rows, with timing; a fetch, push or ls-remote to a store also names the host it reached (`remote git@github-work` when a setup with a host alias owns the store), so a call that went out as the wrong account shows.
 
 For example, the fetch a `lore sync` makes (the time is shown as `<time>` here):
@@ -79,8 +79,16 @@ ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under sto
 
 # alice, in ~
 $ lore store doctor
-ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes: unpushed work: refs/heads/main; git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
-  hint: fix each problem, then run `lore store doctor` again
+stores this repo and machine use:
+  none (no .lore/stores.yaml entry, no org store, no personal store)
+clones of the org stores in ~/.lore/config.yaml (orgs[].stores):
+✗ git@github.com:client2/docs  (entries agency; branches main)
+    fail: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+⚠ git@github.com:agency/notes  (entries agency; branches main)
+    warn: unpushed work: refs/heads/main (commits the store does not have yet: the next lore command that reaches the store pushes them, or run `lore sync`)
+summary: 2 store(s) checked: 0 ok, 1 warn, 1 fail
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+  hint: fix each fail line above, then run `lore store doctor` again
 (exit 20)
 ```
 <!-- /example -->

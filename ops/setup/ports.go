@@ -375,6 +375,10 @@ type SetupSummary struct {
 	// HealthCell) from cached doctor results or the setup's unfinished
 	// steps; "" when never checked.
 	Health string `json:"health,omitempty"`
+	// Problems are the failing and warning checks Health counts, each with
+	// its fix (devco D-483: a "⚠ 1" with nothing naming the warning; the
+	// same list setup show prints).
+	Problems []onboard.CheckResult `json:"problems,omitempty"`
 	// Disabled setups stay listed (greyed on Home) but match nothing.
 	Disabled   bool   `json:"disabled,omitempty"`
 	DisabledAt string `json:"disabled_at,omitempty"`
