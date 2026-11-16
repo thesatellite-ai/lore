@@ -108,9 +108,9 @@ func (a *App) personalSharedBy(url string) []string {
 		if u == url {
 			return true
 		}
-		x, xerr := canonical(attach.Store{URL: u})
-		y, yerr := canonical(attach.Store{URL: url})
-		return xerr == nil && yerr == nil && x == y
+		x, xok := storeKey(u) // an ssh alias spelling is the same store (D-493)
+		y, yok := storeKey(url)
+		return xok && yok && x == y
 	}
 	var out []string
 	for _, e := range cfg.Setups {

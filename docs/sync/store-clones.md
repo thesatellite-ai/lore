@@ -14,6 +14,8 @@ You want this page when you open `~/.lore/stores/` and wonder what each folder i
 
 When lore first needs a git store it clones it to `~/.lore/stores/<owner>/<repo>`, named after the store's address (`git@github.com:acme/notes` → `~/.lore/stores/acme/notes`). The host and any ssh alias never appear in the path. A store pinned to another branch is its own clone at `<repo>@<branch>`; two stores whose addresses end in the same owner and repo on different hosts get `<repo>~2` for the second. Your personal store, when it is a plain folder rather than a git repo, is `~/.lore/stores/_me` (no git host allows an owner name that starts with `_`, so it never clashes with an owner folder).
 
+A store is one store however its address is spelled: `git@github.com:acme/notes.git`, `https://github.com/acme/notes` and `git@work-gh:acme/notes.git`, where your `~/.ssh/config` has `Host work-gh` with `HostName github.com`, all name the same store. lore reads the ssh config file (no ssh process, no network) to tell what an alias stands for, so a clone whose origin uses your alias is still your org's store: reads at its top label rows with the org's name, and a read in one of its folders lists that folder and the org's rows. A HostName that is only another route to the same host (`github.com` → `ssh.github.com`, for port 443) is not taken for an alias.
+
 The first time lore clones or writes to the store it prints what it set up, including your git identity for that clone:
 
 <!-- example: files#a-git-store -->
