@@ -297,24 +297,23 @@ func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
 }
 
 // contextSources are the stores `lore context` picks from: the committed
-// render's (the repo store and the shareable stores) and, in a repo that
-// is not a client's, every attached internal org store (the linked store
-// folder and the org folder, the stores the private render reads). Why
-// (devco D-429): an own repo linked with `lore org link --own` keeps its
-// notes in the store folder, not in the repo, so --for-file and
-// --for-prompt said "nothing in the store applies here" while the private
-// render held 29 rules. context only prints to the agent, never into a
-// file of the checkout, so internal rows are safe here; a client repo
-// keeps the committed-render sources (its agent context stays as before),
-// and personal stores stay out (they are not the project's knowledge).
+// render's (the repo store and the shareable stores) and every attached
+// internal org store (the linked store folder and the org folder, the
+// stores the private render reads). Why (devco D-429): an own repo linked
+// with `lore org link --own` keeps its notes in the store folder, not in
+// the repo, so --for-file and --for-prompt said "nothing in the store
+// applies here" while the private render held 29 rules. A client repo
+// too (devco D-481): its notes live only in its linked folder, and render
+// there names lore context and the agent hook as the way agents read
+// them, yet both answered "nothing in the store applies here". context
+// only prints to the agent, never into a file of the checkout, so
+// internal rows are safe here (a client repo's commit-msg guard refuses a
+// commit quoting them); personal stores stay out (they are not the
+// project's knowledge).
 func (h *Host) contextSources(ctx context.Context) ([]store.Source, error) {
 	srcs, err := h.renderSources(ctx)
 	if err != nil {
 		return nil, err
-	}
-	client, err := h.app.ClientRepo(ctx)
-	if err != nil || client {
-		return srcs, err
 	}
 	idents, err := h.app.StoreIdentities(ctx)
 	if err != nil {

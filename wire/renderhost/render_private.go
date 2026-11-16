@@ -208,12 +208,22 @@ func (p *privatePlan) privateLocalsChanged() bool {
 // With no internal store attached it only drops stale lore lines from an
 // existing CLAUDE.local.md.
 func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root string, dryRun, quiet bool) error {
+	return h.renderPrivateIn(ctx, w, root, dryRun, quiet, true)
+}
+
+// renderPrivateIn is renderPrivate; with locals false it writes only the
+// files outside the checkout and no tool's import file (a client repo,
+// which holds nothing of lore's: devco D-481).
+func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root string, dryRun, quiet, locals bool) error {
 	if h.app == nil {
 		return nil
 	}
 	p, err := h.planPrivate(ctx, root)
 	if err != nil {
 		return err
+	}
+	if !locals {
+		p.locals = nil
 	}
 	if dryRun {
 		if p.budget > 0 && p.coreBytes > p.budget {
@@ -266,6 +276,9 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 	}
 	if !quiet && len(p.stores) > 0 {
 		where := "no target tool has a private file: agents get it through `lore context` and the hooks"
+		if !locals {
+			where = privateNoImportWhere
+		}
 		if len(wrote) > 0 {
 			verb := " hold"
 			if len(wrote) == 1 {
@@ -288,6 +301,10 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 	}
 	return nil
 }
+
+// privateNoImportWhere ends the private render's line where no import
+// file may be written (a client repo, devco D-481).
+const privateNoImportWhere = "no import file in a client repo: agents get it through `lore context` and the hooks"
 
 // privateOverCoreWarn is the warning when the pinned part alone is over
 // context.budget.internal (a real render and, D-430, the dry run too).
