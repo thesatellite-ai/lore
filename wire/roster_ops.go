@@ -375,6 +375,15 @@ func (a *App) rosterApp(ctx context.Context, r rosterAt) (*App, func(), error) {
 	if r.src == store.SourceRepo {
 		return a, noop, nil
 	}
+	if one, ok := a.cloneRosterStore(r.src); ok {
+		// a store clone's company folder (D-445): the setup's org stores
+		// do not name it, so StoreOnlyRoster would not find it
+		alone, err := storeOnlyApp(ctx, a.opts, one)
+		if err != nil {
+			return nil, noop, err
+		}
+		return alone, func() { _ = alone.Close() }, nil
+	}
 	alone, ok, err := StoreOnlyRoster(ctx, a.opts, r.src)
 	if err != nil {
 		return nil, noop, err

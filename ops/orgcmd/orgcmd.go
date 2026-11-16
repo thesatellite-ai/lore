@@ -267,7 +267,8 @@ func Ops(env Env) []op.Entry {
 				return h.Use(ctx, in)
 			}),
 	}, refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...)),
-		storeRemoveOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...))) // refresh.go, storeadd.go, storeremove.go
+		storeRemoveOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...)),   // refresh.go, storeadd.go, storeremove.go
+		storeAudienceOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...))) // storeaudience.go
 }
 
 // ops binds the run functions to one Env.

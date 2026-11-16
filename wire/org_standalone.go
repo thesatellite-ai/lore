@@ -435,6 +435,9 @@ func linkError(err error) error {
 		// the refusal named both but no way on.
 		return errs.New(errs.InvalidInput, err.Error()).
 			WithHint("drop --store to link into the store that holds the folder, or pick another --project folder for this store")
+	case errors.Is(err, orgcfg.ErrAdminsOnlyLink):
+		return errs.New(errs.Refused, err.Error()).
+			WithHint("link the repo to a store every member uses (lore store list names the org's stores), or open the store to members first: lore org store audience --org <org> --url <url> --audience everyone --push --yes")
 	case errors.Is(err, orgcfg.ErrStoreRefused):
 		// The store answered and said no (a hook, branch protection): the
 		// git backend's remote refusal code (adapters/backend/git sync).

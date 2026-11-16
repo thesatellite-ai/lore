@@ -43,8 +43,8 @@ visibility: internal
 created: "2026-11-02"
 $ lore store list
 stores:
-  NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
-  notes  file://~/stores/notes          false              false     stores.yaml  internal    ok     
+  NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS  AUDIENCE
+  notes  file://~/stores/notes          false              false     stores.yaml  internal    ok              
 count: 1
 ```
 <!-- /example -->
@@ -83,8 +83,8 @@ If the store folder moves (or the store's git repo is renamed), `lore store list
 $ mv ~/stores/notes ~/stores/agency-notes
 $ lore store list
 stores:
-  NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH    ADDRESS
-  notes  file://~/stores/notes          false              false     stores.yaml              missing  
+  NAME   URL                                                                     FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH    ADDRESS  AUDIENCE
+  notes  file://~/stores/notes          false              false     stores.yaml              missing           
 count: 1
 $ lore store set-url --name notes --url file://$HOME/stores/agency-notes
 ✓ store notes (sto_7a67…9504) is now at file://~/stores/agency-notes (was file://~/stores/notes); its rows stay
@@ -92,8 +92,8 @@ $ lore store set-url --name notes --url file://$HOME/stores/agency-notes
   note: the old address could not be read (E_NOT_A_STORE), so its store id was not compared
 $ lore store list
 stores:
-  NAME   URL                                                                            FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
-  notes  file://~/stores/agency-notes          false              false     stores.yaml  internal    ok     
+  NAME   URL                                                                            FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS  AUDIENCE
+  notes  file://~/stores/agency-notes          false              false     stores.yaml  internal    ok              
 count: 1
 ```
 <!-- /example -->
@@ -239,7 +239,7 @@ store me: up to date
 - **`file://~/…` is not expanded.** Write `file://$HOME/…`.
 - **A move is one way.** A row never returns to a place it left (`E_UNSUPPORTED`); pick the target with care, and write a new row if you change your mind.
 - **A moved row leaves a tombstone in the repo.** Commit it with your next change, so teammates who pull drop the row from the repo too.
-- **Two entries on one place.** Two `.lore/stores.yaml` entries can name the same place, for example `stag` as `<url>?branch=staging` and `stag2` as `<url> --branch staging`. Lists and search show its rows once under the first entry's name (`[stag]`), even a row written `--to stag2`; `--store stag2` still answers under that name. `lore sql` keeps both names as sources, so a query over both sees each row twice, once with `source` `stag` and once with `stag2`; filter on one of them (`WHERE source = 'stag'`) to count each row once.
+- **Two entries on one place.** Two `.lore/stores.yaml` entries can name the same place, for example `stag` as `<url>?branch=staging` and `stag2` as `<url> --branch staging`. Lists and search show its rows once under the first entry's name (`[stag]`), even a row written `--to stag2`; `--store stag2` still answers under that name. `lore sql` reads each place once too, under the first name: `source` is `stag` for every row, and a query counts each row once.
 - **An ssh alias of yours is not a store url for the team.** `.lore/stores.yaml` is committed, so it holds the canonical url (`git@github.com:agency/notes.git`). Type your alias url (`git@work-gh:agency/notes.git`, where `~/.ssh/config` says `HostName github.com`) and `lore store init` or `lore store add` stores the canonical url, records your spelling under `access:` in `~/.lore/config.yaml`, scoped to the owner (`git@github.com:agency/` → `git@work-gh:agency/`, so your stores under another account are not sent through the alias), and says so ([Reaching stores through your own ssh alias](../reference/config.md#reaching-stores-through-your-own-ssh-alias-access)).
 - **`shareable` is about committed files.** It does not copy the store anywhere; it only allows its notes into renders and client repos. Check with `lore render --dry-run` before you commit the render.
 

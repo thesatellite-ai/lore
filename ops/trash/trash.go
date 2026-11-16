@@ -44,6 +44,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
+	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
@@ -229,8 +230,9 @@ type Warning struct {
 
 // ShowOut is the output of trash.show.
 type ShowOut struct {
-	Data   Item              `json:"data"`
-	Fields map[string]string `json:"fields"`
+	Data Item `json:"data"`
+	// Fields are the row's fields; a list field stays a JSON array (D-455).
+	Fields showfield.Map `json:"fields"`
 	// History marks a --from-history show (the last content of a purged row).
 	History bool `json:"from_history,omitempty"`
 }
@@ -469,21 +471,21 @@ const hiddenValue = "(sensitive, hidden)"
 // each sensitive entry of a resource's "fields" JSON (a resource kind's own
 // fields, RQ1), unless showSensitive. The resource fields are hidden whole
 // when the kind fields cannot be read (fail closed).
-func (o ops) shownFields(ctx context.Context, r row.Row, showSensitive bool) map[string]string {
-	out := map[string]string{}
+func (o ops) shownFields(ctx context.Context, r row.Row, showSensitive bool) showfield.Map {
+	out := showfield.Map{}
 	def, _ := o.env.TableSchema(ctx, r.Table)
 	for k, v := range r.Fields {
 		if f, ok := def.Field(k); ok && f.Sensitive && !showSensitive {
-			out[k] = hiddenValue
+			out[k] = showfield.Text(hiddenValue)
 			continue
 		}
-		out[k] = v.String()
+		out[k] = showfield.Of(v)
 	}
 	if _, has := out[resmask.FieldsField]; has && r.Table == schema.TableResources && !showSensitive {
-		out[resmask.FieldsField] = hiddenValue
+		out[resmask.FieldsField] = showfield.Text(hiddenValue)
 		if getter, canGet := o.env.(resmask.Getter); canGet {
 			if m, _, ok := resmask.Fields(ctx, getter, r, hiddenValue); ok {
-				out[resmask.FieldsField] = m
+				out[resmask.FieldsField] = showfield.Text(m)
 			}
 		}
 	}
@@ -1060,7 +1062,7 @@ func (o ShowOut) Text() string {
 }
 
 // fieldLines renders fields as "  key: value" lines in key order.
-func fieldLines(fields map[string]string) string {
+func fieldLines(fields showfield.Map) string {
 	keys := make([]string, 0, len(fields))
 	for k := range fields {
 		keys = append(keys, k)
@@ -1068,7 +1070,7 @@ func fieldLines(fields map[string]string) string {
 	slices.Sort(keys)
 	var b strings.Builder
 	for _, k := range keys {
-		b.WriteString("  " + k + ": " + fields[k] + "\n")
+		b.WriteString("  " + k + ": " + fields[k].String() + "\n")
 	}
 	return b.String()
 }

@@ -251,6 +251,24 @@ So when lore's commits show your org name ("Mira Dev") and your own commits in t
 
 When a coding agent writes for you, the commit is still signed as the table above says, never as the agent: the agent is named in a `Lore-Agent:` trailer of the commit message.
 
+## Admins-only stores
+
+An org often has notes only its admins may read: servers, domains, registrar and cloud accounts, where a secret lives. Put them in a store of their own and mark it for admins: `lore org store add --org acme --url git@github.com:acme/ops.git --audience admins --push --yes` (or, for a store the org already lists, `lore org store audience --org acme --url git@github.com:acme/ops.git --audience admins --push --yes`). The store's entry in `lore-org.yaml` gets `audience: admins`; `--audience everyone` removes the key again. Give only the admins access to the repo on the git host: the git host is what keeps the notes private, the key is what keeps members' lore from trying.
+
+What each person's lore does with it:
+
+- **A member** (no open roster stint with org role admin): the org entry lore copies from `lore-org.yaml` into `~/.lore/config.yaml` leaves the store out, so nothing on the machine clones, fetches, syncs, reads, renders or checks it. Setup, `lore sync`, reads and `lore doctor` show no error for it; doctor and `lore setup check` say once, as information, `acme's store ops is for the org's admins (audience: admins in lore-org.yaml); you are not an admin of acme, so lore does not clone or read it`.
+- **An admin**: the entry lists it like any other store; `lore store list` shows `admins` in its AUDIENCE column; writes go there with `--to ops/<folder>`, reads with `--store ops` or from the setup's folders.
+- **A member made admin** (`lore actor period edit --period @ann --org-role admin`): their next sync (any command that opens the org's store) copies the entry again with the store in it, with no command of their own. An admin whose stint ends loses it the same way; a clone already on disk stays there.
+
+Decisions (devco D-442):
+
+- **The filter sits where lore-org.yaml is copied, not in each reader.** Every reader (setup, sync, doctor, reads, render, the link index, the leak and client checks) works from the org entry, so one copy step that leaves the store out covers them all, including readers added later. Who is an admin is read from the roster in the org store's clone at the commit lore-org.yaml was read at, by the same rule that decides who may change lore-org.yaml.
+- **Client and leak checks never depend on it.** No repo can be linked to an admins-only store (`lore org link --store <it>` is refused): a repo's notes must be readable by everyone who works in the repo, and the link index skips the store on every machine, so whether a repo is own or client is the same for an admin and a member, and an unreachable admins' store never makes a repo "unknown" (guards on).
+- **The org folder's store is never admins-only**: it holds the roster, teams and company rules every member reads; the command refuses it and the reader keeps it for everyone whatever the file says.
+- **An `audience:` value lore does not know** is read as admins-only, so a member never tries a store the file does not plainly open to them; `lore config check` refuses it in `config.yaml`.
+- **An older lore ignores the key** and treats the store as before (every member tries it): upgrade the team before relying on it.
+
 ## What lore takes from a store, and from whom
 
 A store is a plain git repo, and everyone who can push to it can commit anything there with git alone. So lore checks what it reads instead of trusting the branch as it stands:

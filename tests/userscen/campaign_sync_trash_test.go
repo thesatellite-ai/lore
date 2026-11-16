@@ -69,8 +69,8 @@ func camSyncTrashWalk(t *testing.T, store string) {
 				t.Fatalf("trash list --to %s shows a row of %s", camSyncOtherStore(store), store)
 			}
 			sh := th.DecodeJSON[struct {
-				Data   trashItem         `json:"data"`
-				Fields map[string]string `json:"fields"`
+				Data   trashItem   `json:"data"`
+				Fields shownFields `json:"fields"`
 			}](t, c.MustLore("trash", "show", id, "--json"))
 			if sh.Data.ID != id || sh.Data.Store != store || sh.Fields["body"] != b.body {
 				t.Fatalf("trash show: %+v body %d chars", sh.Data, len(sh.Fields["body"]))

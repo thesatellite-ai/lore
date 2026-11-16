@@ -22,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -760,7 +761,11 @@ func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool, liste
 				name = sc.URL
 			}
 			taken[name] = true
-			out = append(out, opsstores.Entry{Name: name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
+			e := opsstores.Entry{Name: name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg}
+			if sc.AdminsOnly() {
+				e.Audience = string(orgconf.AudienceAdmins) // D-442: an admin sees which store members never read
+			}
+			out = append(out, e)
 		}
 	}
 	return out

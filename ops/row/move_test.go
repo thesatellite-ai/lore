@@ -33,7 +33,7 @@ func TestMoveJSON(t *testing.T) {
 	if txt := opstest.Text(res); !strings.HasPrefix(txt, "✓ "+id+" moved to store me (same id") {
 		t.Fatalf("move text: %q", txt)
 	}
-	if got := showJSON(t, h, `{"id":"`+id+`"}`); got.Store != "me" || got.Fields["body"] != "to move" {
+	if got := showJSON(t, h, `{"id":"`+id+`"}`); got.Store != "me" || got.Fields["body"].String() != "to move" {
 		t.Fatalf("after move: %+v", got)
 	}
 }

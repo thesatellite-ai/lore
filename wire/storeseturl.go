@@ -378,7 +378,8 @@ func (a *App) moveOrgFile(ctx context.Context, org string, old []string, raw str
 	if err != nil {
 		return "lore-org.yaml of " + org + " still names the old address (" + orgFileError(err, raw).Error() + "); run `lore store set-url --name " + org + " --url " + raw + "` again when the store takes the commit, so teammates importing the org get the new address"
 	}
-	if werr := writeOrgSource(a.opts.Home, configLockWait, org, res.Suggestion.Shared(), res.Suggestion.Source()); werr != nil {
+	mine, _ := mineOf(ctx, cfg, o, res.Suggestion)
+	if werr := writeOrgSource(a.opts.Home, configLockWait, org, mine, res.Suggestion.Source()); werr != nil {
 		return "lore-org.yaml of " + org + " updated, but the entry's source stamp was not written: " + werr.Error() + "; `lore org refresh --org " + org + "` writes it"
 	}
 	where := "pushed"

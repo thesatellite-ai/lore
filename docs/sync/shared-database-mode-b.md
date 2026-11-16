@@ -35,8 +35,8 @@ $ lore store add --name client2 --url file://$HOME/stores/client2
 # alice, in app
 $ lore store list
 stores:
-  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
-  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok     
+  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS  AUDIENCE
+  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok              
 count: 1
 ```
 <!-- /example -->

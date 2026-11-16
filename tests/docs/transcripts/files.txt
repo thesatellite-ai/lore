@@ -389,8 +389,8 @@ alice (work/website)$ lore store use --path ~/code/notes --yes
   lore's earlier clone ~/.lore/stores/acme/notes is no longer used and stays on disk; remove it when you no longer need it
 alice (work/website)$ lore store list
 stores:
-  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS
-  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy  
+  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS  AUDIENCE
+  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy           
 count: 1
 alice (work/website)$ lore path --id tsk_2ad3618e878ebbf527d34d446ef4f891
 ~/code/notes/_store/tasks/tsk_2ad3618e878ebbf527d34d446ef4f891.json

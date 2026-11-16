@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -160,7 +161,7 @@ func (o ops) showHistory(ctx context.Context, in ShowIn) (ShowOut, error) {
 		it, r, ok := historyItem(h)
 		one := []Item{it}
 		o.labelDeleters(ctx, one)
-		out := ShowOut{Data: one[0], Fields: map[string]string{}, History: true}
+		out := ShowOut{Data: one[0], Fields: showfield.Map{}, History: true}
 		if !ok {
 			return out, nil
 		}

@@ -253,7 +253,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 			// as org import builds it for a member; not the one store and
 			// patterns typed here, which would make the org's own repos
 			// client repos on this machine only.
-			suggestedStores(&entry, sg, url)
+			suggestedStores(ctx, &entry, sg, url)
 			if _, verr := orgConfigWith(h.home, func(root *yaml.Node) error { return appendOrgNode(root, entry) }); verr != nil {
 				return opsorgcmd.Report{Lines: lines}, verr
 			}
@@ -296,11 +296,14 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 // none) and the client-repo defaults. org create on a store that already
 // has the file uses it too (B2-19), so the admin who starts a team on an
 // existing org gets the same entry as a member who joins it.
-func suggestedStores(entry *orgconf.Org, sg orgcfg.Suggestion, url string) {
-	entry.Own, entry.Repos, entry.Stores = sg.Doc.Own, sg.Doc.Repos, nil
-	for _, s := range sg.Doc.Stores {
-		entry.Stores = append(entry.Stores, orgconf.Store{URL: s.URL, Name: s.Name, Branch: s.Branch, OrgFolder: s.OrgFolder})
-	}
+//
+// A store the file marks `audience: admins` is listed only when the
+// entry's person is an admin of the org (D-442): a member's entry never
+// names it, so their lore never tries to read it. entry.Identity must be
+// set first.
+func suggestedStores(ctx context.Context, entry *orgconf.Org, sg orgcfg.Suggestion, url string) {
+	sh, _ := sg.SharedFor(ctx, entry.Identity.Key)
+	entry.Own, entry.Repos, entry.Stores = sg.Doc.Own, sg.Doc.Repos, append([]orgconf.Store(nil), sh.Stores...)
 	if len(entry.Stores) == 0 {
 		entry.Stores = []orgconf.Store{{URL: url, OrgFolder: sg.Folder}}
 	}
@@ -333,8 +336,8 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in "+lorehome.Shown()+"/config.yaml").
 			WithHint("pass --as <another name>, or edit the existing entry")
 	}
-	suggestedStores(&entry, sg, in.URL)
 	entry.Identity = orgconf.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}
+	suggestedStores(ctx, &entry, sg, in.URL)
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr
 	}

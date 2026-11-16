@@ -50,6 +50,8 @@ type orgFolder struct {
 	Branch string
 	// Dir is the store's local checkout the folder was read from.
 	Dir string
+	// Rows counts the folder's row files (display only).
+	Rows int
 }
 
 // orgFolderScan is what one walk of the org's stores found: the folders,
@@ -64,6 +66,11 @@ type orgFolderScan struct {
 // orgFolders walks every store of the org entries this command sees. No
 // org (a solo setup, a repo with no org) is an empty scan.
 func (a *App) orgFolders(ctx context.Context) orgFolderScan {
+	if sc, in := storeHere(a.opts.RepoDir); in {
+		// a store clone is under no setup's folders: its org is the one
+		// whose stores include it (D-444, D-445, D-458)
+		return a.cloneFolderScan(ctx, sc)
+	}
 	scan := orgFolderScan{Unread: map[string]error{}}
 	entries, err := a.OrgStoreEntries(ctx)
 	if err != nil {
@@ -105,7 +112,7 @@ func (a *App) foldersOf(ctx context.Context, entries []opsstores.Entry) orgFolde
 				continue // a folder whose _meta.json names no project id is not a project
 			}
 			sk, _ := storeKey(e.URL)
-			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch, Dir: dir})
+			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch, Dir: dir, Rows: r.Rows})
 		}
 	}
 	return scan
@@ -187,7 +194,7 @@ func (a *App) OrgFolderProjects(ctx context.Context) ([]opsinfra.FolderProject, 
 	scan := a.orgFolders(ctx)
 	out := make([]opsinfra.FolderProject, 0, len(scan.Folders))
 	for _, f := range scan.Folders {
-		out = append(out, opsinfra.FolderProject{ID: f.ID.String(), Name: f.Folder,
+		out = append(out, opsinfra.FolderProject{ID: f.ID.String(), Name: f.Folder, Rows: f.Rows,
 			Source: store.SourceRef{Store: f.Label, Folder: f.Folder, FolderID: f.ID}})
 	}
 	var notes []string

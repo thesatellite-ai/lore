@@ -119,6 +119,13 @@ type ClaimLogEntry struct {
 type ClaimBefore struct {
 	Status    string `json:"status"`
 	StartedAt string `json:"started_at,omitempty"`
+	// StatusSet marks a claim during which someone set the status
+	// explicitly (task start, edit --status, done, cancel, reopen;
+	// devco:D-464). The ops layer's status writer sets it on the open
+	// chain's entry (ops/task claimmark.go); a release that finds it keeps
+	// the row's status and started_at and records the span: that change
+	// was work, not part of the claim.
+	StatusSet bool `json:"status_set,omitempty"`
 }
 
 // claimBefore is the pre-claim state a release restores: the newest claim
@@ -143,13 +150,18 @@ func claimBefore(log []ClaimLogEntry) (ClaimBefore, bool) {
 // restoreBefore puts the row back to its pre-claim status and started_at
 // (devco:D-427: a release left the task in_progress with nobody on it). It
 // touches only a row the claim left in_progress: a status someone set
-// since (blocked by poison, cancelled) stays. Without a recorded Before the
-// task goes back to todo and keeps its started_at.
+// since (blocked by poison, cancelled) stays, and so does any status set
+// explicitly during the claim (ClaimBefore.StatusSet, devco:D-464: a
+// `task start` on a claimed task stays started). Without a recorded Before
+// the task goes back to todo and keeps its started_at.
 func (d Doc) restoreBefore() {
 	if d.Status() != statusInProgress {
 		return
 	}
 	b, ok := claimBefore(d.ClaimLog())
+	if ok && b.StatusSet {
+		return
+	}
 	if !ok {
 		d.SetStr(keyStatus, statusTodo)
 		return

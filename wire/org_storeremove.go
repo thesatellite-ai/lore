@@ -85,7 +85,8 @@ func (h *standaloneOrg) RemoveStore(ctx context.Context, in opsorgcmd.StoreRemov
 	if serr != nil {
 		return opsorgcmd.Report{Lines: lines}, orgFileError(serr, sc.URL)
 	}
-	if err := writeOrgSource(h.home, configLockWait, in.Org, sg.Shared(), sg.Source()); err != nil {
+	mine, _ := mineOf(ctx, cfg, o, sg)
+	if err := writeOrgSource(h.home, configLockWait, in.Org, mine, sg.Source()); err != nil {
 		return opsorgcmd.Report{Lines: lines}, err
 	}
 	lines = append(lines, "✓ org entry "+in.Org+" no longer lists it (version "+short(sg.Version)+")")

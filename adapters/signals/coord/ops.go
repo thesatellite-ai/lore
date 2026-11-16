@@ -548,6 +548,8 @@ func claimSawWork(s signals.Signal, now time.Time) bool {
 // ref and the row gets one claim_log entry, atomically. The row goes back
 // to the status and started_at it had before the claim (devco:D-427); the
 // holder's span is recorded only when the claim saw work (claimSawWork).
+// A status set explicitly during the claim (ClaimBefore.StatusSet,
+// devco:D-464) is work: the row keeps it and the span is recorded.
 func Release(ctx context.Context, env Env, id string) error {
 	now := env.Signals.Clock.Now()
 	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
@@ -572,7 +574,8 @@ func Release(ctx context.Context, env Env, id string) error {
 			return ch, nil, nil
 		}
 		next := doc.Clone()
-		if claimSawWork(s, v.Now) {
+		b, _ := claimBefore(doc.ClaimLog())
+		if b.StatusSet || claimSawWork(s, v.Now) {
 			if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
 				return signals.Change{}, nil, err
 			}

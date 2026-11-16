@@ -41,6 +41,7 @@ Steps for findings still being fixed are written as they should behave and skipp
 | D-151 | r3 G-6 | over-budget LORE.md renders must rules as ids | `TestStoryGMonthsOfUse` |
 | D-426 | store pass | plain `task next` claimed and committed; it now only shows the next task and why, `--claim` takes it | `TestJourneyNextReadsReleaseRestores`, `TestTaskNextReadsByDefault`; the agents here pass `--claim` |
 | D-427 | store pass | `task release` left the task in_progress with nobody on it, and a claim given back at once left a time entry and the `time` feature | `TestJourneyNextReadsReleaseRestores`, `TestReleaseRightAfterClaimRestoresTodo` |
+| D-464 | after-land gate | `task start` during a claim was undone by the release (the task went back to todo); a status set during a claim is work and the release keeps it | `TestJourneyNextReadsReleaseRestores` (start-during-claim step), `TestReleaseKeepsStatusSetDuringClaim` |
 | D-152 | r3 G-7 | no bulk archive | `TestStoryGMonthsOfUse` |
 | D-155 | r3 G-8 | trash purge slow | `TestStoryGMonthsOfUse` |
 | D-156 | r3 G-9 | doctor warns at 8% of budget | `TestStoryGMonthsOfUse` |

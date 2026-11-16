@@ -12,6 +12,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
@@ -32,6 +33,11 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	if err != nil {
 		return opsorgcmd.Report{}, errs.Wrap(errs.InvalidInput, "--url "+in.URL+" is not a store url", err).
 			WithHint("give the store's git url, e.g. --url git@github.com:agency/client-notes.git")
+	}
+	aud, aerr := orgconf.ParseAudience(in.Audience)
+	if aerr != nil {
+		return opsorgcmd.Report{}, errs.Wrap(errs.InvalidInput, "--audience "+in.Audience, aerr).
+			WithHint(opsorgcmd.StoreAddCommand(in.Org, in.URL) + " --audience admins")
 	}
 	sc := o.OrgFolderStore()
 	if sc == nil {
@@ -56,6 +62,9 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 		push = "committed and pushed to the org store"
 	}
 	lines := []string{"add store " + want + " to org " + in.Org + ":", "  " + file + " lists it (" + push + ")", "  this machine's org entry " + in.Org + " copies it"}
+	if aud == orgconf.AudienceAdmins {
+		lines = append(lines, "  "+audienceAdminsLine)
+	}
 	if named != "" {
 		lines = append(lines, named)
 	}
@@ -64,11 +73,14 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	}
 	g := &orgcfg.GitLinks{Home: h.home, Config: cfg, Now: h.wall(), Route: h.router()}
 	res, err := g.AddOrgFileStore(ctx, orgcfg.OrgFileStoreAdd{URL: sc.URL, OrgFolder: sc.OrgFolder, Branch: sc.Branch, Org: in.Org,
-		Store: orgcfg.OrgFileStore{URL: in.URL, Name: in.Name, Branch: in.Branch}, Push: in.Push, Signature: storeSignature(o)})
+		Store: orgcfg.OrgFileStore{URL: in.URL, Name: in.Name, Branch: in.Branch, Audience: string(aud)}, Push: in.Push, Signature: storeSignature(o),
+		SetAudience: in.Audience != ""})
 	if err != nil {
 		return opsorgcmd.Report{Lines: lines}, orgFileError(err, sc.URL)
 	}
 	switch {
+	case res.AudienceChanged:
+		lines = append(lines, "✓ "+file+" already listed it; its audience is now "+aud.String()+audiencePushNote(res, opsorgcmd.StoreAddCommand(in.Org, in.URL)+" --audience "+aud.String()))
 	case res.Existed && res.Pushed:
 		lines = append(lines, "✓ "+file+" already listed it; pushed the commit that added it")
 	case res.Existed:
@@ -86,7 +98,8 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	if serr != nil {
 		return opsorgcmd.Report{Lines: lines}, orgFileError(serr, sc.URL)
 	}
-	if err := writeOrgSource(h.home, configLockWait, in.Org, sg.Shared(), sg.Source()); err != nil {
+	mine, _ := mineOf(ctx, cfg, o, sg)
+	if err := writeOrgSource(h.home, configLockWait, in.Org, mine, sg.Source()); err != nil {
 		return opsorgcmd.Report{Lines: lines}, err
 	}
 	lines = append(lines, "✓ org entry "+in.Org+" lists it (version "+short(sg.Version)+")",

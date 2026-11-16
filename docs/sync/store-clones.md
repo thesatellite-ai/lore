@@ -129,7 +129,7 @@ alice <alice@agency.example>  lore: store init
 
 | Path in the clone | What it is |
 |---|---|
-| `lore-store.yaml` | the marker that makes the repo a store: its permanent id (`sto_…`), its visibility and the layout version (`lore_store: 4`). lore never treats a folder with this file as a code repo: no `.lore/data`, no folder rules, and `cd ~/.lore/stores/acme/notes/<folder> && lore task list` works on that folder. At the clone's top a read (`task list`, `rule list`, `decision list`, `memory list`, `search`, `sql`) covers every folder of the store, each row labelled `<org>/<folder>`; inside a folder `--store <org>` covers every folder of the org's stores, `--store <org>/<folder>` or `--project <folder>` another folder. `task edit --assign @handle` in a folder finds the org's roster; claims (`task next`, `inbox`) need a code repo linked to the folder (`lore org link --org <org> --project <folder>`) |
+| `lore-store.yaml` | the marker that makes the repo a store: its permanent id (`sto_…`), its visibility and the layout version (`lore_store: 4`). lore never treats a folder with this file as a code repo: no `.lore/data`, no folder rules, and `cd ~/.lore/stores/acme/notes/<folder> && lore task list` works on that folder. At the clone's top a read (`task list`, `rule list`, `decision list`, `memory list`, `search`, `sql`) covers every folder of the store, each row labelled `<org>/<folder>`; inside a folder `--store <org>` covers every folder of the org's stores, `--store <org>/<folder>` or `--project <folder>` another folder. `task edit --assign @handle` in a folder finds the org's roster, and `project member list` there lists that folder's project; `lore show --id <id>` (and every command naming a row by id) finds the row in any folder of the store or the org, read for that one command; `project list` gives each folder's row count; claims (`task next`, `inbox`) need a code repo linked to the folder (`lore org link --org <org> --project <folder>`) |
 | `README.md` | what the folders are and how to browse and edit them; lore writes it once, with its next commit in the store, and never overwrites your version. `lore doctor` notes a store without one (`store_readme`) |
 | `_store/<table>/<id>.json` | the store's own rows (people and machines, notes written to the whole store). A folder name may never start with `_`, so `_store` is never a project |
 | `<folder>/<table>/<id>.json` | the rows of one project or client folder (`acme/tasks/tsk_….json`), with `<folder>/_meta.json` (the folder's id and repo links). Folders can nest (`team/web/tasks/`). A folder may not be named like a kind of row (`tasks`, `memories`, …) nor start with `_` or `.` |
@@ -163,8 +163,8 @@ $ lore store use --path ~/code/notes --yes
   lore's earlier clone ~/.lore/stores/acme/notes is no longer used and stays on disk; remove it when you no longer need it
 $ lore store list
 stores:
-  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS
-  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy  
+  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS  AUDIENCE
+  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy           
 count: 1
 $ lore path --id tsk_2ad3…f891
 ~/code/notes/_store/tasks/tsk_2ad3…f891.json

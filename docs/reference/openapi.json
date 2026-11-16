@@ -41241,6 +41241,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "audience": {
+                    "type": "string",
+                    "description": "who uses the store: everyone (default) or admins (servers, domains, accounts: members' lore never reads it)"
+                  },
                   "branch": {
                     "type": "string",
                     "description": "the store branch (default: the store's default branch)"
@@ -41338,6 +41342,155 @@
           },
           "409": {
             "description": "E_NOT_IMPLEMENTED, E_NOT_PROJECT_ROOT, E_ORG_AMBIGUOUS, E_ORG_DISAGREES, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/org/stores/audience": {
+      "post": {
+        "operationId": "org.store.audience",
+        "summary": "Set who in an org uses one of its stores (admin only): admins (members' lore never reads it) or everyone",
+        "tags": [
+          "org"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "audience": {
+                    "type": "string",
+                    "description": "who uses the store: admins (only the org's admins; members' lore never reads it) or everyone (required)"
+                  },
+                  "org": {
+                    "type": "string",
+                    "description": "the org entry (default: the only org entry on this machine, else the active setup's org)"
+                  },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "the store: its git url (required; lore store list names the org's stores)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "url",
+                  "audience"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "lines"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_NOT_A_STORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_NOT_IMPLEMENTED, E_NOT_PROJECT_ROOT, E_ORG_AMBIGUOUS, E_ORG_DISAGREES, E_REFUSED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -51260,6 +51413,9 @@
                           },
                           "origin_url": {
                             "type": "string"
+                          },
+                          "rows": {
+                            "type": "integer"
                           },
                           "updated_at": {
                             "type": "string"
@@ -65034,10 +65190,10 @@
             "name": "origin",
             "in": "query",
             "required": false,
-            "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves",
+            "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves (--json always has them)",
             "schema": {
               "type": "boolean",
-              "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves"
+              "description": "also print where the row came from: _o, the audit fields, the _w stamp and its moves (--json always has them)"
             }
           },
           {
@@ -65156,12 +65312,7 @@
                         "type": "string"
                       }
                     },
-                    "fields": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
+                    "fields": {},
                     "forced": {
                       "type": "boolean"
                     },
@@ -65263,6 +65414,9 @@
                             "commit": {
                               "type": "string"
                             },
+                            "reason": {
+                              "type": "string"
+                            },
                             "state": {
                               "type": "string"
                             }
@@ -65284,6 +65438,23 @@
                               "type": "string"
                             }
                           }
+                        },
+                        "machine": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
                         },
                         "project": {
                           "type": "object",
@@ -65323,8 +65494,54 @@
                           ]
                         },
                         "store": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id"
+                          ]
+                        },
+                        "version": {
                           "type": "string"
                         }
+                      }
+                    },
+                    "referenced_by": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fields": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "store": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "store",
+                          "table",
+                          "id",
+                          "fields"
+                        ]
                       }
                     },
                     "refs": {
@@ -65362,6 +65579,26 @@
                     },
                     "table": {
                       "type": "string"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ]
+                      }
                     },
                     "updated_at": {
                       "type": "string"
@@ -82445,6 +82682,9 @@
                         "type": "object",
                         "properties": {
                           "address": {
+                            "type": "string"
+                          },
+                          "audience": {
                             "type": "string"
                           },
                           "branch": {
@@ -114456,12 +114696,7 @@
                         "batch"
                       ]
                     },
-                    "fields": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
-                    },
+                    "fields": {},
                     "from_history": {
                       "type": "boolean"
                     }
