@@ -2,7 +2,9 @@ package wire
 
 import (
 	"context"
+	"os"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
@@ -36,6 +38,11 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 	in := identity.Inputs{Home: opts.Home, FlagActor: opts.FlagActor, Config: mc.Config, Dir: opts.RepoDir, Detect: DetectAgent}
 	if opts.PersonOnly {
 		in.Detect = nil // `lore api`: the server is the person, not its starter's tool
+		// devco D-440: an agent key in LORE_ACTOR is the starter's tool too
+		// (an admin's wrapper sets LORE_ACTOR=agent:<label>): a
+		// person-credited step resolves the person behind it, as it does for
+		// a detected tool. A human key there, or --actor, still wins.
+		in.Getenv = personEnv
 	}
 	// ONBOARDING 3.4: the active solo setup's identity, after the org entry.
 	in.Setup = setupIdentity(ctx, opts.Home, optsProjectDir(opts))
@@ -620,4 +627,20 @@ func actorField(r row.Row, name string) string {
 		return ""
 	}
 	return v.String()
+}
+
+// personEnv is os.Getenv with an agent key in LORE_ACTOR hidden: the
+// environment of an identity resolved person-only (Options.PersonOnly).
+func personEnv(k string) string {
+	v := os.Getenv(k)
+	if k == identity.EnvActor && envAgentKey(v) {
+		return ""
+	}
+	return v
+}
+
+// envAgentKey reports whether a LORE_ACTOR value names an agent
+// (agent:<label>).
+func envAgentKey(v string) bool {
+	return strings.HasPrefix(strings.TrimSpace(v), identity.KindAgent+":")
 }

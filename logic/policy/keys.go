@@ -53,8 +53,9 @@ const (
 	// 168 = one week); a limit, the smaller is stricter.
 	KeyMetaStaleAfter    Key = "meta.stale_after"
 	KeyResourcesMaxBytes Key = "resources.max_bytes"
-	// KeyResourcesWarnBytes: a resource larger than this prints a warning
-	// (RQ4: 4 KB); a limit, the smaller is stricter.
+	// KeyResourcesWarnBytes: a resource whose values (the {field: value}
+	// JSON) pass this prints a warning (RQ4: 4 KB); a limit, the smaller is
+	// stricter.
 	KeyResourcesWarnBytes Key = "resources.warn_bytes"
 	// KeyResourcesAllowedIn: where resources may live, items from
 	// AllowedInPlaces (RQ2, OQ24); levels intersect, a lower one only narrows.
@@ -408,7 +409,7 @@ func Keys() []KeyDef {
 		{Key: KeyMetaScopeAliases, Shape: ShapeSet, Default: mustList(), Doc: "short names for metadata scope labels, alias=scope items"},
 		{Key: KeyMetaRenderKeysBudget, Shape: ShapeLimit, Default: value.Int(defaultMetaRenderKeysBudget), Doc: "bytes of the metadata keys block in rendered files"},
 		{Key: KeyResourcesMaxBytes, Shape: ShapeLimit, Default: value.Int(defaultMaxBytes), Doc: "largest resource in bytes"},
-		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource larger than this many bytes prints a warning"},
+		{Key: KeyResourcesWarnBytes, Shape: ShapeLimit, Default: value.Int(defaultWarnBytes), Doc: "a resource whose values (as {field: value} JSON) pass this many bytes prints a warning"},
 		{Key: KeyMetaStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultMetaStaleAfterHours), Doc: "hours since a store's last fetch after which a new metadata key in an own repo is refused (E_META_STALE, METADATA 3.18)"},
 		{Key: KeyResourcesStaleAfter, Shape: ShapeLimit, Default: value.Int(defaultStaleAfterHours), Doc: "hours since a store's last fetch after which a resource write notes the store kinds' commit"},
 		{Key: KeyResourcesAllowedIn, Shape: ShapeAllow, Choices: AllowedInPlaces(), Default: mustTexts(AllowedInPlaces()...),

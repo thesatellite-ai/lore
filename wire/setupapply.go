@@ -658,6 +658,11 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	if !ok {
 		return opssetup.ApplyResult{}, errs.New(errs.Unsupported, "setup apply: this lore build has no org commands").WithHint("use the lore release binary")
 	}
+	if req.Apply == onboard.ApplyTeam { // a new org: no roster row can name the agent's owner yet
+		if err := ap.a.refuseOwnerlessAgent(ctx, "setup apply "+string(req.Step)); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
+	}
 	ans, err := ap.setupAnswers(ctx, e, req.Answers)
 	if err != nil {
 		return opssetup.ApplyResult{}, err

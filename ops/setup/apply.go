@@ -147,8 +147,12 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		}
 		if res.Setup.Name != "" {
 			s.entry, s.exists = res.Setup, true
-			if err := e.keepJoinedKind(ctx, st, s, step); err != nil {
+			upgraded, err := e.keepJoinedKind(ctx, st, s, step)
+			if err != nil {
 				return ApplyOut{}, err
+			}
+			if upgraded {
+				out.Warnings = append(out.Warnings, kindUpgradedWarning(s.entry.Org))
 			}
 		}
 		// 2.3: "step status done; re-run its checks once" — what the
@@ -178,13 +182,17 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 // read before the join), and the join makes the setup an admin setup; the
 // saved kind step wins over the entry on every later step (loadState), so
 // the next step (folders) made it a member setup again.
-func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step onboard.Step) error {
+//
+// upgraded reports that the kind step had asked for another kind: the
+// step then says so (devco D-447: a "member" join showed KIND admin in
+// setup list with no word why).
+func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step onboard.Step) (upgraded bool, err error) {
 	if step.ID != onboard.StepJoin || s.entry.Kind != onboard.KindAdmin {
-		return nil
+		return false, nil
 	}
 	row, ok := s.progress[onboard.StepKind]
 	if !ok || answerKind(row.Answers) == onboard.KindAdmin {
-		return nil
+		return false, nil
 	}
 	ans := maps.Clone(row.Answers)
 	if ans == nil {
@@ -192,7 +200,14 @@ func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step 
 	}
 	ans[kindAnswer] = onboard.Answer{Text: string(onboard.KindAdmin)}
 	row.Answers = ans
-	return st.PutProgress(ctx, row)
+	return true, st.PutProgress(ctx, row)
+}
+
+// kindUpgradedWarning is the join step's notice that a setup asked for as
+// member was saved as admin, because the roster already names this person
+// an admin of org (I-17: their second machine).
+func kindUpgradedWarning(org string) string {
+	return "saved as an admin setup, not member: your roster role in " + quote(org) + " is admin, and the roster role decides it, not the kind step (lore member add and lore team invite work here)"
 }
 
 // withKindDefault fills a kind-step answer set that leaves out default

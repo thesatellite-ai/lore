@@ -123,7 +123,7 @@ func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOu
 	if err != nil {
 		return JoinOut{}, err
 	}
-	id := e.joinEmail(ctx, "", cmp.Or(inv.Org, name))
+	id := e.joinEmail(ctx, e.rosterEmail(ctx, name, org), cmp.Or(inv.Org, name))
 	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan,
 		Commands: joinCommands(cmp.Or(name, joinFallbackName), org, id, plan), Org: inv.Org, IdentityNote: id.Note}, nil
 }

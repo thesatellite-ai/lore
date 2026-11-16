@@ -48,6 +48,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -623,27 +624,29 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 	if len(rep.Rows) == 0 {
 		return
 	}
-	// devco D-437: a changed file may be another lore process's write in
-	// progress (it holds the repo's .lore/lock): look again under the lock.
-	held, release, err := gb.Hold(ctx)
-	if err != nil {
-		say(handLinePrefix + "hand edits in " + gb.Dir() + " wait for the next lore command: " + err.Error())
-		return
-	}
-	defer func() { _ = release() }()
-	ctx = held
-	if rep, err = gb.HandChanges(ctx); err != nil {
-		say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
-		return
-	}
-	// The files are read, decoded and compared in parallel (B1-16: with a
-	// migration not committed yet every row file is modified, ~5,400
-	// decodes of the file and of its committed copy on each command); the
-	// engine part runs after, one file at a time in git's order, so the
-	// lines and writes are the same as a sequential loop.
-	cands := make([]repoEditCandidate, len(rep.Rows))
 	reg := st.eng.Registry()
-	parallelEach(len(rep.Rows), func(i int) { cands[i] = repoEditCandidateOf(reg, rep.Rows[i]) })
+	cands := repoEditCandidates(reg, rep.Rows)
+	if slices.ContainsFunc(cands, func(c repoEditCandidate) bool { return len(c.fields) > 0 }) {
+		// devco D-437: a changed file may be another lore process's write
+		// in progress (it holds the repo's .lore/lock): look again under
+		// the lock. devco D-465: only when there is a hand edit to pick up.
+		// New files (a repo whose rows are not committed yet) and lore's
+		// own writes are no hand edit, and taking the lock on every
+		// command for them rewrote .lore/lock's holder line on reads,
+		// dry runs and refusals, and made parallel reads queue on writes.
+		held, release, herr := gb.Hold(ctx)
+		if herr != nil {
+			say(handLinePrefix + "hand edits in " + gb.Dir() + " wait for the next lore command: " + herr.Error())
+			return
+		}
+		defer func() { _ = release() }()
+		ctx = held
+		if rep, err = gb.HandChanges(ctx); err != nil {
+			say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
+			return
+		}
+		cands = repoEditCandidates(reg, rep.Rows)
+	}
 	for i, c := range rep.Rows {
 		cand := cands[i]
 		if cand.refused != nil {
@@ -663,6 +666,18 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 		}
 		say(handLinePrefix + "picked up a hand edit of " + rowName(c) + " (" + strings.Join(cand.fields, ", ") + "): checked and stamped with your name and the time in " + c.Abs + "; commit it with your code")
 	}
+}
+
+// repoEditCandidates reads and compares every changed file of a code
+// repo. The files are read, decoded and compared in parallel (B1-16: with
+// a migration not committed yet every row file is modified, ~5,400
+// decodes of the file and of its committed copy on each command); the
+// engine part runs after, one file at a time in git's order, so the lines
+// and writes are the same as a sequential loop.
+func repoEditCandidates(reg *schema.Registry, rows []gitbackend.HandChange) []repoEditCandidate {
+	cands := make([]repoEditCandidate, len(rows))
+	parallelEach(len(rows), func(i int) { cands[i] = repoEditCandidateOf(reg, rows[i]) })
+	return cands
 }
 
 // repoEditCandidate is what one modified row file of a code repo holds

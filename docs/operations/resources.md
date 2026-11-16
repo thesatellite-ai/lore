@@ -42,7 +42,7 @@ Available Commands:
   rehome      List the kinds and refs a place can no longer see after its chain changed
   rename      Rename a resource (ids and refs stay)
   repoint     Move every ref from one resource to another of the same kind, then archive the old one
-  report      Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate
+  report      Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references in use (to rotate when offboarding)
   show        Show one resource
   stale       Resources whose last_checked is older than --days, or never set
 ```
@@ -235,7 +235,7 @@ what breaks if host hub_prod goes down
 
 ## Step 6 — Check that the facts are still right
 
-Infrastructure facts go stale. `check` stamps `last_checked` (a person or agent looked and the facts are right, with an optional `--note`), and `stale` lists resources never checked or checked more than `--days` ago (default 60):
+Infrastructure facts go stale. `check` stamps `last_checked` (a person or agent looked and the facts are right, with an optional `--note`), and `stale` lists resources never checked or checked more than `--days` ago (default 60), then the same count line `report` prints (`N to check: S stale (checked over 60 days ago), U never checked`):
 
 <!-- example: resources#check-and-stale -->
 ```console
@@ -246,6 +246,7 @@ host	hub_prod		never
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 $ lore resource check --id hub_prod --note 'looked in the provider console'
 lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
 ✓ checked hub_prod now (res_…a5b0)
@@ -254,6 +255,7 @@ KIND	NAME	LAST_CHECKED	AGE
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+3 to check: 0 stale (checked over 60 days ago), 3 never checked; lore resource check --id <name> records a check
 ```
 <!-- /example -->
 
@@ -348,7 +350,7 @@ imported 2 rows (2 created, 0 updated) from csv; batch bat_9a34…b418
 ```
 <!-- /example -->
 
-A ref field in the file may name a row the same file creates, by its bare name or its qualified name (`<kind>/<name>`, `<place>:<kind>/<name>`). An import is one batch, all or nothing. When one row does not fit, nothing is written; `--dry-run` shows why each row fails, and `--skip-errors` writes the valid rows and lists the rest. `--upsert-by name` updates rows that already exist under the same kind and name instead of refusing them:
+A ref field in the file may name a row the same file creates, by its bare name or its qualified name (`<kind>/<name>`, `<place>:<kind>/<name>`). An import is one batch, all or nothing. When one row does not fit, nothing is written; `--dry-run` shows why each row fails, and `--skip-errors` writes the valid rows and lists the rest. `--upsert-by name` updates rows that already exist under the same kind and name instead of refusing them; an update merges with the row's stored values, so a column or key the file leaves out (a required one too) keeps its value:
 
 <!-- example: resources#import-refused -->
 ```console
@@ -611,7 +613,7 @@ created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:06:10Z by alice
 
 ## Step 15 — Find problems and get a summary
 
-`lint` finds dangling refs, bare-name refs, missing required fields, deprecated fields still in use, dates within their `--remind-before` window and duplicates; `lint --fix` resolves bare-name refs by lookup. `report` sums up everything in view: counts per kind, stale, unchecked, dangling, quarantined, open linked tasks and incidents, and the vault entries to rotate (`--kind`, `--days`; `--meta` and `--project` narrow it when someone leaves a project):
+`lint` finds dangling refs, bare-name refs, missing required fields, deprecated fields still in use, dates within their `--remind-before` window, a `--remind-before` date that is empty (`remind_unset`: nothing will remind) or already past (`remind_passed`) and duplicates; `lint --fix` resolves bare-name refs by lookup. `report` sums up everything in view: counts per kind, stale, unchecked, dangling, quarantined, open linked tasks and incidents, and the vault entries in use, each with the rows and fields that use it (`--kind`, `--days`; `--meta` and `--project` narrow it when someone leaves a project, and then those entries are listed under `rotate`):
 
 <!-- example: resources#lint-and-report -->
 ```console
@@ -626,11 +628,13 @@ $ lore resource report
 resources   5 (service 4, server 1)
 stale       0
 unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service hub_web
+  4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 dangling    0
 quarantined 0
   details: lore resource lint
 open links  1: task tsk_2537…6bbb
-rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
+secret refs 2: gopass://acme/hub/db (service hub_api.db_password), gopass://acme/hub/jobs-db (service hub_jobs.db_password)
+  (where each is used; an offboarding report, --project or --meta, lists the ones to rotate)
 ```
 <!-- /example -->
 

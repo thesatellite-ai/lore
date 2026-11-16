@@ -200,3 +200,84 @@ func TestOrgCreateUnderAnAgentCreditsThePerson(t *testing.T) {
 		t.Fatalf("org create wrote an agent actor into the org store:\n%s", rows)
 	}
 }
+
+// teamStepAnswers are the admin team step's answers for the org northwind
+// on the store agency/team.
+func teamStepAnswers() onboard.Answers {
+	return onboard.Answers{onboard.QIDOrg: {Text: "northwind"}, onboard.QIDStoreURL: {Text: "https://github.com/agency/team"},
+		onboard.QIDEmail: {Text: "ana@agency.example"}, onboard.QIDName: {Text: "Ana"},
+		onboard.QIDOwn: {List: []string{"github.com/acme/*"}, IsList: true}}
+}
+
+// TestSetupTeamStepUnderLoreActorAgentCreditsThePerson (devco D-440): an
+// admin's wrapper sets LORE_ACTOR=agent:<label> and runs the admin setup.
+// The team step of the new org failed ("the agent … has no person behind
+// it … cannot change the roster") after it had created and committed the
+// org's store clone: a half-made org. Like a detected coding agent, the
+// step is the person's own: it completes, credited to the person, with no
+// agent actor written.
+func TestSetupTeamStepUnderLoreActorAgentCreditsThePerson(t *testing.T) {
+	ctx := context.Background()
+	w := newOrgWorld(t)
+	w.bareAt(t, "agency/team")
+	home := w.home(t, "ana")
+	t.Setenv("LORE_NO_DETECT", "1")
+	t.Setenv("LORE_HUMAN", "")
+	t.Setenv("LORE_ACTOR", "agent:store-builder")
+	app := teamStepApp(t, w, home)
+	var said []string
+	app.opts.Notice = func(s string) { said = append(said, s) }
+	ap, err := app.SetupApplier(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "northwind", Kind: onboard.KindAdmin}, Step: onboard.StepTeam, Apply: onboard.ApplyTeam, Answers: teamStepAnswers()}
+	if _, err = ap.Apply(ctx, req); err != nil {
+		t.Fatalf("the team step under LORE_ACTOR=agent:store-builder: %v", err)
+	}
+	clone := filepath.Join(home, "stores", "agency", "team")
+	if rows := orgGit(t, clone, "log", "--all", "-p"); strings.Contains(rows, "agent:store-builder") {
+		t.Fatalf("the team step wrote the agent actor into the org store:\n%s", rows)
+	}
+	if !strings.Contains(strings.Join(said, "\n"), "credited to Ana") {
+		t.Fatalf("setup must say whom it credits when LORE_ACTOR names an agent; said:\n%s", strings.Join(said, "\n"))
+	}
+}
+
+// TestSetupTeamStepRefusesAnOwnerlessAgentFirst (devco D-440): the team
+// step of a new org named as an agent with no person behind it (--actor
+// agent:<label>, where a surface offers --actor) is refused before
+// anything is written: no store clone, no org entry, nothing on the
+// remote.
+func TestSetupTeamStepRefusesAnOwnerlessAgentFirst(t *testing.T) {
+	ctx := context.Background()
+	w := newOrgWorld(t)
+	w.bareAt(t, "agency/team")
+	bare := filepath.Join(w.hosts, "agency/team.git")
+	home := w.home(t, "ana")
+	opts, _ := StandaloneOptionsOrg(w.repo, home, w.repo, "test")
+	opts.FlagActor = "agent:store-builder"
+	app, err := New(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Close() })
+	ap, err := app.SetupApplier(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := opssetup.ApplyRequest{Setup: onboard.SetupEntry{Name: "northwind", Kind: onboard.KindAdmin}, Step: onboard.StepTeam, Apply: onboard.ApplyTeam, Answers: teamStepAnswers()}
+	_, err = ap.Apply(ctx, req)
+	if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "nothing was written") {
+		t.Fatalf("an ownerless agent's team step = %v, want E_INVALID_INPUT before any write", err)
+	}
+	if _, serr := os.Stat(filepath.Join(home, "stores", "agency", "team")); !os.IsNotExist(serr) {
+		t.Fatalf("the refused team step made the org's store clone: %v", serr)
+	}
+	if b, rerr := os.ReadFile(configPath(home)); rerr == nil && strings.Contains(string(b), "northwind") {
+		t.Fatalf("the refused team step wrote the org entry:\n%s", b)
+	}
+	if refs := orgGit(t, bare, "for-each-ref"); strings.TrimSpace(refs) != "" {
+		t.Fatalf("the refused team step pushed to the remote:\n%s", refs)
+	}
+}

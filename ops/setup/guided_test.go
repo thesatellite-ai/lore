@@ -86,10 +86,12 @@ func (f *fakeStore) TouchRepo(context.Context, onboard.KnownRepo) error      { r
 type fakeProber struct {
 	results map[onboard.CheckID]ProbeResult
 	calls   int
+	seen    []ProbeRequest // every request, in order
 }
 
 func (p *fakeProber) Probe(_ context.Context, reqs []ProbeRequest) []ProbeResult {
 	p.calls++
+	p.seen = append(p.seen, reqs...)
 	out := make([]ProbeResult, 0, len(reqs))
 	for _, r := range reqs {
 		res, ok := p.results[r.Check.ID]

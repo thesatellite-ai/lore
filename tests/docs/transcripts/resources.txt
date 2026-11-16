@@ -121,6 +121,7 @@ host	hub_prod		never
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 alice (work/infra)$ lore resource check --id hub_prod --note 'looked in the provider console'
 lore: wrote ~/work/infra/.lore/data/resources/res_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ checked hub_prod now (res_…a5b0)
@@ -129,6 +130,7 @@ KIND	NAME	LAST_CHECKED	AGE
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+3 to check: 0 stale (checked over 60 days ago), 3 never checked; lore resource check --id <name> records a check
 
 ### edit and history
 alice (work/infra)$ lore resource edit --id hub_prod --set os=debian-12
@@ -397,11 +399,13 @@ alice (work/infra)$ lore resource report
 resources   5 (service 4, server 1)
 stale       0
 unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service hub_web
+  4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 dangling    0
 quarantined 0
   details: lore resource lint
 open links  1: task tsk_2537f9b2f7de77bfe5ca958860216bbb
-rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
+secret refs 2: gopass://acme/hub/db (service hub_api.db_password), gopass://acme/hub/jobs-db (service hub_jobs.db_password)
+  (where each is used; an offboarding report, --project or --meta, lists the ones to rotate)
 
 ### files
 alice (work/infra)$ git status --short .lore/data

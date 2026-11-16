@@ -264,15 +264,17 @@ type lockHolder interface {
 // process is stopped.
 //
 // devco D-438: a lock held by this doctor itself (another of its own
-// handles, e.g. a pick-up or write it runs) or by the lore process that
-// started it (a hook) is no other command at work: it is skipped, so
-// doctor never reports "held by pid <its own pid> (0s ago)".
+// handles, e.g. a pick-up or write it runs) is no other command at work:
+// it is skipped, so doctor never reports "held by pid <its own pid> (0s
+// ago)". devco D-466: its parent is not skipped; the parent is often no
+// lore at all (a shell, a test, a script that took the lock), and skipping
+// it hid a real holder.
 func (a *App) DoctorStoreLocks(ctx context.Context) ([]DoctorFinding, error) {
 	return a.doctorStoreLocks(ctx, ownProcess)
 }
 
-// ownProcess reports whether pid is this process or its parent.
-func ownProcess(pid int) bool { return pid == os.Getpid() || pid == os.Getppid() }
+// ownProcess reports whether pid is this process.
+func ownProcess(pid int) bool { return pid == os.Getpid() }
 
 // doctorStoreLocks is DoctorStoreLocks with the own-process test passed in
 // (a test holds the lock in its own process and still wants the note).

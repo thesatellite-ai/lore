@@ -44,7 +44,13 @@ const (
 	lintRequired   = "missing_required"
 	lintDeprecated = "deprecated_field"
 	lintRemind     = "remind"
-	lintDuplicate  = "duplicate"
+	// lintRemindUnset / lintRemindPassed (devco D-450): a date field with
+	// remind_before that is empty can never remind (a domain with no
+	// renews_on), and one whose date has passed was missed; lint was
+	// silent on both.
+	lintRemindUnset  = "remind_unset"
+	lintRemindPassed = "remind_passed"
+	lintDuplicate    = "duplicate"
 	// lintKindRoute: a kind (from an earlier build or a hand edit) named
 	// like a fixed resource command, so its REST route collides (G-META-9).
 	lintKindRoute = "kind_route_collision"
@@ -317,8 +323,11 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 			fid := f.Row.ID.String()
 			raw, has := stored.vals[fid]
 			if !has {
-				if flag(f.Row, fRequired) {
+				switch {
+				case flag(f.Row, fRequired):
 					add(lintRequired, fname, "required field has no value")
+				case remindWindow(f) > 0:
+					add(lintRemindUnset, fname, "has remind_before "+text(f.Row, fRemindBefore)+" but no date, so nothing will remind; set it: lore resource edit --id "+name+" --set "+fname+"=<YYYY-MM-DD>")
 				}
 				continue
 			}
@@ -353,6 +362,8 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 				if w := remindWindow(f); w > 0 {
 					if t, ok := parseWhen(s); ok && !t.Before(now) && t.Sub(now) <= w {
 						add(lintRemind, fname, s+" is within "+text(f.Row, fRemindBefore))
+					} else if ok && t.Before(now) {
+						add(lintRemindPassed, fname, s+" has passed; renew it and set the next date: lore resource edit --id "+name+" --set "+fname+"=<YYYY-MM-DD>")
 					}
 				}
 			default:

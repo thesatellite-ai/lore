@@ -11,9 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
-	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // Answer validation (ONB 2.3: pure and instant; while any FieldError
@@ -181,8 +179,8 @@ func ValidateValue(r Rule, v string) (why string, ok bool) {
 		// '-') and the team store's name in .lore/stores.yaml (row: snake
 		// case): a name only one of them takes was accepted here and then
 		// refused by the save (E_CONFIG_INVALID).
-		if err := orgconf.ValidateOrgName(v); err != nil || !row.ValidName(v) {
-			return "must be lowercase letters and digits, starting with a letter (it names the team and its store)", false
+		if !ValidOrgName(v) {
+			return "must be lowercase letters, digits or -, starting with a letter (it names the team and its store), like acme or acme-ops", false
 		}
 	case RuleGitURL:
 		if _, w, good := ParseGitURL(v); !good {
