@@ -125,6 +125,7 @@ type cqSearchOut struct {
 			Score   float64 `json:"score"`
 			Snippet string  `json:"snippet"`
 			InTrash bool    `json:"in_trash"`
+			Partial bool    `json:"partial"`
 		} `json:"hits"`
 		External []json.RawMessage `json:"external"`
 	} `json:"data"`
@@ -152,7 +153,22 @@ func cqSearch(t *testing.T, c *th.Clone, q string, extra ...string) cqSearchOut 
 func cqIDs(o cqSearchOut) []string {
 	ids := make([]string, 0, len(o.Data.Hits))
 	for _, h := range o.Data.Hits {
+		if h.Partial {
+			continue // holds only some of a question's words (devco D-435): listed apart, marked
+		}
 		ids = append(ids, h.ID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// cqPartialIDs is the sorted ids of the hits holding only some words.
+func cqPartialIDs(o cqSearchOut) []string {
+	ids := []string{}
+	for _, h := range o.Data.Hits {
+		if h.Partial {
+			ids = append(ids, h.ID)
+		}
 	}
 	sort.Strings(ids)
 	return ids

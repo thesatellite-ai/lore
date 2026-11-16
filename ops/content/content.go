@@ -9,6 +9,7 @@ package content
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"maps"
 	"slices"
 	"strings"
@@ -120,6 +121,9 @@ type WriteOut struct {
 	Warnings []Warning `json:"warnings,omitempty"`
 	// Rows are the rows an archive --where matched, each with its store.
 	Rows []wheredel.Row `json:"rows,omitempty"`
+	// Existing is true when an add's --key found the row a previous run
+	// added (nothing written; devco D-439).
+	Existing bool `json:"existing,omitempty"`
 	// Human is the v0.1.17 line the op set (CLI only, never JSON).
 	Human string `json:"-"`
 }
@@ -314,6 +318,52 @@ func (o Ops) Create(ctx context.Context, target string, fields map[string]value.
 		return WriteOut{}, err
 	}
 	src := store.Source(target)
+	if src == "" {
+		if s, _, gerr := o.Env.Get(ctx, engine.Ref{Table: o.Table, ID: w.Row.ID}); gerr == nil {
+			src = s
+		}
+	}
+	return Written(src, w, Mark+" "+w.Row.ID.String()+"\n"), nil
+}
+
+// Keyed is the first step of an add with --key (addkey, devco D-439): the
+// key's natural id in project (zero without a key) and, when a previous
+// run with that key added the row, its WriteOut (found: write nothing).
+// Run it before any other check of the add (--supersedes refuses a row
+// that is already replaced, which the first run did).
+func (o Ops) Keyed(ctx context.Context, key string, project ids.ID[ids.Project]) (ids.AnyID, WriteOut, bool, error) {
+	id, err := addkey.ID(o.Prefix, o.Noun, project.String(), key)
+	if err != nil || id.IsZero() {
+		return id, WriteOut{}, false, err
+	}
+	src, r, found, err := addkey.Existing(ctx, o.Env, o.Noun, o.Table, id)
+	if !found || err != nil {
+		return id, WriteOut{}, false, err
+	}
+	return id, o.existing(src, r), true, nil
+}
+
+// existing is the WriteOut of a keyed add that wrote nothing.
+func (o Ops) existing(src store.Source, r row.Row) WriteOut {
+	out := Written(src, engine.Written{Row: r}, Mark+" "+r.ID.String()+"\n  "+addkey.AlreadyLine+"\n")
+	out.Existing = true
+	return out
+}
+
+// CreateAs is Create under id, the id Keyed returned (zero: Create). A
+// concurrent run with the same key that created the row first answers
+// with that row.
+func (o Ops) CreateAs(ctx context.Context, target string, id ids.AnyID, fields map[string]value.Value) (WriteOut, error) {
+	if id.IsZero() {
+		return o.Create(ctx, target, fields)
+	}
+	src, w, found, err := addkey.Create(ctx, o.Env, o.Noun, store.Source(target), o.Table, id, fields)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	if found {
+		return o.existing(src, w.Row), nil
+	}
 	if src == "" {
 		if s, _, gerr := o.Env.Get(ctx, engine.Ref{Table: o.Table, ID: w.Row.ID}); gerr == nil {
 			src = s

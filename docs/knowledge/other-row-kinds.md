@@ -48,6 +48,8 @@ When the problem is fixed, archive the hotfix (`lore hotfix archive --id <id>`) 
 
 Where a row came from goes in `--source-ref` (a url, a ticket, a commit, `file:line`), not into its body: every add whose row keeps a source has the same flag and the same `source_ref` field (`memory`, `rule`, `decision`, `hotfix`, `pattern`, `playbook` and `snapshot add`), and `show` gives it back.
 
+A script or an agent that may run an add twice passes `--key <value>` (one line, up to 200 characters): `memory`, `task`, `rule`, `decision`, `hotfix`, `pattern` and `playbook add` take it. The first run adds the row; a retry with the same key in the same project writes nothing and returns the row the first run added, with the line `already added with this --key; nothing written` (`"existing": true` in `--json`). Two runs racing on one key end with one row. Every add also records who added it in `created_by_actor_id`, the first write into a new store folder included.
+
 ## Step 2 — Add the other kinds
 
 Each kind is one `add` command. Here are the ones with a title and a body:

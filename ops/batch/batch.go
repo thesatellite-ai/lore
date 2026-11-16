@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
@@ -186,7 +187,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 			return ListOut{}, errs.New(errs.InvalidInput, "batch list: --kind "+strconv.Quote(in.Kind)+" is not one of "+kindNames())
 		}
 	}
-	since, err := sinceOf(in.Since, time.Now())
+	since, err := sinceOf(in.Since, opclock.Now(o.env)) // the app clock the batch rows were stamped with
 	if err != nil {
 		return ListOut{}, err
 	}

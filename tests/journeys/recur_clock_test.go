@@ -7,7 +7,9 @@ package journeys
 // recurring task keep 09:00 across the March DST change, the task's time
 // shows in task show and --json, a monthly "on last" series started on
 // Jan 30 never lists two January dates, and the trash names who deleted
-// rows and carries no spec id in its errors.
+// rows and carries no spec id in its errors. A recurring task's next
+// instance (a hashed id) lists after the tasks made before it, never by its
+// id's digits (devco:D-460).
 
 import (
 	"regexp"
@@ -46,6 +48,25 @@ func TestJourneyRecurringKeepsTheClock(t *testing.T) {
 	w.Step("day1/month-on-last-never-twice-in-a-month", func() {
 		lap.LoreIn(repo, "task", "add", "--title", "payroll check", "--due", "2026-01-30", "--recur", "every month on last", "--commitment", "accepted").OK(t).
 			Says(t, "next: 2026-01-30, 2026-02-28, 2026-03-31").Never(t, "2026-01-31")
+	})
+
+	w.Step("day1/next-instance-lists-in-creation-order", func() {
+		for _, title := range []string{"write the notes", "book the room"} {
+			lap.LoreIn(repo, "task", "add", "--title", title).OK(t)
+		}
+		out := lap.LoreIn(repo, "task", "add", "--title", "water the plants", "--recur", "every week").OK(t)
+		lap.LoreIn(repo, "task", "done", "--id", id.FindString(out.Stdout), "--no-lesson").OK(t)
+		list := lap.LoreIn(repo, "task", "list").OK(t).Stdout
+		var order []string
+		for _, title := range []string{"write the notes", "book the room", "water the plants"} {
+			if i := strings.Index(list, title); i >= 0 {
+				order = append(order, title)
+				list = list[i:]
+			}
+		}
+		if len(order) != 3 {
+			t.Errorf("task list: want the two tasks then the next instance, in that order; got the order %q", order)
+		}
 	})
 
 	w.Step("day1/trash-names-the-deleter", func() {

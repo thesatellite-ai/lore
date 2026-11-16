@@ -8,6 +8,7 @@ package hotfix
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"strings"
 	"time"
@@ -122,6 +123,8 @@ type AddIn struct {
 	engine.MetaFlags
 	// --source-ref, shared by every add that keeps a source_ref (D-425).
 	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
@@ -150,12 +153,15 @@ type AddOut struct {
 	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
-	label string
+	// Existing is true when --key found the row a previous run added
+	// (nothing written).
+	Existing bool `json:"existing,omitempty"`
+	label    string
 }
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("⚠ %s — %s [%s]%s\n", o.ID, o.Title, o.Severity, kn.LabelSuffix(o.label)) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
+	return fmt.Sprintf("⚠ %s — %s [%s]%s\n", o.ID, o.Title, o.Severity, kn.LabelSuffix(o.label)) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings) + kn.ExistingLine(o.Existing)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
@@ -406,7 +412,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	var existed bool
 	c := kn.Create{
+		Key: in.Key, Existed: &existed,
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
@@ -424,7 +432,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	// The reply echoes the stored title (after the write path's text
 	// cleanup), so --json shows what show and the row file hold (I-4).
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Severity: severity, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{Existing: existed, ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Severity: severity, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the hotfixes in scope (archived included, as v0.1.17).

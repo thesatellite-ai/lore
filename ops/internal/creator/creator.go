@@ -51,3 +51,11 @@ func Ref(ctx context.Context, env Getter) value.Value {
 	}
 	return v
 }
+
+// Want marks ctx as an add that keeps created_by_actor_id: the engine
+// fills the column with the writing actor when this package could not
+// (engine.WithCreatorColumn). devco D-439: Ref is nil while the actor row
+// is not in this process's cache yet (a first write into a store or
+// folder, or one racing another process), so such rows were written with
+// the column null.
+func Want(ctx context.Context) context.Context { return engine.WithCreatorColumn(ctx) }

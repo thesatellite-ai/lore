@@ -150,7 +150,8 @@ func TestDoctorTriageOwner(t *testing.T) {
 
 // TestDoctorStoreLocks (later 586, owner item 40): a held store lock names
 // its holder (pid of the holder line) once, as a note while that process
-// lives (a sibling lore command at work); a free lock is silent.
+// lives (a sibling lore command at work); a free lock is silent; a lock
+// doctor's own process holds is skipped (devco D-438).
 func TestDoctorStoreLocks(t *testing.T) {
 	t.Parallel()
 	repo := gitRepo(t)
@@ -169,7 +170,12 @@ func TestDoctorStoreLocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := a.DoctorStoreLocks(ctx)
+	// devco D-438: the holder is this very process, so doctor (which runs
+	// here) skips it instead of reporting its own lock
+	if own, oerr := a.DoctorStoreLocks(ctx); oerr != nil || len(own) != 0 {
+		t.Errorf("doctor reported a lock its own process holds: %+v %v", own, oerr)
+	}
+	got, err := a.doctorStoreLocks(ctx, func(int) bool { return false })
 	if rerr := lock.Release(); rerr != nil {
 		t.Fatal(rerr)
 	}

@@ -129,9 +129,7 @@ func (o ops) export(ctx context.Context, in ExportIn) (ExportOut, error) {
 		}
 		rows = withDescendants(rows, allRows)
 	}
-	slices.SortStableFunc(rows, func(a, b row.Row) int {
-		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), cmp.Compare(a.ID.String(), b.ID.String()))
-	})
+	slices.SortStableFunc(rows, row.ByCreation)
 	names, err := o.refNames(ctx, rows)
 	if err != nil {
 		return ExportOut{}, err

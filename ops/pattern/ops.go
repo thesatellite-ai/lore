@@ -125,6 +125,10 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if err != nil {
 		return content.WriteOut{}, err
 	}
+	keyID, prev, found, err := o.c.Keyed(ctx, in.Key, project)
+	if found || err != nil {
+		return prev, err // D-439: a retry with the same --key writes nothing
+	}
 	fields, err := content.Texts(Noun, map[string]string{
 		fieldTitle: in.Title, content.FieldBody: body, fieldLanguage: in.Language,
 		content.FieldSourceKind: content.DefaultSource, content.FieldSourceRef: in.SourceRef,
@@ -148,6 +152,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 			return content.WriteOut{}, err
 		}
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.c.Env); v != nil {
 		fields[content.FieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}
@@ -161,8 +166,8 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 			return content.WriteOut{}, err
 		}
 	}
-	out, err := o.c.Create(ctx, in.To, fields)
-	if err != nil || old.IsZero() {
+	out, err := o.c.CreateAs(ctx, in.To, keyID, fields)
+	if err != nil || old.IsZero() || out.Existing {
 		return out, err
 	}
 	return out, o.finishSupersedes(ctx, oldSrc, old, store.Source(out.Store), out.ID)

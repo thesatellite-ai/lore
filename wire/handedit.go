@@ -345,6 +345,26 @@ func (st *state) pickUpCheckout(ctx context.Context, co *handCheckout, say func(
 	if len(rep.Rows) == 0 {
 		return
 	}
+	// devco D-437: the changed files may be another lore process's write
+	// between its `git add` and its commit (it holds the store lock). The
+	// unstage below would empty that writer's index, so its commit landed
+	// empty while it printed "wrote" and its rows stayed untracked. The
+	// pick-up looks again and unstages only under the store lock; the
+	// unlocked look above keeps the common no-edit read lock-free.
+	held, release, err := co.gb.Hold(ctx)
+	if err != nil {
+		say(handLinePrefix + "hand edits in " + co.dir + " wait for the next lore command: " + err.Error())
+		return
+	}
+	defer func() { _ = release() }()
+	ctx = held
+	if rep, err = co.gb.HandChanges(ctx); err != nil {
+		say(handLinePrefix + "could not look for hand edits in " + co.dir + ": " + err.Error())
+		return
+	}
+	if len(rep.Rows) == 0 {
+		return // they were a writer's files, committed while this waited
+	}
 	if err := co.gb.Unstage(ctx); err != nil {
 		say(handLinePrefix + "could not pick up the hand edits in " + co.dir + ": " + err.Error())
 		return
@@ -597,6 +617,22 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 	}
 	rep, err := gb.HandChanges(ctx)
 	if err != nil {
+		say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
+		return
+	}
+	if len(rep.Rows) == 0 {
+		return
+	}
+	// devco D-437: a changed file may be another lore process's write in
+	// progress (it holds the repo's .lore/lock): look again under the lock.
+	held, release, err := gb.Hold(ctx)
+	if err != nil {
+		say(handLinePrefix + "hand edits in " + gb.Dir() + " wait for the next lore command: " + err.Error())
+		return
+	}
+	defer func() { _ = release() }()
+	ctx = held
+	if rep, err = gb.HandChanges(ctx); err != nil {
 		say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
 		return
 	}

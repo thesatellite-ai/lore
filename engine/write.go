@@ -80,6 +80,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err = e.checkRefs(ctx, target, def, typed, names); err != nil {
 		return Written{}, err
 	}
+	e.fillCreator(ctx, target, def, typed, e.actorOf(cl))
 	if pin.IsZero() { // FB-RES-1: an id pinned on ctx (WithCreateID)
 		if p, ok := createIDOf(ctx, def.Prefix); ok {
 			pin = p
@@ -1430,4 +1431,54 @@ func refuseActorDelete(r row.Row) error {
 	}
 	return errs.New(errs.Refused, "actor "+r.ID.String()+" cannot be deleted: actors are never deleted, every *_by field points at them").
 		WithHint(actorDeactivateHint)
+}
+
+// creatorField is the v0.1.17 column naming a row's creator (INTEG-AUDIT-1:
+// never caller-set; ops/internal/creator fills it when it can).
+const creatorField = "created_by_actor_id"
+
+// creatorColumnKey marks a ctx whose create keeps created_by_actor_id.
+type creatorColumnKey struct{}
+
+// WithCreatorColumn is ctx of an add op that keeps created_by_actor_id
+// (ops/internal/creator.Want): its creates fill the column (fillCreator).
+// Other writes leave it as v0.1.17 did; readers fall back to the
+// envelope's created_by.
+func WithCreatorColumn(ctx context.Context) context.Context {
+	return context.WithValue(ctx, creatorColumnKey{}, true)
+}
+
+// creatorWanted reports WithCreatorColumn.
+func creatorWanted(ctx context.Context) bool {
+	v, _ := ctx.Value(creatorColumnKey{}).(bool)
+	return v
+}
+
+// fillCreator sets created_by_actor_id to the writing actor, the same id
+// the envelope's created_by gets, on a create of an op that keeps the
+// column (WithCreatorColumn) and left it unset. devco D-439: the ops fill it only when the
+// actor row is already in this process's cache, so a first write into a
+// store or folder (its actor row staged in the same batch) or one racing
+// another process left it null (rule rows of a store built by an agent).
+// The ref is checked like any written ref: when no attached store holds
+// the actor's row (no identity, a store that keeps no actors) the column
+// stays unset rather than dangling.
+func (e *Engine) fillCreator(ctx context.Context, target store.Source, def schema.TableDef, typed map[string]value.Value, actor ids.ID[ids.Actor]) {
+	if actor.IsZero() || !creatorWanted(ctx) {
+		return
+	}
+	if _, set := typed[creatorField]; set {
+		return
+	}
+	if _, has := def.Field(creatorField); !has {
+		return
+	}
+	v, err := value.RefOf(actor.Any())
+	if err != nil {
+		return
+	}
+	typed[creatorField] = v
+	if e.checkRefs(ctx, target, def, typed, []string{creatorField}) != nil {
+		delete(typed, creatorField)
+	}
 }

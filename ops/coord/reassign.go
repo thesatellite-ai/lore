@@ -27,6 +27,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 )
@@ -96,7 +97,7 @@ func (o ops) reassign(ctx context.Context, in ReassignIn) (ReassignOut, error) {
 		}
 		out.Tasks = append(out.Tasks, t.ID)
 		if logged {
-			if err = recordReassign(bctx, rec, b, plan, actor, t.ID); err != nil {
+			if err = recordReassign(bctx, rec, b, plan, actor, t.ID, opclock.Now(o.env)); err != nil {
 				return out, err
 			}
 		}
@@ -109,12 +110,14 @@ func (o ops) reassign(ctx context.Context, in ReassignIn) (ReassignOut, error) {
 }
 
 // recordReassign appends the batch log event of one reassigned task: names
-// and ids only (engine.Event's rule), the wall time of now.
-func recordReassign(ctx context.Context, rec BatchRecorder, b engine.Batch, plan ReassignPlan, actor ids.ID[ids.Actor], taskID string) error {
+// and ids only (engine.Event's rule), stamped at now: the app clock
+// (LORE_NOW in a test build), never the machine's real one, so the log
+// agrees with the rows the reassign wrote.
+func recordReassign(ctx context.Context, rec BatchRecorder, b engine.Batch, plan ReassignPlan, actor ids.ID[ids.Actor], taskID string, now time.Time) error {
 	id, err := ids.ParseAny(taskID)
 	if err != nil {
 		return errs.Wrap(errs.Internal, reassignWhat+": the host named "+taskID+", not a task id", err)
 	}
 	return rec.RecordBatchEvent(ctx, engine.Event{Op: OpTaskReassign, Action: reassignAction, Store: plan.Store,
-		Table: schema.TableTasks, ID: id, Actor: actor, HLC: hlc.HLC{Wall: time.Now().UTC()}, Batch: b})
+		Table: schema.TableTasks, ID: id, Actor: actor, HLC: hlc.HLC{Wall: now.UTC()}, Batch: b})
 }

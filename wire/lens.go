@@ -285,7 +285,7 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 		return opssql.Result{}, err
 	}
 	clientKey, _ := pol.Text(policy.KeyTimeClientKey) // unset = the lens default
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey}, r.Internal, deleted)
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey, Now: a.Now()}, r.Internal, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}

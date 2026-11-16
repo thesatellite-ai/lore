@@ -44,7 +44,7 @@ The line `lore live: (live, pushed)` means lore shared the task at once: it put 
 
 ## Step 2 — See your list
 
-`lore task list` shows the open tasks. The mark at the start of each line is the status: `○` todo, `▶` in progress, `✓` done, `✗` cancelled.
+`lore task list` shows the open tasks, oldest first: in the order they were made, whichever store holds them (a recurring task's next instance comes after the tasks made before it). `--sort` picks another order. The mark at the start of each line is the status: `○` todo, `▶` in progress, `✓` done, `✗` cancelled.
 
 <!-- example: tasks#list -->
 ```console

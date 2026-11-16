@@ -44,6 +44,7 @@ Dev-company round 3, track H. Replayed by `TestStoryHCorruption`, `TestStoryHRew
 | D-140 | r3 H-15 | `git commit -a` with a new row: 'nothing added' | `TestStoryHRewrites` |
 | D-129 | r3 H-10 | `sync status` outside a repo fails | `TestStoryHLostRemotes` |
 | D-130 | r3 H-11 | deleted/moved store reported as offline | `TestStoryHLostRemotes` |
+| D-459 | (devco) | a forced rebase in the same second as its commits rewrote nothing, so "moved 1 commit link(s)" flaked | `TestStoryHRewrites` (rebase through `RewriteGit`); `TestHarness_RewriteGitAlwaysRewrites` |
 | D-131 | r3 H-12 | `store set-url` wrong refusal, member rewrites url | `TestStoryHLostRemotes` |
 | D-143 | r3 H-16 | store doctor: unsent commits as an error ×3 | `TestStoryHLostRemotes` |
 | D-144 | r3 H-17 | new laptop: local personal store lost silently | `TestLocalPersonalStoreNote`, `TestJoinLinesSayLocalIsMachineOnly` (story H has no setup with a local personal store) |

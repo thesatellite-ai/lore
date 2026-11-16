@@ -121,7 +121,7 @@ func TestJourneyRewriteKeepsNotes(t *testing.T) {
 		a.CommitAll("link the work")
 		// devco:Q-5: the moved link goes into lore's own commit on top, so
 		// the rebase ends with a clean tree and the next checkout works.
-		a.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)", "committed them as")
+		a.RewriteGit("rebase", "--force-rebase", "HEAD~2") // a later committer date: new ids even within one second (D-459).OK(t).Says(t, "moved 1 commit link(s)", "committed them as")
 		if st := a.Status(); st != "" {
 			t.Fatalf("the rebase that moved a commit link left changes (Q-5):\n%s", st)
 		}

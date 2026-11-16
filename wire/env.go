@@ -35,6 +35,47 @@ func (a *App) AuditSecret(ctx context.Context, action engine.Action, s engine.Se
 	return st.eng.AuditSecret(ctx, action, s)
 }
 
+// createFrame is the part of a create that comes before the write: the
+// store a row with no --to lands in (DefaultTarget), the write gate of
+// that store, the repo guard and the target check. Create and
+// CreateWithID share it, so a keyed add (`--key`, devco D-439) is routed
+// and guarded exactly like a plain one.
+func (a *App) createFrame(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (*state, store.Source, error) {
+	st, err := a.state(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	target = st.eng.StoreName(target) // devco T-5: an org store's own name answers for it
+	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
+		return nil, "", uerr
+	}
+	q, err := a.writeQuery(ctx, st, table, fields)
+	if err != nil {
+		return nil, "", err
+	}
+	if target == "" && a.opts.DefaultTarget != nil {
+		to, derr := a.opts.DefaultTarget(ctx, q)
+		if derr != nil {
+			return nil, "", derr
+		}
+		if to != store.SourceRepo {
+			target = to
+		}
+	}
+	if st, err = a.writeStateFor(ctx, target); err != nil {
+		return nil, "", err
+	}
+	if target == "" || target == store.SourceRepo {
+		if gerr := a.guard(ctx, q, target == store.SourceRepo); gerr != nil {
+			return nil, "", gerr
+		}
+	}
+	if ferr := a.checkTarget(target); ferr != nil {
+		return nil, "", ferr
+	}
+	return st, target, nil
+}
+
 // Create implements opsmemory.Env.
 //
 // devco:T-4: where a row with no --to goes is decided before the write
@@ -42,37 +83,9 @@ func (a *App) AuditSecret(ctx context.Context, action engine.Action, s engine.Se
 // lands in: in a linked client repo still on the 0.1.17 format a memory
 // routed to the org's client folder is not refused for the repo's format.
 func (a *App) Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error) {
-	st, err := a.state(ctx)
+	st, target, err := a.createFrame(ctx, target, table, fields)
 	if err != nil {
 		return engine.Written{}, err
-	}
-	target = st.eng.StoreName(target) // devco T-5: an org store's own name answers for it
-	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
-		return engine.Written{}, uerr
-	}
-	q, err := a.writeQuery(ctx, st, table, fields)
-	if err != nil {
-		return engine.Written{}, err
-	}
-	if target == "" && a.opts.DefaultTarget != nil {
-		to, derr := a.opts.DefaultTarget(ctx, q)
-		if derr != nil {
-			return engine.Written{}, derr
-		}
-		if to != store.SourceRepo {
-			target = to
-		}
-	}
-	if st, err = a.writeStateFor(ctx, target); err != nil {
-		return engine.Written{}, err
-	}
-	if target == "" || target == store.SourceRepo {
-		if gerr := a.guard(ctx, q, target == store.SourceRepo); gerr != nil {
-			return engine.Written{}, gerr
-		}
-	}
-	if ferr := a.checkTarget(target); ferr != nil {
-		return engine.Written{}, ferr
 	}
 	// A machine-local row (this machine's session row) writes no actor row
 	// (ensureActor skips the machine store, P3-LOCAL-1), so it needs no
@@ -709,16 +722,9 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 // task add's default task list in a linked client repo goes to the org's
 // client folder, and the repo's 0.1.17 format refused it).
 func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error) {
-	st, err := a.writeStateFor(ctx, target)
+	st, target, err := a.createFrame(ctx, target, table, fields)
 	if err != nil {
 		return engine.Written{}, err
-	}
-	target = st.eng.StoreName(target)
-	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
-		return engine.Written{}, uerr
-	}
-	if ferr := a.checkTarget(target); ferr != nil {
-		return engine.Written{}, ferr
 	}
 	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) { // G-ENGINE-2
 		if aerr := a.ensureActor(ctx, st, target); aerr != nil {
