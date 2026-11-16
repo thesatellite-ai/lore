@@ -736,10 +736,27 @@ func (sp setupProber) gitEmail(ctx context.Context, r opssetup.ProbeRequest) ops
 	if !id.Class.Ran() {
 		return outcome(id.Outcome, v)
 	}
-	if !slices.ContainsFunc(emails, func(e string) bool { return strings.EqualFold(e, id.Email) }) {
+	mine := func(e string) bool {
+		return slices.ContainsFunc(emails, func(x string) bool { return strings.EqualFold(x, strings.TrimSpace(e)) })
+	}
+	if !mine(id.Email) {
 		got := id.Email
 		if got == "" {
 			got = "no email"
+		}
+		if repoTarget(r.Target) == "" {
+			// Read outside a repo, git answers its global email only: an
+			// includeIf "gitdir:" file applies inside the repos it names,
+			// which is where this setup's commits are made (devco D-448:
+			// the step warned about the global address of a person whose
+			// work repos use the setup's address through an includeIf).
+			for _, in := range sp.p.IncludeIdentities(ctx) {
+				if in.Folder != "" && mine(in.Email) {
+					v[onboard.VarGitEmail] = in.Email
+					return result(onboard.StatusOK, "git uses "+in.Email+" in repos under "+in.Folder+" (includeIf "+in.Condition+"); the global "+got+" applies outside them", v)
+				}
+			}
+			return result(onboard.StatusFail, "git config --global user.email is "+got+" and no includeIf gitdir: file sets "+emails[0], v)
 		}
 		return result(onboard.StatusFail, "git config user.email is "+got, v)
 	}
@@ -1117,6 +1134,21 @@ func (sp setupProber) prefill(ctx context.Context, id onboard.PrefillID, setup o
 		return text(sp.p.GlobalIdentity(ctx).Name), nil
 	case onboard.PrefillGitUserEmail:
 		return text(sp.p.GlobalIdentity(ctx).Email), nil
+	case onboard.PrefillGitEmails:
+		global := strings.TrimSpace(sp.p.GlobalIdentity(ctx).Email)
+		out := text(global)
+		seen := map[string]bool{}
+		add := func(email, detail string) {
+			if email = strings.TrimSpace(email); email != "" && !seen[strings.ToLower(email)] {
+				seen[strings.ToLower(email)] = true
+				out.Choices = append(out.Choices, onboard.Choice{Value: email, Label: email, Detail: detail})
+			}
+		}
+		add(global, "git config --global user.email")
+		for _, in := range sp.p.IncludeIdentities(ctx) {
+			add(in.Email, "includeIf "+in.Condition)
+		}
+		return out, nil
 	case onboard.PrefillGHAccounts:
 		s := sp.p.GHLogins() // hosts.yml only; the gh check asks GitHub
 		out := text(s.Active)

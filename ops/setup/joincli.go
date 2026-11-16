@@ -192,6 +192,39 @@ func (e engine) joinEmail(ctx context.Context, inviteEmail, org string) joinIden
 		Note: "Note: your git email " + email + " is your identity in org " + other + " on this machine, and each org keeps its own identity, so the identity line asks for the address the admin of " + where + " added you with (lore member list run by them shows it): replace " + ph + " with it before you run the line."}
 }
 
+// rosterEmail is the one of this machine's git emails (global first, then
+// each includeIf file's) the org's roster has, for a join by org name or
+// store url; "" when git names one email or fewer, or none is on the
+// roster, or the roster cannot be read (the line then carries git's global
+// email as before). devco D-448: a person whose global git email is a
+// personal one, with the work address in an includeIf file, got a join
+// line with the personal address, which the roster does not know. Each
+// try is the join step's own invite.found check, so only a machine with
+// several git emails reads the store here.
+func (e engine) rosterEmail(ctx context.Context, setup, answer string) string {
+	pr, err := e.env.SetupProber(ctx)
+	if err != nil {
+		return ""
+	}
+	p, err := pr.Prefill(ctx, onboard.PrefillGitEmails, onboard.SetupEntry{})
+	if err != nil || len(p.Choices) < 2 {
+		return ""
+	}
+	c, ok := e.cat.Check(onboard.CheckInviteFound, onboard.StepJoin, onboard.KindMember, nil)
+	if !ok {
+		return ""
+	}
+	entry := onboard.SetupEntry{Name: setup, Kind: onboard.KindMember}
+	for _, ch := range p.Choices {
+		got := pr.Probe(ctx, []ProbeRequest{{Check: c, Setup: entry,
+			Answers: onboard.Answers{onboard.QIDInvite: {Text: answer}, onboard.QIDEmail: {Text: ch.Value}}}})
+		if len(got) == 1 && got[0].Status == onboard.StatusOK {
+			return ch.Value
+		}
+	}
+	return ""
+}
+
 // orgOwningEmail is the org entry on this machine, other than org, whose
 // identity is email (its key human:<email>, or one of its addresses); ""
 // when none or when the config does not read.

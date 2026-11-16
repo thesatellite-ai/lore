@@ -279,3 +279,17 @@ func TestStoreLockFinding(t *testing.T) {
 		t.Fatalf("dead holder: %+v", f)
 	}
 }
+
+// TestDoctorOwnProcessIsThisPidOnly (devco D-466): doctor skips a lock
+// its own process holds, never its parent's: the parent is often no lore
+// (a shell, a test, a script holding the lock), and skipping it hid a real
+// holder from `lore doctor`.
+func TestDoctorOwnProcessIsThisPidOnly(t *testing.T) {
+	t.Parallel()
+	if !ownProcess(os.Getpid()) {
+		t.Fatal("doctor's own pid is not its own")
+	}
+	if ownProcess(os.Getppid()) {
+		t.Fatal("doctor skips its parent's lock: a real holder is hidden")
+	}
+}

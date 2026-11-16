@@ -59841,11 +59841,20 @@
                         ]
                       }
                     },
+                    "days": {
+                      "type": "integer"
+                    },
+                    "never_checked": {
+                      "type": "integer"
+                    },
                     "notes": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "stale_count": {
+                      "type": "integer"
                     }
                   },
                   "required": [
@@ -62052,7 +62061,7 @@
     "/v1/resources/report": {
       "post": {
         "operationId": "resource.report",
-        "summary": "Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate",
+        "summary": "Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references in use (to rotate when offboarding)",
         "tags": [
           "resource"
         ],
@@ -62096,6 +62105,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "days": {
+                      "type": "integer"
+                    },
                     "findings": {
                       "type": "array",
                       "items": {
@@ -62194,6 +62206,12 @@
                         "type": "string"
                       }
                     },
+                    "secret_refs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "stale": {
                       "type": "array",
                       "items": {
@@ -62217,7 +62235,8 @@
                     "unchecked",
                     "findings",
                     "open_links",
-                    "rotate"
+                    "rotate",
+                    "days"
                   ]
                 }
               }
@@ -62445,11 +62464,20 @@
                         ]
                       }
                     },
+                    "days": {
+                      "type": "integer"
+                    },
+                    "never_checked": {
+                      "type": "integer"
+                    },
                     "notes": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "stale_count": {
+                      "type": "integer"
                     }
                   },
                   "required": [

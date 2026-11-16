@@ -19,10 +19,13 @@ func TestJoinKeepsAdminKind(t *testing.T) {
 		step onboard.StepID
 		kind onboard.Kind
 		want onboard.Kind
+		// upgraded: the step must say the member setup became admin
+		// (devco D-447: setup list showed KIND admin with no word why)
+		upgraded bool
 	}{
-		{"admin join", onboard.StepJoin, onboard.KindAdmin, onboard.KindAdmin},
-		{"member join", onboard.StepJoin, onboard.KindMember, onboard.KindMember},
-		{"another step", onboard.StepFolders, onboard.KindAdmin, onboard.KindMember},
+		{"admin join", onboard.StepJoin, onboard.KindAdmin, onboard.KindAdmin, true},
+		{"member join", onboard.StepJoin, onboard.KindMember, onboard.KindMember, false},
+		{"another step", onboard.StepFolders, onboard.KindAdmin, onboard.KindMember, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			env := newFakeEnv()
@@ -34,8 +37,12 @@ func TestJoinKeepsAdminKind(t *testing.T) {
 			}
 			s := stepState{name: "acme", entry: onboard.SetupEntry{Name: "acme", Kind: c.kind, Org: "acme"},
 				progress: map[onboard.StepID]onboard.Progress{onboard.StepKind: kindRow}}
-			if err := e.keepJoinedKind(ctx, env.store, s, onboard.Step{ID: c.step}); err != nil {
+			upgraded, err := e.keepJoinedKind(ctx, env.store, s, onboard.Step{ID: c.step})
+			if err != nil {
 				t.Fatal(err)
+			}
+			if upgraded != c.upgraded {
+				t.Errorf("upgraded = %v, want %v", upgraded, c.upgraded)
 			}
 			got := env.store.progress["acme"][onboard.StepKind]
 			if k := answerKind(got.Answers); k != c.want {

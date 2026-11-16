@@ -209,6 +209,10 @@ const (
 	PrefillFoldersHere    PrefillID = "folders.here"      // the cwd's parent as a glob (4.9)
 	PrefillInviteEmail    PrefillID = "invite.email"      // the parsed invite's email (4.2, member)
 	PrefillStoreURLCreate PrefillID = "store.url_suggest" // git@{alias}:{user}/lore-me.git (4.4)
+	// PrefillGitEmails lists every email git config names: the global
+	// user.email first, then each includeIf file's (gitconfig reads only).
+	// setup join tries them against the org roster (devco D-448).
+	PrefillGitEmails PrefillID = "git.emails"
 )
 
 // ProbeID names the probe family a check runs (ONB 2.1 adapters/probe).

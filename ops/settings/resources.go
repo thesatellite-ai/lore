@@ -284,6 +284,12 @@ type ResListOut struct {
 	// kind's fields; stale: none).
 	columns []string
 	stale   bool
+	// StaleCount / NeverChecked split a resource stale answer by reason
+	// (checkStateOf; the same counts resource report prints), and Days is
+	// its window; all three are left out of other lists.
+	StaleCount   int `json:"stale_count,omitempty"`
+	NeverChecked int `json:"never_checked,omitempty"`
+	Days         int `json:"days,omitempty"`
 	// Notes are metalist's lines after the rows (unregistered key, …).
 	Notes []string `json:"notes,omitempty"`
 }
@@ -298,11 +304,12 @@ func (o ResListOut) Text() string {
 		b.WriteString("KIND\tNAME\tLAST_CHECKED\tAGE\n")
 		for _, r := range o.Data {
 			age := "never"
-			if t, err := time.Parse(time.RFC3339Nano, r.LastChecked); err == nil {
+			if t, ok := parseWhen(r.LastChecked); ok && r.LastChecked != "" {
 				age = strconv.Itoa(int(time.Since(t).Hours()/hoursPerDay)) + "d"
 			}
 			fmt.Fprintf(&b, "%s\t%s\t%s\t%s\n", r.Kind, r.Name, dayOf(r.LastChecked), age)
 		}
+		b.WriteString(checkSummary(o.StaleCount, o.NeverChecked, o.Days) + "\n")
 		return b.String()
 	}
 	head := []string{"KIND", "NAME"}
@@ -1465,13 +1472,18 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 	if err != nil {
 		return ResListOut{}, err
 	}
-	out := ResListOut{Data: []Resource{}, stale: true}
+	out := ResListOut{Data: []Resource{}, stale: true, Days: days}
 	for _, r := range rows {
 		if text(r.Row, rArchivedAt) != "" {
 			continue
 		}
-		if t, err := time.Parse(time.RFC3339Nano, text(r.Row, rLastChecked)); err == nil && t.After(cut) {
+		switch checkStateOf(r.Row, cut) {
+		case checkFresh:
 			continue
+		case checkStale:
+			out.StaleCount++
+		case checkNever:
+			out.NeverChecked++
 		}
 		v, verr := o.view(ctx, r, false)
 		if verr != nil {

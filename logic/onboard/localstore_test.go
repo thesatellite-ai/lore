@@ -19,8 +19,23 @@ func TestLocalStoreDetail(t *testing.T) {
 		{"other on none", Config{SharedStore: me, Setups: []SetupEntry{{Name: "jobb", PersonalStore: PersonalStoreNone}}}, LocalStoreURL},
 	}
 	for _, c := range cases {
-		if got := LocalStoreDetail(c.cfg, "joba"); got != c.want {
+		if got := LocalStoreDetail(c.cfg, "joba", ""); got != c.want {
 			t.Errorf("%s: LocalStoreDetail = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestLocalStoreDetailNamesTheHome (devco D-448): under another lore home
+// the choice names that home's folder, never ~/.lore's.
+func TestLocalStoreDetailNamesTheHome(t *testing.T) {
+	for home, want := range map[string]string{
+		"":            LocalStoreURL,
+		"~/.lore":     LocalStoreURL,
+		"~/.lore-dev": "file://~/.lore-dev/stores/_me",
+		"/srv/lore/":  "file:///srv/lore/stores/_me",
+	} {
+		if got := LocalStoreDetail(Config{}, "joba", home); got != want {
+			t.Errorf("home %q: LocalStoreDetail = %q, want %q", home, got, want)
 		}
 	}
 }

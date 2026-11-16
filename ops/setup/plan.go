@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -380,6 +381,28 @@ func (e engine) probeReusing(ctx context.Context, s stepState, step onboard.Step
 	return out, nil
 }
 
+// probeEntry is the setup entry the probes read. A member or admin setup
+// whose entry is not written yet (its join or team step is still ahead)
+// keeps its identity only in the saved identity step; the probes get it as
+// the entry's identity key, so a later step's check (github.identity_email)
+// knows the email the person just saved instead of saying "no identity
+// email yet" (devco D-448). Only the probe's copy changes: the saved entry
+// of a member or admin setup never holds an identity (CFG9).
+func probeEntry(s stepState) onboard.SetupEntry {
+	e := s.entry
+	if s.exists || e.Identity.Key != "" {
+		return e
+	}
+	id := s.progress[onboard.StepIdentity].Answers
+	if email := strings.TrimSpace(id[onboard.QIDEmail].Text); email != "" {
+		e.Identity.Key = humanKeyPrefix + email
+		if e.Identity.Name == "" {
+			e.Identity.Name = strings.TrimSpace(id[onboard.QIDName].Text)
+		}
+	}
+	return e
+}
+
 // ownOrg is onboard.OwnOrg for check id of setup s with answers: the
 // saved org from s, the orgs[] entry from the Store when it can list them
 // (OrgStoreLister), the other setups from config.yaml. Anything that
@@ -451,6 +474,7 @@ func (e engine) probeItems(ctx context.Context, s stepState, items []probeItem, 
 	known := make([]probeItem, 0, len(items))
 	reqs := make([]ProbeRequest, 0, len(items))
 	out := make([]probed, 0, len(items))
+	entry := probeEntry(s)
 	for _, it := range items {
 		c, ok := e.cat.Check(it.check, it.step.ID, s.kind, nil)
 		if !ok {
@@ -463,12 +487,12 @@ func (e engine) probeItems(ctx context.Context, s stepState, items []probeItem, 
 		if tools := pickedTools(answers, s.entry); target == "" && perToolChecks[it.check] && len(tools) > 0 {
 			for _, t := range tools {
 				known = append(known, it)
-				reqs = append(reqs, ProbeRequest{Check: c, Setup: s.entry, Answers: answers, Target: t})
+				reqs = append(reqs, ProbeRequest{Check: c, Setup: entry, Answers: answers, Target: t})
 			}
 			continue
 		}
 		known = append(known, it)
-		reqs = append(reqs, ProbeRequest{Check: c, Setup: s.entry, Answers: answers, Target: target})
+		reqs = append(reqs, ProbeRequest{Check: c, Setup: entry, Answers: answers, Target: target})
 	}
 	got := pr.Probe(ctx, reqs)
 	for i, it := range known {
@@ -806,7 +830,7 @@ func localChoiceDetail(choices []onboard.Choice, cfg onboard.Config, setup strin
 	out := slices.Clone(choices)
 	for i := range out {
 		if out[i].Value == onboard.PersonalStoreLocal {
-			out[i].Detail = onboard.LocalStoreDetail(cfg, setup)
+			out[i].Detail = onboard.LocalStoreDetail(cfg, setup, lorehome.Shown())
 		}
 	}
 	return out

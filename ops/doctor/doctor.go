@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -353,6 +354,12 @@ func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
 		// re-check; the report shows the state now
 		r, err = fixProject(ctx, env, false)
 	} else {
+		// devco D-441: a plain doctor is a read. It runs outside the engine
+		// (a Local op), so nothing marked it one, and in a store clone's
+		// root a check that names the folder's project committed a
+		// nameless project row there. Marked a read, such a check finds no
+		// row and makes none (wire rosterProject, devco:T-11).
+		ctx = engine.WithAccess(ctx, op.AccessRead)
 		r, err = runRepo(ctx, env, false)
 	}
 	if err != nil {

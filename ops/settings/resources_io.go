@@ -340,7 +340,13 @@ func inFileQualified(recs []resRecord, target store.Source) {
 // checkRecord validates a record without writing: the kind, the name, no
 // masked value, and every value by its field's type. A ref whose target is
 // another record of the file is accepted here (it is written first).
-func (o ops) checkRecord(ctx context.Context, r resRecord, inFile map[string]bool) error {
+//
+// update is set for a record that updates a row already in the place
+// (--upsert-by name, a re-import): its values merge with the stored ones
+// (resEdit), so a field it leaves out keeps its value and only the values
+// it sets are checked. devco D-452: an upsert had to repeat every
+// required field.
+func (o ops) checkRecord(ctx context.Context, r resRecord, inFile map[string]bool, update bool) error {
 	d, err := o.kindDef(ctx, r.kind)
 	if err != nil {
 		return err
@@ -362,6 +368,9 @@ func (o ops) checkRecord(ctx context.Context, r resRecord, inFile map[string]boo
 		if err = o.applySets(ctx, d, r.name, []string{s}, vals); err != nil {
 			return err
 		}
+	}
+	if update {
+		return nil
 	}
 	return requireFields(d, r.name, vals)
 }
@@ -507,9 +516,10 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	var good []resRecord
 	for _, r := range recs {
 		line := ImportLine{Kind: r.kind, Name: r.name, Action: actCreate}
-		cerr := o.checkRecord(ctx, r, inFile)
+		ex, found := o.existingIn(ctx, target, r)
+		cerr := o.checkRecord(ctx, r, inFile, found)
 		if cerr == nil {
-			if ex, found := o.existingIn(ctx, target, r); found {
+			if found {
 				id := ex.Row.ID.String()
 				// PROVENANCE 11.4: the same import key again is a re-import:
 				// update in place when nobody edited the row since, else keep it.

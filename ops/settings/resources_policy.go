@@ -93,9 +93,12 @@ func checkPlace(ctx context.Context, env Env, target store.Source) error {
 }
 
 // sizeWarning is the RQ4 warning line for a row whose values pass
-// resources.warn_bytes ("" when under it or without a Policier). Measured
-// like the engine's max_bytes check: the canonical {name: value} object of
-// the row's fields.
+// resources.warn_bytes ("" when under it or without a Policier). It
+// measures what the person typed: the canonical {field name: value}
+// object of the row's values (valueBytes). devco D-452: it measured the
+// whole row file, whose history repeats every value and whose field ids
+// and envelope add more, so about 600 characters of values read as 4365
+// bytes.
 func sizeWarning(ctx context.Context, env Env, target store.Source, fields map[string]value.Value) string {
 	p, ok := env.(bulk.Policier)
 	if !ok {
@@ -109,20 +112,47 @@ func sizeWarning(ctx context.Context, env Env, target store.Source, fields map[s
 	if !ok {
 		return ""
 	}
-	ms := make([]canon.Member, 0, len(fields))
-	for _, k := range slices.Sorted(maps.Keys(fields)) {
-		raw, merr := fields[k].MarshalJSON()
-		if merr != nil {
-			return ""
-		}
-		ms = append(ms, canon.Member{Key: k, Raw: raw})
-	}
-	obj, err := canon.Object(ms)
-	if err != nil || int64(len(obj)) <= limit {
+	n, count, ok := valueBytes(fields)
+	if !ok || int64(n) <= limit {
 		return ""
 	}
-	return "warning: this resource is " + strconv.Itoa(len(obj)) + " bytes, over resources.warn_bytes " +
+	return "warning: this resource's values are " + strconv.Itoa(n) + " bytes (its " + strconv.Itoa(count) + " field value(s) as JSON, names included), over resources.warn_bytes " +
 		strconv.FormatInt(limit, 10) + "; keep resources small (long text belongs in a doc or memory)\n"
+}
+
+// valueBytes is the size of a resource row's values as the canonical JSON
+// object {field name: value}, and how many values it holds; ok false when
+// the row's `fields` does not read (no warning then).
+func valueBytes(fields map[string]value.Value) (n, count int, ok bool) {
+	v, has := fields[rFields]
+	if !has || v == nil {
+		return 0, 0, true
+	}
+	raw, err := v.MarshalJSON()
+	if err != nil {
+		return 0, 0, false
+	}
+	var stored map[string]struct {
+		Name string          `json:"name"`
+		V    json.RawMessage `json:"v"`
+	}
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		return 0, 0, false
+	}
+	ms := make([]canon.Member, 0, len(stored))
+	for _, id := range slices.Sorted(maps.Keys(stored)) {
+		f := stored[id]
+		if len(f.V) == 0 {
+			continue
+		}
+		ms = append(ms, canon.Member{Key: cmp.Or(f.Name, id), Raw: f.V})
+	}
+	slices.SortFunc(ms, func(a, b canon.Member) int { return strings.Compare(a.Key, b.Key) })
+	obj, err := canon.Object(ms)
+	if err != nil {
+		return 0, 0, false
+	}
+	return len(obj), len(ms), true
 }
 
 // maxResStdin caps a --set-stdin value (the resource size limit's

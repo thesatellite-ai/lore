@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
@@ -371,17 +372,36 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 		return value.Ref{}, errs.Wrap(errs.InvalidInput, "roster: the folder name is not valid text", err)
 	}
 	fields := map[string]value.Value{rosterFieldName: n}
-	var w engine.Written
 	if pid.IsZero() {
-		w, err = st.eng.Create(ctx, target, schema.TableProjects, fields)
-	} else {
-		w, err = st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+		w, err := st.eng.Create(ctx, target, schema.TableProjects, fields)
+		a.wrote(err)
+		if err != nil {
+			return value.Ref{}, err
+		}
+		return value.RefOf(w.Row.ID)
+	}
+	return a.createFolderProject(ctx, st, target, pid, fields)
+}
+
+// createFolderProject creates target's folder project row under the
+// folder's natural id pid. devco D-437: parallel first writes into a new
+// folder each create this row; one that lost the race (another lore
+// process made the row after this one listed the folder) got E_STALE and
+// failed its write. The row it finds is the row it wanted: it re-reads the
+// folder and uses it.
+func (a *App) createFolderProject(ctx context.Context, st *state, target store.Source, pid ids.ID[ids.Project], fields map[string]value.Value) (value.Ref, error) {
+	_, err := st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+	if errors.Is(err, store.ErrStale) {
+		if _, rerr := st.eng.Refresh(ctx, target); rerr != nil {
+			return value.Ref{}, rerr
+		}
+		return value.RefOf(pid.Any())
 	}
 	a.wrote(err)
 	if err != nil {
 		return value.Ref{}, err
 	}
-	return value.RefOf(w.Row.ID)
+	return value.RefOf(pid.Any())
 }
 
 // folderProjectIDOf is target's folder project id (_meta.json project_id,

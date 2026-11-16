@@ -666,7 +666,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore resource rehome` | List the kinds and refs a place can no longer see after its chain changed | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource rename` | Rename a resource (ids and refs stay) | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource repoint` | Move every ref from one resource to another of the same kind, then archive the old one | [operations/resources](../../docs/operations/resources.md) |
-| `lore resource report` | Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate | [operations/resources](../../docs/operations/resources.md) |
+| `lore resource report` | Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references in use (to rotate when offboarding) | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource show` | Show one resource | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource stale` | Resources whose last_checked is older than --days, or never set | [operations/resources](../../docs/operations/resources.md) |
 

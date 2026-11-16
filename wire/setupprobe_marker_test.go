@@ -118,6 +118,19 @@ func TestOrgEntryIdentityEmailChecked(t *testing.T) {
 			t.Errorf("%s with an org identity without an address = %+v, want skip", id, r)
 		}
 	}
+	// devco D-448: outside a repo git answers its global email only; an
+	// includeIf gitdir: file that sets the setup's address for the work
+	// repos is what those commits carry, so the check passes and says so.
+	work := filepath.Join(home, ".gitconfig-work")
+	if err := os.WriteFile(work, []byte("[user]\n\temail = tomas@agency.example\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\temail = tomas@personal.example\n[includeIf \"gitdir:~/agency/\"]\n\tpath = "+work+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := run(onboard.CheckIdentityGitEmail, "agency"); r.Status != onboard.StatusOK || !strings.Contains(r.Detail, "in repos under ~/agency/") || !strings.Contains(r.Detail, "tomas@personal.example applies outside them") {
+		t.Errorf("git_email with the address in an includeIf file = %+v, want ok naming the includeIf folder", r)
+	}
 }
 
 // github.identity_email of a member or admin setup uses its org entry's
