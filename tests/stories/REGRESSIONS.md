@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1777 |
+| fixed | 1780 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -757,6 +757,9 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-433 | finding | owner (store test bullets 1, 9, 10): from a plain folder `memory edit --id …` failed E_NOT_A_STORE ("run git init here first"), `move --id … --to <org>/<folder>` said "no row … outside"; `task edit --id … --assign @handle` in a store clone's folder failed "roster: no store named … attached" | fixed | TestEditByIDOutsideARepo, TestJourneyStoreScope | an edit, delete or move naming a row by id outside a repo runs on the org folder holding the row (and attaches it beside a move's target); a store clone's folder attaches its org's company folder and finds the org's roster from the clone's own org (coordRoster, repoRoster) |
 | devco:D-434 | finding | owner (store test LF-7): `inbox` and `task next` in a store clone's folder said "coordination needs a git repository", but the folder is a git repo | fixed | TestStoreCheckoutIsNoCodeRepo, TestJourneyStoreScope | decision: coordination (claims on refs/lore/signals of a code repo's remote) stays a code-repo feature; inside a store clone the error says it is a store clone, not a code repo, and the hint names `lore org link` and what works there (task list, task edit --assign) |
 | devco:D-454 | finding | owner: a store clone's TOP (<home>/stores/<org>/<store>) printed "(no rules)" for every read, and `lore sql` failed there and in every store folder ("sqlite lens: a source needs a name and a path") | fixed | TestStoreCheckoutIsNoCodeRepo, TestJourneyStoreScope | at the top every read (rule/task/decision/memory list, search, sql) covers every folder of that store, each row labelled <org>/<folder>; inside a folder that folder (`--store <org>` for all); the sql lens of a store-only open has no repo source |
+| devco:D-435 | finding | store test LF-8: natural-language search ("how do we deploy <product>", "where is the <client> staging server") printed "(no matches)": every word, stop words too, had to match, while `context --for-prompt` found the rows | fixed | TestSearchRelevance, TestSearchPartialMatches, TestTerms, TestStemHas, TestJourneySearchQuestion | logic/querywords is the one word matcher (stop words, light stems; contextfit uses it too); wire/searchrank.go: plain words search any topic word in every form (deploy, deploys, deploying, deployment) and rank by words held; no row holding every word lists the closest rows and says so; FTS5 syntax still matches as written; a 21-query relevance set guards the order |
+| devco:D-436 | finding | store test LF-9: every search score was 0.016-0.017 (RRF), hits interleaved one per kind, a snippet late match was cut off the line, a playbook's name hid behind a body snippet, resource hits showed bare values with no name | fixed | TestSearchScoresSpread, TestTextTitleAndMatch, TestSnippetAround, TestSearchRelevance, TestJourneySearchQuestion | one score in [0,1) across kinds (words held, title share, bm25 rank); a hit line is title — text around the first match; resource hits show name (kind); --json adds title, resource_kind, partial |
+| devco:D-462 | finding | fast check of batch 70: after the any-word search a word held only by a row's filled-in ${var:…} value (search pgmain) found nothing, as the filled-in text search read only plain words, not the any-word form | fixed | TestSearchFindsVarByValue, TestAnyTerms | adapters/cache/sqlite/search.go anyTerms: the filled-in text search reads the any-word form too (one of its words, none of its NOT words) |
 
 ## lore-adoptfix
 

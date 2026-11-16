@@ -15,15 +15,15 @@ Behind the box is an *index*: a list of every word and the rows it appears in, l
 
 ## Step 1 — Search everything
 
-Give one or more words. Each hit shows its kind, its id, the matching text with the found word between `<b>` and `</b>`, and a score (higher is better).
+Give one or more words, or ask a question in plain words. Each hit shows its kind, its id, the row's title (a resource's name and kind) and the text around the found word, and a score from 0 to 1 (higher is better). Hits of every kind are in one list, best first.
 
 <!-- example: search#search -->
 ```console
 # alice, in website
 $ lore search --query payments
 Found 2 hits for "payments" across 2 entity types:
-decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
-memory    mem_2ad3…f891  Old payments page is gone  (score=0.017)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.950)
+memory    mem_2ad3…f891  Old payments page is gone  (score=0.650)
 ```
 <!-- /example -->
 
@@ -36,7 +36,7 @@ memory    mem_2ad3…f891  Old payments page is gone  (score=0.017)
 # alice, in website
 $ lore search --query payments --tables decision
 Found 1 hit for "payments" across 1 entity type:
-decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.950)
 $ lore decision search --query Stripe
 dec_7a67…9504 [accepted] We use Stripe for payments
 ```
@@ -44,7 +44,7 @@ dec_7a67…9504 [accepted] We use Stripe for payments
 
 ## Step 3 — Get the result as JSON
 
-`--json` prints the same hits in a stable shape for scripts and tools: the kind, the id, the score and the snippet.
+`--json` prints the same hits in a stable shape for scripts and tools: the kind, the id, the score, the snippet with the found words between `<b>` and `</b>`, the row's `title` (a title or name; empty for a rule or memory), a resource's `resource_kind`, and `partial: true` on a hit that holds only some of the words.
 
 <!-- example: search#search-json -->
 ```console
@@ -63,7 +63,7 @@ $ lore search --query WhatsApp --json
         "entity": "memory",
         "id": "mem_162d…9666",
         "pretty": "mem_162d…9666",
-        "score": 0.016666666666666666,
+        "score": 0.65,
         "snippet": "The client replies faster on \u003cb\u003eWhatsApp\u003c/b\u003e than email"
       }
     ],
@@ -84,7 +84,7 @@ $ lore search --query payments --tables memory
 (no matches)
 $ lore search --query payments --tables memory --include-archived
 Found 1 hit for "payments" across 1 entity type:
-memory  mem_2ad3…f891  Old payments page is gone  (score=0.017)
+memory  mem_2ad3…f891  Old payments page is gone  (score=0.650)
 ```
 <!-- /example -->
 
@@ -122,32 +122,56 @@ mem_05e9…4603 [retrieved] The web repo deploys on every merge to main
 2 hidden (2 scoped to a repo); --all shows them
 $ lore search --query deploys --all-repos
 Found 1 hit for "deploys" across 1 entity type:
-memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.017)
+memory  mem_05e9…4603  The web repo deploys on every merge to main  (score=0.650)
 ```
 <!-- /example -->
 
 ## Try it: whole words, prefixes and several words
 
-Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. It does not match other forms of a word: `invoice` does not find "invoices". Put `*` at the end to match every word that starts with those letters. Several words find rows that hold all of them.
+Search matches whole words, upper or lower case alike, with accents ignored (`cafe` finds "café"); the Turkish dotted and dotless i count as one letter, so `ISPANAK` finds "ıspanak" and `diyarbakır` finds "DİYARBAKIR", and the hit shows the text as it was written. Other forms of a word match too: `invoice` finds "invoices", `deploy` finds "deploying" and "deployment". Put `*` at the end to match every word that starts with those letters. Several words list the rows that hold all of them first, then the rows that hold most of them.
 
 <!-- example: search#word-forms only=2,3,4,5 -->
 ```console
 # alice, in website
 $ lore search --query invoice
 Found 2 hits for "invoice" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.650)
 $ lore search --query invoices
 Found 2 hits for "invoices" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.950)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.650)
 $ lore search --query 'invoi*'
 Found 2 hits for "invoi*" across 2 entity types:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
-task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.017)
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.650)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.650)
 $ lore search --query 'client Fridays'
-Found 1 hit for "client Fridays" across 1 entity type:
-memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.017)
+Found 3 hits for "client Fridays" across 2 entity types:
+memory  mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.767)
+task    tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.533)
+memory  mem_162d…9666  The client replies faster on WhatsApp than email  (score=0.383)
+```
+<!-- /example -->
+
+## Ask a question
+
+Type the question as you would ask a teammate: `lore search --query "where is the stripe test mode on"`. Words that carry no topic (how, do, we, is, the, where, …) are skipped, and the rest are matched in any form. A row needs only some of the words: rows holding every word come first, a word in the title counts more than one in the body, and when no row holds every word the list says so and shows the closest rows. A query written with search syntax (`"a phrase"`, `word*`, `AND`, `OR`, `NOT`) still needs every hit to match all of it.
+
+<!-- example: search#a-question -->
+```console
+# alice, in website
+$ lore search --query 'where is the stripe test mode on'
+Found 3 hits for "where is the stripe test mode on" across 3 entity types:
+hotfix    hfx_d431…313a  Stripe test mode is on in staging  (score=0.975)
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.375)
+rule      rul_b4f4…a5b0  Run the tests before you push  (score=0.325)
+$ lore search --query 'stripe invoices'
+Found 4 hits for "stripe invoices" across 4 entity types:
+No row holds every word; these hold some of them, most first.
+decision  dec_7a67…9504  We use Stripe for payments  (score=0.533)
+hotfix    hfx_d431…313a  Stripe test mode is on in staging  (score=0.533)
+task      tsk_76bd…3f10  Send the invoice reminder before Friday  (score=0.533)
+memory    mem_c0f3…b5b8  The client sends invoices on Fridays  (score=0.433)
 ```
 <!-- /example -->
 
@@ -188,7 +212,7 @@ note: the core rebuilds a store's whole cache; --kind memory included
 
 ## Pitfalls
 
-- **No word forms.** `invoice` and `invoices` are different words to the index. Use `invoic*` when you are not sure.
+- **Word forms are English.** `deploy`, `deploys`, `deploying` and `deployment` find each other; for other languages, or a word lore does not know the forms of, end it with `*` (`invoic*`).
 - **Quote what the shell would change.** `lore search --query 'invoi*'` with quotes; without them the shell may turn `*` into file names first.
 - <!-- ds:block id=search-defaults-z8rpj5sv --> **Limits.** By default each kind gives at most 10 hits (`--per-table`) and the merged list stops at 20 (`--limit`). A common word in a big project can push the row you want off the list: add a second word or narrow with `--tables`.
 - **Chinese, Japanese, Korean and emoji.** Every Chinese, Japanese or Korean character is a word of its own in the index, so a word inside a sentence with no spaces is found (`lore search --query 迁移` finds 数据库迁移规则), and so is a Korean word with a particle attached. Each emoji is a word too: `lore search --query 🚀` finds rows holding it, 👍 also finds 👍🏽, and 👩‍💻 finds that joined emoji. A cache built by an older lore is rebuilt on the first search after the upgrade.

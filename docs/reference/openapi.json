@@ -69939,7 +69939,7 @@
     "/v1/search/run": {
       "post": {
         "operationId": "search.run",
-        "summary": "Unified full-text search across all entities (fans out per entity + RRF-merges)",
+        "summary": "Search every kind at once: a plain question finds the rows holding its words, best first",
         "tags": [
           "search"
         ],
@@ -69984,7 +69984,7 @@
                   },
                   "query": {
                     "type": "string",
-                    "description": "full-text query (several words without quotes are one query): words, \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"
+                    "description": "full-text query (several words without quotes are one query): plain words or a question (\"how do we deploy orbit\": words like how, do, we are skipped, word forms match, rows holding most words first), or FTS5 syntax that every hit must match: \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"
                   },
                   "repo": {
                     "type": "string",
@@ -70081,8 +70081,16 @@
                                   "type": "string"
                                 }
                               },
+                              "partial": {
+                                "type": "boolean",
+                                "description": "the row holds only some of the query's words"
+                              },
                               "pretty": {
                                 "type": "string"
+                              },
+                              "resource_kind": {
+                                "type": "string",
+                                "description": "a resource hit's kind name"
                               },
                               "score": {
                                 "type": "number"
@@ -70090,6 +70098,10 @@
                               "snippet": {
                                 "type": "string",
                                 "description": "the matched excerpt, matches in \u003cb\u003e…\u003c/b\u003e"
+                              },
+                              "title": {
+                                "type": "string",
+                                "description": "the row's title or name; empty for a kind without one"
                               }
                             },
                             "required": [
@@ -70154,8 +70166,16 @@
                                   "type": "string"
                                 }
                               },
+                              "partial": {
+                                "type": "boolean",
+                                "description": "the row holds only some of the query's words"
+                              },
                               "pretty": {
                                 "type": "string"
+                              },
+                              "resource_kind": {
+                                "type": "string",
+                                "description": "a resource hit's kind name"
                               },
                               "score": {
                                 "type": "number"
@@ -70163,6 +70183,10 @@
                               "snippet": {
                                 "type": "string",
                                 "description": "the matched excerpt, matches in \u003cb\u003e…\u003c/b\u003e"
+                              },
+                              "title": {
+                                "type": "string",
+                                "description": "the row's title or name; empty for a kind without one"
                               }
                             },
                             "required": [

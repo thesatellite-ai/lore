@@ -343,6 +343,8 @@ type knowHit struct {
 	Table string  `json:"entity_table"`
 	ID    string  `json:"id"`
 	Score float64 `json:"score"`
+	// Partial marks a row holding only some of the words (devco:D-435).
+	Partial bool `json:"partial"`
 }
 
 type knowSearch struct {
@@ -372,9 +374,23 @@ func TestKnowledgeSearch(t *testing.T) {
 	if len(s.Data.Hits) == 0 || s.Data.Hits[0].ID != strong {
 		t.Fatalf("the row matching both words in title and body must rank first: %+v", s.Data.Hits)
 	}
+	// devco:D-435: plain words list the rows holding only some of them
+	// too, after every row holding all, marked partial; an explicit AND
+	// still needs every word.
+	seenPartial := false
 	for _, h := range s.Data.Hits {
+		if h.ID == weak && !h.Partial || h.ID == strong && h.Partial {
+			t.Fatalf("partial marks: %+v", s.Data.Hits)
+		}
+		if seenPartial && !h.Partial {
+			t.Fatalf("a row holding every word after a partial one: %+v", s.Data.Hits)
+		}
+		seenPartial = seenPartial || h.Partial
+	}
+	and := th.DecodeJSON[knowSearch](t, c.Lore("search", "invoice AND rounding", "--json"))
+	for _, h := range and.Data.Hits {
 		if h.ID == weak {
-			t.Fatalf("a row without the word invoice matched an AND query: %+v", s.Data.Hits)
+			t.Fatalf("a row without the word invoice matched an AND query: %+v", and.Data.Hits)
 		}
 	}
 	// --tables narrows to one kind; --limit caps the merge.
