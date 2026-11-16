@@ -89,3 +89,45 @@ func TestTextJSONUnchanged(t *testing.T) {
 		t.Fatalf("json:\n got %s\nwant %s", b, want)
 	}
 }
+
+// TestTextTitleAndMatch (D-436): a hit line shows the row's title before
+// its snippet, a resource's name and kind, and the snippet's first match
+// even when it sits past the line's width (before, the line was cut from
+// the start of the snippet and the match fell off).
+func TestTextTitleAndMatch(t *testing.T) {
+	long := "Install the toolchain, copy the example environment file into place, check the ports, then start the server <b>locally</b> with task dev."
+	for _, c := range []struct {
+		name string
+		hit  search.Hit
+		want []string
+	}{
+		{"title then snippet", search.Hit{Entity: "playbook", ID: "pbk_1", Title: "Local development setup", Body: "Local development setup", Snippet: long},
+			[]string{"Local development setup — ", "locally", "..."}},
+		{"resource name and kind", search.Hit{Entity: "resource", ID: "res_1", Title: "web_01", ResourceKind: "host", Snippet: "falkenstein <b>hetzner</b>"},
+			[]string{"web_01 (host) — falkenstein hetzner"}},
+		{"body-labelled: snippet alone", search.Hit{Entity: "rule", ID: "rul_1", Body: "Run task dev", Snippet: "Run task <b>dev</b>"},
+			[]string{"rul_1  Run task dev  (score="}},
+		{"snippet is the title: once", search.Hit{Entity: "decision", ID: "dec_1", Title: "Use Postgres", Snippet: "Use <b>Postgres</b>"},
+			[]string{"dec_1  Use Postgres  (score="}},
+	} {
+		line := hitLines(t, textOf(c.hit))[0]
+		for _, w := range c.want {
+			if !strings.Contains(line, w) {
+				t.Errorf("%s: %q lacks %q", c.name, line, w)
+			}
+		}
+	}
+}
+
+// TestSnippetAround: the cut keeps the first match whole and starts at a
+// word; a short snippet is unchanged; a multi-byte text is never split.
+func TestSnippetAround(t *testing.T) {
+	if got := search.SnippetAround("a <b>b</b> c", 80); got != "a b c" {
+		t.Errorf("short: %q", got)
+	}
+	s := strings.Repeat("ünïcödé wörds ", 12) + "<b>Treffer</b> am Ende"
+	got := search.SnippetAround(s, 60)
+	if !strings.Contains(got, "Treffer") || !strings.HasPrefix(got, "...") || !utf8.ValidString(got) || len(got) > 60 {
+		t.Errorf("late match: %q (%d bytes)", got, len(got))
+	}
+}

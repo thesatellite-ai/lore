@@ -12,6 +12,8 @@ import (
 	"path"
 	"strings"
 	"unicode"
+
+	"github.com/thesatellite-ai/lore/logic/querywords"
 )
 
 // SplitGlobs splits a rule's globs field into patterns: a JSON array of
@@ -80,7 +82,7 @@ func Words(s string) []string {
 	for _, w := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	}) {
-		if len([]rune(w)) < minWord || seen[w] || stopWords[w] {
+		if len([]rune(w)) < minWord || seen[w] || stopWords[w] || querywords.IsStop(w) {
 			continue
 		}
 		seen[w] = true
@@ -89,22 +91,16 @@ func Words(s string) []string {
 	return out
 }
 
-// stopWords are frequent words that carry no topic.
+// stopWords are frequent words of four letters or more that carry no
+// topic, besides querywords' list (the one search reads, D-435).
 var stopWords = map[string]bool{"this": true, "that": true, "with": true, "from": true, "have": true,
 	"what": true, "when": true, "where": true, "which": true, "there": true, "their": true, "about": true,
 	"would": true, "could": true, "should": true, "into": true, "then": true, "than": true, "them": true}
 
-// Score is how many of words appear in text (lower-cased).
-func Score(text string, words []string) int {
-	t := strings.ToLower(text)
-	n := 0
-	for _, w := range words {
-		if strings.Contains(t, w) {
-			n++
-		}
-	}
-	return n
-}
+// Score is how many of words appear in text: querywords.Coverage, the
+// matcher `lore search` ranks by too (D-435), so "deploying" in a prompt
+// finds a rule about deployment.
+func Score(text string, words []string) int { return querywords.Coverage(text, words) }
 
 // Piece is one picked entry: its full and line text.
 type Piece struct {

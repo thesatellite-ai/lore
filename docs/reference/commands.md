@@ -726,9 +726,9 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 
 | Command | What it does | Guide |
 |---|---|---|
-| `lore search` … | Unified full-text search across all entities (fans out per entity + RRF-merges) | [knowledge/search › Try it: whole words, prefixes and several words](../../docs/knowledge/search.md#try-it-whole-words-prefixes-and-several-words) |
+| `lore search` … | Search every kind at once: a plain question finds the rows holding its words, best first | [knowledge/search › Try it: whole words, prefixes and several words](../../docs/knowledge/search.md#try-it-whole-words-prefixes-and-several-words) |
 | `lore search rebuild` | Rebuild the search index: every attached store's cache, from its row files | [knowledge/search › Keep the index healthy](../../docs/knowledge/search.md#keep-the-index-healthy) |
-| `lore search run` | Unified full-text search across all entities (fans out per entity + RRF-merges) | [knowledge/search › Try it: whole words, prefixes and several words](../../docs/knowledge/search.md#try-it-whole-words-prefixes-and-several-words) |
+| `lore search run` | Search every kind at once: a plain question finds the rows holding its words, best first | [knowledge/search › Try it: whole words, prefixes and several words](../../docs/knowledge/search.md#try-it-whole-words-prefixes-and-several-words) |
 | `lore search status` | Per-entity full-text index row counts and drift of the core cache | [knowledge/search › Keep the index healthy](../../docs/knowledge/search.md#keep-the-index-healthy) |
 
 ### lore secrets

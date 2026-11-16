@@ -6,9 +6,10 @@ package wire
 //	per target table:
 //	  key:value on a visible meta key   ─▶ row_meta conditions (METADATA 3.17)
 //	  field:value on a resource field   ─▶ resources only (RES 3.12)
-//	  otherwise                         ─▶ FTS5 over every store's cache (retry quoted on a syntax error)
+//	  otherwise                         ─▶ FTS5 over every store's cache (retry quoted on a syntax error);
+//	                                       plain words: any topic word matches (searchrank.go, D-435)
 //	─▶ scope filters (repo rows: project / repo / archived; store rows: archived)
-//	─▶ RRF merge 1/(60+rank), cut to --limit ─▶ trash tail (--include-deleted)
+//	─▶ one relevance score across kinds (searchrank.go, D-436), cut to --limit ─▶ trash tail (--include-deleted)
 //
 // Rows outside this checkout are the attached stores' rows (r2-source):
 // each such hit carries its FLAG1 `_source`. v0.1.17's second listing of
@@ -24,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/meta"
 	"github.com/thesatellite-ai/lore/logic/metaquery"
+	"github.com/thesatellite-ai/lore/logic/querywords"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -52,6 +54,7 @@ const (
 	searchFieldProject  = "project_id"
 	searchFieldRepo     = "repo_id"
 	searchFieldArchived = "archived_at"
+	searchFieldKind     = "kind"
 )
 
 // searchScope is the resolved scope of one search.
@@ -146,7 +149,8 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		}
 	}
 	textTerms := metaquery.Parse(text, func(string) bool { return false })
-	ftsText := metaquery.FTS(textTerms)
+	words := wordsOf(text, textTerms)
+	ftsText := words.fts
 	// only negated words ("status:open -friday"): no full-text match of
 	// its own, it only drops rows from the conditions' hits
 	narrow := ftsFilter{match: ftsText}
@@ -160,12 +164,14 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 		switch {
 		case len(mconds) > 0:
 			hits, err = a.searchMetaTable(ctx, eng, t, mconds, msens, narrow, sc, r.PerTable)
+			scoreInOrder(hits, words.terms)
 		case len(conds) > 0 && t.Entity == opssearch.EntityResource:
 			hits, err = a.searchResourceFields(ctx, eng, t, conds, text, sc, r.PerTable)
+			scoreInOrder(hits, words.terms)
 		case len(conds) > 0 && ftsText == "":
 			continue // only field conditions (and negated words): nothing for other tables
 		default:
-			hits, err = a.searchCoreTable(ctx, eng, t, ftsText, sc, r.PerTable)
+			hits, err = a.searchCoreTable(ctx, eng, t, words, sc, r.PerTable)
 		}
 		if err != nil {
 			return opssearch.Result{}, err
@@ -174,13 +180,13 @@ func (a *App) GlobalSearch(ctx context.Context, r opssearch.Request) (opssearch.
 			continue
 		}
 		res.MatchedTables++
-		// RRF: per-table rank 0 is best; score = 1 / (k + rank).
-		for rank, h := range hits {
-			h.Score = 1.0 / (opssearch.RRFK + float64(rank))
-			res.Hits = append(res.Hits, h)
-		}
+		res.Hits = append(res.Hits, hits...)
 	}
-	// Stable: equal scores keep table order (deterministic output).
+	if err := a.nameResourceKinds(ctx, res.Hits); err != nil {
+		return opssearch.Result{}, err
+	}
+	// D-436: one score across kinds, best first. Stable: equal scores keep
+	// table order (deterministic output).
 	sort.SliceStable(res.Hits, func(i, j int) bool { return res.Hits[i].Score > res.Hits[j].Score })
 	if len(res.Hits) > r.Limit {
 		res.Hits = res.Hits[:r.Limit]
@@ -235,11 +241,12 @@ func (a *App) searchScope(ctx context.Context, r opssearch.Request) (searchScope
 // quoteSearch is s in double quotes.
 func quoteSearch(s string) string { return `"` + s + `"` }
 
-// searchCoreTable runs query over t in every store's cache and returns t's
-// in-scope hits, best first, at most perTable. A query FTS5 rejects as
-// syntax is retried once with every word quoted (v0.1.17's fallback); a
-// second refusal is E_INVALID_INPUT.
-func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, query string, sc searchScope, perTable int) ([]opssearch.Hit, error) {
+// searchCoreTable runs w over t in every store's cache and returns t's
+// in-scope hits, scored and best first (searchrank.go), at most perTable.
+// A query FTS5 rejects as syntax is retried once with every word quoted
+// (v0.1.17's fallback); a second refusal is E_INVALID_INPUT.
+func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, w searchWords, sc searchScope, perTable int) ([]opssearch.Hit, error) {
+	query := w.fts
 	hits, err := a.Search(ctx, t.Table, query, searchFetch)
 	if errs.Has(err, errs.InvalidInput) {
 		if quoted := quoteSearchTerms(query); quoted != "" && quoted != query {
@@ -253,12 +260,56 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		return nil, err
 	}
-	rows := map[store.Source]map[ids.AnyID]row.Row{} // per store, loaded on its first hit
-	out := make([]opssearch.Hit, 0, perTable)
-	for _, h := range hits {
-		if len(out) == perTable {
-			break
+	// D-435: how many topic words each row holds, by each word's own
+	// search (the index's stemming and segmentation, so a word counts
+	// exactly where the any-word search found it); a row only a word's
+	// search finds (the filled-in text of row_expanded) is a hit too.
+	matched := map[ids.AnyID]int{}
+	if w.natural {
+		found := make(map[ids.AnyID]bool, len(hits))
+		for _, h := range hits {
+			found[h.ID] = true
 		}
+		for _, term := range w.terms {
+			th, terr := a.Search(ctx, t.Table, w.termFTS(term), searchFetch)
+			if errs.Has(terr, errs.InvalidInput) {
+				continue // a word FTS5 cannot read on its own counts nowhere
+			}
+			if terr != nil {
+				return nil, terr
+			}
+			for _, h := range th {
+				matched[h.ID]++
+				if !found[h.ID] {
+					found[h.ID] = true
+					hits = append(hits, h)
+				}
+			}
+		}
+	}
+	// The words a row's own text holds count too: each word's search
+	// returns at most searchFetch rows, so in a big store a row holding a
+	// common word can be past that cut. Resources are left to the index:
+	// their text is field values, sensitive ones never indexed, and a
+	// sensitive value must not move a hit up.
+	var ftsFields []string
+	if def, ok := eng.Registry().Table(t.Table); ok && w.natural && t.Entity != opssearch.EntityResource {
+		ftsFields = def.FTS
+	}
+	held := func(id ids.AnyID, r row.Row) int {
+		n := matched[id]
+		if len(ftsFields) == 0 {
+			return n
+		}
+		var text strings.Builder
+		for _, f := range ftsFields {
+			text.WriteString(searchField(r, f) + "\n")
+		}
+		return max(n, querywords.Coverage(text.String(), w.terms))
+	}
+	rows := map[store.Source]map[ids.AnyID]row.Row{} // per store, loaded on its first hit
+	var out []rankedHit
+	for _, h := range hits {
 		if !sc.fromStore(h.Source) {
 			continue // --store: another store's hit, before the cut
 		}
@@ -280,7 +331,7 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		if h.Source == store.SourceRepo {
 			if sc.keeps(t, r) {
-				out = append(out, hitOf(t, h.ID.String(), h.Snippet, r))
+				out = append(out, rankedHit{hit: hitOf(t, h.ID.String(), h.Snippet, r), matched: held(h.ID, r)})
 			}
 			continue
 		}
@@ -291,14 +342,80 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		}
 		hit := hitOf(t, h.ID.String(), h.Snippet, r)
 		hit.Source = a.DescribeSource(h.Source)
-		out = append(out, hit)
+		out = append(out, rankedHit{hit: hit, matched: held(h.ID, r)})
 	}
-	return out, nil
+	return rankTable(out, w, perTable), nil
+}
+
+// rankedHit is one in-scope hit of a table before scoring: matched is how
+// many topic words it holds (natural queries only).
+type rankedHit struct {
+	hit     opssearch.Hit
+	matched int
+}
+
+// rankTable orders one table's hits (in bm25 order of the search) by
+// words held, then title share, keeping bm25 order within a tie, cuts
+// them to perTable and scores them (scoreHit). Outside a natural query
+// every hit held every word.
+func rankTable(in []rankedHit, w searchWords, perTable int) []opssearch.Hit {
+	n := len(w.terms)
+	share := make([]float64, len(in))
+	for i := range in {
+		if !w.natural {
+			in[i].matched = n
+		}
+		share[i] = titleShare(in[i].hit.Title, w.terms)
+	}
+	idx := make([]int, len(in))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(x, y int) bool {
+		a, b := in[idx[x]], in[idx[y]]
+		if a.matched != b.matched {
+			return a.matched > b.matched
+		}
+		return share[idx[x]] > share[idx[y]]
+	})
+	out := make([]opssearch.Hit, 0, min(len(idx), perTable))
+	for rank, i := range idx {
+		if rank == perTable {
+			break
+		}
+		h := in[i].hit
+		h.Score = scoreHit(in[i].matched, n, share[i], rank)
+		h.Partial = w.natural && in[i].matched < n
+		out = append(out, h)
+	}
+	return out
+}
+
+// nameResourceKinds gives every resource hit its kind's name (D-436): a
+// hit on a field value then says what the row is. The kinds are read only
+// when there is a resource hit.
+func (a *App) nameResourceKinds(ctx context.Context, hits []opssearch.Hit) error {
+	var names map[string]string
+	for i := range hits {
+		if hits[i].Entity != opssearch.EntityResource || hits[i].ResourceKind == "" {
+			continue
+		}
+		if names == nil {
+			var err error
+			if names, err = a.resourceKindNames(ctx); err != nil {
+				return err
+			}
+		}
+		if name := names[hits[i].ResourceKind]; name != "" {
+			hits[i].ResourceKind = name // hitOf set the kind's id
+		}
+	}
+	return nil
 }
 
 // searchTrashed matches the rows in the trash of every attached store
 // against text (every word, case-insensitive, in the table's full-text
-// fields; resources left out, their values may be sensitive) under the
+// fields, stop words dropped; resources left out, their values may be sensitive) under the
 // same scope filters, at most limit, each marked InTrash (FA-META-4).
 func (a *App) searchTrashed(ctx context.Context, eng *engine.Engine, targets []opssearch.Target, text string, sc searchScope, limit int) ([]opssearch.Hit, error) {
 	// the query's words as plain text; a negated one ("-friday") must not
@@ -311,6 +428,9 @@ func (a *App) searchTrashed(ctx context.Context, eng *engine.Engine, targets []o
 		}
 		words = append(words, strings.Fields(strings.ToLower(plainSearchText(t.Word)))...)
 	}
+	// D-435: a question's stop words ("how do we") are no words a trashed
+	// row must hold
+	words = querywords.Terms(strings.Join(words, " "))
 	if len(words) == 0 {
 		return nil, nil
 	}
@@ -383,14 +503,21 @@ func anyWord(hay string, words []string) bool {
 }
 
 // hitOf is a hit labelled like v0.1.17's hydrateGlobalHits: pretty = the
-// id, Body = the table's label field (body-labelled ones cut).
+// id, Body = the table's label field (body-labelled ones cut). A title or
+// name label is the hit's Title too, and a resource hit carries its kind
+// id in ResourceKind until nameResourceKinds names it (D-436).
 func hitOf(t opssearch.Target, id, snippet string, r row.Row) opssearch.Hit {
 	h := opssearch.Hit{EntityTable: t.Table.String(), Entity: t.Entity, ID: id, Pretty: id, Snippet: snippet}
 	if t.Label.Field != "" {
 		h.Body = searchField(r, t.Label.Field)
 		if t.Label.Trunc {
 			h.Body = opssearch.TruncBody(h.Body, opssearch.BodyMax)
+		} else {
+			h.Title = strings.Join(strings.Fields(h.Body), " ")
 		}
+	}
+	if t.Entity == opssearch.EntityResource {
+		h.ResourceKind = searchField(r, searchFieldKind)
 	}
 	h.Fallback = opssearch.TruncBody(strings.Join(strings.Fields(searchField(r, "body")), " "), opssearch.BodyMax)
 	return h
