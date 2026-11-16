@@ -77,8 +77,16 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		// by name), which the store-only open here lacks. A read there keeps
 		// its own paths (the read-only open, rosterread_noproject.go,
 		// personalread_noproject.go).
-		if !write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "" {
+		//
+		// A read naming an org (`--store <org>[/<folder>]`) is the exception
+		// (devco D-471): it reads the org's stores here as from a plain
+		// folder, whatever this repo attaches.
+		orgRead := !write && a.namesOrgRead(ctx, e, d)
+		if !orgRead && (!write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "") {
 			return op.Result{}, false, nil
+		}
+		if orgRead {
+			return a.runOrgReadAside(ctx, e, d, c)
 		}
 	}
 	if !plainFolder(ctx, a.opts.RepoDir) {
@@ -88,6 +96,15 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		// here would hide it behind "no store to read"
 		return op.Result{}, false, nil
 	}
+	return a.runStoreOnly(ctx, e, d, c)
+}
+
+// runStoreOnly is the store-only half of runOutsideRepo: the store the
+// command names (outsideTo), opened alone with the folders it covers.
+// handled is false when the command names no store and needs a repo.
+func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (res op.Result, handled bool, err error) {
+	spec := e.Spec()
+	write := spec.Access == op.AccessWrite
 	in, derr := e.Decode(d)
 	if derr != nil {
 		return op.Result{}, false, nil // the usual path reports the decode error
@@ -115,7 +132,7 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 	if to == "" {
 		return op.Result{}, false, nil
 	}
-	target, created, err := a.outsideTarget(ctx, to, write && (c.Yes || createAsked(in)))
+	target, created, err := a.outsideTarget(ctx, to, write, write && (c.Yes || createAsked(in)))
 	if err != nil {
 		return op.Result{}, true, err
 	}
@@ -124,11 +141,22 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 	// the org's company folder of the same store is attached beside it, as
 	// a linked repo's open attaches it, so kinds and policy defined there
 	// resolve (D-422)
+	if !write && target.Folder != "" && target.Folder != rowfs.FolderRoot {
+		// `--store <org>` in a repo linked to one folder: the org's name is
+		// that folder's entry there, but the read covers the whole org
+		// (D-471), so it reads from the store root like a plain folder
+		root := target
+		root.Folder = rowfs.FolderRoot
+		if len(a.orgWideFolders(ctx, to, root)) > 0 {
+			target = root
+		}
+	}
 	also := append(a.companyFolderOf(ctx, target), holder...)
 	if !write {
 		// `--store <org>` reads every folder of the org's stores (D-431)
 		also = append(also, a.orgWideFolders(ctx, to, target)...)
 	}
+	also = uniqueBeside(target, also)
 	if err := a.openStoreOnlyOn(ctx, target, target.Name, also...); err != nil {
 		return op.Result{}, true, err
 	}
@@ -285,8 +313,9 @@ func (a *App) companyFolderOf(ctx context.Context, target attach.Store) []attach
 // outsideTarget resolves `to` with no repo: an org store by its attached
 // name (acme/org), else a base store (an org store, `me`, an org store's
 // short name) and the folder after the separator. create allows a folder
-// the store does not have yet (--create or --yes), as inside a repo.
-func (a *App) outsideTarget(ctx context.Context, to string, create bool) (attach.Store, newFolder, error) {
+// the store does not have yet (--create or --yes), as inside a repo; a
+// read naming a missing folder gets the read's refusal (readMissingFolder).
+func (a *App) outsideTarget(ctx context.Context, to string, write, create bool) (attach.Store, newFolder, error) {
 	name := store.Source(to)
 	for _, s := range orgStores(ctx, a.opts, "") {
 		if s.Name == name {
@@ -297,6 +326,13 @@ func (a *App) outsideTarget(ctx context.Context, to string, create bool) (attach
 	src, found, _, err := a.baseStore(ctx, base)
 	if err != nil {
 		return attach.Store{}, newFolder{}, err
+	}
+	if !found && !write {
+		// a read naming an org of the home's setup works in any folder
+		// (D-471), also one no setup's folders cover
+		if t, ok, rerr := a.orgConfigTarget(ctx, name, base, folderName, hasFolder); ok || rerr != nil {
+			return t, newFolder{}, rerr
+		}
 	}
 	if !found {
 		return attach.Store{}, newFolder{}, errs.New(errs.NotFound, "no store named "+base+" is set up for this folder, and outside a repo only the setup's stores can be named").
@@ -312,6 +348,9 @@ func (a *App) outsideTarget(ctx context.Context, to string, create bool) (attach
 	exists, err := a.folderExists(ctx, src, folderName)
 	if err != nil {
 		return attach.Store{}, newFolder{}, err
+	}
+	if !exists && !write {
+		return attach.Store{}, newFolder{}, a.readMissingFolder(ctx, src, base, folderName)
 	}
 	if !exists && !create {
 		return attach.Store{}, newFolder{}, a.missingFolder(ctx, src, base, folderName)

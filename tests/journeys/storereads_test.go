@@ -10,7 +10,9 @@ package journeys
 // the store whole read its empty root only, and two names on one place
 // doubled every row; `show --json` left out the origin and flattened
 // lists; `show --id` in one folder could not find a row of another, and
-// `--store <org>/<folder>` in a repo said "not attached".
+// `--store <org>/<folder>` in a repo said "not attached"; `--store <org>`
+// worked only from a plain folder (D-471), and a missing folder got write
+// wording (D-472).
 //
 //	store folder ─▶ members of that folder, row counts, org kinds, any row by id
 //	code repo    ─▶ sql over every folder once, --store <org>/<folder> read-only
@@ -109,5 +111,37 @@ func TestJourneyStoreReadsEverything(t *testing.T) {
 		lee.Lore(wt, "store", "add", "whole", tt.store.SSHURL(), "--yes").OK(t)
 		r := lee.Lore(wt, "sql", "--internal", "--query", "select source, body from rules_all order by body").OK(t)
 		r.Says(t, "whole/"+jsrOps, "whole/"+jsrSync, tlOrg+"/org", "(3 rows)").Never(t, "a source needs")
+	})
+	w.Step("day3/the-org-reads-the-same-everywhere", func() {
+		// D-471: --store <org> reads every folder of the org from a linked
+		// repo, an unattached repo under the setup's folders, a repo and a
+		// folder no setup covers, and a store clone; D-472: a folder the
+		// store lacks is a read's refusal, never "nothing written … --create"
+		wt := filepath.Join(parent, "wt")
+		other, far := filepath.Join(parent, "other"), filepath.Join(lee.Home, "far")
+		for _, d := range []string{other, far} {
+			if out, err := exec.Command("git", "init", "-q", d).CombinedOutput(); err != nil {
+				t.Fatal(string(out))
+			}
+		}
+		for _, d := range []string{parent, app, other, wt, far, lee.Home, storeDir, filepath.Join(storeDir, jsrOps)} {
+			lee.Lore(d, "rule", "list", "--store", tlOrg).OK(t).Says(t, jsrSync+" rule one", jsrOps+" rule one", "org rule one")
+			lee.Lore(d, "task", "list", "--store", tlOrg).OK(t).Says(t, jsrSyncTask, jsrOpsTask)
+			lee.Lore(d, "search", "--query", "rule", "--store", tlOrg).OK(t).Says(t, "Found 3 hits")
+			lee.Lore(d, "memory", "list", "--store", tlOrg).OK(t)
+			lee.Lore(d, "rule", "list", "--store", tlOrg+"/"+jsrOps).OK(t).Says(t, jsrOps+" rule one").Never(t, jsrSync+" rule one")
+			lee.Lore(d, "store", "folder", "list", "--store", tlOrg).OK(t).Says(t, jsrOps, jsrSync)
+			lee.Lore(d, "memory", "list", "--store", tlOrg+"/nofolder").
+				Fails(t, 27, "E_NOT_FOUND", "has no folder nofolder yet", "store folder list --store "+tlOrg).
+				Never(t, "E_NEEDS_CONFIRM", "nothing written", "--create")
+			// D-473: sql takes --store like every other read
+			const q = "select source, body from rules_all order by body"
+			lee.Lore(d, "sql", "--store", tlOrg, "--query", q).OK(t).
+				Says(t, tlOrg+"/"+jsrOps, tlOrg+"/"+jsrSync, tlOrg+"/org", "(3 rows)").Never(t, "unknown flag")
+			lee.Lore(d, "sql", "--store", tlOrg+"/"+jsrOps, "--query", q).OK(t).
+				Says(t, jsrOps+" rule one").Never(t, jsrSync+" rule one")
+			lee.Lore(d, "sql", "--store", tlOrg+"/nofolder", "--query", q).
+				Fails(t, 27, "E_NOT_FOUND", "has no folder nofolder yet", "store folder list --store "+tlOrg)
+		}
 	})
 }

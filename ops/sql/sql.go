@@ -115,6 +115,11 @@ type RunIn struct {
 	Internal      bool          `json:"internal,omitempty" flag:"internal" desc:"in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"`
 	// IncludeDeleted: DELETION 2.9 (FA-META-2).
 	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also read the rows in the trash (tables and their _all views; time_spent counts deleted tasks)"`
+	// Store names the stores the lens reads (devco D-473), as every other
+	// read's --store: `<org>` is every folder of the org's stores, each a
+	// source <store>/<folder>; `<org>/<folder>` is that folder. wire routes
+	// it before the op runs (runOutsideRepo), from any folder.
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store instead of the repo's: <org> (every folder, each a source <store>/<folder>) or <store>/<folder>; works from any folder"`
 }
 
 // RunOut is the output of sql.run (--json and REST): column names, rows
@@ -196,11 +201,12 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun,
 			Errors: []errs.Code{
 				errs.InvalidInput, errs.InvalidIdentifier, errs.SQLRefused, errs.SQLTimeout, errs.NeedsConfirm, errs.Cancelled,
-				errs.Unsupported, errs.DBNotFound, errs.NotAStore, errs.StoreUnreachable, errs.OldLore, errs.Internal,
+				errs.Unsupported, errs.DBNotFound, errs.NotAStore, errs.NotFound, errs.StoreUnreachable, errs.OldLore, errs.Internal,
 			},
 			Confirm: op.ConfirmRule{When: showSensitiveField},
 			Examples: []op.Example{
 				{Title: "count memories per store", CLI: `lore sql run --query "SELECT source, COUNT(*) AS n FROM memories_all GROUP BY source"`, Want: "source"},
+				{Title: "every rule of the org, from any folder", CLI: `lore sql run --store acme --query "SELECT source, body FROM rules_all ORDER BY source"`, Want: "source"},
 				{Title: "every resource as csv", CLI: `lore sql run --query "SELECT kind, name FROM res__all ORDER BY kind, name" --format csv`, Want: "kind,name"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) { return run(ctx, env, in) }),

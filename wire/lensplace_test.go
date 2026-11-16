@@ -42,3 +42,22 @@ func joinNames(n []string) string {
 	}
 	return out
 }
+
+// TestLensStoreSourceReadsOnlyItsOwnName pins devco D-473: a store's cache
+// file is one per place on the machine, filled by every open under the
+// name it gives the place, so a lens with one source over it (`sql --store
+// acme` after reads from a repo and a store clone) must keep only the rows
+// applied under its own name; the repo's own cache needs no filter.
+func TestLensStoreSourceReadsOnlyItsOwnName(t *testing.T) {
+	srcs := []sqlite.LensSource{
+		{Name: "repo", Path: "/c/repo.db"},
+		{Name: "acme/sync", Path: "/c/sync.db"},
+	}
+	markShared(srcs)
+	if srcs[0].Shared {
+		t.Errorf("the repo's own cache is filtered by name: %+v", srcs[0])
+	}
+	if !srcs[1].Shared {
+		t.Errorf("a store source alone on its cache file reads every open's rows (each row once per name): %+v", srcs[1])
+	}
+}

@@ -191,7 +191,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		t.Logf("doctor --fix (%s, %d store commits):\n%s", took, two.CommitCount(mainRef)-before, grepLines(r.Out(), "empty_ref"))
 		// two repairs ran (task leads, empty refs): one store commit each
 		if n := two.CommitCount(mainRef) - before; n != 2 {
-			t.Errorf("doctor --fix made %d commits, want one per repair (2)", n)
+			t.Errorf("doctor --fix made %d commits, want one per repair (2): %q", n, two.Log(mainRef)[:n])
 		}
 		after := lee.LoreIn(hub, "doctor").Never(t, "empty_ref", "task_lead")
 		t.Logf("doctor after --fix:\n%s", after.Out())

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
@@ -140,18 +139,10 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 		}
 		srcs = append(srcs, sqlite.LensSource{Name: string(name), Path: path})
 	}
-	markShared(srcs)
 	// a folder attached for this command (lensfolders.go, idfolder.go) is
-	// read through a cache file other opens fill under their own names
-	// (a store clone's reads name it <org>/<folder>): its views keep only
-	// the rows applied under the name it has here (D-443)
-	a.mu.Lock()
-	for i := range srcs {
-		if slices.ContainsFunc(a.extra, func(x attach.Store) bool { return string(x.Name) == srcs[i].Name }) {
-			srcs[i].Shared = true
-		}
-	}
-	a.mu.Unlock()
+	// read through a cache file other opens fill under their own names, as
+	// is every store's: each keeps only its own name's rows (D-443, D-473)
+	markShared(srcs)
 	return onePerPlace(srcs), extra, nil
 }
 
@@ -176,18 +167,19 @@ func onePerPlace(srcs []sqlite.LensSource) []sqlite.LensSource {
 	return out
 }
 
-// markShared sets Shared on every source whose cache file another source
-// of the lens also uses: two stores.yaml entries on one place (same url,
-// branch and folder) open one cache file, and `lore sql` keeps both names
-// as sources, each with that place's rows once (owner decision,
-// 2026-11-08; lists and search show them once, under the first name).
+// markShared sets Shared on every store's source (never the repo's own
+// cache, which no other open fills): a store's cache file is one per place
+// on the machine, and every open that reads the place applies its rows
+// under the name it gives it (a repo's `acme/org`, `--store acme`'s
+// `acme`, a store clone's `<org>/<folder>`), each once in _source. A
+// source's part of the `<table>_all` views keeps only the rows applied
+// under its own name, so a query sees each row once whichever opens
+// filled the file before (devco D-473: `sql --store acme` after reads
+// from a repo and a clone listed every rule three times). Two names on
+// one file in this lens are dropped to one by onePerPlace.
 func markShared(srcs []sqlite.LensSource) {
-	uses := map[string]int{}
-	for _, s := range srcs {
-		uses[s.Path]++
-	}
 	for i := range srcs {
-		srcs[i].Shared = uses[srcs[i].Path] > 1
+		srcs[i].Shared = srcs[i].Name != string(store.SourceRepo)
 	}
 }
 

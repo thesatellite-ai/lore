@@ -82328,6 +82328,10 @@
                     "type": "boolean",
                     "description": "print sensitive values (asks first)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store instead of the repo's: \u003corg\u003e (every folder, each a source \u003cstore\u003e/\u003cfolder\u003e) or \u003cstore\u003e/\u003cfolder\u003e; works from any folder"
+                  },
                   "timeout": {
                     "type": "integer",
                     "format": "duration-ns",
@@ -82430,6 +82434,16 @@
           },
           "403": {
             "description": "E_NOT_A_STORE, E_OLD_LORE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
             "content": {
               "application/json": {
                 "schema": {

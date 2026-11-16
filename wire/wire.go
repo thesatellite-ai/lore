@@ -467,6 +467,11 @@ type state struct {
 	// here is the store folder a command run inside a store's checkout
 	// works on (storehere.go); "" in a code repo.
 	here store.Source
+	// storeOnly marks an open that chose its stores and folders itself
+	// (openStoreOnlyOn: --store <org>[/<folder>], a store clone, the
+	// setup's default store): the sql lens adds no folders beside it
+	// (lensFolders), else every folder it attached read twice (D-473).
+	storeOnly bool
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
