@@ -6,11 +6,13 @@ package wire
 // --all-repos covers every folder of the store.
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/engine/attach"
 	opsrule "github.com/thesatellite-ai/lore/ops/rule"
 	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -90,5 +92,51 @@ func TestListsReadEveryFolderOfAStoreAttachedWhole(t *testing.T) {
 	}
 	if got := inFolder(`{"query":"deploys","all_repos":true}`); !strings.Contains(got, ruleA) || !strings.Contains(got, ruleB) {
 		t.Errorf("search --all-repos in client_a does not cover every folder of the store: %s", got)
+	}
+}
+
+// TestListsKeepTheOrgEntryAttachToItsPlace (devco D-497): an owned repo
+// with no link attaches its org's store through the org entry, at the
+// store's root folder; a folder of that store is shown only in repos that
+// attach it (STORE TARGETS), so lists there read the root alone. D-484
+// widened that attach like a whole-store entry and listed every folder's
+// rows. A stores.yaml entry with no folder stays whole
+// (TestListsReadEveryFolderOfAStoreAttachedWhole).
+func TestListsKeepTheOrgEntryAttachToItsPlace(t *testing.T) {
+	if isolate.Run(t) {
+		return
+	}
+	hosts := histGitWorld(t)
+	url, _ := bareStore(t, hosts, "acme/kb")
+	home := t.TempDir()
+	writer := openWith(t, gitRepo(t), Options{Home: home})
+	withProject(t, writer)
+	if _, err := run(t, writer, opsstores.OpInit, `{"name":"kb","url":"`+url+`"}`, true); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if _, err := run(t, writer, opsstores.OpFolderAdd, `{"store":"kb","folder":"tips"}`, true); err != nil {
+		t.Fatalf("folder add: %v", err)
+	}
+	const tip = "tips folder deploys on fridays"
+	if _, err := run(t, writer, opsrule.OpAdd, `{"body":"`+tip+`","to":"kb/tips"}`, true); err != nil {
+		t.Fatalf("rule add --to kb/tips: %v", err)
+	}
+	const root = "store root deploys on mondays"
+	if _, err := run(t, writer, opsrule.OpAdd, `{"body":"`+root+`","to":"kb"}`, true); err != nil {
+		t.Fatalf("rule add --to kb: %v", err)
+	}
+	listWith := func(org attach.Store) string {
+		t.Helper()
+		dir := gitRepo(t)
+		opts := Options{Home: home, OrgStores: func(context.Context) ([]attach.Store, error) { return []attach.Store{org}, nil }}
+		withProject(t, openWith(t, dir, opts))
+		out, err := run(t, openWith(t, dir, opts), opsrule.OpList, `{}`, false)
+		if err != nil {
+			t.Fatalf("rule list with %s attached: %v", org.Name, err)
+		}
+		return out
+	}
+	if got := listWith(attach.Store{Name: "acme", URL: url}); strings.Contains(got, tip) || !strings.Contains(got, root) {
+		t.Errorf("the org entry's root attach must list the root row and no folder this repo does not attach: %s", got)
 	}
 }

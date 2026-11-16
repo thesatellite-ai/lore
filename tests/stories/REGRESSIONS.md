@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1836 |
+| fixed | 1837 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -817,6 +817,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-493 | finding | store test 2 (st2member): a store clone whose origin uses an ssh host alias was not matched to the org's store entry (git@github.com: or https), so reads at the clone top labelled rows [<repo>/org] instead of [<org>/…] | fixed | TestRemoteNormResolvesSSHAlias, TestCloneDirForFindsAliasKeyedRecord, TestJourneyStoreCloneThroughSSHAliasIsTheOrgStore | git.Remote.Norm (host/path) resolves an ssh url's alias host to the HostName the person's ~/.ssh/config gives (read once per host per run, file only; a subdomain route such as ssh.github.com is kept as the host), so every comparison through Norm agrees: orgOfURL, cloneOrgEntry, sameStoreURL, CloneDirFor (an old alias-keyed clone record still found), store remove and push matching; https and ssh forms of one host/owner/repo were already one Norm |
 | devco:D-486 | finding | owner store test 2, new problem 6: one `task edit --assign --yes` in a member's store folder committed two actor rows into that folder plus a separate commit with a machines row | fixed | TestFolderWriteKeepsTheActorRowInItsSibling, TestJourneyStoreScope | wire/actorhome.go: a folder of a store clone whose sibling folder (the org folder) holds the caller's actor row gets no copy (refs resolve across the attached folders); an agent's missing row goes once to the folder holding its owner's row (its own roster row, outside the edit's batch), never the folder written; the machine profile goes to that folder too, so a product-folder write carries none; doctor's actor_roster counts the sibling's row; docs/team/identity-and-stores.md, docs/operations/doctor.md; story B; break-verified (unit: acme/ got the copy; journey: sync/actors in the commit) |
 | devco:D-495 | finding | after-land gate on dev 5151f30d: `lore sync` in a linked repo re-rendered the private file under sync's write access, so resolving the project made the linked folder's project row and committed it after the push; every such sync left a commit waiting and `actor merge` made two commits in the folder's store instead of one | fixed | TestJourneyFoldersMerge | the after-sync re-render runs as a read, as `lore render` does (wire/renderhost/render_private.go rerenderPrivateQuiet); broken by D-494 |
+| devco:D-497 | finding | after-land gate on dev 5151f30d: in an owned repo with no link (the org entry attaches its store's root folder), `memory list` listed the rows of a store folder the repo does not attach, while the write there said lists would not show them (D-484 widened the org entry's attach like a whole-store entry) | fixed | TestListsKeepTheOrgEntryAttachToItsPlace, TestKnowledgeLevels_OrgStoreFolders | wire/lensfolders.go: lists, search and sql widen only a stores.yaml entry with no folder and the org's company store; the org entry's own attach of the repo (bare org name) reads its one place (STORE TARGETS) |
 
 ## lore-adoptfix
 

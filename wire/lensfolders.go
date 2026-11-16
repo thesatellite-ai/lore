@@ -1,8 +1,8 @@
 package wire
 
 // lensfolders.go — `lore sql` over every folder of each attached store
-// (devco D-443). A store attached whole (no folder: the org entry's store,
-// a stores.yaml entry with no `folder:`) opens its root folder only, so
+// (devco D-443). A store attached whole (no folder: the org's company
+// store, a stores.yaml entry with no `folder:`) opens its root folder only, so
 // in a repo attaching the company store whole `rules_all` showed the
 // repo's own folder and nothing of the company's: the store's rows live
 // in its folders. For the one query the lens attaches each folder of such
@@ -16,6 +16,7 @@ package wire
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -50,7 +51,12 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 	a.mu.Lock()
 	extra := slices.Clone(a.extra)
 	a.mu.Unlock()
-	attached := slices.Concat(cfg.Stores, a.orgStoresHere(ctx), extra)
+	org := a.orgStoresHere(ctx)
+	attached := slices.Concat(cfg.Stores, org, extra)
+	// whole is what may widen: the org entry's own attach of this repo
+	// (the bare org name: an owned repo's store root, or its linked
+	// folder) is that one place, never the whole store (devco D-497).
+	whole := slices.Concat(cfg.Stores, slices.DeleteFunc(slices.Clone(org), orgEntryAttach), extra)
 	seen := map[string]bool{}
 	names := map[store.Source]bool{} // a name in use elsewhere would refuse the open ("attached twice")
 	for _, s := range attached {
@@ -60,7 +66,7 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 		}
 	}
 	var out []attach.Store
-	for _, s := range attached {
+	for _, s := range whole {
 		if (s.Folder != "" && s.Folder != rowfs.FolderRoot) || s.Name == attach.ReservedMe || s.URL == "" {
 			continue
 		}
@@ -83,6 +89,16 @@ func (a *App) lensFolders(ctx context.Context) []attach.Store {
 		}
 	}
 	return out
+}
+
+// orgEntryAttach reports whether s is the org entry's attach of this repo
+// (orgresolve's first store: the bare org name), not the org's company
+// store (<org>/<org_folder>). An owned repo with no link attaches the
+// store's root folder through it, and STORE TARGETS shows a folder of the
+// store only in repos that attach it, so lists, search and sql there read
+// the root alone; widening it listed every folder's rows (devco D-497).
+func orgEntryAttach(s attach.Store) bool {
+	return !strings.Contains(string(s.Name), targetSep)
 }
 
 // withExtra runs fn with extra attached (unrecorded) and puts the App's
