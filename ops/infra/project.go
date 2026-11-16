@@ -101,6 +101,16 @@ type ProjectDetail struct {
 	CreatedAt  string      `json:"created_at"`
 	ArchivedAt string      `json:"archived_at,omitempty"`
 	Repos      []RepoBrief `json:"repos"`
+	// Store / Rows / Members (devco D-492): show said only name and
+	// created, while project list counts a store folder's rows and
+	// project member list names its people. Store is the [store/folder]
+	// the project lives in, Rows its row files (as project list counts
+	// them), Members its current members ("@handle role, role"; nil when
+	// the roster cannot be read here, so no "members: 0" line is shown).
+	Store   string   `json:"store,omitempty"`
+	Rows    int      `json:"rows,omitempty"`
+	Members []string `json:"members,omitempty"`
+	counted bool
 	// created is the human creation time.
 	created string
 	// UpdatedAt is the envelope's last write (INTEG-AUDIT-1).
@@ -135,6 +145,22 @@ func (o ProjectShowOut) mainText() string {
 		b.WriteString("  origin:  " + p.OriginURL + "\n")
 	}
 	b.WriteString("  created: " + p.created + "\n")
+	if p.Store != "" {
+		b.WriteString("  store:   " + p.Store + "\n")
+	}
+	if p.counted {
+		b.WriteString("  rows:    " + strconv.Itoa(p.Rows) + "\n")
+	}
+	b.WriteString("  repos:   " + strconv.Itoa(len(p.Repos)) + "\n")
+	if p.Members != nil {
+		b.WriteString("  members: " + strconv.Itoa(len(p.Members)) + "\n")
+	}
+	if len(p.Members) > 0 {
+		b.WriteString("\nMembers:\n")
+		for _, m := range p.Members {
+			b.WriteString("  " + m + "\n")
+		}
+	}
 	if len(p.Repos) > 0 {
 		b.WriteString("\nRepos:\n")
 		for _, r := range p.Repos {
@@ -291,7 +317,43 @@ func (o ops) projectShow(ctx context.Context, in ProjectShowIn) (ProjectShowOut,
 		d.Repos = append(d.Repos, RepoBrief{ID: rp.ID.String(), MountName: work.Field(rp, fieldMountName),
 			DisplayName: work.Field(rp, fieldDisplayName), OriginURL: work.Field(rp, fieldOrigin), ArchivedAt: work.TimeText(rp, fieldArchivedAt)})
 	}
+	if err = o.showCounts(ctx, &d); err != nil {
+		return ProjectShowOut{}, err
+	}
 	return ProjectShowOut{SchemaVersion: SchemaVersion, Kind: KindProjectShow, Data: d}, nil
+}
+
+// ProjectMemberLister is the optional Env upgrade (wire.App) that names a
+// project's current members as project member list does ("@handle role,
+// role"); the roster lives outside this Env (devco D-492).
+type ProjectMemberLister interface {
+	ProjectMembers(ctx context.Context, projectID string) ([]string, error)
+}
+
+// showCounts fills the store folder, row count and members of d: the
+// same numbers project list and project member list give. A build or
+// place without the upgrades leaves them out.
+func (o ops) showCounts(ctx context.Context, d *ProjectDetail) error {
+	if fl, ok := upgrade.As[OrgFolderLister](o.env); ok {
+		folders, _, err := fl.OrgFolderProjects(ctx)
+		if err != nil {
+			return err
+		}
+		for _, f := range folders {
+			if f.ID == d.ID {
+				d.Store, d.Rows, d.counted = storeMark(f.Source.Store, f.Source.Folder), f.Rows, true
+				break
+			}
+		}
+	}
+	if ml, ok := upgrade.As[ProjectMemberLister](o.env); ok {
+		ms, err := ml.ProjectMembers(ctx, d.ID)
+		if err != nil {
+			return err
+		}
+		d.Members = ms
+	}
+	return nil
 }
 
 // projectName is the label of a project in the write lines.

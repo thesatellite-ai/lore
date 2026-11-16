@@ -613,7 +613,7 @@ created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:06:10Z by alice
 
 ## Step 15 — Find problems and get a summary
 
-`lint` finds dangling refs, bare-name refs, missing required fields, deprecated fields still in use, dates within their `--remind-before` window, a `--remind-before` date that is empty (`remind_unset`: nothing will remind) or already past (`remind_passed`) and duplicates; `lint --fix` resolves bare-name refs by lookup. `report` sums up everything in view: counts per kind, stale, unchecked, dangling, quarantined, open linked tasks and incidents, and the vault entries in use, each with the rows and fields that use it (`--kind`, `--days`; `--meta` and `--project` narrow it when someone leaves a project, and then those entries are listed under `rotate`):
+`lint` finds dangling refs, bare-name refs, missing required fields, deprecated fields still in use, dates within their `--remind-before` window, a `--remind-before` date that is empty (`remind_unset`: nothing will remind) or already past (`remind_passed`), a field most rows of the kind fill but this one leaves empty (`missing_value`, for a kind with 4 or more rows where 3 in 4 set it, such as a domain with no `renews_on`) and duplicates; every finding ends with the row's id; `lint --fix` resolves bare-name refs by lookup. `report` sums up everything in view: counts per kind, stale, unchecked, dangling, quarantined, open linked tasks and incidents, and the vault entries in use, each with the rows and fields that use it (`--kind`, `--days`; `--meta` and `--project` narrow it when someone leaves a project, and then those entries are listed under `rotate`):
 
 <!-- example: resources#lint-and-report -->
 ```console
@@ -622,7 +622,7 @@ $ lore resource edit --kind server --where provider=hetzner --set renews=2026-11
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
 edit 1 server resources; batch bat_7289…c813 (undo: lore batch undo --id bat_7289…c813)
 $ lore resource lint
-remind           server hub_prod_new.renews     2026-11-20 is within 30d
+remind           server hub_prod_new.renews     2026-11-20 is within 30d  [res_6a86…ed8c]
 1 findings
 $ lore resource report
 resources   5 (service 4, server 1)

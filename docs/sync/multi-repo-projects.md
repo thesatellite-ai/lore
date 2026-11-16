@@ -17,7 +17,7 @@ If the client's product is several separate git repositories that should share o
 
 ## Step 1 — See the project
 
-`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos (`--json` adds the full list); with no `--id` it shows the project of the folder you are in (a linked repo, or a folder of a store clone):
+`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos and its current members (for a store folder also the store and its row count, the same count `project list` gives; `--json` adds the full list); with no `--id` it shows the project of the folder you are in (a linked repo, or a folder of a store clone):
 
 <!-- example: projects#project-list -->
 ```console
@@ -29,6 +29,8 @@ Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
   created: 2026-11-02 10:00:00Z
+  repos:   1
+  members: 0
 Repos:
   rep_2ad3…f891  website
 created 2026-11-02T10:00:00Z by alice · updated 2026-11-02T10:00:00Z by alice

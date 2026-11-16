@@ -52287,6 +52287,12 @@
                         "id": {
                           "type": "string"
                         },
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "name": {
                           "type": "string"
                         },
@@ -52319,6 +52325,12 @@
                               "mount_name"
                             ]
                           }
+                        },
+                        "rows": {
+                          "type": "integer"
+                        },
+                        "store": {
+                          "type": "string"
                         },
                         "updated_at": {
                           "type": "string"
