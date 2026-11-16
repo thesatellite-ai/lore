@@ -55,3 +55,4 @@ Steps for findings still being fixed are written as they should behave and skipp
 | r3 G-18 | (no D- id yet) | repo moved: E_STALE address warning | `TestStoryGRenames` |
 | r3 G-19 | (no D- id yet) | old store clone left after set-url | `TestJourneyTeamLeadStoreMoved`; `TestStoryGRenames` step still empty (skipped) |
 | r3 G-20 | (no D- id yet) | `task stale --days 0` runs with 60 | `TestStoryGMonthsOfUse` |
+| D-460 | (devco) | `task list` put a recurring task's next instance first or last by its hashed id, not when it was made | `TestJourneyRecurringKeepsTheClock`; `TestListAllCreationOrderNotIDOrder` |

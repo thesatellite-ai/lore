@@ -42,6 +42,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -331,7 +332,7 @@ type ops struct{ env Env }
 // list is trash.list: every trashed row of every attached store, newest
 // first, filtered (DELETION 2.2).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
-	since, err := sinceOf(in.Since, time.Now())
+	since, err := sinceOf(in.Since, opclock.Now(o.env)) // the app clock (LORE_NOW in a test build), as the rows were stamped
 	if err != nil {
 		return ListOut{}, err
 	}
@@ -568,7 +569,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		if err != nil {
 			return ResultOut{}, err
 		}
-		cutoff = time.Now().Add(-d)
+		cutoff = opclock.Now(o.env).Add(-d)
 		args = []string{"trash", "purge", "--older-than", in.OlderThan, "--confirm"}
 	}
 	if !in.DryRun && !in.Confirm {
@@ -602,7 +603,7 @@ type ArchivedPurger interface {
 // It replaces the v0.1.17 lore.db purge (lsync); rows in the trash that
 // were archived are purged too.
 func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool) (ResultOut, error) {
-	cutoff, err := sinceOf(before, time.Now())
+	cutoff, err := sinceOf(before, opclock.Now(o.env))
 	if err != nil {
 		return ResultOut{}, err
 	}

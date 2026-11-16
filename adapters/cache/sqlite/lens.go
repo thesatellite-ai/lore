@@ -87,6 +87,10 @@ type LensOptions struct {
 	// time_spent view reads as the client column: the policy
 	// time.client_key (TQ8, FB-TASK-4). "" means TimeClientKey ("client").
 	TimeClientKey string
+	// Now is the time an open time span ends at in the time_spent view: the
+	// app clock (LORE_NOW in a test build), so `lore sql` agrees with
+	// `lore task list` on a running timer. Zero means the machine's clock.
+	Now time.Time
 }
 
 // LensHit is where ResolveID found an id.
@@ -125,6 +129,8 @@ type Lens struct {
 	trash  []TrashRow
 	// clientKey is LensOptions.TimeClientKey (timespans.go).
 	clientKey string
+	// now is LensOptions.Now: where an open time span ends (zero = time.Now).
+	now time.Time
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -183,7 +189,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -311,7 +317,11 @@ func (l *Lens) setup(ctx context.Context) error {
 	}
 	// TIME 9 (timespans.go): task_time_spans + the time_spent view, built
 	// from the rows before the lens locks (open spans end now).
-	if err := l.createTimeSpent(ctx, tables, time.Now()); err != nil {
+	now := l.now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if err := l.createTimeSpent(ctx, tables, now); err != nil {
 		return err
 	}
 	// TASK 6.6 (rollup.go): task_rollup over tasks_all, task_tree_all and

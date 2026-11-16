@@ -347,6 +347,28 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 	return rankTable(out, w, perTable), nil
 }
 
+// labelRunes is how much of a title-less row's body serves as its label.
+const labelRunes = 80
+
+// hitLabel is what names a hit for ranking: its title, else the start of
+// its body's first line, which is what names a memory (a kind with no
+// title) in every listing. Without it a memory holding the word in its
+// one line ranked below every titled row holding it (devco D-463).
+func hitLabel(h opssearch.Hit) string {
+	if h.Title != "" {
+		return h.Title
+	}
+	body := h.Body
+	if body == "" {
+		body = h.Fallback // a memory: its body, as the listing prints it
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
+	if r := []rune(line); len(r) > labelRunes {
+		line = string(r[:labelRunes])
+	}
+	return line
+}
+
 // rankedHit is one in-scope hit of a table before scoring: matched is how
 // many topic words it holds (natural queries only).
 type rankedHit struct {
@@ -365,7 +387,7 @@ func rankTable(in []rankedHit, w searchWords, perTable int) []opssearch.Hit {
 		if !w.natural {
 			in[i].matched = n
 		}
-		share[i] = titleShare(in[i].hit.Title, w.terms)
+		share[i] = titleShare(hitLabel(in[i].hit), w.terms)
 	}
 	idx := make([]int, len(in))
 	for i := range idx {

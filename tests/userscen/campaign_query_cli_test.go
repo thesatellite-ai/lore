@@ -97,7 +97,7 @@ func TestCampaignQuery_SearchMatrix(t *testing.T) {
 		{`"blue green"`, []string{s.deploy}},
 		{`"green blue"`, nil}, // a phrase keeps its order
 		{"blue-green", []string{s.deploy}},
-		{"deploy friday", []string{s.friday}}, // several words: all of them
+		{"deploy friday", []string{s.friday}}, // several words: the rows holding all of them (the rest are partial)
 		{"deploy AND friday", []string{s.friday}},
 		{"deploy NOT friday", []string{s.deploy}},
 		{"friday OR invoice", []string{s.friday, s.invoice}},
@@ -116,6 +116,11 @@ func TestCampaignQuery_SearchMatrix(t *testing.T) {
 		if want := cqSorted(cs.want...); !cqEqual(got, want) {
 			t.Errorf("search %q: got %v, want %v", cs.q, got, want)
 		}
+	}
+	// A question's rows holding only some words follow, marked partial
+	// (devco D-435): deploy holds "deploy" but not "friday".
+	if got, want := cqPartialIDs(cqSearch(t, c, "deploy friday")), cqSorted(s.deploy); !cqEqual(got, want) {
+		t.Errorf("search \"deploy friday\" partial hits: got %v, want %v", got, want)
 	}
 	// FTS punctuation, half a query and odd values: an answer, never a
 	// failure or an internal error (the query is retried quoted).

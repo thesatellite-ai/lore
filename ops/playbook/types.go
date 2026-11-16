@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"strings"
 	"time"
 
@@ -33,6 +34,8 @@ type AddIn struct {
 	engine.MetaFlags
 	// --source-ref, shared by every add that keeps a source_ref (D-425).
 	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
 
 	Title       string `json:"title" flag:"title" alias:"name" desc:"title (required)"`
 	Description string `json:"description,omitempty" flag:"description" desc:"one-line summary (default: the title)"`

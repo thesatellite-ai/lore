@@ -11,12 +11,12 @@
 package knowledge
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -165,6 +165,11 @@ type Create struct {
 	// Trust is the new row's trust_score; 0 writes DefaultTrust. A rule an
 	// agent adds passes trust.Agent so it waits for a person (devco:S-15).
 	Trust float64
+	// Key is the add's --key (addkey, devco D-439): the row gets the key's
+	// natural id, and a retry with the same key writes nothing and returns
+	// the row the first run added (Existed is then set true).
+	Key     string
+	Existed *bool
 }
 
 // Add creates one row of noun n and returns the store that holds it and
@@ -177,6 +182,18 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 	project, err := ResolveProject(ctx, env, n, c.Project)
 	if err != nil {
 		return "", engine.Written{}, 0, err
+	}
+	keyID, err := addkey.ID(n.Prefix, n.Name, project.String(), c.Key)
+	if err != nil {
+		return "", engine.Written{}, 0, err
+	}
+	if !keyID.IsZero() {
+		if src, r, found, ferr := addkey.Existing(ctx, env, n.Name, n.Table, keyID); found || ferr != nil {
+			if found && c.Existed != nil {
+				*c.Existed = true
+			}
+			return src, engine.Written{Row: r}, 0, ferr
+		}
 	}
 	texts := maps.Clone(c.Texts)
 	if texts[FieldSourceKind] == "" {
@@ -198,6 +215,7 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 			return "", engine.Written{}, 0, err
 		}
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, env); v != nil {
 		fields[FieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}
@@ -234,7 +252,20 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 			return "", engine.Written{}, 0, err
 		}
 	}
-	w, err := env.Create(carry.Before(ctx), store.Source(c.To), n.Table, fields)
+	var w engine.Written
+	if keyID.IsZero() {
+		w, err = env.Create(carry.Before(ctx), store.Source(c.To), n.Table, fields)
+	} else {
+		var found bool
+		var ksrc store.Source
+		ksrc, w, found, err = addkey.Create(carry.Before(ctx), env, n.Name, store.Source(c.To), n.Table, keyID, fields)
+		if found && err == nil {
+			if c.Existed != nil {
+				*c.Existed = true // a concurrent run with this key added it first
+			}
+			return ksrc, w, 0, nil
+		}
+	}
 	if err != nil {
 		return "", engine.Written{}, 0, carry.Hint(err)
 	}
@@ -392,7 +423,7 @@ func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only
 		if err != nil {
 			return nil, Hidden{}, err
 		}
-		slices.SortFunc(rows, func(a, b row.Row) int { return cmp.Compare(a.ID.String(), b.ID.String()) })
+		slices.SortFunc(rows, row.ByCreation) // creation order, not id order (row.ByCreation)
 		for _, r := range rows {
 			if r.Deleted || (f.project != "" && Field(r, FieldProject) != f.project) || (keep != nil && !keep(r)) {
 				continue
@@ -591,4 +622,13 @@ func StoreOf(ctx context.Context, env Env, n Noun, id ids.AnyID, requested store
 		return ""
 	}
 	return src
+}
+
+// ExistingLine is the note of an add whose --key found the row a previous
+// run added ("" otherwise).
+func ExistingLine(existing bool) string {
+	if !existing {
+		return ""
+	}
+	return "  " + addkey.AlreadyLine + "\n"
 }

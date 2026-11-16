@@ -4735,6 +4735,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -5174,6 +5177,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -5683,6 +5689,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -7068,6 +7077,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -7507,6 +7519,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -8002,6 +8017,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -13317,6 +13335,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -13760,6 +13781,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -14254,6 +14278,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -14825,6 +14852,10 @@
                     "type": "string",
                     "description": "body (required)"
                   },
+                  "key": {
+                    "type": "string",
+                    "description": "idempotency key: a retry with the same key returns the row already added and writes nothing"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -14932,6 +14963,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -18545,6 +18579,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -18722,6 +18759,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -18899,6 +18939,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -20053,6 +20096,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -20492,6 +20538,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -20958,6 +21007,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -21769,6 +21821,10 @@
                     "type": "string",
                     "description": "body (required)"
                   },
+                  "key": {
+                    "type": "string",
+                    "description": "idempotency key: a retry with the same key returns the row already added and writes nothing"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -21873,6 +21929,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -24667,6 +24726,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -25106,6 +25168,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -25646,6 +25711,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -43023,6 +43091,10 @@
                     "type": "string",
                     "description": "body"
                   },
+                  "key": {
+                    "type": "string",
+                    "description": "idempotency key: a retry with the same key returns the row already added and writes nothing"
+                  },
                   "language": {
                     "type": "string",
                     "description": "programming language of the exemplar (go, ts, …)"
@@ -43102,6 +43174,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -43283,6 +43358,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -43722,6 +43800,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -44259,6 +44340,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -44449,6 +44533,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -44626,6 +44713,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -47800,6 +47890,10 @@
                     "type": "string",
                     "description": "one-line summary (default: the title)"
                   },
+                  "key": {
+                    "type": "string",
+                    "description": "idempotency key: a retry with the same key returns the row already added and writes nothing"
+                  },
                   "meta": {
                     "type": "array",
                     "description": "set metadata: key=value, key:type=value, project:key=value (repeatable)",
@@ -47863,6 +47957,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -48044,6 +48141,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -48483,6 +48583,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -49006,6 +49109,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -49196,6 +49302,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -49373,6 +49482,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -52588,6 +52700,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -52769,6 +52884,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -53208,6 +53326,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -53720,6 +53841,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -53910,6 +54034,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -54087,6 +54214,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -66660,6 +66790,10 @@
                     "type": "string",
                     "description": "JSON array of glob patterns (when activation=glob)"
                   },
+                  "key": {
+                    "type": "string",
+                    "description": "idempotency key: a retry with the same key returns the row already added and writes nothing"
+                  },
                   "live": {
                     "type": "boolean",
                     "description": "share this row with everyone at once on the live ref (refs/lore/live)"
@@ -66765,6 +66899,9 @@
                   "properties": {
                     "carried_meta": {
                       "type": "integer"
+                    },
+                    "existing": {
+                      "type": "boolean"
                     },
                     "id": {
                       "type": "string"
@@ -80119,6 +80256,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -80300,6 +80440,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -80739,6 +80882,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -81233,6 +81379,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -81410,6 +81559,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -85608,6 +85760,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -86051,6 +86206,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -86549,6 +86707,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -108157,6 +108318,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -108596,6 +108760,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -109087,6 +109254,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -111923,6 +112093,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -112366,6 +112539,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -116754,6 +116930,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -117193,6 +117372,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -117688,6 +117870,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -118225,6 +118410,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -118664,6 +118852,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -119159,6 +119350,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "existing": {
+                      "type": "boolean"
+                    },
                     "id": {
                       "type": "string"
                     },

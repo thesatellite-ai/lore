@@ -8,6 +8,7 @@ package rule
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -138,6 +139,8 @@ type AddIn struct {
 	engine.MetaFlags
 	// --source-ref, shared by every add that keeps a source_ref (D-425).
 	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
 
@@ -170,13 +173,16 @@ type AddOut struct {
 	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
-	label string
+	// Existing is true when --key found the row a previous run added
+	// (nothing written).
+	Existing bool `json:"existing,omitempty"`
+	label    string
 }
 
 // Text prints v0.1.17's add lines: "✓ <id> <label>", the label left out
 // (no trailing space) for the repo, whose label is empty.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s\n  scope: [%s] severity: %s\n", strings.TrimSpace(o.ID+" "+o.label), o.Scope, o.Severity) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
+	return fmt.Sprintf("✓ %s\n  scope: [%s] severity: %s\n", strings.TrimSpace(o.ID+" "+o.label), o.Scope, o.Severity) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings) + kn.ExistingLine(o.Existing)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
@@ -466,7 +472,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	var existed bool
 	c := kn.Create{
+		Key: in.Key, Existed: &existed,
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
@@ -490,7 +498,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Scope: kn.Or(scopeLabel, kn.ScopeLabel(in.Repo)), Severity: sev, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{Existing: existed, ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Scope: kn.Or(scopeLabel, kn.ScopeLabel(in.Repo)), Severity: sev, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the rules in scope.

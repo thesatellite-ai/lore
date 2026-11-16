@@ -442,6 +442,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	// v0.1.17 stamped created_by_actor_id with the current identity; it is
 	// the calling actor, never caller-set (INTEG-AUDIT-1: no --created-by).
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.env); v != nil {
 		fields[work.FieldCreatedBy] = v
 	}
