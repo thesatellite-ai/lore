@@ -45,6 +45,10 @@ type Words struct {
 	// Natural is set for plain text with more than one topic word: a row
 	// needs only some of them, and TermFTS finds each word's rows.
 	Natural bool
+	// Syntax is set for text written in FTS5 syntax (a quote, '*', '(',
+	// ':', AND / OR / NOT / NEAR): it is run as written, so FTS5's refusal
+	// of it stands (Retry).
+	Syntax bool
 	// not is the FTS5 tail leaving out the negated words (" NOT …"), ""
 	// without any; each word's own search carries it too.
 	not string
@@ -82,7 +86,7 @@ func Plan(text string, parsed []metaquery.Term) Words {
 	}
 	full := metaquery.FTS(parsed)
 	if syntax {
-		return Words{Terms: querywords.Terms(prefixText(strings.Join(pos, " "))), FTS: full}
+		return Words{Terms: querywords.Terms(prefixText(strings.Join(pos, " "))), FTS: full, Syntax: true}
 	}
 	terms := querywords.Terms(strings.Join(pos, " "))
 	w := Words{Terms: terms, Natural: len(terms) > 1}
@@ -102,6 +106,15 @@ func Plan(text string, parsed []metaquery.Term) Words {
 	w.FTS = "(" + strings.Join(forms, " OR ") + ")" + w.not
 	return w
 }
+
+// Retry reports whether a text FTS5 refused is searched again with every
+// word quoted (Quoted): only plain words holding a topic word (c++,
+// foo-bar). Text written in FTS5 syntax (a lone or unclosed quote, a
+// dangling AND, a stray "(" or "*", a column filter) and text with no
+// word at all (') stay refused, so every search — `lore search` and each
+// `<kind> search` — gives the same E_INVALID_INPUT with the reason and a
+// hint instead of an empty result (D-475).
+func (w Words) Retry() bool { return !w.Syntax && len(w.Terms) > 0 }
 
 // TermFTS is the FTS5 text finding the rows of one topic word.
 func (w Words) TermFTS(term string) string {

@@ -244,8 +244,9 @@ func quoteSearch(s string) string { return `"` + s + `"` }
 
 // searchCoreTable runs w over t in every store's cache and returns t's
 // in-scope hits, scored and best first (searchrank.go), at most perTable.
-// A query FTS5 rejects as syntax is retried once with every word quoted
-// (v0.1.17's fallback); a second refusal is E_INVALID_INPUT.
+// Plain words FTS5 rejects are retried once with every word quoted
+// (v0.1.17's fallback, opsmemory.Match); a query written in FTS5 syntax
+// that FTS5 rejects is E_INVALID_INPUT, as in every `<kind> search`.
 func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssearch.Target, w searchrank.Words, sc searchScope, perTable int) ([]opssearch.Hit, error) {
 	// D-435: how many topic words each row holds, by each word's own
 	// search (the index's stemming and segmentation, so a word counts
@@ -255,10 +256,8 @@ func (a *App) searchCoreTable(ctx context.Context, eng *engine.Engine, t opssear
 		return a.Search(ctx, t.Table, m, n)
 	}, w, searchFetch)
 	if err != nil {
-		if errs.Has(err, errs.InvalidInput) {
-			return nil, errs.Wrap(errs.InvalidInput, "fts5 query against "+t.Entity, err).
-				WithHint("FTS5 syntax: 'foo*' / '\"phrase\"' / 'a OR b' / 'a NOT b'")
-		}
+		// a refused query keeps the cache's message (the query and FTS5's
+		// reason) and hint: the same error as every `<kind> search` (D-475)
 		return nil, err
 	}
 	// The words a row's own text holds count too (opsmemory.Held).

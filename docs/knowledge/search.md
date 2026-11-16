@@ -155,7 +155,7 @@ memory  mem_162d…9666  The client replies faster on WhatsApp than email  (scor
 
 ## Ask a question
 
-Type the question as you would ask a teammate: `lore search --query "where is the stripe test mode on"`. Words that carry no topic (how, do, we, is, the, where, …) are skipped, and the rest are matched in any form. A row needs only some of the words: rows holding every word come first, a word in the title counts more than one in the body, and when no row holds every word the list says so and shows the closest rows. A query written with search syntax (`"a phrase"`, `word*`, `AND`, `OR`, `NOT`) still needs every hit to match all of it.
+Type the question as you would ask a teammate: `lore search --query "where is the stripe test mode on"`. Words that carry no topic (how, do, we, is, the, where, …) are skipped, and the rest are matched in any form. A row needs only some of the words: rows holding every word come first, a word in the title counts more than one in the body, and when no row holds every word the list says so and shows the closest rows. A query written with search syntax (`"a phrase"`, `word*`, `AND`, `OR`, `NOT`) still needs every hit to match all of it. Search syntax that does not read (a lone or unclosed `"`, a stray `(` or `*`, an `AND` / `OR` / `NOT` with no word on one side, or a query with no word at all such as `'`) is refused with E_INVALID_INPUT "not a valid search query (<reason>)" and a hint, the same in `lore search`, every `lore <kind> search` and `lore comment search`, and over REST (400). A word holding a colon (`error: timeout`, `time:3pm`) is plain text and finds the rows holding it.
 
 <!-- example: search#a-question -->
 ```console
