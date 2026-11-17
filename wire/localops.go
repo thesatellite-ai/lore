@@ -82,6 +82,9 @@ func (a *App) runLocal(ctx context.Context, e op.Entry, d op.Decoder, c op.Calle
 		ctx = WithNoCreate(ctx)
 	}
 	// P3-MISC-2: a Local MayAsk operation reads the caller's yes itself.
+	// devco D-526: a Local op that may ask in a terminal (setup apply's
+	// own: offer) reads whether a person is there; an agent never is.
+	ctx = op.WithInteractive(ctx, c.Interactive && c.Agent == "")
 	return e.Invoke(op.WithConfirmed(ctx, c.Yes), in)
 }
 

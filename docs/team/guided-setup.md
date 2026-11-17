@@ -184,7 +184,7 @@ steps:
 | `tools` | Which coding tools do you use? | all, optional | the tool profiles (`claude_code`, `codex`, …); saving records them and checks each tool has the current lore skill: a missing or old one shows as a warning with its fix, `lore skill install --tool <tool>` ([skill install](../knowledge/skill-install.md)) |
 | `secrets` | Where do you keep secrets? | all, optional | the default secret manager for new secret references (lore only asks it for its version) |
 | `folders` | Which folders is this setup for? | all, optional | folder globs and whether this is the default setup |
-| `this_folder` | This folder | all, optional | nothing; shown only when you started inside a git repo: which setup this repo uses and whether lore is set up in it |
+| `this_folder` | This folder | all, optional | nothing; shown only when you started inside a git repo: which setup this repo uses and whether lore is set up in it. For an admin setup it may offer an own: pattern (below) |
 | `summary` | Summary | all | nothing; every step and every warning with its fix |
 
 Steps that do not apply to a kind are skipped. A re-check reuses the results of a check of the same answers from the last 2 minutes and runs only the checks that are missing, failed or older. Every check and its fix is listed in [Checking every setup](../operations/doctor-all.md#every-check).
@@ -257,6 +257,8 @@ This folder: no org, no attached store, written as Tomas Weber <tomas@agency.exa
 <!-- /example -->
 
 Outside a git repo the line is `This folder: not a git repo`, and in a git repo without `.lore/` it says that `lore init` sets it up. In a client repo of an org (a hosted remote the org claims) it names the org link instead (`lore org link --org <org> --project <folder>`, kept only in the org's store), never `lore init`, which would write into the client's repository; the This folder step's `repo.init` check is skipped there with that step. Nothing in the repo is changed by these lines.
+
+**The own: offer (admins only).** When an admin saves the team or This folder step inside a repo whose hosted remote (host/owner/repo) no own: pattern of the org matches, lore would treat it as a client repo (fail closed, guards on). So the step offers the remote's owner as an own: pattern, for example `github.com/acme-co/*`: at a terminal it asks `Add own: pattern github.com/acme-co/* to acme? [Y/n]` (Enter adds it); `--yes` (REST `"yes": true`) adds it without asking; with no terminal and no `--yes` nothing is written and the step's warning names the command, `lore org config set --org acme --key own --add github.com/acme-co/* --yes`. The pattern is written the way `lore org config set` writes it (committed in the org store's clone, then the org entry copies it), and afterwards `lore whoami` there says `own repo`. `setup apply --json` reports it as `own_offer` (`org`, `remote`, `pattern`, `added`, `command`). A member is never offered it, and neither is a repo the org already names: a repos: pattern or client link (an explicit client listing always wins), an own: pattern or own link, or a remote that is not host/owner/repo.
 
 For every command, lore picks the active setup with the first rule that answers:
 

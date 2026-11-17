@@ -345,6 +345,9 @@ type ApplyOut struct {
 	// Warnings are one-line notices of the save, such as a folder given
 	// more than once and saved once; left out when there is none.
 	Warnings []string `json:"warnings,omitempty"`
+	// OwnOffer is the own: pattern offered to an admin for this repo
+	// (devco D-526) and whether it was added; left out when none.
+	OwnOffer OwnOffer `json:"own_offer,omitzero"`
 }
 
 // FixIn is setup.fix's input.

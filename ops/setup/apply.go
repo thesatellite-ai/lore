@@ -173,7 +173,15 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		s.done = false
 	}
 	out.Status, out.Checks = onboard.StepDone, checks
-	return out, e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: answers, Checks: checks, Status: onboard.StepDone})
+	if err := e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: answers, Checks: checks, Status: onboard.StepDone}); err != nil {
+		return ApplyOut{}, err
+	}
+	// devco D-526: an admin saving the team or this_folder step in an org
+	// repo no own: pattern names is offered its owner as one (ownoffer.go).
+	var lines []string
+	out.OwnOffer, lines = e.offerOwn(ctx, s.entry, step.ID)
+	out.Warnings = append(out.Warnings, lines...)
+	return out, nil
 }
 
 // keepJoinedKind records the kind a join step gave the setup in the saved

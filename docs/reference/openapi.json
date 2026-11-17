@@ -75184,6 +75184,10 @@
                   "step": {
                     "type": "string",
                     "description": "the step id"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -75304,6 +75308,32 @@
                         ]
                       }
                     },
+                    "own_offer": {
+                      "type": "object",
+                      "properties": {
+                        "added": {
+                          "type": "boolean"
+                        },
+                        "command": {
+                          "type": "string"
+                        },
+                        "org": {
+                          "type": "string"
+                        },
+                        "pattern": {
+                          "type": "string"
+                        },
+                        "remote": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "org",
+                        "remote",
+                        "pattern",
+                        "command"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -75372,6 +75402,16 @@
           },
           "409": {
             "description": "E_SETUP_STEP_FAILED, E_SETUP_STEP_ORDER, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
