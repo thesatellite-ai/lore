@@ -51,7 +51,7 @@ const cliNotAStoreHint = "cd into a git checkout, or run git init here first"
 // covers (devco D-421): the hint names --to, never "git init".
 const (
 	cliNoStoreMsg  = "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read"
-	cliNoStoreHint = "name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo"
+	cliNoStoreHint = "name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>) or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo"
 )
 
 // cliRefusal reports whether stderr is one of the two outside-repo

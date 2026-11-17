@@ -135,7 +135,7 @@ $ lore team invite list --status pending --json
 ```
 <!-- /example -->
 
-`--status pending|accepted|revoked|expired` filters the list; a pending invite past its last day shows as `expired`. `--json` prints the same rows as `{"invites":[…]}`, as above; projects are shown by `prj_` id.
+`--status pending|accepted|revoked|expired` filters the list; a pending invite past its last day shows as `expired`. `--json` prints the same rows as `{"invites":[…]}`, as above; projects are shown by `prj_` id. With no invites it prints `no invites` (`--json`: `{"invites":[]}`); any answer that is only empty lists says `no <list>` for each, never nothing.
 
 `resend` prints the same line again and changes nothing. It takes an `inv_` id or the invited email (with an email, the pending invite is picked). A used, revoked or expired invite answers its `E_INVITE_*` code, with a hint to write a new one.
 
