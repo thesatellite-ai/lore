@@ -83,7 +83,7 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 | Exit | Code | What it means | What the agent does |
 |---|---|---|---|
 | 10 | `E_NO_WORK` | nothing is ready; the message lists why each task waits (dependency not merged, gate, claimed by someone) | stop, or wait and ask again later; report to the coordinator if a dependency looks stuck |
-| 11 | `E_CONTENDED` | ready work exists but other agents won every claim, or another writer won every attempt to push a claim, heartbeat or other coordination write | wait a few seconds (with some randomness) and run the command again (`task next` for a claim) |
+| 11 | `E_CONTENDED` | ready work exists but other agents won every claim, or another writer won every attempt to push a claim, heartbeat or other coordination write, for about 15 seconds of retries with random waits (the line says how many attempts over how long); when the tasks this agent lost all went to others, `task next` reads the queue again and answers `E_NO_WORK` instead | wait a few seconds (with some randomness) and run the command again (`task next` for a claim) |
 | 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next --claim` for other work |
 | 13 | `E_CANCELLED` | a person cancelled the task while you held it | stop; do not finish it |
 | 14 | `E_REASSIGNED` | a person gave the task to someone else | stop; leave a note or handoff if you have useful state |

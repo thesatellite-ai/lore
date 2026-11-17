@@ -329,7 +329,7 @@ A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 | `lease.ttl` | `20m` | how long a claim lasts without a renewal (a heartbeat) |
 | `lease.renew_every` | `5m` | how often an agent renews its claim; must be shorter than `ttl` |
 | `lease.grace` | `2m` | extra time after a claim runs out before others may take the task |
-| `lease.push_retries` | `5` | how many times lore retries a push the remote turned down |
+| `lease.push_retries` | `5` | the fewest times lore retries a coordination push (claim, hold, release) that lost the race to another writer; past that it keeps retrying, with random exponential waits, for about 15 seconds in all, so a burst of many agents on one queue gets through |
 | `agents.max_claims_per_agent` | `1` | how many tasks one agent session may hold at once; for a person it counts per worktree, so a worktree per task holds one claim each. The cap is the team policy of the same name (`lore policy set --key agents.max_claims_per_agent --value 3`, default 1); this setting may only lower it, and a value above the team's cap is ignored |
 | `agents.max_attempts` | `3` | how many agents may try a task before it is marked `blocked` |
 | `merge_check.adapter` | `none` | `none` learns about merges from commits only; `github` also asks the `gh` tool about merged pull requests |

@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1873 |
+| fixed | 1874 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -854,6 +854,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-526 | finding | owner D-525 answer: an admin's guided setup in the org's own repo with no own: pattern matching its remote left it a client repo (guards on, hooks skipped) with nothing offering to declare it own | fixed | TestOwnOfferFor, TestOfferOwn, TestJourneySetupOwnOffer | logic/orgresolve OwnOfferFor (admin, hosted host/owner/repo remote, no repos:/own: pattern or link of the org names it) → host/owner/*; ops/setup offerOwn after the team or this_folder step of an admin setup: --yes adds it, a terminal asks [Y/n] (Enter yes), no terminal writes nothing and names `lore org config set --org <org> --key own --add <pattern> --yes`; wire App.AddOwnPattern writes through OrgConfigSet; setup.apply out.own_offer; docs team/guided-setup |
 | devco:D-527 | finding | gate 9593e523: `lore sync` in an own repo said "store client-store: pushed (sent 2, received 0, merged 0, refused 0)" for a store link commit with no note rows, dropping "; pushed local commit(s) with no note rows": D-517 made store push's sent count commits and sync's org store push copied it | fixed | TestOrgPushReportSentCountsRows, TestJourneyStoreNamesAgreeOnEveryPath, TestJourneyOrgStoreAdd | wire/sync_orgstores.go orgPushReport: a sync line's sent is the push's row files (PushOut.Rows), as every store line of a sync; `lore store push` keeps D-517's `sent N commit(s) (M row files)` |
 | devco:D-528 | finding | gate 9593e523: D-523 made fix.run repo-only, so `lore fix --all` (and --all --dirs) from the home folder or a folder of repos refused E_UNSUPPORTED (exit 23); fix --all over a folder of repos is a real feature | fixed | TestFixAllIsNotRepoOnly, TestJourneyFleetLinksAndDeadOrigins, TestJourneyNoLoreRepoUntouched, TestJourneyCIShallowReadOnlyHome, TestJourneyUpgraderFixOldProjects, TestStoryJ1AdminManyRepos, TestStoryJ4Upgrade | wire/repoonly.go fleetFix: a fix run with --all (or --dirs) skips the repo-only refusal; plain fix outside a repo keeps it |
+| devco:D-529 | finding | gate 6b8c3e4b: TestJourneyAgentSprint `bot3 task next` → E_CONTENDED "ready work exists but every claim attempt lost a race" at load ~137; six agents on one queue is real use | fixed | TestJourneyClaimBurst, TestRetryScheduleIsExponentialFullJitterCapped, TestBudgetRetriesAtLeastPushRetries, TestJourneyAgentSprint | adapters/signals Retry/Budget: lost races wait full-jitter exponential backoff (50ms doubling, 1.5s cap, first attempt immediate) and retry at least lease.push_retries times, then until 15 s elapsed (60 attempts hard stop); coord.Next re-reads the board after losing every candidate, answers E_NO_WORK when nothing is left and E_CONTENDED (attempts and time named) when the budget runs out; journey: 16 agents in 16 clones on 12 tasks with a slow remote hook |
 
 ## lore-adoptfix
 

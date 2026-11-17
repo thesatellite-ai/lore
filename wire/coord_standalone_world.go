@@ -1159,7 +1159,12 @@ func coordErr(err error) error {
 		}
 		return errs.New(errs.NoWork, nw.Error()).WithHint(hint)
 	case errors.Is(err, coord.ErrContended):
-		return errs.New(errs.Contended, "ready work exists but every claim attempt lost a race").WithHint("retry after a short wait")
+		msg := "ready work exists but every claim attempt lost a race"
+		var ce *coord.ContendedError
+		if errors.As(err, &ce) {
+			msg = fmt.Sprintf("ready work exists but every claim attempt lost a race: %d attempts over %s, other agents kept taking the ready tasks first", ce.Attempts, ce.Elapsed.Round(time.Millisecond))
+		}
+		return errs.New(errs.Contended, msg).WithHint("retry after a short wait")
 	case errors.As(err, &pe):
 		return errs.New(errs.Refused, pe.Error())
 	case errors.Is(err, coord.ErrUnknownTask):
