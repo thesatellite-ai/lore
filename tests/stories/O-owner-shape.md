@@ -1,0 +1,42 @@
+# O — the owner-shaped machine
+
+**Who.** Ada (made-up names) runs the org `acme` as its admin and keeps her own projects in a second org `kite`, on one laptop. Mo joins `acme` as a member from a laptop shaped the same way.
+
+**Why.** Store and setup bugs kept showing up on the owner's own machine after every story passed, because the stories ran on a plain one-identity machine that talks to github.com directly. This story runs on a machine laid out like the owner's, so those bugs show up in the gate first.
+
+**Fixture.** `tests/stories/ownershape.go`; every store or setup story can use it (`s.OwnerShaped(OwnerShape{…})`):
+
+- `~/.gitconfig` holds the personal identity; `[includeIf "gitdir:~/code/<org>/"]` gives every repo under the org folder the org identity (`OwnerMachine.GitUser` reads what git resolves in a folder).
+- `~/.ssh/config` has `Host github-<org>` / `HostName github.com` with the org account's key, and `url."git@github-<org>:<owner>/".insteadOf` rewrites the org's GitHub owners (ssh and https forms) to it.
+- The fake ssh carries git over the alias (`git-upload-pack`, `git-receive-pack`) to the same bare repos a plain url reaches, so a push through the alias lands on the fake GitHub.
+- `s.MoveRemote` is a GitHub transfer: the bare repo moves to another owner (optionally leaving a stale copy).
+- `GitignoredLore` and `ClaudeLinkOut` make a repo that ignores `.lore/` and one whose `CLAUDE.md` is a link out of the repo.
+
+**Test.** `TestStoryOOwnerShape` (tests/stories/O_owner_shape_test.go), about 60 s.
+
+## Steps
+
+1. Ada clones her org repo into `~/code/acme/platform` and a personal one into `~/code/kite/kite-app`; git resolves the org identity in the first and the personal one in the second.
+2. She saves the admin setup `acme-admin` (org identity, the org account through the alias, team store `acme-co/lore-team`) and a second admin setup `kite-home` (personal identity, plain github.com) for the org `kite`; she adds the admins-only store `lore-ops` (`--audience admins`) and the client pattern `github.com/acme-co/client-*`.
+3. She adds a folder `web` with a memory and a task, links `web`, links the client repo `client-shop` (matched by the prefix pattern), inits and renders the repo that ignores `.lore/` and the one whose `CLAUDE.md` links to `~/notes/CLAUDE.md`, adds a folder and a row to `lore-ops`, and syncs.
+4. She reads from every place (home, each repo, the store clone): nothing is pushed.
+5. GitHub moves `lore-team` and `lore-ops` to `acme-labs`; she runs `lore store set-url` for each from `$HOME`, writes a row and runs `lore store push --store acme` from `$HOME`.
+6. Mo joins with the invite as `acme-member` (org identity, alias), reads in his clone and from `$HOME`, writes, syncs.
+7. A second admins-only store nobody wrote to (`lore-vault`) moves; Ada runs set-url for it in her org repo.
+
+## What must hold
+
+- Every org store's clone has the org identity as its git user, and every commit on it is authored so (the `kite` store: the personal identity); set-url says the git user it actually set.
+- A client repo and the repo that ignores `.lore/` keep their tracked files and `git status`; the file `CLAUDE.md` links to is never written, and the link stays a link.
+- Reads push nothing; only sync and store push move a remote.
+- Each store set-url moves its clone to the new owner's folder; `store push` takes the org's name from `$HOME` and its "sent N" is the commits that reached the remote.
+- A member's machine never clones the admins-only stores.
+- Every note names the store it wrote to.
+- Findings another branch fixes are logged as waiting with their id until the fix lands (`oWaiting`).
+
+## Findings it guards
+
+- `devco:D-542` (REGRESSIONS.md): `store folder add lore-ops servers` said "committed locally to store acme"; the note now names the store written.
+- `devco:D-516`, `devco:D-517` (REGRESSIONS.md): `store push --store acme` from `$HOME` refused, and push printed "sent 0" after 2 commits; the story pushes by the org's name and checks the count.
+- `devco:D-514`, `devco:D-515` (REGRESSIONS.md): set-url set the moved clone's git user to a non-org identity and left the old clone beside the new one (for both stores); the story checks the moved clone's place and git user.
+- Waiting: `devco:D-540` (set-url cannot name the org's second store from `$HOME`; store show prints no sto_ id), `devco:D-541` (set-url on an empty admins-only store hints `--name acme` with that store's url).

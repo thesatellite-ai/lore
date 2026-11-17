@@ -1113,7 +1113,7 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	// this very commit leaves it) is now; otherwise it waits for `lore sync`.
 	if m, merr := rowfs.ReadMarker(gb.Dir()); merr != nil || !pushesNow(m.Push) {
 		if a.opts.Notice != nil {
-			a.opts.Notice("committed locally to store " + string(src.Name) + "; lore sync sends it")
+			a.opts.Notice("committed locally to store " + a.writtenStoreLabel(src) + "; lore sync sends it")
 		}
 		return nil
 	}
@@ -1281,4 +1281,21 @@ func (a *App) personalInitOutsideRepo(ctx context.Context, e op.Entry, d op.Deco
 		}
 	}
 	return false
+}
+
+// writtenStoreLabel names the store a commit landed in, as lore sync and
+// store show name it: an org's store by its own short name (the org's
+// folder store by the org), else the name src was reached by. An org's
+// second store is reached under the org entry's name, so "committed
+// locally to store <org>" named the wrong store (devco D-542).
+func (a *App) writtenStoreLabel(src attach.Store) string {
+	if k, ok := storeKey(src.URL); ok {
+		if org := a.orgFolderStores()[k]; org != "" {
+			return org
+		}
+		if n := a.orgShortNames()[k]; n != "" {
+			return n
+		}
+	}
+	return string(src.Name)
 }

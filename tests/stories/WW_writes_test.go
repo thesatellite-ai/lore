@@ -561,19 +561,7 @@ const (
 // (rule, then "<op>@<place>", "*@<place>", "<op>@*" or "*@*"): logged as
 // waiting, never asserted the buggy way, until the fix lands and the entry
 // is removed.
-var wwWaiting = map[string]map[string]string{
-	wRuleHint: {
-		"fix.run@*": "devco:D-524",
-	},
-	wRuleExit: {
-		// fix run exits 1 after "Everything is current." with warnings only
-		"fix.run@*": "devco:D-522",
-	},
-	wwRuleRemote: {
-		// a migrate run in a code repo pushes the org store's waiting commits
-		"migrate.run@*": "devco:D-521",
-	},
-}
+var wwWaiting = map[string]map[string]string{}
 
 // wwFindings collects every finding of the run for the summary log.
 type wwFindings struct {
