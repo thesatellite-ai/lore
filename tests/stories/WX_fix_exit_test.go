@@ -73,7 +73,8 @@ func TestStoryWXFixExitAndStoreClone(t *testing.T) {
 		root := m.LorePath("stores", "acme-co", "lore-team")
 		for _, dir := range []string{root, wFindDir(t, root, wFolder)} {
 			r := m.Lore(dir, "fix")
-			r.Fails(t, 19, "is a lore store clone, not a code repo", "lore store doctor", "cd into", "--store does not apply")
+			// the repo-only class (devco D-523, owner D-508/D-509): exit 23
+			r.Fails(t, 23, "is a lore store clone, not a code repo", "lore store doctor", "cd into", "--store does not apply")
 			r.Never(t, "not inside a git repo")
 		}
 	})

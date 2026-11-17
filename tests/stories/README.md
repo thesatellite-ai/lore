@@ -19,6 +19,7 @@ A story is a [journeys](../journeys/README.md) World (`New(t, "<id>")`): the fak
 | `story.go` | `Story`, `New`, `Person`, `Seed` (fill a remote's first commit from a generator) |
 | `rules.go` | the standing-rule checks |
 | `fixtures.go` | the repo shape generators: `V017Repo` with `HubShape` (the 5.5k-row 0.1.17 repo) or `SmallShape`, `Monorepo`, `DocsOnly`, `Unicode` (Unicode names and text, CRLF), `PlainRepo` (no lore data), `Worktree`, `ShallowClone`; two machines are `Persona.NewLaptop` |
+| `ownershape.go` | the owner-shaped machine every store or setup story can use (`OwnerShaped`): two git identities by folder (includeIf), the org account behind an ssh host alias with url.insteadOf and git carried over it, a GitHub org move (`MoveRemote`), `GitignoredLore`, `ClaudeLinkOut` (story O) |
 | `harness_test.go` | the harness's own tests: every rule check bites, the generators build their shapes, one short replay |
 | `<id>-<name>.md` + `<id>_<name>_test.go` | one story |
 
