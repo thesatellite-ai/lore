@@ -161,11 +161,10 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 	dir := cliOutside(t, w, a)
 	needRepo := [][]string{
 		{"init"}, {"init", "--non-interactive", "--name=app"},
-		{"rule", "list"}, {"rule", "add", "Run the tests"}, {"memory", "add", "a note"}, {"task", "list"}, {"task", "next"},
-		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"inbox"}, {"render"},
+		{"rule", "list"}, {"rule", "add", "Run the tests"}, {"memory", "add", "a note"}, {"task", "list"},
+		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"render"},
 		{"sql", "run", "SELECT 1"}, {"sql", "SELECT 1"}, {"lint"}, {"trash"}, {"batch", "list"},
 		{"policy", "show"}, {"vars", "list"}, {"tag", "list"}, {"machine", "list"}, {"land"},
-		{"session", "list"}, // run:tests:q-session-outside
 	}
 	for _, args := range needRepo {
 		r := a.Lore(dir, args...)
@@ -185,6 +184,26 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 		if err != nil || jr.Code != th.ExitGuard || doc.Error == nil || doc.Error.Code != "E_NOT_A_STORE" || doc.Error.Exit != th.ExitGuard ||
 			doc.Error.Class != "guard" || doc.Error.Message != msg || doc.Error.Hint != hint || jr.Stderr != "" {
 			t.Errorf("lore %v --json outside a repo: want the E_NOT_A_STORE object (exit 19, class guard) and an empty stderr: %s", args, jr)
+		}
+	}
+	// Repo-only reads (owner 2026-11-17, devco D-508/D-509): missions, the
+	// inbox, task next and agent sessions live in each code repo, so outside
+	// one they refuse E_UNSUPPORTED (exit 23) saying so and to cd into the
+	// repo, --store not applying; never the store reads' E_NOT_A_STORE.
+	for _, args := range [][]string{{"task", "next"}, {"inbox"}, {"session", "list"}} { // run:tests:q-session-outside
+		r := a.Lore(dir, args...)
+		if r.Code != 23 || r.Stdout != "" || !strings.Contains(r.Stderr, "[E_UNSUPPORTED]") || !strings.Contains(r.Stderr, "in each code repo") ||
+			!strings.Contains(r.Stderr, "cd into the code repo") || !strings.Contains(r.Stderr, "--store does not apply") {
+			t.Errorf("lore %v outside a repo: want exit 23, E_UNSUPPORTED naming the code repo and --store not applying: %s", args, r)
+		}
+		jr := a.Lore(dir, append(args, "--json")...)
+		raw, err := cliOneJSON(jr.Stdout)
+		var doc cliErrorDoc
+		if err == nil {
+			err = json.Unmarshal(raw, &doc)
+		}
+		if err != nil || jr.Code != 23 || doc.Error == nil || doc.Error.Code != "E_UNSUPPORTED" || doc.Error.Exit != 23 || jr.Stderr != "" {
+			t.Errorf("lore %v --json outside a repo: want the E_UNSUPPORTED object (exit 23) and an empty stderr: %s", args, jr)
 		}
 	}
 	// Machine-level commands need no repository.
