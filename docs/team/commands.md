@@ -1615,7 +1615,7 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `lease.ttl` | `20m` | how long a claim lasts without a heartbeat |
 | `lease.renew_every` | `5m` | heartbeat interval; also how long a reader must see an unchanged renewal before calling a claim expired |
 | `lease.grace` | `2m` | extra time after `expires` before a claim counts as expired |
-| `lease.push_retries` | `5` | retries of a rejected push |
+| `lease.push_retries` | `5` | fewest retries of a push that lost a race; lore keeps retrying with random waits for about 15 s in all |
 | `agents.max_claims_per_agent` | `1` | claims one agent session may hold at once; a person's claims count per worktree; may only lower the team policy of the same name (`lore policy set --key agents.max_claims_per_agent --value <n>`) |
 | `agents.max_attempts` | `3` | holders a task may have before it becomes `blocked` |
 | `merge_check.adapter` | `none` | `github` asks `gh` whether a done task's pull request merged |

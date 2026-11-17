@@ -73,6 +73,22 @@ func (e *NoWorkError) Error() string {
 // ErrContended is E_CONTENDED: ready work exists but every attempt lost.
 var ErrContended = errors.New("coord: every claim attempt lost a race")
 
+// ContendedError is ErrContended with how long Next kept trying: the retry
+// budget (signals.Retry) ran out while other agents kept taking the ready
+// tasks first.
+type ContendedError struct {
+	// Attempts is how many claims were tried; Elapsed how long it took.
+	Attempts int
+	Elapsed  time.Duration
+}
+
+func (e *ContendedError) Error() string {
+	return fmt.Sprintf("coord: every claim attempt lost a race (%d attempts over %s)", e.Attempts, e.Elapsed.Round(time.Millisecond))
+}
+
+// Is lets errors.Is(err, ErrContended) match.
+func (e *ContendedError) Is(target error) bool { return target == ErrContended }
+
 // ToQueueTask converts a row to the queue's view; claim is its signals state.
 func ToQueueTask(d Doc, repoName func(string) string, claim queue.ClaimState, claimedBy string) queue.Task {
 	repo := d.Str(keyRepoID)
@@ -238,32 +254,59 @@ func Next(ctx context.Context, env Env, req NextRequest) (NextResult, error) {
 	if pick == nil {
 		pick = func(int) int { return 0 }
 	}
-	tried := map[string]bool{}
-	cur := res.Ready[0]
-	limit := len(res.Ready) + env.Signals.Lease.PushRetries
-	for i := 0; i < limit; i++ {
-		opts := req.Opts
-		opts.Repo = cur.Repo
-		cr, err := Claim(ctx, env, cur.ID, opts)
-		if err == nil {
-			out.Task, out.Claim = cur.ID, cr
-			return out, nil
+	// devco:D-529: when every candidate of this view was lost (others took
+	// them), wait a jittered backoff, read the board again and re-pick;
+	// the signals retry budget bounds the rounds. The first round never
+	// waits, so the uncontended path stays one read and one claim.
+	budget := env.Signals.NewBudget()
+	claims := 0
+	for {
+		tried := map[string]bool{}
+		cur := res.Ready[0]
+		limit := len(res.Ready) + env.Signals.Lease.PushRetries
+		for i := 0; i < limit; i++ {
+			opts := req.Opts
+			opts.Repo = cur.Repo
+			claims++
+			cr, err := Claim(ctx, env, cur.ID, opts)
+			if err == nil {
+				out.Task, out.Claim = cur.ID, cr
+				return out, nil
+			}
+			var he *signals.HeldError
+			var pe *PoisonedError
+			switch {
+			case errors.As(err, &he) && he.SameActor:
+				return out, err
+			case errors.As(err, &he), errors.Is(err, ErrNotOpen), errors.As(err, &pe):
+				tried[cur.ID] = true
+			default:
+				return out, err
+			}
+			next, ok := queue.PickAfterLoss(res.Ready, tried, pick)
+			if !ok {
+				break
+			}
+			cur = next
 		}
-		var he *signals.HeldError
-		var pe *PoisonedError
-		switch {
-		case errors.As(err, &he) && he.SameActor:
+		if budget.Spent(0) {
+			return out, &ContendedError{Attempts: claims, Elapsed: budget.Elapsed()}
+		}
+		if err := budget.Wait(ctx); err != nil {
 			return out, err
-		case errors.As(err, &he), errors.Is(err, ErrNotOpen), errors.As(err, &pe):
-			tried[cur.ID] = true
-		default:
+		}
+		if v, err = env.Signals.Read(ctx); err != nil {
 			return out, err
 		}
-		next, ok := queue.PickAfterLoss(res.Ready, tried, pick)
-		if !ok {
-			break
+		if docs, err = req.List(ctx); err != nil {
+			return out, err
 		}
-		cur = next
+		req.Opts.OpenChildren = OpenChildrenOf(docs)
+		res = queueOf(env, v, req, docs)
+		if len(res.Ready) == 0 {
+			// Everything this caller lost went to others: nothing is left
+			// to take, which is E_NO_WORK, not contention.
+			return out, &NoWorkError{Waiting: res.Waiting, Poisoned: out.Poisoned}
+		}
 	}
-	return out, ErrContended
 }

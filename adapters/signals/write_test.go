@@ -227,7 +227,7 @@ func TestWriteFailsClosed(t *testing.T) {
 		{"offline", func(f *gitremote.FaultRemote, _ *Store) { f.SetOffline(true) }},
 		{"autopush off", func(_ *gitremote.FaultRemote, s *Store) { s.Autopush = false }},
 		{"retries used up", func(f *gitremote.FaultRemote, _ *Store) {
-			for i := 1; i <= 10; i++ {
+			for i := 1; i <= DefaultRetry.MaxAttempts; i++ { // more than the retry budget allows (devco:D-529)
 				f.RejectPush(i, gitremote.StatusStale)
 			}
 		}},
