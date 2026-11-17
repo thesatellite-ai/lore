@@ -41,7 +41,7 @@ import (
 func (s storeSigner) cloneIdentity(ctx context.Context, remote string) git.CloneIdentity {
 	if sig, ok := s.owner(ctx, remote); ok {
 		why, who := "your identity in this store's org, the one lore signs its commits with", "org identity"
-		if org := orgOfURL(s.opts.Home, remote); org != "" {
+		if org := orgOfMovingStore(ctx, s.opts.Home, remote); org != "" {
 			why = "your identity in org " + org + " (orgs." + org + ".identity in " + lorehome.Shown() + "/config.yaml), the one lore signs this store's commits with"
 			who = "your identity in org " + org
 		}
