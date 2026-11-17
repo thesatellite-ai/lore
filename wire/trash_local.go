@@ -46,9 +46,12 @@ var (
 // v0.1.17 lore that may still hold lore.db (SQLite busy_timeout, ms).
 const localTrashBusyMS = "5000"
 
-// LocalTrash implements opstrash.LocalCopies.
+// LocalTrash implements opstrash.LocalCopies. In a store clone it reads
+// that clone's own copies, at the clone's top (devco D-509: `lore sync
+// trash list` there refused as if it needed a code repo); a store clone
+// keeps no lore 0.1.17 lore.db, so its answer is the empty trash.
 func (a *App) LocalTrash(ctx context.Context) ([]opstrash.LocalCopy, error) {
-	top, err := a.repoTop(ctx)
+	top, err := a.localTrashTop(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,4 +164,14 @@ func (a *App) DropLocalCopies(ctx context.Context, rowIDs []string) (int, error)
 		return 0, errs.Wrap(errs.Internal, "trash purge: close "+v017LoreDB, cerr)
 	}
 	return int(gone), nil
+}
+
+// localTrashTop is the folder whose lore.db holds this machine's safety
+// copies for a read: the code repo's top, or inside a store clone the
+// clone's top (a store clone is never a code repo, so repoTop refuses it).
+func (a *App) localTrashTop(ctx context.Context) (string, error) {
+	if sc, ok := storeHere(a.opts.RepoDir); ok {
+		return sc.top, nil
+	}
+	return a.repoTop(ctx)
 }

@@ -46,7 +46,6 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
-	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -1241,30 +1240,4 @@ const markOK = "✓"
 func errCoordInStore(sc storeCheckout) error {
 	return errs.New(errs.Unsupported, "coordination (task next, claims, inbox) runs in a code repo: "+sc.shown+" is a lore store clone, not a code repo").
 		WithHint("run it in a code repo linked to this folder (`lore org link --org <org> --project <folder>`); here, `lore task list` lists the tasks and `lore task edit --id <id> --assign @<handle>` assigns one")
-}
-
-// coordRepoOnly names the coordination reads a person runs to look
-// around (mission status, the inbox, task next): outside every repo they
-// refuse with errCoordNoRepo before any store is opened, instead of the
-// store reads' "no store to read … --store" (owner 2026-11-17: they stay
-// repo-only; --store does not apply).
-func coordRepoOnly(name string) bool {
-	switch name {
-	case opscoord.OpInbox, opscoord.OpMissionStatus, opscoord.OpTaskNext:
-		return true
-	}
-	return false
-}
-
-// errCoordNoRepo is the refusal of coordination outside a code repo:
-// missions, claims and the inbox live in each code repo (on its remote's
-// refs/lore/signals), not in a store, so the way out is to cd into the
-// repo, never a --store flag.
-func errCoordNoRepo(dir string) error {
-	where := "this folder"
-	if dir != "" {
-		where = dir
-	}
-	return errs.New(errs.Unsupported, "missions, claims and the inbox live in each code repo (on its remote's refs/lore/signals): "+where+" is not inside a code repo").
-		WithHint("cd into the code repo whose missions or inbox you want and run it there; --store does not apply (they are not store rows); `lore task list --store <org>` lists an org's tasks from anywhere")
 }

@@ -214,7 +214,7 @@ this machine only: local safety copies of rows sync removed (never shared)
 ## Pitfalls
 
 - **A removed file is not in the trash.** `lore trash list` shows notes deleted with a lore command (`lore <kind> delete`, `lore sync merge-rows`), and `lore trash restore --id <id>` brings one back with the same id. A file removed with git comes back from git: `lore trash restore --id <id>` prints the `git checkout` line for it. Prefer `archive` for notes you may still want to read.
-- **`lore trash list --local` is only for copies from v0.1.17.** It lists the safety copies an older lore kept in this machine's `lore.db` when a file disappeared; 0.1.18 adds no new ones. Numbers there (`#4`) are per machine, not row ids.
+- **`lore trash list --local` is only for copies from v0.1.17.** It lists the safety copies an older lore kept in this machine's `lore.db` when a file disappeared; 0.1.18 adds no new ones. Numbers there (`#4`) are per machine, not row ids. Inside a store clone it reads that clone's own copies; a store clone never had a `lore.db`, so it says `trash is empty`.
 - **`lore sync trash` is the old spelling.** It still works in 0.1.18, prints a note that names `lore trash --local`, and goes away in the next release.
 - **Purge only touches archived rows.** A row that is not archived is never purged, however old it is.
 - **Run purge on main and commit `_purged.json`.** Purged on a feature branch only, the rows come back from main when the branch merges.

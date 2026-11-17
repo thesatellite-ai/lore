@@ -197,7 +197,7 @@ $ head -3 AGENTS.md
 
 ## Try it: what did the tool read?
 
-`lore why-context` tells you what the last render wrote: when, where, how big, a checksum, and how many rules, hotfixes and memories went in. Add `--rendered` to print the full text after that summary. Use it when a coding tool did something odd and you want to know what it was told.
+`lore why-context` tells you what the last render wrote: when, where, how big, a checksum, and how many rules, hotfixes and memories went in. Add `--rendered` to print the full text after that summary. Use it when a coding tool did something odd and you want to know what it was told. It reads the repo's own `.lore/`, so run it in the code repo: from a folder that is no repo (your home folder) it says the last rendered context lives in each code repo and to cd into it; `--store` does not apply.
 
 <!-- example: render#why-context only=1 -->
 ```console

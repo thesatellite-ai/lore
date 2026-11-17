@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1851 |
+| fixed | 1852 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -832,6 +832,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-503 | finding | matrix: `lore why-context show` in the org store's clone committed the folder's project row (`committed locally to store acme; lore sync sends it`) and then refused E_NOT_FOUND; the next `lore sync` pushed it | fixed | TestLocalReadRunsAsARead, TestStoryWWhereYouStand | wire/localops.go runLocal: a Local operation that only reads runs with engine.WithAccess(read), as engine.Run marks every other read, so the engine it opens creates no row (T-11 guard in rosterProject) and a store clone never pushes for it |
 | devco:D-504 | finding | matrix: `lore team invite list` with no invites exited 0 with no output at all, in every place | fixed | TestEmptyAnswerSaysNothingFound, TestStoryWWhereYouStand | surface/cli printHuman: an answer whose generic text would be empty prints `no <list>` for each empty list field (writeNothing); --json unchanged |
 | devco:D-510 | finding | matrix: from a folder no repo, store clone or setup covers, every read but the roster's refused E_NOT_A_STORE with the hint `name the store: --to <org>/<folder> (or --store) …`, naming no --setup (149 reads at the home folder) | fixed | TestNowhereReadHintNamesStoreAndSetup, TestStoryWWhereYouStand | wire/targetoutside.go runOnDefaultStore: the hint names `--store <org>[/<folder>]` (a write: `--to <org>/<folder>`) and `--setup <setup>`, with lore store list and lore setup list; docs and transcripts updated |
+| devco:D-509 | finding | where-you-stand matrix 2026-11-17: from the home folder migrate status, session list and why-context show refused E_NOT_A_STORE in their own words (git's "cd into a git checkout; a write can also name its store…"), and in a store clone migrate status and sync trash list refused "run it in a code repo; inside a store folder…"; none said --store does not apply | fixed | TestEveryRepoOnlyReadRefusesOutsideARepo, TestRepoOnlyReadsInAStoreClone, TestJourneyRepoOnlyReadsSayWhereTheyLive, TestCoordOutsideRepoSaysWhereItLives | Summary: wire/repoonly.go repoOnlyReads (inbox, mission status, task next, migrate status, session list, why-context show) + errRepoOnly, checked first in App.run: outside a code repo each says what lives in each code repo, to cd into it, and that --store does not apply (E_UNSUPPORTED; D-508's errCoordNoRepo is that refusal); migrate status refuses in a store clone too (a store clone never held lore 0.1.17 data; `lore store doctor` checks a store's layout); sync trash list and trash list --local in a store clone read the clone's own local trash (empty) instead of refusing; story B |
 
 ## lore-adoptfix
 

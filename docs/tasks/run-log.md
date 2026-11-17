@@ -205,7 +205,7 @@ Other traps:
 - **A manual entry that overlaps a run counts twice in effort.** lore prints a hint when you log it; remove the duplicate with `lore task time rm`.
 - **`task time stop` stops only your own span.** Someone else working on the same task keeps their clock running; the status does not change either, so the task still shows as `in_progress`.
 - **`--agent` takes any word.** lore does not check it. Pick one word per tool and stick to it, so time per worker is easy to compare.
-- **`lore session list` shows coding-agent sessions only.** A session row is made by a write from a detected coding agent (Claude Code, Codex, …); a person's own terminal makes none, so alice's list prints `(no sessions)`. WRITES is each session's own count of lore writes on this machine, from every checkout it wrote in (a clone and its worktrees), so parallel sessions of one person each show their own number. Agent identities for team work come from `lore agent start` (see [Related](#related)):
+- **`lore session list` shows coding-agent sessions only.** A session row is made by a write from a detected coding agent (Claude Code, Codex, …); a person's own terminal makes none, so alice's list prints `(no sessions)`. WRITES is each session's own count of lore writes on this machine, from every checkout it wrote in (a clone and its worktrees), so parallel sessions of one person each show their own number. Sessions live in each code repo: from a folder that is no repo (your home folder) `lore session list` says so and to cd into the repo; `--store` does not apply. Agent identities for team work come from `lore agent start` (see [Related](#related)):
 
 <!-- example: runs#session-list -->
 ```console

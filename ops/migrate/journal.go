@@ -245,7 +245,7 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpStatus, Summary: "Show the row format of every place, the last migration and the lock",
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.OldLore, errs.Internal},
+			Errors: []errs.Code{errs.OldLore, errs.Unsupported, errs.Internal}, // Unsupported: outside a code repo (devco D-509)
 			Examples: []op.Example{
 				{Title: "what a migration would change", CLI: "lore migrate status", Want: "places:"},
 			},
