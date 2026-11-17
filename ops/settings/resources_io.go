@@ -740,6 +740,8 @@ func (o ops) existingIn(ctx context.Context, target store.Source, r resRecord) (
 
 // ResExportIn is the input of resource.export.
 type ResExportIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Kind          string   `json:"kind" flag:"kind" desc:"the kind to export (name or knd_ id)"`
 	Format        string   `json:"format,omitempty" flag:"format" desc:"csv, json (default) or yaml"`
 	Where         []string `json:"where,omitempty" flag:"where" desc:"filter on a field, as resource list --where (repeatable)"`

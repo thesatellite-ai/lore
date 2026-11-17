@@ -81,7 +81,9 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		// A read naming an org (`--store <org>[/<folder>]`) is the exception
 		// (devco D-471): it reads the org's stores here as from a plain
 		// folder, whatever this repo attaches.
-		orgRead := !write && a.namesOrgRead(ctx, e, d)
+		// A read whose --store is op.StoreFlag (D-499: its operation
+		// does not filter by it) reads the store it names alone too.
+		orgRead := !write && (a.namesOrgRead(ctx, e, d) || routedStoreRead(e, d))
 		if !orgRead && (!write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "") {
 			return op.Result{}, false, nil
 		}

@@ -134,6 +134,8 @@ type MetaKeyRef struct {
 
 // MetaKeysIn is the input of meta.keys.
 type MetaKeysIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Keys []string `json:"keys,omitempty" flag:"key" desc:"only these keys (repeatable)"`
 	IDs  bool     `json:"ids,omitempty" flag:"ids" desc:"show key ids"`
 	// Unreviewed lists only keys an agent registered that nobody has
@@ -611,6 +613,8 @@ type MetaUnsetIn struct {
 
 // MetaGetIn is the input of meta.get.
 type MetaGetIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID  string `json:"id" arg:"0" desc:"the row (any id)"`
 	Key string `json:"key,omitempty" arg:"1" desc:"only this key"`
 	IDs bool   `json:"ids,omitempty" flag:"ids" desc:"show key ids"`

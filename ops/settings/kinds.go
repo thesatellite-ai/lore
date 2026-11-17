@@ -91,6 +91,8 @@ type KindEditIn struct {
 
 // KindRef names one kind.
 type KindRef struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Kind string `json:"id" arg:"0" desc:"the kind (name or knd_ id)"`
 }
 
@@ -102,6 +104,8 @@ type RenameIn struct {
 
 // KindsIn is the input of resource.kinds.
 type KindsIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	// Unreviewed lists only kinds an agent added that no person reviewed
 	// yet (CLI 3.2, mirrors meta keys --unreviewed, MQ7).
 	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only kinds an agent added that no person reviewed yet"`

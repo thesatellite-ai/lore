@@ -56,6 +56,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/member"
@@ -191,6 +192,8 @@ func (o StaffAddOut) Text() string {
 // StaffListIn is the input of member.list.
 type StaffListIn struct {
 	All bool `json:"all,omitempty" flag:"all" desc:"people who left or are archived too"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }
@@ -246,6 +249,8 @@ type StaffShowIn struct {
 	// History lists the person's commits in the org's store clones
 	// (devco R-18: no view showed what a person who left did, and when).
 	History bool `json:"history,omitempty" flag:"history" desc:"also list their commits in the org's stores, newest first, held-back ones marked"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 }
 
 // HistoryEntry is one store commit a person authored (member show --history).

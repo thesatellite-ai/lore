@@ -35,7 +35,7 @@ func TestTeamRename(t *testing.T) {
 	if got := value.ItemStrings(inv.Fields[schema.FieldInviteTeams]); !slices.Equal(got, []string{"frontend"}) {
 		t.Errorf("invite teams after rename = %v", got)
 	}
-	if _, err := teamShow(x.ctx, x.e, TeamRefIn{Handle: "web"}); !errs.Has(err, errs.NotFound) {
+	if _, err := teamShow(x.ctx, x.e, TeamShowIn{Handle: "web"}); !errs.Has(err, errs.NotFound) {
 		t.Errorf("show of the old handle: %v", err)
 	}
 	for to, want := range map[string]string{"@tomas": "taken by Tomas Dev", "@ops": "taken by team", "@frontend": "already @frontend", "Bad Name": "not one lowercase word"} {

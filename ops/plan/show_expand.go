@@ -2,6 +2,7 @@ package plan
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
@@ -10,6 +11,8 @@ import (
 
 // ShowIn is the input of the show operation: the id flags plus --expand.
 type ShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the plan id (pln_…)"`
 	expand.Flag
 	expand.RevealFlag

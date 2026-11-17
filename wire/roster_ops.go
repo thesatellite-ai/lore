@@ -375,6 +375,15 @@ func (a *App) rosterApp(ctx context.Context, r rosterAt) (*App, func(), error) {
 	if r.src == store.SourceRepo {
 		return a, noop, nil
 	}
+	if p, ok := pinnedRoster(ctx); ok && p.at.src == r.src {
+		// a read naming its org (--store <org>, D-499): that org's roster
+		// alone, whatever this folder's repo or org is
+		alone, err := storeOnlyApp(ctx, a.opts, p.one)
+		if err != nil {
+			return nil, noop, err
+		}
+		return alone, func() { _ = alone.Close() }, nil
+	}
 	if one, ok := a.cloneRosterStore(r.src); ok {
 		// a store clone's company folder (D-445): the setup's org stores
 		// do not name it, so StoreOnlyRoster would not find it
@@ -398,6 +407,9 @@ func (a *App) rosterApp(ctx context.Context, r rosterAt) (*App, func(), error) {
 // the roster is its org folder store when OrgStores attaches one; an org
 // without one is refused rather than written to the wrong place.
 func (a *App) repoRoster(ctx context.Context) (rosterAt, error) {
+	if p, ok := pinnedRoster(ctx); ok { // a read naming its org (rosterstore.go)
+		return p.at, nil
+	}
 	r := newRosterAt(store.SourceRepo, repoRosterWhere)
 	if a.opts.Org != nil {
 		org, err := a.opts.Org(ctx)

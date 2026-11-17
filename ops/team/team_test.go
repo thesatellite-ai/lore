@@ -289,7 +289,7 @@ func TestInviteRowAndLine(t *testing.T) {
 	if x.e.Pushes != 1 {
 		t.Errorf("pushes = %d, want 1", x.e.Pushes)
 	}
-	again, err := x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: "tomas@agency.example"})
+	again, err := x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: "tomas@agency.example"})
 	if err != nil || again.Text != out.Line || again.ID != out.ID {
 		t.Errorf("resend = %+v %v, want the same text", again, err)
 	}
@@ -438,9 +438,9 @@ func TestRevokeListResend(t *testing.T) {
 	if err != nil || out.Status != schema.InviteStatusRevoked {
 		t.Fatalf("revoke = %+v %v", out, err)
 	}
-	_, err = x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: a.ID})
+	_, err = x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: a.ID})
 	wantCode(t, "resend revoked", err, errs.InviteRevoked)
-	_, err = x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: "inv_01890a5d8a2b7000a000000000000fff"})
+	_, err = x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: "inv_01890a5d8a2b7000a000000000000fff"})
 	wantCode(t, "resend unknown", err, errs.InviteNotFound)
 	// b expires: list shows it expired without a write.
 	x.e.Now = x.e.Now.AddDate(0, 0, 15)
@@ -448,7 +448,7 @@ func TestRevokeListResend(t *testing.T) {
 	if err != nil || len(l.Invites) != 1 || l.Invites[0].Email != "b@agency.example" {
 		t.Errorf("expired list = %+v %v", l, err)
 	}
-	_, err = x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: "b@agency.example"})
+	_, err = x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: "b@agency.example"})
 	wantCode(t, "resend expired", err, errs.InviteExpired)
 	// An expired invite no longer blocks a new one for the same person.
 	x.invite(setup.TeamInviteIn{Email: "b@agency.example"})

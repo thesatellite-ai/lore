@@ -712,6 +712,8 @@ func (o TeamInviteOut) Text() string {
 // TeamInviteListIn is team.invite.list's input.
 type TeamInviteListIn struct {
 	Status string `json:"status,omitempty" flag:"status" desc:"pending, accepted, revoked or expired"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
@@ -746,6 +748,14 @@ type TeamInviteListOut struct {
 // TeamInviteRefIn is the input of team.invite.revoke and .resend.
 type TeamInviteRefIn struct {
 	Ref string `json:"ref" arg:"0" desc:"an inv_ id or the invited email"`
+}
+
+// TeamInviteResendIn is the input of team.invite.resend: a read, so it
+// names the org whose roster holds the invite (--store <org>, devco
+// D-499); revoke keeps TeamInviteRefIn, a write names no store.
+type TeamInviteResendIn struct {
+	Ref string `json:"ref" arg:"0" desc:"an inv_ id or the invited email"`
+	metalist.RosterStore
 }
 
 // TeamInviteRevokeOut is team.invite.revoke's output.

@@ -22,6 +22,8 @@ import (
 // PeriodListIn is the input of actor.period.list.
 type PeriodListIn struct {
 	Actor string `json:"actor" arg:"0" desc:"the person: @handle, act_ id or stable key"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).

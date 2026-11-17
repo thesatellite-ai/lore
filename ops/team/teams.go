@@ -109,7 +109,7 @@ func TeamOps(env profilestore.Store) []op.Entry {
 		op.Define(op.Spec{Name: OpTeamShow, Summary: "Show a team and its members",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrs,
 			Examples: []op.Example{{Title: "one team", CLI: "lore team show --handle @web", Want: "members"}}},
-			func(ctx context.Context, in TeamRefIn) (TeamShowOut, error) { return teamShow(ctx, env, in) }),
+			func(ctx context.Context, in TeamShowIn) (TeamShowOut, error) { return teamShow(ctx, env, in) }),
 		op.Define(op.Spec{Name: OpTeamRemove, Summary: "Remove a team (its row is kept, so tasks that named it still read; team add brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
 			Examples: []op.Example{{Title: "the team is disbanded", CLI: "lore team remove --handle @web", Want: "removed"}}},
@@ -143,6 +143,8 @@ type TeamAddIn struct {
 // TeamListIn is the input of team.list.
 type TeamListIn struct {
 	All bool `json:"all,omitempty" flag:"all" desc:"also list removed teams"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; bound by the direct runner, applied by the
 	// roster's engine).
@@ -155,6 +157,14 @@ type TeamListIn struct {
 type TeamRefIn struct {
 	// --id is the lookup flag every show takes (devco D-449).
 	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle (or its tem_ id)"`
+}
+
+// TeamShowIn is the input of team.show: the team, and the org whose
+// roster holds it (--store <org>, devco D-499; team remove keeps
+// TeamRefIn, a write names no store).
+type TeamShowIn struct {
+	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle (or its tem_ id)"`
+	metalist.RosterStore
 }
 
 // TeamRenameIn is the input of team.rename.
@@ -625,7 +635,7 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	return out, nil
 }
 
-func teamShow(ctx context.Context, env profilestore.Store, in TeamRefIn) (TeamShowOut, error) {
+func teamShow(ctx context.Context, env profilestore.Store, in TeamShowIn) (TeamShowOut, error) {
 	h, err := teamHandle(in.Handle)
 	if err != nil {
 		return TeamShowOut{}, err

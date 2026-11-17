@@ -66,11 +66,32 @@ func TestStoreFlagSpellings(t *testing.T) {
 		t.Errorf("memory list --help must list --store with (also --to), the alias hidden:\n%s", help)
 	}
 
-	// an id command takes no store flag: the hint says why
-	code, out = w.loreOut(t, dir, "memory", "show", "mem_00000000000000000000000000000000", "--store", "inner")
-	if code != 20 || !strings.Contains(out, "unknown flag: --store") ||
-		!strings.Contains(out, "hint: lore memory show takes no store flag: it finds the row by its id in every attached store") {
-		t.Errorf("memory show --store: exit %d\n%s", code, out)
+	// a show reads the store it names too (devco D-499 widened: every
+	// read takes --store): the row is found in that store, and an id the
+	// store does not hold is not found there
+	var listed struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Body string `json:"body"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(w.mustLore(t, dir, "memory", "list", "--json")), &listed); err != nil {
+		t.Fatal(err)
+	}
+	var innerID, repoID string
+	for _, d := range listed.Data {
+		switch d.Body {
+		case "placeholder alpha":
+			innerID = d.ID
+		case "placeholder gamma":
+			repoID = d.ID
+		}
+	}
+	if out := w.mustLore(t, dir, "memory", "show", innerID, "--store", "inner"); !strings.Contains(out, "placeholder alpha") {
+		t.Errorf("memory show %s --store inner does not show it:\n%s", innerID, out)
+	}
+	if code, out = w.loreOut(t, dir, "memory", "show", repoID, "--store", "inner"); code == 0 || strings.Contains(out, "unknown flag") {
+		t.Errorf("memory show <a repo memory> --store inner: exit %d, want not found in inner\n%s", code, out)
 	}
 
 	// a command whose --to means something else keeps --store unknown, and

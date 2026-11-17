@@ -205,6 +205,8 @@ type ContactListIn struct {
 	Actor    string `json:"actor,omitempty" arg:"0" desc:"one person (@handle, act_ id, stable key); none = everyone"`
 	Type     string `json:"type,omitempty" flag:"type" desc:"only this contact type"`
 	Identity bool   `json:"identity,omitempty" flag:"identity" desc:"only identity contacts"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).

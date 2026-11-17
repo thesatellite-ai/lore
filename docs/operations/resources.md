@@ -192,7 +192,7 @@ created 2026-11-02T10:01:20Z by alice · updated 2026-11-02T10:01:20Z by alice
 ```
 <!-- /example -->
 
-`list` hides archived rows unless you pass `--archived`; `--include-deleted` and `--deleted-only` show rows in the trash. Every command takes `--json`.
+`list` hides archived rows unless you pass `--archived`; `--include-deleted` and `--deleted-only` show rows in the trash. Every command takes `--json`. Every read (`list`, `show`, `kinds`, `kind show`, `stale`, `report`, `history`, `graph`, `impact`, `export`) takes `--store` to read one store from any folder, as `lore rule list --store` does: `--store <org>` reads every folder of the org, `--store <org>/<folder>` one folder (`lore resource list --kind code_repo --store acme/org` from the home folder), `--store repo` this repo's own rows; a name no store answers to is refused with `E_NOT_FOUND`, never ignored. The metadata reads (`lore meta get`, `show`, `keys`, `history`, `export`) and `lore trash show` / `lore trash stats` take it too.
 
 ## Step 5 — See what depends on what
 

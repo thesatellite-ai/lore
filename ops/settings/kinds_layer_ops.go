@@ -51,6 +51,8 @@ func (o AdoptOut) Text() string { return o.Human }
 
 // RehomeIn is the input of resource.rehome.
 type RehomeIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	In string `json:"in,omitempty" flag:"in" desc:"the place whose resources are checked (default repo)"`
 }
 

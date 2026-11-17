@@ -4,7 +4,7 @@
 
 ## Before you start
 
-- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. Without one, the member commands also run in a repo of an org whose roster gives you org role admin: `lore org create` gives its creator that role, so `lore member add` works right after it with no setup step. A member or solo setup that lore picked for the folder does not stop this; one you name with `--setup` does (`--setup personal` is refused: name an admin setup, or leave `--setup` out). The member commands run outside any repo too, and their reads (`lore member show`, `lore team show`) work in a clone with no lore project yet.
+- An **admin setup** for the org is active (see [Guided setup](guided-setup.md)); run with `--setup <an admin setup>` from anywhere. Without one, the member commands also run in a repo of an org whose roster gives you org role admin: `lore org create` gives its creator that role, so `lore member add` works right after it with no setup step. A member or solo setup that lore picked for the folder does not stop this; one you name with `--setup` does (`--setup personal` is refused: name an admin setup, or leave `--setup` out). The member commands run outside any repo too, and their reads (`lore member show`, `lore team show`) work in a clone with no lore project yet. From a folder no org applies to (the home folder), a read names the org with `--store <org>` (`lore member list --store <org>`, `lore member show --who <who> --store <org>`), as `lore rule list --store <org>` does; without it the hint names `--store <org>` and `--setup <setup>`.
 - The teams you name exist (`lore team add --handle @web`, see [Teams](teams.md)).
 
 ## Step 1 — Add people

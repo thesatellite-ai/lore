@@ -222,3 +222,25 @@ func (a *App) runOrgReadAside(ctx context.Context, e op.Entry, d op.Decoder, c o
 	a.mu.Unlock()
 	return res, handled, err
 }
+
+// routedStoreRead reports whether the read e names its store through
+// op.StoreFlag (`--store <store>`, devco D-499) and not this repo's own:
+// its operation reads every attached store and does not filter by the
+// flag, so the read runs on the store it names alone (runOrgReadAside),
+// as an org read does; a name no store answers to is refused there,
+// never ignored.
+func routedStoreRead(e op.Entry, d op.Decoder) bool {
+	if !orgReadOp(e.Spec()) {
+		return false
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return false
+	}
+	name, ok := in.RoutedStore()
+	if !ok {
+		return false
+	}
+	base, _, _ := strings.Cut(name, targetSep)
+	return base != string(store.SourceRepo)
+}

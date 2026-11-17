@@ -127,6 +127,8 @@ const defaultPageRows = 50
 
 // ShowIn is the input of trash.show.
 type ShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID            string `json:"id" arg:"0" flag:"id" alias:"target" desc:"the row id"` // --target like restore/purge (A-18)
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field values (asks first)"`
 	FromHistory   bool   `json:"from_history,omitempty" flag:"from-history" desc:"show a purged row's last content from git history (3.6)"`
@@ -238,7 +240,10 @@ type ShowOut struct {
 }
 
 // StatsIn is the input of trash.stats (none).
-type StatsIn struct{}
+type StatsIn struct {
+	// --store <store> (devco D-499).
+	op.StoreFlag
+}
 
 // Count is one named count of trash.stats.
 type Count struct {
