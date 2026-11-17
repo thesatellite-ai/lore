@@ -17,8 +17,12 @@ package stories
 //	       the store/folder
 //	D-554: store list in the home folder names store list --setup
 //	D-555: context --store acme[/sync] from the home folder and from web
+//	D-556: in web, with a resource of acme/sync naming web's remote, list,
+//	       search, trash list and context read acme/sync and say so
+//	D-557: decision show (every noun's show) names the store/folder
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
@@ -81,4 +85,43 @@ func TestStoryWUReadsFromAnywhere(t *testing.T) {
 		m.Lore(m.Home, "context", "--store", inSync, "--for-prompt", "deploy").OK(t).Says(t, id)
 		m.Lore(wc.Dir, "context", "--store", wOrg, "--for-prompt", "deploy").OK(t).Says(t, id)
 	})
+
+	s.Step("D-556/unlinked-own-repo-lists-from-the-resource-folder", func() {
+		// no resource names web yet: the refusal names org link --own
+		m.Lore(wc.Dir, "trash", "list").Refused(t, "lore org link --org "+wOrg+" --project <folder> --own")
+		m.Lore(m.Home, "resource", "kind", "add", "--kind", wuRepoKind, "--to", wOrg+"/org", "--setup", wSetup, "--yes").OK(t)
+		m.Lore(m.Home, "resource", "field", "add", "--kind", wuRepoKind, "--field", "url", "--type", "text", "--to", wOrg+"/org", "--setup", wSetup, "--yes").OK(t)
+		m.Lore(m.Home, "resource", "add", "--kind", wuRepoKind, "--name", wuRepoRes, "--set", "url="+web.SSHURL(), "--to", inSync, "--setup", wSetup, "--yes").OK(t)
+		m.Lore(m.Home, "rule", "add", "--body", "deploys go through the pipeline", "--to", inSync, "--setup", wSetup, "--yes").OK(t)
+		note := "read " + inSync + ": its resource " + wuRepoRes + " names this repo"
+		link := "lore org link --org " + wOrg + " --project sync --own"
+		m.Lore(wc.Dir, "memory", "list").OK(t).Says(t, note, link, id)
+		m.Lore(wc.Dir, "rule", "list").OK(t).Says(t, note, "deploys go through the pipeline")
+		m.Lore(wc.Dir, "search", "--query", "deploy").OK(t).Says(t, note, id)
+		m.Lore(wc.Dir, "trash", "list").OK(t).Says(t, note)
+		m.Lore(wc.Dir, "resource", "list").OK(t).Says(t, note, wuRepoRes)
+		m.Lore(wc.Dir, "context", "--for-prompt", "deploy").OK(t).Says(t, note, id)
+		// the repo stays untouched: nothing was created in it
+		if _, err := os.Stat(filepath.Join(wc.Dir, ".lore")); err == nil {
+			t.Fatalf("a read created .lore/ in %s", wc.Dir)
+		}
+	})
+
+	s.Step("D-557/every-show-names-its-folder", func() {
+		dec := wuDecID.FindString(m.Lore(m.Home, "decision", "add", "--title", "ship on fridays", "--body", "never", "--to", inSync, "--setup", wSetup, "--yes").OK(t).Out())
+		if dec == "" {
+			t.Fatal("decision add printed no id")
+		}
+		m.Lore(m.Home, "decision", "show", "--id", dec).OK(t).Says(t, dec+" ["+inSync+"]")
+	})
 }
+
+// wuRepoKind and wuRepoRes are the resource kind and resource naming the
+// web repo by its remote (D-556).
+const (
+	wuRepoKind = "repo"
+	wuRepoRes  = "web_app"
+)
+
+// wuDecID is a decision id in a command's output.
+var wuDecID = regexp.MustCompile(`dec_[0-9a-f]+`)

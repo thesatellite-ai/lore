@@ -1024,6 +1024,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 	}
 	if e.Spec().Local && !storeRoutedLocal(e, d) {
+		// context in an unlinked own repo a resource of its org names
+		// answers from that resource's folder (resourcefolder.go, D-556)
+		if f, ok := a.resourceRoutedRead(ctx, e, d); ok {
+			res, _, err := a.runResourceRouted(ctx, e, d, c, f)
+			return res, err
+		}
 		return a.runLocal(ctx, e, d, c)
 	}
 	// P3-AUDIT-4: audit reads and roster verbs run without the repo engine

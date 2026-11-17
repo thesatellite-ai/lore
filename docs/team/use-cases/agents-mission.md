@@ -347,7 +347,7 @@ msn_2ad3…f891 Invite landing page   4 tasks · 3 done · 1 claimed · 0 ready 
   done      tsk_54fe…28f2  build the invite page        agent-frontend-2 merged 11:07 4m (timebox 1h; agent-frontend 0s + agent-frontend-2 4m)
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:28 12m (timebox 1h)
 $ lore task show --id tsk_c0f3…b5b8 --from agency/client2
-tsk_c0f3…b5b8
+tsk_c0f3…b5b8 [agency/client2]
   title:    deploy to staging
   status:   in_progress
   priority: medium
@@ -355,7 +355,7 @@ tsk_c0f3…b5b8
   mission:  msn_2ad3…f891
 created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:14:00Z by agent-coord
 $ lore task show --id tsk_54fe…28f2
-tsk_54fe…28f2
+tsk_54fe…28f2 [agency/client2]
   title:    build the invite page
   status:   done
   priority: medium

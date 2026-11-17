@@ -142,7 +142,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store
 
 # alice, in website
 $ lore sync >/dev/null && lore task show --id tsk_c0f3…b5b8
-tsk_c0f3…b5b8
+tsk_c0f3…b5b8 [agency/client]
   title:    send the invoice reminder before Friday
   status:   todo
   priority: medium
