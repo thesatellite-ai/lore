@@ -107,12 +107,24 @@ func (p *Prober) IncludeIdentities(ctx context.Context) []IncludeIdentity {
 	if !ok {
 		return nil
 	}
-	r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--global", "--get-regexp", `^includeif\..*\.path$`))
+	// --show-origin names the file each line came from: git resolves a
+	// relative include path against the folder of the config file that
+	// holds it (GIT_CONFIG_GLOBAL or ~/.gitconfig), not against $HOME
+	// (devco D-530: a relative path read against the wrong folder found no
+	// file, so the person's includeIf identity went unseen).
+	r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--global", "--show-origin", "--get-regexp", `^includeif\..*\.path$`))
 	if !r.ok() {
 		return nil
 	}
 	var out []IncludeIdentity
 	for l := range strings.SplitSeq(r.stdout, "\n") {
+		base := p.o.Home // relative to ~/.gitconfig's folder
+		if origin, rest, ok := strings.Cut(l, "\t"); ok {
+			if f, isFile := strings.CutPrefix(origin, "file:"); isFile && filepath.IsAbs(f) {
+				base = filepath.Dir(f)
+			}
+			l = rest
+		}
 		m := reIncludeIf.FindStringSubmatch(strings.TrimSpace(l))
 		if m == nil {
 			continue
@@ -125,7 +137,7 @@ func (p *Prober) IncludeIdentities(ctx context.Context) []IncludeIdentity {
 		}
 		file := expandHome(inc.Path, p.o.Home)
 		if !filepath.IsAbs(file) {
-			file = filepath.Join(p.o.Home, file) // relative to ~/.gitconfig's folder
+			file = filepath.Join(base, file)
 		}
 		ir := p.run(cctx, p.gitSpec(Route{}, "", "config", "--file", file, "--get-regexp", `^user\.(name|email)$`))
 		if !ir.ok() {

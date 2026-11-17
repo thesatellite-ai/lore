@@ -26,6 +26,10 @@ func TestUnlistedClientRepoOnlyByDefault(t *testing.T) {
 		{"repos: pattern claims it", []string{"github.com/client/website"}, nil, ""},
 		{"client link claims it", []string{"github.com/agency/tools"}, []orgresolve.Link{{Entry: "agency", Folder: "shop"}}, ""},
 		{"no hosted remote", nil, nil, ""},
+		// D-531: an ssh alias host the ssh config did not resolve is one
+		// person's spelling: never offered for the shared own: list
+		{"unresolved alias only", []string{"work-gh/agency/tools"}, nil, ""},
+		{"alias and a real host", []string{"work-gh/agency/tools", "gitlab.example/agency/tools"}, nil, "--key own --add gitlab.example/agency/tools --yes"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -750,17 +750,99 @@ func (sp setupProber) gitEmail(ctx context.Context, r opssetup.ProbeRequest) ops
 			// which is where this setup's commits are made (devco D-448:
 			// the step warned about the global address of a person whose
 			// work repos use the setup's address through an includeIf).
-			for _, in := range sp.p.IncludeIdentities(ctx) {
-				if in.Folder != "" && mine(in.Email) {
-					v[onboard.VarGitEmail] = in.Email
-					return result(onboard.StatusOK, "git uses "+in.Email+" in repos under "+in.Folder+" (includeIf "+in.Condition+"); the global "+got+" applies outside them", v)
-				}
-			}
-			return result(onboard.StatusFail, "git config --global user.email is "+got+" and no includeIf gitdir: file sets "+emails[0], v)
+			return sp.gitEmailOutsideRepo(ctx, r, got, mine, v)
 		}
 		return result(onboard.StatusFail, "git config user.email is "+got, v)
 	}
 	return result(onboard.StatusOK, "", v)
+}
+
+// gitEmailOutsideRepo is identity.git_email read outside a repo, where git
+// answers only its global email (got, not one of the setup's). The
+// global address is the person's own and often right for their other
+// work, so the check never asks to change it (devco D-530); it passes when:
+//   - an includeIf file sets the setup's address (any condition: gitdir:
+//     names the folder, hasconfig:remote.*.url: and the like apply in the
+//     repos they match; devco D-448), and, for a setup with folders, a
+//     gitdir: rule covers each folder (or the folder's own repo commits
+//     with the setup's address);
+//   - the setup has no folders: its only commits are store commits, and
+//     lore sets each store clone's git user itself (D-514), so the global
+//     address never reaches them.
+//
+// Otherwise it warns naming the folder git would commit from with the
+// wrong address; the fix is an includeIf or per-repo setting, never
+// --global.
+func (sp setupProber) gitEmailOutsideRepo(ctx context.Context, r opssetup.ProbeRequest, got string, mine func(string) bool, v map[string]string) opssetup.ProbeResult {
+	var rules []probe.IncludeIdentity
+	for _, in := range sp.p.IncludeIdentities(ctx) {
+		if mine(in.Email) {
+			rules = append(rules, in)
+		}
+	}
+	email := v[onboard.VarEmail]
+	if len(r.Setup.Folders) == 0 {
+		if len(rules) > 0 {
+			v[onboard.VarGitEmail] = rules[0].Email
+			return result(onboard.StatusOK, "git uses "+rules[0].Email+" "+includeWhere(rules[0])+"; the global "+got+" applies outside them", v)
+		}
+		return result(onboard.StatusOK, "this setup has no folders: its commits are store commits, which lore makes as "+email+" itself; git's global "+got+" stays for your other repos", v)
+	}
+	var covered []string
+	for _, f := range r.Setup.Folders {
+		in, ok := sp.folderIdentity(ctx, f, rules, mine)
+		if !ok {
+			return result(onboard.StatusFail, "git commits in "+f+" would carry the global "+got+": no includeIf gitdir: rule for that folder sets "+email+" (your global address is fine for your other repos; set "+email+" for this folder only)", v)
+		}
+		covered = append(covered, f+" ("+in+")")
+	}
+	v[onboard.VarGitEmail] = email
+	return result(onboard.StatusOK, "git uses "+email+" in "+strings.Join(covered, ", ")+"; the global "+got+" applies outside them", v)
+}
+
+// globRoot is the folder a setup folder glob or an includeIf gitdir:
+// pattern starts at: ~ expanded to home, cut before the first glob
+// character ("~/code/acme/*" and "~/code/acme/**" are both ~/code/acme).
+func globRoot(pattern, home string) string {
+	if rest, ok := strings.CutPrefix(pattern, "~/"); ok {
+		pattern = filepath.Join(home, rest)
+	} else if pattern == "~" {
+		pattern = home
+	}
+	if i := strings.IndexAny(pattern, "*?["); i >= 0 {
+		pattern = pattern[:i]
+	}
+	return filepath.Clean(pattern)
+}
+
+// includeWhere says where an includeIf rule applies, for the check detail.
+func includeWhere(in probe.IncludeIdentity) string {
+	if in.Folder != "" {
+		return "in repos under " + in.Folder + " (includeIf " + in.Condition + ")"
+	}
+	return "in the repos includeIf " + in.Condition + " matches"
+}
+
+// folderIdentity reports whether commits in setup folder f carry one of
+// the setup's addresses: a gitdir: rule among rules covers f, or f is
+// itself in a repo whose effective email (every scope, includeIf
+// included) is the setup's. The string names what decided it.
+func (sp setupProber) folderIdentity(ctx context.Context, f string, rules []probe.IncludeIdentity, mine func(string) bool) (string, bool) {
+	home := sp.p.Home()
+	abs := globRoot(f, home)
+	for _, in := range rules {
+		if in.Folder == "" {
+			continue
+		}
+		pre := globRoot(in.Folder, home)
+		if abs == pre || strings.HasPrefix(abs, pre+string(filepath.Separator)) {
+			return "includeIf " + in.Condition, true
+		}
+	}
+	if id := sp.p.RepoIdentity(ctx, abs); id.Class.Ran() && id.Class == probe.ClassOK && mine(id.Email) {
+		return "its repo's config", true
+	}
+	return "", false
 }
 
 // isHTTPS: the request's route is https (answers first, else the setup).

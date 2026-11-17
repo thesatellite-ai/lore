@@ -303,6 +303,13 @@ func identityHost(host string) string {
 	return n
 }
 
+// IdentityHost is identityHost for callers outside the backend: the host
+// a code repo's ssh remote is known by once the person's ssh alias is
+// resolved (SetAliasHosts). A code repo's remote and a store url must name
+// one host the same way, or an org's `repos: github.com/<owner>/*` never
+// matches a repo cloned as git@<alias>:<owner>/<repo>.git (devco D-531).
+func IdentityHost(host string) string { return identityHost(strings.ToLower(strings.TrimSpace(host))) }
+
 // AliasHostFunc answers the host ssh connects to for host (its HostName);
 // ok is false when the ssh config does not rename host.
 type AliasHostFunc func(host string) (hostName string, ok bool)

@@ -244,6 +244,8 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store a
 
 `lore whoami` now names the org, the rule that chose it (`own pattern`), your identity there and the store. It prints the store URL the same way without a terminal or in CI; only a credential inside a URL is shown as `<redacted>` (see [Troubleshooting](troubleshooting.md#a-url-shows-redacted)). `lore actor register` put you on the org's roster. Now teammates can write `--assign @alice`.
 
+A remote that uses an ssh host alias (`git@<alias>:<owner>/<repo>.git`, where `~/.ssh/config` says `Host <alias>` / `HostName github.com`, a `url.<x>.insteadOf` rule maps it back, or a setup's `host_alias` names it) counts as `github.com/<owner>/<repo>` for org matching, `own:` and `repos:` patterns, the identity and every remote lore prints; lore never suggests an alias pattern for the shared org file.
+
 Repos outside the org keep your fallback identity, never a company one:
 
 <!-- example: getting-started#first-config only=7 -->

@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1877 |
+| fixed | 1879 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -858,6 +858,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-560 | finding | use pass 1 wrong 10: `task claim` in a linked repo said "… on refs/lore/signals/main", a ref that exists neither in the code repo nor as a branch of the store clone | fixed | TestClaimPlaceNamesTheStore | wire/coord_standalone_task.go claimPlace: a store-backed claim names the signals ref of store <org>/<folder> and whether it was pushed to the store's remote or stays local until `lore sync` |
 | devco:D-563 | finding | use pass 1 weak 12: `store doctor` said "the next lore command that reaches the store pushes them" under push manual, with no count | fixed | TestDoctorAndUnpushed | adapters/orgcfg/clones.go UnpushedWarning: names the commit count and what sends them in every mode (`lore store push` or `lore sync`; the next write only under push auto) |
 | devco:D-566 | finding | use pass 1 weak 17 (part): a row written in one folder was "committed locally to store <org>" while search and sync named <org>/<folder> | fixed | TestStorePushLabelIsOrgFolder | wire/storepush_standalone.go storePush.label: write notes use the store's own <org>/<folder> name |
+| devco:D-530 | finding | owner use pass 1 (wrong 12): `setup list` (and doctor) warned identity.git_email for a setup with no folders and for an includeIf identity it did not see (relative include path, non-gitdir condition), and advised `git config --global user.email <org email>`, which would overwrite the personal global identity includeIf relies on | fixed | TestGitEmailNeverAsksForGlobalD530, TestOrgEntryIdentityEmailChecked, TestFixRunnableOutward, TestStoryOOwnerShape | wire/setupprobe.go gitEmailOutsideRepo: no folders passes (lore sets store clones' git user, D-514); any includeIf condition with the setup's email passes; each setup folder needs a covering gitdir: rule or a repo already on the email; adapters/probe/discover.go reads relative include paths next to the config file (--show-origin); the fix writes an includeIf file, never --global |
+| devco:D-531 | finding | owner use pass 1 (wrong 3): whoami in a repo whose remote is an ssh host alias (git@<alias>:<owner>/<repo>.git) showed <alias>/<owner>/<repo>, matched no org (repos: github.com/<owner>/*), fell back to the personal identity, and with --setup offered `lore org config set --key own --add <alias>/<owner>/<repo>` for the shared org file | fixed | TestStoryOAliasWhoami, TestRemotesResolveSSHAlias, TestUnlistedClientRepoOnlyByDefault | adapters/orgcfg/remotealias.go: code-repo remotes resolve an ssh alias like store urls (D-493): reverse url.insteadOf, ssh config HostName (gitbackend.IdentityHost), the setup's host_alias (wire/storeaccess.go); wire/clientrepo_hint.go never names a dotless host in the own: line |
 
 ## lore-adoptfix
 
