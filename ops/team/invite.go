@@ -501,7 +501,7 @@ func (o ops) revoke(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamIn
 // resend is team.invite.resend: the same line again, nothing written. A
 // used, revoked or expired invite answers its E_INVITE_* code, since its
 // line could no longer be accepted.
-func (o ops) resend(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteResendOut, error) {
+func (o ops) resend(ctx context.Context, in setup.TeamInviteResendIn) (setup.TeamInviteResendOut, error) {
 	e, err := adminSetup(ctx, o.env)
 	if err != nil {
 		return setup.TeamInviteResendOut{}, err

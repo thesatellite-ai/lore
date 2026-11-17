@@ -713,6 +713,8 @@ type MemberListIn struct {
 	Actor   op.ActorRef `json:"actor,omitempty" flag:"actor" desc:"only this person's memberships"`
 	Role    string      `json:"role,omitempty" flag:"role" desc:"only memberships holding this role"`
 	History bool        `json:"history,omitempty" flag:"history" desc:"include ended stints"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).

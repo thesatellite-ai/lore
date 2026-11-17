@@ -160,6 +160,8 @@ func checkRoles(roles []RoleOut, want, keep []string) error {
 // RoleListIn is the input of role.list.
 type RoleListIn struct {
 	Retired bool `json:"retired,omitempty" flag:"retired" desc:"include retired roles"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit

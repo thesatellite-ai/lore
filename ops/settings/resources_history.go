@@ -276,6 +276,8 @@ func quarantineLine(q []Quarantined) string {
 
 // ResHistoryIn is the input of resource.history.
 type ResHistoryIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Name  string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	Field string `json:"field,omitempty" flag:"field" desc:"only changes of this field"`
 	Git   bool   `json:"git,omitempty" flag:"git" desc:"also read older versions from git history (beyond the row's last 100 entries)"`
@@ -407,6 +409,8 @@ func shortCommit(c string) string {
 
 // ResReportIn is the input of resource.report.
 type ResReportIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"only this kind (name or knd_ id)"`
 	Days int    `json:"days,omitempty" flag:"days" min:"1" desc:"stale when last_checked is older than this many days (default 60)"`
 	// Offboarding (RES 3.22, OV49-R1): one place's resources, or the ones

@@ -49,6 +49,16 @@
             }
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
+            }
+          },
+          {
             "name": "created_by",
             "in": "query",
             "required": false,
@@ -913,6 +923,16 @@
             "schema": {
               "type": "string",
               "description": "the person: @handle, act_ id or stable key"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
             }
           },
           {
@@ -5336,6 +5356,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -7676,6 +7706,16 @@
               "description": "the behaviour id (bhv_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -12155,6 +12195,16 @@
             }
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
+            }
+          },
+          {
             "name": "created_by",
             "in": "query",
             "required": false,
@@ -13938,6 +13988,16 @@
               "description": "the cookbook recipe id (cbr_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -15762,6 +15822,16 @@
               "description": "the decision id (dec_…), or the short ref its title opens with, such as D5 for a title that opens with D5"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "project",
@@ -20714,6 +20784,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -22732,6 +22812,16 @@
               "description": "the hotfix id (hfx_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "project",
@@ -25342,6 +25432,16 @@
               "description": "the incident id (inc_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -28787,6 +28887,16 @@
             }
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -29488,6 +29598,16 @@
             "schema": {
               "type": "boolean",
               "description": "also list their commits in the org's stores, newest first, held-back ones marked"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
             }
           }
         ],
@@ -31522,6 +31642,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -33217,6 +33347,10 @@
                     "type": "boolean",
                     "description": "export sensitive values as they are (asks first)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "table": {
                     "type": "string",
                     "description": "only rows of this table"
@@ -33708,6 +33842,10 @@
                   "place": {
                     "type": "string",
                     "description": "one place only: repo, project, org or a scope label (project:acme-hub)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   },
                   "table": {
                     "type": "string",
@@ -36097,6 +36235,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "key",
             "in": "query",
             "required": false,
@@ -36330,6 +36478,10 @@
                     "type": "boolean",
                     "description": "print sensitive values (asks first)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -36524,6 +36676,10 @@
                   "key": {
                     "type": "string",
                     "description": "only this key (name or mky_ id)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -39716,6 +39872,16 @@
               "description": "the mission id (msn_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -44449,6 +44615,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -47526,6 +47702,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -49236,6 +49422,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -50773,6 +50969,16 @@
             "schema": {
               "type": "boolean",
               "description": "include ended stints"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
             }
           },
           {
@@ -53992,6 +54198,16 @@
               "description": "the prompt id (prm_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -59096,6 +59312,16 @@
               "description": "the kind (name or knd_ id)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -59919,6 +60145,16 @@
           "resource"
         ],
         "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
           {
             "name": "kind",
             "in": "query",
@@ -61281,6 +61517,10 @@
                     "type": "boolean",
                     "description": "export sensitive values (asks first); masked as ••• otherwise"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "where": {
                     "type": "array",
                     "description": "filter on a field, as resource list --where (repeatable)",
@@ -61662,6 +61902,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "unreviewed": {
                     "type": "boolean",
                     "description": "only kinds an agent added that no person reviewed yet"
@@ -62100,6 +62344,10 @@
                   "in": {
                     "type": "string",
                     "description": "the place whose resources are checked (default repo)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -62443,6 +62691,10 @@
                   "project": {
                     "type": "string",
                     "description": "offboarding: only resources living in this place (\u003cfolder\u003e, \u003cstore\u003e/\u003cfolder\u003e or \u003cstore\u003e), across every attached store"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -62695,6 +62947,10 @@
                   "days": {
                     "type": "integer",
                     "description": "older than this many days (default 60)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -63160,6 +63416,16 @@
               "description": "the resource (name or res_ id)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "show_sensitive",
@@ -64046,6 +64312,10 @@
                     "type": "boolean",
                     "description": "hide archived resources"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "up": {
                     "type": "boolean",
                     "description": "follow refs backward: what depends on it"
@@ -64274,6 +64544,10 @@
                   "git": {
                     "type": "boolean",
                     "description": "also read older versions from git history (beyond the row's last 100 entries)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -64467,6 +64741,10 @@
                   "no_archived": {
                     "type": "boolean",
                     "description": "hide archived resources"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -64999,6 +65277,16 @@
             "schema": {
               "type": "boolean",
               "description": "include retired roles"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
             }
           },
           {
@@ -65566,6 +65854,16 @@
               "description": "any row id (mem_…, tsk_…, res_…, var_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "origin",
@@ -68330,6 +68628,16 @@
               "description": "the rule id (rul_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "project",
@@ -81760,6 +82068,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -87163,6 +87481,16 @@
               "description": "the suggestion id (sug_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -98445,6 +98773,16 @@
               "description": "the tasklist id (tlt_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -109739,6 +110077,16 @@
             "x-lore-field": "id"
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "expand",
             "in": "query",
             "required": false,
@@ -110234,6 +110582,16 @@
             }
           },
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
+            }
+          },
+          {
             "name": "created_by",
             "in": "query",
             "required": false,
@@ -110440,6 +110798,10 @@
                   "ref": {
                     "type": "string",
                     "description": "an inv_ id or the invited email"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
                   }
                 },
                 "required": [
@@ -111169,6 +111531,16 @@
             "schema": {
               "type": "boolean",
               "description": "also list removed teams"
+            }
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
             }
           },
           {
@@ -112337,6 +112709,16 @@
               "description": "the team's @handle (or its tem_ id)"
             },
             "x-lore-field": "handle"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)",
+            "schema": {
+              "type": "string",
+              "description": "read this org's roster: --store \u003corg\u003e (default the org of this folder)"
+            }
           }
         ],
         "responses": {
@@ -113516,6 +113898,16 @@
               "description": "the techdoc id (tdc_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",
@@ -114992,6 +115384,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -115183,6 +115581,16 @@
               "description": "the row id"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "show_sensitive",
@@ -118344,6 +118752,16 @@
               "description": "the workflow id (wfl_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "expand",

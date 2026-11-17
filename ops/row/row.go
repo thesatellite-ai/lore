@@ -69,6 +69,8 @@ type Mover interface {
 
 // ShowIn is the input of row.show.
 type ShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
 	// Origin adds the origin blocks to the text form; --json always
 	// carries them (D-455), so it is accepted there and changes nothing.

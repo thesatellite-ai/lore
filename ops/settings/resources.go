@@ -115,6 +115,8 @@ type ResRef struct {
 // references of its text values as every other show does (SECRETS 2.7,
 // 12); stored values never change and a sensitive value is never expanded.
 type ResShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Name          string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 	expand.Flag
@@ -157,6 +159,8 @@ type ResNameIn struct {
 
 // ResListIn is the input of resource.list.
 type ResListIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Kind          string   `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Where         []string `json:"where,omitempty" flag:"where" desc:"filter on a field: = != ~= > >= < <= ? !? or field:a,b (repeatable; all must match)"`
 	Sort          []string `json:"sort,omitempty" flag:"sort" desc:"sort by name, last_checked, archived_at or a field: <key>, <key>:asc or <key>:desc (repeatable; default name)"`
@@ -179,6 +183,8 @@ type ResListIn struct {
 
 // ResStaleIn is the input of resource.stale.
 type ResStaleIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Days int `json:"days,omitempty" flag:"days" min:"1" desc:"older than this many days (default 60)"`
 }
 

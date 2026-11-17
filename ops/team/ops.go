@@ -100,7 +100,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: setup.OpTeamInviteResend, Summary: "Print a pending invite's line again (changes nothing)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: resendErrs,
 			Examples: []op.Example{{Title: "resend by email", CLI: "lore team invite resend --ref tomas@agency.example", Want: "lore-invite:v1:"}}},
-			func(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteResendOut, error) {
+			func(ctx context.Context, in setup.TeamInviteResendIn) (setup.TeamInviteResendOut, error) {
 				return o.resend(ctx, in)
 			}),
 	}, o.staffOps(base, writeErrs)...)

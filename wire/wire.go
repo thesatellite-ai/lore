@@ -1023,6 +1023,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			// TEAM_PROFILES 3.4: the profile ops read --yes (op.Confirmed)
 			// and the caller (TS-4) without the engine around them.
 			ctx = profileContext(ctx, c)
+			// devco D-499: a roster read names its org (--store <org>)
+			// from any folder; no org anywhere names both ways in
+			var err error
+			if ctx, err = a.prepareRoster(ctx, e, d); err != nil {
+				return op.Result{}, err
+			}
 		}
 		return runDirect(ctx, e, d)
 	}

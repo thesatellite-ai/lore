@@ -46,6 +46,8 @@ var metaCSVHeader = []string{"id", "key", "value"}
 
 // MetaExportIn is the input of meta.export.
 type MetaExportIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Table  string `json:"table,omitempty" flag:"table" desc:"only rows of this table"`
 	Keys   string `json:"keys,omitempty" flag:"key" desc:"only these keys, comma separated"`
 	Format string `json:"format,omitempty" flag:"format" desc:"csv (default) or json (one object per line)"`
