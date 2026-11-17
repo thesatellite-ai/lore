@@ -799,7 +799,7 @@ lore
 
 ## 7b · Where rows live: files, the cache and `lore sql`
 
-**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). The cache `~/.lore/cache/repo/<repo folder>-<hash>.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from), e.g. `lore sql --query "SELECT source, count(*) FROM memories_all GROUP BY source"`.
+**The row files are the truth.** Every shared row is one JSON file, `.lore/data/<table>/<id>.json` (or the same path inside an attached store). The cache `~/.lore/cache/repo/<repo folder>-<hash>.db` and the per-store cache files are rebuilt from those files at run time; never edit them, and never tell the user to. The same table names are what `lore sql` reads: each table `<t>` is also a view `<t>_all` with a leading `source` column (which attached store the row came from, the name to filter on) and a `place` column (the `<org>/<folder>` label search prints for that store), e.g. `lore sql --query "SELECT source, count(*) FROM memories_all GROUP BY source"`.
 
 | Group | Tables (`.lore/data/<table>/`, and `lore sql` names) | Written with |
 |---|---|---|

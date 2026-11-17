@@ -121,6 +121,22 @@ func TestJourneyStoreReadsEverything(t *testing.T) {
 		lee.Lore(ops, "search", "--query", "rotate token").OK(t).Never(t, jsrSyncTask)
 		lee.Lore(ops, "search", "--query", "rotate token", "--all-repos").OK(t).Says(t, jsrSyncTask)
 	})
+	w.Step("day3/sql-labels-each-place-like-search", func() {
+		// D-568: `source` stays the attached name queries filter on; `place`
+		// is the label search prints, so the linked repo's rows read as
+		// <org>/<folder> in sql too
+		const q = "SELECT source, place, count(*) AS n FROM rules_all GROUP BY 1, 2 ORDER BY 1, 2"
+		r := lee.Lore(app, "sql", "--internal", "--query", q).OK(t)
+		lee.Lore(app, "search", "--query", "sync rule").OK(t).Says(t, "["+tlOrg+"/"+jsrSync+"]", "["+tlOrg+"/org]")
+		for _, row := range []string{tlOrg + `\s+` + tlOrg + "/" + jsrSync + `\s+1`, tlOrg + `/org\s+` + tlOrg + `/org\s+1`} {
+			if !regexp.MustCompile(`(?m)^` + row + `\s*$`).MatchString(r.Out()) {
+				t.Errorf("sql source/place row %q missing:\n%s", row, r.Out())
+			}
+		}
+		// the source column still filters as before
+		lee.Lore(app, "sql", "--internal", "--query", "SELECT body FROM rules_all WHERE source = '"+tlOrg+"'").OK(t).
+			Says(t, jsrSync+" rule one", "(1 row)")
+	})
 	w.Step("day3/the-org-reads-the-same-everywhere", func() {
 		// D-471: --store <org> reads every folder of the org from a linked
 		// repo, an unattached repo under the setup's folders, a repo and a
