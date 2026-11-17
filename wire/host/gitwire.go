@@ -395,7 +395,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	// machine, so nothing goes into a file the repo tracks or would commit
 	// (.gitattributes, a hooks folder in the work tree); the clone's own
 	// .git/config and .git/hooks are still set up.
-	private := !wire.RepoMayHoldLoreFiles(ctx, root)
+	private := !s.repoMayHoldLoreFiles(ctx, root)
 	if private && s.trackedHooksFolder(ctx, dir) {
 		guardBefore = nil // lore never puts its blocks there: no leak-guard line
 	}

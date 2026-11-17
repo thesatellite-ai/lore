@@ -234,7 +234,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		rides = append(rides, hookWrite{name: h, marker: rideHookMarker, lines: rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))})
 	}
 	if created, changed := s.teamHookWrites(ctx, dir, rides); len(created)+len(changed) > 0 {
-		if !wire.RepoMayHoldLoreFiles(ctx, s.top) {
+		if !s.repoMayHoldLoreFiles(ctx, s.top) {
 			note(what + "; not installed: " + dir + " is committed with the repo and this project is private to this machine (.lore/ is ignored by git), so lore adds no block there")
 			return
 		}
