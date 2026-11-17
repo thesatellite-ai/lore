@@ -353,14 +353,6 @@ tsk_c0f3…b5b8
   priority: medium
   commit:   accepted
   mission:  msn_2ad3…f891
-  role:     coordinator
-  after:    tsk_54fe…28f2 (until merged), tsk_05e9…4603 (until merged)
-  gate:     approved
-  attempts: 1
-  source:   agency/client2
-  claim:    active, held by agent-coord (session s-10e90368, devbox)
-  token:    ct_3de87…  epoch 1
-  expires:  2026-11-02T11:34:00Z  renewed_seq 0
 created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:14:00Z by agent-coord
 $ lore task show --id tsk_54fe…28f2
 tsk_54fe…28f2

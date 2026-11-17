@@ -56,6 +56,11 @@ func scopeOf(in op.Input) namedScope {
 			n.project = tv.Text
 		}
 	}
+	if n.store == "" {
+		// an input naming its store through op.StoreRouter under another
+		// field (task show --from, devco D-507) is scoped as --store is
+		n.store, _ = in.RoutedStore()
+	}
 	return n
 }
 

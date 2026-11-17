@@ -38,9 +38,7 @@ var readsLeftForStore = []string{
 	"batch.list", "batch.show", "branch.list", "branch.show", "commit.show", "inbox.show", "link.list",
 	"mission.status", "pii_pattern.list", "policy.show", "project.show", "repo.list", "row.markdown",
 	"row.path", "scope.list", "scope.show", "secrets.allow.list", "secrets.list", "secrets.rules",
-	"secrets.show", "sync.conflicts", "sync.peek", "task.checklist.list", "task.deferred", "task.export",
-	"task.history", "task.recur.show", "task.someday", "task.template.list", "task.template.show",
-	"task.time.show", "task.triage", "task.view.list", "task.view.show",
+	"secrets.show", "sync.conflicts", "sync.peek",
 }
 
 // TestEveryReadTakesStore walks the operation registry (devco D-499,
@@ -85,9 +83,44 @@ func TestEveryReadTakesStore(t *testing.T) {
 		}
 	}
 	// the owner's families are done and stay done
-	for _, name := range []string{"resource.list", "resource.show", "resource.kinds", "team.list", "team.show", "member.list", "member.show", "trash.list", "trash.show", "meta.show", "meta.get", "meta.keys", "rule.show", "task.show", "memory.show", "decision.show", "row.show"} {
+	for _, name := range []string{"resource.list", "resource.show", "resource.kinds", "team.list", "team.show", "member.list", "member.show", "trash.list", "trash.show", "meta.show", "meta.get", "meta.keys", "rule.show", "task.show", "task.triage", "task.template.show", "task.view.list", "memory.show", "decision.show", "row.show"} {
 		if !seen[name] {
 			t.Errorf("%s is not a read in the registry", name)
+		}
+	}
+}
+
+// TestStoreRouterNamesTheReadScope pins devco D-507: `task show --store
+// <org>` (an alias of --from, the field is "from") from a plain folder
+// failed E_NOT_A_STORE because the outside-repo and store-clone resolvers
+// read only a field named "store". An input naming its store through
+// op.StoreRouter is scoped as --store is, under any field name.
+func TestStoreRouterNamesTheReadScope(t *testing.T) {
+	t.Parallel()
+	a, err := New(Options{RepoDir: t.TempDir(), Home: t.TempDir(), FlagActor: testEmail, Wall: time.Now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = a.Close() })
+	for _, tc := range []struct{ op, body, want string }{
+		{"task.show", `{"id":"tsk_01a1e7ddb6977a5bab2a89e9ef46743f","from":"acmeteam/org"}`, "acmeteam/org"},
+		{"task.triage", `{"store":"acmeteam"}`, "acmeteam"},
+		{"task.recur.show", `{"id":"tsk_01a1e7ddb6977a5bab2a89e9ef46743f","store":"acmeteam"}`, "acmeteam"},
+	} {
+		e, ok := a.Registry().Lookup(tc.op)
+		if !ok {
+			t.Fatalf("%s is not in the registry", tc.op)
+		}
+		d := op.JSONDecoder{Body: []byte(tc.body)}
+		in, derr := e.Decode(d)
+		if derr != nil {
+			t.Fatalf("%s: %v", tc.op, derr)
+		}
+		if got := scopeOf(in).store; got != tc.want {
+			t.Errorf("%s: scopeOf store = %q, want %q", tc.op, got, tc.want)
+		}
+		if !routedStoreRead(e, d) {
+			t.Errorf("%s: a read naming %s is not routed to that store", tc.op, tc.want)
 		}
 	}
 }

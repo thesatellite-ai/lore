@@ -89,6 +89,8 @@ created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:25Z by alice
 ```
 <!-- /example -->
 
+Every task read names its store from any folder (a code repo, a store clone, the home folder) as `lore task list --store` does: `task show --store <org>` (also spelled `--from`), `task checklist list`, `task history`, `task recur show`, `task time show`, `task triage`, `task someday`, `task deferred`, `task export`, `task template list|show` and `task view list|show` all take `--store <org>` (every folder of the org) or `--store <org>/<folder>` (one folder); a name no store answers to is refused with `E_NOT_FOUND`, never ignored.
+
 ## Step 5 — Change a task
 
 `lore task edit` changes only the fields you pass. Everything else stays as it was. To remove a value, use the matching `--clear-…` flag, such as `--clear-due`.

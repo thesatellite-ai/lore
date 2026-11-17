@@ -64,6 +64,8 @@ const noteMax = 200
 
 // TimeShowIn is the input of task.time.show.
 type TimeShowIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	ID      string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	Entries bool   `json:"entries,omitempty" flag:"entries" desc:"list every entry"`
 	Deleted bool   `json:"deleted,omitempty" flag:"deleted" desc:"with --entries, list removed entries too"`

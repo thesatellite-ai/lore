@@ -1278,17 +1278,45 @@ const fromRepo = "repo"
 // globex is northwind/globex). A source no attached store answers to is
 // v0.1.17's refusal; an id the source does not hold is E_NOT_FOUND.
 func (o ops) getFrom(ctx context.Context, from string, id ids.AnyID) (store.Source, row.Row, error) {
-	src, ok := o.sourceNamed(from)
-	if !ok {
+	srcs := o.sourcesNamed(from)
+	if len(srcs) == 0 {
 		name, _, _ := strings.Cut(from, "/")
 		return "", row.Row{}, errs.New(errs.InvalidInput, "--from "+from+": no org entry named "+name).
 			WithHint("use repo, an org entry name, or <org>/<folder>")
 	}
-	got, r, err := o.env.Get(ctx, engine.Ref{Store: src, Table: table, ID: id})
-	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return "", row.Row{}, errs.New(errs.NotFound, Noun+" "+work.Quote(id.String())+" not found in "+from)
+	for _, src := range srcs {
+		got, r, err := o.env.Get(ctx, engine.Ref{Store: src, Table: table, ID: id})
+		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+			continue
+		}
+		return got, r, err
 	}
-	return got, r, err
+	return "", row.Row{}, errs.New(errs.NotFound, Noun+" "+work.Quote(id.String())+" not found in "+from)
+}
+
+// sourcesNamed maps a --from value to the attached stores it names, in
+// order: the store of that name or label (Labeler), then, for an org
+// (`--from <org>`, `--store <org>` read from any folder, devco D-507),
+// every attached folder <org>/<folder> of it, since an org's root holds
+// none of its folders' rows; "repo" is the repo store alone.
+func (o ops) sourcesNamed(from string) []store.Source {
+	var out []store.Source
+	if src, ok := o.sourceNamed(from); ok {
+		if src == store.SourceRepo {
+			return []store.Source{src}
+		}
+		out = append(out, src)
+	}
+	lab := work.LabelerOf(o.env)
+	for _, s := range o.env.Stores() {
+		if slices.Contains(out, s) {
+			continue
+		}
+		if strings.HasPrefix(string(s), from+"/") || (lab != nil && strings.HasPrefix(lab.StoreLabel(s), from+"/")) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // sourceNamed maps a --from value to the attached store it names: its

@@ -65,6 +65,8 @@ const (
 
 // ExportIn is the input of task.export.
 type ExportIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Format string   `json:"format,omitempty" flag:"format" desc:"csv | json | markdown | github (default json); json is the shape task import --from json reads; github is an issue list for gh scripts"`
 	Where  []string `json:"where,omitempty" flag:"where" desc:"only tasks matching this filter (the task list --where grammar; repeatable)"`
 	Tree   bool     `json:"tree,omitempty" flag:"tree" desc:"markdown: nest sub-tasks under their parent"`

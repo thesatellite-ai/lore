@@ -74,6 +74,8 @@ type ViewAddIn struct {
 
 // ViewNameIn is the input of task.view.show.
 type ViewNameIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Name string `json:"name" arg:"0" desc:"the view name or tvw_ id"`
 }
 
@@ -86,6 +88,8 @@ type ViewDeleteIn struct {
 
 // ViewListIn is the input of task.view.list.
 type ViewListIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Project string `json:"project,omitempty" flag:"project" desc:"only views of this project (prj_ id or name)"`
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
