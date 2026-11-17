@@ -177,6 +177,7 @@ var reads = []sweepStep{
 	{Cmd: "project list", In: inBoth},
 	{Cmd: "project shared-list", In: inRepo},
 	{Cmd: "org use", In: inHome},
+	{Cmd: "org list", In: inHome}, // devco D-570: lists this machine's org entries; read only
 	{Cmd: "skill status", In: inBoth},
 	{Cmd: "skill install", Args: []string{"--all", "--dry-run"}, In: inBoth},
 	{Cmd: "migrate status", In: inBoth},
