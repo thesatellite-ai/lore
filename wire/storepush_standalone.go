@@ -617,7 +617,7 @@ func (b *storePush) sayLocal() {
 		return
 	}
 	b.localSaid = true
-	_, _ = fmt.Fprintln(b.notes, "lore: committed locally to store "+string(b.name)+"; lore sync sends it")
+	_, _ = fmt.Fprintln(b.notes, "lore: committed locally to store "+b.label()+"; lore sync sends it")
 }
 
 // pendingPush is what happens to a commit whose push failed: the next
@@ -629,7 +629,18 @@ const pendingPush = "run `lore sync` when the store is reachable (or the next lo
 // note says the write waits in the local store clone and when it is
 // pushed.
 func (b *storePush) note(why string) {
-	_, _ = fmt.Fprintln(b.notes, "lore: the change is committed in the local copy of store "+string(b.name)+"; "+why+"; "+pendingPush)
+	_, _ = fmt.Fprintln(b.notes, "lore: the change is committed in the local copy of store "+b.label()+"; "+why+"; "+pendingPush)
+}
+
+// label is the store as a write's note names it: its own <org>/<folder>
+// name when it has one, else the attached name (devco:D-566: a row written
+// in one folder was "committed locally to store <org>" while search and
+// sync named the same place <org>/<folder>).
+func (b *storePush) label() string {
+	if b.own != "" {
+		return b.own
+	}
+	return string(b.name)
 }
 
 // Write implements store.Backend: commit, then push.

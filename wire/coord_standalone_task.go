@@ -100,7 +100,20 @@ func claimLines(id string, cr coord.ClaimResult, ttl time.Duration, ref string) 
 // claimPlace is where a claim line says the claim went: the signals ref,
 // and for a repo with no remote that it stays local (devco:D-362: there is
 // nothing to push to, so --push changes nothing and nobody else sees it).
+//
+// devco:D-560: a linked repo's claim is no ref of the code repo nor a branch
+// of the store clone: it is the store's signals ref, written on the store's
+// remote (the clone keeps only a tracking copy under refs/remotes), while
+// the task row's status is a row commit in the store folder that the
+// "committed locally" line names. Saying only "on refs/lore/signals/main"
+// sent people looking for a ref that exists in neither place.
 func (w *coordWorld) claimPlace(ref string) string {
+	if w.spot.store {
+		if !w.autopush {
+			return "the signals ref " + ref + " of store " + w.spot.label + " (kept in the local store clone: pushing is off, so teammates do not see it until `lore sync`)"
+		}
+		return "the signals ref " + ref + " of store " + w.spot.label + " (pushed to the store's remote now: teammates see it on their next fetch)"
+	}
 	if _, local := localSignalsRemote(w.spot, w.commonDir); local {
 		return ref + " (local: this repo has no remote, so the claim stays in this repository)"
 	}

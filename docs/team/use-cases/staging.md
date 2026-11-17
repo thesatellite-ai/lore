@@ -60,7 +60,7 @@ and the leak guards turn on for everyone in agency-stag.
 ✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
   nothing was written to this repo
 $ lore task add --title 'seed staging with demo data' --to agency-stag
-lore: committed locally to store agency-stag; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag)
 lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag)
 lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag)

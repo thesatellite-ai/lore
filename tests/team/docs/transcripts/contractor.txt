@@ -17,19 +17,19 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client/website (prj_54fe984c9b495744c0217776765a28f2) linked to github.com/agency/notes-client client/ (created; committed in the local clone; `lore sync` sends it)
   nothing was written to this repo
 alice (work/website)$ lore actor register
-lore: committed locally to store agency/.; lore sync sends it
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e99e22e9e86e96fe4daa7777994603.json (store agency/.)
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/.)
 ✓ act_c0f3c11a5724b0cfd74b256190d9b5b8 Alice Doe (@alice) registered in agency ./
 alice (work/website)$ lore memory add --body 'the client staging database is restored every Sunday night'
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store notes-client/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes-client/client/memories/mem_76bd560aff0771fab8457dbfa9823f10.json (store agency)
 ✓ mem_76bd560aff0771fab8457dbfa9823f10 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [project]
 alice (work/website)$ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
-lore: committed locally to store agency/.; lore sync sends it
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/_store/rules/rul_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/.)
 ✓ rul_d4314eba822f1bf5908b2b8ded5f313a [agency/.]
   scope: [project] severity: must
@@ -58,7 +58,7 @@ personal   me -> ~/.lore/personal
 bob (work/website)$ lore actor register
 lore actor register: store clone ~/.lore/stores/agency/notes: git user set to Bob Roe <bob@agency.example> (your identity in org agency)
 lore actor register: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
-lore: committed locally to store agency/.; lore sync sends it
+lore: committed locally to store agency; lore sync sends it
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store agency/.)
 ✓ act_b4f4765e593d51fd1352985e8af3a5b0 Bob Roe (@bob) registered in agency ./

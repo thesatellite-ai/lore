@@ -105,7 +105,7 @@ Notes go to the internal project by default. A project rule goes into the repo w
 ```console
 # alice, in website
 $ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
@@ -130,7 +130,7 @@ Alice adds an internal task for Bob from the default branch: a task added on a f
 # alice, in website
 $ lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
 lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
@@ -147,7 +147,7 @@ $ lore sync >/dev/null; lore task list
 $ lore inbox
 -  assigned              tsk_b4f4…a5b0  send invoice reminder before demo (lead)
 $ lore task done --id tsk_b4f4…a5b0 && lore sync >/dev/null && git switch -q -c feat/login
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)

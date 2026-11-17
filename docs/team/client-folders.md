@@ -105,7 +105,7 @@ and the leak guards turn on for everyone in agency.
 ✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (committed in the local clone; `lore sync` sends it)
   nothing was written to this repo
 $ lore task add --title 'set up the staging deploy'
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client_south; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/

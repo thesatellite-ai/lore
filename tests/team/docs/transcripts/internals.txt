@@ -77,13 +77,13 @@ carol (work/app)$ git branch -a
 
 ### store layout
 alice (work/website)$ lore task add --title 'renew the client SSL certificate' --to agency
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_76bd560aff0771fab8457dbfa9823f10.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
 ✓ tsk_d4314eba822f1bf5908b2b8ded5f313a — renew the client SSL certificate [medium] → [agency/client]
   created tasklist tlt_76bd560aff0771fab8457dbfa9823f10 "default" for tasks added without --tasklist
 alice (work/website)$ lore memory add --body 'the client wants a demo every second Friday'
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_b4f4765e593d51fd1352985e8af3a5b0.json (store agency)
 ✓ mem_b4f4765e593d51fd1352985e8af3a5b0 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
@@ -124,9 +124,9 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_f147dd95f1aaf742dd4f52148
 ✓ act_f147dd95f1aaf742dd4f5214843a5139 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 agent-backend (work/website)$ lore task claim --id tsk_d4314eba822f1bf5908b2b8ded5f313a
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency)
-✓ claimed tsk_d4314eba822f1bf5908b2b8ded5f313a renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+✓ claimed tsk_d4314eba822f1bf5908b2b8ded5f313a renew the client SSL certificate (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 alice$ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
 client/claims/tsk_d4314eba822f1bf5908b2b8ded5f313a.json
 9b40ce7 lore: signals

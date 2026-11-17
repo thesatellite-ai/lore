@@ -85,7 +85,7 @@ clones of the org stores in ~/.lore/config.yaml (orgs[].stores):
 ✗ git@github.com:client2/docs  (entries agency; branches main)
     fail: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
 ⚠ git@github.com:agency/notes  (entries agency; branches main)
-    warn: unpushed work: refs/heads/main (commits the store does not have yet: the next lore command that reaches the store pushes them, or run `lore sync`)
+    warn: unpushed work: refs/heads/main (3 commit(s) the store does not have yet: `lore store push` or `lore sync` sends them; only under push auto does the next write that reaches the store send them too)
 summary: 2 store(s) checked: 0 ok, 1 warn, 1 fail
 ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
   hint: fix each fail line above, then run `lore store doctor` again
