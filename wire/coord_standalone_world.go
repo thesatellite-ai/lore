@@ -46,6 +46,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	opscoord "github.com/thesatellite-ai/lore/ops/coord"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -130,12 +131,11 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	}
 	top, err := a.repoTop(ctx)
 	if err != nil || top == "" {
-		return nil, errs.New(errs.Unsupported, "coordination needs a git repository").
-			WithHint("claims and holds live on refs/lore/signals of the repo's remote")
+		return nil, errCoordNoRepo(a.opts.RepoDir)
 	}
 	repo, err := gitref.Open(ctx, top, nil)
 	if err != nil {
-		return nil, errs.Wrap(errs.Unsupported, "coordination needs a git repository", err)
+		return nil, errs.Wrap(errs.Unsupported, "coordination needs a git repository", errCoordNoRepo(a.opts.RepoDir))
 	}
 	gitDir, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--absolute-git-dir"}})
 	if err != nil {
@@ -1241,4 +1241,30 @@ const markOK = "✓"
 func errCoordInStore(sc storeCheckout) error {
 	return errs.New(errs.Unsupported, "coordination (task next, claims, inbox) runs in a code repo: "+sc.shown+" is a lore store clone, not a code repo").
 		WithHint("run it in a code repo linked to this folder (`lore org link --org <org> --project <folder>`); here, `lore task list` lists the tasks and `lore task edit --id <id> --assign @<handle>` assigns one")
+}
+
+// coordRepoOnly names the coordination reads a person runs to look
+// around (mission status, the inbox, task next): outside every repo they
+// refuse with errCoordNoRepo before any store is opened, instead of the
+// store reads' "no store to read … --store" (owner 2026-11-17: they stay
+// repo-only; --store does not apply).
+func coordRepoOnly(name string) bool {
+	switch name {
+	case opscoord.OpInbox, opscoord.OpMissionStatus, opscoord.OpTaskNext:
+		return true
+	}
+	return false
+}
+
+// errCoordNoRepo is the refusal of coordination outside a code repo:
+// missions, claims and the inbox live in each code repo (on its remote's
+// refs/lore/signals), not in a store, so the way out is to cd into the
+// repo, never a --store flag.
+func errCoordNoRepo(dir string) error {
+	where := "this folder"
+	if dir != "" {
+		where = dir
+	}
+	return errs.New(errs.Unsupported, "missions, claims and the inbox live in each code repo (on its remote's refs/lore/signals): "+where+" is not inside a code repo").
+		WithHint("cd into the code repo whose missions or inbox you want and run it there; --store does not apply (they are not store rows); `lore task list --store <org>` lists an org's tasks from anywhere")
 }
