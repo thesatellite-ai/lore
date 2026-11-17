@@ -382,7 +382,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 			err = printJSON(out, res)
 		} else {
 			var hb strings.Builder
-			if err = printHuman(&hb, res, cfg.color(StreamOut), cmd.CommandPath()); err == nil {
+			if err = printHuman(&hb, res, cfg.color(StreamOut), cmd.CommandPath(), e.Spec().OnlyReads()); err == nil {
 				_, err = io.WriteString(out, cfg.nameActors(cmd.Context(), hb.String()))
 			}
 		}

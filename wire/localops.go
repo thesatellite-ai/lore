@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
@@ -65,6 +66,14 @@ func (a *App) runLocal(ctx context.Context, e op.Entry, d op.Decoder, c op.Calle
 	}
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		ctx = WithNoCreate(ctx) // doctor_nocreate.go: a read never sets a repo up
+	}
+	if e.Spec().OnlyReads() {
+		// devco:D-503: a Local read skips engine.Run, which is what marks a
+		// call's access; unmarked, the engine it opens took it for a write.
+		// lore why-context show in a store clone made and committed the
+		// folder's project row (rosterProject), which the next lore sync
+		// pushed. Marked a read, it creates no row and never pushes (T-11).
+		ctx = engine.WithAccess(ctx, op.AccessRead)
 	}
 	if e.Spec().Name == opsfix.OpRun {
 		// FP-7: lore fix (dry or not) repairs a project and never sets one

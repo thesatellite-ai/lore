@@ -72,7 +72,7 @@ func TestNestedCellsReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := printHuman(&out, res, Palette{}, "lore setup cells"); err != nil {
+	if err := printHuman(&out, res, Palette{}, "lore setup cells", true); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
@@ -141,7 +141,7 @@ func TestWideCellsCutAndEmptyListsLeftOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := printHuman(&out, res, Palette{}, "lore setup wide"); err != nil {
+	if err := printHuman(&out, res, Palette{}, "lore setup wide", true); err != nil {
 		t.Fatal(err)
 	}
 	got := out.String()
@@ -193,7 +193,7 @@ func TestOptionalZeroCellIsBlank(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := printHuman(&out, res, Palette{}, "lore setup lines"); err != nil {
+	if err := printHuman(&out, res, Palette{}, "lore setup lines", true); err != nil {
 		t.Fatal(err)
 	}
 	var kind string
@@ -223,7 +223,7 @@ func TestEmptyTableLeftOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := printHuman(&out, res, Palette{}, "lore setup empty"); err != nil {
+	if err := printHuman(&out, res, Palette{}, "lore setup empty", true); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(out.String(), "rows") || strings.Contains(strings.ToUpper(out.String()), "HELP") {

@@ -221,7 +221,7 @@ lore works inside a git repo (any folder of it). Outside one it stops instead of
 # alice, in ~
 $ lore rule list
 ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
-  hint: name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo
+  hint: name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>) or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 ```
 <!-- /example -->

@@ -264,9 +264,12 @@ func (a *App) runOnDefaultStore(ctx context.Context, e op.Entry, d op.Decoder, c
 	r, err := a.repoRoster(ctx)
 	if err != nil || r.src == store.SourceRepo {
 		// E_NOT_A_STORE as before (exit 19, scripts key on it), but the
-		// hint names the flag: never "run git init here first"
+		// hint names the flag: never "run git init here first". It names
+		// --setup too (devco:D-510, the where-you-stand matrix): from any
+		// folder a person can name the store or the setup, and the hint
+		// named only --to/--store for every read but the roster's (D-499).
 		return op.Result{}, true, errs.New(errs.NotAStore, "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read").
-			WithHint("name the store: --to <org>/<folder> (or --store); lore store list shows the stores this folder can name, or cd into a repo")
+			WithHint("name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>) or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo")
 	}
 	one, err := orgStoreNamed(ctx, a.opts, r.src)
 	if err != nil {
