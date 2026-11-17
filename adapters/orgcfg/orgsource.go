@@ -21,6 +21,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -187,6 +188,10 @@ type OrgFileMoveResult struct {
 	Pushed, Offline, NoPush bool
 	// Suggestion is the file as it now reads (its new blob id).
 	Suggestion Suggestion
+	// Undone is true when this move put the file back as it was before
+	// the clone's last move, which was never pushed: both move commits
+	// were dropped (dropNetZeroMove), so nothing waits to be sent.
+	Undone bool
 }
 
 // MoveOrgFileStore rewrites the store urls in lore-org.yaml after a store
@@ -233,10 +238,77 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 	if err != nil {
 		return res, err
 	}
+	if res.Changed && !res.Pushed {
+		res.Undone = dropNetZeroMove(ctx, dir, branch)
+	}
 	if res.Suggestion, err = g.suggestionAt(ctx, dir, norm, branch); err != nil {
 		return res, err
 	}
 	return res, nil
+}
+
+// dropNetZeroMove drops the last two commits of branch in the store clone
+// at dir when they are two unpushed store moves that cancel out (set-url
+// to an address and straight back): the branch's tree is the one before
+// both, so they change nothing, and the first may carry a path on this
+// machine into the org's history (D-565, owner use pass: the round trip
+// left two commits for the next sync to push). Anything else between or
+// on top (a note, a pushed move) keeps every commit. It reports whether
+// it dropped them; a git failure keeps them.
+func dropNetZeroMove(ctx context.Context, dir, branch string) bool {
+	ctx, unlock, err := gitbackend.LockClone(ctx, dir)
+	if err != nil {
+		return false
+	}
+	defer unlock()
+	git := func(args ...string) (string, bool) {
+		out, gerr := gitRun(ctx, append([]string{"-C", dir}, args...)...)
+		return strings.TrimSpace(out), gerr == nil
+	}
+	head := "refs/heads/" + branch
+	subjects, ok := git("log", "-2", "--format=%s", head)
+	lines := strings.Split(subjects, "\n")
+	if !ok || len(lines) != 2 || !isOrgMoveSubject(lines[0]) || !isOrgMoveSubject(lines[1]) {
+		return false
+	}
+	now, ok1 := git("rev-parse", "--verify", "--quiet", head+"^{tree}")
+	before, ok2 := git("rev-parse", "--verify", "--quiet", head+"~2^{tree}")
+	if !ok1 || !ok2 || now != before {
+		return false
+	}
+	if movePushed(git, head+"~1", trackingRef(branch)) {
+		return false // the first move reached a remote: its undo must go there too
+	}
+	if cur, _ := git("symbolic-ref", "--quiet", "HEAD"); cur != head {
+		return false // the clone has another branch out: leave it to the person
+	}
+	_, ok = git("reset", "--keep", head+"~2")
+	return ok
+}
+
+// movePushed reports whether commit ever reached a remote: whether the
+// tracking ref holds it now or held it at any point its reflog recorded.
+// The reflog matters: set-url re-points origin, so after a move to another
+// address the tracking ref follows that address and no longer shows what
+// the old one got. No reflog to read answers true: nothing is dropped on
+// a guess.
+func movePushed(git func(args ...string) (string, bool), commit, track string) bool {
+	tips, ok := git("reflog", "show", "--format=%H", track)
+	if !ok || tips == "" {
+		return true
+	}
+	for _, tip := range append(strings.Split(tips, "\n"), track) {
+		if _, in := git("merge-base", "--is-ancestor", commit, tip); in {
+			return true
+		}
+	}
+	return false
+}
+
+// isOrgMoveSubject reports a commit subject MoveOrgFileStore writes.
+func isOrgMoveSubject(subject string) bool {
+	org, rest, ok := strings.Cut(strings.TrimPrefix(subject, "lore: org "), " store moved to ")
+	return ok && org != "" && rest != "" && strings.HasPrefix(subject, "lore: org ")
 }
 
 // MoveStoreURLs points every stores[].url of doc naming one of old at

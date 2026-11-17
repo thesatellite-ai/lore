@@ -616,9 +616,12 @@ func subjectOf(ctx context.Context, op string, changes []store.Change) string {
 	return "lore: " + t + " (" + n + ")"
 }
 
-// subject is the commit subject of a batch (B2-4, B3-23): `lore: <op
-// words>: <title>` for a row with a short title (a task, a plan: `lore:
-// task add: Ship the beta (3 rows)`), else `lore: <op words> <id>`. The
+// subject is the commit subject of a batch (B2-4, B3-23): one form for
+// every row, `lore: <op words> <id>`, then `: <title>` for a row with a
+// short title (a task, a plan: `lore: task add tsk_…: Ship the beta (3
+// rows)`). Before, a titled row lost its id (`lore: task add: Ship the
+// beta`) while a rule kept it (`lore: rule add rul_…`): two forms in one
+// log (devco D-569, owner use pass). The
 // row is the first whose table is the operation's noun, else the first
 // that is not an actor copy. Free text (a memory's or rule's body, a
 // comment) never goes into a subject: a subject is the most visible part
@@ -633,7 +636,7 @@ func subject(op string, changes []store.Change) string {
 	s := "lore: " + words + " " + c.Row.ID.String()
 	if op != DefaultOp && op != purgeOp {
 		if l := rowTitle(c.Row); l != "" && !removingOp(op) && !looksSecret(l) {
-			s = "lore: " + words + ": " + l
+			s += ": " + l
 		}
 		if len(changes) > 1 {
 			return s + " (" + strconv.Itoa(len(changes)) + " rows)"

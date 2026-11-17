@@ -35,10 +35,13 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/op"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -61,6 +64,9 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		return opsstores.SetURLOut{}, err
 	}
 	out := opsstores.SetURLOut{Name: in.Name, URL: raw, Previous: src.URL}
+	if err = a.confirmOrgMove(ctx, in.Name, src.URL, raw); err != nil {
+		return opsstores.SetURLOut{}, err // asked before anything is cloned or written
+	}
 	// D-514: every open of raw below (the marker check, the carried clone,
 	// the org file commit) runs before or while orgs[].stores moves to raw;
 	// the store stays its org's, so its clone gets the org identity.
@@ -140,21 +146,72 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 	if rerr := recordStoreAddress(a.opts.Home, out.ID, raw, a.opts.Wall()); rerr != nil {
 		return out, rerr
 	}
+	tail, at := "", ""
 	if carrying {
-		line, cerr := a.applyCloneCarry(ctx, carry, raw)
-		if cerr != nil {
+		var cerr error
+		if tail, at, cerr = a.applyCloneCarry(ctx, carry, raw); cerr != nil {
 			return out, errs.Prefix(verb+": the places moved, but the clone "+carry.from+" holding unpushed work was not carried (run this command again)", cerr)
 		}
-		out.Clone, out.Changed = joinLines(out.Clone, line), true
+		out.Changed = true
 	}
-	if line := leftClonesLine(leftClones(ctx, a.opts.Home, out.ID, raw), old); line != "" {
-		if out.Clone != "" {
-			line = out.Clone + "; " + line
-		}
-		out.Clone = line
-	}
+	left := leftClonesLine(leftClones(ctx, a.opts.Home, out.ID, raw), old)
 	out.OrgFiles = a.moveOrgFiles(ctx, moved.orgs, in.Name, old, raw)
+	if carrying {
+		// the org file commit above lands in the carried clone: its line
+		// counts what waits after it (D-562)
+		out.Clone = joinLines(out.Clone, carryLine(carry, at, raw, tail, pendingIn(ctx, at)))
+	}
+	out.Clone = joinLines(out.Clone, left)
 	return out, nil
+}
+
+// confirmOrgMove asks before set-url changes a store's address for a whole
+// org (D-562, owner use pass): run by an admin of an org listing the store,
+// it commits the new address to that org's lore-org.yaml, which every
+// teammate's lore follows, so like `lore org config set` it stops with
+// E_NEEDS_CONFIRM naming what it would do (the CLI asks at a terminal) and
+// writes only under --yes. A path on this machine is called out: no
+// teammate can fetch from it. A member's set-url (only this machine moves)
+// and a url that is already the store's ask nothing.
+func (a *App) confirmOrgMove(ctx context.Context, name, from, raw string) error {
+	if engine.Confirmed(ctx) || op.Confirmed(ctx) || storeaddr.Same(from, raw) { // --yes reaches a run op through the engine, a direct one through op
+		return nil
+	}
+	orgs := adminOrgsNaming(a.opts.Home, from)
+	if len(orgs) == 0 {
+		return nil
+	}
+	who := strings.Join(orgs, ", ")
+	plan := "store set-url would move store " + name + " to " + raw + " for everyone in " + who + ": it commits the new address to lore-org.yaml of " + who + ", and every teammate's lore follows it after their next sync"
+	if repourl.IsLocalRemote(raw) {
+		plan += "; " + raw + " is a path on this machine, which no teammate can reach, so their lore would lose the store until it moves back"
+	}
+	q := "Move store " + name + " to " + raw + " for everyone in " + who + "?"
+	return errs.New(errs.NeedsConfirm, plan).WithQuestion(q).
+		WithHint("nothing written; to move it: lore store set-url --name " + name + " --url " + raw + " --yes")
+}
+
+// adminOrgsNaming is every org whose entry lists a store at url and that
+// this machine administers (an admin setup of it): the orgs whose
+// lore-org.yaml a set-url of that store rewrites (moveOrgFiles).
+func adminOrgsNaming(home, url string) []string {
+	cfg, _, err := orgcfg.LoadConfig(home)
+	if err != nil || cfg == nil {
+		return nil
+	}
+	var out []string
+	for _, o := range cfg.Orgs {
+		if !isOrgAdmin(home, o.Name) {
+			continue
+		}
+		for _, sc := range o.Stores {
+			if storeaddr.Same(sc.URL, url) {
+				out = append(out, o.Name)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // moveOrgFiles commits the move to each org's lore-org.yaml this machine
@@ -474,6 +531,9 @@ func (a *App) moveOrgFile(ctx context.Context, org, name string, old []string, r
 	}
 	where := "pushed"
 	switch {
+	case res.Undone:
+		// D-565: back where it was before an unpushed move: no commit left
+		return "lore-org.yaml of " + org + " names " + raw + " again: the earlier move to another address was never pushed, so both move commits were dropped and nothing waits to be sent; orgs[" + org + "] stamped with version " + short(res.Suggestion.Version)
 	case !res.Changed:
 		return "lore-org.yaml of " + org + " already names " + raw + " (version " + short(res.Suggestion.Version) + ")"
 	case res.Offline:
@@ -481,7 +541,11 @@ func (a *App) moveOrgFile(ctx context.Context, org, name string, old []string, r
 	case !res.Pushed:
 		where = "committed in the local clone; `lore sync` pushes it"
 	}
-	return "lore-org.yaml of " + org + " now names " + raw + " (" + where + "); orgs[" + org + "] stamped with version " + short(res.Suggestion.Version)
+	line := "lore-org.yaml of " + org + " now names " + raw + " (" + where + "); orgs[" + org + "] stamped with version " + short(res.Suggestion.Version)
+	if repourl.IsLocalRemote(raw) {
+		line += "; " + raw + " is a path on this machine: teammates cannot fetch from it" // D-562
+	}
+	return line
 }
 
 // storeIDAt opens the store src names and returns its marker's sto_ id

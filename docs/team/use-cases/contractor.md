@@ -84,11 +84,11 @@ lore: wrote ~/.lore/stores/agency/notes/_store/rules/rul_d431…313a.json (store
 ✓ rul_d431…313a [agency/.]
   scope: [project] severity: must
 $ lore sync
-lore: pushed store notes-client/client (here: agency): commit 601d285 to branch main
+lore: pushed store notes-client/client: commit 601d285 to branch main
 lore: pushed store agency/.: commit 86dbae4 to branch main
 store me: up to date
 store me/everywhere: up to date
-store notes-client/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store notes-client/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/.: pushed (sent 3, received 0, merged 0, refused 0)
 ```
 <!-- /example -->

@@ -98,8 +98,13 @@ func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool, org st
 			continue // another org's store: its own repos' sync sends it (N-3)
 		}
 		info := cl.Inspect(ctx, cs.norm)
-		if !info.Cloned || !slices.ContainsFunc(info.Unpushed, isBranchRef) {
-			continue // only a branch's commits wait for a push: refs/lore/backup/* stay local by design
+		if !info.Cloned || !slices.Contains(info.Unpushed, cloneHeadRef(ctx, info.Dir)) {
+			// only the store branch's commits wait for a push: refs/lore/backup/*
+			// stay local by design, and a branch someone made by hand in the
+			// clone is never pushed (D-561: a leftover test branch made a home
+			// sync say "pushed … local commit(s) with no note rows" over a push
+			// that sent nothing)
+			continue
 		}
 		// The branch whose clone folder is the one holding the work: an
 		// org entry names the effective branch ("main"), while the clone
@@ -136,8 +141,20 @@ func orgPushReport(name string, res opsstores.PushOut, perr error) opsstores.Rep
 		r.Problems = []string{perr.Error()}
 		return r
 	}
-	r.Sent, r.Offline, r.Pushed = res.Rows, res.Offline, !res.Offline
+	// D-561: a push that sent no commit is no push, whatever the clone held
+	r.Sent, r.Offline, r.Pushed = res.Rows, res.Offline, !res.Offline && res.Sent > 0
 	return r
+}
+
+// cloneHeadRef is the branch the store clone at dir has checked out
+// (refs/heads/<branch>), the one branch a store push sends; "" when it
+// cannot be read (then no ref matches and nothing is pushed on a guess).
+func cloneHeadRef(ctx context.Context, dir string) string {
+	out, err := gitRun{dir: dir, args: []string{"symbolic-ref", "--quiet", "HEAD"}}.output(ctx)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // syncOrg is the org whose waiting store clones a sync here may push: the
@@ -161,8 +178,3 @@ func (a *App) syncOrg(ctx context.Context) string {
 func orgStoreShortName(norm string) string {
 	return strings.TrimSuffix(path.Base(repourl.Mask(norm)), ".git")
 }
-
-// isBranchRef reports a local branch (refs/heads/…): the refs a store push
-// sends. Inspect also lists lore's local refs (a compaction's backup),
-// which no push ever sends.
-func isBranchRef(ref string) bool { return strings.HasPrefix(ref, "refs/heads/") }

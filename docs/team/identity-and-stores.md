@@ -292,7 +292,7 @@ Your personal store (`me`), your org's stores and the stores a repo attaches in 
 | `batch` | commits on your machine only | when the oldest waiting write is `push_every` (default `5m`) old and you run any lore command that uses the store, on `lore sync`, on commands that need the remote current (`lore sync status`, `lore land`), when your coding tool starts or ends a session, and from the repo's git hooks lore installs (after a commit, before a push) |
 | `now` (your opt-in) | commits and pushes | at once, one commit per write, roster and link writes included |
 
-Each store commit is titled after what you did: the command and, for a kind with a short title (a task, a plan), the title, as in `lore: task add: Ship the beta`; other rows are named by id, as in `lore: memory add mem_01ab…` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+Each store commit is titled after what you did, in one form: the command and the record's id, as in `lore: memory add mem_01ab…`, then for a kind with a short title (a task, a plan) the title after a colon, as in `lore: task add tsk_01cd…: Ship the beta` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
 
 Your actor row and your machine profile live in one folder of a store, the folder that holds your row (the org folder, where the roster is), not in every folder you write to. A write in another folder of the same store (`task edit --id … --assign @lee` in `sync/`) commits only that row: one commit, with no `sync/actors/…` or `sync/machines/…` file beside it, since a folder's reads attach the org folder and find you there. A coding agent's first write in a store adds the agent's own row to that same folder, once, as its own commit; later writes carry only their rows. A folder of a store that holds no row of yours yet (a store with no org folder) still gets your actor row with your first write there.
 
@@ -330,7 +330,7 @@ me: push batch every 10m, compact off
 $ lore sync
 lore: pushed store me: commit 601d285 to branch main
 store me: pushed (sent 4, received 0, merged 0, refused 0)
-store agency/client (here: agency): up to date
+store agency/client: up to date
 store agency/org: up to date
 $ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
@@ -375,9 +375,9 @@ agency: push batch every 15m, compact off
   epoch     0
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
-lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
+lore: pushed store agency/client: commit 86dbae4 to branch main
 store me: up to date
-store agency/client (here: agency): up to date
+store agency/client: up to date
 store agency/org: up to date
 
 # bob, in website
@@ -485,8 +485,8 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (st
 ✓ mem_05e9…4603 [agency/client]
   scope: [project]
 $ lore sync
-lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
-store agency/client (here: agency): pushed (sent 1, received 0, merged 0, refused 0)
+lore: pushed store agency/client: commit dfd8dc8 to branch main
+store agency/client: pushed (sent 1, received 0, merged 0, refused 0)
 store agency/org: up to date
 $ lore memory list
 mem_c0f3…b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]

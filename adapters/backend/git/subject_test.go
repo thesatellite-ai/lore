@@ -13,7 +13,8 @@ import (
 
 // TestSubjectNamesWhatThePersonDid pins B2-4: a `task add` commit that
 // also carries the person's actor copy and the task list is titled after
-// the task ("lore: task add: <title>"), never after the actor row.
+// the task ("lore: task add tsk_…: <title>", D-569: the id always, the
+// title after it), never after the actor row.
 func TestSubjectNamesWhatThePersonDid(t *testing.T) {
 	t.Parallel()
 	g := newGen(t)
@@ -37,7 +38,7 @@ func TestSubjectNamesWhatThePersonDid(t *testing.T) {
 	actor := mk("actors", ids.PrefixActor, "name", "Mira")
 	list := mk("task_lists", ids.PrefixKind, "name", "Inbox")
 	task := mk("tasks", ids.PrefixTask, "title", "Ship the beta\nwith notes")
-	if got, want := subject("task.add", []store.Change{actor, list, task}), "lore: task add: Ship the beta (3 rows)"; got != want {
+	if got, want := subject("task.add", []store.Change{actor, list, task}), "lore: task add "+task.Row.ID.String()+": Ship the beta (3 rows)"; got != want {
 		t.Fatalf("task add subject = %q, want %q", got, want)
 	}
 	if got := subject(DefaultOp, []store.Change{actor, task}); got != "lore: task save "+task.Row.ID.String()+" (2 rows)" {

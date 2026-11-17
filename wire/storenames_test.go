@@ -10,17 +10,17 @@ import (
 // store alone, so a client repo printed the team store as "acme" (in that
 // repo `acme` is the client folder) where the org's repos print
 // "acme/org". A clone listed only by a folder is named by that folder,
-// with "(here: …)" when this repo calls it otherwise.
+// whatever this repo calls it (D-567: no "(here: …)").
 func TestSetupSyncNamesAStoreAsEveryPathDoes(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, folder, own, want string }{
-		{"acme", "", "acme", "acme"},                                         // the team store's root, outside a repo
-		{"client-store", "", "client-store", "client-store"},                 // a second store's root
-		{"acme/org", "org", "acme", "acme/org"},                              // the team store's org folder in a client repo
-		{"acme", "bigco", "client-store", "client-store/bigco (here: acme)"}, // the client folder a client repo attaches as acme
-		{"notes", "", "", "notes"},                                           // no org's store: its listed name
-		{"notes/x", "x", "", "notes/x"},                                      // a folder of no org's store
-		{"acme/.", ".", "acme", "acme"},                                      // the root spelled as a folder
+		{"acme", "", "acme", "acme"},                            // the team store's root, outside a repo
+		{"client-store", "", "client-store", "client-store"},    // a second store's root
+		{"acme/org", "org", "acme", "acme/org"},                 // the team store's org folder in a client repo
+		{"acme", "bigco", "client-store", "client-store/bigco"}, //  the client folder a client repo attaches as acme
+		{"notes", "", "", "notes"},                              // no org's store: its listed name
+		{"notes/x", "x", "", "notes/x"},                         // a folder of no org's store
+		{"acme/.", ".", "acme", "acme"},                         // the root spelled as a folder
 	} {
 		if got := entryShown(c.name, c.folder, c.own); got != c.want {
 			t.Errorf("entryShown(%q, %q, %q) = %q, want %q", c.name, c.folder, c.own, got, c.want)

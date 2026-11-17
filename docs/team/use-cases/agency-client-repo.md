@@ -76,7 +76,7 @@ $ lore sync
 lore: pushed store agency/org: commit 601d285 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): up to date
+store agency/client: up to date
 store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 
 # bob, in website
@@ -90,7 +90,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_05e9…4603.json (store a
 lore: pushed store agency/org: commit 86dbae4 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): up to date
+store agency/client: up to date
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 ```
 <!-- /example -->
@@ -129,16 +129,16 @@ Alice adds an internal task for Bob from the default branch: a task added on a f
 ```console
 # alice, in website
 $ lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
-lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
+lore: pushed store agency/client: commit 9b40ce7 to branch main
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
   created tasklist tlt_d431…313a "default" for tasks added without --tasklist
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
+lore: pushed store agency/client: commit 05513aa to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: up to date
 
 # bob, in website
@@ -151,7 +151,7 @@ lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
 ✓ tsk_b4f4…a5b0 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
+lore: pushed store agency/client: commit dfd8dc8 to branch main
 $ git status --short
 ```
 <!-- /example -->

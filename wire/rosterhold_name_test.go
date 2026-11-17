@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -26,7 +25,7 @@ func TestHeldStoreNameIsTheClonesStore(t *testing.T) {
 		t.Fatalf("hold of the team store's clone named %q, want initech", got)
 	}
 	got = a.heldStoreName(context.Background(), heldChange{src: "initech", url: "git@git.example.test:initech/client-store.git", folder: "shop"})
-	if !strings.HasPrefix(got, "client-store/shop") {
-		t.Fatalf("hold of the client store's clone named %q, want client-store/shop (here: initech)", got)
+	if got != "client-store/shop" { // one label, no "(here: initech)" (D-567)
+		t.Fatalf("hold of the client store's clone named %q, want client-store/shop", got)
 	}
 }
