@@ -177,6 +177,9 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		}
 	}
 	out.Lines = bareLines(ctx, a.opts.RepoDir)
+	if out.Data.Pass != opssync.PassStore && !insideWorkTree(ctx, a.opts.RepoDir) {
+		out.Lines = append(out.Lines, a.noSetupScope(ctx)...)
+	}
 	var failed []opssync.StoreReport
 	var codes []errs.Code
 	add := func(r opssync.StoreReport, code errs.Code, name string) {
@@ -235,6 +238,34 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 	return out, errs.New(sameCode(codes), msg).WithHint(strings.Join(nexts, "; "))
 }
 
+// noSetupScope is the line that opens `lore sync` in a folder no setup
+// covers (the home folder of a person whose setups name ~/code/**), when
+// this machine has setups: the sync covers only the stores `lore store
+// list` shows here plus the org store clones with commits waiting, and
+// `--setup` syncs a setup's stores. Before (devco D-561, owner use pass)
+// a home sync printed one org's admin store as if it were the whole sync,
+// and the company store was never named. Nothing when a setup is in effect
+// here: its stores are what this sync syncs, as `lore store list` says.
+func (a *App) noSetupScope(ctx context.Context) []string {
+	if res, err := a.SetupResolution(ctx, ""); err != nil || res.Active.Name != "" {
+		return nil
+	}
+	raw, err := readConfigRaw(a.opts.Home)
+	if err != nil || raw == nil {
+		return nil
+	}
+	d, err := decodeSetupsDoc(raw)
+	if err != nil || len(d.Setups) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(d.Setups))
+	for _, e := range d.Setups {
+		names = append(names, e.Name)
+	}
+	return []string{"no setup covers this folder, so this sync covers only the stores `lore store list` shows here and the org store clones with commits waiting; " +
+		"`lore sync --setup <name>` syncs every store of a setup (yours: " + strings.Join(names, ", ") + ")"}
+}
+
 // sameCode is the one code every failure shares, else E_STORE_UNREACHABLE
 // when a store could not be reached, else E_STALE.
 func sameCode(codes []errs.Code) errs.Code {
@@ -273,7 +304,7 @@ func (a *App) setupStores(ctx context.Context) ([]attach.Store, error) {
 // text lines, by the one rule every store line follows (storeshown.go,
 // devco D-279): the store's own name, as `lore store list` names it in
 // the org's repos and outside any repo, "/<folder>" for a folder, and
-// "(here: <name>)" when this repo's `lore store list` calls it otherwise.
+// nothing else, whatever this repo's `lore store list` calls it (D-567).
 // A clone listed here by its root is named by the store alone; a clone
 // listed only by a folder (a client repo attaches the client store's
 // folder and the team store's org folder) is named by that folder, as
@@ -452,6 +483,10 @@ func waitingPushReport(url string, p opsstores.Report) (opssync.StoreReport, err
 		r.Error = strings.Join(p.Problems, "; ")
 		r.Next = "run `lore store push --store " + url + "` to see the cause, then `lore sync` again; `lore doctor` explains a store it cannot reach"
 		return r, errs.StoreUnreachable
+	}
+	if !p.Pushed {
+		r.Status = opssync.StoreStatusUpToDate // D-561: nothing left the machine
+		return r, ""
 	}
 	r.Status, r.Pushed = opssync.StoreStatusPushed, true
 	return r, ""

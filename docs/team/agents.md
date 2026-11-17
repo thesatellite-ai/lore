@@ -124,10 +124,10 @@ lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_05e9…4603.json (
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
 ✓ tsk_c0f3…b5b8 — send the invoice reminder before Friday [medium] → [agency/client]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
-lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
+lore: pushed store agency/client: commit 86dbae4 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: up to date
 
 # bob, in website
@@ -206,7 +206,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store
 lore: pushed store agency/client, agency/org: commit 9b40ce7 to branch main
 store me: up to date
 store me/everywhere: up to date
-store agency/client (here: agency): pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 
 # bob, in website

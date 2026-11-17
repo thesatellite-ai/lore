@@ -714,7 +714,9 @@ func allOwn(links []Link) bool {
 func describeLinks(ls []Link) string {
 	parts := make([]string, 0, len(ls))
 	for _, l := range ls {
-		p := l.StoreURL + " " + l.Folder + "/"
+		// a store at a path on this machine is keyed "_local/<path>":
+		// shown as the path (D-564: whoami said "link in _local/private/…")
+		p := repourl.ShownStore(l.StoreURL) + " " + l.Folder + "/"
 		if l.Default {
 			p += " (default)"
 		}

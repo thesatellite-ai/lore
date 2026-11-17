@@ -528,7 +528,7 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, actor string, idErr 
 			row("global", "(no store sets org_folder: no roster or company rules)")
 		}
 		for _, l := range r.Links {
-			lv := red.str(l.StoreURL) + " " + red.folder(l.Folder) + "/"
+			lv := red.str(repourl.ShownStore(l.StoreURL)) + " " + red.folder(l.Folder) + "/" // a path store as its path (D-564)
 			if l.Default {
 				lv += " (default link)"
 			}

@@ -10,8 +10,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1885 |
-| open | 1 |
+| fixed | 1891 |
+| open | 2 |
 | on-hold | 14 |
 | owner | 6 |
 | not-reproduced | 110 |
@@ -866,6 +866,12 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-553 | finding | owner use pass 1 2026-11-17: `rule show --id <id>` (and memory show) from the home folder refused without --store though ids are unique; the text output did not name the store/folder | fixed | TestStoryWUReadsFromAnywhere | Summary: wire/orgfolders.go everyOrgFolders: rowFolderOutside also scans every org's stores of the config after this folder's org, so a read by id finds its row from the home folder; memory and rule show text print `[<org>/<folder>]` after the id; story WU |
 | devco:D-554 | finding | owner use pass 1 2026-11-17: `lore store list` in the home folder printed count 1 (only me) with no word that two setups had org stores | fixed | TestStoreListNamesSetups, TestStoryWUReadsFromAnywhere | Summary: ops/stores setupsHint (SetupHinter, wire App.OrgSetupNames): with no org store listed, store.list's new out.hint names `lore store list --setup <setup>` for each enabled setup with an org; story WU |
 | devco:D-555 | finding | owner use pass 1 2026-11-17: `lore context` took no --store, so an unlinked repo or the home folder got no context for an org folder | fixed | TestEveryReadTakesStore, TestStoryWUReadsFromAnywhere | Summary: ops/context FetchIn embeds op.StoreFlag (context.fetch in.store); wire storeRoutedLocal runs context --store <org>[/<folder>] on the store-only open from any folder; docs team/client-folders; story WU |
+| devco:D-561 | finding | use pass 1 wrong 11: `lore sync` in the home folder synced only one org's admins-only store and printed "pushed (sent 0 …); pushed local commit(s) with no note rows" though nothing was pushed (only a branch made by hand in the clone was ahead), and never said which setup it covered | fixed | TestWaitingPushReport, TestJourneyHomeSyncAndStoreMoveSayWhatHappened | wire/sync_orgstores.go: a clone waits only for commits on its checked-out store branch, a push that sent 0 commits is not "pushed"; wire/syncsetup.go noSetupScope: a folder no setup covers says so and names `lore sync --setup <name>` |
+| devco:D-562 | finding | use pass 1 wrong 13: `store set-url` by an org admin rewrote the shared lore-org.yaml with no confirmation, wrote a path on this machine into it without a word, and counted "1 unpushed commit(s)" where git counted 2 | fixed | TestJourneyHomeSyncAndStoreMoveSayWhatHappened | wire/storeseturl.go confirmOrgMove: E_NEEDS_CONFIRM with the plan and --yes in the hint, a local path called out there and in the result; wire/storeseturl_clone.go pendingIn counts origin/<branch>..HEAD after every set-url commit |
+| devco:D-564 | finding | use pass 1 weak 15: whoami after set-url to a path showed "matched by: link in _local/<path> …" | fixed | TestDescribeLinksShowsAPathStore, TestJourneyHomeSyncAndStoreMoveSayWhatHappened | logic/orgresolve describeLinks and wire whoami show a path store as its path (repourl.ShownStore) |
+| devco:D-565 | finding | use pass 1 weak 16: a set-url round trip (to a path and back) left two move commits that cancel out, one carrying the path into history, and an empty stores/_local/ folder | fixed | TestDropNetZeroMove, TestIsOrgMoveSubject, TestJourneyHomeSyncAndStoreMoveSayWhatHappened | adapters/orgcfg/orgsource.go dropNetZeroMove drops an unpushed pair of moves whose trees cancel; the carried clone's emptied parent folder is removed |
+| devco:D-567 | finding | use pass 1 weak 17: sync, conflicts and holds named a folder "store acme/web (here: acme)" where a claim and a write's push line said "store acme/web" | fixed | TestStoreOwnNameInOutput, TestSetupSyncNamesAStoreAsEveryPathDoes, TestJourneyStoreNamesAgreeOnEveryPath | wire/storeshown.go storeShown: the store's own name only, never "(here: <name>)" |
+| devco:D-569 | finding | use pass 1 weak 17: store commit subjects mixed ids ("lore: rule add rul_…") and titles ("lore: decision add: …") | fixed | TestSubjectNamesWhatThePersonDid, TestSubjectNeverCarriesFreeText | adapters/backend/git/backend.go subject: one form, `lore: <op words> <id>` then `: <title>` for a titled kind |
 
 ## lore-adoptfix
 
@@ -2446,6 +2452,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | id | kind | title | state | guarding test(s) | notes |
 |---|---|---|---|---|---|
 | devco:T-20-list | finding | task list at ~5,000-8,000 live tasks takes 5-8 s: every call still decodes and read-scans every live task in the engine | open | - | r7tperf follow-up: the live files' conversion is kept by blob (TestLiveRowsKeptByBlob) and show no longer lists every task, but engine.List decodes each row and runs the read mask (secret scan) on it per call (~2.2 s of CPU at 5,600 tasks, more under load); next: serve a plain list from the cache's tasks table while the store head is unchanged, or keep the masked decode by row version |
+| devco:D-568 | finding | use pass 1 weak 17: `lore sql` over memories_all shows `source` as the attached name ("acme") where search labels the row "[acme/web]" | open | - | the `source` column is the name queries filter on (`WHERE source = …`); a readable `<org>/<folder>` needs a new column or a lens change, left for the coordinator |
 
 ## On hold (owner, not built in 0.1.18)
 

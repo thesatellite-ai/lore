@@ -10,8 +10,8 @@ package journeys
 // folder `acmeteam`; and outside any setup the local personal store was
 // listed as `_me`, a name no store may have, so `lore sync` there FAILED.
 // Now every sync line names a store by its own name ("<store>/<folder>"
-// for a folder), adding "(here: <name>)" when this repo's store list calls
-// it otherwise. A second org's store keeps its own name and never shows in
+// for a folder) and nothing else, whatever this repo's store list calls
+// it (D-567: "(here: <name>)" made one place read as two). A second org's store keeps its own name and never shows in
 // the first org's repos.
 
 import (
@@ -31,7 +31,7 @@ func TestJourneyStoreNamesAgreeOnEveryPath(t *testing.T) {
 	beta := w.Remote("github.com/beta-co/lore-beta")
 	app := tt.repo[tlLee.Email]
 	teamOrg := tlOrg + "/org"
-	clientShown := "client-store/" + clsFolder + " (here: " + tlOrg + ")"
+	clientShown := "client-store/" + clsFolder
 
 	w.Step("day1/team-client-store-and-client-repo", func() {
 		tlStartTeam(t, lee, app.Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})

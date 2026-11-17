@@ -58,12 +58,24 @@ func TestStoreIdentityFix(t *testing.T) {
 // E_STORE_UNREACHABLE and the next step) or failed with its problem.
 func TestWaitingPushReport(t *testing.T) {
 	const url = "git@git.example.invalid:acme/lore-x.git"
-	r, code := waitingPushReport(url, opsstores.Report{Store: "lore-x", Sent: 1})
+	r, code := waitingPushReport(url, opsstores.Report{Store: "lore-x", Sent: 1, Pushed: true})
 	if code != "" || r.Status != opssync.StoreStatusPushed || !r.Pushed || r.URL != url {
 		t.Fatalf("pushed: %+v %q", r, code)
 	}
 	if got := syncStoreLines(r, "")[0]; got != "store lore-x: pushed (sent 1, received 0, merged 0, refused 0)" {
 		t.Errorf("pushed line = %q", got)
+	}
+	// devco D-561: a push that sent no commit (only a branch made by hand
+	// in the clone was ahead) is no push: no "pushed", no no-rows tail
+	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x"})
+	if code != "" || r.Status != opssync.StoreStatusUpToDate || r.Pushed {
+		t.Fatalf("nothing sent: %+v %q", r, code)
+	}
+	if got := syncStoreLines(r, "")[0]; strings.Contains(got, "pushed") {
+		t.Errorf("nothing-sent line claims a push: %q", got)
+	}
+	if rep := orgPushReport("lore-x", opsstores.PushOut{}, nil); rep.Pushed {
+		t.Errorf("orgPushReport of a push that sent 0 commits says pushed: %+v", rep)
 	}
 	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Offline: true})
 	if code != errs.StoreUnreachable || r.Status != opssync.StoreStatusOffline || !strings.Contains(r.Next, url) {

@@ -260,8 +260,8 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		// (owner decision 7: one clone pushes every folder at once). The
 		// code repo attaches the org's folders only (D-6: the team step
 		// writes no .lore/stores.yaml entry), so here the project folder is
-		// the org's name, printed with its own name first (B-9).
-		holder := tlOrg + "/" + tlProject + " (here: " + tlOrg + ")"
+		// the org's name, printed by its own name only (B-9, D-567).
+		holder := tlOrg + "/" + tlProject
 		heldLine := "held: waiting on " + tlOrg + "'s conflict (" + ruleID + ")"
 		if n := strings.Count(r.Out(), "refused 1"); n != 1 {
 			t.Errorf("sync reports the conflict %d times, want once under %s:\n%s", n, holder, r)
