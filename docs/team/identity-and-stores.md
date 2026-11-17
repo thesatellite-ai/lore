@@ -193,7 +193,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
 ✓ mem_76bd…3f10
   scope: [project]
 $ lore move --id mem_76bd…3f10 --to agency --yes
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency)
 lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
 ✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
@@ -480,7 +480,7 @@ Nothing to do. On Bob's next sync lore sees the higher epoch, moves his copy ont
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants the invoice on the 1st' --to agency
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (store agency)
 ✓ mem_05e9…4603 [agency/client]
   scope: [project]

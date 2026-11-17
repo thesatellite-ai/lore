@@ -43,7 +43,7 @@ members (2):
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'ship the checkout page' --to agency --assign @web
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/acme-hub; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_54fe…28f2.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e9…4603.json (store agency)
 ✓ tsk_05e9…4603 — ship the checkout page [medium] → [agency/acme-hub]

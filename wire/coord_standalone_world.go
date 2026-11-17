@@ -119,6 +119,9 @@ type sigSpot struct {
 	folder     string
 	// store: the linked store's ref (the task row is not in this repo).
 	store bool
+	// label is the store folder as every line names it, <org>/<folder>
+	// (storeOwnName); "" for a code repo's own ref (devco:D-560).
+	label string
 }
 
 // openWorld gathers the world, refusing what this host cannot coordinate:
@@ -368,11 +371,16 @@ func (w *coordWorld) useStore(ctx context.Context) error {
 	remote := &gitremote.Git{Repo: repo, Name: gitbackend.RemoteName}
 	// The store clone's signals ref is reached as the setup that owns the
 	// store (storeRoute); a store no setup owns gets no route.
+	label := string(w.orgStore)
 	if u, uerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + gitbackend.RemoteName + ".url"}}); uerr == nil {
-		remote.RouteArgs, remote.RouteEnv, _ = storeRoute(ctx, w.a.opts.Home, w.a.projectDir(), strings.TrimSpace(string(u)))
+		url := strings.TrimSpace(string(u))
+		remote.RouteArgs, remote.RouteEnv, _ = storeRoute(ctx, w.a.opts.Home, w.a.projectDir(), url)
+		if own := storeOwnName(w.a.opts.Home, url, folder); own != "" {
+			label = own
+		}
 	}
 	w.spot = sigSpot{repo: repo, remote: remote, remoteName: gitbackend.RemoteName,
-		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true}
+		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true, label: label}
 	w.folder = folder
 	return nil
 }

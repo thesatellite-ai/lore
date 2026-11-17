@@ -230,7 +230,7 @@ ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) is active; leaving ends their stint 
 
 ### offboard
 tomas (work/acme-hub)$ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/acme-hub; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191616cfa49f94ede5d5148b8b045c2.json (store agency)
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3d8fc9a019dca1371ad55c6a611aa.json (store agency)
 ✓ tsk_b4d3d8fc9a019dca1371ad55c6a611aa — move the invoice export to the new API [medium] → [agency/acme-hub]

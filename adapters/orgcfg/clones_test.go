@@ -143,7 +143,7 @@ func TestDoctorAndUnpushed(t *testing.T) {
 	if hasPrefix(d.Problems, ProblemUnpushed) || len(d.Warnings) != 3 {
 		t.Fatalf("unpushed work must be warnings, one per ref: problems %v warnings %v", d.Problems, d.Warnings)
 	}
-	wantSide := UnpushedWarning(dir, "refs/heads/backup-test", []string{"main"})
+	wantSide := UnpushedWarning(dir, "refs/heads/backup-test", 1, []string{"main"})
 	if !slices.Contains(d.Warnings, wantSide) || !strings.Contains(wantSide, "push it with `git -C "+dir+" push origin backup-test`") ||
 		!strings.Contains(wantSide, "delete it with `git -C "+dir+" branch -D backup-test`") {
 		t.Fatalf("side branch warning %q not in %v", wantSide, d.Warnings)
@@ -152,7 +152,8 @@ func TestDoctorAndUnpushed(t *testing.T) {
 		t.Fatalf("UnpushedRef = %q %v", ref, ok)
 	}
 	// the store's own branch is lore's waiting work: never "delete it"
-	if w := UnpushedWarning(dir, "refs/heads/main", []string{"main"}); !slices.Contains(d.Warnings, w) || strings.Contains(w, "branch -D") || !strings.Contains(w, "`lore sync`") {
+	if w := UnpushedWarning(dir, "refs/heads/main", 1, []string{"main"}); !slices.Contains(d.Warnings, w) || strings.Contains(w, "branch -D") || !strings.Contains(w, "`lore sync`") ||
+		!strings.Contains(w, "1 commit(s) the store does not have yet") || strings.Contains(w, "the next lore command that reaches the store pushes them") {
 		t.Fatalf("store branch warning %q (all %v)", w, d.Warnings)
 	}
 	testGit(t, dir, "update-ref", "-d", "refs/heads/backup-test")
