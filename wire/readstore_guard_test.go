@@ -29,17 +29,24 @@ var readsWithoutStore = map[string]string{
 	"explain.run":     "explains a command, reads no rows",
 	"workspace.show":  "this checkout's workspace",
 	"sync.trash.list": "this machine's local sync trash",
+	// devco D-506: reads of this machine or this checkout, never a store's rows
+	"batch.list":       "this machine's batch log (<home>/state/batches), no store",
+	"batch.show":       "this machine's batch log (<home>/state/batches), no store",
+	"pii_pattern.list": "this machine's own PII patterns (the machine source), no store",
+	"sync.conflicts":   "reports the conflicts of every store this checkout syncs, as sync.status",
+	"sync.peek":        "reads another git ref of this checkout, never a store",
+	"scope.list":       "this repo's folder scopes, keyed by this checkout's repo id",
+	"scope.show":       "the scope chain of a path in this repo, keyed by this checkout's repo id",
+	"branch.list":      "the branch layers of this checkout's code repo (its repo key), not a store's rows",
+	"branch.show":      "one branch layer of this checkout's code repo (default the branch checked out)",
+	"inbox.show":       "claims, gates and handoffs live on this repo's refs/lore/signals; a store clone refuses coordination",
+	"mission.status":   "a mission's claims live on this repo's refs/lore/signals; a store clone refuses coordination",
 }
 
 // readsLeftForStore are reads that should take --store and do not yet
 // (devco D-499 widened; the coordinator splits them across workers).
 // Remove a name when its read takes the flag; the guard then holds it.
-var readsLeftForStore = []string{
-	"batch.list", "batch.show", "branch.list", "branch.show", "commit.show", "inbox.show", "link.list",
-	"mission.status", "pii_pattern.list", "policy.show", "project.show", "repo.list", "row.markdown",
-	"row.path", "scope.list", "scope.show", "secrets.allow.list", "secrets.list", "secrets.rules",
-	"secrets.show", "sync.conflicts", "sync.peek",
-}
+var readsLeftForStore = []string{}
 
 // TestEveryReadTakesStore walks the operation registry (devco D-499,
 // widened by the owner: `resource list --kind code_repo --store <org>/org`
@@ -83,7 +90,9 @@ func TestEveryReadTakesStore(t *testing.T) {
 		}
 	}
 	// the owner's families are done and stay done
-	for _, name := range []string{"resource.list", "resource.show", "resource.kinds", "team.list", "team.show", "member.list", "member.show", "trash.list", "trash.show", "meta.show", "meta.get", "meta.keys", "rule.show", "task.show", "task.triage", "task.template.show", "task.view.list", "memory.show", "decision.show", "row.show"} {
+	for _, name := range []string{"resource.list", "resource.show", "resource.kinds", "team.list", "team.show", "member.list", "member.show", "trash.list", "trash.show", "meta.show", "meta.get", "meta.keys", "rule.show", "task.show", "task.triage", "task.template.show", "task.view.list", "memory.show", "decision.show", "row.show",
+		// D-506
+		"commit.show", "link.list", "policy.show", "project.show", "repo.list", "row.markdown", "row.path", "secrets.allow.list", "secrets.list", "secrets.rules", "secrets.show"} {
 		if !seen[name] {
 			t.Errorf("%s is not a read in the registry", name)
 		}

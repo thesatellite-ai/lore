@@ -11326,6 +11326,16 @@
               "description": "the commit sha"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -26236,6 +26246,16 @@
           "link"
         ],
         "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
           {
             "name": "entity",
             "in": "query",
@@ -50322,6 +50342,16 @@
         ],
         "parameters": [
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "id",
             "in": "query",
             "required": false,
@@ -50793,6 +50823,16 @@
               "description": "a key or a key prefix (default every key)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -52472,6 +52512,16 @@
               "description": "the project: a name or prj_ id (default the project of this folder)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -56460,6 +56510,16 @@
           "repo"
         ],
         "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
           {
             "name": "project",
             "in": "query",
@@ -66595,6 +66655,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -66907,6 +66973,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -70205,6 +70277,10 @@
                   "replaced": {
                     "type": "boolean",
                     "description": "also list which gitleaks rule ids cover the same ground as each lore rule (3.3)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -71547,6 +71623,16 @@
         ],
         "parameters": [
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "holder",
             "in": "query",
             "required": false,
@@ -71986,6 +72072,16 @@
           "secrets"
         ],
         "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
           {
             "name": "created_by",
             "in": "query",
@@ -73709,6 +73805,16 @@
               "description": "a secret reference (manager://entry or ${secret:…}) or a row id"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "reveal",

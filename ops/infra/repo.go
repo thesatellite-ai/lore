@@ -41,6 +41,8 @@ type RepoAddIn struct {
 
 // RepoListIn is the input of repo.list.
 type RepoListIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Project string `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).

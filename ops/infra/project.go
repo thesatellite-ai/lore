@@ -402,6 +402,8 @@ type ProjectRefIn struct {
 // show the project of the folder the command runs in (devco D-449: inside
 // a store folder or a linked repo `project show` needed --id).
 type ProjectShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	ID string `json:"id,omitempty" arg:"0" desc:"the project: a name or prj_ id (default the project of this folder)"`
 }
 

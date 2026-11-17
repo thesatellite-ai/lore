@@ -42,6 +42,8 @@ const sourceDefault = "default"
 
 // PolicyShowIn is the input of policy.show.
 type PolicyShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Key string `json:"id,omitempty" arg:"0" desc:"a key or a key prefix (default every key)"`
 }
 

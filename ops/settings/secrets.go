@@ -65,6 +65,8 @@ var ruleIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 // RulesIn is the input of secrets.rules.
 type RulesIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Replaced bool `json:"replaced,omitempty" flag:"replaced" desc:"also list which gitleaks rule ids cover the same ground as each lore rule (3.3)"`
 }
 
@@ -261,6 +263,8 @@ type AllowRmIn struct {
 
 // AllowListIn is the input of secrets.allow.list.
 type AllowListIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
