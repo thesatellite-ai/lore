@@ -543,10 +543,18 @@ func (o ops) showSHA(ctx context.Context, arg string, all []Record) (string, err
 
 // links lists the live links of the current project in every attached
 // store that keep says to keep, oldest first.
+//
+// devco D-505: at a place with no project of its own (an org store's
+// root) it keeps every project's links, as memory list does there.
 func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, error) {
-	project, err := o.env.Project(ctx)
-	if err != nil {
+	pid, err := o.env.Project(ctx)
+	every := engine.EveryProject(err)
+	if err != nil && !every {
 		return nil, err
+	}
+	project := pid.String()
+	if every {
+		project = ""
 	}
 	out := []Record{}
 	for _, src := range engine.ReadStoresOf(o.env) {
@@ -555,7 +563,7 @@ func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, erro
 			return nil, err
 		}
 		for _, r := range rows {
-			if r.Deleted || field(r, fieldProject) != project.String() || !keep(r) {
+			if r.Deleted || (project != "" && field(r, fieldProject) != project) || !keep(r) {
 				continue
 			}
 			out = append(out, recordOf(opsmemory.LabelerOf(o.env), src, r))
