@@ -25,8 +25,10 @@ const notAWorkTreeHint = "cd into a git checkout, or run git init here first"
 
 // notAWorkTreeHomeHint is notAWorkTreeHint in the home folder (or above
 // it): `git init` there would make every file of the person a repository,
-// so the hint names the store target a write can take instead (B-7).
-const notAWorkTreeHomeHint = "cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)"
+// so the hint names the store target a write can take instead (B-7), and
+// the setup a person can name from anywhere, as the read hint does
+// (devco D-510, D-520: a write from home named only --to).
+const notAWorkTreeHomeHint = "cd into a git checkout, or name the store from here with --to <org>/<folder> (or --store; --to me for your own) or a setup with --setup <setup>; lore store list and lore setup list show them"
 
 func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	cfg := build(opts)
