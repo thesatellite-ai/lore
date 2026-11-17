@@ -906,6 +906,9 @@ type LayerPushReport struct {
 	// by data folder: what lore sync reports as sent for the layers
 	// (devco:V-13: the whole folder's rows were reported instead).
 	Rows map[string]int
+	// Commits counts the commits the pushed layer refs carried over the
+	// remote's copy (a new layer: over the store commit it started from).
+	Commits int
 }
 
 // trashedElsewhere reports whether a trash copy of the layer at ref (local
@@ -1022,10 +1025,19 @@ func (b *Backend) layerPushLocked(ctx context.Context, prefix string) (LayerPush
 			continue
 		}
 		rep.Pushed = append(rep.Pushed, ref)
-		n, err := b.layerRowsSent(ctx, local, remote)
+		from, err := b.layerSentOver(ctx, local, remote)
 		if err != nil {
 			return rep, err
 		}
+		n, err := b.layerRowsSent(ctx, local, from)
+		if err != nil {
+			return rep, err
+		}
+		c, err := b.countCommits(ctx, from, local) // no shared commit: every commit of the layer is new there
+		if err != nil {
+			return rep, err
+		}
+		rep.Commits += c
 		for f, c := range n {
 			if rep.Rows == nil {
 				rep.Rows = map[string]int{}
@@ -1036,21 +1048,31 @@ func (b *Backend) layerPushLocked(ctx context.Context, prefix string) (LayerPush
 	return rep, nil
 }
 
+// layerSentOver is the commit a layer push of local is counted over:
+// remote (the remote's copy before the push), or for a layer new on the
+// remote the store commit it shares with this clone's store branch, never
+// every commit or row of the folder (devco:V-13). "" when there is no
+// shared commit (best effort: nothing is counted rather than failing).
+func (b *Backend) layerSentOver(ctx context.Context, local, remote string) (string, error) {
+	if remote != "" {
+		return remote, nil
+	}
+	h, err := b.head(ctx)
+	if err != nil || h == "" {
+		return "", err
+	}
+	from, err := b.mergeBase(ctx, local, h)
+	if err != nil {
+		return "", nil
+	}
+	return from, nil
+}
+
 // layerRowsSent counts the row files a layer push of local carried over
-// remote (the remote's copy before the push); a layer new on the remote
-// counts over the store commit it shares with this clone's store branch,
-// never every row of the folder (devco:V-13). Best effort: a base git
-// cannot find counts nothing rather than failing the sync.
-func (b *Backend) layerRowsSent(ctx context.Context, local, remote string) (map[string]int, error) {
-	from := remote
+// from (layerSentOver); "" counts nothing.
+func (b *Backend) layerRowsSent(ctx context.Context, local, from string) (map[string]int, error) {
 	if from == "" {
-		h, err := b.head(ctx)
-		if err != nil || h == "" {
-			return nil, err
-		}
-		if from, err = b.mergeBase(ctx, local, h); err != nil || from == "" {
-			return nil, nil // no shared commit: nothing to count against
-		}
+		return nil, nil // no shared commit: nothing to count against
 	}
 	return b.countRows(ctx, from, local)
 }

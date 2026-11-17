@@ -671,6 +671,7 @@ func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 		b.pushed(ctx, waiting)
 	}
 	rep.Sent += b.earlier.Sent
+	rep.Commits += b.earlier.Commits
 	rep.Received += b.earlier.Received
 	rep.Merged = append(b.earlier.Merged, rep.Merged...)
 	rep.Others = addOthers(rep.Others, b.earlier.Others)
@@ -699,6 +700,7 @@ func (b *storePush) carry(rep store.SyncReport, err error) {
 		return
 	}
 	b.earlier.Sent += rep.Sent
+	b.earlier.Commits += rep.Commits
 	b.earlier.Received += rep.Received
 	b.earlier.Merged = append(b.earlier.Merged, rep.Merged...)
 	b.earlier.Others = addOthers(b.earlier.Others, rep.Others)

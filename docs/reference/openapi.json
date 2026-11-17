@@ -85168,6 +85168,9 @@
                     "restored": {
                       "type": "boolean"
                     },
+                    "rows": {
+                      "type": "integer"
+                    },
                     "sent": {
                       "type": "integer"
                     },
@@ -85181,7 +85184,8 @@
                   "required": [
                     "store",
                     "url",
-                    "sent"
+                    "sent",
+                    "rows"
                   ]
                 }
               }

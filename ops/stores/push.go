@@ -315,8 +315,14 @@ type PushOut struct {
 	Store    string `json:"store"`
 	URL      string `json:"url"`
 	Restored bool   `json:"restored,omitempty"`
-	Sent     int    `json:"sent"`
-	Offline  bool   `json:"offline,omitempty"`
+	// Sent is the commits the push put on the remote (the store branch's
+	// over the remote's tip before it, plus each branch layer ref's), and
+	// Rows the row files they changed in any folder of the store. A commit
+	// that changes no row (an org file) is still sent: "sent 0" only when
+	// nothing moved (D-517: a pushed lore-org.yaml commit said "sent 0").
+	Sent    int  `json:"sent"`
+	Rows    int  `json:"rows"`
+	Offline bool `json:"offline,omitempty"`
 }
 
 // Text prints the push.
@@ -325,9 +331,16 @@ func (o PushOut) Text() string {
 	case o.Offline:
 		return "store " + o.Store + ": offline, nothing pushed; the local commits wait for the next sync\n"
 	case o.Restored:
-		return "✓ store " + o.Store + ": this machine's copy is back at " + o.URL + " (sent " + strconv.Itoa(o.Sent) + ")\n"
+		return "✓ store " + o.Store + ": this machine's copy is back at " + o.URL + " (" + o.sentText() + ")\n"
+	case o.Sent == 0:
+		return "✓ store " + o.Store + ": nothing to send, the remote already has every commit\n"
 	}
-	return "✓ store " + o.Store + ": sent " + strconv.Itoa(o.Sent) + "\n"
+	return "✓ store " + o.Store + ": " + o.sentText() + "\n"
+}
+
+// sentText is "sent 1 commit (2 row files)": what the push moved.
+func (o PushOut) sentText() string {
+	return "sent " + plural(o.Sent, "commit") + " (" + plural(o.Rows, "row file") + ")"
 }
 
 // StorePusherNow is the optional Manager upgrade behind store.push

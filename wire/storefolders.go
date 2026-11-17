@@ -155,6 +155,13 @@ func (a *App) lookupStore(ctx context.Context, verb, name string) (attach.Store,
 	}
 	if !found {
 		if top == "" && name != attach.ReservedMe {
+			// D-516: an org entry, <org>/<store> or a setup's name
+			if s, ok, oerr := a.outsideStoreAt(ctx, name); oerr != nil || ok {
+				if oerr != nil {
+					return attach.Store{}, oerr
+				}
+				return a.orgStoreAt(ctx, verb, s.URL)
+			}
 			return attach.Store{}, a.needsRepoErr(ctx, verb, name)
 		}
 		return attach.Store{}, errs.New(errs.NotFound, verb+": no store named "+name+" is attached").
