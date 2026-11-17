@@ -438,18 +438,20 @@ func (s storeSigner) owner(ctx context.Context, raw string) (git.Signature, bool
 	if s.opts.OrgSigners == nil {
 		return git.Signature{}, false
 	}
-	key, ok := storeKey(raw)
-	if !ok {
-		return git.Signature{}, false
-	}
 	orgs, err := s.opts.OrgSigners(ctx)
 	if err != nil {
 		return git.Signature{}, false
 	}
-	for _, o := range orgs {
-		for _, u := range o.StoreURLs {
-			if k, ok := storeKey(u); ok && k == key {
-				return git.Signature{Name: o.Name, Email: o.Email}, true
+	for _, addr := range ownerAddresses(ctx, raw) { // D-514: a store set-url is moving is still its org's
+		key, ok := storeKey(addr)
+		if !ok {
+			continue
+		}
+		for _, o := range orgs {
+			for _, u := range o.StoreURLs {
+				if k, ok := storeKey(u); ok && k == key {
+					return git.Signature{Name: o.Name, Email: o.Email}, true
+				}
 			}
 		}
 	}

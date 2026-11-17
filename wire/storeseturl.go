@@ -61,6 +61,10 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		return opsstores.SetURLOut{}, err
 	}
 	out := opsstores.SetURLOut{Name: in.Name, URL: raw, Previous: src.URL}
+	// D-514: every open of raw below (the marker check, the carried clone,
+	// the org file commit) runs before or while orgs[].stores moves to raw;
+	// the store stays its org's, so its clone gets the org identity.
+	ctx = withStoreMove(ctx, src.URL, raw)
 	// N-13: an empty clone of raw from an earlier check is opened again
 	// without a fetch, so it would still say "empty" after the person
 	// pushed; it holds nothing, so it goes before the check.
