@@ -47,7 +47,10 @@ func guidedOps(e engine) []op.Entry {
 			Examples: []op.Example{{Title: "check the identity step", CLI: `lore setup check --setup personal --step identity --answers '{"email":"mira@agency.example"}'`, Want: ""}}}),
 			e.Check),
 		op.Define(local(op.Spec{Name: OpApply, Summary: "Save one setup step: its one write, once every error-level check passes",
-			Permission: op.PermWrite, Errors: with(errs.SetupStepFailed, errs.SetupStepOrder, errs.SetupNameTaken, errs.JoinOrgUnknown),
+			// MayAsk (devco D-526): --yes / REST "yes" accepts the own: offer
+			// an admin gets in an unlisted org repo (ownoffer.go)
+			Permission: op.PermWrite, Confirm: op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
+			Errors:   with(errs.SetupStepFailed, errs.SetupStepOrder, errs.SetupNameTaken, errs.JoinOrgUnknown),
 			Examples: []op.Example{{Title: "save the identity step", CLI: "lore setup apply --setup personal --step identity", Want: ""}}}),
 			e.Apply),
 		op.Define(local(op.Spec{Name: OpFix, Summary: "Run a failing check's fix command after a confirmation",
