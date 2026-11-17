@@ -54,8 +54,10 @@ const (
 	// gitBin is the git program; remotes are read from git config.
 	gitBin = "git"
 	// rawRemoteKeyPattern matches every remote's fetch and push URL keys
-	// (a remote name may contain dots).
-	rawRemoteKeyPattern = `^remote\..*\.(url|pushurl)$`
+	// (a remote name may contain dots) and, in the same git run, every
+	// url.<base>.insteadOf rule (remotealias.go: an ssh alias spelling
+	// mapped back to the host it stands for, D-531).
+	rawRemoteKeyPattern = `^(remote\..*\.(url|pushurl)|url\..*\.insteadof)$`
 )
 
 // LinkSource answers the store links of a repo (F11). It is
@@ -297,7 +299,10 @@ func projectRootUnder(top, dir, home string) (root string, ok bool) {
 // Remotes reads dir's git remote urls as written in git config (never
 // `git remote get-url`: insteadOf would swap the remote the org is keyed
 // on for a mirror, F10 edge cases) and normalises them; a url that is not
-// a hosted remote is a note. No git, no repo or no remote gives nil.
+// a hosted remote is a note. No git, no repo or no remote gives nil. An
+// ssh alias spelling (git@<alias>:<owner>/<repo>.git) is normalised to the
+// host it stands for (normalizeRemote), so classification, identity and
+// every printed remote name github.com/<owner>/<repo> (D-531).
 func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 	out, err := gitRun(ctx, "-C", dir, "config", "--get-regexp", rawRemoteKeyPattern)
 	if err != nil {
@@ -305,17 +310,19 @@ func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 	}
 	seen := map[string]bool{}
 	seenNote := map[string]bool{}
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	rules := insteadOfRules(lines)
+	for _, line := range lines {
 		key, val, ok := strings.Cut(line, " ")
 		val = strings.TrimSpace(val)
-		if !ok || val == "" {
+		if !ok || val == "" || !strings.HasPrefix(key, "remote.") {
 			continue
 		}
 		name := strings.TrimPrefix(key, "remote.")
 		if i := strings.LastIndex(name, "."); i > 0 {
 			name = name[:i]
 		}
-		n, err := repourl.Normalize(val)
+		n, err := normalizeRemote(val, rules)
 		if err != nil {
 			note := fmt.Sprintf("%s (%s): not a hosted remote, ignored", name, val)
 			if !seenNote[note] {

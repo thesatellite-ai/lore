@@ -26,6 +26,7 @@
 
 ## What must hold
 
+- `setup list` and `doctor --all` treat the includeIf org identity as right: no `identity.git_email` warning and never a `--global` git command.
 - Every org store's clone has the org identity as its git user, and every commit on it is authored so (the `kite` store: the personal identity); set-url says the git user it actually set.
 - A client repo and the repo that ignores `.lore/` keep their tracked files and `git status`; the file `CLAUDE.md` links to is never written, and the link stays a link.
 - Reads push nothing; only sync and store push move a remote.
@@ -36,6 +37,8 @@
 
 ## Findings it guards
 
+- `devco:D-531` (REGRESSIONS.md, `TestStoryOAliasWhoami`): `whoami` in a repo cloned as `git@<alias>:<owner>/<repo>.git` showed the remote as `<alias>/<owner>/<repo>`, matched no org, fell back to the personal identity and, with `--setup`, offered the alias pattern for the shared own list; it now shows `github.com/<owner>/<repo>`, the org match and the org identity, and never names the alias.
+- `devco:D-530` (REGRESSIONS.md): `setup list` warned `identity.git_email` for a personal global email with an includeIf org identity and advised `git config --global user.email <org email>`; `setup list` and `doctor --all` from `$HOME` now show no such warning and never advise `--global`.
 - `devco:D-542` (REGRESSIONS.md): `store folder add lore-ops servers` said "committed locally to store acme"; the note now names the store written.
 - `devco:D-516`, `devco:D-517` (REGRESSIONS.md): `store push --store acme` from `$HOME` refused, and push printed "sent 0" after 2 commits; the story pushes by the org's name and checks the count.
 - `devco:D-514`, `devco:D-515` (REGRESSIONS.md): set-url set the moved clone's git user to a non-org identity and left the old clone beside the new one (for both stores); the story checks the moved clone's place and git user.

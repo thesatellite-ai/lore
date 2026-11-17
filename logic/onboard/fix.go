@@ -447,8 +447,12 @@ var fixes = map[fixKey]Fix{
 	{check: CheckIdentityEmailFormat}: {Text: "Type the address you use for this work, e.g. you@company.example"},
 	{check: CheckIdentityInviteEmail}: {Text: "This invite is for {invite_email}. Use that address, or ask {inviter} for a new invite to {email}"},
 	// git config is the person's own: shown, never run (4.2).
-	{check: CheckIdentityGitEmail}: {Text: "git commits here will carry {git_email}. To use {email}: git config --global user.email {email}",
-		Command: argv(cmdGit, "config", "--global", "user.email", "{email}")},
+	// Never --global (devco D-530): the global address is the person's
+	// own for their other work, and an includeIf file per work folder is
+	// how git keeps two identities apart. The command writes only that
+	// file; the includeIf line goes into ~/.gitconfig by hand.
+	{check: CheckIdentityGitEmail}: {Text: "git commits in this work's folders would carry {git_email}. To use {email} there and keep your global identity: git config --file ~/.gitconfig-work user.email {email}, then add to ~/.gitconfig: [includeIf \"gitdir:<work folder>/\"] path = ~/.gitconfig-work (or per repo: git -C <repo> config user.email {email})",
+		Command: argv(cmdGit, "config", "--file", "~/.gitconfig-work", "user.email", "{email}")},
 	{check: CheckIdentityGitEmail, variant: FixRepo}: {Text: "{repo_root} commits as {git_email}. To use {email}: git -C {repo_root} config user.email {email}",
 		Command: argv(cmdGit, "-C", "{repo_root}", "config", "user.email", "{email}")},
 	// SOURCE_OF_TRUTH rows 7 and 9: one source per copied datum.

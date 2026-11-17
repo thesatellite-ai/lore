@@ -209,6 +209,18 @@ func TestStoryOOwnerShape(t *testing.T) {
 	}
 	s.Step("admin/identity-after-setup", func() { identity("setup") })
 
+	// devco:D-530: the global email is the personal one and an includeIf
+	// gives the org folder the org email; setup list and doctor see that
+	// as right and never advise changing the global identity.
+	s.Step("admin/identity-advice", func() {
+		for _, args := range [][]string{{"setup", "list"}, {"doctor", "--all"}} {
+			r := ada.Lore(ada.Home, args...)
+			out := r.Stdout + r.Stderr
+			oCheck(t, "identity-advice/global", !strings.Contains(out, "--global"), "%v advises a --global git change:\n%s", args, out)
+			oCheck(t, "identity-advice/git_email", !strings.Contains(out, "identity.git_email"), "%v warns identity.git_email for an includeIf identity:\n%s", args, out)
+		}
+	})
+
 	var shopTree, ignTree, notesHash string
 	ids := map[string]string{}
 	s.Step("admin/folders-rows-links-render", func() {

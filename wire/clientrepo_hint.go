@@ -65,7 +65,16 @@ func UnlistedClientRepo(org *orgconf.Org, links []orgresolve.Link, remotes []str
 	if org == nil || len(remotes) == 0 || orgresolve.ClientByMatch(org, links, remotes) {
 		return ClientRepo{}
 	}
-	return ClientRepo{Unlisted: org.Name, Remote: remotes[0]}
+	// The own: line is a command for the team's shared lore-org.yaml: never
+	// name a host with no dot there, which is one person's ssh alias that no
+	// teammate's remote spells the same way (D-531: the alias of a repo is
+	// resolved to its host before this; one that is not stays unnamed).
+	for _, r := range remotes {
+		if host, _, _ := strings.Cut(r, "/"); strings.Contains(host, ".") {
+			return ClientRepo{Unlisted: org.Name, Remote: r}
+		}
+	}
+	return ClientRepo{}
 }
 
 // initCommandText is how a hint names lore init.

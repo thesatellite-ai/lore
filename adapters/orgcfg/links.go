@@ -183,7 +183,7 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 			// links of a copy too old to trust are kept apart (Old): reads
 			// attach their folders, nothing decides by them
 			for _, l := range links {
-				if l.ProjectID == projectID && want[l.Remote] {
+				if l.ProjectID == projectID && wantRemote(want, l.Remote) {
 					res.Old = append(res.Old, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
 				}
 			}
@@ -197,7 +197,7 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 			if l.ProjectID != projectID {
 				continue
 			}
-			if !want[l.Remote] {
+			if !wantRemote(want, l.Remote) {
 				forks = append(forks, l.Remote)
 				res.Moved = append(res.Moved, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
 				continue
@@ -244,7 +244,7 @@ func (g *GitLinks) EntryLinks(ctx context.Context, o *orgconf.Org, projectID str
 	want := setOf(remotes)
 	var out []orgresolve.Link
 	for _, l := range links {
-		if l.ProjectID == projectID && projectID != "" && want[l.Remote] {
+		if l.ProjectID == projectID && projectID != "" && wantRemote(want, l.Remote) {
 			out = append(out, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
 		}
 	}
@@ -627,8 +627,16 @@ func CloneLinkRemotes(ctx context.Context, dir string) ([]string, error) {
 	var out []string
 	for _, l := range links {
 		if n, nerr := repourl.Normalize(l.Remote); nerr == nil {
-			out = append(out, n)
+			out = append(out, CanonicalRemote(n)) // an alias spelling recorded before D-531
 		}
 	}
 	return sortedUnique(out), nil
+}
+
+// wantRemote reports a link row's remote among the repo's remotes, also
+// when the row recorded the remote under an ssh alias spelling (written
+// before D-531, when Remotes kept the alias host): Remotes now resolves
+// the alias, and the row must still name this repo, not a fork of it.
+func wantRemote(want map[string]bool, remote string) bool {
+	return want[remote] || want[CanonicalRemote(remote)]
 }

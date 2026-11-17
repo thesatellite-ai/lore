@@ -238,7 +238,7 @@ func TestFixRunnableOutward(t *testing.T) {
 		{CheckStoreRead, StepPersonalStore, FixDefault, true, true, "gh", "gh repo create {owner}/{repo} --private"},
 		{CheckStoreRead, StepPersonalStore, FixUnreachable, false, false, "", "network or VPN"},
 		{CheckStoreRead, StepJoin, FixDefault, false, false, "", "github.com/notifications"},
-		{CheckIdentityGitEmail, StepIdentity, FixDefault, false, false, "git", "git config --global user.email {email}"},
+		{CheckIdentityGitEmail, StepIdentity, FixDefault, false, false, "git", "git config --file ~/.gitconfig-work user.email {email}"},
 		{CheckIdentityGitEmail, StepThisFolder, FixRepo, false, false, "git", "git -C {repo_root}"},
 		{CheckToolsSkillInstalled, StepTools, FixDefault, true, false, "lore", "lore skill install --tool {tool}"},
 		{CheckToolsSkillVersion, StepTools, FixNoVersionLine, true, false, "lore", "no version line"},

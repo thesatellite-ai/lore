@@ -110,7 +110,13 @@ func TestOrgEntryIdentityEmailChecked(t *testing.T) {
 		t.Errorf("git_email (same) = %+v, want ok", r)
 	}
 	gitcfg("tomas@personal.example")
-	if r := run(onboard.CheckIdentityGitEmail, "agency"); r.Status == onboard.StatusOK || r.Status == onboard.StatusSkip || r.Vars[onboard.VarEmail] != "tomas@agency.example" {
+	// devco D-530: a setup with no folders only makes store commits, which
+	// lore authors itself, so the mismatch shows for a setup with folders.
+	withFolder := func() opssetup.ProbeResult {
+		e := onboard.SetupEntry{Name: "agency-admin", Kind: onboard.KindAdmin, Org: "agency", Folders: []string{"~/agency/*"}}
+		return sp.Probe(context.Background(), []opssetup.ProbeRequest{{Check: onboard.Check{ID: onboard.CheckIdentityGitEmail, Level: onboard.LevelWarn}, Setup: e}})[0]
+	}
+	if r := withFolder(); r.Status == onboard.StatusOK || r.Status == onboard.StatusSkip || r.Vars[onboard.VarEmail] != "tomas@agency.example" {
 		t.Errorf("git_email (other) = %+v, want a mismatch naming the org entry's email", r)
 	}
 	for _, id := range []onboard.CheckID{onboard.CheckIdentityEmailFormat, onboard.CheckIdentityGitEmail} {

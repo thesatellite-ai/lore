@@ -79,8 +79,40 @@ func init() {
 		}
 		al, ok := sshAliasResolver(context.Background())(host)
 		cache.Store(host, aliasAnswer{hostName: al.HostName, ok: ok})
+		if !ok {
+			// not cached: the lore home (and its setups) may differ per call
+			if hn, sok := setupAliasHost(host); sok {
+				return hn, true
+			}
+		}
 		return al.HostName, ok
 	})
+}
+
+// setupAliasHost answers a setup's github.host_alias as github.com when the
+// ssh config does not rename host (D-531): host_alias is by definition the
+// ssh Host lore uses for this setup's github.com urls, so a code repo cloned
+// as git@<host_alias>:<owner>/<repo>.git is github.com/<owner>/<repo> even
+// where ~/.ssh/config cannot be read. Only a single-label host is looked up
+// (an alias never has a dot), so a store url on a real host reads no file.
+func setupAliasHost(host string) (string, bool) {
+	if host == "" || strings.Contains(host, ".") {
+		return "", false
+	}
+	home, err := lorehome.Resolve()
+	if err != nil {
+		return "", false
+	}
+	cfg, err := ReadSetupsConfig(home.Dir)
+	if err != nil {
+		return "", false
+	}
+	for _, e := range cfg.Setups {
+		if strings.EqualFold(strings.TrimSpace(e.GitHub.HostAlias), host) {
+			return probe.GitHubHost, true
+		}
+	}
+	return "", false
 }
 
 // aliasAnswer is one cached answer of the alias-host resolver.
