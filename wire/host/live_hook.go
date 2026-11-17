@@ -774,6 +774,13 @@ func fixMigrate(run *Run) bool {
 	return fixBoolFlag(run, fixMigrateFlag, func(in opsfix.RunIn) bool { return in.Migrate }, false)
 }
 
+// fixTrackedHooks reports whether run is `lore fix --tracked-hooks`, the
+// explicit yes to write lore's blocks into a hooks folder committed with
+// the repo (D-501); an input it cannot read is not.
+func fixTrackedHooks(run *Run) bool {
+	return fixBoolFlag(run, fixTrackedHooksFlag, func(in opsfix.RunIn) bool { return in.TrackedHooks }, false)
+}
+
 // fixBoolFlag reads one boolean flag of a lore fix run from the command
 // line or the REST body; unreadable answers onBad.
 func fixBoolFlag(run *Run, flag string, field func(opsfix.RunIn) bool, onBad bool) bool {
@@ -919,6 +926,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		gitleaks.Warm() // the write's secret scan rules load while it queues for the live lock (D-159)
 	}
 	ctx = withRun(ctx, r)
+	if fixTrackedHooks(run) {
+		ctx = withTrackedHooksYes(ctx) // D-501: the one explicit yes to a tracked hooks folder
+	}
 	defer r.finish(ctx)
 	wired := false
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" {

@@ -391,7 +391,19 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	// before (removed by hand, or a hook manager took the hooks over)
 	wasWired := !s.neverWired(ctx, dir)
 	guardBefore := missingGuardHooks(dir)
+	// devco D-500: .lore/ ignored by git: the project is private to this
+	// machine, so nothing goes into a file the repo tracks or would commit
+	// (.gitattributes, a hooks folder in the work tree); the clone's own
+	// .git/config and .git/hooks are still set up.
+	private := !wire.RepoMayHoldLoreFiles(ctx, root, false)
+	if private && s.trackedHooksFolder(ctx, dir) {
+		guardBefore = nil // lore never puts its blocks there: no leak-guard line
+	}
 	if mode == wireRead {
+		if private {
+			s.sayPrivate(ctx, root, stamp, fp)
+			return
+		}
 		if wasWired && len(guardBefore) > 0 && !wire.ProjectFormatOld(root) {
 			s.sayGuardOff(ctx, dir, guardBefore, false, fp, stamp+gitWiringReadSuffix)
 		}
@@ -429,6 +441,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	case !wire.HoldsLoreData(root):
 		// no row files here (a client repo): the rules would only change
 		// a tracked file of theirs for nothing (plain files sweep 3.8)
+	case private:
+		// D-500: the row files are never committed, so the rules would
+		// only change the team's .gitattributes for nothing
 	case formatOld:
 	case mode != wireInstall && !wire.TrackedWiringHere(ctx, root):
 		// A-1: a teammate's clone of a migrated project: the tracked
@@ -464,11 +479,16 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	teamNew, teamChanged := s.teamHookWrites(ctx, dir, writes)
 	skip := map[string]bool{}
 	skipped := ""
-	if mode != wireInstall {
+	// D-501: an install step (init, doctor --fix, lore fix) writes there
+	// only on the explicit yes of `lore fix --tracked-hooks`; a private
+	// project (D-500) never does, and is not "wired in part" for it.
+	if mode != wireInstall || !trackedHooksYes(ctx) || private {
 		for _, n := range append(append([]string{}, teamNew...), teamChanged...) {
 			skip[n] = true
 		}
-		skipped = teamHookNames(teamNew, teamChanged)
+		if !private {
+			skipped = teamHookNames(teamNew, teamChanged)
+		}
 		teamNew, teamChanged = nil, nil
 	}
 	for _, n := range names {
@@ -500,6 +520,11 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if skipped != "" && !wire.ReadNoticeSaid(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp) {
 		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, skipped, dir))
 		wire.MarkReadNotice(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp)
+	}
+	if private {
+		s.sayPrivate(ctx, root, stamp, fp)
+		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
+		return // no row file is ever committed: nothing to re-include in .gitignore
 	}
 	if wasWired && len(guardBefore) > 0 && !formatOld {
 		after := missingGuardHooks(dir)
@@ -840,4 +865,19 @@ func withFileBlockLF(content, marker string, lines []string) string {
 		next += block
 	}
 	return next
+}
+
+// privateNoticeSuffix keys the read-notice memory of the private-project
+// line (D-500).
+const privateNoticeSuffix = ".private"
+
+// sayPrivate says once per state of the wired files why lore wrote
+// nothing into the repo's tracked files of the private project at root
+// (wire.PrivateProjectLine, devco D-500).
+func (s *liveSession) sayPrivate(ctx context.Context, root, stamp, fp string) {
+	if wire.ReadNoticeSaid(s.h.cfg.Home, stamp+privateNoticeSuffix, fp) {
+		return
+	}
+	s.cmdNotice(ctx, fmt.Sprintf(wire.PrivateProjectLine, root))
+	wire.MarkReadNotice(s.h.cfg.Home, stamp+privateNoticeSuffix, fp)
 }

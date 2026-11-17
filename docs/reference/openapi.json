@@ -19130,6 +19130,10 @@
                     "type": "boolean",
                     "description": "also migrate a project still on the lore 0.1.17 format (runs lore migrate run; teammates then need lore 0.1.18); without it such a project is refused, or listed by --all"
                   },
+                  "tracked_hooks": {
+                    "type": "boolean",
+                    "description": "also add lore's hook blocks to a hooks folder committed with the repo (core.hooksPath in the work tree, such as .githooks); without it lore leaves such a folder alone"
+                  },
                   "verbose": {
                     "type": "boolean",
                     "description": "with --all: also list each repo found with no lore data (the summary always counts them)"

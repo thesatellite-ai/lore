@@ -221,16 +221,17 @@ func TestWriteCreatesNoHookFileInATrackedHooksFolder(t *testing.T) {
 		t.Fatalf("a write changed the tracked .husky:\n%s", status)
 	}
 	out := stderrOf(f)
-	if !strings.Contains(out, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push or add its block to pre-commit in "+dir) || !strings.Contains(out, "`lore fix`") {
-		t.Fatalf("the write said %q, want the hooks it left out and lore fix", out)
+	if !strings.Contains(out, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push or add its block to pre-commit in "+dir) || !strings.Contains(out, "`lore fix --tracked-hooks`") {
+		t.Fatalf("the write said %q, want the hooks it left out and lore fix --tracked-hooks", out)
 	}
 	if status := gitOut(t, f, "status", "--porcelain", "--untracked-files=all", "--", ".husky"); strings.Contains(status, "??") {
 		t.Fatalf("new untracked files in .husky after a write:\n%s", status)
 	}
 
-	f.s.ensureGitWiring(f.ctx, f.s.top, wireInstall)
+	// D-501: only the explicit yes (`lore fix --tracked-hooks`) writes there
+	f.s.ensureGitWiring(withTrackedHooksYes(f.ctx), f.s.top, wireInstall)
 	if got := missingGuardHooks(dir); len(got) != 0 {
-		t.Fatalf("after lore fix the guard misses %v", got)
+		t.Fatalf("after lore fix --tracked-hooks the guard misses %v", got)
 	}
 	if out := stderrOf(f); !strings.Contains(out, "new or changed files in "+dir+", a folder committed with the repo: commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push") {
 		t.Fatalf("lore fix did not name the new files of the repo:\n%s", out)
