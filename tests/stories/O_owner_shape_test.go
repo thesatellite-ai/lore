@@ -361,6 +361,19 @@ func TestStoryOOwnerShape(t *testing.T) {
 		identity("push")
 	})
 
+	s.Step("admin/org-list-store-show", func() {
+		// devco D-570: org list was an unknown command; it lists each org
+		// entry with its stores and the setups (and role) that use it.
+		r := ada.Lore(ada.Home, "org", "list")
+		oCheck(t, "org-list", r.Code == 0 && strings.Contains(r.Out(), oOrg) && strings.Contains(r.Out(), "(admin)") && strings.Contains(r.Out(), "lore-team"),
+			"org list from $HOME does not list the org entry %s with its store and admin setup:\n%s", oOrg, r)
+		// devco D-571: store show --store <org> printed only push mode,
+		// compaction and epoch; it now prints the clone and folders too.
+		r = ada.Lore(ada.Home, "store", "show", "--store", oOrg)
+		oCheck(t, "store-show-named", r.Code == 0 && strings.Contains(r.Out(), "  clone ") && strings.Contains(r.Out(), "  folders ") && strings.Contains(r.Out(), oFolder),
+			"store show --store %s prints no clone or folders:\n%s", oOrg, r)
+	})
+
 	// The member: an owner-shaped machine of their own joins acme.
 	mo := s.OwnerShaped(OwnerShape{Personal: oMemPersonal, Org: oMemOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner, oNewOwner}})
 	var mwc *teamharness.Clone

@@ -42219,6 +42219,170 @@
         }
       }
     },
+    "/v1/orgs": {
+      "get": {
+        "operationId": "org.list",
+        "summary": "List this machine's org entries: their stores, the setups that use them and each setup's role",
+        "tags": [
+          "org"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "at most this many rows (default: all; 50 when --page is given)",
+            "schema": {
+              "type": "integer",
+              "description": "at most this many rows (default: all; 50 when --page is given)"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "page number, from 1 (with --limit)",
+            "schema": {
+              "type": "integer",
+              "description": "page number, from 1 (with --limit)"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orgs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "own": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "repos": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "setups": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "role": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "role"
+                              ]
+                            }
+                          },
+                          "stores": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "audience": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "org_folder": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "url"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "stores",
+                          "setups"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "orgs"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_CONFIG_INVALID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/orgs/create": {
       "post": {
         "operationId": "org.create",
@@ -84487,6 +84651,12 @@
                         "folder": {
                           "type": "boolean"
                         },
+                        "folders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "last_push": {
                           "type": "string"
                         },
@@ -85530,6 +85700,12 @@
                     "folder": {
                       "type": "boolean"
                     },
+                    "folders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "last_push": {
                       "type": "string"
                     },
@@ -86390,6 +86566,12 @@
                         },
                         "folder": {
                           "type": "boolean"
+                        },
+                        "folders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "last_push": {
                           "type": "string"

@@ -431,9 +431,9 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 		}
 		body := renderField(k.r.Row, renderFieldBody)
 		switch {
-		case strings.Contains(body, rel):
+		case mentionsPath(body, rel):
 			add(k, "mentions "+rel)
-		case dir != "." && strings.Contains(body, dir+"/"):
+		case dir != "." && mentionsPath(body, dir+"/"):
 			add(k, "mentions "+dir+"/")
 		}
 	}

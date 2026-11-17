@@ -269,6 +269,7 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 			return err
 		}
 	}
+	changed := privateFilesChanged(p.files)
 	if len(p.stores) > 0 {
 		if err := os.MkdirAll(p.dir, renderDirMode); err != nil {
 			return errs.FileIO("create the private render folder", p.dir, err)
@@ -313,7 +314,7 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		fmt.Fprintf(w, "%s private context → %s (%s, %s%s, outside the checkout); %s\n",
 			h.decor.check(), h.redact(p.dir), plural.Count(len(p.stores), "store"), plural.Count(p.rows, "row"), left, where)
 	}
-	if p.budget > 0 && p.coreBytes > p.budget {
+	if changed && p.budget > 0 && p.coreBytes > p.budget {
 		fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
 	}
 	return nil
@@ -323,12 +324,72 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 // file may be written (a client repo, devco D-481).
 const privateNoImportWhere = "no import file in a client repo: agents get it through `lore context` and the hooks"
 
+// privateFilesChanged reports whether a private file differs from what is
+// on disk (or is missing). The over-budget warning is printed only then
+// (devco D-573: every `lore sync` repeated it while nothing had changed
+// since the last render).
+func privateFilesChanged(files []privateFile) bool {
+	for _, f := range files {
+		if old, err := os.ReadFile(f.path); err != nil || string(old) != f.body {
+			return true
+		}
+	}
+	return false
+}
+
 // privateOverCoreWarn is the warning when the pinned part alone is over
 // context.budget.internal (a real render and, D-430, the dry run too).
+// Why the commands (devco D-573): "unpin some or raise the key" named no
+// command, and "unpin" is not what takes a row out of the pinned part: a
+// must rule or a critical/high hotfix is always written in full, so the
+// fix is a lower severity, or a larger budget.
 func privateOverCoreWarn(p *privatePlan) string {
-	return fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut: unpin some or raise the key",
-		p.coreBytes, policy.KeyContextBudgetInternal, p.budget)
+	return fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut.%s\n  fix: %s",
+		p.coreBytes, policy.KeyContextBudgetInternal, p.budget, largestPins(p.pins, largestPinsShown), overCoreFix(p.coreBytes, p.pins))
 }
+
+// largestPinsShown is how many of the largest pinned rows the warning names.
+const largestPinsShown = 3
+
+// largestPins is " The largest: <id> (<n> bytes), …" for the n largest
+// pinned rows, "" when there are none.
+func largestPins(pins []privatePin, n int) string {
+	if len(pins) == 0 {
+		return ""
+	}
+	ps := slices.Clone(pins)
+	slices.SortStableFunc(ps, func(a, b privatePin) int { return len(b.text) - len(a.text) })
+	parts := make([]string, 0, n)
+	for _, pin := range ps[:min(n, len(ps))] {
+		parts = append(parts, fmt.Sprintf("%s (%d bytes)", pin.id, len(pin.text)))
+	}
+	return " The largest: " + strings.Join(parts, ", ") + "."
+}
+
+// overCoreFix names the two fixes as commands: take a row out of the
+// pinned part (a lower severity), or raise context.budget.internal to
+// fit what is pinned now.
+func overCoreFix(coreBytes int, pins []privatePin) string {
+	rule, hotfix := "<rul_id>", "<hfx_id>"
+	for _, pin := range pins {
+		switch {
+		case pin.kind == privatePinRule && rule == "<rul_id>":
+			rule = pin.id
+		case pin.kind == privatePinHotfix && hotfix == "<hfx_id>":
+			hotfix = pin.id
+		}
+	}
+	lower := "`lore rule edit --id " + rule + " --severity should`"
+	if hotfix != "<hfx_id>" {
+		lower += " or `lore hotfix edit --id " + hotfix + " --severity medium`"
+	}
+	return fmt.Sprintf("take a row out of the pinned part with %s, or raise the budget with `lore policy set --key %s --value %d --yes`",
+		lower, policy.KeyContextBudgetInternal, budgetToFit(coreBytes))
+}
+
+// budgetToFit is coreBytes rounded up to the next thousand, plus a
+// thousand for the other notes.
+func budgetToFit(coreBytes int) int { return (coreBytes/1000 + 2) * 1000 }
 
 // loadInternalBudget reads context.budget.internal (6.1).
 func (h *Host) loadInternalBudget(ctx context.Context) int {
@@ -605,8 +666,8 @@ func privateTrustAttr(r row.Row) string {
 func leftOutLine(left, budget, coreBytes int) string {
 	notes := plural.Of(left, "more note", "more notes")
 	if budget > 0 && coreBytes > budget {
-		return fmt.Sprintf("%s left out: %s is %d bytes and the pinned rules and hotfixes above already take %d bytes (never cut; unpin some or raise the key); run `lore search`.",
-			notes, policy.KeyContextBudgetInternal, budget, coreBytes)
+		return fmt.Sprintf("%s left out: %s is %d bytes and the pinned rules and hotfixes above already take %d bytes (never cut; to raise it: `lore policy set --key %s --value %d --yes`); run `lore search`.",
+			notes, policy.KeyContextBudgetInternal, budget, coreBytes, policy.KeyContextBudgetInternal, budgetToFit(coreBytes))
 	}
 	return fmt.Sprintf("%s left out by %s %d bytes: run `lore search`.", notes, policy.KeyContextBudgetInternal, budget)
 }

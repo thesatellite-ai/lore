@@ -5,7 +5,8 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
 ✓ tem_7a670ae8548ed05bf57ad29ad0759504 @web (2 member(s)) added in agency org/
 tomas (work)$ lore team list
-@web              Web                      2 member(s)
+@web  Web  2 member(s)
+1 team
 tomas (work/acme-hub)$ lore team show --handle @web
 tem_7a670ae8548ed05bf57ad29ad0759504  @web  Web
 roster: agency org/
@@ -81,7 +82,8 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
 ✓ tem_7a670ae8548ed05bf57ad29ad0759504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
 tomas (work)$ lore team list --all
-@web              Web platform             2 member(s)  [removed]
+@web  Web platform  2 member(s)  [removed]
+1 team
 tomas (work)$ lore team add --handle @web
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)

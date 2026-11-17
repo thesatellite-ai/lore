@@ -77,7 +77,7 @@ func TestResourceListMeta(t *testing.T) {
 	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"a1","meta":["client=acme"]}`)
 	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"b1","meta":["client=globex"]}`)
 	got := opstest.Text(h.Must(settings.OpResList, `{"kind":"host","meta_where":["client=acme"]}`))
-	if !strings.Contains(got, "\ta1\t") || strings.Contains(got, "\tb1\t") { // names as table cells: the meta: lines hold hex ids (FA-META-5)
+	if !strings.Contains(got, "\nhost  a1\n") || strings.Contains(got, "\nhost  b1") { // names as table rows: the meta: lines hold hex ids (FA-META-5)
 		t.Fatalf("list --meta %q", got)
 	}
 }

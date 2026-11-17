@@ -19,6 +19,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/sortspec"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -320,21 +321,38 @@ func (o ResListOut) Text() string {
 		b.WriteString(checkSummary(o.StaleCount, o.NeverChecked, o.Days) + "\n")
 		return b.String()
 	}
+	// devco D-572: aligned columns (terminal cells, textwidth) and a count
+	// line, like every other list; the rows were raw tab-separated cells.
 	head := []string{"KIND", "NAME"}
 	for _, c := range o.columns {
 		head = append(head, strings.ToUpper(c))
 	}
-	b.WriteString(strings.Join(append(head, "CHECKED"), "\t") + "\n")
+	rows := [][]string{append(head, "CHECKED")}
 	for _, r := range o.Data {
 		cells := []string{r.Kind, r.Name}
 		for _, c := range o.columns {
 			cells = append(cells, r.shown(c))
 		}
-		b.WriteString(strings.Join(append(cells, dayOf(r.LastChecked)), "\t") + "\n")
-		if q := quarantineLine(r.Quarantine); q != "" {
-			b.WriteString("  " + r.Name + " " + q + "\n") // R10: marked, never hidden
+		rows = append(rows, append(cells, dayOf(r.LastChecked)))
+	}
+	ws := textwidth.Columns(rows)
+	for i, row := range rows {
+		var line strings.Builder
+		for j, c := range row {
+			if j > 0 {
+				line.WriteString("  ")
+			}
+			line.WriteString(textwidth.PadRight(c, ws[j]))
+		}
+		b.WriteString(strings.TrimRight(line.String(), " ") + "\n")
+		if i == 0 {
+			continue
+		}
+		if q := quarantineLine(o.Data[i-1].Quarantine); q != "" {
+			b.WriteString("  " + o.Data[i-1].Name + " " + q + "\n") // R10: marked, never hidden
 		}
 	}
+	b.WriteString(plural.Count(len(o.Data), "resource") + "\n")
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
 	}

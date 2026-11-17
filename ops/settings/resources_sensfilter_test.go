@@ -47,7 +47,7 @@ func TestResourceListSensitiveFilterNote(t *testing.T) {
 				t.Errorf("%s: row %s missing:\n%s", c.name, r, txt)
 			}
 		}
-		if got := strings.Count(txt, "\n") - 1; got != len(c.rows)+boolN(c.note) { // header + rows + note
+		if got := strings.Count(txt, "\n") - 1; got != len(c.rows)+1+boolN(c.note) { // header + rows + count line (D-572) + note
 			t.Errorf("%s: %d lines after the header:\n%s", c.name, got, txt)
 		}
 		if strings.Contains(txt, note) != c.note || strings.Contains(js, note) != c.note {

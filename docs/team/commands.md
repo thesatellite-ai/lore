@@ -113,6 +113,26 @@ Flags:
 ```
 <!-- /help -->
 
+### `lore org list`
+
+<!-- help: org list -->
+List this machine's org entries: their stores, the setups that use them and each setup's role
+
+```text
+Usage:
+  lore org list
+
+Examples:
+  # every org entry
+  lore org list
+
+Flags:
+      --json        print the result (or the error) as JSON
+      --limit int   at most this many rows (default: all; 50 when --page is given)
+      --page int    page number, from 1 (with --limit)
+```
+<!-- /help -->
+
 ### `lore org use`
 
 <!-- help: org use -->
