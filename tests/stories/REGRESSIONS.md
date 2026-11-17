@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1910 |
+| fixed | 1911 |
 | open | 2 |
 | on-hold | 14 |
 | owner | 6 |
@@ -880,6 +880,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-572 | finding | owner use pass 1 weak 5: resource list printed raw tab-separated rows and no count; team list's fixed-width name column overflowed into the member count; member list printed no count | fixed | TestResourceListAlignsAndCounts, TestTeamListColumnsFitLongNames, TestStaffListAlignsWideAndLongNames | Summary: the three lists use columns as wide as their widest cell (textwidth) and end with a count line |
 | devco:D-573 | finding | owner use pass 1 weak 13: every `lore sync` in a linked repo warned the private context is over context.budget.internal ("unpin some or raise the key") with no command, on every run | fixed | TestOverCoreWarnNamesTheFixCommands, TestOverCoreWarnOncePerChange | Summary: wire/renderhost privateOverCoreWarn names the largest pinned rows and both fixes as commands (`lore rule edit --id <id> --severity should` / `lore hotfix edit --id <id> --severity medium`, `lore policy set --key context.budget.internal --value <n> --yes`); it prints only when a private file changed; render --report and the left-out line name the policy command too |
 | devco:D-574 | finding | owner use pass 1 weak 14: `context --for-file main.go` returned a rule that mentions another repo's saas/cmd/cron/main.go (substring match on the base name) | fixed | TestMentionsPathIsWholePath | Summary: wire/renderhost mentionsPath: a body mentions the path only as a whole path (not the tail of a longer path, not the head of a longer name) |
+| devco:D-575 | finding | gate 01c81f25: the new `lore org list` (D-570) was not in the machine sweep, and with LORE_HOME pointing at a file it failed E_CONFIG_INVALID with no hint saying what to do | fixed | TestSweepCoversEveryCommand, TestSweepReads | tests/machines/sweep_cmds.go sweeps org list from the home folder; wire/org_list.go config errors name `lore config check` and the lore home |
 | devco:D-538 | finding | owner use pass 1 W4: `memory add --to <org>/<folder>` from the home folder refused "no store named <org> is set up for this folder, and outside a repo only the setup's stores can be named" while reads take `--store <org>` there; it worked only with `--setup` | fixed | TestStoryWUPrintedCommandsWork | pkg wire (withSetupOfTarget: the org's one setup is used as --setup would) |
 | devco:D-539 | finding | owner use pass 1 W5: the home-folder E_NOT_A_STORE hint named --to and --store for every command: `context` takes neither, `memory edit` takes no --to, and a command given --setup was told to add it | fixed | TestHomeHintNamesOnlyFlagsTheCommandTakes, TestStoryWUPrintedCommandsWork | pkg wire (hintflags.go) |
 | devco:D-543 | finding | owner use pass 1 W6: `decision delete` prints `restore: lore trash restore --id <id>`, which failed where printed outside the store clone ("this repository has no lore project", hint lore init) | fixed | TestStoryWUPrintedCommandsWork, TestStoryWWWrites | pkg wire (trash restore by id finds the row's org folder as an edit by id does); WW checks every printed restore line |

@@ -21,14 +21,16 @@ func (a *App) OrgList(context.Context) (opsorgcmd.ListOut, error) {
 	}
 	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
 	if err != nil {
-		return opsorgcmd.ListOut{}, errs.Wrap(errs.ConfigInvalid, "org list: read config.yaml", err)
+		return opsorgcmd.ListOut{}, errs.Wrap(errs.ConfigInvalid, "org list: read config.yaml", err).
+			WithHint("check it with `lore config check`; the lore home is " + a.opts.Home + " (LORE_HOME), which must be a folder")
 	}
 	if cfg == nil {
 		return out, nil
 	}
 	sc, err := ReadSetupsConfig(a.opts.Home)
 	if err != nil {
-		return opsorgcmd.ListOut{}, errs.Wrap(errs.ConfigInvalid, "org list: read setups", err)
+		return opsorgcmd.ListOut{}, errs.Wrap(errs.ConfigInvalid, "org list: read setups", err).
+			WithHint("check it with `lore config check`; `lore setup list` names each setup")
 	}
 	for _, o := range cfg.Orgs {
 		g := opsorgcmd.ListOrg{Name: o.Name, ID: o.ID, Key: o.Identity.Key, Own: o.Own, Repos: o.Repos,
