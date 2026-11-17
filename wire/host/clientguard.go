@@ -70,6 +70,10 @@ func (h *liveHost) installClientGuard(ctx context.Context, opName string) {
 	}
 	before, _ := os.ReadFile(filepath.Join(hooksDir, hookCommitMsg))
 	b := hookBlocks("")[hookCommitMsg]
+	if err := hookRefused(dir, hooksDir, hookCommitMsg); err != nil {
+		h.line("lore: could not install the leak guard in this clone: " + err.Error()) // D-502
+		return
+	}
 	if err := ensureHookBlock(hooksDir, hookCommitMsg, b.marker, withHookPin(hookPinFor(dir, hooksDir, false), b.lines)); err != nil {
 		h.line("lore: could not install the leak guard in this clone: " + err.Error())
 		return

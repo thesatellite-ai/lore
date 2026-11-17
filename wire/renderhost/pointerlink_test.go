@@ -50,62 +50,55 @@ func assertStillLink(t *testing.T, at string) {
 	}
 }
 
-// TestStitchPointerLinkOutIdentical: CLAUDE.md linked from outside the
-// repository whose end already holds the exact block is left untouched
-// (not even rewritten) and the render goes on.
-func TestStitchPointerLinkOutIdentical(t *testing.T) {
-	body := claudeBlockFor(t, "# notes kept by hand\n")
-	root, at, end := pointerLinkFixture(t, body)
-	before, err := os.Stat(end)
-	if err != nil {
+// TestStitchPointerLinkOutSkipped (D-502): CLAUDE.md linked in from
+// outside the repository (another repository's CLAUDE.md, a notes repo)
+// is never written through, whatever its end holds (lore's block already,
+// a stale block, none): the end stays byte-identical, the link stays a
+// link, and the render goes on with one line naming the link, its end and
+// where lore's context is instead.
+func TestStitchPointerLinkOutSkipped(t *testing.T) {
+	stale := builtin(t, toolprofile.NameClaudeCode).StitchPointer("# notes kept by hand\n", toolprofile.Link{FromPointer: "old/LORE.md", FromRoot: "old/LORE.md"})
+	for name, body := range map[string]string{
+		"identical block": claudeBlockFor(t, "# notes kept by hand\n"),
+		"stale block":     stale,
+		"no block":        "# notes kept by hand\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, at, end := pointerLinkFixture(t, body)
+			out, err := stitchClaude(t, root)
+			if err != nil {
+				t.Fatalf("want a note, not a failure: %v (%s)", err, out)
+			}
+			if b, _ := os.ReadFile(end); string(b) != body {
+				t.Fatalf("the end outside the repository was written: %q", b)
+			}
+			endReal, _ := filepath.EvalSymlinks(end)
+			for _, want := range []string{at + wire.PointerSkippedMark, endReal, "outside the repository", "lore context"} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("note lacks %q: %q", want, out)
+				}
+			}
+			assertStillLink(t, at)
+		})
+	}
+}
+
+// TestStitchPointerLinkInsideWritten: CLAUDE.md linked to a regular file
+// inside the repository is written through at its end; the link stays.
+func TestStitchPointerLinkInsideWritten(t *testing.T) {
+	root := t.TempDir()
+	end := filepath.Join(root, "docs", "CLAUDE.md")
+	if err := os.MkdirAll(filepath.Dir(end), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	out, err := stitchClaude(t, root)
-	if err != nil {
-		t.Fatalf("want ok, got %v (%s)", err, out)
+	if err := os.WriteFile(end, []byte("# own text\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(out, "pointer present") {
-		t.Fatalf("want pointer present, got %q", out)
-	}
-	after, _ := os.Stat(end)
-	if b, _ := os.ReadFile(end); string(b) != body || !after.ModTime().Equal(before.ModTime()) {
-		t.Fatalf("the end was rewritten: %q", b)
-	}
-	assertStillLink(t, at)
-}
-
-// TestStitchPointerLinkOutStale: an end whose block is stale is updated in
-// place through the link: the person's text stays, the link stays a link,
-// the end keeps its mode and no temp file is left beside it.
-func TestStitchPointerLinkOutStale(t *testing.T) {
-	stale := builtin(t, toolprofile.NameClaudeCode).StitchPointer("# notes kept by hand\n", toolprofile.Link{FromPointer: "old/LORE.md", FromRoot: "old/LORE.md"})
-	root, at, end := pointerLinkFixture(t, stale)
-	out, err := stitchClaude(t, root)
-	if err != nil {
-		t.Fatalf("want ok, got %v (%s)", err, out)
-	}
-	b, _ := os.ReadFile(end)
-	if string(b) != claudeBlockFor(t, "# notes kept by hand\n") || strings.Contains(string(b), "old/LORE.md") {
-		t.Fatalf("end not updated in place: %q", b)
-	}
-	if fi, _ := os.Stat(end); fi.Mode().Perm() != 0o600 {
-		t.Fatalf("end mode %v, want 0600 kept", fi.Mode().Perm())
-	}
-	assertStillLink(t, at)
-	entries, _ := os.ReadDir(filepath.Dir(end))
-	if len(entries) != 1 {
-		t.Fatalf("want only CLAUDE.md beside the end, got %v", entries)
-	}
-}
-
-// TestStitchPointerLinkOutNoBlock: an end of the same file name without a
-// block yet gets one (written through), its text kept.
-func TestStitchPointerLinkOutNoBlock(t *testing.T) {
-	root, at, end := pointerLinkFixture(t, "# notes kept by hand\n")
+	at := link(t, filepath.Join("docs", "CLAUDE.md"), filepath.Join(root, "CLAUDE.md"))
 	if out, err := stitchClaude(t, root); err != nil {
 		t.Fatalf("want ok, got %v (%s)", err, out)
 	}
-	if b, _ := os.ReadFile(end); !toolprofile.HasPointer(string(b)) || !strings.Contains(string(b), "# notes kept by hand") {
+	if b, _ := os.ReadFile(end); !toolprofile.HasPointer(string(b)) || !strings.Contains(string(b), "# own text") {
 		t.Fatalf("end: %q", b)
 	}
 	assertStillLink(t, at)
@@ -113,18 +106,19 @@ func TestStitchPointerLinkOutNoBlock(t *testing.T) {
 
 // TestStitchPointerLinkSkips: a link render does not write through is left
 // as it is with a note naming the file and why, never an error: dangling
-// out of the repo, a folder, another kind of file outside the repo.
+// out of the repo, a folder, another kind of file outside the repo (each
+// leaves the repository: D-502).
 func TestStitchPointerLinkSkips(t *testing.T) {
 	cases := []struct {
 		name, why string
 		setup     func(t *testing.T, root, outside string) (end string)
 	}{
-		{"dangling", "does not exist", func(t *testing.T, root, outside string) string {
+		{"dangling", "outside the repository", func(t *testing.T, root, outside string) string {
 			end := filepath.Join(outside, "gone", "CLAUDE.md")
 			link(t, end, filepath.Join(root, "CLAUDE.md"))
 			return end
 		}},
-		{"folder", "is a folder", func(t *testing.T, root, outside string) string {
+		{"folder", "outside the repository", func(t *testing.T, root, outside string) string {
 			end := filepath.Join(outside, "CLAUDE.md")
 			if err := os.MkdirAll(end, 0o700); err != nil {
 				t.Fatal(err)
@@ -132,7 +126,7 @@ func TestStitchPointerLinkSkips(t *testing.T) {
 			link(t, end, filepath.Join(root, "CLAUDE.md"))
 			return end
 		}},
-		{"other kind of file", "neither a CLAUDE.md", func(t *testing.T, root, outside string) string {
+		{"other kind of file", "outside the repository", func(t *testing.T, root, outside string) string {
 			end := write(t, filepath.Join(outside, "profile.sh"))
 			link(t, end, filepath.Join(root, "CLAUDE.md"))
 			return end

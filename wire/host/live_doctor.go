@@ -248,6 +248,10 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		return
 	}
 	for _, h := range missing {
+		if rerr := hookRefused(s.top, dir, h); rerr != nil {
+			warn(what + "; not installed: " + rerr.Error()) // D-502
+			return
+		}
 		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))); ierr != nil {
 			warn(what + "; installing it failed: " + ierr.Error())
 			return

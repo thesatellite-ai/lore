@@ -74,6 +74,18 @@ func TestWriteThroughLink(t *testing.T) {
 			lwLink(t, filepath.Join(outside, "nope.md"), filepath.Join(root, "hop.md"))
 			return lwLink(t, "hop.md", filepath.Join(root, "CLAUDE.md")), ""
 		}, errs.Refused},
+		// D-502: a folder of the repository linked out of it (.githooks
+		// linked to a shared hooks folder, .claude to another repository's)
+		// is refused for the files in it too, existing or new.
+		{"file in a folder linked out of the repo", func(t *testing.T, root string) (string, string) {
+			lwWrite(t, filepath.Join(outside, "hooks", "pre-push"))
+			lwLink(t, filepath.Join(outside, "hooks"), filepath.Join(root, ".githooks"))
+			return filepath.Join(root, ".githooks", "pre-push"), ""
+		}, errs.Refused},
+		{"new file in a folder linked out of the repo", func(t *testing.T, root string) (string, string) {
+			lwLink(t, outside, filepath.Join(root, "agentdocs"))
+			return filepath.Join(root, "agentdocs", "new", "CLAUDE.md"), ""
+		}, errs.Refused},
 		{"loop", func(t *testing.T, root string) (string, string) {
 			lwLink(t, "CLAUDE.md", filepath.Join(root, "hop.md"))
 			return lwLink(t, "hop.md", filepath.Join(root, "CLAUDE.md")), ""
@@ -118,8 +130,8 @@ func TestWriteThroughLinkNamesLinkAndEnd(t *testing.T) {
 	if !errors.As(err, &e) {
 		t.Fatalf("want *errs.Error, got %v", err)
 	}
-	want := "refusing to write " + at + ": it is a symbolic link to " + end + ", outside the repository"
-	if e.Message != want || e.Hint == "" {
+	want := "refusing to write " + at + ": it is a symbolic link to " + end + ", outside the repository; lore does not write there"
+	if e.Message != want || !strings.Contains(e.Hint, "lore context") {
 		t.Fatalf("got %q (hint %q), want %q with a hint", e.Message, e.Hint, want)
 	}
 }

@@ -660,6 +660,10 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		if team[hook] {
 			continue
 		}
+		if err := hookRefused(s.top, dir, hook); err != nil {
+			s.warn("ride-along hooks: " + err.Error()) // D-502: this hook only
+			continue
+		}
 		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared, pin)); err != nil {
 			s.warn("ride-along hooks: " + err.Error())
 			return
