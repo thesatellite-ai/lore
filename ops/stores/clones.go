@@ -433,11 +433,28 @@ func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, e
 			return e, true, nil
 		}
 	}
+	base, _, _ := strings.Cut(name, "/")
+	if on, ok := upgrade.As[OutsideNamer](m); ok && row.ValidName(base) {
+		// D-516: outside a repo an org entry, <org>/<store> or a setup
+		e, found, err := on.OutsideStoreNamed(ctx, cmd, name)
+		if err != nil || found {
+			return e, found, err
+		}
+	}
 	if !snake {
 		return Entry{}, false, nil // not a store name lore knows: a path or url as given
 	}
 	return Entry{}, false, errs.New(errs.NotFound, "store "+cmd+": no store named "+name+" in this repo").
 		WithHint("run `lore store list`, or give the store url (" + storeURLForm[cmd] + ")")
+}
+
+// OutsideNamer is the optional Manager upgrade that resolves a store name
+// outside every repo, where no .lore/stores.yaml names anything (devco
+// D-516: `store push --store <org>` from the home folder refused the org
+// entry's name). found is false inside a repo; outside one a name no org
+// entry or setup has is E_NOT_FOUND naming the ones that exist.
+type OutsideNamer interface {
+	OutsideStoreNamed(ctx context.Context, cmd, name string) (e Entry, found bool, err error)
 }
 
 // storeURLForm is the url form of each command storeNamed serves, with

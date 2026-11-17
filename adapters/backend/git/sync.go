@@ -237,6 +237,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		return rep, err
 	}
 	rep.Pushed = true
+	rep.Commits += layers.Commits
 	for f, n := range layers.Rows {
 		if f == rep.Folder {
 			rep.Sent += n
@@ -309,6 +310,11 @@ func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushe
 	// go to Others, named by their folder (W-5: a write to a folder no
 	// store attaches here was reported as this folder's)
 	rep.Received, rep.Sent = received[rep.Folder], sent[rep.Folder]
+	if pushed {
+		if rep.Commits, err = b.countCommits(ctx, pushedOver, after); err != nil {
+			return rep, err
+		}
+	}
 	for f, n := range received {
 		if f != rep.Folder {
 			rep.Others = addFolderCount(rep.Others, f, store.FolderCount{Received: n})
@@ -589,6 +595,9 @@ func (b *Backend) countSent(ctx context.Context, rep store.SyncReport, before, r
 		return rep, err
 	}
 	rep.Pushed = true
+	if rep.Commits, err = b.countCommits(ctx, remote, sent); err != nil {
+		return rep, err
+	}
 	n, err := b.countRows(ctx, remote, sent)
 	if err != nil {
 		return rep, err

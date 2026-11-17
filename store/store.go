@@ -109,7 +109,13 @@ type Backend interface {
 
 // SyncReport tells the core and the person what a Sync did.
 type SyncReport struct {
-	Sent     int         // local changes now on the remote
+	Sent int // local changes now on the remote
+	// Commits counts the commits this sync put on the remote: the store
+	// branch's over the remote's tip before the push, plus each branch
+	// layer ref's over the remote's copy. Unlike Sent it counts a commit
+	// that changed no row of this folder (another folder's rows, an org
+	// file): `lore store push` said "sent 0" after pushing one (D-517).
+	Commits  int
 	Received int         // remote changes now local
 	Merged   []ids.AnyID // rows merged field by field
 	Refused  []Refusal

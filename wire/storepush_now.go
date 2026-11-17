@@ -77,7 +77,7 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 	if err != nil {
 		return opsstores.PushOut{}, err
 	}
-	if rep.Held != "" && rep.Sent == 0 {
+	if rep.Held != "" && rep.Commits == 0 {
 		// nothing went out because the person left the org: say so, not "sent 0"
 		return opsstores.PushOut{}, errs.New(errs.Refused, "store push: "+rep.Held).
 			WithHint("lore doctor --all shows your status in each org")
@@ -85,6 +85,12 @@ func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.
 	if len(rep.Refused) > 0 {
 		return opsstores.PushOut{}, errs.New(errs.Refused, "store push: the remote refused the push: "+rep.Refused[0].Reason)
 	}
-	out.Sent, out.Offline = rep.Sent, rep.Offline
+	// D-517: the commits that went out, not the rows of the root folder
+	// (the clone is opened at its root, so an org folder's rows and a
+	// commit of lore-org.yaml counted 0)
+	out.Sent, out.Rows, out.Offline = rep.Commits, rep.Sent, rep.Offline
+	for _, c := range rep.Others {
+		out.Rows += c.Sent
+	}
 	return out, nil
 }
