@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/origin"
 	"github.com/thesatellite-ai/lore/logic/policy"
-	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -479,7 +479,7 @@ func (a *App) landWithoutConfig(ctx context.Context, in opsbranch.LandIn) (opsbr
 		return opsbranch.LandOut{}, errs.New(errs.InvalidInput, "--store, --folder and --repo go together").
 			WithHint("lore branch land --store <url> --folder <folder> --repo <github.com/owner/repo> --branch <branch>")
 	}
-	repo, err := normalizeRepoArg(in.Repo)
+	code, err := normalizeRepoArg(ctx, in.Repo)
 	if err != nil {
 		return opsbranch.LandOut{}, err
 	}
@@ -492,11 +492,11 @@ func (a *App) landWithoutConfig(ctx context.Context, in opsbranch.LandIn) (opsbr
 		return opsbranch.LandOut{}, err
 	}
 	defer func() { _ = gb.Close() }()
-	key := branchlayer.Key{StoreBranch: gb.Branch(), Folder: in.Folder, RepoKey: branchlayer.RepoKey(repo), Branch: in.Branch}
+	key := branchlayer.Key{StoreBranch: gb.Branch(), Folder: in.Folder, RepoKey: layerRepoKey(ctx, gb, code), Branch: in.Branch}
 	if err := key.Check(); err != nil {
 		return opsbranch.LandOut{}, errs.Wrap(errs.InvalidInput, "the layer", err)
 	}
-	out, err := landLayer(ctx, gb, key, repo, in)
+	out, err := landLayer(ctx, gb, key, code.Remote, in)
 	if errs.Has(err, errs.NotFound) {
 		return opsbranch.LandOut{Branch: in.Branch, Folder: in.Folder, StoreBranch: gb.Branch(), Nothing: true},
 			nil // CI: a branch that wrote no notes has nothing to land (exit 0)
@@ -768,13 +768,17 @@ func invokePolicy[T policyIn](ctx context.Context, a *App, name string, in T) er
 // errNoRepo is a --repo that is no repo address.
 var errNoRepo = errors.New("not a repo address")
 
-// normalizeRepoArg normalizes --repo (github.com/acme/app, a url).
-func normalizeRepoArg(raw string) (string, error) {
-	norm, err := repourl.Normalize(raw)
+// normalizeRepoArg normalizes --repo (github.com/acme/app, a url) the way
+// a checkout's origin is (readCodeRepo): an ssh alias url
+// (git@<alias>:acme/app.git) names the layers of github.com/acme/app
+// (devco D-532), and the alias spelling is kept as PlainRemote so layers
+// made under its key before D-532 still land.
+func normalizeRepoArg(ctx context.Context, raw string) (codeRepo, error) {
+	norm, err := orgcfg.ResolveRemote(ctx, "", raw)
 	if err != nil || norm == "" {
-		return "", errs.Wrap(errs.InvalidInput, "--repo "+raw, errors.Join(errNoRepo, err)).WithHint("--repo github.com/<owner>/<repo>")
+		return codeRepo{}, errs.Wrap(errs.InvalidInput, "--repo "+raw, errors.Join(errNoRepo, err)).WithHint("--repo github.com/<owner>/<repo>")
 	}
-	return norm, nil
+	return codeRepo{Remote: norm, PlainRemote: orgcfg.PlainRemote(raw, norm)}, nil
 }
 
 // mergerForLayers is the row merger a config-less store clone (the CI

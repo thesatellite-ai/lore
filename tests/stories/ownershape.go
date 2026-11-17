@@ -11,6 +11,9 @@ package stories
 //	two git identities      ~/.gitconfig holds the personal one; an
 //	                        [includeIf "gitdir:~/code/<org>/"] block gives
 //	                        every repo under the org folder the org one
+//	                        (IncludeByRemote: [includeIf "hasconfig:
+//	                        remote.*.url:…"] blocks give it to every repo
+//	                        whose remote is the org's, wherever it sits)
 //	an ssh host alias       ~/.ssh/config "Host <alias> / HostName github.com"
 //	                        with the org account's key, and
 //	                        url."git@<alias>:<owner>/".insteadOf for each of
@@ -54,6 +57,13 @@ type OwnerShape struct {
 	// OrgOwners are the GitHub owners whose urls git rewrites to the alias
 	// (the org, and the org a store moved to).
 	OrgOwners []string
+	// IncludeByRemote gives the org identity by remote instead of by
+	// folder: one [includeIf "hasconfig:remote.*.url:<url>/**"] per org
+	// owner, in the github.com (ssh, https) and alias spellings, with a relative
+	// path (.gitconfig-<org>, next to ~/.gitconfig). A person with an ssh
+	// alias per account often keys the identity on the remote; a check
+	// that only understands gitdir: rules misses it (devco D-533).
+	IncludeByRemote bool
 }
 
 // OwnerMachine is a journeys Machine shaped like the owner's laptop.
@@ -113,7 +123,15 @@ func (o *OwnerMachine) WriteGitconfig(t testing.TB) {
 	orgCfg := filepath.Join(o.Home, ".gitconfig-"+sh.OrgFolder)
 	writeFile(t, orgCfg, fmt.Sprintf("[user]\n\tname = %s\n\temail = %s\n", sh.Org.Name, sh.Org.Email))
 	var b strings.Builder
-	fmt.Fprintf(&b, "[includeIf \"gitdir:~/code/%s/\"]\n\tpath = %s\n", sh.OrgFolder, orgCfg)
+	if sh.IncludeByRemote {
+		for _, owner := range sh.OrgOwners {
+			for _, url := range []string{"git@github.com:" + owner, "git@" + sh.Alias + ":" + owner, "https://github.com/" + owner} {
+				fmt.Fprintf(&b, "[includeIf \"hasconfig:remote.*.url:%s/**\"]\n\tpath = %s\n", url, filepath.Base(orgCfg))
+			}
+		}
+	} else {
+		fmt.Fprintf(&b, "[includeIf \"gitdir:~/code/%s/\"]\n\tpath = %s\n", sh.OrgFolder, orgCfg)
+	}
 	for _, owner := range sh.OrgOwners {
 		fmt.Fprintf(&b, "[url \"git@%s:%s/\"]\n\tinsteadOf = git@github.com:%s/\n\tinsteadOf = https://github.com/%s/\n", sh.Alias, owner, owner, owner)
 	}

@@ -1307,3 +1307,16 @@ func (b *Backend) LayerTipTime(ctx context.Context, l Layer) (time.Time, error) 
 	}
 	return time.Unix(sec, 0).UTC(), nil
 }
+
+// LayerKeyUsed reports whether this backend's folder on its store branch
+// holds an open layer (local or fetched) under repoKey. It reads ref
+// names only, so a caller can ask it on every open: the wire asks it to
+// keep a repo on the key its layers were made under (devco D-532).
+func (b *Backend) LayerKeyUsed(ctx context.Context, repoKey string) bool {
+	if repoKey == "" || b.usable(ctx) != nil || b.mode != modeClone {
+		return false
+	}
+	prefix := b.branch + "/" + branchlayer.FolderSeg(b.folder.Name()) + "/" + repoKey + "/"
+	refs, err := b.listRefs(ctx, branchlayer.RefPrefix+prefix, LayerTrackingPrefix+prefix)
+	return err == nil && len(refs) > 0
+}

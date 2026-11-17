@@ -10,7 +10,8 @@ package stories
 // matched no org (the org's repos: github.com/<owner>/* never matched), fell
 // back to the personal identity, and with --setup offered to write the alias
 // pattern into the team's shared own: list. Now the alias is resolved
-// before anything is matched or printed.
+// before anything is matched or printed. devco D-532: `org link --remote`
+// typed in the alias spelling links the same repo.
 
 import (
 	"testing"
@@ -51,5 +52,14 @@ func TestStoryOAliasWhoami(t *testing.T) {
 		r = ada.Lore(cc.Dir, "whoami", "--json").OK(t)
 		r.Says(t, want)
 		r.Never(t, aliasForm)
+	})
+	// devco:D-532: `org link --remote` typed in the alias spelling (what the
+	// owner's origin says) names the same repo as the resolved remote; it
+	// was refused as "not a remote of this repo"
+	s.Step("D-532/link-by-typed-alias-remote", func() {
+		r := ada.Lore(cc.Dir, "org", "link", "--org", oOrg, "--project", "portal", "--remote", aliasURL, "--yes").OK(t)
+		r.Says(t, "linked")
+		r.Never(t, "not a remote of this repo", aliasForm)
+		ada.Lore(cc.Dir, "whoami").OK(t).Says(t, "portal").Never(t, aliasForm)
 	})
 }
