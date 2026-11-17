@@ -77,6 +77,8 @@ type Updater interface {
 
 // PathIn is the input of row.path.
 type PathIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"any row id (tsk_…, mem_…, rul_…)"`
 }
 
@@ -96,6 +98,8 @@ func (o PathOut) Text() string { return o.Path + "\n" }
 
 // MarkdownIn is the input of row.markdown.
 type MarkdownIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"any row id"`
 }
 

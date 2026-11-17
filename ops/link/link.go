@@ -139,6 +139,8 @@ func (o AddOut) Text() string {
 
 // ListIn is the input of link.list.
 type ListIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Entity string `json:"entity,omitempty" flag:"entity" desc:"filter by entity (opaque id)"`
 	Commit string `json:"commit,omitempty" flag:"commit" desc:"filter by sha"`
 	// --created-by / --updated-by: the shared writer filters of every
@@ -197,6 +199,8 @@ type Record struct {
 
 // ShowIn is the input of commit.show (the sha is the path id in REST).
 type ShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the commit sha"`
 }
 
