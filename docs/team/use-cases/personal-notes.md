@@ -86,6 +86,7 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (s
 $ lore memory list
 lore memory list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 lore memory list: store clone ~/.lore/stores/alice/lore-me: git user set to Alice Doe <alice@agency.example> (your lore identity)
+lore memory list: store clone ~/.lore/stores/alice/lore-me: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 (no memories)
 ```
 <!-- /example -->

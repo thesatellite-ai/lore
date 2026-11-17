@@ -116,8 +116,10 @@ func TestSetStoreURLCarriesUnpushedClone(t *testing.T) {
 	if found, _ = gitbackend.ScanClones(home); len(found) != 1 {
 		t.Fatalf("want one clone after the fix, got %+v", found)
 	}
-	if rec := gitbackend.ReadCloneRecord(home).Clones; len(rec) != 1 {
-		t.Fatalf("the clone record keeps the old address: %+v", rec)
+	// the carried clone sits at the new address's default folder: nothing
+	// recorded, neither the old address nor an absolute default path (D-534)
+	if rec := gitbackend.ReadCloneRecord(home).Clones; len(rec) != 0 {
+		t.Fatalf("the clone record keeps the old address or pins the default path: %+v", rec)
 	}
 	if f, _ = a.DoctorStoreClones(background()); len(f) != 0 {
 		t.Fatalf("doctor after the fix: %+v", f)

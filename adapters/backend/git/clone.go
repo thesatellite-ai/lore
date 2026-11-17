@@ -315,7 +315,11 @@ func (b *Backend) setup(ctx context.Context, remote string) error {
 	} else if err := b.ensureRemote(ctx, remote); err != nil {
 		return err
 	}
-	if GitSetUp(ctx) {
+	if fresh || GitSetUp(ctx) {
+		// the clone lore makes now gets its hook and driver with it (D-534,
+		// owner use pass weak 10), whichever command made it: it is lore's
+		// own folder, created at this moment; a read never sets up a clone
+		// that already exists (owner bug 6)
 		if err := b.ensureHandGit(ctx); err != nil {
 			return err
 		}

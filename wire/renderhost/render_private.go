@@ -120,6 +120,24 @@ const renderDirName = "render"
 
 var privateImportDir = "~/.lore/" + renderDirName + "/"
 
+// privateImportDirFor is the import prefix of the private renders of the
+// lore home home: <home>/render/, written ~-relative when the home is under
+// the person's home folder (~/.lore/render/ for the default home), else
+// absolute. devco D-535: every import named ~/.lore/render/ whatever the
+// home, so under LORE_HOME=~/.lore-dev the tool read a missing or stale
+// file of ~/.lore while the render was written under ~/.lore-dev.
+func privateImportDirFor(home string) string {
+	if user, err := os.UserHomeDir(); err == nil && home != "" {
+		if rel, err := filepath.Rel(filepath.Clean(user), filepath.Clean(home)); err == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "~/" + filepath.ToSlash(rel) + "/" + renderDirName + "/"
+		}
+	}
+	if home == "" {
+		return privateImportDir
+	}
+	return strings.TrimSuffix(filepath.ToSlash(filepath.Clean(home)), "/") + "/" + renderDirName + "/"
+}
+
 // privateStemUnsafe matches characters a store name may hold that a file
 // stem must not.
 var privateStemUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -291,6 +309,11 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		if l.out != "" && l.imports {
 			wrote = append(wrote, l.rel)
 		}
+		if l.in != l.out {
+			// devco D-535: a sync wrote these files with no word; one line
+			// each, even when quiet (a file in the person's checkout)
+			fmt.Fprintln(w, h.privateLocalLine(l))
+		}
 	}
 	if !quiet && len(p.stores) > 0 {
 		where := "no target tool has a private file: agents get it through `lore context` and the hooks"
@@ -318,6 +341,19 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
 	}
 	return nil
+}
+
+// privateLocalLine is the line for a tool's local import file the
+// private render changed in the checkout: written (git-excluded, naming
+// the render under this lore home) or removed.
+func (h *Host) privateLocalLine(l privateLocal) string {
+	switch {
+	case l.out == "":
+		return h.decor.check() + " removed " + l.rel + " (it held only lore's import lines)"
+	case l.imports:
+		return h.decor.check() + " wrote " + l.rel + " (git-excluded): imports the private context under " + h.redact(h.opts.Home)
+	}
+	return h.decor.check() + " updated " + l.rel + ": dropped lore's stale import lines"
 }
 
 // privateNoImportWhere ends the private render's line where no import
@@ -484,7 +520,7 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
 		body := withPrivateStamp(fit.texts[i], bodies[i].origins, p.budget)
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: body})
-		imports = append(imports, privateImportDir+p.dirName+"/"+s.stem+privateFileExt)
+		imports = append(imports, privateImportDirFor(home)+p.dirName+"/"+s.stem+privateFileExt)
 	}
 	if len(internal) > 0 {
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, privateIndexFile), body: buildPrivateIndex(repoName, p.repoKey, internal)})
@@ -530,7 +566,14 @@ func (h *Host) planPrivateLocals(ctx context.Context, root string, imports []str
 		if l.in == "" && len(lines) == 0 {
 			continue
 		}
-		l.out = prof.PrivateContent(l.in, privateImportDir, lines)
+		dir := privateImportDirFor(h.opts.Home)
+		in := l.in
+		if dir != privateImportDir {
+			// lines an older lore wrote naming ~/.lore/render/ whatever the
+			// home (D-535) are lore's too: replaced, never left beside the new ones
+			in = prof.PrivateContent(in, privateImportDir, nil)
+		}
+		l.out = prof.PrivateContent(in, dir, lines)
 		l.imports = len(lines) > 0
 		out = append(out, l)
 	}

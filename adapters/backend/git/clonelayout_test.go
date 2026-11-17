@@ -77,10 +77,11 @@ func TestPathsOfIsOpenClonesLayout(t *testing.T) {
 	if up := strings.TrimSpace(gitT(t, p.Dir, "rev-parse", "--abbrev-ref", "@{upstream}")); up != RemoteName+"/"+testBranch {
 		t.Fatalf("upstream %q: a plain git pull would not work", up)
 	}
-	// a first open that is a read sets nothing up for plain git (owner
-	// bug 6): the row attributes come with the first write
-	if attrs, err := os.ReadFile(filepath.Join(p.GitDir, "info", "attributes")); err == nil && strings.Contains(string(attrs), "*.json") {
-		t.Fatalf("a read's first open wrote row attributes: %q", attrs)
+	// the clone lore makes is set up for plain git at once (devco D-534;
+	// owner bug 6 still holds for an existing clone): with no merge driver
+	// configured, git never text-merges a row
+	if attrs, err := os.ReadFile(filepath.Join(p.GitDir, "info", "attributes")); err != nil || !strings.Contains(string(attrs), rowAttributesNoDriver) {
+		t.Fatalf("a new clone's row attributes: %q %v", attrs, err)
 	}
 	got := scanStates(t, home)
 	if len(got) != 1 || got["owner/notes"].State != CloneWhole {
