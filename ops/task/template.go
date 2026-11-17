@@ -101,6 +101,8 @@ type TemplateFile struct {
 
 // TemplateNameIn names one template (name or ttp_ id).
 type TemplateNameIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Name string `json:"name" arg:"0" desc:"the template name (or its ttp_ id)"`
 }
 
@@ -190,6 +192,8 @@ func (o TemplateOut) Text() string { return o.Human }
 
 // TemplateListIn is the (empty) input of task.template.list.
 type TemplateListIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).

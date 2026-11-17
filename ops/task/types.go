@@ -355,6 +355,8 @@ type ListIn struct {
 
 // ViewIn is the input of the triage, someday and deferred views.
 type ViewIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Project string `json:"project,omitempty" flag:"project" desc:"only tasks of this project (prj_ id or name)"`
 	Repo    string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts"`
 }
@@ -404,6 +406,13 @@ type ShowIn struct {
 	Signals bool `json:"signals,omitempty" flag:"signals" desc:"show the claim as seen now (holder, token prefix, expires, renewed_seq)"`
 	rowexpand.Flag
 }
+
+// RoutedStore implements the op package's StoreRouter (devco D-507):
+// --from/--store naming a store other than repo routes the show to that
+// store alone (wire routedStoreRead), so it reads from a plain folder or
+// the home folder as `task list --store <org>` does, and a name no store
+// answers to is refused there.
+func (in ShowIn) RoutedStore() string { return in.From }
 
 // ShowOut is the output of task.show.
 type ShowOut struct {

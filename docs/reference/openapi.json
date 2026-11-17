@@ -91041,6 +91041,16 @@
         ],
         "parameters": [
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "id",
             "in": "query",
             "required": true,
@@ -92723,6 +92733,16 @@
               "description": "the task id (tsk_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -93485,6 +93505,16 @@
           "task"
         ],
         "parameters": [
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
           {
             "name": "created_by",
             "in": "query",
@@ -94384,6 +94414,16 @@
               "description": "the template name (or its ttp_ id)"
             },
             "x-lore-field": "name"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -94821,6 +94861,16 @@
               "description": "the task id (tsk_…)"
             },
             "x-lore-field": "id"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           },
           {
             "name": "entries",
@@ -96451,6 +96501,16 @@
         ],
         "parameters": [
           {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
+          },
+          {
             "name": "project",
             "in": "query",
             "required": false,
@@ -97052,6 +97112,16 @@
               "description": "the view name or tvw_ id"
             },
             "x-lore-field": "name"
+          },
+          {
+            "name": "store",
+            "in": "query",
+            "required": false,
+            "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)",
+            "schema": {
+              "type": "string",
+              "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+            }
           }
         ],
         "responses": {
@@ -102037,6 +102107,10 @@
                   "repo": {
                     "type": "string",
                     "description": "accepted for v0.1.17 scripts"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -102329,6 +102403,10 @@
                   "internal": {
                     "type": "boolean",
                     "description": "add internal fields (claims, time entries, attempts); refused in a client repo"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   },
                   "tree": {
                     "type": "boolean",
@@ -103486,6 +103564,10 @@
                   "repo": {
                     "type": "string",
                     "description": "accepted for v0.1.17 scripts"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -104079,6 +104161,10 @@
                   "repo": {
                     "type": "string",
                     "description": "accepted for v0.1.17 scripts"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false
@@ -107106,6 +107192,10 @@
                   "git": {
                     "type": "boolean",
                     "description": "also read older row versions from git history (full detail of folded entries)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "additionalProperties": false

@@ -203,6 +203,11 @@ func (a *App) outsideTo(ctx context.Context, in op.Input, write bool, opName str
 			project = tv.Text
 		}
 	}
+	if filter == "" {
+		// an input naming its store through op.StoreRouter under another
+		// field (task show --from, devco D-507) routes as --store does
+		filter, _ = in.RoutedStore()
+	}
 	if to == "" && !write {
 		to = filter
 	}

@@ -45,6 +45,8 @@ const fieldClaimLog = "claim_log"
 
 // HistoryIn is the input of task.history.
 type HistoryIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	ID  string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	Git bool   `json:"git,omitempty" flag:"git" desc:"also read older row versions from git history (full detail of folded entries)"`
 }
