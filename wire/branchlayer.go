@@ -32,11 +32,11 @@ import (
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/logic/policy"
-	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -96,9 +96,13 @@ type codeRepo struct {
 	Branch   string // "" on a detached HEAD
 	Detached bool
 	Default  string // the default branch
-	Remote   string // normalized origin url ("" when none)
-	Split    string // merge-base of HEAD and origin/<default> ("" when unknown)
-	Head     string // HEAD commit
+	Remote   string // normalized origin url, ssh host alias resolved ("" when none)
+	// PlainRemote is the origin url as lore keyed it before D-532 (the
+	// ssh alias host kept), "" when that is Remote: older layers of a
+	// clone made through an alias live under its repo key.
+	PlainRemote string
+	Split       string // merge-base of HEAD and origin/<default> ("" when unknown)
+	Head        string // HEAD commit
 }
 
 // readCodeRepo asks git about the checkout at top. A folder that is no git
@@ -116,11 +120,12 @@ func readCodeRepo(ctx context.Context, top string) (codeRepo, bool) {
 	if raw == "" {
 		return c, false
 	}
-	norm, err := repourl.Normalize(raw)
+	norm, err := orgcfg.ResolveRemote(ctx, top, raw)
 	if err != nil {
 		return c, false
 	}
 	c.Remote = norm
+	c.PlainRemote = orgcfg.PlainRemote(raw, norm)
 	c.Head = run("rev-parse", "--verify", "--quiet", "HEAD")
 	c.Branch = run("symbolic-ref", "--short", "--quiet", "HEAD")
 	c.Detached = c.Branch == "" && c.Head != ""
@@ -195,7 +200,7 @@ func newLayerBackend(ctx context.Context, name store.Source, folder string, b st
 	if !ok || gb.Branch() == "" || folder == "" || folder == "." {
 		return b
 	}
-	key := branchlayer.Key{StoreBranch: gb.Branch(), Folder: folder, RepoKey: branchlayer.RepoKey(code.Remote), Branch: code.Branch}
+	key := branchlayer.Key{StoreBranch: gb.Branch(), Folder: folder, RepoKey: layerRepoKey(ctx, gb, code), Branch: code.Branch}
 	if code.Branch == "" {
 		key.Branch = "HEAD" // detached: never written (E_DETACHED), only named
 	}
@@ -781,4 +786,24 @@ func (l *layerBackend) writesToLayer(ctx context.Context) bool {
 	}
 	iso, err := l.isolated(ctx)
 	return err != nil || iso
+}
+
+// layerRepoKey is the repo key of code's layers in gb's folder: the key of
+// its remote with the ssh host alias resolved, so a clone made through an
+// alias and one from github.com share their layers (devco D-532). A repo
+// whose layers were all made under the alias spelling's key before D-532
+// (open ones there, none under the resolved key) keeps that key, so its
+// open branches are still found; once they are landed or dropped, its new
+// layers take the resolved key. Read both, never moved: a ref rename here
+// would rewrite refs a teammate may have fetched.
+func layerRepoKey(ctx context.Context, gb *git.Backend, code codeRepo) string {
+	key := branchlayer.RepoKey(code.Remote)
+	if code.PlainRemote == "" {
+		return key
+	}
+	old := branchlayer.RepoKey(code.PlainRemote)
+	if gb.LayerKeyUsed(ctx, old) && !gb.LayerKeyUsed(ctx, key) {
+		return old
+	}
+	return key
 }

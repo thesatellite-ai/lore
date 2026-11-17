@@ -212,8 +212,17 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	// D-532: a typed --remote in the alias spelling (git@<alias>:<owner>/<repo>.git)
+	// names the same repo as s.Remotes, which Remotes resolved; a remote that
+	// does not parse goes on as typed so PlanLink's refusal names it.
+	remote := in.Remote
+	if remote != "" {
+		if n, rerr := orgcfg.ResolveRemote(ctx, s.Dir, remote); rerr == nil {
+			remote = n
+		}
+	}
 	plan, err := orgresolve.PlanLink(s.Config, orgresolve.LinkRequest{Entry: in.Org, ProjectID: s.ProjectID, Remotes: s.Remotes,
-		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: in.Store, Remote: in.Remote})
+		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: in.Store, Remote: remote})
 	if err != nil {
 		return opsorgcmd.Report{}, planLinkError(err)
 	}

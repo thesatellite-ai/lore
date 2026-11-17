@@ -17,6 +17,8 @@ package orgcfg
 //	                                               └▶ ssh config HostName (gitbackend.IdentityHost)
 
 import (
+	"context"
+	"slices"
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -108,4 +110,69 @@ func isSSHRemote(raw string) bool {
 	colon := strings.Index(s, ":")
 	slash := strings.Index(s, "/")
 	return colon > 1 && (slash < 0 || colon < slash)
+}
+
+// insteadOfKeyPattern selects the url.<base>.insteadOf lines of a git
+// config (the rules normalizeRemote maps an alias spelling back with).
+const insteadOfKeyPattern = `^url\..*\.insteadof$`
+
+// ResolveRemote is a code repo remote (a raw url, as git config or a flag
+// holds it) normalised with its ssh host alias resolved, as Remotes
+// normalises every remote of a repo: dir's url.<base>.insteadOf rules
+// first, then the ssh config's HostName. dir "" reads the person's global
+// config only. Every place that keys or matches a code repo by its remote
+// (branch layer refs, `branch land --repo`, `org link --remote`) goes
+// through it, so a clone through an alias and one from github.com name
+// one repo the same way (devco D-532).
+func ResolveRemote(ctx context.Context, dir, raw string) (string, error) {
+	args := []string{"config", "--get-regexp", insteadOfKeyPattern}
+	if dir != "" {
+		args = append([]string{"-C", dir}, args...)
+	}
+	var rules []insteadOfRule
+	if out, err := gitRun(ctx, args...); err == nil { // exit 1 = no rule
+		rules = insteadOfRules(strings.Split(strings.TrimSpace(out), "\n"))
+	}
+	return normalizeRemote(raw, rules)
+}
+
+// PlainRemote is raw normalised the way lore keyed a code repo before
+// D-531/D-532 (repourl.Normalize, the alias host kept), "" when that is the
+// same as resolved: the spelling an older branch layer ref or remote-only
+// link row may still be keyed by.
+func PlainRemote(raw, resolved string) string {
+	n, err := repourl.Normalize(raw)
+	if err != nil || n == resolved {
+		return ""
+	}
+	return n
+}
+
+// aliasSpellings maps each of dir's remotes (as Remotes names it) to the
+// plain spellings it had before D-531 resolved its ssh alias: a repo linked
+// by its remote alone back then holds a link row whose project id came
+// from that spelling (devco D-532).
+func aliasSpellings(ctx context.Context, dir string) map[string][]string {
+	out, err := gitRun(ctx, "-C", dir, "config", "--get-regexp", rawRemoteKeyPattern)
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	rules := insteadOfRules(lines)
+	spell := map[string][]string{}
+	for _, line := range lines {
+		key, val, ok := strings.Cut(line, " ")
+		val = strings.TrimSpace(val)
+		if !ok || val == "" || !strings.HasPrefix(key, "remote.") {
+			continue
+		}
+		n, err := normalizeRemote(val, rules)
+		if err != nil {
+			continue
+		}
+		if p := PlainRemote(val, n); p != "" && !slices.Contains(spell[n], p) {
+			spell[n] = append(spell[n], p)
+		}
+	}
+	return spell
 }

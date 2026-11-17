@@ -127,8 +127,11 @@ func resourceNamingRemote(path string, mine map[string]bool) (name, remote strin
 	}
 	for _, s := range jsonStrings(b, 0) {
 		n, nerr := repourl.Normalize(s)
-		if nerr == nil && mine[n] {
-			remote = n
+		if nerr != nil {
+			continue
+		}
+		if c := orgcfg.CanonicalRemote(n); mine[n] || mine[c] { // D-532: an alias spelling names the repo too
+			remote = c
 			break
 		}
 	}

@@ -26,6 +26,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -459,23 +460,33 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		// A repo with no lore data in it is linked by its remote
 		// (orgresolve.RemoteProjectID): the first remote a store links
 		// gives the project id, which lives only in that link row.
+		// D-532: a repo cloned through an ssh alias and linked before D-531
+		// has a link row whose project id came from the alias spelling
+		// (<alias>/<owner>/<repo>); that spelling is tried after the
+		// resolved one, so the old row is still found. LinkedByRemote then
+		// names that spelling: it is what the row keys the project by, and
+		// `lore init` derives the same project id from it.
+		spellings := aliasSpellings(ctx, root)
 		byRemote := func(src orgresolve.LinkSource) {
+		remotes:
 			for _, r := range s.Remotes {
-				pid, perr := orgresolve.RemoteProjectID(r)
-				if perr != nil {
-					continue
-				}
-				got, lerr := src.Links(ctx, pid, []string{r})
-				if lerr != nil {
-					// a store that cannot be read as one (a code repo listed
-					// under stores:) is reported by the project's own lookup and
-					// by whoami, as before; here it only means no remote link
-					// was found, so `lore init` in such a repo still runs
-					break
-				}
-				if len(got.Links) > 0 {
-					s.ProjectID, s.LinkedByRemote = pid, r
-					break
+				for _, key := range append([]string{r}, spellings[r]...) {
+					pid, perr := orgresolve.RemoteProjectID(key)
+					if perr != nil {
+						continue
+					}
+					got, lerr := src.Links(ctx, pid, sortedUnique([]string{r, key}))
+					if lerr != nil {
+						// a store that cannot be read as one (a code repo listed
+						// under stores:) is reported by the project's own lookup and
+						// by whoami, as before; here it only means no remote link
+						// was found, so `lore init` in such a repo still runs
+						break remotes
+					}
+					if len(got.Links) > 0 {
+						s.ProjectID, s.LinkedByRemote = pid, key
+						break remotes
+					}
 				}
 			}
 		}
@@ -495,7 +506,12 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 			}
 		}
 	}
-	lr, err = links.Links(ctx, s.ProjectID, s.Remotes)
+	linkRemotes := s.Remotes
+	if s.LinkedByRemote != "" && !slices.Contains(linkRemotes, s.LinkedByRemote) {
+		// D-532: the row keyed by an alias spelling names the repo by it
+		linkRemotes = sortedUnique(append(slices.Clone(linkRemotes), s.LinkedByRemote))
+	}
+	lr, err = links.Links(ctx, s.ProjectID, linkRemotes)
 	if err != nil {
 		return nil, err
 	}
