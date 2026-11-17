@@ -47,8 +47,9 @@ func privateRepo(t *testing.T, private bool) string {
 // stitched lore's pointer block into the tracked CLAUDE.md and AGENTS.md
 // of a repo whose .gitignore lists .lore/. Now both stay byte-identical;
 // claude_code's pointer goes into its git-excluded CLAUDE.local.md, codex's
-// file is skipped with how it gets the notes, and one line says why. A
-// repo that commits .lore/ still gets the pointer in its tools' files.
+// file is skipped with a note saying why and how it gets the notes (the
+// project-wide line is the git wiring's, devco D-513). A repo that
+// commits .lore/ still gets the pointer in its tools' files.
 func TestPrivateProjectPointerGoesToLocalFile(t *testing.T) {
 	targets := []contextTarget{
 		{profile: builtin(t, toolprofile.NameClaudeCode), file: "CLAUDE.md", known: true},

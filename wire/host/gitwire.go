@@ -395,7 +395,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	// machine, so nothing goes into a file the repo tracks or would commit
 	// (.gitattributes, a hooks folder in the work tree); the clone's own
 	// .git/config and .git/hooks are still set up.
-	private := !wire.RepoMayHoldLoreFiles(ctx, root, false)
+	private := !wire.RepoMayHoldLoreFiles(ctx, root)
 	if private && s.trackedHooksFolder(ctx, dir) {
 		guardBefore = nil // lore never puts its blocks there: no leak-guard line
 	}
@@ -888,11 +888,13 @@ const privateNoticeSuffix = ".private"
 
 // sayPrivate says once per state of the wired files why lore wrote
 // nothing into the repo's tracked files of the private project at root
-// (wire.PrivateProjectLine, devco D-500).
+// (wire.PrivateProjectNotice, devco D-500), naming the .gitignore rule
+// (D-513). The rule costs one git process, spent only when the line is
+// said.
 func (s *liveSession) sayPrivate(ctx context.Context, root, stamp, fp string) {
 	if wire.ReadNoticeSaid(s.h.cfg.Home, stamp+privateNoticeSuffix, fp) {
 		return
 	}
-	s.cmdNotice(ctx, fmt.Sprintf(wire.PrivateProjectLine, root))
+	s.cmdNotice(ctx, wire.PrivateProjectNotice(root, loreDirIgnoreRule(ctx, root)))
 	wire.MarkReadNotice(s.h.cfg.Home, stamp+privateNoticeSuffix, fp)
 }

@@ -108,3 +108,26 @@ func TestPrivateProjectWritesNoTrackedFile(t *testing.T) {
 	}
 	assertTeamFilesUntouched(t, f, "doctor --fix")
 }
+
+// TestPrivateProjectSaysGitIgnoresLoreDataOnce (devco D-513): D-500's
+// private-project line replaced the old "git ignores lore data" report,
+// and init printed it twice (render's pointer step and the git wiring).
+// Now the wiring says one line that starts with the report, names the
+// .gitignore rule and says the project is private; a second command in
+// the same state says nothing.
+func TestPrivateProjectSaysGitIgnoresLoreDataOnce(t *testing.T) {
+	f := newLiveFixtureWith(t, "", nil, trackedHooksRepo(true))
+	commitTeamFiles(t, f)
+	f.s.ensureGitWiring(f.ctx, f.s.top, wireInstall)
+	out := stderrOf(f)
+	if !strings.Contains(out, "git ignores lore data") || !strings.Contains(out, ".gitignore:2:.lore/") || !strings.Contains(out, "private to this machine") {
+		t.Fatalf("the install step does not report the ignored .lore/ with its rule and what lore does about it:\n%s", out)
+	}
+	if n := strings.Count(out, "git ignores lore data"); n != 1 {
+		t.Fatalf("said %d times, want one line:\n%s", n, out)
+	}
+	f.s.ensureGitWiring(f.ctx, f.s.top, wireRead)
+	if n := strings.Count(stderrOf(f), "git ignores lore data"); n != 1 {
+		t.Fatalf("a read in the same state repeated the line (%d):\n%s", n, stderrOf(f))
+	}
+}

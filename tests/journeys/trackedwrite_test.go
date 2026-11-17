@@ -12,7 +12,8 @@ package journeys
 //     AGENTS.md and CLAUDE.md, lore's lines into .gitattributes and hook
 //     blocks into .githooks. Now `git status` stays clean and every
 //     tracked file byte-identical; the pointer goes into the git-excluded
-//     CLAUDE.local.md and one line says why.
+//     CLAUDE.local.md and one line says why ("git ignores lore data",
+//     the rule, and that the project is private: D-513).
 //   - D-501: a repo that commits .lore/ with a tracked core.hooksPath:
 //     init, doctor --fix and `lore fix --yes` added the lore-sync:live
 //     block (and every other) to .githooks without asking. Now they leave
@@ -76,7 +77,12 @@ func TestJourneyPrivateProjectWritesNoTrackedFile(t *testing.T) {
 	c := twRepo(t, w, lap, "private", "bin/\n.lore/\n")
 
 	w.Step("day1/init-in-a-repo-that-ignores-lore", func() {
-		lap.LoreIn(c, "init").OK(t).Says(t, "private to this machine", "CLAUDE.local.md")
+		// D-513: one line reports the ignore (with its rule) and that the
+		// project is private, not two
+		r := lap.LoreIn(c, "init").OK(t).Says(t, "git ignores lore data", ".gitignore:2:.lore/", "private to this machine", "CLAUDE.local.md")
+		if n := strings.Count(r.Out(), "lore treats this project as private"); n != 1 {
+			t.Fatalf("init says the private-project line %d times, want 1:\n%s", n, r.Out())
+		}
 		twUntouched(t, c, "lore init")
 	})
 
