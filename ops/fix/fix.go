@@ -129,6 +129,22 @@ type LoreGoneGate interface {
 }
 
 // noLoreDataErr is lore fix's answer in a repo with no lore data.
+// StoreCloneGate is the optional upgrade of Env that tells a lore store
+// clone (devco D-524): shown is the store checkout the command runs in, as
+// printed, ok false outside one. A store clone is a git repo but no code
+// repo, so lore fix there names what applies instead of "not inside a git
+// repo" (*wire.App implements it).
+type StoreCloneGate interface {
+	FixStoreCloneHere(ctx context.Context) (shown string, ok bool)
+}
+
+// storeCloneErr is lore fix's refusal in a store clone: it fixes one code
+// repo; a store clone is checked by lore store doctor and sent by lore sync.
+func storeCloneErr(shown string) error {
+	return errs.New(errs.NotAStore, "lore fix works on one code repo: "+shown+" is a lore store clone, not a code repo").
+		WithHint("cd into the code repo you want fixed and run lore fix there, or lore fix --all for every repo the setups know; --store does not apply (lore fix has no store to fix); `lore store doctor` checks this store's clone and `lore sync` sends its waiting commits")
+}
+
 func noLoreDataErr(top string) error {
 	return errs.New(errs.NotAStore, "lore fix: no lore data in "+top+" (no .lore folder), so there is nothing to fix and lore fix creates nothing there").
 		WithHint("lore init sets this repo up; lore fix --all lists such repos and leaves them as they are")
@@ -374,8 +390,9 @@ type Out struct {
 	Exit     int  `json:"exit_status"`
 }
 
-// ExitStatus implements op.ExitStatuser: one repo exits as doctor does
-// (0 healthy, 1 degraded, 2 broken); --all exits 1 when a repo failed.
+// ExitStatus implements op.ExitStatuser: one repo exits 0 when every step
+// ran and no error is left (healthy, or degraded by warnings only), 1 when
+// a step failed, 2 broken (doctor's); --all exits 1 when a repo failed.
 func (o Out) ExitStatus() int { return o.Exit }
 
 // Text implements op.Texter.
@@ -557,6 +574,11 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 		return Out{}, errs.New(errs.InvalidInput, "lore fix takes --verbose only with --all").
 			WithHint("lore fix --all --verbose")
 	}
+	if g, ok := env.(StoreCloneGate); ok {
+		if shown, in := g.FixStoreCloneHere(ctx); in {
+			return Out{}, storeCloneErr(shown) // D-524: a git repo, but a store's
+		}
+	}
 	top, err := env.RepoTop(ctx)
 	if err != nil || top == "" {
 		return Out{}, errs.New(errs.NotAStore, "lore fix works on one project: not inside a git repo here").
@@ -594,7 +616,19 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if in.DryRun && dryOnlyWouldDo(out) {
 		out.Exit = 0 // B4-14: every finding is one the real run fixes
 	}
+	if warningsOnly(out) {
+		out.Exit = 0 // D-522: warnings are printed as warnings, never an exit with no error line
+	}
 	return out, nil
+}
+
+// warningsOnly reports a run that ended degraded by warnings alone: every
+// step ran, no error is left, the status is not broken. Its exit is 0 (as
+// --all already counts such a repo ok): a non-zero exit always comes with
+// the line that caused it (a failed step, an error), never after
+// "Everything is current." and warning lines only (devco D-522).
+func warningsOnly(o Out) bool {
+	return o.Exit == 1 && len(o.Failed) == 0 && len(o.Errors) == 0 && o.Status != doctor.StatusBroken
 }
 
 // dryRealRunChecks are the doctor checks whose findings a dry run leaves

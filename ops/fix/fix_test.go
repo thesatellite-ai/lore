@@ -2,6 +2,7 @@ package fix
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -506,6 +507,54 @@ func TestNoLoreDataRefusedBeforeAnyStep(t *testing.T) {
 		_, err := Run(context.Background(), env, in)
 		if !errs.Has(err, errs.NotAStore) || !strings.Contains(err.Error(), "no lore data in /w/app") {
 			t.Fatalf("lore fix %+v in a repo with no lore data: %v", in, err)
+		}
+	}
+}
+
+// storeCloneEnv runs in a lore store clone (devco D-524).
+type storeCloneEnv struct{ *fakeEnv }
+
+func (e *storeCloneEnv) FixStoreCloneHere(context.Context) (string, bool) {
+	return "~/.lore/stores/acme-co/lore-team", true
+}
+
+// TestStoreCloneRefusalNamesWhatApplies (devco D-524): lore fix in a store
+// clone (a git repo, but no code repo) says so and names what applies
+// there, never "not inside a git repo"; no step runs (the embedded
+// doctor.Env is nil, so reaching one would panic).
+func TestStoreCloneRefusalNamesWhatApplies(t *testing.T) {
+	_, err := Run(context.Background(), &storeCloneEnv{&fakeEnv{}}, RunIn{})
+	var e *errs.Error
+	if !errors.As(err, &e) || e.Code != errs.NotAStore {
+		t.Fatalf("lore fix in a store clone: %v", err)
+	}
+	if !strings.Contains(e.Message, "~/.lore/stores/acme-co/lore-team is a lore store clone, not a code repo") || strings.Contains(e.Message, "not inside a git repo") {
+		t.Fatalf("message %q", e.Message)
+	}
+	for _, want := range []string{"cd into the code repo", "--store does not apply", "lore store doctor", "lore fix --all"} {
+		if !strings.Contains(e.Hint, want) {
+			t.Fatalf("hint %q does not name %q", e.Hint, want)
+		}
+	}
+}
+
+// TestWarningsOnlyExitsZero (devco D-522): a run that ends degraded by
+// warnings alone exits 0; a failed step or an error left keeps its
+// non-zero exit, each with the line that says why.
+func TestWarningsOnlyExitsZero(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		out  Out
+		want bool
+	}{
+		{"warnings only", Out{Status: doctor.StatusDegraded, Exit: 1, Warnings: []string{"clock_skew: …"}}, true},
+		{"a failed step", Out{Status: doctor.StatusDegraded, Exit: 1, Failed: []string{"render"}}, false},
+		{"an error left", Out{Status: doctor.StatusDegraded, Exit: 1, Errors: []string{"rows: …"}}, false},
+		{"broken", Out{Status: doctor.StatusBroken, Exit: 2, Errors: []string{"rows: …"}}, false},
+		{"healthy", Out{Status: doctor.StatusHealthy}, false},
+	} {
+		if got := warningsOnly(c.out); got != c.want {
+			t.Errorf("%s: warningsOnly %v, want %v", c.name, got, c.want)
 		}
 	}
 }

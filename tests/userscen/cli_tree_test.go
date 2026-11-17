@@ -508,7 +508,8 @@ func cliCheckJSON(t *testing.T, r cliProc) {
 	if !slices.Contains(cliExits, r.Code) {
 		t.Errorf("exit %d is not a documented exit status: %s", r.Code, r)
 	}
-	// lore fix ends with doctor's status and exits as doctor does (0/1/2)
+	// lore fix ends with doctor's status; doctor exits 1 degraded, lore fix 1
+	// when a step failed (warnings alone exit 0, devco D-522)
 	isDoctor := len(r.Args) > 0 && (r.Args[0] == "doctor" || r.Args[0] == "fix")
 	if r.Code == 1 && !isDoctor {
 		t.Errorf("exit 1 (E_INTERNAL, an unexpected failure) for a bare call: %s", r)
