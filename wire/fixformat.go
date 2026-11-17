@@ -107,6 +107,13 @@ func (a *App) FixNoLoreData(ctx context.Context) bool {
 	return a.gitRepoWithoutLore(ctx)
 }
 
+// FixStoreCloneHere is opsfix.StoreCloneGate (devco D-524): the command
+// runs inside a lore store's checkout (its root or a folder).
+func (a *App) FixStoreCloneHere(_ context.Context) (string, bool) {
+	sc, ok := storeHere(a.opts.RepoDir)
+	return sc.shown, ok
+}
+
 // FixLoreGone is opsfix.LoreGoneGate: beforeLoreErr's refusal when the
 // repo's .lore/ was deleted or is out of this checkout, nil otherwise.
 func (a *App) FixLoreGone(ctx context.Context) error {

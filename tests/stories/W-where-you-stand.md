@@ -26,4 +26,6 @@
 - `devco:D-504` (REGRESSIONS.md): `lore team invite list` with no invites exited 0 with no output; an answer that is only empty lists says `no <list>`.
 - `devco:D-510` (REGRESSIONS.md): from the home folder every read but the roster's refused with a hint naming no `--setup`; the hint now names `--store <org>[/<folder>]` and `--setup <setup>`.
 - `devco:D-505` (REGRESSIONS.md): 35 kind lists and searches refused at the store clone's root for want of a project row.
+- `devco:D-522` (REGRESSIONS.md, `TestStoryWXFixExitAndStoreClone`): `lore fix` exited 1 after "Everything is current." with warning lines only; warnings alone now exit 0.
+- `devco:D-524` (REGRESSIONS.md, `TestStoryWXFixExitAndStoreClone`): `lore fix` in a store clone said "not inside a git repo here"; it now says the clone is a lore store clone, not a code repo, and names `lore store doctor`, `lore sync` and the code repo to cd into.
 - Waiting: `devco:D-509` (open: repo-only reads refuse with hints naming neither flag nor saying they are repo-only; `sync trash list` in a store clone).
