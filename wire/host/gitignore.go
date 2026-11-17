@@ -338,6 +338,10 @@ func rewireTracked(ctx context.Context, root string) []string {
 		out = append(out, gitignoreName)
 	}
 	attrs := filepath.Join(root, gitAttributesFile)
+	if err := repoWriteRefused(root, attrs); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "lore: git wiring: "+err.Error()) // D-502: left as it is
+		return out
+	}
 	before, _ := os.ReadFile(filepath.Clean(attrs)) // a missing file reads as empty: the block is then new
 	if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "lore: git wiring: "+err.Error()) // stderr gone: nothing left to report to

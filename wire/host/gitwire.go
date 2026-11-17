@@ -450,11 +450,19 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		// block comes with the migrator's commit; until it is there the
 		// same rules apply from the clone's own attributes file, so the
 		// git pull that brings it finds no uncommitted .gitattributes.
+		if err := repoWriteRefused(s.top, localAttrs); err != nil {
+			s.warn("git wiring: " + err.Error()) // D-502: this file only; the hooks below still wire
+			break
+		}
 		if err := ensureLocalAttributes(attrs, localAttrs); err != nil {
 			s.warn("git wiring: " + err.Error())
 			return
 		}
 	default:
+		if err := repoWriteRefused(s.top, attrs); err != nil {
+			s.warn("git wiring: " + err.Error()) // D-502: this file only; the hooks below still wire
+			break
+		}
 		attrsBefore, _ := os.ReadFile(filepath.Clean(attrs)) // missing reads as empty: the block is then new
 		if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
 			s.warn("git wiring: " + err.Error())
@@ -462,6 +470,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		}
 		if attrsAfter, _ := os.ReadFile(filepath.Clean(attrs)); string(attrsAfter) != string(attrsBefore) {
 			wire.HostWiringOf(ctx).Note(gitAttributesFile) // devco N-5: lore fix names it
+		}
+		if repoWriteRefused(s.top, localAttrs) != nil {
+			break // a clone's own attributes file linked out of the work tree: left as it is
 		}
 		if err := dropFileBlock(localAttrs, gitBlockMarker); err != nil {
 			s.warn("git wiring: " + err.Error())
@@ -494,6 +505,10 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	for _, n := range names {
 		b := blocks[n]
 		if skip[n] {
+			continue
+		}
+		if err := hookRefused(s.top, dir, n); err != nil {
+			s.warn("git wiring: " + err.Error()) // D-502: this hook only
 			continue
 		}
 		if err := ensureHookBlock(dir, n, b.marker, b.lines); err != nil {

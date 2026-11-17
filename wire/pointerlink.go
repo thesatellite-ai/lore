@@ -4,40 +4,33 @@ package wire
 // tool file (CLAUDE.md, AGENTS.md, a --target) is a symbolic link.
 //
 //	PointerLinkEnd(root, path)
-//	  ├─ path not a link ─────────────────────────► path (unchanged behaviour)
 //	  ├─ chain unreadable / a loop ────────────────► skip: <why>
+//	  ├─ in the repo, leading out of it (LeavesRepo: its own link or a
+//	  │  linked folder) ───────────────────────────► skip, naming the end
+//	  ├─ path not a link ─────────────────────────► path (unchanged behaviour)
 //	  ├─ end missing, inside the repo ─────────────► end (created there)
 //	  ├─ end missing, outside the repo (dangling) ─► skip
 //	  ├─ end a folder / not a regular file ────────► skip
-//	  ├─ link inside the repo, end outside it:
-//	  │    ├─ end in a system folder ──────────────► skip
-//	  │    ├─ end cannot be read ──────────────────► skip
-//	  │    ├─ end neither the same file name nor
-//	  │    │  already holding lore's pointer block ─► skip
-//	  │    └─ otherwise ───────────────────────────► end (written through)
-//	  └─ otherwise (end inside, or a link of the person's outside) ► end
+//	  ├─ a link of the person's outside the repo,
+//	  │  end in a system folder ───────────────────► skip
+//	  └─ otherwise (end a regular file) ───────────► end (written through)
 //
-// Why the old refusal existed: WriteThroughLink refuses a link inside the
-// repository that ends outside it, because a cloned repository could
-// commit CLAUDE.md as a link to ~/.bashrc and a render would overwrite
-// it. A person who links their tool files in from a private notes repo
-// (a symlink manager) hit that refusal and the whole repo's render failed.
-// Decision: a pointer file is written through such a link only when the
-// end is the same kind of file (the same file name, CLAUDE.md -> …/
-// CLAUDE.md, or one already holding lore's pointer block), a regular file,
-// readable, and not in a system folder; anything else is skipped with the
-// reason, never a failure. The pointer block is a short import line that
-// is replaced in place, so the person's other text is kept. Other writes
-// (the out file, path rules, folder files) keep WriteThroughLink's refusal.
+// Decision (D-502, owner 2026-11-17): a pointer file inside the repository
+// that leads out of it is never written through, whatever its end holds.
+// It used to be when the end had the same file name (a symlink manager
+// linking CLAUDE.md in from a notes repository), and a CLAUDE.md linked to
+// another repository's CLAUDE.md got lore's pointer block in that other
+// repository's tracked file. Such a file is skipped with one line naming
+// it, where it leads and where lore's context is instead (OutsideRepoHint);
+// the render goes on, never a failure. A link that stays inside the
+// repository is written through to its end when that is a regular file
+// (or does not exist yet), so CLAUDE.md -> AGENTS.md keeps one block.
 
 import (
 	"io/fs"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
-	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
@@ -56,15 +49,16 @@ var systemDirs = []string{"/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/b
 // note; the render goes on). isLink reports whether path is a link, so
 // the caller can treat a failed write through it as a skip too.
 func PointerLinkEnd(root, path string) (end string, isLink bool, skip string) {
-	end, isLink, err := LinkEnd(path)
-	if err != nil {
+	end, isLink, leaves, err := LeavesRepo(root, path)
+	switch {
+	case err != nil:
 		return "", true, err.Error()
-	}
-	if !isLink {
+	case leaves:
+		return "", isLink, OutsideRepoReason(end, isLink) + " (" + OutsideRepoHint(path) + ")"
+	case !isLink:
 		return path, false, ""
 	}
-	rootReal := fspath.Canonical(root)
-	inside := insideOf(rootReal, end)
+	inside := insideOf(fspath.Canonical(root), end)
 	fi, err := os.Stat(end)
 	switch {
 	case err != nil && os.IsNotExist(err):
@@ -79,24 +73,8 @@ func PointerLinkEnd(root, path string) (end string, isLink bool, skip string) {
 	case !fi.Mode().IsRegular():
 		return "", true, "it is a symbolic link to " + end + ", which is not a regular file"
 	}
-	at, aerr := filepath.Abs(path)
-	if aerr != nil {
-		return "", true, "cannot resolve " + path + ": " + aerr.Error()
-	}
-	linkAt := filepath.Join(fspath.Canonical(filepath.Dir(at)), filepath.Base(at))
-	if inside || !insideOf(rootReal, linkAt) {
-		return end, true, ""
-	}
-	if inSystemDir(end) {
+	if !inside && inSystemDir(end) {
 		return "", true, "it is a symbolic link to " + end + ", in a system folder; lore does not write there"
-	}
-	data, rerr := os.ReadFile(filepath.Clean(end))
-	if rerr != nil {
-		return "", true, "it is a symbolic link to " + end + ", which cannot be read (" + rerr.Error() + ")"
-	}
-	if !strings.EqualFold(filepath.Base(end), filepath.Base(path)) && !toolprofile.HasPointer(string(data)) {
-		return "", true, "it is a symbolic link to " + end + ", outside the repository, which is neither a " + filepath.Base(path) +
-			" nor a file holding lore's pointer block; lore does not write through it"
 	}
 	return end, true, ""
 }
