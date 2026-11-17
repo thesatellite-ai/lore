@@ -6,6 +6,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -717,5 +718,21 @@ func TestRepairOutText(t *testing.T) {
 	}
 	if got := (RepairOut{}).Text(); got != "nothing to repair\n" {
 		t.Errorf("empty text = %q", got)
+	}
+}
+
+// devco:D-549: a fix naming an unknown check lists the known check ids; its
+// hint named `lore setup check` as the lister, which refuses with no
+// --setup and --step.
+func TestFixUnknownCheckHintListsCheckIDs(t *testing.T) {
+	env := newFakeEnv(onboard.SetupEntry{Name: "acme-hub", Kind: onboard.KindSolo})
+	e := newTestEngine(env)
+	_, err := e.Fix(bg, FixIn{Setup: "acme-hub", Check: "no-such-check"})
+	if !errs.Has(err, errs.InvalidInput) {
+		t.Fatalf("unknown check: %v, want E_INVALID_INPUT", err)
+	}
+	var le *errs.Error
+	if !errors.As(err, &le) || strings.Contains(le.Hint, "lore setup check") || !strings.Contains(le.Hint, string(onboard.CheckToolsPointerFile)) {
+		t.Fatalf("hint %q: want the known check ids, not lore setup check", le.Hint)
 	}
 }

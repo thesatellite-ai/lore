@@ -75556,7 +75556,7 @@
           "setup"
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -75574,10 +75574,6 @@
                     "description": "the step id (lore setup plan lists them)"
                   }
                 },
-                "required": [
-                  "setup",
-                  "step"
-                ],
                 "additionalProperties": false
               }
             }

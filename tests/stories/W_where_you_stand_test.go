@@ -77,6 +77,14 @@ var wCode = regexp.MustCompile(`ERROR: \[(E_[A-Z_]+)\]`)
 // unless the read is repo-only (wRepoOnly).
 var wPlaceCodes = map[string]bool{"E_NOT_A_STORE": true}
 
+// wNamesStoreAndSetup reports whether a not-here refusal names the way to
+// a store from here: the store flag the command takes (--store for a read,
+// --to for a write: devco:D-539, a hint names only flags its command takes)
+// and --setup.
+func wNamesStoreAndSetup(out string) bool {
+	return (strings.Contains(out, "--store") || strings.Contains(out, "--to ")) && strings.Contains(out, "--setup")
+}
+
 // wRepoOnly marks the refusal of a read that lives in each code repo
 // (missions, the inbox, migrate status: devco D-508, D-509): its hint says
 // to cd into the code repo and that --store does not apply, which is the
@@ -455,7 +463,7 @@ func wCheck(r wRead, p wPlace, res teamharness.Result, before, now wSnap) []wBad
 			add(wRuleRowless, "(a) refuses for want of a project row the place has none of")
 		}
 		if c := wCode.FindStringSubmatch(out); c != nil && wPlaceCodes[c[1]] {
-			if !wRepoOnly(out) && (!strings.Contains(out, "--store") || !strings.Contains(out, "--setup")) {
+			if !wRepoOnly(out) && !wNamesStoreAndSetup(out) {
 				add(wRuleHint, "(a) a not-here refusal ("+c[1]+") whose hint does not name --store and --setup")
 			}
 		}

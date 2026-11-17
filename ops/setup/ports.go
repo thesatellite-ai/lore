@@ -312,8 +312,8 @@ type PlanOut struct {
 
 // CheckIn is setup.check's input.
 type CheckIn struct {
-	Setup   string          `json:"setup" arg:"0" desc:"the setup name"`
-	Step    string          `json:"step" flag:"step" desc:"the step id (lore setup plan lists them)"`
+	Setup   string          `json:"setup,omitempty" arg:"0" desc:"the setup name"`
+	Step    string          `json:"step,omitempty" flag:"step" desc:"the step id (lore setup plan lists them)"`
 	Answers onboard.Answers `json:"answers,omitempty" flag:"answers" desc:"the step's answers as a JSON object"`
 }
 
