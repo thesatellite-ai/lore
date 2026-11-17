@@ -144,16 +144,28 @@ func (a *App) rosterHere(ctx context.Context, read bool) error {
 // rosterNowhereErr is E_NOT_A_STORE (exit 19, as the repo open's refusal
 // was: scripts key on it) for a roster op run where no org applies: the
 // hint names --store <org> (a read) and --setup <setup>, with the orgs and
-// the setups this machine has.
+// the setups this machine has; a write's names --setup and says --store is
+// the reads' (D-523).
 func (a *App) rosterNowhereErr(read bool) error {
 	orgs, setups := a.knownOrgs(), a.orgSetups()
 	var ways []string
 	if read {
 		ways = append(ways, "name the org with --store <org>"+knownList("orgs", orgs))
+		ways = append(ways, "name a setup with --setup <setup>"+knownList("setups", setups))
+	} else {
+		// devco D-523: a change of the roster writes through the setup
+		// that holds the org (its identity signs the commit); --store
+		// <org> names the org for the roster reads only, said so here so
+		// a person who read `team list --store <org>` does not try it on
+		// a change next
+		ways = append(ways, "name the setup of the org with --setup <setup>"+knownList("setups", setups)+" (--store <org> names the org for the roster reads, `lore team list --store <org>`, not for a change)"+knownList("orgs", orgs))
 	}
-	ways = append(ways, "name a setup with --setup <setup>"+knownList("setups", setups))
 	ways = append(ways, "or cd into a code repo or a store clone of the org")
-	return errs.New(errs.NotAStore, "no org applies to this folder (it is no code repo, store clone or setup's folder), so there is no roster to read the teams and people from").
+	verb := "read the teams and people from"
+	if !read {
+		verb = "change"
+	}
+	return errs.New(errs.NotAStore, "no org applies to this folder (it is no code repo, store clone or setup's folder), so there is no roster to "+verb).
 		WithHint(strings.Join(ways, "; "))
 }
 

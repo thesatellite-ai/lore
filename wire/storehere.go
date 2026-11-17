@@ -65,9 +65,12 @@ func inStore(dir string) bool {
 }
 
 // errInStore refuses a command that needs a code repo inside a store.
+// Its hint is the repo-only class (repoonly.go, devco D-523): cd into the
+// code repo, --store does not apply; before it said only "run it in a code
+// repo", and a move (memory move --to <org>/<folder>) tried --store next.
 func errInStore(sc storeCheckout) error {
-	return errs.New(errs.NotAStore, "wire: "+sc.shown+" is a lore store ("+rowfs.MarkerFile+" at its top), not a code repo; this command needs a code repo").
-		WithHint("run it in a code repo; inside a store folder lore reads and writes that folder (`lore task list`, `lore task add …`)")
+	return errs.New(errs.NotAStore, "wire: "+sc.shown+" is a lore store ("+rowfs.MarkerFile+" at its top), not a code repo; this command works on a code repo's rows").
+		WithHint("cd into the code repo it is for and run it there; --store does not apply (a store clone is no code repo); inside a store folder lore reads and writes that folder (`lore task list`, `lore task add …`)")
 }
 
 // storeHereEntry is the attach entry of the store folder sc names: the

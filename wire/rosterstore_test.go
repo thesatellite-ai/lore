@@ -93,4 +93,10 @@ func TestRosterReadNamesItsOrg(t *testing.T) {
 	if env = errs.EnvelopeOf(err).Error; !errs.Has(err, errs.NotFound) || !strings.Contains(env.Message, "names no org") {
 		t.Fatalf("team list --store nosuch: %v, want E_NOT_FOUND saying it names no org", err)
 	}
+	// devco D-523: a roster change with no org here names --setup (it
+	// writes through the org's setup) and says --store is the reads'
+	_, err = open(false).Run(ctx, add, op.JSONDecoder{Body: []byte(`{"handle":"@ops"}`)}, op.Caller{Yes: true})
+	if env = errs.EnvelopeOf(err).Error; !errs.Has(err, errs.NotAStore) || !strings.Contains(env.Hint, "--setup <setup>") || !strings.Contains(env.Hint, "--store <org>") || !strings.Contains(env.Message, "no roster to change") {
+		t.Fatalf("team add with no org: %v (hint %q), want E_NOT_A_STORE naming --setup <setup> and --store <org>", err, env.Hint)
+	}
 }

@@ -563,19 +563,7 @@ const (
 // is removed.
 var wwWaiting = map[string]map[string]string{
 	wRuleHint: {
-		// repo-only writes (store add/init/set-url edit a repo's
-		// stores.yaml; org link, fix, migrate, directive install, memory
-		// move) refuse in a store clone or at home with hints that are
-		// neither the --store/--setup pair nor the repo-only class; roster
-		// writes from home name --setup but not --store
-		"*@home":            "devco:D-523",
-		"*@home-to-acme":    "devco:D-523",
-		"*@home-to-acmeops": "devco:D-523",
-		"*@store-root":      "devco:D-523",
-		"*@store-folder":    "devco:D-523",
-		"*@ops-root":        "devco:D-523",
-		"*@ops-folder":      "devco:D-523",
-		"fix.run@*":         "devco:D-524",
+		"fix.run@*": "devco:D-524",
 	},
 	wRuleExit: {
 		// fix run exits 1 after "Everything is current." with warnings only
