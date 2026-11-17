@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -121,10 +122,11 @@ func TestNoDriverKeepsMinusMerge(t *testing.T) {
 	}
 }
 
-// TestReadOpenSetsNothingUp (owner bug 6): an open that is not an explicit
-// setup or sync (a read) writes no merge driver, no attributes, no hook
-// into the clone; the first write sets it up and says so (HandGit.Say)
-// before its commit, once.
+// TestReadOpenSetsNothingUp (owner bug 6): an open of an existing clone
+// that is not an explicit setup or sync (a read) writes no merge driver, no
+// driver attributes, no hook into the clone; the first write sets it up
+// and says so (HandGit.Say) before its commit, once. (A clone lore makes
+// is set up at once: TestNewCloneGetsItsHook, devco D-534.)
 func TestReadOpenSetsNothingUp(t *testing.T) {
 	t.Parallel()
 	remote := newRemote(t, true)
@@ -135,12 +137,18 @@ func TestReadOpenSetsNothingUp(t *testing.T) {
 		said = append(said, set)
 		tipWhenSaid, _ = tryGit(t, dir, "rev-parse", "HEAD")
 	}
-	b, g := clone(t, remote, WithHandGit(hg)), newGen(t)
+	first := clone(t, remote) // an older lore made the clone without the wiring
+	b, err := OpenClone(context.Background(), remote, first.Dir(), rowfs.FolderRoot, store.OpenOptions{}, WithHandGit(hg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = b.Close() })
+	g := newGen(t)
 	if _, err := tryGit(t, b.Dir(), "config", "--local", "--get", "merge.lore.driver"); err == nil {
 		t.Fatal("a read's open configured the merge driver")
 	}
-	if _, err := os.Stat(filepath.Join(b.Dir(), ".git", "info", "attributes")); err == nil {
-		t.Fatal("a read's open wrote .git/info/attributes")
+	if attrs, err := os.ReadFile(filepath.Join(b.Dir(), ".git", "info", "attributes")); err == nil && strings.Contains(string(attrs), rowAttributesDriver) {
+		t.Fatal("a read's open wrote the driver attributes")
 	}
 	if _, err := os.Stat(filepath.Join(b.Dir(), ".git", "hooks", "pre-commit")); err == nil {
 		t.Fatal("a read's open wrote .git/hooks/pre-commit")
@@ -209,5 +217,19 @@ func TestReadOpenWritesNoIdentity(t *testing.T) {
 	write(t, b, store.Change{Row: g.row(newID(t), "x", hlc.HLC{})})
 	if v, _ := LocalConfig(t.Context(), dir, ConfigUserEmail); v != want.Email || len(said) != 1 || said[0].Email != want.Email {
 		t.Fatalf("after a write user.email = %q, said %+v", v, said)
+	}
+}
+
+// TestNewCloneGetsItsHook (devco D-534): the clone lore makes gets its
+// merge driver and pre-commit hook with it, even when a read made it, so a
+// hand commit in a store clone nobody wrote to yet is checked too.
+func TestNewCloneGetsItsHook(t *testing.T) {
+	t.Parallel()
+	b := clone(t, newRemote(t, true), WithHandGit(testHandGit))
+	if got := gitT(t, b.Dir(), "config", "--local", "--get", "merge.lore.driver"); got != testHandGit.Driver {
+		t.Fatalf("a new clone's merge.lore.driver = %q", got)
+	}
+	if h, err := os.ReadFile(filepath.Join(b.Dir(), ".git", "hooks", "pre-commit")); err != nil || !strings.Contains(string(h), hookBlockBegin) {
+		t.Fatalf("a new clone has no pre-commit block: %q %v", h, err)
 	}
 }

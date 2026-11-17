@@ -8,7 +8,8 @@ package journeys
 // commits with plain git. The clone's pre-commit hook ran lore without
 // LORE_HOME, so lore looked in ~/.lore and refused: E_LEAK_BLOCKED "… is a
 // clone of store … that lore does not use". The hook now carries the home
-// it was installed under, and `lore doctor --fix` rewrites an older hook.
+// (found from where the clone sits, devco D-536), and `lore doctor --fix`
+// rewrites an older hook.
 
 import (
 	"io/fs"
@@ -74,8 +75,10 @@ func TestJourneyLoreHomeStoreHandCommit(t *testing.T) {
 		}
 		jWrite(t, hook, strings.Join(kept, "\n")) // what an older lore wrote
 		lap.LoreIn(app, "doctor", "--fix", "--yes")
-		if b, err = os.ReadFile(hook); err != nil || !strings.Contains(string(b), loreHomeEnv+"='"+moved+"'") {
-			t.Fatalf("doctor --fix did not rewrite the older hook to carry %s=%s:\n%s", loreHomeEnv, moved, b)
+		// devco D-536: the block finds the home from where the clone sits
+		// (no pinned path), so a copied or moved home checks against itself
+		if b, err = os.ReadFile(hook); err != nil || !strings.Contains(string(b), loreHomeEnv+`="$(cd ../../.. && pwd -P)"`) {
+			t.Fatalf("doctor --fix did not rewrite the older hook to find %s from the clone's place:\n%s", loreHomeEnv, b)
 		}
 		handCommit("timestamps are UTC everywhere", "timestamps are UTC, always", "hand edit after doctor --fix")
 	})

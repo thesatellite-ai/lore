@@ -93,7 +93,9 @@ func TestSetStoreURLMovesPushedClone(t *testing.T) {
 	if _, err = os.Stat(before[0].Paths.Dir); !os.IsNotExist(err) {
 		t.Fatalf("the old clone folder is still there: %v", err)
 	}
-	if rec := gitbackend.ReadCloneRecord(home).Clones; len(rec) != 1 {
-		t.Fatalf("the clone record keeps the old address: %+v", rec)
+	// the carried clone sits at the new address's default folder: nothing
+	// recorded, neither the old address nor an absolute default path (D-534)
+	if rec := gitbackend.ReadCloneRecord(home).Clones; len(rec) != 0 {
+		t.Fatalf("the clone record keeps the old address or pins the default path: %+v", rec)
 	}
 }

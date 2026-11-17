@@ -145,9 +145,12 @@ func handGitOption(say func(string)) gitbackend.Option {
 	if !ok {
 		return gitbackend.Join()
 	}
+	prog := storeHookProg(bin, os.Getenv(envHookBin))
 	return gitbackend.WithHandGit(gitbackend.HandGit{
-		Driver: bin + " merge-driver %O %A %B %P",
-		Hook:   storeHookLines(bin, hookHome()),
+		Driver: storeDriverLine(prog),
+		HookFor: func(dir string) []string {
+			return storeHookLines(prog, storeHookHomeFor(dir))
+		},
 		Say: func(ctx context.Context, dir string, set []string) {
 			if say != nil {
 				say(handGitSetUpLine(ctx, dir, set))
@@ -203,26 +206,87 @@ func handGitParts(set []string) string {
 // the staged row files (valid JSON and rows, no conflict markers), then
 // its secret scan; no lore that can run refuses the commit.
 //
-// home is the LORE_HOME the installing build ran under ("" for the default
-// home): the block exports it, so a person's hand `git commit` in
-// <home>/stores/<org>/<store> checks against the home that owns the clone
-// and not ~/.lore (devco D-423: under LORE_HOME=~/.lore-dev every hand
-// commit was refused as "a clone lore does not use").
-func storeHookLines(bin, home string) []string {
-	var lines []string
-	if home != "" {
-		lines = append(lines, lorehome.EnvName+"='"+home+"'; export "+lorehome.EnvName)
+// prog is the build that wrote the block ("" for bare `lore`): the block
+// runs it only while that file is there and otherwise the first `lore` on
+// PATH (devco D-534, weak 10: a block that named one worktree build failed
+// every hand commit once that build was gone). home says which LORE_HOME
+// the block exports (storeHookHome): for a clone under the lore home, the
+// home found from where the clone sits, so a copied or moved home checks
+// against itself (devco D-423 for the home, D-534 for the copy).
+func storeHookLines(prog string, home storeHookHome) []string {
+	lines := home.lines()
+	lines = append(lines, EnvGitHook+"=pre-commit; export "+EnvGitHook, "lore_bin="+reposync.BinaryName)
+	if prog != "" {
+		lines = append(lines, "if [ -x "+prog+" ]; then lore_bin="+prog+"; fi")
 	}
 	return append(lines,
-		EnvGitHook+"=pre-commit; export "+EnvGitHook,
-		"if command -v "+bin+" >/dev/null 2>&1; then",
-		"  "+bin+" sync hook pre-commit || exit $?",
-		"  "+bin+" check leaks --staged || exit $?",
+		`if command -v "$lore_bin" >/dev/null 2>&1; then`,
+		`  "$lore_bin" sync hook pre-commit || exit $?`,
+		`  "$lore_bin" check leaks --staged || exit $?`,
 		"else",
 		`  echo "lore: this is a lore store clone and no lore on PATH can check this commit (rows and secrets); install lore, then commit again" >&2`,
 		"  exit 1",
 		"fi",
 	)
+}
+
+// storeHookProg is the quoted program a store clone's block and merge
+// driver prefer, "" for bare `lore`: LORE_HOOK_BIN when it names an
+// executable (a wrapper's own path, as the code repo hooks pin it), else
+// bin (handGitBinary: the running build unless it is the lore on PATH).
+func storeHookProg(bin, hookBin string) string {
+	if hookBin != "" && filepath.IsAbs(hookBin) && !strings.Contains(hookBin, "'") {
+		if st, err := os.Stat(hookBin); err == nil && st.Mode().IsRegular() && st.Mode().Perm()&0o111 != 0 {
+			return "'" + filepath.ToSlash(filepath.Clean(hookBin)) + "'"
+		}
+	}
+	if bin == reposync.BinaryName {
+		return ""
+	}
+	return bin
+}
+
+// storeDriverLine is a store clone's merge.lore.driver: prog while that
+// file is there, else the first `lore` on PATH (git runs the driver
+// through the shell).
+func storeDriverLine(prog string) string {
+	const args = " merge-driver %O %A %B %P"
+	if prog == "" {
+		return reposync.BinaryName + args
+	}
+	return "if [ -x " + prog + " ]; then " + prog + args + "; else " + reposync.BinaryName + args + "; fi"
+}
+
+// storeHookHome is the LORE_HOME a store clone's block exports: up folders
+// above the clone (the hook runs in the clone's top folder) when up > 0,
+// else the absolute abs ("" exports nothing: the default home).
+type storeHookHome struct {
+	up  int
+	abs string
+}
+
+// lines are the block's LORE_HOME lines.
+func (h storeHookHome) lines() []string {
+	switch {
+	case h.up > 0:
+		return []string{lorehome.EnvName + `="$(cd ` + strings.TrimSuffix(strings.Repeat("../", h.up), "/") + ` && pwd -P)"; export ` + lorehome.EnvName}
+	case h.abs != "":
+		return []string{lorehome.EnvName + "='" + h.abs + "'; export " + lorehome.EnvName}
+	}
+	return nil
+}
+
+// storeHookHomeFor is the home spec of the clone at dir: found from its
+// place when dir is inside the running lore home (stores/<owner>/<repo>,
+// any depth), else the pinned hookHome (a person's own clone elsewhere,
+// `lore store use`).
+func storeHookHomeFor(dir string) storeHookHome {
+	if h, err := lorehome.Resolve(); err == nil {
+		if rel, err := filepath.Rel(filepath.Clean(h.Dir), filepath.Clean(dir)); err == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return storeHookHome{up: len(strings.Split(filepath.ToSlash(rel), "/"))}
+		}
+	}
+	return storeHookHome{abs: hookHome()}
 }
 
 // hookHome is the home a hook lore writes must carry: the resolved
@@ -890,3 +954,8 @@ func jsonKeys(b []byte) []string {
 		}
 	}
 }
+
+// envHookBin is the variable a wrapper sets to the program lore's git
+// hooks should run (the same name as host.EnvHookBin, which wire cannot
+// import).
+const envHookBin = "LORE_HOOK_BIN"

@@ -72,9 +72,10 @@ func TestReadsNeverWireGit(t *testing.T) {
 	if now := pfSnapshot(t, repo); now != fresh {
 		t.Fatalf("the first read wrote into the repo:\n%s\nstderr:\n%s", pfDiff(fresh, now), first)
 	}
-	if b, err := os.ReadFile(filepath.Join(stores, "acme", "notes", ".git", "info", "attributes")); err == nil && strings.Contains(string(b), "*.json") {
-		t.Fatalf("the read that cloned the store set the clone up for plain git:\n%s", b)
-	}
+	// the clone that read made is lore's own, set up at creation (devco
+	// D-534, owner use pass weak 10: a new clone gets its hook at once);
+	// what must hold is that a read never sets up a clone that already
+	// exists: the identity check below and every later read's snapshot
 	// a store clone with no git identity of its own (made by an older lore,
 	// or the person removed it): a read writes none either
 	storeClone := filepath.Join(stores, "acme", "notes")

@@ -15,10 +15,12 @@ package git
 //	                       make git skip .git/hooks: then the clone's own
 //	                       config points it back at .git/hooks
 //
-// When (owner bug 6, 2026-11-12): never on a read. An open sets the clone
-// up only when its context says the run is an explicit setup or sync
-// (WithGitSetUp: `lore sync`, `lore doctor --fix`, store init/add/use);
-// any other open leaves it for the clone's first write, which sets it up
+// When (owner bug 6, 2026-11-12): never on a read of an existing clone. An
+// open sets the clone up when lore makes the clone (D-534: before, a new
+// company clone had no hook until its first write, so a hand commit there
+// went unchecked) or when its context says the run is an explicit setup
+// or sync (WithGitSetUp: `lore sync`, `lore doctor --fix`, store
+// init/add/use); any other open leaves it for the clone's first write, which sets it up
 // and says what and where (HandGit.Say) before it commits. Lore's own
 // three-way merge does not need the attributes in the clone: it passes
 // its own attributes file (mergeAttributes in sync.go).
@@ -72,6 +74,11 @@ type HandGit struct {
 	Driver string
 	// Hook is the pre-commit block's lines (without lore's markers).
 	Hook []string
+	// HookFor, when set, gives the block for the clone at dir instead of
+	// Hook: the block finds the lore home from where the clone sits, so a
+	// copied or moved home's clones never run against the old home
+	// (devco D-534, weak 10).
+	HookFor func(dir string) []string
 	// Say, when set, is told what a write set up in the clone at dir (one
 	// line per file or setting), before the write commits; an open that
 	// set the clone up reports it through HandGitSetUp instead.
@@ -154,8 +161,12 @@ func (b *Backend) ensureHandGit(ctx context.Context) error {
 	if err := b.ensureAttributeLine(rowAttributesDriver, rowAttributesNoDriver); err != nil {
 		return err
 	}
-	if len(h.Hook) > 0 {
-		if err := b.ensurePreCommit(h.Hook); err != nil {
+	hook := h.Hook
+	if h.HookFor != nil {
+		hook = h.HookFor(b.work)
+	}
+	if len(hook) > 0 {
+		if err := b.ensurePreCommit(hook); err != nil {
 			return err
 		}
 	}

@@ -231,7 +231,7 @@ func TestRenderPrivateLocalFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := user + "\n@" + privateImportDir + p.dirName + "/" + p.fileFor(t, privMatrixInnerID) + "\n"
+		want := user + "\n@" + privateImportDirFor(h.opts.Home) + p.dirName + "/" + p.fileFor(t, privMatrixInnerID) + "\n"
 		got, err := readUnder(t, repo, local)
 		if err != nil || string(got) != want {
 			t.Fatalf("%s = %q (%v), want %q", local, got, err, want)

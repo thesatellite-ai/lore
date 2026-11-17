@@ -531,6 +531,7 @@ func New(opts Options) (*App, error) {
 	}
 	closeLoreHome(opts.Home)                 // homemode.go: an older lore left it open
 	movePersonalFolder(opts.Home, os.Stderr) // personalfolder.go: stores/me → stores/_me, once
+	dropForeignClones(opts.Home, os.Stderr)  // cloneforeign.go: a copied home never reaches the old home's clones (D-534)
 	a := &App{opts: opts, probeLimiter: probe.NewLimiter(probe.DefaultConcurrency), doctorCache: opsdoctor.NewMemCache(0, opts.Wall), prefillCache: newPrefillCache(opts.Wall), aliasCache: newAliasCache(opts.Wall)}
 	if b, ok := opts.Audit.(appBinder); ok {
 		b.bindApp(a) // a sink that links sessions and stamps with the App's clock (wire/auditchain.go)
