@@ -119,22 +119,7 @@ const wRowless = "has no project row yet"
 // "<op>@<place>", "*@<place>", "<op>@*" or "*@*": such a finding is logged
 // as waiting, never asserted the buggy way, until the fix lands and the
 // entry is removed.
-var wWaiting = map[string]map[string]string{
-	wRuleHint: {
-		// open: reads of one repo refuse with hints of their own (git's
-		// work-tree hint, storehere's code-repo hint, the repo-only config
-		// error) that name neither flag nor say they are repo-only; and
-		// sync trash list must read a store clone's own trash
-		"migrate.status@home": "D-509", "session.list@home": "D-509", "why_context.show@home": "D-509",
-		"migrate.status@store-root": "D-509", "migrate.status@store-folder": "D-509",
-		"sync.trash.list@store-root": "D-509", "sync.trash.list@store-folder": "D-509",
-	},
-	wRuleRowless: {
-		// why-context show reads one repo's render history: at a store
-		// clone's root it is a repo-only refusal to make (D-509)
-		"why_context.show@store-root": "D-509",
-	},
-}
+var wWaiting = map[string]map[string]string{}
 
 // wTrace set logs every cell's exit and first error line (run with -v):
 // what a person sees from each place, for reading the matrix by hand.

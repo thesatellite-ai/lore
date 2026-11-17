@@ -60,11 +60,6 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 	if spec.Local {
 		return op.Result{}, false, nil
 	}
-	if coordRepoOnly(spec.Name) && !inStore(a.opts.RepoDir) && !insideWorkTree(ctx, a.opts.RepoDir) {
-		// mission status, inbox, task next stay repo-only (owner
-		// 2026-11-17): say where they live, not "name a --store"
-		return op.Result{}, true, errCoordNoRepo(a.opts.RepoDir)
-	}
 	write := spec.Access == op.AccessWrite
 	if !write && !rowRead(spec.Name) {
 		return op.Result{}, false, nil
