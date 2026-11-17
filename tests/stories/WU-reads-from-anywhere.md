@@ -1,0 +1,28 @@
+# WU — reads from anywhere
+
+**Who.** Ada (made-up names) is the admin of the org `acme`, whose own repos match `github.com/acme-co/*`. She works from the home folder (under no setup's folders) and from `~/code/web`, an own repo of the org that is not linked to a store folder and has no `.lore/`.
+
+**Why.** An owner use pass found that reads did not go where writes went: `lore memory edit --id <id>` worked in the unlinked own repo while `lore memory show --id <id>` refused "lore isn't set up", `lore resource list --store acme` refused without `--kind`, a read naming the wrong folder answered with a branch hint that has no meaning outside a repo, `lore store list` in the home folder said count 1 with no word about the setups, and `lore context` took no `--store`.
+
+**Test.** `TestStoryWUReadsFromAnywhere` (tests/stories/WU_upread_test.go), about 25 s.
+
+## Steps
+
+1. Ada starts the team in `~/code/platform` with the setup `acme-admin`, adds the `own:` pattern, clones `web` unlinked and writes a memory to `acme/sync` from the home folder.
+2. From the home folder and in `web`: `lore resource list --store acme` with no `--kind`; with `--where` and no `--kind` it is refused naming `--kind` and `lore resource kinds`.
+3. In `web`: `lore memory show --id <id>`, `lore memory edit --id <id> …`, then show again; `lore trash list` there.
+4. From the home folder: `lore memory show --id <id> --store acme/org` (a folder that does not hold the row), then `lore memory show --id <id>` with no `--store`.
+5. From the home folder: `lore store list`, then `lore store list --setup acme-admin`.
+6. `lore context --store acme --for-prompt deploy` and `--store acme/sync` from the home folder, and `--store acme` in `web`.
+
+## What must hold
+
+- A read by id finds the row in whichever org folder holds it (ids are unique), from the home folder or a repo lore is not set up in, and the text output names that folder after the id (`mem_… [acme/sync]`).
+- A read that still needs a project in an own repo of the org names `lore org link --org acme --project <folder> --own` and `--store acme`.
+- A read naming a folder that does not hold the row says `it is in acme/sync` and the read that finds it, never "landed on main" or `lore sync peek`.
+- `lore store list` outside every setup names `lore store list --setup <setup>` for each setup that brings org stores.
+- `lore context --store <org>[/<folder>]` answers from any folder.
+
+## Findings it guards
+
+- `devco:D-550`..`devco:D-555` (REGRESSIONS.md).

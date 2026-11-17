@@ -664,7 +664,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore resource kind show` | Show a resource kind and its fields | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource kinds` | List resource kinds with their fields and row counts | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource lint` | Find dangling and bare-name refs, missing required fields, deprecated fields, due reminders and duplicates | [operations/resources](../../docs/operations/resources.md) |
-| `lore resource list` | List resources of a kind | [operations/resources](../../docs/operations/resources.md) |
+| `lore resource list` | List resources of a kind (every kind when none is given) | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource merge` | Fold a duplicate resource into another of the same kind: refs move, values fill, the duplicate is archived | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource rehome` | List the kinds and refs a place can no longer see after its chain changed | [operations/resources](../../docs/operations/resources.md) |
 | `lore resource rename` | Rename a resource (ids and refs stay) | [operations/resources](../../docs/operations/resources.md) |

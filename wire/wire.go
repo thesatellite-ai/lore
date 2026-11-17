@@ -1023,7 +1023,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			return op.Result{}, err
 		}
 	}
-	if e.Spec().Local {
+	if e.Spec().Local && !storeRoutedLocal(e, d) {
 		return a.runLocal(ctx, e, d, c)
 	}
 	// P3-AUDIT-4: audit reads and roster verbs run without the repo engine

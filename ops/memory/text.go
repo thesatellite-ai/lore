@@ -87,7 +87,8 @@ func (o ListOut) rowsText() string {
 func (o ShowOut) baseText() string {
 	r := o.Data
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n  kind:   %s\n  trust:  %.2f\n  source: %s\n", r.ID, r.Kind, r.TrustScore, r.SourceKind)
+	// the store label after the id: which store/folder holds the row (devco D-553)
+	fmt.Fprintf(&b, "%s%s\n  kind:   %s\n  trust:  %.2f\n  source: %s\n", r.ID, LabelSuffix(r.Label), r.Kind, r.TrustScore, r.SourceKind)
 	if r.SupersededByID != "" {
 		fmt.Fprintf(&b, "  superseded-by: %s\n", r.SupersededByID)
 	}

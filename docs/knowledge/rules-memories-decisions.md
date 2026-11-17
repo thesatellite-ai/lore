@@ -213,7 +213,7 @@ lore: wrote 3 row file(s) in ~/stores/agency/_store (store agency)
 lore: wrote 1 row file(s) in ~/work/website/.lore/data
 ✓ mem_54fe…28f2 moved to agency
 $ lore memory show --id mem_54fe…28f2
-mem_54fe…28f2
+mem_54fe…28f2 [agency]
   kind:   retrieved
   trust:  0.50
   source: manual

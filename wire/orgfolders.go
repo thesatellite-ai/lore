@@ -118,6 +118,25 @@ func (a *App) foldersOf(ctx context.Context, entries []opsstores.Entry) orgFolde
 	return scan
 }
 
+// everyOrgFolders walks the stores of every org entry of the config, not
+// only the one this folder's setup covers: a row id is unique, so a read
+// or edit by id from the home folder (no setup covers it) still finds the
+// folder holding the row (devco D-553). An empty scan when the config
+// names no org.
+func (a *App) everyOrgFolders(ctx context.Context) orgFolderScan {
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return orgFolderScan{Unread: map[string]error{}}
+	}
+	var entries []opsstores.Entry
+	for _, o := range cfg.Orgs {
+		for _, sc := range o.Stores {
+			entries = append(entries, opsstores.Entry{Name: o.Name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
+		}
+	}
+	return a.foldersOf(ctx, entries)
+}
+
 // orgFolderStores maps the store key of each store that holds an org's
 // org folder (org_folder set in its orgs[] entry) to the org's name: the
 // name a person knows that store by. Every other store of the org is

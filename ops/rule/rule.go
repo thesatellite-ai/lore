@@ -360,7 +360,8 @@ func (o ShowOut) baseText() string {
 	if o.Data.NeedsApproval {
 		review = fmt.Sprintf("  review:     %s (a person runs lore rule approve --id %s)\n", trust.ReviewLabel, o.Data.ID)
 	}
-	return fmt.Sprintf("%s\n  severity:   %s\n  activation: %s\n%s\n%s\n", o.Data.ID, o.Data.Severity, o.Data.Activation, review, o.Data.Body)
+	// the store label after the id: which store/folder holds the row (devco D-553)
+	return fmt.Sprintf("%s%s\n  severity:   %s\n  activation: %s\n%s\n%s\n", o.Data.ID, kn.LabelSuffix(o.Data.Label), o.Data.Severity, o.Data.Activation, review, o.Data.Body)
 }
 
 // EditIn is the input of rule.edit; an empty flag leaves its field.
