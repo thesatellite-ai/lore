@@ -25,8 +25,13 @@ package wire
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 // LoreDirIgnored reports whether git ignores the .lore folder of the
@@ -40,6 +45,64 @@ func LoreDirIgnored(ctx context.Context, root string) bool {
 	}
 	_, err := gitRun{dir: root, args: []string{"check-ignore", "-q", "--", loreDirName}}.output(ctx)
 	return err == nil // exit 0: ignored; 1: not ignored; 128: not a checkout
+}
+
+// LoreDirIgnoredMemo is LoreDirIgnored remembered in memoFile (devco
+// D-511). Why: every git hook run wires the clone and asks it, so the
+// hooks of one commit started a sixth git process (`git check-ignore`),
+// over the budget of five (D-420). The answer is kept with a key over the
+// size and mtime of inputs, the files git reads to decide it (the
+// .gitignore files from root up to the work tree's top, info/exclude, the
+// global excludes file): until one of them changes the remembered answer
+// is git's, and no git process starts. A lost or unreadable memo only
+// means git is asked again.
+func LoreDirIgnoredMemo(ctx context.Context, root, memoFile string, inputs []string) bool {
+	if fi, err := os.Stat(filepath.Join(root, loreDirName)); err != nil || !fi.IsDir() {
+		return false
+	}
+	key := ignoreInputsKey(root, inputs)
+	if b, err := os.ReadFile(filepath.Clean(memoFile)); err == nil {
+		if k, ans, ok := strings.Cut(strings.TrimSpace(string(b)), " "); ok && k == key {
+			return ans == memoIgnored
+		}
+	}
+	ignored := LoreDirIgnored(ctx, root)
+	ans := memoNotIgnored
+	if ignored {
+		ans = memoIgnored
+	}
+	if err := os.MkdirAll(filepath.Dir(memoFile), memoDirMode); err == nil {
+		_ = os.WriteFile(memoFile, []byte(key+" "+ans+"\n"), memoFileMode) // a lost memo only means git is asked again
+	}
+	return ignored
+}
+
+// The memo's answer words and its file modes (the memo lives in the
+// clone's git folder, never the work tree).
+const (
+	memoIgnored    = "ignored"
+	memoNotIgnored = "tracked"
+	memoDirMode    = 0o700
+	memoFileMode   = 0o600
+)
+
+// ignoreInputsKey hashes root and the size and mtime of every input (a
+// missing one counts as missing): equal keys mean no ignore rule changed.
+func ignoreInputsKey(root string, inputs []string) string {
+	sorted := append([]string(nil), inputs...)
+	sort.Strings(sorted)
+	var b strings.Builder // a Builder never fails a write
+	b.WriteString(root + "\n")
+	for _, p := range sorted {
+		fi, err := os.Stat(p)
+		if err != nil {
+			b.WriteString(p + ":missing\n")
+			continue
+		}
+		b.WriteString(p + ":" + strconv.FormatInt(fi.Size(), 10) + ":" + strconv.FormatInt(fi.ModTime().UnixNano(), 10) + "\n")
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 // RepoMayHoldLoreFiles is the one decision whether lore may write into

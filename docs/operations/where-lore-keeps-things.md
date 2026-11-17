@@ -28,6 +28,8 @@ lore's home: ~/.lore
       one cache per code repo checkout, of the rows in its .lore/data: repo/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)
   cache/repo/website-<hash>.db
       a code repo's cache; used by ~/work/website
+  cache/repo/website-<hash>.db.lore-dir-ignored
+      a code repo's cache
   cache/stores
       one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each); a code branch that keeps its own notes (isolated: `lore branch mode`) reads a store folder through its own cache, stores/<store id>/<branch>/_layers/<repo key>/<branch key>/<folder>.db (repo key: 12 hex digits of the repo's remote; branch key: the branch name with / written %2F), while a shared branch (the default branch, dev, staging, release/*, one marked `lore branch share`) reads the folder's own cache; a layer cache is removed when that branch's notes are landed, dropped or purged, when the branch becomes shared, by `lore doctor --fix` (doctor lists a stray one), and by `lore cache prune` once no repo reads it
   cache/stores/sto_7a67…9504/main/root.db
