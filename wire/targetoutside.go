@@ -90,6 +90,12 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		// (devco D-551: memory edit --id worked, memory show --id refused).
 		idRead := !write && !orgRead && UntouchedRepo(ctx, a.opts.RepoDir) != "" && linkedByRemote(ctx, a.opts) == "" && a.namesHeldRow(ctx, e, d)
 		if !orgRead && !idRead && (!write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "") {
+			// a list or search read in an own repo not linked to a folder
+			// answers from the folder whose resource names the repo's
+			// remote (resourcefolder.go, devco D-556)
+			if f, ok := a.resourceRoutedRead(ctx, e, d); ok {
+				return a.runResourceRouted(ctx, e, d, c, f)
+			}
 			return op.Result{}, false, nil
 		}
 		if orgRead {
@@ -227,6 +233,11 @@ func (a *App) outsideTo(ctx context.Context, in op.Input, write bool, opName str
 	}
 	if to == "" && !write {
 		to = filter
+	}
+	if to == "" && !write {
+		// a read the folder of a resource naming this repo answers
+		// (resourcefolder.go, devco D-556)
+		to = autoStoreOf(ctx)
 	}
 	if to == string(store.SourceRepo) {
 		return "", false, nil

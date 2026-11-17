@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1891 |
+| fixed | 1893 |
 | open | 2 |
 | on-hold | 14 |
 | owner | 6 |
@@ -872,6 +872,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-565 | finding | use pass 1 weak 16: a set-url round trip (to a path and back) left two move commits that cancel out, one carrying the path into history, and an empty stores/_local/ folder | fixed | TestDropNetZeroMove, TestIsOrgMoveSubject, TestJourneyHomeSyncAndStoreMoveSayWhatHappened | adapters/orgcfg/orgsource.go dropNetZeroMove drops an unpushed pair of moves whose trees cancel; the carried clone's emptied parent folder is removed |
 | devco:D-567 | finding | use pass 1 weak 17: sync, conflicts and holds named a folder "store acme/web (here: acme)" where a claim and a write's push line said "store acme/web" | fixed | TestStoreOwnNameInOutput, TestSetupSyncNamesAStoreAsEveryPathDoes, TestJourneyStoreNamesAgreeOnEveryPath | wire/storeshown.go storeShown: the store's own name only, never "(here: <name>)" |
 | devco:D-569 | finding | use pass 1 weak 17: store commit subjects mixed ids ("lore: rule add rul_…") and titles ("lore: decision add: …") | fixed | TestSubjectNamesWhatThePersonDid, TestSubjectNeverCarriesFreeText | adapters/backend/git/backend.go subject: one form, `lore: <op words> <id>` then `: <title>` for a titled kind |
+| devco:D-556 | finding | owner use pass 1 2026-11-17 (upread LEFT): in an own repo of the org not linked to a folder, with a resource of the org naming the repo's remote, `trash list`, `search`, `rule list`, every `<kind> list` and `context` still refused "lore isn't set up (no .lore folder)" | fixed | TestResourceNamingRemote, TestStoryWUReadsFromAnywhere | Summary: wire/resourcefolder.go resourceRoutedRead: a list/search read (and context) naming no store, in an own repo with no .lore/ and no link, reads the org folder whose resource row names one of the repo's remotes (runStoreOnly through runOrgReadAside), with a first line `read <org>/<folder>: its resource <name> names this repo (<remote>) …; link it: lore org link --org <org> --project <folder> --own`; no such resource keeps the refusal naming org link --own and --store; docs team/client-folders; story WU |
+| devco:D-557 | finding | owner use pass 1 2026-11-17 (upread LEFT): only memory and rule show printed the `[<org>/<folder>]` label of a row of another store; decision, task, hotfix, pattern, playbook and every other show did not | fixed | TestShowLabelOnFirstLine, TestStoryWUReadsFromAnywhere | Summary: op/showlabel.go Result.WithShowLabel (one shared step, applied by engine Run to every `<noun>.show`): the row's `_label` is printed after the id on the first line when the line does not already name it; story WU |
 
 ## lore-adoptfix
 

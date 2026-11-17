@@ -125,6 +125,11 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	if ierr == nil {
 		ierr = metaUsed()
 	}
+	if ierr == nil && strings.HasSuffix(spec.Name, showSuffix) {
+		// every <noun> show names the store/folder of its row on its
+		// first line, as memory and rule show do (op.WithShowLabel, D-557)
+		res = res.WithShowLabel()
+	}
 	if ierr == nil && purge != nil {
 		confirm := purge.Confirmed
 		res = res.WithTextEdit(func(t string) string { return purgedText(t, purge, confirm) })
@@ -243,3 +248,6 @@ func (e *Engine) unknownTarget(err error) error {
 	// another repo's .lore/data, so say what --to names.
 	return ee.WithHint("give one of: " + strings.Join(places, ", ") + " (lore store list shows the attached stores); --to names a store, never another repo: a row cannot move into another repo's notes, add it there instead")
 }
+
+// showSuffix ends the name of every <noun> show operation.
+const showSuffix = ".show"
