@@ -666,13 +666,15 @@ func (a *App) migrateOrg(ctx context.Context, dryRun bool, seen map[string]bool)
 	}
 	if !dryRun {
 		// Convert what the team has, not a stale copy: bring each org
-		// store clone up to date first (this also pushes waiting commits,
-		// so it is skipped by --dry-run, which changes nothing).
+		// store clone up to date first. Fetch and merge only (devco:D-521):
+		// only push and sync move a remote, so the commits that already
+		// waited in the clone stay there; the run's own conversion commits
+		// go out with its Finish (or wait on --no-push).
 		for _, s := range org {
 			if _, ok := st.byName[s.Name]; !ok {
 				continue
 			}
-			if _, err := st.eng.Sync(ctx, s.Name); err != nil {
+			if _, err := st.eng.Sync(fetchOnly(ctx), s.Name); err != nil {
 				return nil, 0, errs.Prefix("migrate: sync org store "+string(s.Name)+" first", err)
 			}
 		}
