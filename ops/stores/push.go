@@ -96,6 +96,9 @@ type PushView struct {
 	// one personal store `me`, shared by all their setups (decided
 	// 2026-11-09; journey joiner).
 	SharedBy []string `json:"shared_by,omitempty"`
+	// Folders are the store's folders (store show --store <name>, devco
+	// D-571); empty for a store with none or a build that cannot list them.
+	Folders []string `json:"folders,omitempty"`
 }
 
 // Text prints one store's settings.
@@ -124,6 +127,9 @@ func (v PushView) Text() string {
 		fmt.Fprintf(&b, "  problem   %s (pushing as now until it is fixed)\n", v.Problem)
 	}
 	fmt.Fprintf(&b, "  epoch     %d\n", v.Epoch)
+	if len(v.Folders) > 0 {
+		fmt.Fprintf(&b, "  folders   %s\n", strings.Join(v.Folders, ", "))
+	}
 	if v.Unpushed > 0 {
 		age := ""
 		if v.WaitingFor != "" {

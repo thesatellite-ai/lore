@@ -36,8 +36,10 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -300,18 +302,39 @@ func (o TeamListOut) Text() string {
 	if len(o.Teams) == 0 {
 		return "no teams on " + o.Where + "'s roster\n"
 	}
-	var b strings.Builder
-	for _, t := range o.Teams {
-		line := fmt.Sprintf("@%-16s %-24s %s", t.Handle, t.Name, memberWord(len(t.Members)))
+	// devco D-572: columns as wide as their widest cell (a name longer than
+	// the old fixed 24 ran into the member count), and a count line.
+	rows := make([][]string, len(o.Teams))
+	for i, t := range o.Teams {
+		count := memberWord(len(t.Members))
 		if len(t.Pending) > 0 {
-			line += fmt.Sprintf(", %d pending (invited)", len(t.Pending))
+			count += fmt.Sprintf(", %d pending (invited)", len(t.Pending))
 		}
 		if !t.Active {
-			line += removedMark
+			count += removedMark
 		}
-		b.WriteString(strings.TrimRight(line, " ") + "\n")
+		rows[i] = []string{"@" + t.Handle, t.Name, count}
 	}
+	var b strings.Builder
+	writeColumns(&b, rows)
+	b.WriteString(plural.Count(len(o.Teams), "team") + "\n")
 	return b.String()
+}
+
+// writeColumns writes rows as columns two spaces apart, each as wide as
+// its widest cell in terminal cells (N-2), trailing spaces trimmed.
+func writeColumns(b *strings.Builder, rows [][]string) {
+	ws := textwidth.Columns(rows)
+	for _, row := range rows {
+		var line strings.Builder
+		for i, c := range row {
+			if i > 0 {
+				line.WriteString("  ")
+			}
+			line.WriteString(textwidth.PadRight(c, ws[i]))
+		}
+		b.WriteString(strings.TrimRight(line.String(), " ") + "\n")
+	}
 }
 
 // removedMark ends the list line of a removed team (--all).

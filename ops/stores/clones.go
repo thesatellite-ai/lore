@@ -25,6 +25,7 @@ package stores
 // build without it answers E_UNSUPPORTED.
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strconv"
@@ -353,7 +354,16 @@ func (o ClonesOut) Text() string {
 		return b.String()
 	}
 	if o.Push.Store != "" {
-		return o.Push.Text()
+		b.WriteString(o.Push.Text())
+		// devco D-571: the unpushed count also when it is 0, but only from a
+		// clone this machine read (the push view's count hides a read error).
+		if len(o.Stores) == 1 && o.Stores[0].Cloned && o.Push.Unpushed == 0 && len(o.Stores[0].Unpushed) == 0 {
+			b.WriteString("  waiting   nothing: every local commit is pushed\n")
+		}
+		for _, v := range o.Stores {
+			writeCloneLines(&b, v)
+		}
+		return b.String()
 	}
 	for _, h := range o.Here {
 		b.WriteString(h + "\n")
@@ -372,14 +382,7 @@ func (o ClonesOut) Text() string {
 			b.WriteString("  clone     not cloned yet (the next command that needs it clones it)\n")
 			continue
 		}
-		fetched := fetchedNever
-		if v.LastFetch != "" {
-			fetched = v.LastFetch
-		}
-		fmt.Fprintf(&b, "  clone     %s   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
-		if len(v.Unpushed) > 0 {
-			fmt.Fprintf(&b, "  unpushed  %s\n", strings.Join(v.Unpushed, ", "))
-		}
+		writeCloneLines(&b, v)
 		for _, l := range v.Links {
 			d, own := "", ""
 			if l.Default {
@@ -394,9 +397,56 @@ func (o ClonesOut) Text() string {
 	return b.String()
 }
 
+// writeCloneLines are a cloned store's clone and unpushed lines.
+func writeCloneLines(b *strings.Builder, v CloneView) {
+	if !v.Cloned {
+		b.WriteString("  clone     not cloned yet (the next command that needs it clones it)\n")
+		return
+	}
+	fetched := fetchedNever
+	if v.LastFetch != "" {
+		fetched = v.LastFetch
+	}
+	fmt.Fprintf(b, "  clone     %s   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
+	if len(v.Unpushed) > 0 {
+		fmt.Fprintf(b, "  unpushed  %s\n", strings.Join(v.Unpushed, ", "))
+	}
+}
+
 // cloneErrors are the codes of the clone commands.
 var cloneErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.StoreUnreachable,
 	errs.NotAStore, errs.Unsupported, errs.Refused, errs.StoreReadOnly, errs.StoreScheme, errs.Internal}
+
+// StoreCloneFinder is the optional Manager upgrade that finds the clone
+// view of one named store (store show --store <name>, devco D-571).
+type StoreCloneFinder interface {
+	StoreClone(ctx context.Context, name string) (CloneView, bool)
+}
+
+// namedStoreShow is store show --store <name>: the push settings, plus
+// (devco D-571) the store's url, clone, last fetch, unpushed commits and
+// folders, as the no-argument show prints them. Before, a named store
+// printed only "push manual, compact off, epoch 0". Display only: a part
+// the build or the store cannot give is left out, never an error.
+func namedStoreShow(ctx context.Context, m Manager, name string, v PushView) ClonesOut {
+	out := ClonesOut{Push: v}
+	if f, ok := upgrade.As[StoreCloneFinder](m); ok {
+		if cv, found := f.StoreClone(ctx, name); found {
+			out.Stores = []CloneView{cv}
+			if out.Push.URL == "" {
+				out.Push.URL = cmp.Or(cv.Shown, cv.URL)
+			}
+		}
+	}
+	if fl, ok := upgrade.As[FolderLister](m); ok && !v.Folder {
+		if fo, err := fl.ListFolders(ctx, name); err == nil {
+			for _, r := range fo.Folders {
+				out.Push.Folders = append(out.Push.Folders, r.Folder)
+			}
+		}
+	}
+	return out
+}
 
 // cloner is m's Cloner, or E_UNSUPPORTED naming the command.
 func cloner(m Manager, cmd string) (Cloner, error) {
@@ -498,7 +548,7 @@ func cloneOps(m Manager) []op.Entry {
 				if err != nil {
 					return ClonesOut{}, err
 				}
-				return withEmptyLists(ClonesOut{Push: v}), nil
+				return withEmptyLists(namedStoreShow(ctx, m, name, v)), nil
 			}
 			c, err := cloner(m, "show")
 			if err != nil {

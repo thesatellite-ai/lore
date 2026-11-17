@@ -43,6 +43,7 @@ var auditListSetups = map[string]func(h *opstest.H) (map[string]string, string){
 // writer filter; every other `<noun>.list` must reach a table (schema.Noun
 // or the plural rule) and take --created-by/--updated-by.
 var auditNoTable = map[string]string{
+	"org.list":            "lists the org entries of this machine's config.yaml (stores, setups), not rows",
 	"batch.list":          "lists delete batches, a view over the trash of every table",
 	"branch.list":         "lists branch layers (hidden refs of a store clone), not rows",
 	"config.list":         "lists ~/.lore/config.yaml settings, not rows",

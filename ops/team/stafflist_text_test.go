@@ -19,9 +19,10 @@ func TestStaffListAlignsWideAndLongNames(t *testing.T) {
 		{ID: "act_4", Email: "bo@example.test", Name: "Bo", Handle: "bo", Status: "left"},
 	}}.Text()
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 4 {
-		t.Fatalf("want 4 lines, got:\n%s", out)
+	if len(lines) != 5 || lines[4] != "4 members" { // devco D-572: the count line
+		t.Fatalf("want 4 rows and a count line, got:\n%s", out)
 	}
+	lines = lines[:4]
 	// The role, handle and teams columns start at the same cell on every row.
 	cols := map[string][]string{
 		"role":   {"  member", "  member", "  admin", "  -  "},

@@ -266,9 +266,9 @@ func baseOps(env Env) []op.Entry {
 				}
 				return h.Use(ctx, in)
 			}),
-	}, refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...)),
+	}, listOp(o), refreshOp(o, spec, codes), storeAddOp(o, spec, append([]errs.Code{errs.NeedsConfirm}, codes...)),
 		storeRemoveOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...)),   // refresh.go, storeadd.go, storeremove.go
-		storeAudienceOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...))) // storeaudience.go
+		storeAudienceOp(o, spec, append([]errs.Code{errs.NeedsConfirm, errs.Refused}, codes...))) // storeaudience.go; list.go is org.list
 }
 
 // Ops is every org operation: the org verbs and org config get/set

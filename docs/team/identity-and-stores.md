@@ -383,13 +383,17 @@ store agency/org: up to date
 # bob, in website
 $ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
+  at        git@github.com:agency/notes
   set in    the store's lore-store.yaml (org agency; set by an org admin)
   epoch     0
+  folders   client, org
   pushed    2026-11-02T10:00:00Z
+  waiting   nothing: every local commit is pushed
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:01:10Z
 ```
 <!-- /example -->
 
-`lore store show --store <store>` prints a store's settings; `--json` gives them under `"push"`. With no store name, `lore store show` lists the stores of your orgs as before.
+`lore store show --store <store>` prints a store's settings and, as `lore store show` with no name does for every store, its url (`at`), its folders, its unpushed commits (`waiting   nothing: every local commit is pushed` when none wait) and this machine's clone with its last fetch; `--json` gives the settings under `"push"` (folders in `"push"."folders"`) and the clone under `"stores"`. With no store name, `lore store show` lists the stores of your orgs as before. `lore org list` lists this machine's org entries: each with its stores (the org folder one and an admins-only one marked), the setups that use it with their role, and a count line.
 
 The values `lore store set` takes:
 

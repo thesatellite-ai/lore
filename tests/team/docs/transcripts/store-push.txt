@@ -84,9 +84,13 @@ store agency/client: up to date
 store agency/org: up to date
 bob (work/website)$ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
+  at        git@github.com:agency/notes
   set in    the store's lore-store.yaml (org agency; set by an org admin)
   epoch     0
+  folders   client, org
   pushed    2026-11-02T10:00:00Z
+  waiting   nothing: every local commit is pushed
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:01:10Z
 
 ### compact
 bob (work/website)$ lore memory add --body 'the client wants the invoice on the 1st' --to agency

@@ -46,10 +46,10 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
-	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -223,18 +223,9 @@ func (o StaffListOut) Text() string {
 		}
 		rows[i] = row
 	}
-	ws := textwidth.Columns(rows)
 	var b strings.Builder
-	for _, row := range rows {
-		var line strings.Builder
-		for i, c := range row {
-			if i > 0 {
-				line.WriteString("  ")
-			}
-			line.WriteString(textwidth.PadRight(c, ws[i]))
-		}
-		b.WriteString(strings.TrimRight(line.String(), " ") + "\n")
-	}
+	writeColumns(&b, rows)
+	b.WriteString(plural.Count(len(o.Members), "member") + "\n") // devco D-572: a count like every list
 	return b.String()
 }
 

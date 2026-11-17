@@ -170,19 +170,21 @@ created res_…e913  service  repo:service/hub_web
 
 ## Step 4 — List, filter and show
 
-`list <kind>` prints one column per field. `--where` filters (`=`, `!=`, `~=`, `>`, `>=`, `<`, `<=`, `?` for set, `!?` for not set, `field:a,b` for any of), `--sort` orders by name, `last_checked`, `archived_at` or a field, and `show` prints one resource:
+`list <kind>` prints one column per field, each as wide as its widest cell, and ends with a count line. `--where` filters (`=`, `!=`, `~=`, `>`, `>=`, `<`, `<=`, `?` for set, `!?` for not set, `field:a,b` for any of), `--sort` orders by name, `last_checked`, `archived_at` or a field, and `show` prints one resource:
 
 <!-- example: resources#list-and-show -->
 ```console
 # alice, in infra
 $ lore resource list --kind host
-KIND	NAME	IP	OS	PROVIDER	CHECKED
-host	hub_prod	203.0.113.10	ubuntu-24.04	hetzner	
-host	hub_stage	203.0.113.11	ubuntu-24.04	aws	
+KIND  NAME       IP            OS            PROVIDER  CHECKED
+host  hub_prod   203.0.113.10  ubuntu-24.04  hetzner
+host  hub_stage  203.0.113.11  ubuntu-24.04  aws
+2 resources
 $ lore resource list --kind service --where runs_on=hub_prod --sort name:desc
-KIND	NAME	DB_PASSWORD	RUNS_ON	URL	CHECKED
-service	hub_web		hub_prod	https://www.example.com	
-service	hub_api	gopass://acme/hub/db	hub_prod	https://api.example.com	
+KIND     NAME     DB_PASSWORD           RUNS_ON   URL                      CHECKED
+service  hub_web                        hub_prod  https://www.example.com
+service  hub_api  gopass://acme/hub/db  hub_prod  https://api.example.com
+2 resources
 $ lore resource show --id hub_api
 res_4c59…6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db
@@ -428,12 +430,13 @@ ERROR: [E_RESOURCE_ARCHIVED] service hub_admin: runs_on: hub_prod is archived
   hint: ref its replacement host hub_prod_new
 (exit 23)
 $ lore resource list --kind host --archived
-KIND	NAME	IP	OS	PROVIDER	CHECKED
-host	hub_cache	203.0.113.21	ubuntu-24.04	aws	
-host	hub_db	203.0.113.30	ubuntu-24.04	aws	2026-11-02
-host	hub_prod	203.0.113.10	debian-13	hetzner	2026-11-02
-host	hub_prod_new	203.0.113.12	debian-13	hetzner	2026-11-02
-host	hub_stage		ubuntu-24.04	aws	2026-11-02
+KIND  NAME          IP            OS            PROVIDER  CHECKED
+host  hub_cache     203.0.113.21  ubuntu-24.04  aws
+host  hub_db        203.0.113.30  ubuntu-24.04  aws       2026-11-02
+host  hub_prod      203.0.113.10  debian-13     hetzner   2026-11-02
+host  hub_prod_new  203.0.113.12  debian-13     hetzner   2026-11-02
+host  hub_stage                   ubuntu-24.04  aws       2026-11-02
+5 resources
 ```
 <!-- /example -->
 
@@ -593,8 +596,9 @@ $ lore resource edit --id hub_prod_new --set root_user=deploy
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
 ✓ edited server hub_prod_new (res_…ed8c)
 $ lore resource list --kind server
-KIND	NAME	ACCESS_KEY	IP	OS_IMAGE	PROVIDER	RENEWS	ROOT_USER	CHECKED
-server	hub_prod_new	${secret:gopass://acme/hub/aws-key}	203.0.113.12	debian-13	hetzner		•••	2026-11-02
+KIND    NAME          ACCESS_KEY                           IP            OS_IMAGE   PROVIDER  RENEWS  ROOT_USER  CHECKED
+server  hub_prod_new  ${secret:gopass://acme/hub/aws-key}  203.0.113.12  debian-13  hetzner           •••        2026-11-02
+1 resource
 $ lore resource show --id hub_prod_new --show-sensitive
 ERROR: [E_NEEDS_CONFIRM] resource show?
   hint: ask the person, then rerun with --yes

@@ -50,7 +50,7 @@ func (r *privateReport) text() string {
 	fmt.Fprintf(&b, "  rows shown             %4d  %d bytes\n", r.Rows, r.Bytes)
 	fmt.Fprintf(&b, "  notes left out         %4d  %s %d bytes\n", r.LeftOut, policy.KeyContextBudgetInternal, r.Budget)
 	if r.OverCore {
-		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d: unpin some or raise the key\n", r.Core, policy.KeyContextBudgetInternal, r.Budget)
+		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d; fix: a lower severity (`lore rule edit --id <id> --severity should`) or `lore policy set --key %s --value %d --yes`\n", r.Core, policy.KeyContextBudgetInternal, r.Budget, policy.KeyContextBudgetInternal, budgetToFit(r.Core))
 	}
 	return b.String()
 }
