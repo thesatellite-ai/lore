@@ -154,7 +154,7 @@ func (s *liveSession) trackedHooksFolder(ctx context.Context, dir string) bool {
 // private project (.lore/ ignored by git, D-500): lore never puts its
 // blocks there, so their absence is no leak-guard warning.
 func (s *liveSession) privateTrackedHooks(ctx context.Context, dir string) bool {
-	return s.trackedHooksFolder(ctx, dir) && !wire.RepoMayHoldLoreFiles(ctx, s.top, false)
+	return s.trackedHooksFolder(ctx, dir) && !wire.RepoMayHoldLoreFiles(ctx, s.top)
 }
 
 // hookWrite is one lore block a command would put into a hook file.
