@@ -116,20 +116,28 @@ func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool, org st
 		}
 		// named as `lore store list` names it (the org's name for its main
 		// store), not by its clone folder (N-3)
-		r := opsstores.Report{Store: cmp.Or(orgStoreLabel(a.opts.Home, cs.url), orgStoreShortName(cs.norm))}
 		res, perr := a.PushStoreNow(ctx, opsstores.PushIn{Store: cs.url, Branch: branch})
-		switch {
-		case perr != nil:
-			r.Problems = []string{perr.Error()}
-		default:
-			// a clone pushed here held branch commits (checked above): a
-			// push that was not offline sent them, even with no note rows
-			// in them, so the line says "pushed", never a bare "sent 0" (N-3)
-			r.Sent, r.Offline, r.Pushed = res.Sent, res.Offline, !res.Offline
-		}
+		r := orgPushReport(cmp.Or(orgStoreLabel(a.opts.Home, cs.url), orgStoreShortName(cs.norm)), res, perr)
 		out = append(out, orgPush{report: r, url: cs.url})
 	}
 	return out
+}
+
+// orgPushReport is the sync line's report of a waiting org store clone
+// that sync pushed. A clone pushed here held branch commits, so a push that
+// was not offline sent them, even with no note rows in them: the line says
+// "pushed", never a bare "sent 0" (N-3). Its "sent" counts row files like
+// every other store line of a sync: res.Sent is the push's commits since
+// D-517, and a store link commit read "sent 2" without the "no note rows"
+// note (D-527).
+func orgPushReport(name string, res opsstores.PushOut, perr error) opsstores.Report {
+	r := opsstores.Report{Store: name}
+	if perr != nil {
+		r.Problems = []string{perr.Error()}
+		return r
+	}
+	r.Sent, r.Offline, r.Pushed = res.Rows, res.Offline, !res.Offline
+	return r
 }
 
 // syncOrg is the org whose waiting store clones a sync here may push: the
