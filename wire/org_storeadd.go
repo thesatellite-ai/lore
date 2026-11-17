@@ -80,7 +80,7 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	}
 	switch {
 	case res.AudienceChanged:
-		lines = append(lines, "✓ "+file+" already listed it; its audience is now "+aud.String()+audiencePushNote(res, opsorgcmd.StoreAddCommand(in.Org, in.URL)+" --audience "+aud.String()))
+		lines = append(lines, "✓ "+file+" already listed it; its audience is now "+aud.String()+audiencePushNote(res, sc.URL))
 	case res.Existed && res.Pushed:
 		lines = append(lines, "✓ "+file+" already listed it; pushed the commit that added it")
 	case res.Existed:
@@ -90,7 +90,7 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	case res.Offline:
 		lines = append(lines, "✓ added store "+want+" to "+file+" (committed; the org store is unreachable, the next write to it pushes)")
 	default:
-		lines = append(lines, "✓ added store "+want+" to "+file+" (committed in this machine's clone of the store, not pushed; push it with: "+opsorgcmd.StoreAddCommand(in.Org, in.URL)+" --push --yes)")
+		lines = append(lines, "✓ added store "+want+" to "+file+audiencePushNote(res, sc.URL))
 	}
 	// The entry copies the file as committed in the clone (the local tip,
 	// pushed or not), with its stamp, as `lore org refresh` does.

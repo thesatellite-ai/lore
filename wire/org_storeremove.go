@@ -78,7 +78,7 @@ func (h *standaloneOrg) RemoveStore(ctx context.Context, in opsorgcmd.StoreRemov
 	case res.Offline:
 		lines = append(lines, "✓ retired store "+want+" from "+file+" (committed; the org store is unreachable, the next write to it pushes)")
 	default:
-		lines = append(lines, "✓ retired store "+want+" from "+file+" (committed in this machine's clone of the store, not pushed; push it with: "+opsorgcmd.StoreRemoveCommand(in.Org, in.URL)+" --push --yes)")
+		lines = append(lines, "✓ retired store "+want+" from "+file+audiencePushNote(res, sc.URL))
 	}
 	sg, serr := g.LocalSuggestion(ctx, sc.URL, sc.Branch)
 	if serr != nil {

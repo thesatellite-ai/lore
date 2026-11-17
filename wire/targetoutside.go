@@ -19,11 +19,13 @@ package wire
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -32,6 +34,7 @@ import (
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/store"
@@ -121,6 +124,13 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	in, derr := e.Decode(d)
 	if derr != nil {
 		return op.Result{}, false, nil // the usual path reports the decode error
+	}
+	if write {
+		// `--to <org>/<folder>` from a folder no setup covers runs as with
+		// --setup <the org's setup> (devco:D-538): reads name an org with
+		// --store from anywhere, and a write refused "only the setup's
+		// stores can be named" until --setup was added by hand
+		ctx = a.withSetupOfTarget(ctx, in)
 	}
 	to, useDefault, err := a.outsideTo(ctx, in, write, spec.Name)
 	if err != nil {
@@ -459,13 +469,12 @@ const idField = "id"
 // writable attach entry named <org>/<folder>; ok is false when the input
 // names no id or no folder of the org's stores holds it.
 func (a *App) rowFolderOutside(ctx context.Context, in op.Input) (attach.Store, bool) {
-	id := ""
-	for _, tv := range in.Texts() {
-		if tv.Field == idField {
-			id = strings.TrimSpace(tv.Text)
-		}
-	}
-	if id == "" || strings.ContainsAny(id, `/\*?[`) {
+	// trash restore and purge name their row as target (--id on the CLI):
+	// the trashed row stays in its folder, so a restore by id finds it
+	// there as an edit by id does (devco:D-543: the `restore: lore trash
+	// restore --id …` line a delete prints)
+	id := rowIDOf(in)
+	if id == "" {
 		return attach.Store{}, false
 	}
 	// this folder's org first; then every org of the config (the home
@@ -501,4 +510,103 @@ func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string) (a
 		return attach.Store{Name: store.Source(base + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
 	}
 	return attach.Store{}, false
+}
+
+// trashTargetField is the input field trash restore and trash purge name
+// their row by (ops/trash TargetIn, PurgeIn).
+const trashTargetField = "target"
+
+// withSetupOfTarget is ctx with the setup of the org a write's
+// `--to <org>[/<folder>]` names, when no setup is named already (--setup,
+// LORE_SETUP) and exactly one enabled setup belongs to that org: the
+// store-only open then attaches that setup's stores and commits as its
+// identity, as `--setup <name>` does. Any other case keeps ctx, and the
+// usual refusal names --setup.
+func (a *App) withSetupOfTarget(ctx context.Context, in op.Input) context.Context {
+	if strings.TrimSpace(op.SetupOf(ctx)) != "" || strings.TrimSpace(os.Getenv(opssetup.EnvSetup)) != "" {
+		return ctx
+	}
+	var to string
+	for _, tv := range in.Texts() {
+		if tv.Field == engine.InputTarget {
+			to = tv.Text
+		}
+	}
+	base, _, _ := strings.Cut(to, targetSep)
+	if to == "" {
+		// an edit, delete or restore naming its row by id: the org whose
+		// store clone holds the row (devco:D-543: `lore trash restore --id`
+		// and `lore rule delete --id` from the home folder found no store)
+		base = a.orgHoldingRow(ctx, in)
+	}
+	if base == "" || base == attach.ReservedMe || to == string(store.SourceRepo) {
+		return ctx
+	}
+	if name := a.setupOfOrg(base); name != "" {
+		return op.WithSetup(ctx, name)
+	}
+	return ctx
+}
+
+// setupOfOrg is the one enabled setup of org ("" for none, or for two:
+// the person then picks with --setup).
+func (a *App) setupOfOrg(org string) string {
+	cfg, err := ReadSetupsConfig(a.opts.Home)
+	if err != nil {
+		return ""
+	}
+	var name string
+	for _, s := range cfg.Setups {
+		if s.Disabled || s.Org != org {
+			continue
+		}
+		if name != "" {
+			return ""
+		}
+		name = s.Name
+	}
+	return name
+}
+
+// orgHoldingRow is the org of the home's org config whose store clone
+// holds the row in's id (or trash target) names, in any folder; "" when
+// none does or the input names no row. It reads only this machine's
+// clones of the stores the config lists (no setup needs to cover the
+// folder the command runs in); ids are unique, so the first hit is it.
+func (a *App) orgHoldingRow(ctx context.Context, in op.Input) string {
+	id := rowIDOf(in)
+	if id == "" {
+		return ""
+	}
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return ""
+	}
+	for i := range cfg.Orgs {
+		for _, s := range a.orgConfigStores(cfg.Orgs[i].Name) {
+			dir, derr := a.storeDir(ctx, s)
+			if derr != nil {
+				continue
+			}
+			if hits, _ := filepath.Glob(filepath.Join(dir, "*", "*", id+".json")); len(hits) > 0 {
+				return cfg.Orgs[i].Name
+			}
+		}
+	}
+	return ""
+}
+
+// rowIDOf is the row id an input names (--id, or trash restore's target);
+// "" when none, or when it is a pattern rather than one id.
+func rowIDOf(in op.Input) string {
+	id := ""
+	for _, tv := range in.Texts() {
+		if tv.Field == idField || tv.Field == trashTargetField {
+			id = strings.TrimSpace(tv.Text)
+		}
+	}
+	if strings.ContainsAny(id, `/\*?[`) {
+		return ""
+	}
+	return id
 }

@@ -31,6 +31,10 @@ func unknownWord(cmd *cobra.Command, cfg config, word string) error {
 		} else {
 			e = e.WithHint(cmd.CommandPath() + " takes a command, not a value; " + help)
 		}
+	case wordGuesses[cmd.CommandPath()+" "+word] != "":
+		// the obvious guess for a command that lives under another noun
+		// (devco:D-546: `lore repo link` suggested `lore repo list`)
+		e = e.WithHint(wordGuesses[cmd.CommandPath()+" "+word] + "; " + help)
 	default:
 		// C-13: every refusal names a next step: the commands of that
 		// name deeper down (`lore status` → `lore migrate status`), else
@@ -42,6 +46,12 @@ func unknownWord(cmd *cobra.Command, cfg config, word string) error {
 		}
 	}
 	return printUsage(cmd, cfg, e)
+}
+
+// wordGuesses are commands people guess under the wrong noun, by the path
+// they typed, with the command that does it.
+var wordGuesses = map[string]string{
+	"lore repo link": "a repo is linked to a folder of the org's store with lore org link --org <org> --project <folder> (lore org link --help)",
 }
 
 // nearCommands lists, by path, the visible commands under g named word

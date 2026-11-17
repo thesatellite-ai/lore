@@ -23,16 +23,26 @@ import (
 // command's plan that makes one.
 const audienceAdminsLine = "audience: admins: only the org's admins use it; members' lore never clones or reads it, and no repo can be linked to it"
 
-// audiencePushNote is the tail of an audience change line: pushed, or the
-// command that pushes it.
-func audiencePushNote(res orgcfg.OrgFileResult, cmd string) string {
+// audiencePushNote is the tail of an org-file change line: pushed, or the
+// command that pushes the commit. That command is `lore store push --store
+// <url>` of the org file's store (devco:D-544): the change's own command
+// with --push alone refused "nothing to change", and run again with its
+// change it found nothing to commit, so the printed line never pushed.
+func audiencePushNote(res orgcfg.OrgFileResult, storeURL string) string {
 	switch {
 	case res.Pushed:
 		return " (pushed)"
 	case res.Offline:
 		return " (committed; the org store is unreachable, the next write to it pushes)"
 	}
-	return " (committed in this machine's clone of the store, not pushed; push it with: " + cmd + " --push --yes)"
+	return " (committed in this machine's clone of the store, not pushed; push it with: " + StorePushCommand(storeURL) + ")"
+}
+
+// StorePushCommand is the command that pushes a store clone's commits,
+// named by the store's url (which works from any folder, a repo that does
+// not attach the store too).
+func StorePushCommand(storeURL string) string {
+	return "lore store push --store " + storeURL
 }
 
 // SetStoreAudience implements opsorgcmd.StoreAudiencer.
@@ -95,11 +105,11 @@ func (h *standaloneOrg) SetStoreAudience(ctx context.Context, in opsorgcmd.Store
 	}
 	switch {
 	case res.AudienceChanged:
-		lines = append(lines, "✓ store "+want+" in "+file+" is now for "+aud.String()+audiencePushNote(res, cmd))
+		lines = append(lines, "✓ store "+want+" in "+file+" is now for "+aud.String()+audiencePushNote(res, sc.URL))
 	case !res.Existed:
 		// a store the entry lists but the file does not (a hand edit): the
 		// add appended it with the audience asked for
-		lines = append(lines, "✓ "+file+" now lists store "+want+" for "+aud.String()+audiencePushNote(res, cmd))
+		lines = append(lines, "✓ "+file+" now lists store "+want+" for "+aud.String()+audiencePushNote(res, sc.URL))
 	default:
 		lines = append(lines, "· store "+want+" in "+file+" is already for "+aud.String()+"; nothing committed")
 	}

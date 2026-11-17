@@ -550,11 +550,12 @@ type wwCell struct {
 
 // The rules of WW beyond W's (a-hint, a-init, d-exit, b-files).
 const (
-	wwRuleIdent  = "a-identity" // commits and the clone's git user are the org identity
-	wwRuleCount  = "b-count"    // a printed commit count matches what moved
-	wwRuleTwin   = "c-twin"     // same-shape stores, same treatment
-	wwRuleScope  = "d-scope"    // nothing outside the target changes
-	wwRuleRemote = "e-remote"   // no remote moves unless push/sync
+	wwRuleIdent   = "a-identity" // commits and the clone's git user are the org identity
+	wwRuleCount   = "b-count"    // a printed commit count matches what moved
+	wwRulePrinted = "g-printed"  // a printed next-step command works where printed (the owner's GUARD)
+	wwRuleTwin    = "c-twin"     // same-shape stores, same treatment
+	wwRuleScope   = "d-scope"    // nothing outside the target changes
+	wwRuleRemote  = "e-remote"   // no remote moves unless push/sync
 )
 
 // wwWaiting are findings another branch's fix covers, keyed like W's
@@ -699,6 +700,29 @@ func wwRunPlace(t *testing.T, w *wwWorld, p wwPlace, found *wwFindings) map[stri
 		if len(bad) > 0 {
 			t.Errorf("[WW] %s: lore %s\n  %s\n%s", cell, strings.Join(args, " "), strings.Join(bad, "\n  "), res)
 		}
+		// the owner's GUARD (devco:D-543..D-548): every next-step command a
+		// write prints (restore:, push it with:, hint: lore …) works exactly
+		// as printed, here; run after the write's own checks, so a printed
+		// push is not the write moving a remote, and the next write's
+		// before is taken after it
+		printed := false
+		for _, mk := range wuMarkers {
+			for _, c := range wuPrinted(res.Out(), mk) {
+				printed = true
+				pr := w.m.Lore(p.Dir, c...)
+				if bad := wuBadRefusal(pr.Code, pr.Out()); bad != "" {
+					if why := wwWaitingFor(wwRulePrinted, o.Name, p.Name); why != "" {
+						t.Logf("WAITING for %s: %s printed `lore %s` (%s)", why, o.Name+"@"+p.Name, strings.Join(c, " "), bad)
+						continue
+					}
+					found.add(wwRulePrinted + " " + o.Name + "@" + p.Name + " lore " + strings.Join(c, " "))
+					t.Errorf("[WW] %s@%s: printed `lore %s`, which fails where printed (%s):\n%s", o.Name, p.Name, strings.Join(c, " "), bad, pr)
+				}
+			}
+		}
+		if printed {
+			before = wwSnapshot(t, w)
+		}
 		if os.Getenv(wTrace) != "" {
 			first := strings.SplitN(strings.TrimSpace(res.Out()), "\n", 2)[0]
 			if c := wwJSONCode.FindStringSubmatch(res.Out()); c != nil {
@@ -811,7 +835,7 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 			add(wRuleInit, `(a) the refusal says "git init"`)
 		}
 		if wPlaceCodes[code] {
-			if !wRepoOnly(out) && (!strings.Contains(out, "--store") || !strings.Contains(out, "--setup")) {
+			if !wRepoOnly(out) && !wNamesStoreAndSetup(out) {
 				add(wRuleHint, "(a) a not-here refusal ("+code+") whose hint does not name --store and --setup")
 			}
 		}
@@ -824,7 +848,7 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 		allowed[p.Repo] = true
 	}
 	target := p.Org
-	if target == "" && wwNamesOrg(args, wOrg) {
+	if target == "" && (wwNamesOrg(args, wOrg) || wwHoldsRow(w, args, wOrg)) {
 		target = wOrg
 	}
 	for c, org := range w.owner {
@@ -909,6 +933,30 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 	}
 	return bad
 }
+
+// wwHoldsRow reports whether an argument is the id of a row a store clone
+// of org holds: an edit, delete or restore by id from the home folder
+// writes the org whose store holds the row (devco:D-543), so that org's
+// stores are its target.
+func wwHoldsRow(w *wwWorld, args []string, org string) bool {
+	for _, a := range args {
+		if !wwRowID.MatchString(a) {
+			continue
+		}
+		for c, o := range w.owner {
+			if o != org {
+				continue
+			}
+			if hits, _ := filepath.Glob(filepath.Join(c, "*", "*", a+".json")); len(hits) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// wwRowID is the shape of a row id (<prefix>_<hex>).
+var wwRowID = regexp.MustCompile(`^[a-z]+_[0-9a-f]{16,}$`)
 
 // wwNamesOrg reports whether an op's arguments name org (its name, a
 // folder of it, its setup or its store's url): such an op at the home

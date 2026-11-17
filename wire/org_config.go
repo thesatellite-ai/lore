@@ -109,7 +109,7 @@ func (h *standaloneOrg) OrgConfigSet(ctx context.Context, in opsorgcmd.ConfigSet
 	if res.Existed {
 		lines = append(lines, "· "+in.Key+" in "+file+" already holds that list; nothing committed")
 	} else {
-		lines = append(lines, "✓ "+in.Key+" in "+file+" changed"+audiencePushNote(res, cmd))
+		lines = append(lines, "✓ "+in.Key+" in "+file+" changed"+audiencePushNote(res, sc.URL))
 	}
 	sg, err = g.LocalSuggestion(ctx, sc.URL, sc.Branch)
 	if err != nil {
