@@ -282,17 +282,23 @@ func (r *OrgResolution) Apply(o *Options) {
 // ClientRepo is Options.ClientRepo: the org this checkout is a client repo
 // of by a match (a client link, or the org's repos: pattern), and its
 // linked folder (the default link, else the first client link). Zero for a
-// plain folder, a repo with no hosted remote, a repo that is client only
-// by the fail-closed default (nothing lists it as own), an own repo, no
-// org, or an org that cannot be resolved.
+// plain folder, a repo with no hosted remote, an own repo, no org, or an
+// org that cannot be resolved. A repo that is client only by the
+// fail-closed default (nothing lists it as own) has Org "" and Unlisted
+// set (devco D-525).
 func (r *OrgResolution) ClientRepo(ctx context.Context) ClientRepo {
 	s, err := r.Situation(ctx)
 	if err != nil || s == nil || s.ResolveErr != nil || s.NotGitRepo || len(s.Remotes) == 0 {
 		return ClientRepo{}
 	}
 	res := s.Result
-	if res.Role != orgresolve.RoleClient || !orgresolve.ClientByMatch(res.Org, res.Links, s.Remotes) {
-		return ClientRepo{} // not a client by default alone (an own repo never listed under own:)
+	if res.Role != orgresolve.RoleClient {
+		return ClientRepo{}
+	}
+	if !orgresolve.ClientByMatch(res.Org, res.Links, s.Remotes) {
+		// client by the fail-closed default alone (an own repo never
+		// listed under own:): Org stays "", Unlisted names the way out
+		return UnlistedClientRepo(res.Org, res.Links, s.Remotes)
 	}
 	out := ClientRepo{Org: res.Org.Name}
 	for _, l := range res.Links {

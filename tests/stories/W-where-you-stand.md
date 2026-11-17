@@ -29,3 +29,4 @@
 - `devco:D-522` (REGRESSIONS.md, `TestStoryWXFixExitAndStoreClone`): `lore fix` exited 1 after "Everything is current." with warning lines only; warnings alone now exit 0.
 - `devco:D-524` (REGRESSIONS.md, `TestStoryWXFixExitAndStoreClone`): `lore fix` in a store clone said "not inside a git repo here"; it now says the clone is a lore store clone, not a code repo, and names `lore store doctor`, `lore sync` and the code repo to cd into.
 - Waiting: `devco:D-509` (open: repo-only reads refuse with hints naming neither flag nor saying they are repo-only; `sync trash list` in a store clone).
+- `devco:D-525` (REGRESSIONS.md, `TestStoryWXOwnRepoNeverListed`): in the org's own repo set up with no `own:` patterns, `lore fix` and `whoami` said "a client repo" with no cause; they now say it is treated as a client repo because no `own:` pattern matches its remote, and name `lore org config set --org <org> --key own --add <remote> --yes`.

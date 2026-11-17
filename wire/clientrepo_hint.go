@@ -20,6 +20,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -30,6 +32,40 @@ type ClientRepo struct {
 	Org string
 	// Folder is the linked folder ("" when no client link names the repo).
 	Folder string
+	// Unlisted is the org of a checkout that is a client repo only by the
+	// fail-closed default (Org is "" then): it has a hosted remote, no
+	// own: pattern or own link of the org names it, and no repos: pattern
+	// or client link does either. Why (devco D-525): an admin who set the
+	// team up inside the org's own repo without own: patterns saw "a
+	// client repo" from lore fix, setup --agent-hooks and whoami with no
+	// cause and no way out; each of them now names both (UnlistedOwnStep).
+	Unlisted string
+	// Remote is the checkout's hosted remote (host/owner/repo) when
+	// Unlisted is set: the own: pattern that would make it an own repo.
+	Remote string
+}
+
+// UnlistedOwnStep is why a checkout is a client repo only by the
+// fail-closed default and the command that declares it the org's own
+// repo; "" when c is not such a checkout. lore fix's hooks step, setup
+// --agent-hooks' refusal and whoami's repo line say it, so the three agree.
+func UnlistedOwnStep(c ClientRepo) string {
+	if c.Unlisted == "" || c.Remote == "" {
+		return ""
+	}
+	return "no own: pattern of " + c.Unlisted + " matches " + c.Remote + ", so lore treats it as a client repo (fail closed); if it is " + c.Unlisted + "'s own repo: lore org config set --org " + c.Unlisted + " --key own --add " + c.Remote + " --yes"
+}
+
+// UnlistedClientRepo is ClientRepo for a checkout that resolves to role
+// client: Unlisted and Remote set when no pattern or link of org claims
+// it as a client's (orgresolve.ClientByMatch is false), so the role is
+// the fail-closed default alone. Zero for a checkout with no hosted
+// remote (lore whoami names that place on its own).
+func UnlistedClientRepo(org *orgconf.Org, links []orgresolve.Link, remotes []string) ClientRepo {
+	if org == nil || len(remotes) == 0 || orgresolve.ClientByMatch(org, links, remotes) {
+		return ClientRepo{}
+	}
+	return ClientRepo{Unlisted: org.Name, Remote: remotes[0]}
 }
 
 // initCommandText is how a hint names lore init.
@@ -46,6 +82,13 @@ func (a *App) clientRepo(ctx context.Context) ClientRepo {
 		return ClientRepo{}
 	}
 	return a.opts.ClientRepo(ctx)
+}
+
+// UnlistedOwnHere is UnlistedOwnStep for this app's repo: why it is a
+// client repo only by the fail-closed default and how to declare it own,
+// "" otherwise. Exported for renderhost's setup --agent-hooks refusal.
+func (a *App) UnlistedOwnHere(ctx context.Context) string {
+	return UnlistedOwnStep(a.clientRepo(ctx))
 }
 
 // clientRepoHint is the step that sets lore up for a client repo: the org

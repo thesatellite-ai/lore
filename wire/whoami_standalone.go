@@ -429,6 +429,9 @@ func whoamiRepoRow(s *orgcfg.Situation) string {
 		if place != "" {
 			return place + "  (treated as a client repo: guards on)"
 		}
+		if why := UnlistedOwnStep(UnlistedClientRepo(r.Org, r.Links, s.Remotes)); why != "" {
+			return "treated as a client repo  (guards on: " + why + ")"
+		}
 		return "client repo  (guards on)"
 	case orgresolve.RoleOwn:
 		if place != "" {
