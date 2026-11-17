@@ -416,7 +416,7 @@ func cloner(m Manager, cmd string) (Cloner, error) {
 func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, error) {
 	name := strings.TrimSpace(raw)
 	snake := row.ValidName(name)
-	if IsStoreURL(name) || (!snake && orgconf.ValidateStoreShortName(name) != nil) {
+	if IsStoreURL(name) || (!snake && orgconf.ValidateStoreShortName(name) != nil && !orgStoreSpelling(name)) {
 		return Entry{}, false, nil
 	}
 	var list []Entry
@@ -434,8 +434,10 @@ func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, e
 		}
 	}
 	base, _, _ := strings.Cut(name, "/")
-	if on, ok := upgrade.As[OutsideNamer](m); ok && row.ValidName(base) {
-		// D-516: outside a repo an org entry, <org>/<store> or a setup
+	if on, ok := upgrade.As[OutsideNamer](m); ok && storeNameShaped(base) {
+		// D-516: outside a repo an org entry, <org>/<store> or a setup;
+		// D-540: or an org store's short name (lore-ops is no snake_case
+		// name, so the snake check alone sent it on as a path)
 		e, found, err := on.OutsideStoreNamed(ctx, cmd, name)
 		if err != nil || found {
 			return e, found, err
@@ -446,6 +448,20 @@ func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, e
 	}
 	return Entry{}, false, errs.New(errs.NotFound, "store "+cmd+": no store named "+name+" in this repo").
 		WithHint("run `lore store list`, or give the store url (" + storeURLForm[cmd] + ")")
+}
+
+// storeNameShaped reports whether s is spelled like a stores.yaml name
+// (snake_case) or an org store's short name (lore-ops).
+func storeNameShaped(s string) bool {
+	return row.ValidName(s) || orgconf.ValidateStoreShortName(s) == nil
+}
+
+// orgStoreSpelling reports whether name is <org>/<store> (D-540: `store
+// push --store acme/lore-ops` was taken for a folder path, "not a git
+// store", since the slash made it no name).
+func orgStoreSpelling(name string) bool {
+	org, st, ok := strings.Cut(name, "/")
+	return ok && storeNameShaped(org) && storeNameShaped(st)
 }
 
 // OutsideNamer is the optional Manager upgrade that resolves a store name

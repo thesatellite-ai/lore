@@ -46,8 +46,8 @@ func TestJourneyStoreMovedPushFromHome(t *testing.T) {
 		lee.Lore(lee.Home, "store", "push", "--store", tlOrg).OK(t).Says(t, "nothing to send").Never(t, "sent 0")
 		// a setup's name stands for its org's store
 		lee.Lore(lee.Home, "store", "push", "--store", tlLeadSetup).OK(t).Says(t, "nothing to send")
-		lee.Lore(lee.Home, "store", "push", "--store", "nosuch").Refused(t, "no org or setup is named nosuch", tlOrg, tlLeadSetup).
+		lee.Lore(lee.Home, "store", "push", "--store", "nosuch").Refused(t, "no org, org store or setup is named nosuch", tlOrg, tlLeadSetup).
 			Never(t, "in this repo")
-		lee.Lore(lee.Home, "store", "forget", "--url", "nosuch").Refused(t, "no org or setup is named nosuch").Never(t, "in this repo")
+		lee.Lore(lee.Home, "store", "forget", "--url", "nosuch").Refused(t, "no org, org store or setup is named nosuch").Never(t, "in this repo")
 	})
 }
