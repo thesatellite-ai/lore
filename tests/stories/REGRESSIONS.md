@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1863 |
+| fixed | 1864 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -844,6 +844,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-524 | finding | matrix: `lore fix` in a store clone (team and ops stores, root and folder) said "lore fix works on one project: not inside a git repo here" in a git repo | fixed | TestStoreCloneRefusalNamesWhatApplies, TestStoryWXFixExitAndStoreClone | ops/fix StoreCloneGate (wire FixStoreCloneHere): E_NOT_A_STORE "<clone> is a lore store clone, not a code repo", hint cd into the code repo, lore fix --all, --store does not apply, lore store doctor checks the clone and lore sync sends its commits; docs operations/upgrade |
 | devco:D-514 | finding | owner 2026-11-17: `lore store set-url --name <org> --url <new> --yes` after the org store moved to another GitHub org set the store clone's git user to the person's personal lore identity and said "(your lore identity)", while the commit set-url made there was authored with the org identity; a second store of the same org got the org email | fixed | TestJourneyStoreMovedToAnotherOrg, TestStoreOwnerFollowsSetURLMove | set-url opened the new address before orgs[].stores named it, so storeSigner.owner found no org; wire/storemove_identity.go: set-url marks its ctx with the move and owner (the one resolver of a clone's git user and lore's commit identity) also tries the old address; a carried clone's lore-written git user is reset to that same identity (carriedCloneIdentity) |
 | devco:D-515 | finding | owner 2026-11-17: set-url on the company store left the old clone at stores/<old org>/… with a `lore store forget` hint, while for the ops store (holding unpushed work) it moved the clone | fixed | TestJourneyStoreMovedToAnotherOrg, TestJourneyTeamLeadStoreMoved, TestSetStoreURLMovesPushedClone | wire/storeseturl_clone.go planCleanCarry: one fully pushed old clone is carried like a stranded one (origin re-pointed, the fresh clone of the new address dropped, moved into the new address's folder, clone record re-keyed); left in place and named with forget only when several old clones exist or the new address's clone is the person's own or holds work |
+| devco:D-521 | finding | write matrix 2026-11-17: `lore migrate run` in a code repo of an org said "Nothing to migrate: every row is already in the current format." yet printed `lore: pushed store acme, …: commit … to branch main`: it pushed the org store's waiting commits (only push and sync move a remote) | fixed | TestMigrateOrgSyncFetchesOnly, TestJourneyMigrateNothingPushesNoWaitingStoreCommit | wire/migrate.go migrateOrg brought each org store up to date with a full sync (fetch, merge, push) before converting it: now fetch-only (fetchOnly); and the store's first read of the command (caller identity, before the run) retried a push=now store's waiting commits as any write command does: `migrate.run` marks its ctx from the top of App.run (opsmigrate.WithCommand) and storePush.refresh fetches like a read under it; the run still pushes the store commits it makes itself (Finish, the moved and live rows) |
 
 ## lore-adoptfix
 

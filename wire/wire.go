@@ -1004,6 +1004,9 @@ func removeEmptyDirs(dir string) int {
 // run is Run without the refusal clean-up.
 func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
 	ctx = a.TeamContext(ctx) // P3-COORD-3: --assign @h, --mine, STATE without a host Team (wire/coord_standalone.go)
+	if e.Spec().Name == opsmigrate.OpRun {
+		ctx = opsmigrate.WithCommand(ctx) // devco:D-521: its store reads fetch, never push what already waited
+	}
 	// P3-CFG-1: a Local operation opens nothing, not even the
 	// agent detection's repo state (wire/localops.go).
 	if e.Spec().Name == opsrepoinit.OpRepoInit {

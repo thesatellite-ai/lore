@@ -270,7 +270,7 @@ func (b *storePush) refresh(ctx context.Context) {
 		// fetch, no retried push, so an offline command never waits for the
 		// network's timeout again; `lore sync` always tries (devco:U-6)
 		b.backingOff = true
-		if readRun(ctx) || opsmigrate.NoPushAsked(ctx) {
+		if readRun(ctx) || opsmigrate.NoPushAsked(ctx) || opsmigrate.InCommand(ctx) {
 			// the remote was out of reach a moment ago: a read still names
 			// the commits that wait and how they are sent (devco:D-387)
 			b.reach = reachOffline
@@ -283,8 +283,11 @@ func (b *storePush) refresh(ctx context.Context) {
 	// the fetch is due and says when local commits wait (readRefresh); the
 	// push is a write's, `lore sync`'s or a hook's. A writing command (or
 	// one whose access is unknown here) pushes as its store's mode says.
-	if readRun(ctx) || opsmigrate.NoPushAsked(ctx) {
-		b.readRefresh(ctx, in, autopush) // a --no-push migration fetches like a read
+	if readRun(ctx) || opsmigrate.NoPushAsked(ctx) || opsmigrate.InCommand(ctx) {
+		// a --no-push migration fetches like a read; so does any migration
+		// run's read (devco:D-521): it pushes only the commits it makes
+		// itself (its Finish), never the ones that already waited
+		b.readRefresh(ctx, in, autopush)
 		return
 	}
 	push := !held || (autopush && b.pushSettings().Push == storepush.ModeBatch && in.Kind == live.FetchAlways)

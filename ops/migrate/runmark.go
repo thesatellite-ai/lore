@@ -29,6 +29,29 @@ func InRun(ctx context.Context) bool {
 	return v
 }
 
+// commandKey marks a context as the `lore migrate run` command from its
+// first step (WithCommand), before run itself starts.
+type commandKey struct{}
+
+// WithCommand marks ctx as belonging to `lore migrate run` from the
+// command's start, so the store reads the command makes before run (the
+// caller's identity, the repo state) are covered too (devco:D-521).
+//
+// Why: only push and sync move a remote. A store clone's first read in a
+// writing command retried the push of commits that already waited there
+// (push mode now after an offline write), so a run with nothing to
+// migrate sent them. Under this mark a read fetches and merges only; the
+// run pushes just the store commits it makes itself (its Finish).
+func WithCommand(ctx context.Context) context.Context {
+	return context.WithValue(ctx, commandKey{}, true)
+}
+
+// InCommand reports WithCommand's mark.
+func InCommand(ctx context.Context) bool {
+	v, _ := ctx.Value(commandKey{}).(bool) // absent: not a migration command
+	return v
+}
+
 // machineLocalKey marks a run given --machine-local.
 type machineLocalKey struct{}
 
