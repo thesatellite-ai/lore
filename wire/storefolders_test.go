@@ -125,7 +125,7 @@ func TestStoreFoldersWithoutRepo(t *testing.T) {
 	// H-12: set-url runs on the setup outside a repo (an org's store, me,
 	// a sto_ id); a .lore/stores.yaml name is not found, and the error
 	// says where it is named
-	if _, err = run(t, a, opsstores.OpSetURL, `{"name":"foo","url":"`+url+`"}`, true); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "outside a repo set-url takes an org's name, me or a sto_ id") {
+	if _, err = run(t, a, opsstores.OpSetURL, `{"name":"foo","url":"`+url+`"}`, true); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "outside a repo it takes an org") || !strings.Contains(err.Error(), "or me") || strings.Contains(err.Error(), "sto_") {
 		t.Errorf("set-url of a stores.yaml name outside a repo: %v, want E_NOT_FOUND naming what works here", err)
 	}
 	if entries, _ := os.ReadDir(plain); len(entries) != 0 {

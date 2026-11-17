@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 )
@@ -157,4 +158,22 @@ func notAStoreAt(name, raw string, empty bool) error {
 	}
 	return errs.New(errs.NotAStore, verb+": "+raw+" holds no lore store with an id ("+rowfs.MarkerFile+")").
 		WithHint("check the url (lore store set-url --name " + name + " --url <url>); a v0.1.17 store needs lore fix first")
+}
+
+// oldCloneID is the store id of lore's whole clone of the address addr
+// (its marker), when one is on this machine and holds a commit.
+func oldCloneID(ctx context.Context, home, addr string) (ids.ID[ids.Store], bool) {
+	found, err := gitbackend.ScanClones(home)
+	if err != nil {
+		return ids.ID[ids.Store]{}, false
+	}
+	for _, c := range found {
+		if c.State != gitbackend.CloneWhole || !storeaddr.Same(c.Origin, addr) || emptyClone(ctx, c.Paths.Dir) {
+			continue
+		}
+		if m, merr := rowfs.ReadMarker(c.Paths.Dir); merr == nil && !m.ID.IsZero() {
+			return m.ID, true
+		}
+	}
+	return ids.ID[ids.Store]{}, false
 }
