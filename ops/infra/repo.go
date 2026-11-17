@@ -124,7 +124,8 @@ func identChar(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.'
 }
 
-// projectRepos is the live repos of project pid in the repo store.
+// projectRepos is the live repos of project pid in the repo store ("" =
+// every project's: repo list at a place with no project of its own).
 func (o ops) projectRepos(ctx context.Context, pid string) ([]row.Row, error) {
 	rows, err := o.env.List(ctx, repoStore, schema.TableRepos)
 	if err != nil {
@@ -132,7 +133,7 @@ func (o ops) projectRepos(ctx context.Context, pid string) ([]row.Row, error) {
 	}
 	var out []row.Row
 	for _, r := range rows {
-		if !r.Deleted && work.Field(r, fieldProject) == pid {
+		if !r.Deleted && (pid == "" || work.Field(r, fieldProject) == pid) {
 			out = append(out, r)
 		}
 	}
@@ -175,12 +176,20 @@ func (o ops) repoAdd(ctx context.Context, in RepoAddIn) (work.WriteOut, error) {
 }
 
 // repoList lists the repos of the project, oldest first.
+// devco D-505: at a place with no project of its own (an org store's
+// root) and no --project it lists every project's repos, as memory list
+// does there.
 func (o ops) repoList(ctx context.Context, in RepoListIn) (RepoListOut, error) {
 	pid, err := work.Project(ctx, o.env, NounRepo, in.Project)
-	if err != nil {
+	every := in.Project == "" && engine.EveryProject(err)
+	if err != nil && !every {
 		return RepoListOut{}, err
 	}
-	rows, err := o.projectRepos(ctx, pid.String())
+	project := pid.String()
+	if every {
+		project = ""
+	}
+	rows, err := o.projectRepos(ctx, project)
 	if err != nil {
 		return RepoListOut{}, err
 	}

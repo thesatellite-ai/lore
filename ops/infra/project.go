@@ -407,9 +407,19 @@ type ProjectShowIn struct {
 
 // showProject is the project ref names, or with no ref the project the
 // current folder or repo belongs to.
+//
+// devco D-505: at a place with no project of its own (an org store's
+// root, which holds every folder's project) there is no default project
+// to show; the refusal names the way to pick one instead of the store's
+// missing project row.
 func (o ops) showProject(ctx context.Context, ref string) (ids.ID[ids.Project], error) {
 	if strings.TrimSpace(ref) == "" {
-		return work.Project(ctx, o.env, NounProject, "")
+		pid, err := work.Project(ctx, o.env, NounProject, "")
+		if engine.EveryProject(err) {
+			return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "project show: this folder is the root of a store, which holds the projects of all its folders and is none of them").
+				WithHint("name one: lore project show --id <name> (lore project list names them), or run it in a folder of the store; lore <kind> list --store <store> reads a store's rows from anywhere, and lore setup check --setup <name> shows the folders of a setup")
+		}
+		return pid, err
 	}
 	return work.ProjectRef(ctx, o.env, NounProject, ref)
 }

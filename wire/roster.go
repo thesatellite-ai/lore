@@ -363,9 +363,12 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 	// lore search in a repo with no lore data reached here for the personal
 	// store's root (no folder id) and committed a nameless project row there,
 	// which the next lore sync pushed.
+	// devco D-505: the refusal carries engine.ErrNoPlaceProject, so a read
+	// that filters by "this project" (content lists, link, tag, repo list)
+	// reads every project's rows instead, as memory list does here.
 	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
-		return value.Ref{}, errs.New(errs.NotFound, "store "+string(target)+" has no project row yet, and a read never makes one").
-			WithHint("a write there makes it (lore memory add --to " + string(target) + " --body \"…\"); lore search and lore <kind> list --store " + string(target) + " read its rows without one")
+		return value.Ref{}, errs.Wrap(errs.NotFound, "store "+string(target)+" has no project row yet, and a read never makes one", engine.ErrNoPlaceProject).
+			WithHint(noPlaceProjectHint(target))
 	}
 	n, err := value.TextOf(folder)
 	if err != nil {
@@ -597,4 +600,12 @@ func readWithoutProject(ctx context.Context, opts Options) bool {
 func insideWorkTree(ctx context.Context, dir string) bool {
 	out, err := gitRun{dir: dir, args: []string{"rev-parse", "--is-inside-work-tree"}}.output(ctx)
 	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// noPlaceProjectHint is the hint of rosterProject's read refusal at target
+// (a store with no project row). devco D-505: a not-here refusal names the
+// two ways out a person has from anywhere, --store (read the store's rows
+// by name) and --setup (the setup whose stores and folders a place is in).
+func noPlaceProjectHint(target store.Source) string {
+	return "a write there makes it (lore memory add --to " + string(target) + " --body \"…\"); lore search and lore <kind> list --store " + string(target) + " read its rows without one; lore setup check --setup <name> shows the folders of a setup and the store each one reads"
 }

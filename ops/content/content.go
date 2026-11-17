@@ -526,8 +526,15 @@ func (o Ops) Search(ctx context.Context, a SearchArgs, keep func(row.Row) bool) 
 // Without --project it is the repo's own project: v0.1.17 listed and
 // searched these nouns in the current project only (Where ProjectID), so
 // rows another repo wrote into a shared store stay out unless named.
+//
+// devco D-505: at a place with no project of its own (the root of an org
+// store's clone) a read with no --project keeps every project's rows ("")
+// instead of refusing, as memory list answers there.
 func (o Ops) ProjectFilter(ctx context.Context, flag string) (string, error) {
 	p, err := o.ProjectOf(ctx, flag)
+	if flag == "" && engine.EveryProject(err) {
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
