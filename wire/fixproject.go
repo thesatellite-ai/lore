@@ -491,6 +491,9 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 	}
 	if client {
 		st.Result = "skipped: a client repo (lore never changes its tracked files)"
+		if why := a.UnlistedOwnHere(ctx); why != "" {
+			st.Result = "skipped: treated as a client repo (lore never changes its tracked files): " + why
+		}
 		return st
 	}
 	h, err := a.SetupHost(ctx)

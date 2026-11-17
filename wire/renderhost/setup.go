@@ -139,8 +139,13 @@ func (s *SetupHost) refuseClientRepo(ctx context.Context, remove bool) error {
 	if err != nil || !client {
 		return nil // not known as a client repo: the usual plan decides
 	}
-	return errs.New(errs.InvalidInput, "lore setup --agent-hooks writes nothing in a client repo: every agent hook goes in a settings file inside the checkout, and a client's repo never holds lore files").
-		WithHint(clientHooksHint)
+	e := errs.New(errs.InvalidInput, "lore setup --agent-hooks writes nothing in a client repo: every agent hook goes in a settings file inside the checkout, and a client's repo never holds lore files")
+	if why := s.h.app.UnlistedOwnHere(ctx); why != "" {
+		// devco D-525: client only by default (the org's own repo never
+		// listed under own:): say so and name the way out first
+		return e.WithHint(why + "; until then " + clientHooksHint)
+	}
+	return e.WithHint(clientHooksHint)
 }
 
 // clientHooksHint is how an agent gets lore's notes in a client repo.

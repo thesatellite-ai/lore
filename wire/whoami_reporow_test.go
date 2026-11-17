@@ -17,8 +17,9 @@ import (
 // the lines it had.
 func TestWhoamiRepoRowNamesThePlace(t *testing.T) {
 	t.Parallel()
-	org := &orgconf.Org{Name: "agency"}
+	org := &orgconf.Org{Name: "agency", Repos: []string{"github.com/client/*"}}
 	hosted := []string{"github.com/client/website"}
+	ownUnlisted := []string{"github.com/agency/tools"}
 	cases := []struct {
 		name    string
 		notRepo bool
@@ -28,6 +29,9 @@ func TestWhoamiRepoRowNamesThePlace(t *testing.T) {
 	}{
 		{"client repo", false, hosted, orgresolve.RoleClient, "client repo  (guards on)"},
 		{"own repo", false, hosted, orgresolve.RoleOwn, "own repo  (no client guards)"},
+		// devco D-525: client by the fail-closed default alone (no own: or
+		// repos: pattern, no link): the line says so and names the way out
+		{"own repo never listed under own:", false, ownUnlisted, orgresolve.RoleClient, "treated as a client repo  (guards on: no own: pattern of agency matches github.com/agency/tools, so lore treats it as a client repo (fail closed); if it is agency's own repo: lore org config set --org agency --key own --add github.com/agency/tools --yes)"},
 		{"no org", false, hosted, orgresolve.RoleNone, "no org  (fallback identity)"},
 		{"plain folder under a setup", true, nil, orgresolve.RoleClient, "not a git repo  (treated as a client repo: guards on)"},
 		{"plain folder, no org", true, nil, orgresolve.RoleNone, "not a git repo  (no org, fallback identity)"},
