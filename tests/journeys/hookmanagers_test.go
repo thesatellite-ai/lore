@@ -13,9 +13,10 @@ package journeys
 //     a lore write adds its block to the hook file already there but
 //     creates no new file in .husky, and says which it left out; doctor's
 //     first warning is the leak guard being off, with `lore fix`; a commit
-//     with a key made meanwhile is named by the next lore command; `lore fix`
-//     (which asks) creates the hook files and says they are new files of
-//     the repo; the push is then refused.
+//     with a key made meanwhile is named by the next lore command; `lore fix
+//     --tracked-hooks` (the explicit yes, devco D-501) creates the hook
+//     files and says they are new files of the repo; the push is then
+//     refused.
 
 import (
 	"os"
@@ -61,9 +62,9 @@ func TestJourneyHookManagers(t *testing.T) {
 		c.TryGit("commit", "-q", "-m", "husky").OK(t)
 		c.Git("config", "core.hooksPath", ".husky")
 		lap.LoreIn(c, "memory", "add", "--body", "husky runs the lint").OK(t).
-			Says(t, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push or add its block to pre-commit in "+husky, "`lore fix`", "leak guard off in this clone")
+			Says(t, "lore did not create commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-push or add its block to pre-commit in "+husky, "`lore fix --tracked-hooks`", "leak guard off in this clone")
 		// D-142: a write neither creates nor changes a file in the tracked
-		// .husky (it would reach every teammate); `lore fix` does, after asking.
+		// .husky (it would reach every teammate); `lore fix --tracked-hooks` does (D-501).
 		if st := c.Git("status", "--porcelain", "--untracked-files=all", "--", ".husky"); st != "" {
 			t.Fatalf("a lore write created or changed files in the tracked .husky:\n%s", st)
 		}
@@ -77,8 +78,8 @@ func TestJourneyHookManagers(t *testing.T) {
 		r := lap.LoreIn(c, "doctor")
 		out := r.Out()
 		i := strings.Index(out, "Warnings:")
-		if i < 0 || !strings.HasPrefix(strings.TrimSpace(out[i+len("Warnings:"):]), "- live: leak guard off in this clone") || !strings.Contains(out, "run `lore fix` to restore them") {
-			t.Fatalf("doctor's first warning is not the leak guard with lore fix:\n%s", r)
+		if i < 0 || !strings.HasPrefix(strings.TrimSpace(out[i+len("Warnings:"):]), "- live: leak guard off in this clone") || !strings.Contains(out, "run `lore fix --tracked-hooks` to restore them") {
+			t.Fatalf("doctor's first warning is not the leak guard with lore fix --tracked-hooks:\n%s", r)
 		}
 		// devco:Q-16: one cause, one line, one next step: no "git is not
 		// set up for lore's row files … lore sync" opener and no second
@@ -95,7 +96,7 @@ func TestJourneyHookManagers(t *testing.T) {
 	})
 
 	w.Step("day2/lore-fix-creates-the-hook-files-and-says-so", func() {
-		lap.LoreIn(c, "fix", "--yes").Says(t, "hook blocks in "+husky, "new or changed files in "+husky+", a folder committed with the repo", "commit them to share lore's checks").Never(t, key)
+		lap.LoreIn(c, "fix", "--yes", "--tracked-hooks").Says(t, "hook blocks in "+husky, "new or changed files in "+husky+", a folder committed with the repo", "commit them to share lore's checks").Never(t, key)
 		c.TryGit("push", "-q").Refused(t, "E_LEAK_BLOCKED", "deploy/aws.env").Never(t, key)
 	})
 }

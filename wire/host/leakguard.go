@@ -98,8 +98,15 @@ func (s *liveSession) guardOffText(ctx context.Context, dir string, missing []st
 // the hooks folder (core.hooksPath: husky, a shared hooks folder), that it
 // must run again after the manager reinstalls its hooks, since a reinstall
 // rewrites the folder without lore's blocks.
+//
+// A hooks folder committed with the repo (D-501) takes the explicit yes:
+// plain `lore fix` leaves it alone, so the step is `lore fix
+// --tracked-hooks` (with the local way in trackedHooksSkipped).
 func (s *liveSession) guardNextStep(ctx context.Context) string {
 	step := "; run `lore fix` to restore them"
+	if dir, _, err := s.hooksFolder(ctx); err == nil && s.trackedHooksFolder(ctx, dir) {
+		step = "; run `lore fix --" + fixTrackedHooksFlag + "` to restore them (" + dir + " is committed with the repo: commit the blocks after; to keep them on this machine only, copy that folder's hooks into .git/hooks, run `git config --local core.hooksPath .git/hooks`, then `lore fix`)"
+	}
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" {
 		step += " (core.hooksPath belongs to a hook manager: run `lore fix` again after it reinstalls its hooks)"
 	}
@@ -115,7 +122,7 @@ func (s *liveSession) guardOff(ctx context.Context, dir string) []string {
 		return nil
 	}
 	missing := missingGuardHooks(dir)
-	if len(missing) == 0 || s.neverWired(ctx, dir) || s.clientHooksInWorkTree(ctx, dir) {
+	if len(missing) == 0 || s.neverWired(ctx, dir) || s.clientHooksInWorkTree(ctx, dir) || s.privateTrackedHooks(ctx, dir) {
 		return nil
 	}
 	return missing
@@ -130,6 +137,24 @@ func (s *liveSession) hooksInWorkTree(dir string) bool {
 	}
 	first := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
 	return first != ".git"
+}
+
+// trackedHooksFolder reports whether dir is a hooks folder in the work
+// tree that the repo commits (git tracks a file in it): only `lore fix
+// --tracked-hooks` writes there (D-501).
+func (s *liveSession) trackedHooksFolder(ctx context.Context, dir string) bool {
+	if !s.hooksInWorkTree(dir) {
+		return false
+	}
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-files", "--", dir}})
+	return err == nil && strings.TrimSpace(string(out)) != ""
+}
+
+// privateTrackedHooks reports whether dir is a tracked hooks folder of a
+// private project (.lore/ ignored by git, D-500): lore never puts its
+// blocks there, so their absence is no leak-guard warning.
+func (s *liveSession) privateTrackedHooks(ctx context.Context, dir string) bool {
+	return s.trackedHooksFolder(ctx, dir) && !wire.RepoMayHoldLoreFiles(ctx, s.top, false)
 }
 
 // hookWrite is one lore block a command would put into a hook file.
@@ -148,11 +173,8 @@ type hookWrite struct {
 // file (a person's own, not shared), or a file whose block is already
 // current lists nothing.
 func (s *liveSession) teamHookWrites(ctx context.Context, dir string, writes []hookWrite) (created, changed []string) {
-	if !s.hooksInWorkTree(dir) {
-		return nil, nil
-	}
-	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-files", "--", dir}}); err != nil || strings.TrimSpace(string(out)) == "" {
-		return nil, nil // nothing of the folder is committed: not the team's
+	if !s.trackedHooksFolder(ctx, dir) {
+		return nil, nil // not in the work tree, or nothing of it committed: not the team's
 	}
 	for _, w := range writes {
 		p := filepath.Join(dir, w.name)
@@ -191,9 +213,31 @@ func teamHookNames(created, changed []string) string {
 	return strings.Join(parts, " or ")
 }
 
-// trackedHooksSkipped is a write's line when it left hook files of a
-// tracked hooks folder alone (H-19, stories H-1): "%s" is teamHookNames.
-const trackedHooksSkipped = "lore did not %s in %s: that folder is in the work tree and committed with the repo, so a new or changed file there reaches every teammate; `lore fix` writes them after asking (then commit them), or add lore's lines to your own hook files"
+// trackedHooksSkipped is a command's line when it left hook files of a
+// tracked hooks folder alone (H-19, stories H-1, devco D-501: init and
+// doctor --fix too): "%s" is teamHookNames, then the folder. It names the
+// explicit yes (`lore fix --tracked-hooks`) and the local way: hooks in
+// .git/hooks are never committed.
+const trackedHooksSkipped = "lore did not %s in %s: that folder is in the work tree and committed with the repo, so a new or changed file there reaches every teammate; to add lore's blocks there run `lore fix --tracked-hooks` (then commit them); to keep them on this machine only, copy the folder's hooks into .git/hooks, run `git config --local core.hooksPath .git/hooks`, then `lore fix`; or add lore's lines to your own hook files"
+
+// fixTrackedHooksFlag is lore fix's flag giving the explicit yes to write
+// lore's hook blocks into a hooks folder committed with the repo (D-501).
+const fixTrackedHooksFlag = "tracked-hooks"
+
+// trackedHooksKey marks a context whose run said yes to tracked hooks.
+type trackedHooksKey struct{}
+
+// withTrackedHooksYes marks ctx: this run (`lore fix --tracked-hooks`)
+// may write lore's blocks into a tracked hooks folder (D-501).
+func withTrackedHooksYes(ctx context.Context) context.Context {
+	return context.WithValue(ctx, trackedHooksKey{}, true)
+}
+
+// trackedHooksYes reports whether ctx carries that yes.
+func trackedHooksYes(ctx context.Context) bool {
+	v, ok := ctx.Value(trackedHooksKey{}).(bool)
+	return ok && v
+}
 
 // trackedHooksCreated follows the set-up line of `lore fix` when it
 // created or changed files in a tracked hooks folder (H-19).

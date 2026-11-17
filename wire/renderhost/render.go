@@ -390,7 +390,7 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if !f.quiet {
 			h.printTargetPick(f.out(), pick)
 		}
-		if err = h.stitchPointers(f.out(), root, pick.targets, resolvedOut); err != nil {
+		if err = h.stitchRepoPointers(ctx, f.out(), root, pick.targets, resolvedOut); err != nil { // D-500
 			return err
 		}
 		if !f.quiet {

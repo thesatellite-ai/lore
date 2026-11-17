@@ -210,6 +210,12 @@ type RunIn struct {
 	// Verbose (K-10) names every repo --all found with no lore data; the
 	// summary always counts them.
 	Verbose bool `json:"verbose,omitempty" flag:"verbose" desc:"with --all: also list each repo found with no lore data (the summary always counts them)"`
+	// TrackedHooks (devco D-501) is the explicit yes to add lore's hook
+	// blocks to a hooks folder committed with the repo (core.hooksPath in
+	// the work tree, such as .githooks or .husky): without it no command
+	// writes there, init and doctor --fix included. A project whose .lore
+	// folder git ignores never gets them (D-500).
+	TrackedHooks bool `json:"tracked_hooks,omitempty" flag:"tracked-hooks" desc:"also add lore's hook blocks to a hooks folder committed with the repo (core.hooksPath in the work tree, such as .githooks); without it lore leaves such a folder alone"`
 }
 
 // RepoResult is one repo's block of --all.

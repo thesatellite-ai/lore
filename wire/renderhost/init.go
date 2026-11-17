@@ -55,7 +55,7 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 		fmt.Fprintf(w, "%s %s\n", h.decor.muted("·"), v.Note())
 	}
 	out := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
-	if err := h.stitchPointers(w, root, pick.targets, out); err != nil {
+	if err := h.stitchRepoPointers(ctx, w, root, pick.targets, out); err != nil { // D-500
 		return err
 	}
 	h.ignoredPointerLines(ctx, w, root, pick.targets) // devco:S-2

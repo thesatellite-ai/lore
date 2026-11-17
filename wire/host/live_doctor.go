@@ -224,6 +224,25 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	if !fix && len(s.guardOff(ctx, dir)) > 0 {
 		return // devco:Q-16: the leak-guard warning names these blocks and `lore fix` (doctorGuard)
 	}
+	// devco D-501: the ride-along blocks went into a hooks folder committed
+	// with the repo (core.hooksPath=.githooks) on doctor --fix with no
+	// question, past the guard every other hook write has (teamHookWrites).
+	// Only `lore fix --tracked-hooks` writes there, and never in a private
+	// project (D-500).
+	rides := make([]hookWrite, 0, len(missing))
+	for _, h := range missing {
+		rides = append(rides, hookWrite{name: h, marker: rideHookMarker, lines: rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))})
+	}
+	if created, changed := s.teamHookWrites(ctx, dir, rides); len(created)+len(changed) > 0 {
+		if !wire.RepoMayHoldLoreFiles(ctx, s.top, false) {
+			note(what + "; not installed: " + dir + " is committed with the repo and this project is private to this machine (.lore/ is ignored by git), so lore adds no block there")
+			return
+		}
+		if !fix || !trackedHooksYes(ctx) {
+			warn(what + "; " + fmt.Sprintf(trackedHooksSkipped, teamHookNames(created, changed), dir))
+			return
+		}
+	}
 	if !fix {
 		warn(what + "; run `lore fix` (or `lore sync`) to install it; a read never does")
 		return
