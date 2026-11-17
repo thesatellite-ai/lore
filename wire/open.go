@@ -231,7 +231,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			return fail(err)
 		}
 	case NoCreate(ctx) && !loreFolderAt(st.repoTop): // doctor_nocreate.go: a read (or a write that may not set up, S-2) never creates .lore/
-		return fail(noProjectErr(ctx, st.repoTop))
+		return fail(withOwnOrgLink(noProjectErr(ctx, st.repoTop), ownOrgOf(ctx, opts)))
 	default:
 		// Only a command that sets a repo up on purpose (init, setup,
 		// link, store add, sync: host.setsUpRepo) or an in-process caller

@@ -47,6 +47,10 @@ const errOneMode = "pass only one of --for-file, --for-task, --topic, --topics, 
 
 // FetchIn is the input of context.fetch (the v0.1.17 flags).
 type FetchIn struct {
+	// --store <org>[/<folder>] (devco D-555): context for a store read
+	// from anywhere (the home folder, a repo not linked to a folder), as
+	// every other read takes it.
+	op.StoreFlag
 	ForFile      string `json:"for_file,omitempty" flag:"for-file" desc:"rules, hotfixes and notes for this path"`
 	ForTask      string `json:"for_task,omitempty" flag:"for-task" desc:"the task, its plan and links, then what applies to the files it names"`
 	Topic        string `json:"topic,omitempty" flag:"topic" desc:"every row tagged with this topic"`

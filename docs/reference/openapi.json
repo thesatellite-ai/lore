@@ -12851,6 +12851,10 @@
                     "type": "boolean",
                     "description": "with --hook: answer SessionStart (in a repo with no LORE.md the always-on rules first, then in-flight tasks, rows changed since your last session)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "table": {
                     "type": "string",
                     "description": "with --internal: only this table (rules, memories, decisions, tasks, …)"
@@ -60220,7 +60224,7 @@
       },
       "get": {
         "operationId": "resource.list",
-        "summary": "List resources of a kind",
+        "summary": "List resources of a kind (every kind when none is given)",
         "tags": [
           "resource"
         ],
@@ -60238,11 +60242,11 @@
           {
             "name": "kind",
             "in": "query",
-            "required": true,
-            "description": "the kind (name or knd_ id)",
+            "required": false,
+            "description": "the kind (name or knd_ id); every kind when left out",
             "schema": {
               "type": "string",
-              "description": "the kind (name or knd_ id)"
+              "description": "the kind (name or knd_ id); every kind when left out"
             }
           },
           {
@@ -83655,6 +83659,9 @@
                   "properties": {
                     "count": {
                       "type": "integer"
+                    },
+                    "hint": {
+                      "type": "string"
                     },
                     "stores": {
                       "type": "array",

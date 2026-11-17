@@ -180,6 +180,39 @@ type ListIn struct {
 type ListOut struct {
 	Stores []Entry `json:"stores"`
 	Count  int     `json:"count"`
+	// Hint names the setups whose org stores this list leaves out, when
+	// the folder is under none of them (devco D-554: `store list` in the
+	// home folder said "count: 1" while two setups had stores).
+	Hint string `json:"hint,omitempty"`
+}
+
+// setupsHint is store.list's hint when it lists no org store but setups
+// bring some: the --setup form of the list for each ("" otherwise).
+func setupsHint(ctx context.Context, m Manager, got []Entry) string {
+	for _, e := range got {
+		if e.Source == SourceOrg {
+			return ""
+		}
+	}
+	sh, ok := upgrade.As[SetupHinter](m)
+	if !ok {
+		return ""
+	}
+	names := sh.OrgSetupNames(ctx)
+	if len(names) == 0 {
+		return ""
+	}
+	cmds := make([]string, len(names))
+	for i, n := range names {
+		cmds[i] = "lore store list --setup " + n
+	}
+	return "no setup covers this folder, so no org store is listed; " + strings.Join(cmds, " or ") + " lists that setup's stores"
+}
+
+// SetupHinter is the Manager's list of the setups that bring org stores
+// (each by name), for store.list's hint outside every setup.
+type SetupHinter interface {
+	OrgSetupNames(ctx context.Context) []string
 }
 
 // VisibilityIn is the input of store.visibility.
@@ -453,7 +486,7 @@ func Ops(m Manager) []op.Entry {
 				got[i].Name, got[i].URL = repourl.Mask(got[i].Name), repourl.Mask(got[i].URL)
 				got[i].Address = repourl.MaskText(got[i].Address)
 			}
-			return ListOut{Stores: got, Count: len(got)}, nil
+			return ListOut{Stores: got, Count: len(got), Hint: setupsHint(ctx, m, got)}, nil
 		}),
 		// Flow (CFG4): validate → read the current visibility → same: done
 		// → shareable and not yet confirmed: E_NEEDS_CONFIRM (going back

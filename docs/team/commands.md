@@ -758,6 +758,7 @@ Flags:
       --meta                also print each returned row's metadata (sensitive values masked)
       --search string       with --internal: only rows whose title or body contains this text
       --session-start       with --hook: answer SessionStart (in a repo with no LORE.md the always-on rules first, then in-flight tasks, rows changed since your last session)
+      --store string        read this store: <org> (every folder of the org), <org>/<folder>, repo, or a store's name (default every attached store) (also --to)
       --table string        with --internal: only this table (rules, memories, decisions, tasks, …)
       --topic string        every row tagged with this topic
       --topics              list the topics with their counts

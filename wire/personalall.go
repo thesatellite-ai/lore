@@ -127,3 +127,22 @@ func personalEntryName(raw string, local bool, taken map[string]bool) string {
 	}
 	return strings.TrimLeft(strings.ToLower(orgconf.RepoName(raw)), "_-.")
 }
+
+// OrgSetupNames implements opsstores.SetupHinter: every enabled setup
+// that names an org (its stores are what `store list --setup <name>`
+// lists), in config order (devco D-554).
+func (a *App) OrgSetupNames(_ context.Context) []string {
+	cfg, err := ReadSetupsConfig(a.opts.Home)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, s := range cfg.Setups {
+		if !s.Disabled && strings.TrimSpace(s.Org) != "" {
+			out = append(out, s.Name)
+		}
+	}
+	return out
+}
+
+var _ opsstores.SetupHinter = (*App)(nil)

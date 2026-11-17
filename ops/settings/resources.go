@@ -161,7 +161,9 @@ type ResNameIn struct {
 type ResListIn struct {
 	// --store <store> (devco D-499): the read names its store.
 	op.StoreFlag
-	Kind          string   `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
+	// Kind is optional (devco D-550): with none the list covers every
+	// kind, so `resource list --store <org>` answers like the rest.
+	Kind          string   `json:"kind,omitempty" arg:"0" desc:"the kind (name or knd_ id); every kind when left out"`
 	Where         []string `json:"where,omitempty" flag:"where" desc:"filter on a field: = != ~= > >= < <= ? !? or field:a,b (repeatable; all must match)"`
 	Sort          []string `json:"sort,omitempty" flag:"sort" desc:"sort by name, last_checked, archived_at or a field: <key>, <key>:asc or <key>:desc (repeatable; default name)"`
 	Archived      bool     `json:"archived,omitempty" flag:"archived" desc:"include archived resources"`
@@ -370,7 +372,7 @@ func (o ops) resourceOps() []op.Entry {
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm, errs.ResourceAmbiguous, errs.Unsupported), Confirm: op.ConfirmRule{When: "show_sensitive"},
 			Examples: []op.Example{{Title: "one resource", CLI: "lore resource show --id prod_db"}, {Title: "fill in its ${var:…} references", CLI: "lore resource show --id prod_db --expand"}}}, o.resShow),
-		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
+		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind (every kind when none is given)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}, Examples: []op.Example{{Title: "every database", CLI: "lore resource list --kind database"}}}, o.resList),
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
 		// it may ask (a preview above batch.preview_rows); the one-row form
@@ -1094,6 +1096,9 @@ func (o ops) resShow(ctx context.Context, in ResShowIn) (ResOut, error) {
 }
 
 func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
+	if strings.TrimSpace(in.Kind) == "" {
+		return o.resListEvery(ctx, in)
+	}
 	d, err := o.kindDefRead(ctx, in.Kind)
 	if err != nil {
 		return ResListOut{}, err
@@ -1168,6 +1173,50 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	if !in.ShowSensitive && filtersSensitive(d, m) {
 		out.Notes = append(out.Notes, noteSensitiveFilter)
 	}
+	out.Count = len(out.Data)
+	return out, nil
+}
+
+// resListEvery is resource list with no kind (devco D-550: `resource
+// list --store <org>` refused while `--kind <kind> --store <org>`
+// answered): every kind's list, one after another (kind, then name), with
+// no field columns since kinds differ in their fields. --where and --sort
+// name a kind's fields, so they still need --kind.
+func (o ops) resListEvery(ctx context.Context, in ResListIn) (ResListOut, error) {
+	if len(in.Where) > 0 || len(in.Sort) > 0 {
+		return ResListOut{}, errs.New(errs.InvalidInput, "resource list: --where and --sort filter on a kind's fields, so they need --kind").
+			WithHint("lore resource list --kind <kind> --where <field>=<value>; lore resource kinds names the kinds")
+	}
+	ks, err := o.kindList(ctx, KindsIn{})
+	if err != nil {
+		return ResListOut{}, err
+	}
+	out := ResListOut{Data: []Resource{}}
+	seen := map[string]bool{}
+	for _, k := range ks.Data {
+		if seen[k.ID] {
+			continue
+		}
+		seen[k.ID] = true
+		one := in
+		one.Kind = k.ID
+		got, lerr := o.resList(ctx, one)
+		if lerr != nil {
+			return ResListOut{}, lerr
+		}
+		out.Data = append(out.Data, got.Data...)
+		for _, n := range got.Notes {
+			if !slices.Contains(out.Notes, n) {
+				out.Notes = append(out.Notes, n)
+			}
+		}
+	}
+	slices.SortStableFunc(out.Data, func(a, b Resource) int {
+		if c := strings.Compare(a.Kind, b.Kind); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
 	out.Count = len(out.Data)
 	return out, nil
 }

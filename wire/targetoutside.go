@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	contextop "github.com/thesatellite-ai/lore/ops/context"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
@@ -57,7 +58,7 @@ const projectField = "project"
 // setup's default store, the org store holding this folder's org roster.
 func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (res op.Result, handled bool, err error) {
 	spec := e.Spec()
-	if spec.Local {
+	if spec.Local && !storeRoutedLocal(e, d) {
 		return op.Result{}, false, nil
 	}
 	write := spec.Access == op.AccessWrite
@@ -84,7 +85,11 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		// A read whose --store is op.StoreFlag (D-499: its operation
 		// does not filter by it) reads the store it names alone too.
 		orgRead := !write && (a.namesOrgRead(ctx, e, d) || routedStoreRead(e, d))
-		if !orgRead && (!write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "") {
+		// A read by id in a repo lore is not set up in reads the org
+		// folder holding the row, as an edit by id there writes it
+		// (devco D-551: memory edit --id worked, memory show --id refused).
+		idRead := !write && !orgRead && UntouchedRepo(ctx, a.opts.RepoDir) != "" && linkedByRemote(ctx, a.opts) == "" && a.namesHeldRow(ctx, e, d)
+		if !orgRead && !idRead && (!write || UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "") {
 			return op.Result{}, false, nil
 		}
 		if orgRead {
@@ -119,13 +124,25 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	// folder holding the row, beside the folder `to` names (devco D-433):
 	// before it every such write outside a repo needed one
 	var holder []attach.Store
-	if write {
-		if h, ok := a.rowFolderOutside(ctx, in); ok {
-			if to == "" {
-				to, useDefault = string(h.Name), false
-			} else if string(h.Name) != to {
-				holder = append(holder, h)
-			}
+	if h, ok := a.rowFolderOutside(ctx, in); ok {
+		switch {
+		case to == "":
+			// ids are unique across the org's stores: a read by id finds
+			// its row as an edit by id does (devco D-550, D-553), with no
+			// --store and no setup covering this folder
+			to, useDefault = string(h.Name), false
+		case string(h.Name) == to:
+		case write:
+			holder = append(holder, h)
+		case strings.Contains(to, targetSep) && !strings.HasPrefix(string(h.Name), to+targetSep) &&
+			!strings.HasPrefix(to, string(h.Name)+targetSep):
+			// (a row in the org folder the named folder's read attaches beside
+			// it, e.g. task show --from agency/client2 of a row in agency, is
+			// read there as before: not "elsewhere")
+			// a read naming one folder that does not hold the row: say
+			// where it is instead of a branch hint that has no meaning
+			// outside a repo (devco D-552)
+			return op.Result{}, true, rowElsewhereErr(in, to, string(h.Name), spec.Name)
 		}
 	}
 	if useDefault {
@@ -390,6 +407,39 @@ func plainFolder(ctx context.Context, dir string) bool {
 	return !strings.Contains(string(out), "true")
 }
 
+// storeRoutedLocal reports a Local read that names its store with
+// --store: `lore context --store <org>[/<folder>]` (devco D-555) runs on
+// the store-only open every other store read gets, from the home folder or
+// a repo not linked to a folder, instead of the repo-only local path.
+func storeRoutedLocal(e op.Entry, d op.Decoder) bool {
+	return e.Spec().Name == contextop.OpFetch && routedStoreRead(e, d)
+}
+
+// namesHeldRow reports whether e's input names a row by id that a folder
+// of the org's stores holds (rowFolderOutside).
+func (a *App) namesHeldRow(ctx context.Context, e op.Entry, d op.Decoder) bool {
+	in, err := e.Decode(d)
+	if err != nil {
+		return false
+	}
+	_, ok := a.rowFolderOutside(ctx, in)
+	return ok
+}
+
+// rowElsewhereErr is a read's refusal when the folder it names (to) does
+// not hold the row its --id names but the org folder held does: ids are
+// unique, so it says where the row is and the read that finds it.
+func rowElsewhereErr(in op.Input, to, held, opName string) error {
+	id := ""
+	for _, tv := range in.Texts() {
+		if tv.Field == idField {
+			id = strings.TrimSpace(tv.Text)
+		}
+	}
+	return errs.New(errs.NotFound, "no row "+id+" in "+to+"; it is in "+held).
+		WithHint(OpCommandName(opName) + " --id " + id + " --store " + held)
+}
+
 // idField is the input field naming one row (`--id`).
 const idField = "id"
 
@@ -407,7 +457,17 @@ func (a *App) rowFolderOutside(ctx context.Context, in op.Input) (attach.Store, 
 	if id == "" || strings.ContainsAny(id, `/\*?[`) {
 		return attach.Store{}, false
 	}
-	for _, f := range a.orgFolders(ctx).Folders {
+	// this folder's org first; then every org of the config (the home
+	// folder is under no setup, and an id names one row anywhere: D-553)
+	if h, ok := a.rowFolderIn(ctx, a.orgFolders(ctx), id); ok {
+		return h, true
+	}
+	return a.rowFolderIn(ctx, a.everyOrgFolders(ctx), id)
+}
+
+// rowFolderIn is rowFolderOutside over one scan of org-store folders.
+func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string) (attach.Store, bool) {
+	for _, f := range scan.Folders {
 		if f.Dir == "" {
 			continue
 		}
