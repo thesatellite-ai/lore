@@ -91,6 +91,13 @@ type LensOptions struct {
 	// app clock (LORE_NOW in a test build), so `lore sql` agrees with
 	// `lore task list` on a running timer. Zero means the machine's clock.
 	Now time.Time
+	// Places maps a source name to the readable label of its place, the
+	// one search and every list print ("acme/web" for the source "acme"
+	// attached at folder web: devco D-568). Each "<table>_all" view
+	// carries it as the `place` column beside `source`, which stays the
+	// name queries filter on. A source missing here is labelled by its
+	// name.
+	Places map[string]string
 }
 
 // LensHit is where ResolveID found an id.
@@ -131,6 +138,8 @@ type Lens struct {
 	clientKey string
 	// now is LensOptions.Now: where an open time span ends (zero = time.Now).
 	now time.Time
+	// places is LensOptions.Places (the `place` column, D-568).
+	places map[string]string
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -189,7 +198,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -342,6 +351,46 @@ type srcTable struct {
 	cols []string
 }
 
+// LensPlaceColumn is the column after `source` in every "<table>_all"
+// view: the readable place of the row's source ("<org>/<folder>", the
+// label search and lists print; LensOptions.Places). A table with its own
+// column of that name (a kind field "place") keeps it, and its view gets
+// no place column, so no query over the field changes meaning.
+const LensPlaceColumn = "place"
+
+// placeOf is the place label of the source named name.
+func (l *Lens) placeOf(name string) string {
+	if p := l.places[name]; p != "" {
+		return p
+	}
+	return name
+}
+
+// placeExpr is the SQL of the place column for a source whose `source`
+// column is src: a literal for a plain source, a CASE over the row's own
+// _source for a combined or deleted-rows file (each row labelled by its
+// own store).
+func (l *Lens) placeExpr(s LensSource, src string) string {
+	if !s.ownSource() {
+		return literal(l.placeOf(s.Name))
+	}
+	if src == "NULL" || len(l.places) == 0 {
+		return src
+	}
+	names := make([]string, 0, len(l.places))
+	for n := range l.places {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	var b strings.Builder
+	b.WriteString("CASE " + src)
+	for _, n := range names {
+		b.WriteString(" WHEN " + literal(n) + " THEN " + literal(l.placeOf(n)))
+	}
+	b.WriteString(" ELSE " + src + " END")
+	return b.String()
+}
+
 // createViews creates "<n>_all" over every source that has table n (by
 // column name, NULL where a source lacks a column) and, on a masked lens,
 // the plain TEMP VIEW "<n>" over the first source that has it: TEMP shadows
@@ -361,6 +410,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 	if err != nil {
 		return err
 	}
+	withPlace := !slices.Contains(all, LensPlaceColumn)
 	var parts []string
 	for _, st := range srcs {
 		src := literal(l.sources[st.src].Name)
@@ -374,7 +424,11 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		if selErr != nil {
 			return selErr
 		}
-		part := "SELECT " + src + ` AS "source", ` + sel + ` FROM "` + attachedName(st.src) + `".` + tq
+		head := "SELECT " + src + ` AS "source", `
+		if withPlace {
+			head += l.placeExpr(l.sources[st.src], src) + ` AS "` + LensPlaceColumn + `", `
+		}
+		part := head + sel + ` FROM "` + attachedName(st.src) + `".` + tq
 		if l.sources[st.src].Shared && !l.sources[st.src].ownSource() && slices.Contains(st.cols, colSource) {
 			part += ` WHERE "` + colSource + `" = ` + literal(l.sources[st.src].Name)
 		}

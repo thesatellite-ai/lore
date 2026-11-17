@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
@@ -13,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/tmpdir"
+	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -56,6 +58,9 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, 
 	if deleted != "" {
 		srcs = append(srcs, sqlite.LensSource{Name: deletedLensName, Path: deleted, Deleted: true})
 	}
+	if o.Places == nil {
+		o.Places = a.lensPlaces(st)
+	}
 	if o.Expand == nil {
 		// lore_expand(text): var/res/row filled from the row files, never env,
 		// secrets or sensitive values (SQ4, SQ15); client repos see only their own (MQ6).
@@ -63,6 +68,25 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, 
 	}
 	l, err := sqlite.OpenLensWith(ctx, srcs, o)
 	return l, extra, err
+}
+
+// lensPlaces labels every attached store as search and the lists do
+// (devco D-568): the `place` column of the `<table>_all` views, so `lore
+// sql` shows "acme/web" where search prints "[acme/web]" while `source`
+// stays the attached name queries filter on. Every store of the engine is
+// labelled, not only the lens's own sources, because a combined or
+// deleted-rows file holds rows of any of them under their own names; the
+// repo's own rows keep their source name (search gives them no label).
+func (a *App) lensPlaces(st *state) map[string]string {
+	out := map[string]string{}
+	for _, name := range st.eng.Stores() {
+		if name == store.SourceRepo {
+			continue
+		}
+		ref, _ := a.sourcePlace(name)
+		out[string(name)] = strings.Trim(opssearch.StoreLabel(ref), "[]")
+	}
+	return out
 }
 
 // lensSources lists the cache files of st's lens, the repo first (the

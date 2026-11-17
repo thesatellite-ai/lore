@@ -11,7 +11,8 @@ package stories
 // back to the personal identity, and with --setup offered to write the alias
 // pattern into the team's shared own: list. Now the alias is resolved
 // before anything is matched or printed. devco D-532: `org link --remote`
-// typed in the alias spelling links the same repo.
+// typed in the alias spelling links the same repo. devco D-576: the repos
+// rows record the resolved spelling too.
 
 import (
 	"testing"
@@ -61,5 +62,18 @@ func TestStoryOAliasWhoami(t *testing.T) {
 		r.Says(t, "linked")
 		r.Never(t, "not a remote of this repo", aliasForm)
 		ada.Lore(cc.Dir, "whoami").OK(t).Says(t, "portal").Never(t, aliasForm)
+	})
+	// devco:D-576: the repos row of an alias clone (init's identity, `repo
+	// add --origin` typed in the alias spelling) records the github.com
+	// spelling every other path keys the repo by, so a teammate's clone
+	// from github.com is the same address, never an unconfirmed one
+	s.Step("D-576/repo-rows-key-the-resolved-remote", func() {
+		resolved := "git@github.com:" + oClientOwner + "/portal.git"
+		ada.Lore(cc.Dir, "init", "--yes").OK(t)
+		ada.Lore(cc.Dir, "repo", "list", "--json").OK(t).Says(t, `"origin_url": "`+resolved+`"`).Never(t, oAlias)
+		ada.Lore(cc.Dir, "repo", "add", "portal-two", "--origin", aliasURL).OK(t)
+		ada.Lore(cc.Dir, "repo", "list").OK(t).Says(t, "portal-two  "+resolved).Never(t, oAlias)
+		ada.Lore(cc.Dir, "sync").OK(t)
+		ada.Lore(cc.Dir, "doctor").Says(t, "same address "+want).Never(t, "is unconfirmed", aliasForm)
 	})
 }
