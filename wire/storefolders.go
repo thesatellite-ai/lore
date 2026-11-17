@@ -82,21 +82,19 @@ func (a *App) refuseStoresFileOutsideRepo(ctx context.Context, name string) erro
 	if !opsstores.WritesStoresFile(name) && name != opsstores.OpRemove {
 		return nil
 	}
+	// devco D-523: the repo-only refusal (repoonly.go), as the repo-only
+	// reads and writes say it; before, its own words named neither cd
+	// into the code repo as the class does nor that --store does not apply
 	if sc, in := storeHere(a.opts.RepoDir); in {
-		verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
-		return errs.New(errs.NotAStore, verb+": it edits a repo's .lore/stores.yaml, and "+sc.top+" is a lore store, not a code repo").
-			WithHint("cd into the code repo that should attach the store")
+		return errRepoOnlyAs(errs.NotAStore, storesYAMLRepoOnly, sc.shown+" is a lore store clone, not a code repo")
 	}
 	if insideWorkTree(ctx, a.opts.RepoDir) {
 		return nil
 	}
-	verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
-	return errs.New(errs.NotAStore, verb+": it edits a repo's .lore/stores.yaml, and "+a.opts.RepoDir+" is not inside a git repo").
-		WithHint("cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)")
+	r := storesYAMLRepoOnly
+	r.also = "outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)"
+	return errRepoOnlyAs(errs.NotAStore, r, a.opts.RepoDir+" is not inside a code repo")
 }
-
-// storeOpPrefix starts every store operation name.
-const storeOpPrefix = "store."
 
 // runSetupOnly runs a store operation on the machine-only engine (this
 // machine's policies, the caller's confirm), with this App as its Manager.

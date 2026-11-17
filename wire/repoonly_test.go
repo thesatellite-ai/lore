@@ -9,7 +9,12 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
+	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
+	opssync "github.com/thesatellite-ai/lore/ops/sync"
 )
 
 // assertRepoOnlyRefusal checks err is the one repo-only refusal: what
@@ -40,7 +45,7 @@ func assertRepoOnlyRefusal(t *testing.T, name string, err error, because string)
 }
 
 // TestEveryRepoOnlyReadRefusesOutsideARepo (devco D-509): every read of
-// repoOnlyReads, run from a plain folder (no repo, no store clone, no
+// repoOnlyOps, run from a plain folder (no repo, no store clone, no
 // setup), refuses with the one repo-only refusal. Before, migrate status,
 // session list and why-context each refused E_NOT_A_STORE in their own
 // words (git's "cd into a git checkout; a write can also name its
@@ -49,13 +54,16 @@ func TestEveryRepoOnlyReadRefusesOutsideARepo(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	a := openWith(t, dir, Options{})
-	if len(repoOnlyReads) < 6 {
-		t.Fatalf("repoOnlyReads lost entries: %d", len(repoOnlyReads))
+	if len(repoOnlyOps) < 6 {
+		t.Fatalf("repoOnlyOps lost entries: %d", len(repoOnlyOps))
 	}
-	for name := range repoOnlyReads {
+	for name, r := range repoOnlyOps {
 		if _, ok := a.Registry().Lookup(name); !ok {
-			t.Errorf("repoOnlyReads names %s, which is no registered operation", name)
+			t.Errorf("repoOnlyOps names %s, which is no registered operation", name)
 			continue
+		}
+		if r.outsideWorks {
+			continue // works outside a repo by design: TestRepoOnlyWritesInAStoreClone
 		}
 		_, err := run(t, a, name, `{}`, false)
 		assertRepoOnlyRefusal(t, name, err, dir+" is not inside a code repo")
@@ -95,5 +103,73 @@ func TestRepoOnlyReadsInAStoreClone(t *testing.T) {
 		if err != nil || len(copies) != 0 {
 			t.Errorf("local trash in the store clone at %s: want the empty trash, got %v, %v", dir, copies, err)
 		}
+	}
+}
+
+// TestRepoOnlyWritesInAStoreClone (devco D-523): the writes that change a
+// code repo's own files refuse in a store clone (at its top and in a
+// folder) with the repo-only refusal, and outside every repo too unless
+// they work there by design. Before, each refused in its own words ("it
+// edits a repo's .lore/stores.yaml, and … is a lore store", "lore isn't set
+// up in … (no .lore folder)", "not inside a git repo here" in a store clone
+// that is one), none saying cd into the code repo and --store does not
+// apply; a command needing a code repo with no entry of its own (memory
+// move in a store clone) says the same through errInStore.
+func TestRepoOnlyWritesInAStoreClone(t *testing.T) {
+	t.Parallel()
+	writes := []string{
+		opsfix.OpRun, opsmigrate.OpRun, opsmigrate.OpRollback, opsmigrate.OpUnlock,
+		opsdirective.OpInstall, opssync.OpInstallAction,
+	}
+	top, folder := fakeStoreClone(t)
+	for _, dir := range []string{top, folder} {
+		a := openWith(t, dir, Options{})
+		for _, name := range writes {
+			if _, ok := repoOnlyOps[name]; !ok {
+				t.Errorf("%s is not in repoOnlyOps", name)
+				continue
+			}
+			_, err := run(t, a, name, `{}`, true)
+			assertRepoOnlyRefusal(t, name+" in "+dir, err, "is a lore store clone, not a code repo")
+		}
+		// the stores.yaml writes refuse through their own gate
+		for name, in := range map[string]string{
+			opsstores.OpAdd: `{"name":"extra","url":"git@example.test:acme/extra.git"}`, opsstores.OpInit: `{"name":"extra","url":"git@example.test:acme/extra.git"}`,
+			opsstores.OpRemove: `{"name":"extra"}`, opsstores.OpSetURL: `{"name":"extra","url":"git@example.test:acme/moved.git"}`,
+		} {
+			_, err := run(t, a, name, in, true)
+			assertStoresYAMLRefusal(t, name+" in "+dir, err, "is a lore store clone, not a code repo")
+		}
+	}
+	// outside every repo store add refuses the same way, and store init
+	// --name me still makes the personal store there
+	plain := openWith(t, t.TempDir(), Options{})
+	_, err := run(t, plain, opsstores.OpAdd, `{"name":"extra","url":"git@example.test:acme/extra.git"}`, true)
+	assertStoresYAMLRefusal(t, opsstores.OpAdd+" outside a repo", err, "is not inside a code repo")
+	if _, ok := repoOnlyOps[opsorgcmd.OpLink]; !ok {
+		t.Errorf("%s is not in repoOnlyOps", opsorgcmd.OpLink)
+	}
+	sc, _ := storeHere(folder)
+	var le *errs.Error
+	if err = errInStore(sc); !errors.As(err, &le) || !strings.Contains(le.Hint, "cd into the code repo") || !strings.Contains(le.Hint, "--store does not apply") {
+		t.Errorf("errInStore: want the repo-only hint (cd into the code repo, --store does not apply), got %v", err)
+	}
+}
+
+// assertStoresYAMLRefusal checks err is the repo-only refusal of a
+// stores.yaml write: the class's words (cd into the code repo, --store
+// does not apply) under the E_NOT_A_STORE that refusal always had.
+func assertStoresYAMLRefusal(t *testing.T, name string, err error, because string) {
+	t.Helper()
+	var le *errs.Error
+	if !errors.As(err, &le) || le.Code != errs.NotAStore {
+		t.Errorf("%s: want E_NOT_A_STORE, got %v", name, err)
+		return
+	}
+	if !strings.Contains(le.Message, "edits a repo's .lore/stores.yaml") || !strings.Contains(le.Message, because) {
+		t.Errorf("%s: message does not name stores.yaml and %q: %q", name, because, le.Message)
+	}
+	if !strings.Contains(le.Hint, "cd into the code repo") || !strings.Contains(le.Hint, "--store does not apply") {
+		t.Errorf("%s: hint must say cd into the repo and that --store does not apply: %q", name, le.Hint)
 	}
 }

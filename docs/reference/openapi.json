@@ -16912,6 +16912,16 @@
               }
             }
           },
+          "409": {
+            "description": "E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "E_INTERNAL",
             "content": {
@@ -19504,7 +19514,7 @@
             }
           },
           "409": {
-            "description": "E_FORMAT_OLD",
+            "description": "E_FORMAT_OLD, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -37645,7 +37655,7 @@
             }
           },
           "409": {
-            "description": "E_MIGRATE_LOCKED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_MIGRATE_LOCKED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -37909,7 +37919,7 @@
             }
           },
           "409": {
-            "description": "E_MIGRATE_LOCKED",
+            "description": "E_MIGRATE_LOCKED, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

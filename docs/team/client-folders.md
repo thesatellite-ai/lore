@@ -62,8 +62,8 @@ ERROR: [E_NOT_FOUND] store folder add: no store named golang here: golang would 
   hint: here name team, agency, git@github.com:agency/notes; or cd into the repo whose .lore/stores.yaml attaches golang
 (exit 27)
 $ lore store add --name golang --url git@github.com:agency/notes
-ERROR: [E_NOT_A_STORE] store add: it edits a repo's .lore/stores.yaml, and ~/work/clients is not inside a git repo
-  hint: cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)
+ERROR: [E_NOT_A_STORE] the stores a repo attaches (a store command edits a repo's .lore/stores.yaml) live in each code repo: ~/work/clients is not inside a code repo
+  hint: cd into the code repo that should attach (or drop) the store and run it there; --store does not apply (it edits that repo's stores.yaml); outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)
 (exit 19)
 ```
 <!-- /example -->

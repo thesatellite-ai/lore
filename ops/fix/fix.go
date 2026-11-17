@@ -546,7 +546,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 			// a doctor repair may ask first (reversed --supersedes links)
 			Confirm: op.ConfirmRule{MayAsk: true},
-			Errors:  []errs.Code{errs.NotAStore, errs.InvalidInput, errs.FormatOld, errs.NeedsConfirm, errs.Internal},
+			Errors:  []errs.Code{errs.NotAStore, errs.Unsupported, errs.InvalidInput, errs.FormatOld, errs.NeedsConfirm, errs.Internal}, // Unsupported: outside a code repo or in a store clone (devco D-523)
 			Examples: []op.Example{
 				{Title: "fix this project", CLI: "lore fix", Want: "Status:"},
 				{Title: "see what it would do", CLI: "lore fix --dry-run", Want: ""},
