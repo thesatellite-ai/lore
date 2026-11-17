@@ -1018,8 +1018,10 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// (mission status, inbox, migrate status, session list, why-context)
 	// refuses outside one with the one repo-only refusal (repoonly.go),
 	// before the Local and store-only paths answer in their own words
-	if err := repoOnlyRefusal(ctx, e.Spec().Name, a.opts.RepoDir); err != nil {
-		return op.Result{}, err
+	if !fleetFix(e, d) {
+		if err := repoOnlyRefusal(ctx, e.Spec().Name, a.opts.RepoDir); err != nil {
+			return op.Result{}, err
+		}
 	}
 	if e.Spec().Local {
 		return a.runLocal(ctx, e, d, c)

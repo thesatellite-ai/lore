@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1871 |
+| fixed | 1872 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -852,6 +852,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:ownershape | scenario | the owner-shaped machine: two git identities by folder (includeIf gitdir), the org account behind an ssh host alias with url.insteadOf, two orgs and two setups on one laptop, an admins-only store, a store moved to another GitHub org then set-url, a repo that gitignores .lore/, a CLAUDE.md linked out of its repo, client repos by prefix pattern; the admin and member flows on it hold the org identity per store, nothing in tracked files of private or client repos, nothing through a link out, no push unasked, printed counts true | fixed | TestStoryOOwnerShape | story O (tests/stories/O-owner-shape.md), fixture tests/stories/ownershape.go (OwnerShaped, MoveRemote, GitignoredLore, ClaudeLinkOut); full gate step stories |
 | devco:D-542 | finding | owner shape: `lore store folder add lore-ops servers` in an org repo (lore-ops = the org's admins-only store) printed "committed locally to store acme; lore sync sends it" while the commit was in lore-ops (sync then said acme up to date, lore-ops pushed) | fixed | TestFolderAddNoticeNamesTheStoreWritten, TestStoryOOwnerShape | wire.withStoreDir names the store written with writtenStoreLabel: an org store by its short name (the org folder's store by the org), else the name it was reached by; an org's second store is reached under the org entry's name |
 | devco:D-526 | finding | owner D-525 answer: an admin's guided setup in the org's own repo with no own: pattern matching its remote left it a client repo (guards on, hooks skipped) with nothing offering to declare it own | fixed | TestOwnOfferFor, TestOfferOwn, TestJourneySetupOwnOffer | logic/orgresolve OwnOfferFor (admin, hosted host/owner/repo remote, no repos:/own: pattern or link of the org names it) → host/owner/*; ops/setup offerOwn after the team or this_folder step of an admin setup: --yes adds it, a terminal asks [Y/n] (Enter yes), no terminal writes nothing and names `lore org config set --org <org> --key own --add <pattern> --yes`; wire App.AddOwnPattern writes through OrgConfigSet; setup.apply out.own_offer; docs team/guided-setup |
+| devco:D-528 | finding | gate 9593e523: D-523 made fix.run repo-only, so `lore fix --all` (and --all --dirs) from the home folder or a folder of repos refused E_UNSUPPORTED (exit 23); fix --all over a folder of repos is a real feature | fixed | TestFixAllIsNotRepoOnly, TestJourneyFleetLinksAndDeadOrigins, TestJourneyNoLoreRepoUntouched, TestJourneyCIShallowReadOnlyHome, TestJourneyUpgraderFixOldProjects, TestStoryJ1AdminManyRepos, TestStoryJ4Upgrade | wire/repoonly.go fleetFix: a fix run with --all (or --dirs) skips the repo-only refusal; plain fix outside a repo keeps it |
 
 ## lore-adoptfix
 

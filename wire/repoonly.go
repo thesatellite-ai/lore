@@ -25,6 +25,7 @@ package wire
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/op"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -212,4 +213,23 @@ func errCoordNoRepo(dir string) error {
 		where = dir
 	}
 	return errRepoOnly(coordRepoOnlyRead, where+" is not inside a code repo")
+}
+
+// fleetFix reports a `lore fix --all` (or --all --dirs …) run: it walks a
+// folder of repos and the setups' repos from wherever it starts (the home
+// folder, a folder holding code repos), so it is not a one-repo command
+// and the repo-only refusal never applies to it (devco D-528: D-523's
+// refusal had made `lore fix --all` from a folder of repos exit 23).
+func fleetFix(e op.Entry, d op.Decoder) bool {
+	if e.Spec().Name != opsfix.OpRun {
+		return false
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return false
+	}
+	if all, ok := in.Bool("all"); ok && all {
+		return true
+	}
+	return len(in.Positionals()) > 0 // --dirs (with --all) folders
 }
