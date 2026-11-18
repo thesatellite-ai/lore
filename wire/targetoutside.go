@@ -611,17 +611,27 @@ func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string, lo
 			continue
 		}
 		look.livePath = liveFile(hits)
-		// the name --to takes for it: the org entry attaching this very
-		// folder, else <org>/<folder>
-		k := placeKey(f.URL, f.Branch)
-		for _, s := range orgStores(ctx, a.opts, "") {
-			if strings.Trim(s.Folder, "/") == f.Folder && placeKey(s.URL, s.Branch) == k {
-				return attach.Store{Name: s.Name, URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
-			}
-		}
-		return attach.Store{Name: store.Source(place), URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
+		return a.orgFolderStore(ctx, f), true
 	}
 	return attach.Store{}, false
+}
+
+// orgFolderStore is org folder f as a store --to takes: the org entry
+// attaching this very folder, else <org>/<folder>. rowFolderIn names the
+// folder holding a row by it; the store task queue (devco:D-666) each
+// folder it ranks.
+func (a *App) orgFolderStore(ctx context.Context, f orgFolder) attach.Store {
+	base := f.Org
+	if base == "" {
+		base = f.Label
+	}
+	k := placeKey(f.URL, f.Branch)
+	for _, s := range orgStores(ctx, a.opts, "") {
+		if strings.Trim(s.Folder, "/") == f.Folder && placeKey(s.URL, s.Branch) == k {
+			return attach.Store{Name: s.Name, URL: f.URL, Folder: f.Folder, Branch: f.Branch}
+		}
+	}
+	return attach.Store{Name: store.Source(base + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch}
 }
 
 // answer is the refusal for an id no folder holds live, when the command

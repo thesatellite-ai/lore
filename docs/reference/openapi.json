@@ -21439,6 +21439,10 @@
                     "type": "boolean",
                     "description": "push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "hold it on this org store folder's signals ref, \u003corg\u003e/\u003cfolder\u003e (or \u003corg\u003e when it has one folder), from any folder; without it the code repo's signals ref (outside a code repo: the store clone here, or the --setup's org store)"
+                  },
                   "ttl": {
                     "type": "integer",
                     "format": "duration-ns",
@@ -21555,6 +21559,10 @@
                   "name": {
                     "type": "string",
                     "description": "the resource to release"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "release the hold taken on this org store folder, \u003corg\u003e/\u003cfolder\u003e (or \u003corg\u003e when it has one folder), from any folder"
                   }
                 },
                 "required": [
@@ -104064,6 +104072,10 @@
                   "role": {
                     "type": "string",
                     "description": "plan role (e.g. coordinator)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "rank the tasks of this org's store, \u003corg\u003e or \u003corg\u003e/\u003cfolder\u003e, from any folder (each claim lands on its folder's store signals ref); from the home folder --setup \u003csetup\u003e ranks that setup's org store"
                   },
                   "why": {
                     "type": "boolean",

@@ -17,6 +17,7 @@
 7. (`TestStoryWUFolderScope`) With folders `org`, `sync` and `tools`, a `code_repo` kind in `acme/org` and resources in `acme/org` (`project = sync`, `project = tools`, none) and in `acme/sync`: `lore resource list|kinds|kind show|show --store acme/sync` from the home folder and in `platform`, then `lore resource list` inside the `sync` folder of the store clone.
 8. `lore resource list --store acme`, with and without `--kind code_repo` (one resource has a long `purpose`), before and after a `lore resource check`.
 9. (D-623) In `web`, with a resource of `acme/sync` naming its remote: `lore trash list --json`, `lore rule list --json`, `lore resource list --json`; then `lore rule list --store acme/sync --json` from the home folder.
+11. (`TestStoryWUStoreTaskNextFromHome`, D-666) From the home folder: `lore task next --setup acme-admin`, `--store acme`, `--store acme/web`; `--claim` without and with `--push`; `lore task heartbeat` with no `--id` from home, at the store clone's top and in `web`; `lore task heartbeat --id <id>` and `lore task release --id <id>` from home; `web` shows the claim after each step.
 10. `lore org config set --org acme --key own --add 'github.com/acme-co/*'` and two exact `repos` entries under that owner; then `lore org config get --org acme` and `lore store doctor`.
 
 11. (`TestStoryWUBudgetWarn`, D-636, D-637) Ada links `web` to `acme/web` with `--own`, adds a long must rule to `acme/org`, sets `context.budget.internal` to 1000 in `acme/web`; Mo joins as a member. Each `lore sync` WARN line's fixes are run exactly as printed in `web`; Mo then tries to demote, archive and delete the company rule and to set a policy in `acme/org`.
@@ -34,6 +35,7 @@
 - `lore resource list` with no `--kind` prints `KIND NAME PROJECT URL`, `CHECKED` only once a row was checked; no cell is wider than 60 characters.
 - `lore org config get` and `lore store doctor` name an own pattern that overlaps repos entries, how many, and that the repos entries win (client).
 - In a repo linked to a store folder, `lore task claim` without `--push` is refused and the store remote is unchanged; with `--push` the claim reaches the store's signals ref signed by the org identity; `lore task release` takes it off and says it pushed (TestStoryWUClaimPushOnlyWhenAsked).
+- From the home folder `lore task next --setup <setup>` (or `--store <org>[/<folder>]`) ranks the org store's tasks, `--claim` is refused without `--push` and writes nothing, with `--push` the claim lands on the store's signals ref under the task's folder and `web` sees it; `lore task heartbeat` with no `--id` names that claim from home, in the store clone and in a code repo; every printed next step (it carries the same `--setup` or `--store`) works where printed.
 
 - The budget warning's raise names `--to acme/web` in the linked repo and works there; a company row's fix is a command for an admin only, and a member is told `ask an admin of acme (<names>) to …`; a member's demotion of a company must rule or policy write to `acme/org` is refused with E_REFUSED and nothing changes; a rule of `acme/web` stays the member's to change.
 - `task release` with no pushed claim leaves the store remote unchanged, and its help says it needs no `--push` and why.
@@ -44,3 +46,4 @@
 - `devco:D-580`..`devco:D-582` (REGRESSIONS.md).
 - `devco:D-623` (REGRESSIONS.md).
 - `devco:D-636`, `devco:D-637`, `devco:D-639` (REGRESSIONS.md).
+- `devco:D-666` (REGRESSIONS.md).

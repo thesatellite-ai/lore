@@ -42,7 +42,13 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.requirePushAsked(in.Push, "a claim"); err != nil {
+	return h.claimOn(ctx, w, in)
+}
+
+// claimOn is the claim of in.ID on world w: task claim's, and the store
+// task queue's claim of the task it ranked first (devco:D-666).
+func (h standaloneCoord) claimOn(ctx context.Context, w *coordWorld, in opscoord.ClaimIn) (opscoord.Report, error) {
+	if err := w.requirePushAsked(in.Push, "a claim"); err != nil {
 		return opscoord.Report{}, err
 	}
 	env := w.env(ctx)
@@ -156,9 +162,39 @@ func (h standaloneCoord) hereRepo(ctx context.Context, w *coordWorld) string {
 // of this session (rate limited to renew_every), or keep renewing them
 // (--daemon, heartbeatDaemon).
 func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.HeartbeatIn) (opscoord.Report, error) {
+	if !inCodeRepo(ctx, h.a.opts.RepoDir) {
+		// the home folder, a plain folder, a store clone: the claims held
+		// on the org stores' signals refs (devco:D-666), kept alive by
+		// --daemon too (devco:D-671)
+		if in.Daemon {
+			return h.storeHeartbeatDaemon(ctx, in.ID)
+		}
+		return h.storeHeartbeat(ctx, in.ID, nil)
+	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
 		return opscoord.Report{}, err
+	}
+	if in.ID == "" && !in.Daemon {
+		// a code repo renews its own held claims, then the store tasks
+		// held from home (their held record is the store clone's)
+		var repoIDs []string
+		for _, r := range w.held().List(w.session()) {
+			repoIDs = append(repoIDs, r.Task)
+		}
+		rep, rerr := h.renewHeld(ctx, w, repoIDs, true)
+		if rerr != nil {
+			return rep, rerr
+		}
+		srep, serr := h.storeHeartbeat(ctx, "", repoIDs)
+		rep.Lines = append(rep.Lines, srep.Lines...)
+		if serr != nil {
+			return rep, serr
+		}
+		if len(rep.Lines) == 0 && len(repoIDs) == 0 {
+			rep.Lines = []string{"no claims held by this session"}
+		}
+		return rep, nil
 	}
 	var ids []string
 	if in.ID != "" {
@@ -167,16 +203,31 @@ func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.Heartbea
 		for _, r := range w.held().List(w.session()) {
 			ids = append(ids, r.Task)
 		}
-		if len(ids) == 0 {
-			return opscoord.Report{Lines: []string{"no claims held by this session"}}, nil
+	}
+	if in.Daemon {
+		// devco:D-673: the store claims this session took from home are
+		// held on the store clones, not this repo (repoDaemonScope)
+		if store, uncovered := h.repoDaemonScope(ctx, w, in.ID, ids); store {
+			return h.storeHeartbeatDaemon(ctx, in.ID)
+		} else if len(uncovered) > 0 {
+			fmt.Fprintln(os.Stderr, uncoveredStoreClaims(uncovered))
 		}
+	}
+	if len(ids) == 0 {
+		return opscoord.Report{Lines: []string{"no claims held by this session"}}, nil
 	}
 	if in.Daemon {
 		return w.heartbeatDaemon(ctx, ids)
 	}
+	return h.renewHeld(ctx, w, ids, in.ID == "")
+}
+
+// renewHeld renews each claim of ids on world w; limited skips one renewed
+// within lease.renew_every (a heartbeat with no --id).
+func (h standaloneCoord) renewHeld(ctx context.Context, w *coordWorld, ids []string, limited bool) (opscoord.Report, error) {
 	var lines []string
 	for _, id := range ids {
-		if in.ID == "" && w.renewedRecently(id) {
+		if limited && w.renewedRecently(id) {
 			continue
 		}
 		if ferr := w.forHeld(ctx, id); ferr != nil {
@@ -378,6 +429,9 @@ const nextTagName = "next"
 // ready leaf, as before; --dry-run prints the old ranking form and never
 // claims. Poisoned tasks are announced (and blocked) only by a claim.
 func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opscoord.NextOut, error) {
+	if out, ok, serr := h.storeQueue(ctx, in); ok {
+		return out, serr // an org store's tasks with no code repo (devco:D-666)
+	}
 	w, err := h.openWorldFor(ctx, "")
 	if err != nil {
 		return opscoord.NextOut{}, err
@@ -440,11 +494,19 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 // waits, and how to take it. why breaks the reason out term by term; push
 // is claimPushFlag, so the printed claim is one that works here (D-607).
 func readLines(pk coord.Peek, why bool, push string) []string {
+	return readLinesAt(pk, why, push, "", true)
+}
+
+// readLinesAt is readLines with scope, the flag that names the store
+// task queue again (" --store <org>", " --setup <setup>", devco:D-666), on
+// every printed task next; claimByID keeps the "or task claim --id"
+// alternative (false where a claim by id would not reach that store).
+func readLinesAt(pk coord.Peek, why bool, push, scope string, claimByID bool) []string {
 	res := pk.Queue
 	var out []string
 	switch {
 	case pk.Holding != "":
-		out = append(out, fmt.Sprintf("you hold %s; resume it (%s resumes it), or `lore task release --id %s`", pk.Holding, "lore task next --claim"+push, pk.Holding))
+		out = append(out, fmt.Sprintf("you hold %s; resume it (%s resumes it), or `lore task release --id %s`", pk.Holding, "lore task next --claim"+push+scope, pk.Holding))
 	case len(res.Ready) == 0:
 		out = append(out, "nothing ready")
 	default:
@@ -469,7 +531,10 @@ func readLines(pk coord.Peek, why bool, push string) []string {
 		out = append(append(out, "waiting:"), waiting...)
 	}
 	if pk.Holding == "" && len(res.Ready) > 0 {
-		return append(out, fmt.Sprintf("nothing written; take it: %s (or %s)", "lore task next --claim"+push, "lore task claim --id "+res.Ready[0].ID+push))
+		if !claimByID {
+			return append(out, "nothing written; take it: lore task next --claim"+push+scope)
+		}
+		return append(out, fmt.Sprintf("nothing written; take it: %s (or %s)", "lore task next --claim"+push+scope, "lore task claim --id "+res.Ready[0].ID+push))
 	}
 	return append(out, "nothing written")
 }
