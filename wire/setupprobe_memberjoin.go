@@ -43,10 +43,16 @@ func orgForStoreURL(home, url string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
-	want, _ := storeKey(url)
+	// devco:D-644: one store in two spellings (an ssh alias of the
+	// provider, git@<alias>:o/r.git, and git@github.com:o/r.git) is one
+	// entry: sameStoreAs, the comparison every store match makes (D-627)
+	same := sameStoreAs(url)
+	if same == nil {
+		return ""
+	}
 	for _, o := range cfg.Orgs {
 		for _, st := range o.Stores {
-			if k, ok := storeKey(st.URL); ok && k == want {
+			if same(st.URL) {
 				return o.Name
 			}
 		}
@@ -96,6 +102,10 @@ func (sp setupProber) memberJoinFound(ctx context.Context, r opssetup.ProbeReque
 		}
 		name, _, _ := strings.Cut(emails[0], "@")
 		name = cmp.Or(answerText(ans, onboard.QIDName), name)
+		// devco:D-644: a check writes nothing: the import's access rule,
+		// clone and machine id go again, whatever the roster said
+		guard := guardHome(sp.a.opts.Home)
+		defer func() { _ = guard.undo() }()
 		_, err = host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(emails[0]), Name: name, Handle: answerText(ans, onboard.QIDHandle), SkipRegister: true,
 			Admit: func(ctx context.Context, entry string) error {
 				if aerr := admit(ctx, entry); aerr != nil {

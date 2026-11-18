@@ -332,9 +332,14 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if entry.Name == "" {
 		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "the store's lore-org.yaml names no org; pass --as <name>")
 	}
-	if cfg.FindOrg(entry.Name) != nil {
-		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in "+lorehome.Shown()+"/config.yaml").
-			WithHint("pass --as <another name>, or edit the existing entry")
+	if have := cfg.FindOrg(entry.Name); have != nil {
+		e := errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in "+lorehome.Shown()+"/config.yaml")
+		if in.Admit != nil {
+			// devco:D-644: a setup join (Admit set) has no --as flag: the
+			// hint names the join answer that uses the existing entry
+			return opsorgcmd.Report{}, e.WithHint(existingEntryJoinHint(entry.Name, have))
+		}
+		return opsorgcmd.Report{}, e.WithHint("pass --as <another name>, or edit the existing entry")
 	}
 	entry.Identity = orgconf.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}
 	suggestedStores(ctx, &entry, sg, in.URL)
@@ -699,4 +704,16 @@ func editMachineConfigBytes(home string, edit func(root *yaml.Node) error, use f
 		return errs.Wrap(errs.Internal, "wire: encode "+ConfigFile, err)
 	}
 	return use(out)
+}
+
+// existingEntryJoinHint is the next step of a setup join refused because
+// an org entry of the store's org name exists already: join through that
+// entry by name when it is this org's (setup apply has no --as flag, the
+// hint org import gives), else move the entry aside first.
+func existingEntryJoinHint(name string, have *orgconf.Org) string {
+	at := ""
+	if len(have.Stores) > 0 {
+		at = " (store " + have.Stores[0].URL + ")"
+	}
+	return "the entry " + name + at + " is this machine's; if it is this org, answer the join step with it: --answers '{\"invite\":\"" + name + "\"}'; if it is another org, rename or remove that entry in " + lorehome.Shown() + "/config.yaml first"
 }

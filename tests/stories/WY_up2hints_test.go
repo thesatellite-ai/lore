@@ -14,6 +14,8 @@ package stories
 //	       (org link), never `lore fix`, which refuses in an unlinked repo
 //	D-588: a resource in acme/org whose project field is sync names web:
 //	       reads in web suggest `--project sync`, never `--project org`
+//	D-643: the same with project a select field (its val_ id in v, the
+//	       name in v_name): `--project sync`, never org or the val_ id
 //	D-589: a mistyped id in the home folder (edit, show, trash restore):
 //	       "in no store of any setup", where lore looked, no --setup/--store
 //	       hint loop, never a flag the command was not given
@@ -39,6 +41,13 @@ import (
 
 // wyShopSlug is a client repo of acme (the org config's repos: pattern).
 const wyShopSlug = "github.com/client-co/shop"
+
+// wyAPISlug is an own repo of acme named by a resource whose project field
+// is a select (devco D-643); wySelKind is that resource's kind.
+const (
+	wyAPISlug = "github.com/acme-co/api"
+	wySelKind = "svc_repo"
+)
 
 // wyRulID is a rule id in a command's output.
 var wyRulID = regexp.MustCompile(`rul_[0-9a-f]+`)
@@ -91,6 +100,36 @@ func TestStoryWYUp2Hints(t *testing.T) {
 		r := m.Lore(wc.Dir, "memory", "list").OK(t).Says(t, "lore org link --org "+wOrg+" --project sync --own", mem).Never(t, "--project org")
 		m.Lore(wc.Dir, "search", "--query", "deploy").OK(t).Says(t, "--project sync --own", mem).Never(t, "--project org")
 		wyFollow(t, m, wc.Dir, r, "devco:D-592 memory list@own-unlinked")
+	})
+
+	s.Step("D-643/select-project-field-names-the-folder", func() {
+		// the owner's resource kind keeps project as a closed value (a
+		// select): the row stores its val_ id in v and the name in v_name
+		api := s.Seed(s.Remote(wyAPISlug), func(dir string) { PlainRepo(t, dir) })
+		ac := m.Clone(api, "api")
+		m.MoveClone(t, ac, filepath.Join(m.Home, "code", "api"))
+		m.Lore(m.Home, "resource", "kind", "add", "--kind", wySelKind, "--to", wOrg+"/org", "--setup", wSetup, "--yes").OK(t)
+		m.Lore(m.Home, "resource", "field", "add", "--kind", wySelKind, "--field", "url", "--type", "text", "--to", wOrg+"/org", "--setup", wSetup, "--yes").OK(t)
+		m.Lore(m.Home, "resource", "field", "add", "--kind", wySelKind, "--field", "project", "--type", "text", "--values", "platform,sync", "--to", wOrg+"/org", "--setup", wSetup, "--yes").OK(t)
+		m.Lore(m.Home, "resource", "add", "--kind", wySelKind, "--name", "api_repo", "--set", "url="+api.SSHURL(), "--set", "project=sync", "--to", wOrg+"/org", "--setup", wSetup, "--yes").OK(t)
+		root := m.LorePath("stores", "acme-co", "lore-team")
+		rows, _ := filepath.Glob(filepath.Join(wFindDir(t, root, "org"), "resources", "*.json"))
+		sel := false
+		for _, p := range rows {
+			if b, err := os.ReadFile(p); err == nil && strings.Contains(string(b), `"v_name"`) && strings.Contains(string(b), "api_repo") {
+				sel = true
+			}
+		}
+		if !sel {
+			t.Fatalf("the select-valued resource row has no v_name (the shape D-643 needs): %v", rows)
+		}
+		hint := "lore org link --org " + wOrg + " --project sync --own"
+		r := m.Lore(ac.Dir, "memory", "list").OK(t).Says(t, hint, mem).Never(t, "--project org", "--project val_")
+		m.Lore(ac.Dir, "whoami").OK(t).Never(t, "--project org", "--project val_")
+		wyFollow(t, m, ac.Dir, r, "devco:D-643 memory list@own-unlinked-select")
+		// the printed link, run where printed, links the repo to sync
+		m.Lore(ac.Dir, "org", "link", "--org", wOrg, "--project", "sync", "--own", "--yes").OK(t)
+		m.Lore(ac.Dir, "whoami").OK(t).Says(t, wOrg+"/sync").Never(t, "link it:")
 	})
 
 	s.Step("D-589/mistyped-id-in-home", func() {

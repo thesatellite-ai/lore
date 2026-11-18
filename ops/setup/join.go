@@ -121,19 +121,29 @@ func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOu
 	if !storeURLish(org) {
 		inv = Invite{Org: org}
 	}
-	name := op.SetupOf(ctx)
+	named := op.SetupOf(ctx)
+	name := named
 	if name == "" {
 		// the org's name, else the store url's owner: never "" here, so
 		// the page and the "This folder" line offer this member setup
 		// (B-10: they offered "solo setup personal")
 		name = joinSetupName(inv.Org, inv.Store)
 	}
+	id := e.joinEmail(ctx, e.rosterEmail(ctx, name, org), cmp.Or(inv.Org, name))
+	id = e.joinPerson(ctx, id, name, org, inv.Org)
+	if named == "" && inv.Org == "" && id.Org != "" {
+		// devco:D-645: a join by store url names its setup for the org the
+		// store's lore-org.yaml names (the admin's setup, the entry the
+		// join step makes), not for the url's owner (another GitHub name)
+		if id.Org != name {
+			id.SetupFrom = "the org's name in its store, not the store url's owner (" + name + ")"
+		}
+		name = id.Org
+	}
 	plan, err := e.Plan(ctx, PlanIn{Kind: string(onboard.KindMember), Setup: name})
 	if err != nil {
 		return JoinOut{}, err
 	}
-	id := e.joinEmail(ctx, e.rosterEmail(ctx, name, org), cmp.Or(inv.Org, name))
-	id = e.joinPerson(ctx, id, name, org, inv.Org)
 	cmds := joinCommands(cmp.Or(name, joinFallbackName), org, id, plan)
 	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan,
 		Commands: cmds, Org: inv.Org, IdentityNote: id.Note, PrefillNote: prefillNote(id, cmds)}, nil
