@@ -86,9 +86,23 @@ func NamedSources(l StoreLister, name store.Source) []store.Source {
 		return out
 	}
 	for _, s := range ReadStoresOf(l) {
-		if s != name && strings.HasPrefix(string(s), string(name)+storeFolderSep) {
+		if s != name && InNamedStore(name, s) {
 			out = append(out, s)
 		}
 	}
 	return out
+}
+
+// InNamedStore reports whether a row read from src is in the store a
+// `--store <name>` filter names: src is name itself, or name names no
+// folder and src is one of its folders (<name>/<folder>), the rule
+// NamedSources applies. Lists that filter rows they already hold (trash
+// list) use it instead of comparing names, which dropped every row of
+// acme/<folder> for `--store acme` (devco D-606).
+func InNamedStore(name, src store.Source) bool {
+	name = store.Source(strings.TrimSpace(string(name)))
+	if src == name {
+		return true
+	}
+	return !strings.Contains(string(name), storeFolderSep) && strings.HasPrefix(string(src), string(name)+storeFolderSep)
 }

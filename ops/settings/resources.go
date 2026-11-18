@@ -96,6 +96,9 @@ type ResValueFlags struct {
 
 // ResEditIn is the input of resource.edit.
 type ResEditIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Name  string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Set   []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable)"`
 	Unset []string `json:"unset,omitempty" flag:"unset" desc:"field to remove (repeatable)"`
@@ -156,6 +159,9 @@ func (o ResDeleteOut) Text() string { return o.Human }
 
 // ResNameIn names one resource for archive and check.
 type ResNameIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Name string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 }
 
@@ -309,6 +315,9 @@ type ResListOut struct {
 	// and the stores they are in (devco D-583, FolderScope.note).
 	left     int
 	leftFrom []store.Source
+	// leftBy is the read whose whole-org form the scope note names
+	// ("" for resource list).
+	leftBy string
 }
 
 // addLeft counts n resources left out from the stores from.
@@ -324,7 +333,11 @@ func (o *ResListOut) addLeft(n int, from []store.Source) {
 // withScopeNote adds the folder-scope line when rows were left out.
 func (o ResListOut) withScopeNote(sc FolderScope, ok bool) ResListOut {
 	if ok && o.left > 0 {
-		o.Notes = append(o.Notes, sc.note(o.left, o.leftFrom))
+		by := o.leftBy
+		if by == "" {
+			by = OpResList
+		}
+		o.Notes = append(o.Notes, sc.noteFor(o.left, o.leftFrom, by))
 	}
 	return o
 }
@@ -332,7 +345,9 @@ func (o ResListOut) withScopeNote(sc FolderScope, ok bool) ResListOut {
 // Text implements op.Texter: the CLI_REFERENCE 3.2 tables.
 func (o ResListOut) Text() string {
 	if len(o.Data) == 0 {
-		return "(no resources)\n"
+		// a folder-scoped read that left every row out still says where
+		// they are (devco D-586)
+		return "(no resources)\n" + strings.Join(append(slices.Clip(o.Notes), ""), "\n")
 	}
 	var b strings.Builder
 	if o.stale {
@@ -345,6 +360,9 @@ func (o ResListOut) Text() string {
 			fmt.Fprintf(&b, "%s\t%s\t%s\t%s\n", r.Kind, r.Name, dayOf(r.LastChecked), age)
 		}
 		b.WriteString(checkSummary(o.StaleCount, o.NeverChecked, o.Days) + "\n")
+		for _, n := range o.Notes {
+			b.WriteString(n + "\n") // the folder-scope line (devco D-586)
+		}
 		return b.String()
 	}
 	// devco D-572: aligned columns (terminal cells, textwidth) and a count
@@ -1019,7 +1037,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 		}
 		return o.resEditWhere(ctx, in)
 	}
-	r, err := o.resourceByName(ctx, in.Name, "")
+	r, err := o.resourceInScope(ctx, in.Name, OpResEdit)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -1592,7 +1610,7 @@ func (o ops) referrers(ctx context.Context, id ids.AnyID) ([]string, error) {
 }
 
 func (o ops) resArchive(ctx context.Context, in ResNameIn) (RowOut, error) {
-	r, err := o.resourceByName(ctx, in.Name, "")
+	r, err := o.resourceInScope(ctx, in.Name, OpResArchive)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -1606,7 +1624,7 @@ func (o ops) resCheck(ctx context.Context, in ResCheckIn) (RowOut, error) {
 		}
 		return o.resCheckWhere(ctx, in)
 	}
-	r, err := o.resourceByName(ctx, in.Name, "")
+	r, err := o.resourceInScope(ctx, in.Name, OpResCheck)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -1627,7 +1645,13 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 	if err != nil {
 		return ResListOut{}, err
 	}
-	out := ResListOut{Data: []Resource{}, stale: true, Days: days}
+	out := ResListOut{Data: []Resource{}, stale: true, Days: days, leftBy: OpResStale}
+	// a folder's stale list keeps that folder's resources, as its list
+	// does (devco D-586)
+	var left int
+	var leftFrom []store.Source
+	rows, left, leftFrom = o.inFolderScope(ctx, rows)
+	out.addLeft(left, leftFrom)
 	for _, r := range rows {
 		if text(r.Row, rArchivedAt) != "" {
 			continue
@@ -1647,7 +1671,8 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 		out.Data = append(out.Data, v)
 	}
 	out.Count = len(out.Data)
-	return out, nil
+	sc, scoped := o.folderScope()
+	return out.withScopeNote(sc, scoped), nil
 }
 
 // conflictsView shows a row's conflict entries by field name; a sensitive

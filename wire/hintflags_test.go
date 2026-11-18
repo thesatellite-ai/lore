@@ -62,3 +62,45 @@ func TestOrgFilePushNoteNamesStorePush(t *testing.T) {
 		t.Errorf("push note = %q", got)
 	}
 }
+
+// TestHomeHintNeverSaysStoreDoesNotApply (devco:D-586): from the home
+// folder `resource check --id <name>` refused "this command works on the
+// folder it runs in, so --store does not apply" although the resource was
+// in a store. Every operation's home-folder hint, with and without
+// --setup, names --store when the operation takes it and never says
+// "--store does not apply"; the resource reads and the writes that find a
+// resource by name take --store.
+func TestHomeHintNeverSaysStoreDoesNotApply(t *testing.T) {
+	reg, err := Registry(&App{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	takesStore := func(e op.Entry) bool {
+		for _, f := range e.InputFields() {
+			if f.Name == readStoreField {
+				return true
+			}
+		}
+		return false
+	}
+	for _, e := range reg.Entries() {
+		for _, setup := range []bool{false, true} {
+			h := homeHint(e, setup)
+			if strings.Contains(h, "does not apply") {
+				t.Errorf("%s (setup given %v): the home hint says a flag does not apply: %s", e.Spec().Name, setup, h)
+			}
+			if takesStore(e) && !strings.Contains(h, "--store <org>") {
+				t.Errorf("%s takes --store but its home hint does not name it: %s", e.Spec().Name, h)
+			}
+		}
+	}
+	for _, name := range []string{"resource.check", "resource.stale", "resource.report", "resource.graph", "resource.edit", "resource.archive", "resource.rename", "resource.merge"} {
+		e, ok := reg.Lookup(name)
+		if !ok {
+			t.Fatalf("no op %s", name)
+		}
+		if !takesStore(e) {
+			t.Errorf("%s takes no --store <org>[/<folder>]", name)
+		}
+	}
+}

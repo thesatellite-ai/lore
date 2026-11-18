@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Operation names.
@@ -524,6 +525,17 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 	if err != nil {
 		return ResReportOut{}, err
 	}
+	var scopeNote string
+	if !offboard {
+		// a folder's report covers that folder's resources, as its list
+		// does (devco D-586); offboarding reads every store on purpose
+		var left int
+		var leftFrom []store.Source
+		if rows, left, leftFrom = o.inFolderScope(ctx, rows); left > 0 {
+			sc, _ := o.folderScope()
+			scopeNote = sc.noteFor(left, leftFrom, OpResReport)
+		}
+	}
 	kindID := ""
 	if in.Kind != "" {
 		d, kerr := o.kindDefRead(ctx, in.Kind)
@@ -613,6 +625,9 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 	}
 	if offboard {
 		out.Inbound = o.inboundRefs(ctx, all, nodes)
+	}
+	if scopeNote != "" {
+		out.Notes = append(out.Notes, scopeNote)
 	}
 	return out, nil
 }

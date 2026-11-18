@@ -67,6 +67,9 @@ const (
 
 // ResRenameIn is the input of resource.rename.
 type ResRenameIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Old string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	New string `json:"new_name" arg:"1" desc:"the new name (the kind's name format)"`
 	// RewriteRows rewrites the ref label of every resource that refs this
@@ -77,6 +80,9 @@ type ResRenameIn struct {
 
 // ResMergeIn is the input of resource.merge.
 type ResMergeIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Name   string `json:"id" arg:"0" desc:"the duplicate to fold away (name or res_ id)"`
 	Into   string `json:"into" flag:"into" desc:"the resource that survives (same kind)"`
 	DryRun bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would change; write nothing"`
@@ -163,7 +169,7 @@ func (o ops) maintOps() []op.Entry {
 // id, so no meaning changes (RES 3.4). Referrers' stored ref labels refresh
 // on their next write, or all at once with --rewrite-rows (PASS3-A-3).
 func (o ops) resRename(ctx context.Context, in ResRenameIn) (RowOut, error) {
-	r, err := o.resourceByName(ctx, in.Old, "")
+	r, err := o.resourceInScope(ctx, in.Old, OpResRename)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -212,7 +218,7 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 	if in.Into == "" {
 		return ResRepointOut{}, errs.New(errs.InvalidInput, "resource merge: give --into <name>")
 	}
-	dup, err := o.resourceByName(ctx, in.Name, "")
+	dup, err := o.resourceInScope(ctx, in.Name, OpResMerge)
 	if err != nil {
 		return ResRepointOut{}, err
 	}

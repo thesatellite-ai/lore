@@ -55,7 +55,10 @@ func homeHint(e op.Entry, setupGiven bool) string {
 	}
 	if !setupGiven && (to || st || id) {
 		if id && !to && !st {
-			ways = append(ways, "add --setup <setup> so the row's id finds its store (--store does not apply)")
+			// the command takes no store flag: its id names the row
+			// (never "--store does not apply", devco D-586: a reader
+			// cannot tell that from "a store would not work")
+			ways = append(ways, "add --setup <setup> so the row's id finds its store (the id names the row: the command takes no store flag)")
 		} else {
 			ways = append(ways, "or a setup with --setup <setup>")
 		}
@@ -63,7 +66,7 @@ func homeHint(e op.Entry, setupGiven bool) string {
 	if len(ways) == 0 {
 		// context, and a command given --setup that still has no store here:
 		// it reads or writes the repo it runs in
-		return "cd into a git checkout (or the store's clone): this command works on the folder it runs in, so --store does not apply; lore setup list shows each setup's folders and lore store list --setup <setup> its clones"
+		return "cd into a git checkout (or the store's clone): this command takes no store flag, it works on the folder it runs in; lore setup list shows each setup's folders and lore store list --setup <setup> its clones"
 	}
 	return "cd into a git checkout, or " + strings.Join(ways, " ") + "; lore store list and lore setup list show them"
 }

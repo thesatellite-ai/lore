@@ -370,7 +370,7 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	for _, t := range all {
 		it := itemOf(t)
 		switch {
-		case in.To != "" && it.Store != strings.TrimSpace(in.To):
+		case in.To != "" && !engine.InNamedStore(store.Source(in.To), store.Source(it.Store)):
 		case in.Type != "" && !typeMatches(it.Table, in.Type):
 		case by != "" && it.DeletedBy != by:
 		case born != "" && !engine.BornOn(t.Row, born):
@@ -646,7 +646,7 @@ func (o ops) overruled(ctx context.Context, in ListIn) (ListOut, error) {
 	out := ListOut{Data: []Item{}, Overruled: true}
 	for _, r := range rows {
 		it := Item{ID: r.Row.ID.String(), Table: r.Row.Table.String(), Store: string(r.Store), Title: titleOf(r.Row), Overruled: r.Note}
-		if (in.To != "" && it.Store != strings.TrimSpace(in.To)) || (in.Type != "" && !typeMatches(it.Table, in.Type)) {
+		if (in.To != "" && !engine.InNamedStore(store.Source(in.To), store.Source(it.Store))) || (in.Type != "" && !typeMatches(it.Table, in.Type)) {
 			continue
 		}
 		out.Data = append(out.Data, it)

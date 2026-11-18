@@ -365,7 +365,7 @@ func (o ops) resGraph(ctx context.Context, in GraphIn) (GraphOut, error) {
 	if err != nil {
 		return GraphOut{}, err
 	}
-	root, err := o.resourceByName(ctx, in.Name, "")
+	root, err := o.resourceInScope(ctx, in.Name, OpResGraph)
 	if err != nil {
 		return GraphOut{}, err
 	}

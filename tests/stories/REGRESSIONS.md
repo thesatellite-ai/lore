@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1930 |
+| fixed | 1932 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -911,6 +911,8 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-602 | finding | owner use pass 2 weak 7: the private-context budget warning listed the largest pinned rows but its fix named a different, smaller rule | fixed | TestOverCoreFixNamesTheListedRows, TestOverCoreWarnNamesTheFixCommands | Summary: wire/renderhost overCoreFix picks the rule and hotfix from pinsBySize (largest first), the order the warning lists them |
 | devco:D-603 | finding | owner use pass 2 weak 8: `policy set --key … --value …` without --yes answered "E_NEEDS_CONFIRM policy set?" naming no place, old value, reach or command, and in a linked repo the --yes answer was then refused | fixed | TestPolicyQuestionParts, TestStoryWPPolish | Summary: ops/settings policy set and unset ask their own question (policy_question.go): the place (this repo's .lore/ or store <org>/<folder>), the value now and where it comes from, the new value, who it reaches, and the exact command with --yes; a target the write cannot reach (engine.CheckWritable, wire App.CheckWritable with the repo backend's WriteRefusal) is refused before the question; docs operations/plugins-and-db-config; story WP |
 | devco:D-604 | finding | owner use pass 2 weak 9: `trash list --store <org>/<folder>` from the home folder printed "by act_…" where every other list names the person | fixed | TestStoryWPPolish | Summary: wire companyFolderOf falls back to the home's org config (orgConfigCompany) when no setup covers the folder, so a `--store <org>/<folder>` read attaches the org folder that holds the roster and every "by act_…" is named; story WP |
+| devco:D-586 | finding | owner use pass 2 follow-up (up2folder LEFT): `resource check --id <name>` from the home folder refused "this command works on the folder it runs in, so --store does not apply" although the resource was in a store; `resource stale`, `report` and `graph` with `--store <org>/<folder>` were not narrowed to the folder | fixed | TestStoryWMMore, TestHomeHintNeverSaysStoreDoesNotApply | Summary: resource check, edit, archive, rename and merge take --store (op.StoreFlag); wire routedWriteStore runs such a write on the named store from any folder (a whole org attaches its folders writable, the row is written where it is); stale and report keep the folder's resources (FolderScope via inFolderScope) with a line naming the whole-org command; check, graph and the by-name writes refuse a resource of another folder naming --store <org>; the home-folder hint never says "--store does not apply" |
+| devco:D-606 | finding | owner use pass 2 follow-up (up2polish LEFT): `trash list --store <org>` from the home folder said "the trash is empty" while <org>/<folder> held a trashed row (D-431: --store <org> reads every folder) | fixed | TestStoryWMMore, TestInNamedStore | Summary: trash list (and --overruled, --from-history) compared the store name exactly, dropping every <org>/<folder> row the open had attached; engine.InNamedStore applies NamedSources' rule (the name itself or one of its folders) |
 
 ## lore-adoptfix
 

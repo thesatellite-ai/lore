@@ -191,6 +191,15 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	if !write {
 		// `--store <org>` reads every folder of the org's stores (D-431)
 		also = append(also, a.orgWideFolders(ctx, to, target)...)
+	} else if routedWriteStore(in) == to {
+		// a write finding its row by name with `--store <org>` looks in
+		// every folder of the org, as the read does, and writes the row
+		// where it is (devco D-586: resource check --id <name> --store
+		// <org> found no row stored in a folder)
+		for _, f := range a.orgWideFolders(ctx, to, target) {
+			f.ReadOnly = false
+			also = append(also, f)
+		}
 	}
 	also = uniqueBeside(target, also)
 	if err := a.openStoreOnlyOn(ctx, target, target.Name, also...); err != nil {
@@ -244,6 +253,11 @@ func (a *App) outsideTo(ctx context.Context, in op.Input, write bool, opName str
 	}
 	if to == "" && !write {
 		to = filter
+	}
+	if to == "" && write {
+		// a write finding its row by name in the store --store names
+		// (op.StoreFlag: resource check, devco D-586)
+		to = routedWriteStore(in)
 	}
 	if to == "" && !write {
 		// a read the folder of a resource naming this repo answers
@@ -571,6 +585,9 @@ func (a *App) withSetupOfTarget(ctx context.Context, in op.Input) context.Contex
 			to = tv.Text
 		}
 	}
+	if to == "" {
+		to = routedWriteStore(in) // --store of a write (devco D-586)
+	}
 	base, _, _ := strings.Cut(to, targetSep)
 	if to == "" {
 		// an edit, delete or restore naming its row by id: the org whose
@@ -648,4 +665,18 @@ func rowIDOf(in op.Input) string {
 		return ""
 	}
 	return id
+}
+
+// routedWriteStore is the store a write names with op.StoreFlag's
+// --store (resource check --id <name> --store <org>[/<folder>], devco
+// D-586): it finds its row by name there, so outside a repo it runs on
+// that store as a write naming --to does. "" for a write naming none or
+// the repo.
+func routedWriteStore(in op.Input) string {
+	name, ok := in.RoutedStore()
+	name = strings.TrimSpace(name)
+	if !ok || name == string(store.SourceRepo) {
+		return ""
+	}
+	return name
 }

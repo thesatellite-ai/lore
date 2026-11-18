@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/ops/internal/showfield"
@@ -128,7 +129,7 @@ func (o ops) listHistory(ctx context.Context, in ListIn, since time.Time, by str
 	for _, h := range hs {
 		it, _, _ := historyItem(h)
 		switch {
-		case in.To != "" && it.Store != strings.TrimSpace(in.To):
+		case in.To != "" && !engine.InNamedStore(store.Source(in.To), store.Source(it.Store)):
 		case in.Type != "" && !typeMatches(it.Table, in.Type):
 		case by != "" && it.DeletedBy != by:
 		case in.Search != "" && !matches(it, in.Search):
