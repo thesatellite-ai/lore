@@ -144,7 +144,7 @@ Upgraded 2 rows
   mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
   mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ ls .lore; cat .lore/stores.yaml

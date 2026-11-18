@@ -80,6 +80,9 @@ type RosterResult struct {
 	// Imported / Created: the org entry was added by this run.
 	Imported bool
 	Created  bool
+	// StorePushed: creating the org pushed the new team store's first
+	// commit to its remote (devco D-613: the setup output says so).
+	StorePushed bool
 	// Rejoined: the actor was left or archived and is active again.
 	Rejoined bool
 	// Already: the invite was accepted by this actor before; nothing written.
@@ -479,9 +482,11 @@ func ApplyAdmin(ctx context.Context, d AdminDeps, req AdminRequest) (RosterResul
 	case !errs.Has(err, errs.NotFound):
 		return RosterResult{}, err
 	default:
-		if _, err = d.Stores.InitStore(ctx, stores.InitIn{Name: req.Org, URL: req.StoreURL, RepoOptional: true}); err != nil {
+		made, err := d.Stores.InitStore(ctx, stores.InitIn{Name: req.Org, URL: req.StoreURL, RepoOptional: true})
+		if err != nil {
 			return RosterResult{}, err
 		}
+		res.StorePushed = made.Pushed
 		folder := req.OrgFolder
 		if folder == "" {
 			folder = orgcmd.DefaultOrgFolder

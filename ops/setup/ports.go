@@ -208,6 +208,11 @@ type ApplyResult struct {
 	// Wrote names each thing written: a config path, "setups[personal]",
 	// a store id, a row id.
 	Wrote []string `json:"wrote"`
+	// Pushed names each remote the step pushed to and what went there
+	// (a new store's first commit); left out when the step pushed nothing.
+	// Why: nothing reaches a remote without the person seeing it (devco
+	// D-613).
+	Pushed []string `json:"pushed,omitempty"`
 	// Setup is the entry after the write (the op saves progress with it).
 	Setup onboard.SetupEntry `json:"setup"`
 }
@@ -338,6 +343,9 @@ type ApplyOut struct {
 	Status  onboard.StepStatus `json:"status"`
 	Changed bool               `json:"changed"`
 	Wrote   []string           `json:"wrote"`
+	// Pushed is ApplyResult.Pushed: each remote the step pushed to (a new
+	// store's first commit); left out when it pushed nothing (devco D-613).
+	Pushed []string `json:"pushed,omitempty"`
 	// Checks are the step's results after the save (reused fresh ones keep
 	// their own time), so the page and Summary show what ran: a finished
 	// setup keeps no progress rows to read them from (realmac NEW-5).

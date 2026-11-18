@@ -474,7 +474,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 # alice, in website
 $ LORE_ORG=agency lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_c0f3…b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_c0f3…b5b8) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ cat .lore/stores.yaml
 stores:
     - name: agency

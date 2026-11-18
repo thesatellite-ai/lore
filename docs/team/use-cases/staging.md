@@ -36,7 +36,7 @@ $ lore store init --name agency_stag --url 'git@github.com:agency/notes?branch=s
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore store init: store clone ~/.lore/stores/agency/notes@staging: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency_stag (sto_7a67…9504) on git@github.com:agency/notes?branch=staging: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org use --entry agency-stag

@@ -47,7 +47,7 @@ func runWith(t *testing.T, ctx context.Context, f *fakeRewriter, input string) e
 // --no-push and --offline take none even with the flag; a held T is
 // E_MIGRATE_LOCKED before any step, with M still released.
 func TestRunTeamLock(t *testing.T) {
-	for in, want := range map[string]int{`{"team_lock":true}`: 1, `{}`: 0, `{"team_lock":true,"dry_run":true}`: 0, `{"team_lock":true,"no_push":true}`: 0, `{"team_lock":true,"offline":true}`: 0} {
+	for in, want := range map[string]int{`{"team_lock":true,"push":true}`: 1, `{}`: 0, `{"team_lock":true,"dry_run":true}`: 0, `{"team_lock":true,"no_push":true}`: 0, `{"team_lock":true,"offline":true}`: 0} {
 		l := &fakeTeamLock{}
 		f := &fakeRewriter{tables: []row.Table{"memories"}}
 		if err := runWith(t, WithTeamLock(context.Background(), l), f, in); err != nil {
@@ -59,7 +59,7 @@ func TestRunTeamLock(t *testing.T) {
 	}
 	l := &fakeTeamLock{held: true}
 	f := &fakeRewriter{tables: []row.Table{"memories"}}
-	if err := runWith(t, WithTeamLock(context.Background(), l), f, `{"team_lock":true}`); !errs.Has(err, errs.MigrateLocked) {
+	if err := runWith(t, WithTeamLock(context.Background(), l), f, `{"team_lock":true,"push":true}`); !errs.Has(err, errs.MigrateLocked) {
 		t.Fatalf("held: want E_MIGRATE_LOCKED, got %v", err)
 	}
 	if !slices.Equal(f.calls, []string{"lock"}) || f.unlocked != 1 {

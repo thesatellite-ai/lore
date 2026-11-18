@@ -548,16 +548,25 @@ func (ap setupApplier) personalStoreValue(choice, raw string) (value, initURL st
 	return url, url, nil
 }
 
+// pushedFirstCommit is the ApplyResult.Pushed line of a new git store
+// whose marker commit went to url (devco D-613).
+func pushedFirstCommit(url string) string {
+	return url + ": the new store's first commit (its marker), so the store exists there"
+}
+
 // initPersonalStore makes url a store (its marker) once the entry naming
 // it is saved, adding the write to res.
 func (ap setupApplier) initPersonalStore(ctx context.Context, res opssetup.ApplyResult, url string) (opssetup.ApplyResult, error) {
-	already, err := ap.a.InitStoreMarker(ctx, url)
+	made, err := ap.a.InitStoreMarker(ctx, url)
 	if err != nil {
 		return res, err
 	}
-	if !already {
+	if !made.Already {
 		res.Changed = true
 		res.Wrote = append(res.Wrote, url)
+	}
+	if made.Pushed {
+		res.Pushed = append(res.Pushed, pushedFirstCommit(url))
 	}
 	return res, nil
 }
@@ -780,6 +789,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	if len(res.Wrote) > 0 || res.Imported || res.Created || res.Rejoined {
 		out.Changed = true
 		out.Wrote = append(out.Wrote, res.Wrote...)
+	}
+	if res.StorePushed {
+		out.Pushed = append(out.Pushed, pushedFirstCommit(teamURL))
 	}
 	// Now that setups[] holds the admin entry, this machine may set the
 	// team store's shared settings (isOrgAdmin).

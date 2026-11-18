@@ -8525,7 +8525,7 @@
     "/v1/branch/drop": {
       "post": {
         "operationId": "branch.drop",
-        "summary": "Move a code branch's own notes to the trash without landing them",
+        "summary": "Move a code branch's own notes to the trash without landing them; pushes to the store's remote at once",
         "tags": [
           "branch"
         ],
@@ -8903,7 +8903,7 @@
     "/v1/branch/land": {
       "post": {
         "operationId": "branch.land",
-        "summary": "Squash a code branch's own notes into the shared notes as one commit and push it (after the branch merged)",
+        "summary": "Squash a code branch's own notes into the shared notes as one commit and push it to the store's remote (after the branch merged)",
         "tags": [
           "branch"
         ],
@@ -9409,7 +9409,7 @@
     "/v1/branch/purge": {
       "post": {
         "operationId": "branch.purge",
-        "summary": "Delete trashed branch notes for good",
+        "summary": "Delete trashed branch notes for good, on the store's remote too (pushes at once)",
         "tags": [
           "branch"
         ],
@@ -9536,7 +9536,7 @@
     "/v1/branch/rename": {
       "post": {
         "operationId": "branch.rename",
-        "summary": "Move a code branch's notes to its new name after git branch -m",
+        "summary": "Move a code branch's notes to its new name after git branch -m; pushes to the store's remote at once",
         "tags": [
           "branch"
         ],
@@ -9656,7 +9656,7 @@
     "/v1/branch/restore": {
       "post": {
         "operationId": "branch.restore",
-        "summary": "Bring a code branch's dropped or landed notes back from the trash",
+        "summary": "Bring a code branch's dropped or landed notes back from the trash; pushes to the store's remote at once",
         "tags": [
           "branch"
         ],
@@ -37455,9 +37455,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the undo commits now, whatever each store's push mode says (default: a store in push mode now pushes; manual and batch keep them local and the rollback prints the command that sends them)"
+                  },
                   "team_lock": {
                     "type": "boolean",
-                    "description": "also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the rollback runs (removed when it ends), so it cannot race a teammate's migration"
+                    "description": "also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the rollback runs (removed when it ends), so it cannot race a teammate's migration; needs --push"
                   }
                 },
                 "additionalProperties": false
@@ -37588,15 +37592,19 @@
                   },
                   "no_push": {
                     "type": "boolean",
-                    "description": "commit the store changes but do not push them"
+                    "description": "commit the store changes but do not push them, even to a store in push mode now"
                   },
                   "offline": {
                     "type": "boolean",
                     "description": "branch files only: skip the settings, live rows and stores (they need the network)"
                   },
+                  "push": {
+                    "type": "boolean",
+                    "description": "push the store commits now, whatever each store's push mode says (default: a store in push mode now pushes; manual and batch keep the commit local and the run prints the command that sends it)"
+                  },
                   "team_lock": {
                     "type": "boolean",
-                    "description": "also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the run lasts (removed when it ends), so a teammate cannot migrate at the same time; ignored with --dry-run, --no-push and --offline"
+                    "description": "also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the run lasts (removed when it ends), so a teammate cannot migrate at the same time; needs --push; ignored with --dry-run, --no-push and --offline"
                   },
                   "verbose": {
                     "type": "boolean",
@@ -75682,6 +75690,12 @@
                         "command"
                       ]
                     },
+                    "pushed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -85237,7 +85251,7 @@
     "/v1/stores/init": {
       "post": {
         "operationId": "store.init",
-        "summary": "Make a git repo or folder a lore store and attach it (me = your personal store)",
+        "summary": "Make a git repo or folder a lore store and attach it (me = your personal store); a git url gets the store's first commit pushed",
         "tags": [
           "store"
         ],
@@ -85254,7 +85268,7 @@
                   },
                   "url": {
                     "type": "string",
-                    "description": "git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)"
+                    "description": "git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me); a new git store's first commit (its marker) is pushed there at once, which is what creates the store"
                   },
                   "visibility": {
                     "type": "string",
@@ -85303,6 +85317,9 @@
                       "type": "string"
                     },
                     "personal": {
+                      "type": "boolean"
+                    },
+                    "pushed": {
                       "type": "boolean"
                     },
                     "url": {

@@ -8,8 +8,9 @@ package journeys
 // teammate's folder billing/ (one `_v: 1` memory and its project row)
 // arrives with a pull. migrate status names it as its own place with
 // `lore migrate run`, doctor warns about it (never "current", never "a
-// lore older than 0.1.18"), and the run upgrades it and pushes it, after
-// which nothing is pending.
+// lore older than 0.1.18"), and the run upgrades it, keeps the store
+// commit local (push mode manual, devco D-612) and names the push command,
+// after which nothing is pending.
 
 import (
 	"os"
@@ -45,7 +46,8 @@ func TestJourneyMigrateUnattachedFolder(t *testing.T) {
 
 	w.Step("day1/attach-the-store-root", func() {
 		lap.LoreIn(app, "init", "--non-interactive", "--name=app").OK(t)
-		lap.LoreIn(app, "store", "init", "acme", bare, "--yes").OK(t)
+		// devco D-613: creating a git store pushes its first commit, and says so
+		lap.LoreIn(app, "store", "init", "acme", bare, "--yes").OK(t).Says(t, "on "+bare+": pushed its first commit (the store marker)")
 		lap.LoreIn(app, "memory", "add", "--body", "the api runs on port 8080", "--to", "acme").OK(t)
 		lap.LoreIn(app, "sync").OK(t)
 	})
@@ -74,8 +76,18 @@ func TestJourneyMigrateUnattachedFolder(t *testing.T) {
 			Never(t, "older than 0.1.18")
 	})
 
-	w.Step("day2/migrate-run-upgrades-and-pushes-it", func() {
-		lap.LoreIn(app, "migrate", "run").OK(t).Says(t, "Upgraded 2 rows", muMemID, muPrjID)
+	// devco D-612: the store is in the default push mode (manual), so the
+	// run commits locally, says so and prints the command that sends it;
+	// the remote moves only when that command runs
+	w.Step("day2/migrate-run-upgrades-it-and-the-printed-push-sends-it", func() {
+		before := w.Git(w.Root, "--git-dir", bare, "rev-parse", "main")
+		lap.LoreIn(app, "migrate", "run").OK(t).
+			Says(t, "Upgraded 2 rows", muMemID, muPrjID, "not pushed: store acme is in push mode manual; push with: lore store push --store acme").
+			Never(t, ", pushed")
+		if after := w.Git(w.Root, "--git-dir", bare, "rev-parse", "main"); after != before {
+			t.Fatalf("lore migrate run pushed to a store in push mode manual: %s -> %s", before, after)
+		}
+		lap.LoreIn(app, "store", "push", "--store", "acme").OK(t).Says(t, "sent 1 commit")
 		for _, rel := range []string{"billing/memories/" + muMemID + ".json", "billing/projects/" + muPrjID + ".json"} {
 			if got := w.Git(w.Root, "--git-dir", bare, "show", "main:"+rel); !strings.Contains(got, `"_v": 2`) {
 				t.Fatalf("the store remote still has %s at v1:\n%s", rel, got)

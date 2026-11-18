@@ -24,7 +24,7 @@ agency/memories/mem_2ad3618e878ebbf527d34d446ef4f891.json
 ### git personal store
 alice (work/scratch)$ lore store init --name me --url git@github.com:alice/lore-me --yes
 lore store init: store clone ~/.lore/stores/alice/lore-me: git user set to alice <alice@devbox> (your lore identity)
-✓ created store me (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_c0f3c11a5724b0cfd74b256190d9b5b8) on git@github.com:alice/lore-me: pushed its first commit (the store marker); recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 alice (work/website)$ lore memory add --body 'my invoice template lives in the shared drive' --to me
 lore memory add: store clone ~/.lore/stores/alice/lore-me: git user set to Alice Doe <alice@agency.example> (your lore identity, was alice@devbox)
 lore: committed locally to store me; lore sync sends it

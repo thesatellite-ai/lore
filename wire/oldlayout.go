@@ -237,11 +237,13 @@ func (a *App) flattenPersonal(ctx context.Context, p personalClone, push layoutP
 // first write's safe steps), and returns what it did as lines. The
 // migration turns a v0.1.17 store's marker into one this lore moves, so
 // without this the layout commit (and its push) waited for the next
-// command, even a read. Run only when the migration pushes: a --no-push or
+// command, even a read. Run only when the migration may push: a --no-push or
 // --offline run leaves the move to the next command, which first fetches
-// what a teammate pushed. The App's open stores still point at the old
-// layout, so the state is closed first and the next use reopens it.
-func (a *App) FlattenAfterMigrate(ctx context.Context) []string {
+// what a teammate pushed. force (--push) pushes whatever a store's push
+// mode says; otherwise only a store in push mode now pushes (devco D-612).
+// The App's open stores still point at the old layout, so the state is
+// closed first and the next use reopens it.
+func (a *App) FlattenAfterMigrate(ctx context.Context, force bool) []string {
 	home := a.opts.Home
 	if home == "" {
 		return nil
@@ -251,15 +253,19 @@ func (a *App) FlattenAfterMigrate(ctx context.Context) []string {
 		return nil
 	}
 	_ = a.reopenState() // a close error leaves nothing open that a reopen needs
+	push := migratePerMode
+	if force {
+		push = migrateForced
+	}
 	var lines []string
 	say := func(line string) { lines = append(lines, line) }
 	for _, dir := range flat {
-		a.settleClone(ctx, dir, migratePushes, say)
+		a.settleClone(ctx, dir, push, say)
 	}
 	// D16: the personal store's everywhere/ move is lore migrate run's too
 	for _, p := range personalV017Candidates(home) {
 		if !personalMarkerOld(p.dir) {
-			a.flattenPersonal(ctx, p, migratePushes, say)
+			a.flattenPersonal(ctx, p, push, say)
 		}
 	}
 	return lines
@@ -501,23 +507,32 @@ func LayoutCommitLine(name, commit string, c rowfs.LayoutChange) string {
 
 // layoutPush says whether a step of the old-layout move may push: only a
 // command the person ran to migrate (lore migrate run, lore fix) pushes,
-// per the store's push mode; the automatic first-run step before any
-// other command, a read included, never does (E-13).
-type layoutPush bool
+// per the store's push mode or, with --push, always; the automatic
+// first-run step before any other command, a read included, never does
+// (E-13).
+type layoutPush int
 
 const (
 	// firstRunLocal: MoveOldLayout, before the command the person typed.
-	firstRunLocal layoutPush = false
-	// migratePushes: FlattenAfterMigrate, inside a migration that pushes.
-	migratePushes layoutPush = true
+	firstRunLocal layoutPush = iota
+	// migratePerMode: FlattenAfterMigrate in a migration without --push:
+	// a store in push mode now pushes, the others wait for lore sync.
+	migratePerMode
+	// migrateForced: FlattenAfterMigrate in a migration run with --push.
+	migrateForced
 )
+
+// sends reports whether a store in push mode mode pushes at this step.
+func (p layoutPush) sends(mode storepush.Mode) bool {
+	return p == migrateForced || (p == migratePerMode && mode == storepush.ModeNow)
+}
 
 // syncMoved brings a clone level with its remote: in a migration a store
 // that pushes now sends the commits it carries; otherwise it only fetches
 // and merges, and says the carried commits wait for lore sync.
 func (a *App) syncMoved(ctx context.Context, gb *git.Backend, name string, mode storepush.Mode, push layoutPush, say func(string)) {
 	n, _ := gb.Unpushed(ctx)
-	if n == 0 || mode != storepush.ModeNow || !push {
+	if n == 0 || !push.sends(mode) {
 		if _, err := gb.SyncWith(ctx, git.SyncOptions{NoPush: true}); err != nil && !errors.Is(err, context.Canceled) {
 			say(fmt.Sprintf("store %s: could not fetch its remote (%s); lore sync tries again", name, errLine(err)))
 		}
@@ -533,7 +548,7 @@ func (a *App) syncMoved(ctx context.Context, gb *git.Backend, name string, mode 
 // step never pushes (committed on this machine only), a migration waits
 // for a store that does not push now.
 func waitWhy(mode storepush.Mode, push layoutPush) string {
-	if !push {
+	if push == firstRunLocal {
 		return " (committed on this machine only)"
 	}
 	return fmt.Sprintf(" (push mode %s)", mode)
@@ -543,7 +558,7 @@ func waitWhy(mode storepush.Mode, push layoutPush) string {
 // pushes now and prints the push line; otherwise it says what waits and
 // why.
 func (a *App) pushPerMode(ctx context.Context, gb *git.Backend, name string, mode storepush.Mode, push layoutPush, what string, say func(string)) {
-	if mode != storepush.ModeNow || !push {
+	if !push.sends(mode) {
 		say(fmt.Sprintf("store %s: %s waits%s; lore sync sends it", name, what, waitWhy(mode, push)))
 		return
 	}

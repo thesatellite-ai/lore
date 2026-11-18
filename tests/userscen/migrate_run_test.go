@@ -179,7 +179,7 @@ func TestMigrateRunOldDataMatrix(t *testing.T) {
 			}
 
 			// The run: every row rewritten, every field kept, pushed under the team lock (asked for: --team-lock).
-			out := th.DecodeJSON[migRunOut](t, run.Lore("migrate", "run", "--team-lock", "--json"))
+			out := th.DecodeJSON[migRunOut](t, run.Lore("migrate", "run", "--team-lock", "--push", "--json"))
 			if out.DryRun || out.Count != n || !strings.HasPrefix(out.BackupRef, migBackupPrefix) {
 				t.Fatalf("run: %+v, want count %d and a backup ref", out, n)
 			}
@@ -272,7 +272,7 @@ func TestMigrateRunSoloRepoNoRemote(t *testing.T) {
 				migDowngrade(t, dir+"/"+rel)
 			}
 		}
-		out := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--team-lock", "--json"))
+		out := th.DecodeJSON[migRunOut](t, alice.Lore(dir, "migrate", "run", "--team-lock", "--push", "--json"))
 		if len(out.Journal) == 0 || out.Journal[0] != noRemote {
 			t.Fatalf("%s: journal %q, want it to start with %q", rows, out.Journal, noRemote)
 		}

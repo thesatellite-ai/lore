@@ -301,19 +301,33 @@ var wwSkip = map[string]string{
 	"setup.run":   "the guided setup (a terminal flow); its steps run as setup.apply",
 }
 
-// wwPushOps may move a remote's refs: they push or sync by design (rule e).
-var wwPushOps = map[string]bool{
-	"store.push": true, "store.set_url": true, "store.init": true, "store.add": true,
-	"land.run": true, "branch.land": true, "branch.share": true, "branch.promote": true,
-	"sync.ci_merge": true, "sync.promote": true, "sync.purge": true, "sync.resolve": true,
-	"sync.merge_rows": true, "sync.fix_projects": true, "sync.trash.restore": true,
-	"org.create": true, "store.compact": true, "store.folder.add": true, "store.folder.remove": true,
-	"team.invite": true, "team.invite.revoke": true,
-	// claims, releases and holds reach the remote at once (docs/reference/
-	// config.md live.autopush): a claim nobody else sees claims nothing
-	"hold.claim": true, "hold.release": true, "task.claim": true, "task.release": true,
-	"task.next": true, "task.heartbeat": true, "task.start": true, "task.done": true,
-	"task.revoke": true,
+// wwPushOps are the only writes that may move a remote's refs with no
+// --push, each with why (rule e, devco D-612..D-614: nothing reaches a
+// remote without an explicit push or sync, or a push setting the person
+// turned on). The WW world keeps every store in the default push mode,
+// manual, and live.autopush off, and the matrix passes no --push, so any
+// other op that moves a remote is a finding. An op leaves this list when
+// it learns --push; one joins it only with its reason and help text that
+// says it pushes.
+var wwPushOps = map[string]string{
+	"store.push":         "lore store push: the explicit push",
+	"store.set_url":      "moves the store to its new address (asks first) and pushes it there: the move is the remote act",
+	"store.init":         "a git url's new store is created by pushing its first commit (D-613: help and output say so)",
+	"org.create":         "creates the org's team store on its url by pushing its first commit, as store init (D-613)",
+	"store.compact":      "rewrites the store's history on its remote: an explicit maintenance act",
+	"land.run":           "lore land: lands live rows on the remote, an explicit sync",
+	"branch.land":        "explicit remote act: lands the branch's notes on the store remote (D-614, help and output say it pushes)",
+	"branch.drop":        "explicit remote act: moves the branch's notes to the trash on the store remote (D-614)",
+	"branch.restore":     "explicit remote act: brings trashed notes back on the store remote (D-614)",
+	"branch.purge":       "explicit remote act: deletes trashed notes on the store remote for good (D-614)",
+	"branch.rename":      "explicit remote act: moves the branch's notes ref on the store remote (D-614)",
+	"sync.ci_merge":      "lore sync ci-merge: the CI sync step",
+	"sync.promote":       "lore sync promote: a sync",
+	"sync.purge":         "lore sync purge: a sync",
+	"sync.resolve":       "lore sync resolve: a sync",
+	"sync.merge_rows":    "lore sync merge-rows: a sync",
+	"sync.fix_projects":  "lore sync fix-projects: a sync",
+	"sync.trash.restore": "lore sync trash restore: a sync",
 }
 
 // wwExits are writes whose documented non-zero exit still prints their
@@ -763,6 +777,12 @@ func wwRunPlace(t *testing.T, w *wwWorld, p wwPlace, found *wwFindings) map[stri
 		t.Errorf("[WW] setup@%s: %s", p.Name, b)
 		found.add("a-identity setup@" + p.Name + " " + b)
 	}
+	// rule (e) is the push guard (devco D-612..D-614): the harness gives
+	// every simulated person LORE_PUSH_CLAIMS=1, a standing go-ahead to
+	// push claims and holds; the matrix withdraws it, so a write moves a
+	// remote only when it is in wwPushOps (every store stays in the default
+	// push mode, manual, and no input passes --push)
+	w.m.SetEnv(teamharness.EnvPushClaims, "0")
 	before := wwSnapshot(t, w)
 	var pass, refuse int
 	for _, o := range ops {
@@ -1004,7 +1024,7 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 			continue
 		}
 		pushed += wwRemoteMoved(w, r, before.remoteRefs[r.Slug], now.remoteRefs[r.Slug])
-		if !wwPushOps[o.Name] {
+		if _, exempt := wwPushOps[o.Name]; !exempt {
 			add(wwRuleRemote, "(e) moved the refs of "+r.Slug+": "+strings.Join(wLineDiff(before.remoteRefs[r.Slug], now.remoteRefs[r.Slug]), "; "))
 		}
 	}

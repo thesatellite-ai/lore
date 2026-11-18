@@ -5,7 +5,7 @@ package migrate
 //
 //	run ─► lock ─► Journal.Begin (backup ref + journal, or resume the interrupted one)
 //	    ─► settings ─► live ─► rewrites   (--offline: the repo's rows only, RewriteRepoV1)
-//	    ─► Journal.Finish (record what changed; push the store commits unless --no-push/--offline)
+//	    ─► Journal.Finish (record what changed; push the store commits per each store's push mode, --push always, --no-push/--offline never)
 //	status   ─► Journal.Status   (versions per place, format, journal, lock)
 //	rollback ─► lock ─► Journal.Rollback (refuse with E_MIGRATE_ROLLBACK_LOSES, or restore all)
 //	unlock   ─► Journal.Unlock   (only a lock whose process is gone)
@@ -44,10 +44,12 @@ type Journal interface {
 	// files only, the stores need the network).
 	RewriteRepoV1(ctx context.Context, table row.Table, dryRun bool) ([]ids.AnyID, error)
 	// Finish records what the run changed, pushes the changed store
-	// commits unless push is false, and marks the journal done. A run
-	// that changed no data folder and reported count 0 rows removes its
-	// backup ref and journal and returns no lines.
-	Finish(ctx context.Context, push bool, count int) (Finished, error)
+	// commits as push says (PushPerMode: a store in push mode now; every
+	// line names whether its commit was pushed and, if not, the command
+	// that sends it), and marks the journal done. A run that changed no
+	// data folder and reported count 0 rows removes its backup ref and
+	// journal and returns no lines.
+	Finish(ctx context.Context, push PushChoice, count int) (Finished, error)
 	// Status reports the format of every place, the journal and the lock.
 	Status(ctx context.Context) (StatusOut, error)
 	// Rollback undoes the last migration (FQ5): before push a local undo,
@@ -181,7 +183,10 @@ type RollbackIn struct {
 	// TeamLock holds the team lock on the remote's refs/lore/signals while
 	// the rollback runs (7.2: a rollback cannot race a run); off by default
 	// because the lock is a push (A-7).
-	TeamLock bool `json:"team_lock,omitempty" flag:"team-lock" desc:"also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the rollback runs (removed when it ends), so it cannot race a teammate's migration"`
+	TeamLock bool `json:"team_lock,omitempty" flag:"team-lock" desc:"also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the rollback runs (removed when it ends), so it cannot race a teammate's migration; needs --push"`
+	// Push sends the undo commits of a migration that reached a remote
+	// now; without it each store's push mode decides (devco D-612).
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the undo commits now, whatever each store's push mode says (default: a store in push mode now pushes; manual and batch keep them local and the rollback prints the command that sends them)"`
 }
 
 // RollbackOut is the output of migrate.rollback.
@@ -262,6 +267,14 @@ func journalOps(rw Rewriter, j Journal) []op.Entry {
 				{Title: "undo the last migration", CLI: "lore migrate rollback", Want: "backup_ref:"},
 			},
 		}, func(ctx context.Context, in RollbackIn) (RollbackOut, error) {
+			if in.TeamLock && !in.Push {
+				return RollbackOut{}, teamLockNeedsPush("lore migrate rollback")
+			}
+			choice := PushPerMode
+			if in.Push {
+				choice = PushNow
+			}
+			ctx = WithPushChoice(ctx, choice)
 			unlock, err := rw.LockMigration(ctx)
 			if err != nil {
 				return RollbackOut{}, err

@@ -105,16 +105,16 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 |---|---|---|
 | `lore branch` … | Notes a code branch keeps to itself until it merges (branch layers): list, land, drop, restore | — |
 | `lore branch adopt` | Move the shared rows born on a code branch (before branch layers) into that branch's own notes | — |
-| `lore branch drop` | Move a code branch's own notes to the trash without landing them | — |
+| `lore branch drop` | Move a code branch's own notes to the trash without landing them; pushes to the store's remote at once | — |
 | `lore branch install-action` | Add the GitHub workflow that lands a branch's notes when its pull request merges (asks first) | — |
 | `lore branch isolate` | Make a code branch keep its own notes, for everyone in this project folder | — |
-| `lore branch land` | Squash a code branch's own notes into the shared notes as one commit and push it (after the branch merged) | — |
+| `lore branch land` | Squash a code branch's own notes into the shared notes as one commit and push it to the store's remote (after the branch merged) | — |
 | `lore branch list` | List the notes code branches keep to themselves in this project's store folder (branch layers) | — |
 | `lore branch mode` | Say whether a code branch keeps its own notes (isolated) or writes to the shared notes, and which rule decided | — |
 | `lore branch promote` | Put rows of this branch's own notes into the shared notes now (an urgent rule) | — |
-| `lore branch purge` | Delete trashed branch notes for good | — |
-| `lore branch rename` | Move a code branch's notes to its new name after git branch -m | — |
-| `lore branch restore` | Bring a code branch's dropped or landed notes back from the trash | — |
+| `lore branch purge` | Delete trashed branch notes for good, on the store's remote too (pushes at once) | — |
+| `lore branch rename` | Move a code branch's notes to its new name after git branch -m; pushes to the store's remote at once | — |
+| `lore branch restore` | Bring a code branch's dropped or landed notes back from the trash; pushes to the store's remote at once | — |
 | `lore branch share` | Make a code branch write to the shared notes, for everyone in this project folder | — |
 | `lore branch show` | Show one code branch's own notes: its rows, where it started, who started it | — |
 
@@ -858,7 +858,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore store folder list` | List the folders of a store (default: every store the setup sees), and which ones this repo attaches | [team/client-folders › Step 2 — List the folders](../../docs/team/client-folders.md#step-2--list-the-folders) |
 | `lore store folder remove` | Remove a folder from a store: an empty one at once; one with rows or repo links only with --purge --confirm (its rows go to the trash first); asks first | [team/client-folders › Step 6 — Remove a folder made by mistake](../../docs/team/client-folders.md#step-6--remove-a-folder-made-by-mistake) |
 | `lore store forget` | Delete this machine's clone of a store (refused while it holds unpushed work) | [team/identity-and-stores › Step 7 — Look inside a store, or drop your copy: lore store open and forget](../../docs/team/identity-and-stores.md#step-7--look-inside-a-store-or-drop-your-copy-lore-store-open-and-forget) |
-| `lore store init` | Make a git repo or folder a lore store and attach it (me = your personal store) | [team/commands › lore store init](../../docs/team/commands.md#lore-store-init) |
+| `lore store init` | Make a git repo or folder a lore store and attach it (me = your personal store); a git url gets the store's first commit pushed | [team/commands › lore store init](../../docs/team/commands.md#lore-store-init) |
 | `lore store list` | List the stores this repo sees, in precedence order (outside a repo: the stores of the setup) | [sync/stores › Step 1 — Make a store and look at it](../../docs/sync/stores.md#step-1--make-a-store-and-look-at-it) |
 | `lore store open` | Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>, or <repo>@<branch>), fetched first | [team/identity-and-stores › Step 7 — Look inside a store, or drop your copy: lore store open and forget](../../docs/team/identity-and-stores.md#step-7--look-inside-a-store-or-drop-your-copy-lore-store-open-and-forget) |
 | `lore store push` | Push a store's local commits now; --restore puts this machine's copy back into a store remote that was deleted and made again | [sync/stores › Step 3 — Follow a store that moved](../../docs/sync/stores.md#step-3--follow-a-store-that-moved) |

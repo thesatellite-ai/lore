@@ -150,7 +150,7 @@ Upgraded 1 row
   actors: 1 row (act_162d…9666)
   identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
   actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 branch (.lore/data): 1 files upgraded, not committed (lore never commits a code repo)
 undo: lore migrate rollback
@@ -222,7 +222,7 @@ $ lore config check
 # alice, in tools
 $ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_d431…313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_d431…313a) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
 identity   Alice Doe <human:alice@agency.example>   act_b4f4…a5b0  @alice  (from: org entry (config.yaml orgs[agency].identity))

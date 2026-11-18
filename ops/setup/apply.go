@@ -145,6 +145,7 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		if res.Wrote != nil {
 			out.Wrote = res.Wrote
 		}
+		out.Pushed = res.Pushed
 		if res.Setup.Name != "" {
 			s.entry, s.exists = res.Setup, true
 			upgraded, err := e.keepJoinedKind(ctx, st, s, step)

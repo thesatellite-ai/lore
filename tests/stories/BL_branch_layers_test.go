@@ -292,7 +292,7 @@ func TestStoryBL5GitCommands(t *testing.T) {
 		// a rename: the new name starts with no notes until lore branch rename
 		w.aapp.Git("branch", "-m", "feat/git", "feat/renamed")
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Never(t, "note one")
-		w.admin.LoreIn(w.aapp, "branch", "rename", "--from", "feat/git", "--to", "feat/renamed").OK(t).Says(t, "now belong to feat/renamed")
+		w.admin.LoreIn(w.aapp, "branch", "rename", "--from", "feat/git", "--to", "feat/renamed").OK(t).Says(t, "now belong to feat/renamed (pushed to the store's remote)") // devco D-614: the output says it pushed
 		seesAll("lore branch rename")
 		if refs := w.storeRefs("refs/lore/layer/"); !strings.Contains(refs, "feat%2Frenamed") || strings.Contains(refs, "feat%2Fgit") {
 			t.Fatalf("remote layer refs after the rename: %q", refs)

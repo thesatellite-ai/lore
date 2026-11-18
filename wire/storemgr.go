@@ -143,11 +143,11 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 		return opsstores.InitOut{}, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: vis, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
-	got, already, err := a.makeStore(ctx, canon, raw, m)
+	got, made, err := a.makeStore(ctx, canon, raw, m)
 	if err != nil {
 		return opsstores.InitOut{}, err
 	}
-	out := opsstores.InitOut{Name: in.Name, URL: raw, Already: already, Org: org, OrgSetup: orgAdminSetup(a.opts.Home, org)}
+	out := opsstores.InitOut{Name: in.Name, URL: raw, Already: made.already, Pushed: made.pushed, Org: org, OrgSetup: orgAdminSetup(a.opts.Home, org)}
 	if !got.ID.IsZero() {
 		out.ID = got.ID.String()
 	}
@@ -186,57 +186,77 @@ func attachedAs(top, name string) (attach.Store, bool, error) {
 // .lore/stores.yaml entry. A setup's own personal_store url uses it, since
 // the setup entry is what points at that store (realmac finding 13: the
 // page promised "Save will run lore store init" and nothing ran).
-func (a *App) InitStoreMarker(ctx context.Context, raw string) (bool, error) {
+func (a *App) InitStoreMarker(ctx context.Context, raw string) (InitMarkerResult, error) {
 	raw, err := cleanFileURL(raw)
 	if err != nil {
-		return false, err
+		return InitMarkerResult{}, err
 	}
 	canon, err := canonical(attach.Store{URL: raw})
 	if err != nil {
-		return false, err
+		return InitMarkerResult{}, err
 	}
 	id, err := ids.New[ids.Store]()
 	if err != nil {
-		return false, errs.Wrap(errs.Internal, "store init: new store id", err)
+		return InitMarkerResult{}, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
-	_, already, err := a.makeStore(ctx, canon, raw, m)
-	return already, err
+	_, made, err := a.makeStore(ctx, canon, raw, m)
+	return InitMarkerResult{Already: made.already, Pushed: made.pushed}, err
+}
+
+// InitMarkerResult is what InitStoreMarker did.
+type InitMarkerResult struct {
+	// Already: the url was a lore store before; nothing was written.
+	Already bool
+	// Pushed: the new store's marker commit was pushed to its git remote
+	// (devco D-613: the setup step's output names it).
+	Pushed bool
+}
+
+// storeMade is what makeStore did beyond the marker in force.
+type storeMade struct {
+	// already: the url was a lore store before; nothing was written.
+	already bool
+	// pushed: the marker commit went to the git remote (a new git store).
+	// Publishing the new store is the point of a store url, so the first
+	// push needs no --push; every output that made one says so (devco
+	// D-613: nothing reaches a remote without the person seeing it).
+	pushed bool
 }
 
 // makeStore writes m as the marker of the store at canon unless it already
-// has one; it returns the marker in force and whether it was already there.
-func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) (rowfs.Marker, bool, error) {
+// has one; it returns the marker in force and what it did.
+func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) (rowfs.Marker, storeMade, error) {
 	u, err := url.Parse(canon)
 	if err != nil {
-		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: the url does not parse")
+		return rowfs.Marker{}, storeMade{}, errs.New(errs.StoreScheme, "store init: the url does not parse")
 	}
 	if u.Scheme == folder.Scheme {
 		dir := fileuri.OSPath(u.Path)
 		if old, rerr := rowfs.ReadMarker(dir); rerr == nil {
-			return old, true, nil
+			return old, storeMade{already: true}, nil
 		} else if !errs.Has(rerr, errs.NotAStore) {
 			if !errors.Is(rerr, fs.ErrNotExist) {
-				return rowfs.Marker{}, false, rerr
+				return rowfs.Marker{}, storeMade{}, rerr
 			}
 		}
 		if err = folder.Init(dir, m, a.opts.rowfsOptions()...); err != nil {
-			return rowfs.Marker{}, false, err
+			return rowfs.Marker{}, storeMade{}, err
 		}
 		if fspath.Same(dir, personalFolderDir(a.opts.Home)) {
 			// N-13: the personal folder is the one a person may later put in git by hand
 			err = folder.IgnoreState(dir)
 		}
-		return m, false, err
+		return m, storeMade{}, err
 	}
 	b, err := a.openStore(ctx, canon, raw)
 	if err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	defer func() { _ = b.Close() }() // read-mostly handle; the commit below already landed
 	gb, ok := b.(*git.Backend)
 	if !ok {
-		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: not a git store")
+		return rowfs.Marker{}, storeMade{}, errs.New(errs.StoreScheme, "store init: not a git store")
 	}
 	if old := gb.Marker(); old.Version > 0 {
 		// B3-29: the marker is the clone's; judge the remote's own content.
@@ -244,40 +264,40 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		// not "already a lore store": this clone of the old one is stale.
 		reset, rerr := gb.RemoteReset(ctx)
 		if rerr != nil {
-			return rowfs.Marker{}, false, rerr
+			return rowfs.Marker{}, storeMade{}, rerr
 		}
 		if reset {
 			shown := raw
-			return rowfs.Marker{}, false, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
+			return rowfs.Marker{}, storeMade{}, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
 				WithHint("start fresh: lore store forget --url " + shown + ", then run this command again; or put the old store back: lore store add --name <name> --url " + shown + ", then lore store push --store <name> --restore")
 		}
-		return old, true, nil
+		return old, storeMade{already: true}, nil
 	}
 	if err = rowfs.WriteMarker(gb.Dir(), m); err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	files := []string{rowfs.MarkerFile}
 	if readme, rerr := readmeForCommit(ctx, gb.Dir()); rerr != nil {
-		return rowfs.Marker{}, false, rerr
+		return rowfs.Marker{}, storeMade{}, rerr
 	} else if readme != "" {
 		files = append(files, readme)
 	}
 	if wrote, serr := rowfs.EnsureSignpost(gb.Dir()); serr != nil {
-		return rowfs.Marker{}, false, serr
+		return rowfs.Marker{}, storeMade{}, serr
 	} else if wrote {
 		files = append(files, rowfs.SignpostFile) // a new store: lore 0.1.17 says so first (rowfs/signpost.go)
 	}
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), initSubject, files...); err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	rep, err := gb.Sync(git.WithFirstPush(ctx)) // the store's first push (remotereset.go)
 	if err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	if len(rep.Refused) > 0 {
-		return rowfs.Marker{}, false, errs.New(errs.PolicyDenied, "store init: the remote refused the marker commit: "+rep.Refused[0].Reason)
+		return rowfs.Marker{}, storeMade{}, errs.New(errs.PolicyDenied, "store init: the remote refused the marker commit: "+rep.Refused[0].Reason)
 	}
-	return m, false, nil
+	return m, storeMade{pushed: true}, nil
 }
 
 // readmeForCommit writes lore's README.md into the git store clone dir

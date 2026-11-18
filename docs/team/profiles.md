@@ -589,7 +589,7 @@ Profiles live in an org's store, so a team without an org starts with `lore org 
 # ana, in handbook
 $ lore store init --name acme --url git@github.com:acme/lore-notes --yes
 lore store init: store clone ~/.lore/stores/acme/lore-notes: git user set to ana <ana@acme.example> (your lore identity)
-✓ created store acme (sto_376c…8e1a) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store acme (sto_376c…8e1a) on git@github.com:acme/lore-notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ lore org create --org acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore: committed locally to store acme/org; lore sync sends it
