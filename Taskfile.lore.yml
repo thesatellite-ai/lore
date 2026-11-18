@@ -120,7 +120,8 @@ vars:
   GATE_STEPS: |
     userscen          13  test:scen PARALLEL=13
     setupe2e          11  test:setupe2e:run PARALLEL=10
-    stories           4   test:stories PARALLEL=8
+    stories-ww        3   test:stories:ww PARALLEL=6
+    stories           4   test:stories:rest PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
     journey-solo      2   test:journeys:solo PARALLEL=4
     machines          7   test:machines:core PARALLEL=8
@@ -640,6 +641,31 @@ tasks:
     cmds:
       - CGO_ENABLED=0 go build -tags loretest -o {{.STORIES_BIN}} ./cmd/lore
       - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout $({{.TEST_TIME}} 15m) {{.CLI_ARGS}} ./tests/stories/"
+
+  # The gate runs the stories in two parts, each with its own binary and 15 m limit, like the
+  # journeys: story WW (the write matrix, twelve places of ~400 writes each) is the suite's long
+  # pole and alone took 7 of the 15 minutes once the gate's load rose (devco D-678); the rest
+  # part runs every other story (-skip of exactly the ww part), so a new story is in the gate
+  # the day it is added; internal/repoguard TestGateRunsEveryTaggedSuiteTest fails when a story is in neither.
+  test:stories:part:
+    desc: "One part of tests/stories with its own binary (PART names it, FILTER is the go test -run or -skip); the gate's stories steps call it"
+    vars:
+      STORIES_BIN: "{{.BIN_DIR}}/lore-stories-{{.PART}}"
+    cmds:
+      - CGO_ENABLED=0 go build -tags loretest -o {{.STORIES_BIN}} ./cmd/lore
+      - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout $({{.TEST_TIME}} 15m) {{.FILTER}} ./tests/stories/"
+
+  test:stories:ww:
+    desc: "Story WW alone: every write of the registry from every place a person stands (the gate's long pole, its own step)"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: ww, FILTER: "-run '^TestStoryWW'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:rest:
+    desc: "Every story the ww part does not run (the catch-all of the gate's stories parts)"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: rest, FILTER: "-skip '^TestStoryWW'", PARALLEL: "{{.PARALLEL}}"}
 
   test:journeys:frame:
     desc: "Journey harness self-tests: a walk through every harness action, every shared invariant bites, Pending records"

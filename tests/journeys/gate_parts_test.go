@@ -42,6 +42,10 @@ func (p journeyPart) has(name string) bool {
 
 var (
 	partTaskLine = regexp.MustCompile(`^  test:journeys:([a-z-]+):\s*$`)
+	// anyTaskLine is any task's header: a PART line under another suite's
+	// task (test:stories:ww, devco D-678) belongs to that task, not to the
+	// journey task above it.
+	anyTaskLine  = regexp.MustCompile(`^  [a-z][a-z0-9:-]*:\s*$`)
 	partVarsLine = regexp.MustCompile(`vars: \{PART: ([a-z-]+), FILTER: "(.*)"\}`)
 	filterFlag   = regexp.MustCompile(`-(run|skip) '([^']*)'`)
 )
@@ -56,6 +60,10 @@ func journeyParts(t *testing.T, text string) []journeyPart {
 	for _, line := range strings.Split(text, "\n") {
 		if m := partTaskLine.FindStringSubmatch(line); m != nil {
 			task = m[1]
+			continue
+		}
+		if anyTaskLine.MatchString(line) {
+			task = ""
 			continue
 		}
 		m := partVarsLine.FindStringSubmatch(line)
