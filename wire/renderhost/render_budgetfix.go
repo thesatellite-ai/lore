@@ -27,6 +27,10 @@ type budgetFix struct {
 	to string
 	// raiseCompany is true when the raise goes to a company place.
 	raiseCompany bool
+	// unplaced is true when the place the budget is set cannot be named
+	// here (a linked repo whose store folder is not attached): no raise
+	// command is printed then, only `lore whoami` to find it (devco D-658).
+	unplaced bool
 	// company holds the ids of pinned rows kept in a company place.
 	company map[string]bool
 	// admins is the org's admins and whether the caller is one; its zero
@@ -41,6 +45,12 @@ func (f budgetFix) mayLower(id string) bool { return !f.company[id] || f.admins.
 // mayRaise reports whether the caller may raise the budget where it is set.
 func (f budgetFix) mayRaise() bool { return !f.raiseCompany || f.admins.May() }
 
+// unplacedText is the raise when its place cannot be named: a command
+// that works anywhere (`lore whoami`) and the key and value to write.
+func (f budgetFix) unplacedText(coreBytes int) string {
+	return fmt.Sprintf("raise %s to %d in the store folder `lore whoami` names for this repo", policy.KeyContextBudgetInternal, budgetToFit(coreBytes))
+}
+
 // raiseCmd is the policy set command that raises the budget to fit
 // coreBytes, at the place it is set.
 func (f budgetFix) raiseCmd(coreBytes int) string {
@@ -54,6 +64,9 @@ func (f budgetFix) raiseCmd(coreBytes int) string {
 // raiseText is the left-out line's way to raise the budget: the command
 // for whoever may run it, else the admin to ask.
 func (f budgetFix) raiseText(coreBytes int) string {
+	if f.unplaced {
+		return "to raise it, " + f.unplacedText(coreBytes)
+	}
 	if f.mayRaise() {
 		return "to raise it: `" + f.raiseCmd(coreBytes) + "`"
 	}
@@ -68,7 +81,9 @@ func (h *Host) planBudgetFix(ctx context.Context, bodies []privateBody) budgetFi
 	if h.app == nil {
 		return f
 	}
-	f.to, f.raiseCompany = h.app.PolicyPlace(ctx, policy.KeyContextBudgetInternal)
+	var placed bool
+	f.to, f.raiseCompany, placed = h.app.PolicyPlace(ctx, policy.KeyContextBudgetInternal)
+	f.unplaced = !placed
 	f.company = map[string]bool{}
 	for _, b := range bodies {
 		for _, pin := range b.pins {
@@ -116,9 +131,12 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 	if len(lower) > 0 {
 		can = append(can, "take a row out of the pinned part with "+strings.Join(lower, " or "))
 	}
-	if f.mayRaise() {
+	switch {
+	case f.unplaced:
+		can = append(can, f.unplacedText(coreBytes))
+	case f.mayRaise():
 		can = append(can, "raise the budget with `"+f.raiseCmd(coreBytes)+"`")
-	} else {
+	default:
 		ask = append(ask, fmt.Sprintf("raise %s to %d in %s", policy.KeyContextBudgetInternal, budgetToFit(coreBytes), f.to))
 	}
 	out := strings.Join(can, ", or ")

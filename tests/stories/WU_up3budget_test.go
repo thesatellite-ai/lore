@@ -12,6 +12,10 @@ package stories
 //	D-637: a member is told which admin to ask about a company row, never
 //	       given its command; a member's demotion of a company must rule or
 //	       policy write to the org folder is refused; a folder's stays theirs
+//	D-664: `pin set --context` / `pin unset` of a company must rule is an
+//	       admin's change; a project folder's must rule stays a member's
+//	D-658: a budget set at the store root names that store in its raise
+//	       (never the literal `<store>`), and the raise runs as printed
 
 import (
 	"path/filepath"
@@ -28,6 +32,7 @@ const (
 	wubFolder = "web"
 	wubKey    = "context.budget.internal"
 	wubJoin   = "acme"
+	wubRoot   = "kb" // the whole store attached in a repo set up with lore init (D-658)
 )
 
 // wubRuleID finds a rule id in a list.
@@ -91,6 +96,26 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		wubRun(t, mo, mc.Dir, wubPrinted(t, out, "raise the budget with `")).Says(t, wubKey)
 	})
 
+	s.Step("D-658/store-root-budget-names-the-store", func() {
+		// a repo set up here with the whole store attached (its root): a
+		// budget set there is a store-root value, and its raise printed
+		// the literal `--to <store>`. It names the store and runs exactly
+		// as printed.
+		m.Lore(pc.Dir, "init", "--yes").OK(t)
+		m.Lore(pc.Dir, "store", "add", "--name", wubRoot, "--url", store.SSHURL(), "--yes").OK(t)
+		m.Lore(pc.Dir, "rule", "add", "--severity", "must", "--body", strings.Repeat("the platform keeps its migrations reversible. ", 30), "--yes").OK(t)
+		m.Lore(pc.Dir, "policy", "set", "--key", wubKey, "--value", "900", "--to", wubRoot, "--yes").OK(t)
+		r := m.Lore(pc.Dir, "render").OK(t)
+		if strings.Contains(r.Out(), "<store") {
+			t.Fatalf("devco:D-658: the budget fix prints a placeholder store:\n%s", r)
+		}
+		raise := wubPrinted(t, r.Out(), "raise the budget with `")
+		if !strings.Contains(raise, "--to "+wubRoot+" ") {
+			t.Fatalf("devco:D-658: the store-root raise does not name the store %s: %s\n%s", wubRoot, raise, r)
+		}
+		wubRun(t, m, pc.Dir, raise).Says(t, wubKey)
+	})
+
 	s.Step("D-659/member-cannot-bulk-change-company-rows", func() {
 		// every bulk and generic path runs the one-row forms' role check
 		all := "created_at>2000-01-01"
@@ -121,6 +146,22 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		}
 		// the admin's printed line is the admin's to run
 		m.Lore(wc.Dir, "rule", "delete", "--where", "severity=must", "--dry-run").OK(t).Says(t, company)
+	})
+
+	s.Step("D-664/member-cannot-pin-company-rows", func() {
+		// `pin set --context line` cuts a company must rule to one line in
+		// every repo of the org: an admin's change, as its demotion is
+		mo.Lore(mc.Dir, "pin", "set", "--id", company, "--context", "line").Refused(t, "E_REFUSED", "only an admin of the org", company, wAdmin.Name, "nothing was written", "lore pin set --id "+company+" --context line")
+		mo.Lore(mc.Dir, "pin", "set", "--id", company, "--context", "full").Refused(t, "E_REFUSED", "only an admin of the org")
+		// the admin's printed line is the admin's to run, and the pin is theirs to take off
+		m.Lore(wc.Dir, "pin", "set", "--id", company, "--context", "line").OK(t).Says(t, "pinned")
+		m.Lore(wc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "pin", "unset", "--id", company).Refused(t, "E_REFUSED", "only an admin of the org", "lore pin unset --id "+company)
+		m.Lore(wc.Dir, "pin", "unset", "--id", company).OK(t)
+		// a project folder's must rule stays every member's to pin
+		own := wubRuleID.FindString(mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web forms validate on the server", "--yes").OK(t).Out())
+		mo.Lore(mc.Dir, "pin", "set", "--id", own, "--context", "line").OK(t).Says(t, "pinned")
 	})
 
 	s.Step("D-637/member-cannot-demote-company-rows", func() {

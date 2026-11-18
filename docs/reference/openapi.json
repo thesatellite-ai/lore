@@ -6720,7 +6720,7 @@
             }
           },
           "409": {
-            "description": "E_CANCELLED, E_PARENT_DELETED, E_STALE, E_UNSUPPORTED",
+            "description": "E_CANCELLED, E_PARENT_DELETED, E_REFUSED, E_STALE, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -46672,7 +46672,7 @@
             }
           },
           "409": {
-            "description": "E_POLICY_DENIED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_POLICY_DENIED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
@@ -46803,7 +46803,7 @@
             }
           },
           "409": {
-            "description": "E_POLICY_DENIED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
+            "description": "E_POLICY_DENIED, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY",
             "content": {
               "application/json": {
                 "schema": {
