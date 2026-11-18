@@ -13,11 +13,11 @@ import (
 // says so with both sizes, instead of "left out by … 8000 bytes" on a
 // 21 KB file; under the budget the line is unchanged.
 func TestPrivateBudgetLineStatesTheRealLimit(t *testing.T) {
-	over := fitPrivate([]privateBody{privBody(strings.Repeat("x", 300), 2, 4)}, 100)
+	over := fitPrivate([]privateBody{privBody(strings.Repeat("x", 300), 2, 4)}, 100, budgetFix{})
 	if txt := over.texts[0]; !strings.Contains(txt, "context.budget.internal is 100 bytes") || !strings.Contains(txt, "already take 300 bytes (never cut") {
 		t.Fatalf("over-core file does not state the real limit:\n%s", txt)
 	}
-	under := fitPrivate([]privateBody{privBody("C", 0, 30)}, 200)
+	under := fitPrivate([]privateBody{privBody("C", 0, 30)}, 200, budgetFix{})
 	if txt := under.texts[0]; !strings.Contains(txt, "left out by context.budget.internal 200 bytes") || strings.Contains(txt, "never cut") {
 		t.Fatalf("under-budget file line changed:\n%s", txt)
 	}

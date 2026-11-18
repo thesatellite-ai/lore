@@ -35,7 +35,7 @@ const OpStoreRemove = "org.store.remove"
 type StoreRemoveIn struct {
 	Org  string `json:"org,omitempty" flag:"org" desc:"the org entry (default: the only org entry on this machine, else the active setup's org)"`
 	URL  string `json:"url" flag:"url" desc:"the store to retire: its git url (required; lore store list names the org's stores)"`
-	Push bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"`
+	Push bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store <org>, sends it)"`
 }
 
 // StoreRemover is the optional Host upgrade behind org.store.remove.

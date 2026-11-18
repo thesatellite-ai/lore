@@ -328,6 +328,14 @@ var wwPushOps = map[string]string{
 	"sync.merge_rows":    "lore sync merge-rows: a sync",
 	"sync.fix_projects":  "lore sync fix-projects: a sync",
 	"sync.trash.restore": "lore sync trash restore: a sync",
+	// devco D-639: the named exemptions of the claim family. A claim or a
+	// hold is pushed only with --push; what follows it touches only what
+	// that pushed claim published, on the same remote, and its help says
+	// so ("no --push: …"). A claim never pushed is on no remote, so these
+	// push nothing (WU_claimpush_test.go).
+	"task.release":   "clears only what your pushed claim published (D-639; help says no --push)",
+	"task.heartbeat": "renews only what your pushed claim published (D-639; help says no --push)",
+	"hold.release":   "clears only what your pushed hold published (D-639; help says no --push)",
 }
 
 // wwExits are writes whose documented non-zero exit still prints their

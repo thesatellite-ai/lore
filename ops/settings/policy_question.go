@@ -17,6 +17,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -37,6 +38,19 @@ func (o ops) checkWritable(ctx context.Context, target store.Source) error {
 	return nil
 }
 
+// checkPolicyWrite is every refusal a policy write to target gets before
+// anything is asked or written: the place must take writes
+// (checkWritable), and a company place (the org folder, a store root)
+// takes a policy from an admin of the org only (devco D-637: the roster's
+// role rules; profilestore.RequireAdminAt). line is the command the admin
+// runs.
+func (o ops) checkPolicyWrite(ctx context.Context, target store.Source, line string) error {
+	if err := o.checkWritable(ctx, target); err != nil {
+		return err
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, line)
+}
+
 // policySetQuestion is policy set's confirm question; "" (the generic
 // question) for an unknown key, which the operation itself refuses.
 func (o ops) policySetQuestion(ctx context.Context, in PolicySetIn) (string, error) {
@@ -45,7 +59,7 @@ func (o ops) policySetQuestion(ctx context.Context, in PolicySetIn) (string, err
 		return "", nil
 	}
 	target := targetOf(in.To)
-	if err := o.checkWritable(ctx, target); err != nil {
+	if err := o.checkPolicyWrite(ctx, target, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
 		return "", err
 	}
 	old, err := o.policyNow(ctx, d.Key)
@@ -63,7 +77,7 @@ func (o ops) policyUnsetQuestion(ctx context.Context, in PolicyUnsetIn) (string,
 		return "", nil
 	}
 	target := targetOf(in.To)
-	if err := o.checkWritable(ctx, target); err != nil {
+	if err := o.checkPolicyWrite(ctx, target, policyCommand("unset", in.Key, "", in.To)); err != nil {
 		return "", err
 	}
 	old, err := o.policyNow(ctx, d.Key)

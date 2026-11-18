@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 )
 
 // TestOverCoreWarnNamesTheFixCommands guards devco D-573: the private
@@ -31,7 +33,7 @@ func TestOverCoreWarnNamesTheFixCommands(t *testing.T) {
 	if strings.Contains(w, "unpin some") {
 		t.Errorf("warning still says unpin with no command:\n%s", w)
 	}
-	if l := leftOutLine(3, 8000, 20285); !strings.Contains(l, "lore policy set --key context.budget.internal --value 22000 --yes") {
+	if l := leftOutLine(3, 8000, 20285, budgetFix{}); !strings.Contains(l, "lore policy set --key context.budget.internal --value 22000 --yes") {
 		t.Errorf("left-out line names no command: %s", l)
 	}
 }
@@ -52,5 +54,60 @@ func TestOverCoreWarnOncePerChange(t *testing.T) {
 	f.body = "pinned and more\n"
 	if !privateFilesChanged([]privateFile{f}) {
 		t.Fatal("a changed private file is not a change")
+	}
+}
+
+// TestOverCoreFixWorksWherePrinted guards devco D-636: the raise named no
+// place, so in a repo linked to a store folder it fell to --to repo and
+// was refused (E_STORE_READ_ONLY). It names the place the budget is set.
+func TestOverCoreFixWorksWherePrinted(t *testing.T) {
+	pins := []privatePin{{id: "rul_big", kind: privatePinRule, text: strings.Repeat("r", 5000)}}
+	f := budgetFix{to: "acme/web"}
+	cmd := "`lore policy set --key context.budget.internal --value 7000 --to acme/web --yes`"
+	if got := overCoreFix(5000, pins, f); !strings.Contains(got, cmd) {
+		t.Errorf("the raise does not name the linked folder:\n%s", got)
+	}
+	if l := leftOutLine(3, 1000, 5000, f); !strings.Contains(l, cmd) {
+		t.Errorf("the left-out line does not name the linked folder: %s", l)
+	}
+}
+
+// TestOverCoreFixOnlyAdminsLowerCompanyRows guards devco D-637: every
+// member was told to demote a company must rule. A company row (or a
+// company budget) is shown as a command only to an admin; a member is
+// told which admin to ask.
+func TestOverCoreFixOnlyAdminsLowerCompanyRows(t *testing.T) {
+	pins := []privatePin{
+		{id: "rul_co", kind: privatePinRule, text: strings.Repeat("r", 5000)},
+		{id: "hfx_web", kind: privatePinHotfix, text: strings.Repeat("h", 100)},
+	}
+	member := budgetFix{to: "acme/web", company: map[string]bool{"rul_co": true},
+		admins: profilestore.Admins{Org: "acme", Names: []string{"Ada Admin"}}}
+	got := overCoreFix(5100, pins, member)
+	for _, want := range []string{
+		"`lore hotfix edit --id hfx_web --severity medium`", // a project row: a member may lower it
+		"--to acme/web --yes`",                              // a folder budget: a member may raise it
+		"ask an admin of acme (Ada Admin) to lower rul_co",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("member's fix lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "rule edit --id rul_co") {
+		t.Errorf("a member is told to demote a company must rule:\n%s", got)
+	}
+	admin := member
+	admin.admins.Caller = true
+	if got := overCoreFix(5100, pins, admin); !strings.Contains(got, "`lore rule edit --id rul_co --severity should`") || strings.Contains(got, "ask an admin") {
+		t.Errorf("an admin is not given the company rule's command:\n%s", got)
+	}
+	company := budgetFix{to: "acme/org", raiseCompany: true, company: map[string]bool{"rul_co": true},
+		admins: profilestore.Admins{Org: "acme", Names: []string{"Ada Admin"}}}
+	got = overCoreFix(5000, pins[:1], company)
+	if strings.Contains(got, "lore policy set") || !strings.Contains(got, "raise context.budget.internal to 7000 in acme/org") {
+		t.Errorf("a member is given a company policy command:\n%s", got)
+	}
+	if l := leftOutLine(3, 1000, 5000, company); strings.Contains(l, "lore policy set") || !strings.Contains(l, "ask an admin of acme (Ada Admin)") {
+		t.Errorf("the left-out line gives a member a company policy command: %s", l)
 	}
 }

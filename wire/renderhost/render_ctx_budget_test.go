@@ -48,7 +48,7 @@ func TestFitPrivate(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := fitPrivate(c.bodies, c.budget)
+			got := fitPrivate(c.bodies, c.budget, budgetFix{})
 			if got.shown != c.shown || got.leftOut != c.leftOut {
 				t.Fatalf("shown %d left out %d, want %d %d", got.shown, got.leftOut, c.shown, c.leftOut)
 			}

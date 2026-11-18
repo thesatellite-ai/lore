@@ -1318,7 +1318,7 @@ Flags:
 ### `lore task heartbeat`
 
 <!-- help: task heartbeat -->
-Renew your claim's lease (alive, not progress)
+Renew your claim's lease (alive, not progress); no --push: it renews only what your pushed claim published, on the same remote
 
 ```text
 Usage:
@@ -1340,7 +1340,7 @@ Flags:
 ### `lore task release`
 
 <!-- help: task release -->
-Give back a claim you hold
+Give back a claim you hold; no --push: it pushes only to clear what your pushed claim published (a claim never pushed is on no remote, and nothing is pushed)
 
 ```text
 Usage:
@@ -1510,7 +1510,7 @@ Flags:
 ### `lore hold release`
 
 <!-- help: hold release -->
-Release a resource you hold
+Release a resource you hold; no --push: it pushes only to clear what your pushed hold published (a hold never pushed is on no remote, and nothing is pushed)
 
 ```text
 Usage:

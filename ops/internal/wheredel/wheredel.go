@@ -91,6 +91,11 @@ type Spec struct {
 	// against it keeps working) but is no longer listed, so the refusal
 	// naming the fields shows only what a person types.
 	Aliases map[string]string
+	// Guard, when set, is called with every match before the dry run and
+	// the question; an error refuses the whole write, nothing written
+	// (devco D-659: rule/hotfix --where run the same roster role check
+	// as their one-row forms, profilestore.RequireAdminForRows).
+	Guard func(ctx context.Context, hits []Located) error
 }
 
 // Result is what a bulk delete did (or, with DryRun, would do).
@@ -141,6 +146,11 @@ func Run(ctx context.Context, env Env, sp Spec, where []string, dryRun bool) (Re
 	if len(hits) == 0 {
 		out.Human = "no " + sp.Noun + " matches --where; nothing deleted\n"
 		return out, nil
+	}
+	if sp.Guard != nil {
+		if err = sp.Guard(ctx, hits); err != nil {
+			return Result{}, err
+		}
 	}
 	refs := make([]engine.Ref, 0, len(hits))
 	for _, h := range hits {

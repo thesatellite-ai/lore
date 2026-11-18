@@ -10,6 +10,9 @@ package stories
 //	D-580: claim without --push is refused and the store remote is unchanged
 //	D-581: the pushed signals commit carries the org identity, never an agent
 //	D-582: release takes the claim off the store remote and says so
+//	D-639: release is the named exemption to --push (its help says so):
+//	       it pushes only to clear what a pushed claim published, so a
+//	       release with no pushed claim leaves the remote as it was
 
 import (
 	"os/exec"
@@ -46,6 +49,18 @@ func TestStoryWUClaimPushOnlyWhenAsked(t *testing.T) {
 	}
 	if got := store.Rev(ref); got != before {
 		t.Errorf("devco:D-580: the store remote's %s moved without --push (%q -> %q)", ref, before, got)
+	}
+
+	// D-639: the claim was refused, so nothing of it is on the remote: a
+	// release then pushes nothing either
+	r = m.Lore(app, "task", "release", "--id", id)
+	t.Logf("release with no pushed claim:\n%s", r)
+	if got := store.Rev(ref); got != before {
+		t.Errorf("devco:D-639: a release with no pushed claim moved the store remote's %s (%q -> %q):\n%s", ref, before, got, r)
+	}
+	help := m.Lore(app, "task", "release", "--help").OK(t).Out()
+	if !strings.Contains(help, "no --push") || !strings.Contains(help, "pushed claim") {
+		t.Errorf("devco:D-639: task release --help does not say it pushes with no --push, and why:\n%s", help)
 	}
 
 	r = m.Lore(app, "task", "claim", "--id", id, "--push").OK(t)

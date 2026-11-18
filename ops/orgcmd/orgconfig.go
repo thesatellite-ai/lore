@@ -54,7 +54,7 @@ type ConfigSetIn struct {
 	Values []string `json:"values,omitempty" flag:"value" desc:"the new list, one pattern per --value (repeat; replaces the whole list); host/owner/repo with * inside or as a segment, ** as a segment"`
 	Add    []string `json:"add,omitempty" flag:"add" desc:"a pattern to add to the list (repeat; keeps the others)"`
 	Remove []string `json:"remove,omitempty" flag:"remove" desc:"a pattern to take out of the list (repeat)"`
-	Push   bool     `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"`
+	Push   bool     `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store <org>, sends it)"`
 }
 
 // ConfigGetOut is org.config.get's answer: the shared keys of lore-org.yaml.

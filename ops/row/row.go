@@ -25,6 +25,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -804,6 +805,15 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 		} else if src == store.Source(to) {
 			return MoveOut{}, errs.New(errs.InvalidInput, "move: "+id.String()+" is already in store "+to+"; nothing to move").
 				WithHint("name another attached store with --to (`lore store list` shows them); lore row show --id " + id.String() + " --origin shows where it lives")
+		}
+	}
+	// moving a company must rule / critical or high hotfix out of its
+	// place takes it from every repo of the org: an admin's change, as
+	// its delete is (devco D-659)
+	if src, r, gerr := o.env.Get(ctx, engine.Ref{ID: id}); gerr == nil && !r.Deleted {
+		if err = profilestore.RequireAdminForRows(ctx, o.env, []profilestore.Placed{{Source: src, Row: r}},
+			"move", "lore row move --id "+id.String()+" --to "+to, ""); err != nil {
+			return MoveOut{}, err
 		}
 	}
 	w, err := mv.MoveWith(ctx, engine.Ref{ID: id}, store.Source(to), engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, WithChildren: in.WithChildren})

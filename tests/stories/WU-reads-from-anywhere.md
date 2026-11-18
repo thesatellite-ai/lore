@@ -19,6 +19,9 @@
 9. (D-623) In `web`, with a resource of `acme/sync` naming its remote: `lore trash list --json`, `lore rule list --json`, `lore resource list --json`; then `lore rule list --store acme/sync --json` from the home folder.
 10. `lore org config set --org acme --key own --add 'github.com/acme-co/*'` and two exact `repos` entries under that owner; then `lore org config get --org acme` and `lore store doctor`.
 
+11. (`TestStoryWUBudgetWarn`, D-636, D-637) Ada links `web` to `acme/web` with `--own`, adds a long must rule to `acme/org`, sets `context.budget.internal` to 1000 in `acme/web`; Mo joins as a member. Each `lore sync` WARN line's fixes are run exactly as printed in `web`; Mo then tries to demote, archive and delete the company rule and to set a policy in `acme/org`.
+12. (`TestStoryWUClaimPushOnlyWhenAsked`, D-639) A `task release` after the refused claim, and `task release --help`.
+
 ## What must hold
 
 - A read by id finds the row in whichever org folder holds it (ids are unique), from the home folder or a repo lore is not set up in, and the text output names that folder after the id (`mem_… [acme/sync]`).
@@ -32,8 +35,12 @@
 - `lore org config get` and `lore store doctor` name an own pattern that overlaps repos entries, how many, and that the repos entries win (client).
 - In a repo linked to a store folder, `lore task claim` without `--push` is refused and the store remote is unchanged; with `--push` the claim reaches the store's signals ref signed by the org identity; `lore task release` takes it off and says it pushed (TestStoryWUClaimPushOnlyWhenAsked).
 
+- The budget warning's raise names `--to acme/web` in the linked repo and works there; a company row's fix is a command for an admin only, and a member is told `ask an admin of acme (<names>) to …`; a member's demotion of a company must rule or policy write to `acme/org` is refused with E_REFUSED and nothing changes; a rule of `acme/web` stays the member's to change.
+- `task release` with no pushed claim leaves the store remote unchanged, and its help says it needs no `--push` and why.
+
 ## Findings it guards
 
 - `devco:D-550`..`devco:D-555`, `devco:D-583`..`devco:D-585` (REGRESSIONS.md).
 - `devco:D-580`..`devco:D-582` (REGRESSIONS.md).
 - `devco:D-623` (REGRESSIONS.md).
+- `devco:D-636`, `devco:D-637`, `devco:D-639` (REGRESSIONS.md).

@@ -484,26 +484,7 @@ const orgRoleAdmin = "admin"
 // at all (an org from before org roles) refuses nobody; `lore doctor
 // --fix` gives its first admin one.
 func requireAdmin(ctx context.Context, r profilestore.Roster, what adminAct) error {
-	rows, err := r.List(ctx, schema.TableActorPeriods)
-	if err != nil {
-		return err
-	}
-	caller := r.Caller().String()
-	anyAdmin := false
-	for _, p := range rows {
-		if text(p, schema.FieldPeriodEndedOn) != "" || text(p, schema.FieldPeriodOrgRole) != orgRoleAdmin {
-			continue
-		}
-		if text(p, schema.FieldPeriodActor) == caller {
-			return nil
-		}
-		anyAdmin = true
-	}
-	if !anyAdmin {
-		return nil
-	}
-	return errs.New(errs.Refused, "only an admin of the org can "+what.does+", and you are not one on "+r.Where()+"'s roster; nothing was written").
-		WithHint("ask an admin of the org to run: " + what.line)
+	return profilestore.RequireAdmin(ctx, r, what.does, what.line)
 }
 
 // adminAct is a roster change only an admin makes: what it does, and the

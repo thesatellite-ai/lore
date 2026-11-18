@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -547,6 +548,11 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
+	if in.Severity != "" && in.Severity != schema.RuleSeverityMust {
+		if err = o.guardCompanyMust(ctx, in.ID, "lower the severity of a company must rule", "lore rule edit --id "+in.ID+" --severity "+in.Severity); err != nil {
+			return WriteOut{}, err
+		}
+	}
 	e := kn.Edit{
 		Texts: map[string]string{
 			kn.FieldBody: in.Body, fieldSeverity: in.Severity, fieldActivation: in.Activation, fieldGlobs: in.Globs, fieldApplies: in.AppliesTo, kn.FieldSourceRef: in.SourceRef, schema.FieldSummary: summary,
@@ -577,11 +583,14 @@ func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	if bulkForm {
-		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun, kn.Now(o.env))
+		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table, Guard: wheredel.CompanyGuard(o.env, noun.Name, "archive", in.Where, keepMember)}, in.Where, in.DryRun, kn.Now(o.env))
 		if werr != nil {
 			return WriteOut{}, werr
 		}
 		return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, bulk: res.Human}, nil
+	}
+	if err = o.guardCompanyMust(ctx, in.ID, "archive a company must rule", "lore rule archive --id "+in.ID); err != nil {
+		return WriteOut{}, err
 	}
 	return o.stamp(ctx, in.ID, kn.Now(o.env), "archived")
 }
@@ -608,7 +617,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	if bulkForm {
-		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun)
+		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table, Guard: wheredel.CompanyGuard(o.env, noun.Name, "delete", in.Where, keepMember)}, in.Where, in.DryRun)
 		if werr != nil {
 			return WriteOut{}, werr
 		}
@@ -617,6 +626,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	// the one-row form asks as the engine did under Confirm Always (FA-DEL-1)
 	// a bad id is E_INVALID_ID and a missing row E_NOT_FOUND before any question
 	if _, err = kn.DeleteQuestion(ctx, o.env, noun, in.ID); err != nil {
+		return WriteOut{}, err
+	}
+	if err = o.guardCompanyMust(ctx, in.ID, "delete a company must rule", "lore rule delete --id "+in.ID+" --yes"); err != nil {
 		return WriteOut{}, err
 	}
 	id, err := noun.ID(in.ID)
@@ -631,6 +643,25 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	return WriteOut{ID: w.Row.ID.String(), Store: string(src), trashed: true}, nil
+}
+
+// keepMember is the --where term that leaves every must rule out of a
+// bulk form, the member's own way on when it matched company must rules
+// (devco D-659).
+const keepMember = fieldSeverity + ":" + schema.RuleSeverityShould + "," + schema.RuleSeverityMay
+
+// guardCompanyMust refuses a member's change that takes a must rule of a
+// company place (the org folder, a store root) out of what every repo of
+// the org is told: a lower severity, archive, delete (devco D-637). Only
+// an admin of the org makes it (profilestore.RequireAdminAt); line is the
+// command the admin runs. A project folder's rule, a should/may rule and
+// a rewording pass. A bad or missing id passes: the op answers it.
+func (o ops) guardCompanyMust(ctx context.Context, id, does, line string) error {
+	it, err := kn.Show(ctx, o.env, noun, id)
+	if err != nil || kn.Field(it.Row, fieldSeverity) != schema.RuleSeverityMust {
+		return nil
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, it.Source, does, line)
 }
 
 // search runs the full-text search.
