@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,5 +62,39 @@ func TestPolicyPlaceNamesTheStoreRoot(t *testing.T) {
 	}
 	if eff, has := set.Get(key); !has || eff.Value == nil || !strings.Contains(eff.Value.String(), "22000") {
 		t.Fatalf("devco:D-658: after the printed raise the budget is %+v, want 22000", eff)
+	}
+}
+
+// TestPolicyPlaceNamesTheLinksFolder guards devco D-675: in a repo a store
+// links by its remote whose linked folder is not attached here, the budget
+// raise had no place (ok false), so the warning printed no command, only
+// "the store folder `lore whoami` names". The link names that folder, and
+// a write's --to resolves it from config.yaml (Options.RepoLinkTarget,
+// D-670), so the raise names it; with no link in config.yaml it stays
+// unplaced (no placeholder --to is ever returned).
+func TestPolicyPlaceNamesTheLinksFolder(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, target, wantTo string
+		wantOK               bool
+	}{
+		{name: "link-in-config", target: "kb-acme/web", wantTo: "kb-acme/web", wantOK: true},
+		{name: "no-link-known", target: "", wantTo: "", wantOK: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := newTestAppWith(t, gitRepo(t), func(o *Options) {
+				o.RepoLinkedByRemote = func(context.Context) string { return "git.example.test/acme/web" }
+				o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+				o.RepoLinkTarget = func(context.Context) string { return tc.target }
+			})
+			to, company, ok := a.PolicyPlace(background(), policy.KeyContextBudgetInternal)
+			if to != tc.wantTo || ok != tc.wantOK || company {
+				t.Fatalf("devco:D-675: PolicyPlace = (%q, %v, %v), want (%q, false, %v)", to, company, ok, tc.wantTo, tc.wantOK)
+			}
+			if strings.ContainsAny(to, "<>") {
+				t.Fatalf("devco:D-675: a placeholder place %q", to)
+			}
+		})
 	}
 }

@@ -28,8 +28,10 @@ type budgetFix struct {
 	// raiseCompany is true when the raise goes to a company place.
 	raiseCompany bool
 	// unplaced is true when the place the budget is set cannot be named
-	// here (a linked repo whose store folder is not attached): no raise
-	// command is printed then, only `lore whoami` to find it (devco D-658).
+	// here (a linked repo whose store folder is not attached and whose
+	// link names no store of config.yaml; with one, the raise names the
+	// link's --to, devco D-675): no raise command is printed then, only
+	// `lore whoami` to find it (devco D-658).
 	unplaced bool
 	// company holds the ids of pinned rows kept in a company place.
 	company map[string]bool
