@@ -138,11 +138,16 @@ func headBranch(dir string) string {
 }
 
 // sameStoreURL reports whether two git urls name one store (host/path,
-// an ssh alias resolved: gitbackend.Remote.Norm).
+// an ssh alias resolved or routed by insteadOf: sameStoreAs, D-627).
 func sameStoreURL(a, b string) bool {
-	ra, ea := gitbackend.RemoteOfRaw(a)
-	rb, eb := gitbackend.RemoteOfRaw(b)
-	return ea == nil && eb == nil && ra.Norm == rb.Norm
+	if _, err := gitbackend.RemoteOfRaw(a); err != nil {
+		return false
+	}
+	if _, err := gitbackend.RemoteOfRaw(b); err != nil {
+		return false
+	}
+	same := sameStoreAs(a)
+	return same != nil && same(b)
 }
 
 // storeIdentity is the one identity of a store url for comparing two

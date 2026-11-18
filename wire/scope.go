@@ -224,15 +224,15 @@ func cloneOrgEntry(home, url string) *orgconf.Org {
 	if err != nil || cfg == nil || url == "" {
 		return nil
 	}
-	want, ok := storeKey(url)
-	if !ok {
+	same := sameStoreAs(url)
+	if same == nil {
 		return nil
 	}
 	for i := range cfg.Orgs {
 		for _, s := range cfg.Orgs[i].Stores {
-			// storeKey: one identity for every spelling of the store, an
-			// ssh alias origin included (D-493)
-			if k, kok := storeKey(s.URL); kok && k == want {
+			// sameStoreAs: one identity for every spelling of the store, an
+			// ssh alias origin included (D-493, D-627)
+			if same(s.URL) {
 				return &cfg.Orgs[i]
 			}
 		}

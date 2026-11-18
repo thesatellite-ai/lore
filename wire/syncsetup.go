@@ -367,8 +367,8 @@ func orgStoreLabel(home, raw string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
-	want, ok := storeKey(raw)
-	if !ok {
+	same := sameStoreAs(raw) // an ssh alias origin included (D-627)
+	if same == nil {
 		return ""
 	}
 	for i := range cfg.Orgs {
@@ -378,7 +378,7 @@ func orgStoreLabel(home, raw string) string {
 			main = &o.Stores[0]
 		}
 		for _, sc := range o.Stores {
-			if k, ok := storeKey(sc.URL); !ok || k != want {
+			if !same(sc.URL) {
 				continue
 			}
 			if main != nil && main.URL == sc.URL {

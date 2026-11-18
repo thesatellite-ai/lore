@@ -42,6 +42,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -264,20 +265,25 @@ func SameRepoViaAlias(a, b Remote) bool {
 	if pa != pb {
 		return false
 	}
+	// a Norm recorded before D-630 may still name a provider's port-443
+	// route host (ssh.github.com): it is the provider's
+	ha, hb = repourl.ProviderSSHHost(ha), repourl.ProviderSSHHost(hb)
 	if ha == hb {
 		return true // one host: Norm already resolved both aliases (identityHost)
 	}
-	if f := aliasHosts.Load(); f != nil {
-		na, okA := (*f)(ha)
-		nb, okB := (*f)(hb)
-		switch {
-		case okA && strings.EqualFold(na, hb), okB && strings.EqualFold(nb, ha):
-			return true
-		case okA && okB && strings.EqualFold(na, nb):
-			return true // two aliases of one host
-		case okA || okB:
-			return false // the ssh config sends the alias to another host
-		}
+	// renamedHost, the rule identityHost uses: a host the ssh config
+	// sends only to its own port-443 route (github.com → ssh.github.com) is
+	// not renamed (devco D-628: that line made every unnamed alias, such as
+	// one git reaches by url.<base>.insteadOf, "another host").
+	na, okA := renamedHost(ha)
+	nb, okB := renamedHost(hb)
+	switch {
+	case okA && na == hb, okB && nb == ha:
+		return true
+	case okA && okB && na == nb:
+		return true // two aliases of one host
+	case okA || okB:
+		return false // the ssh config sends the alias to another host
 	}
 	return !strings.Contains(ha, ".") || !strings.Contains(hb, ".")
 }
@@ -293,16 +299,35 @@ func SameRepoViaAlias(a, b Remote) bool {
 // port-443 route) is a route to the same host, not an alias, and is not
 // taken: the https url of that store names host.
 func identityHost(host string) string {
+	if n, ok := renamedHost(host); ok {
+		return n
+	}
+	// devco D-630: a url typed on a provider's port-443 route host
+	// (git@ssh.github.com:o/r.git) is the provider's repository
+	return repourl.ProviderSSHHost(host)
+}
+
+// renamedHost is the other host the person's ssh config sends host to
+// (SetAliasHosts), lower case; ok is false without a resolver, when the
+// config does not rename host, renames it to itself or to a name that is
+// no host, or only to a subdomain of it (github.com → ssh.github.com, the
+// port-443 route: the same host, not an alias); a known provider's route
+// host is the provider's (repourl.ProviderSSHHost). identityHost and
+// SameRepoViaAlias share it, so a store's identity and the same-store test
+// of a clone's origin read one ssh config line the same way (devco D-628).
+func renamedHost(host string) (string, bool) {
 	f := aliasHosts.Load()
 	if f == nil {
-		return host
+		return "", false
 	}
 	n, ok := (*f)(host)
-	n = strings.ToLower(strings.TrimSpace(n))
+	// a provider's port-443 route is the provider's host (devco D-629:
+	// Host work-gh / HostName ssh.github.com was "another host")
+	n = repourl.ProviderSSHHost(n)
 	if !ok || n == "" || n == host || strings.HasSuffix(n, "."+host) || !hostPattern.MatchString(n) {
-		return host
+		return "", false
 	}
-	return n
+	return n, true
 }
 
 // IdentityHost is identityHost for callers outside the backend: the host

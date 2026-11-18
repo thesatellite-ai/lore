@@ -1310,13 +1310,9 @@ func (a *App) orgStoreOf(ctx context.Context, raw string) (org string, ok bool) 
 	if raw == "" {
 		return "", false
 	}
-	want, ok := storeKey(raw)
-	if !ok {
+	same := sameStoreAs(raw) // an ssh alias origin included (D-627)
+	if same == nil {
 		return "", false
-	}
-	same := func(u string) bool {
-		got, ok := storeKey(u)
-		return ok && got == want
 	}
 	for _, s := range rawOrgStores(ctx, a.opts) {
 		if same(s.URL) {

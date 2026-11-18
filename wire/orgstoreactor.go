@@ -108,12 +108,12 @@ func (st *state) writerIn(ctx context.Context, opts Options, orgs []identity.Org
 // store at raw (storeKey: any spelling of the remote, folder and branch
 // ignored).
 func orgOfStore(urls []OrgStoreURL, raw string) (string, bool) {
-	want, ok := storeKey(raw)
-	if !ok {
+	same := sameStoreAs(raw) // an ssh alias origin included (D-627)
+	if same == nil {
 		return "", false
 	}
 	for _, u := range urls {
-		if k, ok := storeKey(u.URL); ok && k == want {
+		if same(u.URL) {
 			return u.Org, true
 		}
 	}
