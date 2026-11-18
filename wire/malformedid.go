@@ -5,8 +5,16 @@ package wire
 // --id mem_bogus` and `memory show --id mem_bogus` answered "the folder is
 // not inside a git work tree", which sent the person to the wrong fix: the
 // id was wrong, not the place.
+//
+// Inside a git work tree the op answers in its own order and words (devco
+// D-676): its kind-specific refusal (`"mem_nope" is not a memory id
+// (mem_…)`), its own code (`actor delete <id>` is E_REFUSED whatever the
+// id) and the same error object over REST. The early check exists only to
+// beat the place lookup, which answers first only outside a work tree.
 
 import (
+	"context"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -22,9 +30,10 @@ var idFieldTakesOther = []string{"name", "prefix", "key", "handle", "number", "s
 // malformedIDErr is the E_INVALID_ID of e's `--id` when it starts like a
 // lore id (a registered prefix and "_") but is not one; nil otherwise (no
 // id field, a field that takes names too, a valid id, a value that is no
-// id at all). The op's own lookup still refuses an id that is well formed
-// but in no store.
-func malformedIDErr(e op.Entry, d op.Decoder) error {
+// id at all, a folder inside a git work tree where the op refuses the id
+// itself). The op's own lookup still refuses an id that is well formed but
+// in no store.
+func malformedIDErr(ctx context.Context, dir string, e op.Entry, d op.Decoder) error {
 	var field op.FieldInfo
 	found := false
 	for _, f := range e.InputFields() {
@@ -55,9 +64,33 @@ func malformedIDErr(e op.Entry, d op.Decoder) error {
 		// keeps its op's refusal
 		return nil
 	}
+	if insideWorkTree(ctx, dir) {
+		return nil // the op refuses it in its own words (D-676)
+	}
+	return malformedIDMessage(e.Spec().Name, v)
+}
+
+// malformedIDMessage is the refusal of malformed id v given to op name:
+// the kind-specific words the op itself uses (`memory: "mem_nope" is not a
+// memory id`) followed by the shape, so the same id reads the same from
+// home and inside a repo (D-676); an op of no one kind (show, context)
+// names a lore id.
+func malformedIDMessage(name, v string) error {
 	p := v[:idPrefixLen]
-	return errs.New(errs.InvalidID, v+" is not a valid lore id: a lore id is its kind's prefix, an underscore and 32 hex digits ("+p+"_<32 hex>), as lore prints it").
-		WithHint("copy the id from the list or search it came from (lore search --query <words> finds a row by its words)")
+	shape := p + "_<32 hex>"
+	hint := "copy the id from the list or search it came from (lore search --query <words> finds a row by its words)"
+	path := op.CLIPath(name)
+	if len(path) < 2 || path[0] == "row" {
+		return errs.New(errs.InvalidID, strconv.Quote(v)+" is not a valid lore id: a lore id is its kind's prefix, an underscore and 32 hex digits ("+shape+"), as lore prints it").
+			WithHint(hint)
+	}
+	noun := strings.Join(path[:len(path)-1], " ")
+	an := "a "
+	if strings.ContainsRune("aeiou", rune(noun[0])) {
+		an = "an "
+	}
+	return errs.New(errs.InvalidID, noun+": "+strconv.Quote(v)+" is not "+an+noun+" id ("+p+"_…): "+an+noun+" id is "+p+"_ and 32 hex digits ("+shape+"), as lore prints it").
+		WithHint("`lore " + noun + " list` shows the " + noun + " ids; " + hint)
 }
 
 // hex32 reports whether s is 32 hex digits, the tail of a lore id (the

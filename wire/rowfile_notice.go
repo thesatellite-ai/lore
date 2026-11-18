@@ -134,6 +134,10 @@ func plainReason(p rowfs.Problem) string {
 		}
 	}
 	r = strings.TrimPrefix(r, "rowfs: ")
+	// the decoder's internal "row: " prefix is no word a person knows: the
+	// warning reads like the error it stands for (D-641's errmask drops it
+	// there; devco D-676 keeps the two the same)
+	r = strings.TrimPrefix(r, "row: ")
 	for _, q := range []string{strconv.Quote(p.Path), p.Path} {
 		if rest, ok := strings.CutPrefix(r, q+": "); ok {
 			r = rest
