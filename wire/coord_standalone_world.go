@@ -1144,12 +1144,36 @@ func docValue(f schema.FieldDef, v canonjson.Value) (value.Value, error) {
 
 // ---- errors ----
 
+// claimPushFlag is " --push" when a new claim or hold here is refused
+// without it (requirePushAsked: a code repo's remote or a linked store's,
+// with no LORE_PUSH_CLAIMS=1 and no live.autopush), else "". Every hint
+// that names `lore task next --claim` or `lore task claim --id …` appends
+// it, so the printed next step is never the claim refusal (devco:D-607).
+func (w *coordWorld) claimPushFlag() string {
+	if w == nil || w.requirePushAsked(false, "a claim") == nil {
+		return ""
+	}
+	return " --push"
+}
+
+// coordErr is coordErrPush with this world's claim flag: a hint that
+// sends the person to another claim names --push where the claim needs it.
+func (w *coordWorld) coordErr(err error) error {
+	return coordErrPush(err, w.claimPushFlag())
+}
+
 // coordErr maps coordination failures to the spec's codes (§1 "Error
-// codes", v0.1.17 coordError); anything else passes through.
-func coordErr(err error) error {
+// codes", v0.1.17 coordError) for a place whose claims need no --push;
+// anything else passes through.
+func coordErr(err error) error { return coordErrPush(err, "") }
+
+// coordErrPush is coordErr whose claim hints carry push (claimPushFlag:
+// " --push" or "").
+func coordErrPush(err error, push string) error {
 	if err == nil {
 		return nil
 	}
+	next := "lore task next --claim" + push // the command that takes other work
 	var e *errs.Error
 	if errors.As(err, &e) {
 		return err
@@ -1163,7 +1187,7 @@ func coordErr(err error) error {
 	var hoc *coord.HasOpenChildrenError
 	switch {
 	case errors.As(err, &hoc):
-		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim --id " + hoc.Children[0] + "   (or: lore task claim --id " + hoc.Task + " --coordinate)")
+		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim --id " + hoc.Children[0] + push + "   (or: lore task claim --id " + hoc.Task + " --coordinate" + push + ")")
 	case errors.As(err, &fe):
 		code := errs.LostClaim // an unknown kind fails closed as a lost claim
 		switch fe.Kind {
@@ -1174,7 +1198,7 @@ func coordErr(err error) error {
 		case coord.FenceLost:
 			code = errs.LostClaim
 		}
-		return errs.New(code, fe.Error()).WithHint("stop work on this task; `lore task next --claim` takes other work")
+		return errs.New(code, fe.Error()).WithHint("stop work on this task; `" + next + "` takes other work")
 	case errors.As(err, &off) && off.RacesLost:
 		// Reachable, but another writer won every attempt: contention, not
 		// a network problem (the remote answered each push).
@@ -1193,9 +1217,9 @@ func coordErr(err error) error {
 		if he.SameActor {
 			// P2-TASK-3: waiting will not help. devco:M-8: the other session
 			// keeps it; this one picks other work or works under its own name.
-			return errs.New(errs.Refused, msg).WithHint("lore task next --claim takes other work; the other session finishes or releases this one")
+			return errs.New(errs.Refused, msg).WithHint(next + " takes other work; the other session finishes or releases this one")
 		}
-		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or take other work with `lore task next --claim`")
+		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or take other work with `" + next + "`")
 	case errors.As(err, &we):
 		// B-ERRS-4: the WIP limit, a poisoned task and a task that is not
 		// open are refusals by rule or by the data's state (E_REFUSED,
@@ -1234,14 +1258,14 @@ func coordErr(err error) error {
 	case errors.Is(err, coord.ErrNotOpen):
 		// devco:M-9: one plain refusal, never the package's "coord:" text;
 		// the next step is the next ready task.
-		const hint = "lore task next shows the next ready task (--claim takes it); lore task list shows the open ones"
+		hint := "lore task next shows the next ready task (--claim" + push + " takes it); lore task list shows the open ones"
 		if ad, ok := coord.IsAlreadyDone(err); ok {
 			return errs.New(errs.Refused, ad.Error()).WithHint(hint)
 		}
 		if rv, ok := coord.IsRevoked(err); ok {
 			// devco:S-13: the person who revoked it decides who works on it.
 			return errs.New(errs.Refused, rv.Error()).
-				WithHint("lore task next --claim takes other work; a person hands it back with `lore task reassign --id " + rv.Task + " --assign @<handle>`")
+				WithHint(next + " takes other work; a person hands it back with `lore task reassign --id " + rv.Task + " --assign @<handle>" + push + "`")
 		}
 		msg := strings.TrimPrefix(err.Error(), coord.ErrNotOpen.Error()+": ")
 		return errs.New(errs.Refused, msg+"; only an open task can be claimed").WithHint(hint)
@@ -1296,4 +1320,15 @@ const markOK = "✓"
 func errCoordInStore(sc storeCheckout) error {
 	return errs.New(errs.Unsupported, "coordination (task next, claims, inbox) runs in a code repo: "+sc.shown+" is a lore store clone, not a code repo").
 		WithHint("run it in a code repo linked to this folder (`lore org link --org <org> --project <folder>`); here, `lore task list` lists the tasks and `lore task edit --id <id> --assign @<handle>` assigns one")
+}
+
+// ClaimPushFlag implements task.ClaimPushFlagger: " --push" when a claim
+// of task id here is refused without it (claimPushFlag), "" otherwise and
+// when the place has no coordination to ask.
+func (a *App) ClaimPushFlag(ctx context.Context, id string) string {
+	w, err := standaloneCoord{a: a}.openWorldFor(ctx, id)
+	if err != nil {
+		return ""
+	}
+	return w.claimPushFlag()
 }

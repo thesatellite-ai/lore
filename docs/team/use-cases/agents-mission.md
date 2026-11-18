@@ -99,7 +99,7 @@ $ lore inbox
 $ lore task next --mission msn_2ad3…f891 --repo api
 next tsk_162d…9666 send the invite email from the API   urgency 7.90
   why: +3.90  priority medium; +4.00  blocks 1 open task (tsk_54fe…28f2)
-nothing written; take it: lore task next --claim (or lore task claim --id tsk_162d…9666)
+nothing written; take it: lore task next --claim --push (or lore task claim --id tsk_162d…9666 --push)
 $ lore task next --claim --mission msn_2ad3…f891 --repo api --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency/client2)
@@ -269,7 +269,7 @@ dfd8dc8 invite page
 # agent-frontend, in agents/app
 $ lore task done --id tsk_54fe…28f2
 ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:02AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:50AM
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)
 
 # agent-frontend-2, in agents/fe2/app

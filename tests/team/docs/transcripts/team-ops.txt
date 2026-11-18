@@ -15,15 +15,15 @@ bob (work/billing)$ lore sync >/dev/null && lore task list
 
 ### resource
 alice (work/billing)$ lore hold claim --name full-suite --ttl 30m --push
-✓ holding full-suite until 2026-11-02T10:34:40Z
+✓ holding full-suite until 2026-11-02T10:34:40Z on refs/lore/signals of this repo's remote origin (pushed now: teammates see it on their next fetch)
 bob (work/billing)$ lore hold claim --name full-suite --ttl 30m --push
 ERROR: [E_CONTENDED] full-suite is held by alice since 10:04AM (lease until 10:34AM)
-  hint: retry after the hold ends, or take other work with `lore task next --claim`
+  hint: retry after the hold ends, or take other work with `lore task next --claim --push`
 (exit 11)
 alice (work/billing)$ lore hold release --name full-suite
-✓ released full-suite
+✓ released full-suite: the hold is off refs/lore/signals of this repo's remote origin (pushed now: teammates see it on their next fetch)
 bob (work/billing)$ lore hold claim --name full-suite --ttl 30m --push
-✓ holding full-suite until 2026-11-02T10:38:10Z
+✓ holding full-suite until 2026-11-02T10:38:10Z on refs/lore/signals of this repo's remote origin (pushed now: teammates see it on their next fetch)
 
 ### release
 alice (work/website)$ lore task add --title 'send the invoice reminder before Friday' --to agency && lore sync
@@ -70,10 +70,10 @@ alice (work/website)$ lore task revoke --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
 ✓ revoked the claim on tsk_c0f3c11a5724b0cfd74b256190d9b5b8 (was held by agent-backend)
-  pushed refs/lore/signals/main to origin: the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
+  on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch): the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
 agent-backend (work/website)$ lore task done --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
 ERROR: [E_LOST_CLAIM] tsk_c0f3c11a5724b0cfd74b256190d9b5b8: your claim (token ct_cb04f…) was revoked by @alice at 10:16AM
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)
 
 ### reassign
@@ -96,7 +96,8 @@ alice (work/website)$ lore task reassign --id tsk_d4314eba822f1bf5908b2b8ded5f31
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/client)
 ✓ tsk_d4314eba822f1bf5908b2b8ded5f313a reassigned to @alice
+  took @bob's claim off the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch); the task row itself waits for your next lore sync
 bob (work/website)$ lore task done --id tsk_d4314eba822f1bf5908b2b8ded5f313a
 ERROR: [E_LOST_CLAIM] your claim is not on the signals ref; your token ct_87f6f… was dropped before its lease ended (10:39AM)
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)

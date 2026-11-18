@@ -64,16 +64,23 @@ func (h standaloneCoord) TaskReassign(ctx context.Context, in opscoord.ReassignI
 	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, "a reassign of a claimed task"); err != nil {
 		return opscoord.Report{}, err
 	}
-	if _, err = coord.OverrideChecked(ctx, env, in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
+	removed, err := coord.OverrideChecked(ctx, env, in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
 		prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
 		d.SetStr(fieldTaskLead, to)
 		d[schema.FieldTaskAssignees] = canonjson.Array(canonjson.String(to))
 		dropGoneWatchers(d, gone)
 		return appendReassignHistory(d, by, now, prevLead, prevAll, to)
-	}); err != nil {
-		return opscoord.Report{}, coordErr(err)
+	})
+	if err != nil {
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{markOK + " " + in.ID + " reassigned to " + in.Assign}}, nil
+	lines := []string{markOK + " " + in.ID + " reassigned to " + in.Assign}
+	if removed != nil {
+		// devco:D-608: the claim it dropped left the same place a release
+		// names.
+		lines = append(lines, "  took "+holderName(*removed)+"'s claim off "+w.claimPlace(env.Signals.Ref)+"; the task row itself waits for your next lore sync")
+	}
+	return opscoord.Report{Lines: lines}, nil
 }
 
 // goneActors are the actor ids of the org roster that are no longer active
@@ -308,7 +315,7 @@ func (h standaloneCoord) TaskMerged(ctx context.Context, in opscoord.MergedIn) (
 		}
 		return nil
 	}); err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
 	return opscoord.Report{Lines: []string{fmt.Sprintf("%s %s merged (marked by hand, %s)", markOK, in.ID, at.Format(stateClock))}}, nil
 }
@@ -360,9 +367,10 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 		return signals.Change{Put: map[string]signals.Signal{signals.ResourcePath(w.folder, in.Name): s}}, nil
 	})
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{fmt.Sprintf("%s holding %s until %s", markOK, in.Name, held.Expires.UTC().Format(time.RFC3339))}}, nil
+	// devco:D-608: a hold names where it went, as a claim does.
+	return opscoord.Report{Lines: []string{fmt.Sprintf("%s holding %s until %s on %s", markOK, in.Name, held.Expires.UTC().Format(time.RFC3339), w.claimPlace(w.spot.ref))}}, nil
 }
 
 // HoldRelease implements opscoord.Host: remove your own hold.
@@ -379,9 +387,9 @@ func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleas
 		return signals.Change{Delete: []string{p}}, derr
 	})
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{markOK + " released " + in.Name}}, nil
+	return opscoord.Report{Lines: []string{markOK + " released " + in.Name + ": the hold is off " + w.claimPlace(w.spot.ref)}}, nil
 }
 
 // ---- gate request / approve ----
@@ -405,14 +413,14 @@ func (h standaloneCoord) GateRequest(ctx context.Context, in opscoord.GateIn) (o
 	env := w.env(ctx)
 	v, err := env.Signals.Read(ctx)
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
 	p := signals.ClaimPath(w.folder, in.ID)
 	sig, claimed := v.Board[p]
 	_, hadClaim := w.held().Get(w.session(), in.ID)
 	if (claimed && sig.Holder == w.actorID && sig.Session == w.session()) || hadClaim {
 		if _, err = coord.HolderWrite(ctx, env, in.ID, false, coord.RequestGate); err != nil {
-			return opscoord.Report{}, coordErr(err)
+			return opscoord.Report{}, w.coordErr(err)
 		}
 		return opscoord.Report{Lines: gateRequested(in.ID)}, nil
 	}
@@ -493,7 +501,7 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 	}
 	ap, err := coord.Approve(ctx, w.env(ctx), coord.ApproveRequest{ID: in.ID, ApproverID: approver})
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
 	return opscoord.Report{Lines: []string{fmt.Sprintf("%s %s approved by %s (%s), hash %s…", markOK, in.ID, w.who.DisplayName, stepName(w.who.Step), ap.Hash[:min(len(ap.Hash), gateHashShown)])}}, nil
 }

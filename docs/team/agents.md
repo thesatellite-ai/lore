@@ -103,7 +103,7 @@ A real one, from the worked example: the crashed `agent-frontend` woke up after 
 # agent-frontend, in agents/app
 $ lore task done --id tsk_54fe…28f2
 ERROR: [E_LOST_CLAIM] tsk_54fe…28f2 is held by agent:agent-frontend-2 since 11:02AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:50AM
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)
 ```
 <!-- /example -->
@@ -180,17 +180,17 @@ $ lore task revoke --id tsk_c0f3…b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ revoked the claim on tsk_c0f3…b5b8 (was held by agent-backend)
-  pushed refs/lore/signals/main to origin: the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
+  on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch): the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
 
 # agent-backend, in website
 $ lore task done --id tsk_c0f3…b5b8
 ERROR: [E_LOST_CLAIM] tsk_c0f3…b5b8: your claim (token ct_cb04f…) was revoked by @alice at 10:16AM
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)
 ```
 <!-- /example -->
 
-The revoke also keeps that agent off the task: its `lore task next --claim` takes other work and lists the task under `waiting:` as `revoked from you by <person> at <time>`, and a `lore task claim --id <id>` from any session of the same agent is refused (`E_REFUSED`, naming `lore task reassign --id <id> --assign @<handle>`). Other agents and people may still claim it. The fence lasts until a person runs `lore task reassign` on the task, or for a week. The agent learns who revoked it from the signals ref, so its `E_LOST_CLAIM` names the person and the time even before the task row reaches its clone with a sync. In a code repo with a remote, or a repo linked to a store folder (the example above), a revoke of a claimed task changes the signals ref that remote or the store's remote shares, so it takes `--push` like a claim (`LORE_PUSH_CLAIMS=1` or `live.autopush: true` give the same go-ahead); without it lore refuses and writes nothing. Its success line says `pushed refs/lore/signals to <remote>`; the task row itself waits for your next `lore sync`. `lore task reassign` of a claimed or revoked task there takes `--push` for the same reason.
+The revoke also keeps that agent off the task: its `lore task next --claim` takes other work and lists the task under `waiting:` as `revoked from you by <person> at <time>`, and a `lore task claim --id <id>` from any session of the same agent is refused (`E_REFUSED`, naming `lore task reassign --id <id> --assign @<handle>`). Other agents and people may still claim it. The fence lasts until a person runs `lore task reassign` on the task, or for a week. The agent learns who revoked it from the signals ref, so its `E_LOST_CLAIM` names the person and the time even before the task row reaches its clone with a sync. In a code repo with a remote, or a repo linked to a store folder (the example above), a revoke of a claimed task changes the signals ref that remote or the store's remote shares, so it takes `--push` like a claim (`LORE_PUSH_CLAIMS=1` or `live.autopush: true` give the same go-ahead); without it lore refuses and writes nothing. Its success line names the place with the same label a claim and a release print (`on the signals ref refs/lore/signals/main of store <org>/<folder> (pushed to the store's remote now …)`, or `refs/lore/signals of this repo's remote <remote> (pushed now …)` in a code repo), as do a reassign that drops a claim, `lore hold claim` and `lore hold release`; every hint that sends you to another claim there (`take it:` of a plain `lore task next`, the `takes other work` of `E_LOST_CLAIM` or of a held task) names `--push` too, and only where the claim needs it; the task row itself waits for your next `lore sync`. `lore task reassign` of a claimed or revoked task there takes `--push` for the same reason.
 
 ## Step 3 — Give the task to someone else: `lore task reassign`
 
@@ -222,11 +222,12 @@ $ lore task reassign --id tsk_d431…313a --assign @alice --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ tsk_d431…313a reassigned to @alice
+  took @bob's claim off the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch); the task row itself waits for your next lore sync
 
 # bob, in website
 $ lore task done --id tsk_d431…313a
 ERROR: [E_LOST_CLAIM] your claim is not on the signals ref; your token ct_87f6f… was dropped before its lease ended (10:39AM)
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)
 ```
 <!-- /example -->
@@ -271,21 +272,21 @@ Some things break when two runs use them together, like one shared test database
 ```console
 # alice, in billing
 $ lore hold claim --name full-suite --ttl 30m --push
-✓ holding full-suite until 2026-11-02T10:34:40Z
+✓ holding full-suite until 2026-11-02T10:34:40Z on refs/lore/signals of this repo's remote origin (pushed now: teammates see it on their next fetch)
 
 # bob, in billing
 $ lore hold claim --name full-suite --ttl 30m --push
 ERROR: [E_CONTENDED] full-suite is held by alice since 10:04AM (lease until 10:34AM)
-  hint: retry after the hold ends, or take other work with `lore task next --claim`
+  hint: retry after the hold ends, or take other work with `lore task next --claim --push`
 (exit 11)
 
 # alice, in billing
 $ lore hold release --name full-suite
-✓ released full-suite
+✓ released full-suite: the hold is off refs/lore/signals of this repo's remote origin (pushed now: teammates see it on their next fetch)
 
 # bob, in billing
 $ lore hold claim --name full-suite --ttl 30m --push
-✓ holding full-suite until 2026-11-02T10:38:10Z
+✓ holding full-suite until 2026-11-02T10:38:10Z on refs/lore/signals of this repo's remote origin (pushed now: teammates see it on their next fetch)
 ```
 <!-- /example -->
 

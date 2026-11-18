@@ -58,6 +58,9 @@ func (a *App) runPersonalReadNoProject(ctx context.Context, e op.Entry, d op.Dec
 	if err != nil || !found {
 		return op.Result{}, false, nil // no personal store: the usual path says the repo is not set up
 	}
+	if c := a.clientRepo(ctx); c.Org != "" && c.Folder == "" && a.opts.Notice != nil {
+		a.opts.Notice(clientPersonalOnlyNote(c))
+	}
 	// the operations call back into a (its Env), so a itself is opened on
 	// the personal store, which answers for the repo store as it does for
 	// the `--to me` write here
@@ -70,4 +73,13 @@ func (a *App) runPersonalReadNoProject(ctx context.Context, e op.Entry, d op.Dec
 	}
 	res, err = eng.Run(ctx, e, d, c)
 	return res, true, err
+}
+
+// clientPersonalOnlyNote is the line a read in a client repo no folder is
+// linked to prints when only the personal store answered it (devco:D-610:
+// search there said "(no matches)" with no word that the org's folders
+// were not read, while the same read without a personal store refused
+// naming the link and --store <org>/<folder>). It names the same steps.
+func clientPersonalOnlyNote(c ClientRepo) string {
+	return "read your personal store only, not " + c.Org + "'s folders: " + clientRepoStep(c)
 }
