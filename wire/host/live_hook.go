@@ -94,6 +94,13 @@ type LiveConfig struct {
 	// address notices and the ask-once question), run at the start of
 	// every sync; cmd/lore passes wire.App.SyncRepoAddresses. nil skips it.
 	RepoAddresses func(ctx context.Context)
+	// PersonalStore is the personal store the active setup configures (the
+	// url `lore whoami` shows on its personal line), "" when none is set
+	// up (devco:D-654): the "not set up: run lore store init --name me"
+	// hint is only true then; with one configured but not attached to the
+	// command, following it made a second personal store. cmd/lore passes
+	// wire.App.PersonalStoreURL; nil keeps the not-set-up hint.
+	PersonalStore func(ctx context.Context) string
 	// Signer is the lore identity (`lore whoami`) that signs live commits
 	// when the repo's git has no user.name/user.email (FLAG4: an existing
 	// git identity always wins, git config is never changed); cmd/lore

@@ -292,6 +292,14 @@ func whoamiPersonal(ctx context.Context, home, dir string) string {
 	return mc.localPersonalV017(home)
 }
 
+// PersonalStoreURL is the personal store the active setup configures for
+// the command's folder, as whoami's personal line shows it ("" when none
+// is set up). The live hook asks it before telling a person their
+// personal store "is not set up" (devco:D-654).
+func (a *App) PersonalStoreURL(ctx context.Context) string {
+	return whoamiPersonal(ctx, a.opts.Home, a.projectDir())
+}
+
 // personalNotSet is the personal row when no personal store is set.
 const personalNotSet = "not set"
 

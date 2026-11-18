@@ -32,6 +32,22 @@ const missingPersonalStore = "no store named " + orgconf.TargetMe + " is attache
 // personalStoreHint is what a person runs before `--to me` works.
 const personalStoreHint = "your personal store is not set up: run `lore store init --name me` (a local folder) or `lore store init --name me --url <url>`, then run the command again"
 
+// personalNotAttachedHint is the hint when the active setup does configure
+// a personal store but the command did not attach it where it ran
+// (devco:D-654): store init would make a second one, so it says how to
+// reach the one there is.
+const personalNotAttachedHint = "your personal store is set up (`lore whoami` shows it on its personal line) but this command did not attach it here: read it with --store me and write to it with --to me from your home folder or a code repo, where it is attached"
+
+// personalHint is the hint of an engine "no store named me is attached":
+// personalNotAttachedHint when the active setup configures a personal
+// store, personalStoreHint when it does not (or nobody can tell).
+func (h *liveHost) personalHint(ctx context.Context) string {
+	if h.cfg.PersonalStore != nil && h.cfg.PersonalStore(ctx) != "" {
+		return personalNotAttachedHint
+	}
+	return personalStoreHint
+}
+
 // firstArg is the operation's first positional argument as the caller gave
 // it: on the CLI the decoded value of that field (by its flag, `--id
 // tsk_…`, or by position: U-4), or over `lore api` (no Args) the JSON member of the
@@ -159,7 +175,7 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 	// It replaces the engine's generic list of attached places: setting the
 	// personal store up is the way out, not another --to.
 	if strings.Contains(err.Error(), missingPersonalStore) {
-		return e.WithHint(personalStoreHint) // the TARGET is missing, not the row
+		return e.WithHint(h.personalHint(ctx)) // the TARGET is missing, not the row
 	}
 	if e.Hint != "" {
 		return err

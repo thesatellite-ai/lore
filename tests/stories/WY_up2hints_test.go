@@ -27,6 +27,8 @@ package stories
 //	D-591: a read refused in shop names --store acme/<folder> for reads
 //	D-592: every printed next step above runs where printed and neither
 //	       refuses nor loops back to the first hint
+//	D-653: a write with no --to in web names --to acme/sync and the same
+//	       org link the read hint names, never <org> or <folder>
 
 import (
 	"os"
@@ -130,6 +132,19 @@ func TestStoryWYUp2Hints(t *testing.T) {
 		// the printed link, run where printed, links the repo to sync
 		m.Lore(ac.Dir, "org", "link", "--org", wOrg, "--project", "sync", "--own", "--yes").OK(t)
 		m.Lore(ac.Dir, "whoami").OK(t).Says(t, wOrg+"/sync").Never(t, "link it:")
+	})
+
+	// devco:D-653: a write with no --to in that unlinked own repo named
+	// placeholders ("--to <org>/<folder>", "org link --org <org> --project
+	// <folder>") while the read hint there names the exact link: the write
+	// hint names the same org link and the exact --to, and both work where
+	// printed (the link is checked by D-587's step, so only --to runs here).
+	s.Step("D-653/unlinked-own-write-hint-names-the-folder", func() {
+		r := m.Lore(wc.Dir, "memory", "add", "--body", "a note written with no target", "--yes").
+			Refused(t, "--to "+inSync, "lore org link --org "+wOrg+" --project sync --own").
+			Never(t, "<org>", "<folder>", "--project org", "wire:")
+		wyFollow(t, m, wc.Dir, r, "devco:D-653 memory add@own-unlinked")
+		m.Lore(wc.Dir, "memory", "add", "--body", "a note written with no target", "--to", inSync, "--yes").OK(t)
 	})
 
 	s.Step("D-589/mistyped-id-in-home", func() {

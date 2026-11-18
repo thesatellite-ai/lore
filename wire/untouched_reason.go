@@ -12,6 +12,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,11 @@ import (
 // the repo has no project. Called outside a.mu (staleLinkOrg asks the
 // host's Org hook).
 func (a *App) refineNoProject(ctx context.Context, err error) error {
+	return a.withResourceLink(ctx, a.refineNoProjectBase(ctx, err))
+}
+
+// refineNoProjectBase is refineNoProject before withResourceLink.
+func (a *App) refineNoProjectBase(ctx context.Context, err error) error {
 	if err == nil || !errs.Has(err, errs.NotAStore) {
 		return err
 	}
@@ -77,4 +83,65 @@ func loreRanInRepo(ctx context.Context, top string) bool {
 	}
 	fi, err := os.Stat(filepath.Join(strings.TrimSpace(string(out)), signalsStateDir))
 	return err == nil && fi.IsDir()
+}
+
+// folderPlaceholder is the folder placeholder an own repo's no-project
+// hint names when lore does not know the folder (withOwnOrgLink,
+// noLoreProjectErr).
+const folderPlaceholder = "--project <folder>"
+
+// withResourceLink is err with its hint made exact when a resource of the
+// repo's own org names this repo (devco:D-653): a write with no --to in an
+// unlinked own repo said "--to <org>/<folder>" and "lore org link --org
+// <org> --project <folder> --own" although a read there names the folder
+// the resource gives (resourceFolderOf, the project field included). The
+// hint then names that folder's --to and the same org link the read
+// prints. err is returned as it is when its hint has no folder
+// placeholder, the repo is no own repo, or no resource names it.
+func (a *App) withResourceLink(ctx context.Context, err error) error {
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Hint, folderPlaceholder) {
+		return err
+	}
+	org := ownOrgOf(ctx, a.opts)
+	if org == "" {
+		return err
+	}
+	f, found := a.resourceFolderOf(ctx, org)
+	if !found {
+		return err
+	}
+	return replaceErr(err, e, e.WithHint(f.writeHint()))
+}
+
+// replaceErr is err with its part old swapped for repl: err itself when it
+// is old, or the errors.Join open's fail makes (the refusal joined with
+// the close of a half-open state). Any other wrapping keeps err as it is.
+func replaceErr(err error, old *errs.Error, repl error) error {
+	if err == error(old) { //nolint:errorlint // identity, not a match
+		return repl
+	}
+	j, ok := err.(interface{ Unwrap() []error }) //nolint:errorlint // only open's own join
+	if !ok {
+		return err
+	}
+	var out []error
+	for _, p := range j.Unwrap() {
+		if p == error(old) { //nolint:errorlint // identity, not a match
+			p = repl
+		}
+		out = append(out, p)
+	}
+	if len(out) == 1 {
+		return out[0]
+	}
+	return errors.Join(out...)
+}
+
+// writeHint is the next step of a write refused in an unlinked own repo
+// that resource f names: the folder's --to, the org link the read note
+// prints (note), or lore init.
+func (f resourceFolder) writeHint() string {
+	return "its resource " + f.Resource + " names this repo (" + f.Remote + "): write to that folder with --to " + f.target() +
+		", or link the repo to it with `lore org link --org " + f.Org + " --project " + f.Folder + " --own` (both keep the repo free of lore files); lore init sets this repo up instead"
 }
