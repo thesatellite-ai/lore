@@ -31,6 +31,7 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -122,6 +123,10 @@ type sigSpot struct {
 	// label is the store folder as every line names it, <org>/<folder>
 	// (storeOwnName); "" for a code repo's own ref (devco:D-560).
 	label string
+	// url is the store clone's remote url ("" for a code repo's own ref):
+	// it picks the identity that signs the store's signals commits
+	// (devco:D-581, storeSigner.identityFor).
+	url string
 }
 
 // openWorld gathers the world, refusing what this host cannot coordinate:
@@ -371,16 +376,16 @@ func (w *coordWorld) useStore(ctx context.Context) error {
 	remote := &gitremote.Git{Repo: repo, Name: gitbackend.RemoteName}
 	// The store clone's signals ref is reached as the setup that owns the
 	// store (storeRoute); a store no setup owns gets no route.
-	label := string(w.orgStore)
+	label, url := string(w.orgStore), ""
 	if u, uerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + gitbackend.RemoteName + ".url"}}); uerr == nil {
-		url := strings.TrimSpace(string(u))
+		url = strings.TrimSpace(string(u))
 		remote.RouteArgs, remote.RouteEnv, _ = storeRoute(ctx, w.a.opts.Home, w.a.projectDir(), url)
 		if own := storeOwnName(w.a.opts.Home, url, folder); own != "" {
 			label = own
 		}
 	}
 	w.spot = sigSpot{repo: repo, remote: remote, remoteName: gitbackend.RemoteName,
-		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true, label: label}
+		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true, label: label, url: url}
 	w.folder = folder
 	return nil
 }
@@ -493,8 +498,14 @@ const (
 // claim already pushed needs no new go-ahead: it changes what the person
 // published.
 func (w *coordWorld) requirePushAsked(asked bool, what string) error {
-	if asked || w.autopushChosen || w.spot.store || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+	if asked || w.autopushChosen || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
 		return nil
+	}
+	if w.spot.store {
+		// devco:D-580: a linked store's signals ref is a remote too; a claim
+		// there was pushed unasked although --push says it is refused.
+		return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through the signals ref %s of store %s on the store's remote, and lore pushes nothing to a remote unless you ask; nothing was written", what, w.spot.ref, w.spot.label)).
+			WithHint("run the command again with --push to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim); `lore task start --id <id>` works on a task without a claim")
 	}
 	return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through %s on this repo's remote %s, and lore pushes nothing to a code remote unless you ask; nothing was written", what, signals.CodeRepoRef, w.remoteName)).
 		WithHint("run the command again with --push to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim); `lore task start --id <id>` works on a task without a claim")
@@ -572,9 +583,8 @@ func localSignalsRemote(sp sigSpot, commonDir string) (gitremote.Remote, bool) {
 }
 
 // signalsStore is this repo's own signals ref (§1 "Refs").
-func (w *coordWorld) signalsStore() *signals.Store {
-	name := w.who.DisplayName
-	email := signatureEmail(w.who.StableKey)
+func (w *coordWorld) signalsStore(ctx context.Context) *signals.Store {
+	sig := w.signalsSignature(ctx)
 	sp := w.spot
 	remote, remoteName, autopush := sp.remote, sp.remoteName, w.autopush && sp.remote != nil
 	if local, ok := localSignalsRemote(sp, w.commonDir); ok {
@@ -588,8 +598,9 @@ func (w *coordWorld) signalsStore() *signals.Store {
 		Seen:  signals.SeenStore{Path: sp.seen},
 		Clock: w.a, Lease: w.lease,
 		Signature: func(at time.Time) gitref.Signature {
-			return gitref.Signature{Name: name, Email: email, When: at}
+			return gitref.Signature{Name: sig.Name, Email: sig.Email, When: at}
 		},
+		Trailers: w.signalsTrailers(),
 		Autopush: autopush, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		Trace: signalsTrace(os.Stderr),
 		// FORMAT_EVOLUTION rule 2 (OV48): no claim, renew or release on a
@@ -634,6 +645,38 @@ func signalsTrace(w io.Writer) func(string) {
 	return func(line string) { _, _ = fmt.Fprintln(w, "trace: "+line) } // stderr gone: nothing left to report to
 }
 
+// signalsSignature is who signs a signals commit (devco:D-581): on a
+// linked store's ref the identity every other commit of that store uses
+// (storeSigner.identityFor: the org identity for an org store), on a code
+// repo's own ref the person (the owner of a detected agent). It was
+// "<person> via <tool> <agent.auto/…@lore.invalid>", an author no store
+// commit may carry; the agent goes into the Lore-Agent trailer
+// (signalsTrailers). A caller with no person (the CI actor) keeps the
+// v0.1.17 non-routable address.
+func (w *coordWorld) signalsSignature(ctx context.Context) gitref.Signature {
+	if w.spot.store && w.spot.url != "" {
+		if s := storeIdentityFunc(w.a.opts).identityFor(ctx, w.spot.url); s.Name != "" && s.Email != "" && !agentSignature(s.Name, s.Email) {
+			return gitref.Signature{Name: s.Name, Email: s.Email}
+		}
+	}
+	if name, email := w.who.Person().CommitSignature(); name != "" && email != "" && !agentSignature(name, email) {
+		return gitref.Signature{Name: name, Email: email}
+	}
+	return gitref.Signature{Name: w.who.DisplayName, Email: signatureEmail(w.who.StableKey)}
+}
+
+// signalsTrailers names the agent that wrote a signals commit for its
+// person (Lore-Agent trailer, devco:D-581); none for a person or CI.
+func (w *coordWorld) signalsTrailers() []string {
+	if !w.isAgent() || w.who.Agent == "" {
+		return nil
+	}
+	if t := gitcommit.AgentTrailer(w.who.Label, w.who.Agent); t != "" {
+		return []string{t}
+	}
+	return nil
+}
+
 // signatureEmail turns a stable key into a commit e-mail; agents get a
 // non-routable address (v0.1.17 signatureEmail).
 func signatureEmail(stableKey string) string {
@@ -651,7 +694,7 @@ func (w *coordWorld) env(ctx context.Context) coord.Env {
 	}
 	agents := w.agents
 	agents.PerCheckout = !w.isAgent() // devco:Q-1: a person's limit is per worktree, an agent's per session
-	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: agents, Held: w.held()}
+	e := coord.Env{Signals: w.signalsStore(ctx), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: agents, Held: w.held()}
 	set, perr := w.a.Policy(ctx, store.SourceRepo)
 	e.Agents.TeamMaxClaims, e.Agents.MaxClaims = maxClaims(set, perr == nil, w.maxClaimsConfig)
 	if perr == nil {

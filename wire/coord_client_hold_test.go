@@ -75,7 +75,7 @@ func TestClientRepoHoldsOnTheLinkedStore(t *testing.T) {
 				return orgGit(t, store, "ls-tree", "-r", "--name-only", "refs/lore/signals/main")
 			}
 
-			_, err = run(t, app, opscoord.OpHoldClaim, `{"name":"deploy-lock"}`, true)
+			_, err = run(t, app, opscoord.OpHoldClaim, `{"name":"deploy-lock","push":true}`, true) // devco:D-580: a linked store's ref needs --push too
 			if !linked {
 				if !errs.Has(err, errs.Unsupported) || !strings.Contains(err.Error(), "no store link") {
 					t.Fatalf("unlinked client hold: %v, want E_UNSUPPORTED naming the missing link", err)

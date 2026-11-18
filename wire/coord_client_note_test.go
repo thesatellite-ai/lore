@@ -112,7 +112,7 @@ func TestClientTaskUnheldNoteGoesToTheStore(t *testing.T) {
 	if err = json.Unmarshal([]byte(out2), &t2); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = run(t, app, "task.claim", `{"id":"`+t2.Data.ID+`"}`, true); err != nil {
+	if _, err = run(t, app, "task.claim", `{"id":"`+t2.Data.ID+`","push":true}`, true); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	if got := orgGit(t, store, "ls-tree", "-r", "--name-only", "refs/lore/signals/main"); got != "acme/claims/"+t2.Data.ID+".json" {

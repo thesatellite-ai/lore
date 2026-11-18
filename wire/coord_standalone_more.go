@@ -341,7 +341,7 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if err = w.requirePushAsked(in.Push, "a hold"); err != nil {
 		return opscoord.Report{}, err
 	}
-	st := w.signalsStore()
+	st := w.signalsStore(ctx)
 	d := in.TTL
 	if d <= 0 {
 		d = w.lease.TTL
@@ -374,7 +374,7 @@ func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleas
 	if err = w.forHolds(ctx); err != nil {
 		return opscoord.Report{}, err
 	}
-	_, err = w.signalsStore().Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err = w.signalsStore(ctx).Write(ctx, func(v signals.View) (signals.Change, error) {
 		p, derr := signals.DecideUnhold(v, w.caller(), w.folder, in.Name)
 		return signals.Change{Delete: []string{p}}, derr
 	})

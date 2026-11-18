@@ -454,3 +454,16 @@ func TestRemoteCompanionPushedOnlyAfterTheLease(t *testing.T) {
 		t.Fatalf("a fenced write must not reach the other remote: err=%v pushed=%d", err, fenced.pushed)
 	}
 }
+
+// TestSignalsMessageTrailers is devco:D-581: the agent that wrote a
+// signals commit is named in a trailer after the fixed message, never in
+// the author; no trailers keeps the bare message.
+func TestSignalsMessageTrailers(t *testing.T) {
+	if got := (&Store{}).message(); got != CommitMessage {
+		t.Fatalf("bare message = %q", got)
+	}
+	got := (&Store{Trailers: []string{" Lore-Agent: claude_code (agent:auto/x) ", ""}}).message()
+	if got != CommitMessage+"\n\nLore-Agent: claude_code (agent:auto/x)" {
+		t.Fatalf("message = %q", got)
+	}
+}

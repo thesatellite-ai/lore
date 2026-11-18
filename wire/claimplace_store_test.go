@@ -15,9 +15,11 @@ func TestClaimPlaceNamesTheStore(t *testing.T) {
 	if !strings.Contains(pushed, "the signals ref "+ref+" of store acme/web") || !strings.Contains(pushed, "pushed to the store's remote now") {
 		t.Fatalf("pushed claim place = %q", pushed)
 	}
-	local := (&coordWorld{spot: sigSpot{store: true, label: "acme/web"}}).claimPlace(ref)
-	if !strings.Contains(local, "of store acme/web") || !strings.Contains(local, "teammates do not see it until `lore sync`") || strings.Contains(local, "pushed to") {
-		t.Fatalf("unpushed claim place = %q", local)
+	// devco:D-580: a store signals write is pushed or refused, never kept
+	// locally, so no wording may promise a local-only claim.
+	off := (&coordWorld{spot: sigSpot{store: true, label: "acme/web"}}).claimPlace(ref)
+	if strings.Contains(off, "local store clone") || strings.Contains(off, "until `lore sync`") {
+		t.Fatalf("claim place promises a local-only store claim: %q", off)
 	}
 }
 

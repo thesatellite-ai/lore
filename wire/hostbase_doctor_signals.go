@@ -37,7 +37,7 @@ func (a *App) doctorSignals(ctx context.Context, warn, report func(string)) {
 	if err != nil || w.sit.Role == orgresolve.RoleClient {
 		return
 	}
-	signalsRows(ctx, w.signalsStore(), warn, report)
+	signalsRows(ctx, w.signalsStore(ctx), warn, report)
 }
 
 // signalsRows are the rows of one signals store (its last fetched copy, and

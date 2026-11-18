@@ -27,7 +27,7 @@ agent-coord (work/api)$ lore mission apply --file invite.yaml
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page         timebox 1h  after backend
   tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging             after frontend,proxy  gate required
-agent-coord (work/api)$ lore task claim --id msn_2ad3618e878ebbf527d34d446ef4f891
+agent-coord (work/api)$ lore task claim --id msn_2ad3618e878ebbf527d34d446ef4f891 --push
 ✓ claimed msn_2ad3618e878ebbf527d34d446ef4f891 (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
 
 ### workers start
@@ -55,7 +55,7 @@ agent-backend (work/agents/api)$ lore task next --mission msn_2ad3618e878ebbf527
 next tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API   urgency 7.90
   why: +3.90  priority medium; +4.00  blocks 1 open task (tsk_54fe984c9b495744c0217776765a28f2)
 nothing written; take it: lore task next --claim (or lore task claim --id tsk_162df51b7f78b785c97c26b41ea89666)
-agent-backend (work/agents/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo api
+agent-backend (work/agents/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo api --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json (store agency/client2)
 ✓ claimed tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API (lease 20m, token ct_cb04f…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
@@ -66,7 +66,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store agency/org)
 ✓ act_b4f4765e593d51fd1352985e8af3a5b0 agent agent-frontend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
-agent-frontend (work/agents/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
+agent-frontend (work/agents/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page: waits for tsk_162df51b7f78b785c97c26b41ea89666 to be merged (claimed by agent:agent-backend)
   hint: lore task board shows what each task waits on
@@ -77,7 +77,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_28f8d32584b2db54ffb146bede5b03df.json (store agency/org)
 ✓ act_28f8d32584b2db54ffb146bede5b03df agent agent-infra (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
-agent-infra (work/agents/infra)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo infra --owns nginx/sites/invite.conf
+agent-infra (work/agents/infra)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo infra --owns nginx/sites/invite.conf --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json (store agency/client2)
 ✓ claimed tsk_05e99e22e9e86e96fe4daa7777994603 allow /invite on the proxy (lease 20m, token ct_87f6f…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
@@ -118,7 +118,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162df51b7f78b785c97c26
 lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147dd95f1aaf742dd4f5214843a5139.json (store agency/client2)
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 done (commit 86dbae4, not linked to the task; link it with: lore link add --entity tsk_162df51b7f78b785c97c26b41ea89666 --commit 86dbae41af28cc54b467a9dd89dcb5ad6e6c0e91); waiting for merge
   lesson → mem_f147dd95f1aaf742dd4f5214843a5139
-agent-frontend (work/agents/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
+agent-frontend (work/agents/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe984c9b495744c0217776765a28f2 build the invite page: waits for tsk_162df51b7f78b785c97c26b41ea89666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
@@ -130,7 +130,7 @@ lore: committed locally to store agency/client2; lore sync sends it
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 merged 10:28 (found by: ancestry, 05513aa)
 ○ tsk_54fe984c9b495744c0217776765a28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
-agent-frontend (work/agents/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
+agent-frontend (work/agents/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe984c9b495744c0217776765a28f2.json (store agency/client2)
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_dfebf…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
@@ -159,7 +159,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b69e8368dd4986838455061d5d9e5ed7.json (store agency/org)
 ✓ act_b69e8368dd4986838455061d5d9e5ed7 agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
-agent-frontend-2 (work/agents/fe2/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app
+agent-frontend-2 (work/agents/fe2/app)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo app --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe984c9b495744c0217776765a28f2.json (store agency/client2)
 ✓ claimed tsk_54fe984c9b495744c0217776765a28f2 build the invite page (lease 20m, token ct_d57ca…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch); reclaim, attempt 2; previous holder agent-frontend timed out
@@ -183,7 +183,7 @@ lore: committed locally to store agency/client2; lore sync sends it
 ✓ tsk_54fe984c9b495744c0217776765a28f2 merged 11:07 (found by: ancestry, 6d00426)
 
 ### merged by hand
-agent-coord (work/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
+agent-coord (work/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging: waits for tsk_05e99e22e9e86e96fe4daa7777994603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
@@ -194,7 +194,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e99e22e9e86e96fe4daa
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 merged (marked by hand, 11:09)
 
 ### gate
-agent-coord (work/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
+agent-coord (work/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging: gate needs approval (lore gate approve --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8)
   hint: lore task board shows what each task waits on
@@ -207,7 +207,7 @@ alice (work/api)$ lore gate approve --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client2)
 ✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 approved by Alice Doe (org entry (config.yaml)), hash 34ee2105…
-agent-coord (work/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator
+agent-coord (work/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --role coordinator --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client2)
 ✓ claimed tsk_c0f3c11a5724b0cfd74b256190d9b5b8 deploy to staging (lease 20m, token ct_3de87…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)

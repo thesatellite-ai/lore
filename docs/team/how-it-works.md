@@ -290,7 +290,7 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 <!-- example: internals#signals only=2,3,4,5,6 -->
 ```console
 # agent-backend, in website
-$ lore task claim --id tsk_d431…313a
+$ lore task claim --id tsk_d431…313a --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ claimed tsk_d431…313a renew the client SSL certificate (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
@@ -326,7 +326,7 @@ $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-
 ```
 <!-- /example -->
 
-A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next --claim` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` naming `--push`, and `lore task start --id <id>` works on a task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag. A claim on a linked store's signals ref (the example above: a client repo's task) needs no flag and never touches the client's remote.
+A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next --claim` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` naming `--push`, and `lore task start --id <id>` works on a task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag. A claim on a linked store's signals ref (the example above: a client repo's task, or any task of a repo linked to a store folder) follows the same rule: it is pushed to the store's remote only with `--push` (or the same standing go-ahead), is refused without it (as are `lore task revoke` and `lore task reassign` of a claimed task there), and never touches the client's remote. Its commit is signed with the store's identity (your identity in the org for an org store); an agent that claims for you is named in a `Lore-Agent` trailer, never as the author. `lore task release` takes the claim off the same ref and says where it went.
 
 | Operation | What is checked | What is written (claims on a task push signals and the task row together, atomically) |
 |---|---|---|
@@ -379,7 +379,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147…5139.json (s
   lesson → mem_f147…5139
 
 # agent-frontend, in agents/app
-$ lore task next --claim --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
@@ -395,7 +395,7 @@ lore: committed locally to store agency/client2; lore sync sends it
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
-$ lore task next --claim --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency/client2)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)

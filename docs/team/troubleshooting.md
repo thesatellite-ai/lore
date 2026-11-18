@@ -170,7 +170,7 @@ A **claim** is an agent putting its name on a task, like writing your name on a 
 <!-- example: errors#offline-claim only=1 -->
 ```console
 # alice, in website
-$ lore task claim --id tsk_2ad3…f891
+$ lore task claim --id tsk_2ad3…f891 --push
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)

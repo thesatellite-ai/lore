@@ -191,7 +191,7 @@ func (t standaloneTeam) FenceHolder(ctx context.Context, taskID string, rowEpoch
 	if err != nil || w == nil {
 		return err
 	}
-	st := w.signalsStore()
+	st := w.signalsStore(ctx)
 	local, err := st.Local(ctx)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "read the signals ref", err)

@@ -252,6 +252,10 @@ type Store struct {
 	Lease Lease
 	// Signature returns the commit author for a write at t.
 	Signature func(t time.Time) gitref.Signature
+	// Trailers are git trailer lines appended to every signals commit
+	// message (devco:D-581: an agent writing for its person is named in a
+	// Lore-Agent trailer, never in the author); nil = the bare message.
+	Trailers []string
 	// Autopush false makes every write fail closed without network.
 	Autopush bool
 	Tokens   Tokens
@@ -285,6 +289,21 @@ type Result struct {
 	Attempts int
 	// Atomic tells whether the companions went in one atomic push.
 	Atomic bool
+}
+
+// message is the signals commit message: CommitMessage, then Trailers
+// (blank line between, as git trailers need) when there are any.
+func (s *Store) message() string {
+	var keep []string
+	for _, t := range s.Trailers {
+		if t = strings.TrimSpace(t); t != "" {
+			keep = append(keep, t)
+		}
+	}
+	if len(keep) == 0 {
+		return CommitMessage
+	}
+	return CommitMessage + "\n\n" + strings.Join(keep, "\n")
 }
 
 // trace sends one line to Trace when it is set.
@@ -464,7 +483,7 @@ func (s *Store) attempt(ctx context.Context, decide Decide) (Result, bool, error
 	}
 	commit, err := s.Repo.MakeCommit(ctx, gitref.CommitRequest{
 		Base: old, History: gitref.HistoryReplace, Changes: changes,
-		Message: CommitMessage, Signature: s.Signature(s.Clock.Now()),
+		Message: s.message(), Signature: s.Signature(s.Clock.Now()),
 	})
 	if err != nil {
 		return Result{Old: old}, false, fmt.Errorf("signals: build commit: %w", err)

@@ -109,9 +109,9 @@ func claimLines(id string, cr coord.ClaimResult, ttl time.Duration, ref string) 
 // sent people looking for a ref that exists in neither place.
 func (w *coordWorld) claimPlace(ref string) string {
 	if w.spot.store {
-		if !w.autopush {
-			return "the signals ref " + ref + " of store " + w.spot.label + " (kept in the local store clone: pushing is off, so teammates do not see it until `lore sync`)"
-		}
+		// devco:D-580: a signals write is pushed in the same command or not
+		// made at all (signals.Store fails closed with autopush off), so the
+		// "kept in the local store clone" wording this had was never true.
 		return "the signals ref " + ref + " of store " + w.spot.label + " (pushed to the store's remote now: teammates see it on their next fetch)"
 	}
 	if _, local := localSignalsRemote(w.spot, w.commonDir); local {
@@ -290,10 +290,13 @@ func (h standaloneCoord) TaskRelease(ctx context.Context, in opscoord.ReleaseIn)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = coord.Release(ctx, w.env(ctx), in.ID); err != nil {
+	env := w.env(ctx)
+	if err = coord.Release(ctx, env, in.ID); err != nil {
 		return opscoord.Report{}, coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{markOK + " released " + in.ID}}, nil
+	// devco:D-582: say where the release went, the same place the claim
+	// line named (the store's remote, the code repo's remote, or local).
+	return opscoord.Report{Lines: []string{markOK + " released " + in.ID + ": the claim is off " + w.claimPlace(env.Signals.Ref)}}, nil
 }
 
 // TaskRevoke implements opscoord.Host: a person drops the current claim;
@@ -330,7 +333,7 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 // it. An override of a task nobody holds writes its row only, which waits
 // for lore sync like every other row.
 func (w *coordWorld) requireOverridePush(ctx context.Context, env coord.Env, id string, asked bool, what string) error {
-	if asked || w.autopushChosen || w.spot.store || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+	if asked || w.autopushChosen || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
 		return nil
 	}
 	v, err := env.Signals.Read(ctx)

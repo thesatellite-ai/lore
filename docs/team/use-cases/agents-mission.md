@@ -60,7 +60,7 @@ $ lore mission apply --file invite.yaml
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
   tsk_05e9…4603 allow /invite on the proxy
   tsk_c0f3…b5b8 deploy to staging             after frontend,proxy  gate required
-$ lore task claim --id msn_2ad3…f891
+$ lore task claim --id msn_2ad3…f891 --push
 ✓ claimed msn_2ad3…f891 (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
 ```
 <!-- /example -->
@@ -100,7 +100,7 @@ $ lore task next --mission msn_2ad3…f891 --repo api
 next tsk_162d…9666 send the invite email from the API   urgency 7.90
   why: +3.90  priority medium; +4.00  blocks 1 open task (tsk_54fe…28f2)
 nothing written; take it: lore task next --claim (or lore task claim --id tsk_162d…9666)
-$ lore task next --claim --mission msn_2ad3…f891 --repo api
+$ lore task next --claim --mission msn_2ad3…f891 --repo api --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency/client2)
 ✓ claimed tsk_162d…9666 send the invite email from the API (lease 20m, token ct_cb04f…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
@@ -115,7 +115,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store a
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 
 # agent-frontend, in agents/app
-$ lore task next --claim --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (claimed by agent:agent-backend)
   hint: lore task board shows what each task waits on
@@ -130,7 +130,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_28f8…03df.json (store a
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 
 # agent-infra, in agents/infra
-$ lore task next --claim --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invite.conf
+$ lore task next --claim --mission msn_2ad3…f891 --repo infra --owns nginx/sites/invite.conf --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency/client2)
 ✓ claimed tsk_05e9…4603 allow /invite on the proxy (lease 20m, token ct_87f6f…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
@@ -192,7 +192,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147…5139.json (s
   lesson → mem_f147…5139
 
 # agent-frontend, in agents/app
-$ lore task next --claim --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
@@ -208,7 +208,7 @@ lore: committed locally to store agency/client2; lore sync sends it
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
-$ lore task next --claim --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency/client2)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
@@ -257,7 +257,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b69e…5ed7.json (store a
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 
 # agent-frontend-2, in agents/fe2/app
-$ lore task next --claim --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency/client2)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_d57ca…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch); reclaim, attempt 2; previous holder agent-frontend timed out
@@ -289,7 +289,7 @@ The deploy task waits for every task it depends on to be merged. `agent-infra` f
 <!-- example: agents#merged-by-hand -->
 ```console
 # agent-coord, in api
-$ lore task next --claim --mission msn_2ad3…f891 --role coordinator
+$ lore task next --claim --mission msn_2ad3…f891 --role coordinator --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: waits for tsk_05e9…4603 to be merged (done, merge unknown)
   hint: lore task board shows what each task waits on
@@ -308,7 +308,7 @@ Now the deploy task is ready except for its gate. The coordinator stops there. A
 <!-- example: agents#gate -->
 ```console
 # agent-coord, in api
-$ lore task next --claim --mission msn_2ad3…f891 --role coordinator
+$ lore task next --claim --mission msn_2ad3…f891 --role coordinator --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_c0f3…b5b8 deploy to staging: gate needs approval (lore gate approve --id tsk_c0f3…b5b8)
   hint: lore task board shows what each task waits on
@@ -325,7 +325,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (stor
 ✓ tsk_c0f3…b5b8 approved by Alice Doe (org entry (config.yaml)), hash 34ee2105…
 
 # agent-coord, in api
-$ lore task next --claim --mission msn_2ad3…f891 --role coordinator
+$ lore task next --claim --mission msn_2ad3…f891 --role coordinator --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_c0f3…b5b8.json (store agency/client2)
 ✓ claimed tsk_c0f3…b5b8 deploy to staging (lease 20m, token ct_3de87…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)

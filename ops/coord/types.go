@@ -63,7 +63,7 @@ type ClaimIn struct {
 	From       string   `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
 	// Push is the person's go-ahead to push the claim to the code repo's
 	// remote (D-15: nothing reaches a remote unasked).
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
 }
 
 // HeartbeatIn is the input of task.heartbeat.
@@ -95,7 +95,7 @@ type NextIn struct {
 	// v0.1.17 ranking ("would claim …", "nothing written (--dry-run)").
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain in the old form, never claiming even with --claim (nothing written)"`
 	// Push: as ClaimIn.Push, for the claim task next --claim takes.
-	Push bool `json:"push,omitempty" flag:"push" desc:"with --claim: push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"with --claim: push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
 }
 
 // NextOut is the output of task.next. Without --claim (a read, or
@@ -156,7 +156,7 @@ type ReassignIn struct {
 	From   string `json:"from,omitempty" flag:"from" desc:"reassign every open task of this person"`
 	// Push: as ClaimIn.Push, for a reassign that drops a claim (or a
 	// revoke marker) on the code repo's signals ref (devco:S-17).
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the dropped claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
 }
 
 // ReassignTask is one task a `task reassign --from` batch changes.
@@ -198,7 +198,7 @@ type RevokeIn struct {
 	From string `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
 	// Push: as ClaimIn.Push (devco:S-17): a revoke changes refs/lore/signals,
 	// so on a code repo's own remote it needs the same explicit go-ahead.
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the revoke to this code repo's remote now (refs/lore/signals); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the revoke now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
 }
 
 // HoldClaimIn is the input of hold.claim.
@@ -207,7 +207,7 @@ type HoldClaimIn struct {
 	TTL  time.Duration `json:"ttl,omitempty" flag:"ttl" desc:"how long the hold lasts (default: lease.ttl)"`
 	On   string        `json:"on,omitempty" flag:"on" desc:"project (the project's signals ref, the default) or machine"`
 	// Push: as ClaimIn.Push, for a hold on the code repo's signals ref.
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"`
 }
 
 // HoldReleaseIn is the input of hold.release.

@@ -27,7 +27,7 @@ func (t standaloneTeam) ClaimText(ctx context.Context, taskID string) (string, e
 	if err != nil {
 		return "", err
 	}
-	st := w.signalsStore()
+	st := w.signalsStore(ctx)
 	v, err := st.Read(ctx)
 	if err != nil {
 		return "", coordErr(err)

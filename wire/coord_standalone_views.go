@@ -147,7 +147,7 @@ func (h standaloneCoord) openView(ctx context.Context) (*coordView, error) {
 	if p, perr := h.a.Project(ctx); perr == nil {
 		cv.project = p.String()
 	}
-	if v, lerr := w.signalsStore().Local(ctx); lerr == nil {
+	if v, lerr := w.signalsStore(ctx).Local(ctx); lerr == nil {
 		cv.board, cv.hasBoard = v, true
 	}
 	if cv.docs, err = (engineRows{a: h.a}).List(ctx); err != nil {
