@@ -11,7 +11,9 @@ package wire
 //	  store root             ──▶ --to <the store's name>   (company: admins)
 //	  folder                 ──▶ --to <org>/<folder>       (members too)
 //	  repo, or the default   ──▶ the repo: no --to in a repo with .lore/,
-//	                             --to <org>/<folder> in a linked repo
+//	                             --to <org>/<folder> in a linked repo,
+//	                             --to <store>/<folder> of the link when
+//	                             that folder is not attached (D-675)
 
 import (
 	"context"
@@ -30,8 +32,10 @@ import (
 // place (only an admin of the org writes a policy there). The policy is
 // the strictest level's, so a raise goes to the store that holds the row
 // setting it now; with no row, to the repo, which in a linked repo is its
-// store folder. ok is false when that place cannot be named here (a
-// linked repo whose store folder is not attached): the caller must not
+// store folder; when that folder is not attached here, the link's own
+// --to (Options.RepoLinkTarget, devco D-675). ok is false when that place
+// cannot be named here (a linked repo whose store folder is not attached
+// and whose link names no store of config.yaml): the caller must not
 // print a command then, since no --to it could print would work (devco
 // D-658: it printed the literal `--to <store>` and `--to <store>/<folder>`).
 func (a *App) PolicyPlace(ctx context.Context, key policy.Key) (to string, company bool, ok bool) {
@@ -76,6 +80,15 @@ func (a *App) PolicyPlace(ctx context.Context, key policy.Key) (to string, compa
 	}
 	if src, has := onlyStoreAt(st.eng, policy.LevelFolder); has {
 		return a.StoreLabel(src), false, true
+	}
+	// devco D-675: the linked folder is not attached here, but the link
+	// still names it, and a write's --to resolves "<store>/<folder>" from
+	// config.yaml (Options.RepoLinkTarget, D-670): print that real --to
+	// instead of no command at all
+	if a.opts.RepoLinkTarget != nil {
+		if t := a.opts.RepoLinkTarget(ctx); t != "" {
+			return t, false, true
+		}
 	}
 	return "", false, false
 }
