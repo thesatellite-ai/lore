@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
@@ -413,20 +414,34 @@ func actorLabel(a row.Row) string {
 	return a.ID.String()
 }
 
+// CheckJoinEntry is the org-entry check of a join, read-only, so the
+// setup apply runs it before its first write (devco D-626: the join step
+// rewrote the entry's identity, then this check refused, leaving the
+// setup half applied). have is true when an entry named org exists for
+// store, in any spelling of it (an ssh host alias resolved, sameStore);
+// an entry of that name for another store is E_SETUP_ORG_MISMATCH.
+func CheckJoinEntry(ctx context.Context, entries OrgEntries, org, store string) (have bool, err error) {
+	origin, err := entries.TeamOrigin(ctx, org)
+	switch {
+	case err == nil:
+		if !sameStore(origin.Store, store) {
+			return false, errs.New(errs.SetupOrgMismatch, "an org entry named "+org+" exists for store "+origin.Store+", not "+store+"; nothing was written").
+				WithHint("lore org rename --old " + org + " --new <other name>, then lore setup join again")
+		}
+		return true, nil
+	case errs.Has(err, errs.NotFound):
+		return false, nil
+	}
+	return false, err
+}
+
 // ensureImported runs org.import unless the orgs[] entry exists for the
 // same store (a re-run). An entry of that name on another store is
 // E_SETUP_ORG_MISMATCH: lore never re-points an org entry silently.
 func ensureImported(ctx context.Context, d JoinDeps, req JoinRequest, email string, admit func(context.Context, string) error, skipRegister bool) (bool, error) {
 	inv := req.Invite
-	origin, err := d.Entries.TeamOrigin(ctx, inv.Org)
-	switch {
-	case err == nil:
-		if !sameStore(origin.Store, inv.Store) {
-			return false, errs.New(errs.SetupOrgMismatch, "an org entry named "+inv.Org+" exists for store "+origin.Store+", not "+inv.Store).
-				WithHint("lore org rename --old " + inv.Org + " --new <other name>, then lore setup join again")
-		}
-		return false, nil
-	case !errs.Has(err, errs.NotFound):
+	have, err := CheckJoinEntry(ctx, d.Entries, inv.Org, inv.Store)
+	if err != nil || have {
 		return false, err
 	}
 	rep, err := d.Orgs.Import(ctx, orgcmd.ImportIn{URL: inv.Store, Key: humanKeyPrefix + email, Name: req.Name, Handle: req.Handle, As: inv.Org, Admit: admit, SkipRegister: skipRegister}, true)
@@ -529,6 +544,15 @@ func ApplyAdmin(ctx context.Context, d AdminDeps, req AdminRequest) (RosterResul
 // sameStore compares two store urls, ignoring space, a trailing slash and
 // a trailing .git (the same repo spelled two ways).
 func sameStore(a, b string) bool {
+	// devco D-626: git@<alias>:o/r.git (the alias from ~/.ssh/config
+	// Host/HostName) and git@github.com:o/r.git are one store; the join
+	// refused the alias spelling of the entry's own store. Remote.Norm is
+	// the host/path every store comparison uses (D-493).
+	ra, ea := gitbackend.RemoteOfRaw(strings.TrimSpace(a))
+	rb, eb := gitbackend.RemoteOfRaw(strings.TrimSpace(b))
+	if ea == nil && eb == nil {
+		return ra.Norm == rb.Norm
+	}
 	norm := func(s string) string {
 		return strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(s), "/"), gitSuffix)
 	}

@@ -221,8 +221,15 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 			remote = n
 		}
 	}
+	// devco D-626: --store in the alias spelling (git@<alias>:<owner>/<repo>.git)
+	// is the org's store of the github.com spelling; it was refused as "not
+	// one of <org>'s stores".
+	store := in.Store
+	if store != "" {
+		store = resolveRemoteURL(ctx, s.Dir, store)
+	}
 	plan, err := orgresolve.PlanLink(s.Config, orgresolve.LinkRequest{Entry: in.Org, ProjectID: s.ProjectID, Remotes: s.Remotes,
-		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: in.Store, Remote: remote})
+		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: store, Remote: remote})
 	if err != nil {
 		return opsorgcmd.Report{}, planLinkError(err)
 	}
