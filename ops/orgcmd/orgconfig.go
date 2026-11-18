@@ -68,6 +68,15 @@ type ConfigGetOut struct {
 	Stores []string `json:"stores"`
 	// key is the --key asked for ("" every key).
 	key string
+	// overlaps are orgresolve.OwnRepoOverlaps of Own and Repos, printed
+	// under them (devco D-585); text only, the JSON keeps its keys.
+	overlaps []string
+}
+
+// WithOverlaps is o with the own/repos overlap lines it prints.
+func (o ConfigGetOut) WithOverlaps(lines []string) ConfigGetOut {
+	o.overlaps = lines
+	return o
 }
 
 // Text prints one key per line, lists comma-separated.
@@ -83,6 +92,11 @@ func (o ConfigGetOut) Text() string {
 	}
 	line(ConfigKeyOwn, o.Own)
 	line(ConfigKeyRepos, o.Repos)
+	if o.key == "" || o.key == ConfigKeyOwn || o.key == ConfigKeyRepos {
+		for _, l := range o.overlaps {
+			b.WriteString("note: " + l + "\n")
+		}
+	}
 	line("stores", o.Stores)
 	return b.String()
 }

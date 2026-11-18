@@ -97,6 +97,7 @@ func (a *App) CheckStores(ctx context.Context) []opsstores.StoreCheck {
 		c.Shown = repourl.Mask(c.URL)
 		out = append(out, c)
 	}
+	a.noteOwnRepoOverlaps(ctx, out)
 	return out
 }
 

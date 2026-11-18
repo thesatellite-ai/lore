@@ -15,8 +15,11 @@ package orgresolve
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
 // RemoteClass is what an org's patterns say about a set of remotes.
@@ -71,6 +74,46 @@ func clampLinks(cfg *orgconf.Config, links []Link) []Link {
 			}
 		}
 		out[i] = l
+	}
+	return out
+}
+
+// overlapShown is how many overlapped repos entries an overlap line names
+// before it says how many more there are.
+const overlapShown = 3
+
+// OwnRepoOverlaps is one line per own: pattern that also matches entries
+// of repos: (devco D-585, owner use pass 2 Weak 13): an org whose own
+// github.com/acme/* covers 65 exact client entries classified each of
+// them right (ClassifyRemote: repos wins, fail closed) but never said so.
+// The line names the pattern, how many repos entries it overlaps (a few
+// by name) and which rule wins. A pattern that does not compile is
+// skipped (org config set refuses it before it is written).
+func OwnRepoOverlaps(own, repos []string) []string {
+	var out []string
+	for _, o := range own {
+		p, err := repourl.Compile(o)
+		if err != nil {
+			continue
+		}
+		var hit []string
+		for _, r := range repos {
+			if p.Match(r) {
+				hit = append(hit, r)
+			}
+		}
+		if len(hit) == 0 {
+			continue
+		}
+		names := strings.Join(hit[:min(len(hit), overlapShown)], ", ")
+		if len(hit) > overlapShown {
+			names += fmt.Sprintf(" and %d more", len(hit)-overlapShown)
+		}
+		entries := "entries"
+		if len(hit) == 1 {
+			entries = "entry"
+		}
+		out = append(out, fmt.Sprintf("own %s overlaps %d repos %s (%s); repos entries win (client), whether exact or a pattern", o, len(hit), entries, names))
 	}
 	return out
 }

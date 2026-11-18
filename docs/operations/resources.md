@@ -176,12 +176,12 @@ created res_…e913  service  repo:service/hub_web
 ```console
 # alice, in infra
 $ lore resource list --kind host
-KIND  NAME       IP            OS            PROVIDER  CHECKED
+KIND  NAME       IP            OS            PROVIDER
 host  hub_prod   203.0.113.10  ubuntu-24.04  hetzner
 host  hub_stage  203.0.113.11  ubuntu-24.04  aws
 2 resources
 $ lore resource list --kind service --where runs_on=hub_prod --sort name:desc
-KIND     NAME     DB_PASSWORD           RUNS_ON   URL                      CHECKED
+KIND     NAME     DB_PASSWORD           RUNS_ON   URL
 service  hub_web                        hub_prod  https://www.example.com
 service  hub_api  gopass://acme/hub/db  hub_prod  https://api.example.com
 2 resources
@@ -194,7 +194,7 @@ created 2026-11-02T10:01:20Z by alice · updated 2026-11-02T10:01:20Z by alice
 ```
 <!-- /example -->
 
-`list` hides archived rows unless you pass `--archived`; `--include-deleted` and `--deleted-only` show rows in the trash. Every command takes `--json`. Every read (`list`, `show`, `kinds`, `kind show`, `stale`, `report`, `history`, `graph`, `impact`, `export`) takes `--store` to read one store from any folder, as `lore rule list --store` does: `--store <org>` reads every folder of the org, `--store <org>/<folder>` one folder (`lore resource list --kind code_repo --store acme/org` from the home folder), `--store repo` this repo's own rows; a name no store answers to is refused with `E_NOT_FOUND`, never ignored. With no `--kind`, `lore resource list` lists every kind's resources (by kind, then name, with no field columns), so `lore resource list --store acme` answers from any folder as the other reads do; `--where` and `--sort` filter on one kind's fields, so they still need `--kind`. The metadata reads (`lore meta get`, `show`, `keys`, `history`, `export`) and `lore trash show` / `lore trash stats` take it too.
+`list` hides archived rows unless you pass `--archived`; `--include-deleted` and `--deleted-only` show rows in the trash. Every command takes `--json`. Every read (`list`, `show`, `kinds`, `kind show`, `stale`, `report`, `history`, `graph`, `impact`, `export`) takes `--store` to read one store from any folder, as `lore rule list --store` does: `--store <org>` reads every folder of the org, `--store <org>/<folder>` one folder (`lore resource list --kind code_repo --store acme/org` from the home folder), `--store repo` this repo's own rows; a name no store answers to is refused with `E_NOT_FOUND`, never ignored. With no `--kind`, `lore resource list` lists every kind's resources (by kind, then name) in a narrow table: `KIND`, `NAME` and the `PROJECT` and `URL` fields when a row sets them, and `CHECKED` only when a row was checked, so `lore resource list --store acme` answers from any folder as the other reads do; with `--kind` the columns are that kind's fields. A cell longer than 60 characters is cut and ends with `…` (the whole value is in `lore resource show` and `--json`). `--where` and `--sort` filter on one kind's fields, so they still need `--kind`. A read of one project folder (`--store acme/sync` from any folder, or any resource read run inside that folder of the store clone) sees the kinds of the org folder (`acme/org`), the same from everywhere; its `list` shows the resources stored in the folder and those of the org folder whose `project` field is the folder (`sync`), and the line under it says how many org-wide or other folders' resources it left out and that `lore resource list --store acme` lists the whole org. `show --id <name>` still finds an org folder's resource from there. The metadata reads (`lore meta get`, `show`, `keys`, `history`, `export`) and `lore trash show` / `lore trash stats` take it too.
 
 ## Step 5 — See what depends on what
 

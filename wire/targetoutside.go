@@ -341,9 +341,17 @@ func (a *App) orgFoldersBeside(ctx context.Context, one attach.Store) []attach.S
 // store target is a folder of, when target is another folder of it: the
 // level a linked repo's open attaches above its own folder. None for the
 // store root, the company folder itself, or a store no org entry names.
+// The org entry's org_folder names it (cloneCompanyFolder, as a store
+// clone's folder attaches it): devco D-583, `--store <org>/<folder>` took
+// the first other attached folder of the store instead, so with any
+// folder sorting before the company one the org's kinds were missing
+// (E_KIND_UNKNOWN) and `resource list` printed "(no resources)".
 func (a *App) companyFolderOf(ctx context.Context, target attach.Store) []attach.Store {
 	if target.Folder == "" || target.Folder == rowfs.FolderRoot {
 		return nil
+	}
+	if org := cloneOrgEntry(a.opts.Home, target.URL); org != nil && org.OrgFolderStore() != nil {
+		return cloneCompanyFolder(org, target)
 	}
 	tk := placeKey(target.URL, target.Branch)
 	for _, s := range orgStores(ctx, a.opts, "") {
