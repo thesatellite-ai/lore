@@ -401,7 +401,7 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 		}
 	}
 	if gone, ok := removedTeam(teams, h); ok {
-		return opstask.Assignee{}, removedTeamErr(gone, teams, r.where)
+		return opstask.Assignee{}, removedTeamErr(gone, teams, r.of())
 	}
 	// An org roster's miss keeps its sync hint (the store copy may predate
 	// a teammate's registration, v0.1.17 rosterMissHint); the repo's own
@@ -672,7 +672,7 @@ const maxTeamsNamed = 6
 // to a team nobody sees in lore team list). It names the team list and,
 // when an active team has the same members (the team was recreated under
 // another handle), that team.
-func removedTeamErr(gone RosterTeam, teams []RosterTeam, where string) error {
+func removedTeamErr(gone RosterTeam, teams []RosterTeam, roster string) error {
 	hint := "lore team list shows the teams; lore team add --handle " + rosterHandleMark + gone.Handle + " brings it back"
 	for _, x := range teams {
 		if x.Active && len(x.Members) > 0 && sameMembers(x.Members, gone.Members) {
@@ -680,7 +680,7 @@ func removedTeamErr(gone RosterTeam, teams []RosterTeam, where string) error {
 			break
 		}
 	}
-	return errs.New(errs.NotFound, "team "+rosterHandleMark+gone.Handle+" was removed from the roster in "+where).WithHint(hint)
+	return errs.New(errs.NotFound, "team "+rosterHandleMark+gone.Handle+" was removed from "+roster).WithHint(hint)
 }
 
 // sameMembers reports whether a and b hold the same actor ids.

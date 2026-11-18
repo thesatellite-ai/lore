@@ -65,7 +65,7 @@ func TestTeamAddListShow(t *testing.T) {
 	if got := strings.Join(memberIDs(out.Team), ","); got != x.admin.String()+","+tomas.String() {
 		t.Fatalf("members = %s, want mira then tomas, once each", got)
 	}
-	if !strings.HasPrefix(out.Text(), "✓ "+out.Team.ID+" @web (2 member(s)) added in agency org/") {
+	if !strings.HasPrefix(out.Text(), "✓ "+out.Team.ID+" @web (2 member(s)) added on the roster of agency (agency/org)") {
 		t.Errorf("text = %q", out.Text())
 	}
 	rows := x.e.All(schema.TableTeams)

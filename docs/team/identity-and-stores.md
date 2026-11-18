@@ -490,7 +490,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (st
   scope: [project]
 $ lore sync
 lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
-store agency/client: pushed (sent 1, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 1, received 4, merged 0, refused 0); rows: 0 received
 store agency/org: up to date
 $ lore memory list
 mem_c0f3…b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]

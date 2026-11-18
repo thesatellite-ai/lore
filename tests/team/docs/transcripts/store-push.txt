@@ -109,7 +109,7 @@ alice (work/website)$ lore store compact --store agency --before 30d --yes
   pushed store agency: commit 05513aa to branch main
 bob (work/website)$ lore sync
 lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
-store agency/client: pushed (sent 1, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 1, received 4, merged 0, refused 0); rows: 0 received
 store agency/org: up to date
 bob (work/website)$ lore memory list
 mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]

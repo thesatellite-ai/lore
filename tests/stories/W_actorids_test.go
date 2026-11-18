@@ -7,6 +7,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/logic/agentdetect"
+	"github.com/thesatellite-ai/lore/model/ids"
 )
 
 // wRuleActorID is devco:D-620's rule for the W and WW matrices: a human
@@ -22,8 +26,10 @@ var wRawActor = regexp.MustCompile(`act_[0-9a-f]{8,}`)
 
 // wActorIDOK are the places an actor id is the point of the text: a
 // command hint's named flag (--actor act_…, --id act_…), an "id:" or
-// "actor id" field, a JSON value, a row path (actors/act_…).
-var wActorIDOK = regexp.MustCompile(`(--[a-z][a-z-]*[ =]|\bid:\s*|\bactor id\s*|"\s*:\s*"|/)$`)
+// "actor id" field, a JSON value, a row path (actors/act_…), or the id in
+// parentheses right after the name ("ada via claude_code (act_…)": doctor's
+// actor_roster finding names the id readers will see beside the name).
+var wActorIDOK = regexp.MustCompile(`(--[a-z][a-z-]*[ =]|\bid:\s*|\bactor id\s*|"\s*:\s*"|/|[^\s(,:]\s\()$`)
 
 // wActorIDOps are the commands whose subject is the actor itself: the id
 // is printed as the row's own id beside the name (the roster, an actor's
@@ -43,9 +49,14 @@ var wActorIDOps = map[string]string{
 }
 
 // wKnownActors is the act_ ids a roster at the place names (the output of
-// `actor list --json` there): an id no store knows may be shown as the id
-// (the documented fallback), so the rule flags only these. nil (the list
-// was refused there) flags every id.
+// `actor list --json` there) and the detected-agent ids of each of them in
+// every tool lore detects: an agent's id derives from its person and tool,
+// so lore can name it "<person> via <tool>" before (or without) its own
+// actors row reaching this machine (devco D-652/D-661: doctor's Team
+// versions printed such an id, and the matrices let it pass as an unknown
+// writer). An id no store knows may be shown as the id (the documented
+// fallback), so the rule flags only these. nil (the list was refused
+// there) flags every id.
 func wKnownActors(listJSON string) map[string]bool {
 	found := wRawActor.FindAllString(listJSON, -1)
 	if len(found) == 0 {
@@ -54,8 +65,31 @@ func wKnownActors(listJSON string) map[string]bool {
 	known := map[string]bool{}
 	for _, id := range found {
 		known[id] = true
+		for _, a := range wAgentsOf(id) {
+			known[a] = true
+		}
 	}
 	return known
+}
+
+// wAgentsOf is every detected-agent id of the actor id, in every tool
+// agentdetect knows (both key widths); none when id is not an actor id.
+func wAgentsOf(id string) []string {
+	owner, err := ids.Parse[ids.Actor](id)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, d := range agentdetect.Builtin() {
+		agents, aerr := identity.DetectedAgentIDs(owner, d.Tool)
+		if aerr != nil {
+			continue
+		}
+		for _, a := range agents {
+			out = append(out, a.String())
+		}
+	}
+	return out
 }
 
 // wTableHeader is a list's header line: upper-case column names.
@@ -115,10 +149,25 @@ func TestStoryWRawActorIDs(t *testing.T) {
 		{out: id + "  ada@example.test  Ada Admin\n", args: []string{"member", "list"}},
 		{out: "by " + id + "\n", args: []string{"trash", "list", "--json"}},
 		{out: "tsk_1 was already done by " + id + "\n", args: []string{"task", "done"}, bad: true},
+		{out: "- actor_roster: store acme holds rows saved by ada via claude_code (" + id + "), an actor its roster does not hold\n"},
 	} {
 		if got := wRawActorIDs(c.args, c.out, nil); (len(got) > 0) != c.bad {
 			t.Errorf("wRawActorIDs(%q) = %q, want bad=%v", c.out, got, c.bad)
 		}
+	}
+	// devco:D-661: a detected agent of a known person is known too (its id
+	// derives from the person and the tool), so doctor's Team versions
+	// printing it raw fails the rule, as D-652's did
+	person, err := identity.ActorID("human:" + wAdmin.Email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents := wAgentsOf(person.String())
+	if len(agents) == 0 {
+		t.Fatal("no detected-agent ids derive from a known actor id")
+	}
+	if got := wRawActorIDs([]string{"doctor"}, "Team versions (newest save per writer and machine):\n  "+agents[0]+" on laptop: lore dev (2026-11-18)\n", wKnownActors(`{"id": "`+person.String()+`"}`)); len(got) == 0 {
+		t.Errorf("a known person's agent id in doctor output passed the rule")
 	}
 	// an id no roster here knows may stay the id (the fallback)
 	other := "act_fedcba9876543210fedcba9876543210"

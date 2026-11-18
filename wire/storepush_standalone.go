@@ -684,13 +684,24 @@ func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	if !rep.Offline && len(rep.Refused) == 0 && rep.Held == "" {
 		b.pushed(ctx, waiting)
 	}
+	return b.withEarlier(rep), nil
+}
+
+// withEarlier is rep with the counts of this command's earlier syncs of
+// the clone added (carry), which it then forgets: what a read's fetch
+// merged is this sync's to report.
+func (b *storePush) withEarlier(rep store.SyncReport) store.SyncReport {
 	rep.Sent += b.earlier.Sent
 	rep.Commits += b.earlier.Commits
 	rep.Received += b.earlier.Received
+	// devco D-660: the commits a read's fetch merged arrived too (a sync
+	// --setup refreshes each store before it syncs it): without them the
+	// line counted the rows instead ("received 7" when 5 commits arrived)
+	rep.CommitsIn += b.earlier.CommitsIn
 	rep.Merged = append(b.earlier.Merged, rep.Merged...)
 	rep.Others = addOthers(rep.Others, b.earlier.Others)
 	b.earlier = store.SyncReport{}
-	return rep, nil
+	return rep
 }
 
 // addOthers adds the per-folder counts of from to into (made when nil):
@@ -716,6 +727,7 @@ func (b *storePush) carry(rep store.SyncReport, err error) {
 	b.earlier.Sent += rep.Sent
 	b.earlier.Commits += rep.Commits
 	b.earlier.Received += rep.Received
+	b.earlier.CommitsIn += rep.CommitsIn
 	b.earlier.Merged = append(b.earlier.Merged, rep.Merged...)
 	b.earlier.Others = addOthers(b.earlier.Others, rep.Others)
 }

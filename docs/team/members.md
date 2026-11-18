@@ -62,7 +62,7 @@ A commit that puts a new person on the roster is held with one reason for all it
 
 Security note: the check trusts the commit's git author, which anyone with push access can set to another person's email. It stops a member's hand edit made under their own name and every lore command of a member or leaver; it is not proof against someone who forges an admin's authorship. Signed changes are a separate feature, not part of this release. Keep push access to the org's store to the people on its roster.
 
-A person who was removed and runs the join line again is told so: `E_REFUSED` "<email> is on <org>'s roster (…) but marked as left since <day>", with the admin's `lore actor rejoin --actor @<handle> --type employee` line, instead of "not a member".
+A person who was removed and runs the join line again is told so: `E_REFUSED` "<email> is on the roster of <org> (<org>/org) but marked as left since <day>", with the admin's `lore actor rejoin --actor @<handle> --type employee` line, instead of "not a member".
 
 ## Pending invites
 

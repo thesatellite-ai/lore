@@ -19,7 +19,7 @@ Tomas makes `@web` from his plain `work` folder (no repo there), lists the teams
 $ lore team add --handle @web --name 'Web' --members @tomas,@mira
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web (2 member(s)) added in agency org/
+✓ tem_7a67…9504 @web (2 member(s)) added on the roster of agency (agency/org)
 $ lore team list
 @web  Web  2 member(s)
 1 team
@@ -74,7 +74,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store ag
 $ lore team add --handle @web --name 'Web platform'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
+✓ tem_7a67…9504 @web (2 member(s)) updated on the roster of agency (agency/org)
 $ lore team list --json
 {
   "teams": [
@@ -114,15 +114,15 @@ A team cannot take a person's handle (an `@mention` would mean two things), only
 ```console
 # tomas, in ~
 $ lore team add --handle @mira
-ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster in agency org/; a team and a person cannot share one
+ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster of agency (agency/org); a team and a person cannot share one
   hint: choose another team handle (lore team add --handle @mira-team …)
 (exit 20)
 $ lore team add --handle @ops --members @nobody
-ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
+ERROR: [E_NOT_FOUND] no one is @nobody on the roster of agency (agency/org)
   hint: check the handle with lore actor list; a new person runs lore actor register (or joins from an invite) first
 (exit 27)
 $ lore team show --handle @ops
-ERROR: [E_NOT_FOUND] no team @ops on your copy of the roster in agency org/
+ERROR: [E_NOT_FOUND] no team @ops on your copy of the roster of agency (agency/org)
   hint: a teammate may have made it since your last sync: lore sync fetches the roster, then run this again; lore team list shows the teams you have
 (exit 27)
 ```
@@ -138,14 +138,14 @@ ERROR: [E_NOT_FOUND] no team @ops on your copy of the roster in agency org/
 $ lore team remove --handle @web
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
+✓ tem_7a67…9504 @web removed from the roster of agency (agency/org) (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
 $ lore team list --all
 @web  Web platform  2 member(s)  [removed]
 1 team
 $ lore team add --handle @web
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
+✓ tem_7a67…9504 @web (2 member(s)) updated on the roster of agency (agency/org)
 ```
 <!-- /example -->
 

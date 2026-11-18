@@ -237,7 +237,7 @@ func resolveProject(ctx context.Context, env Env, r profilestore.Roster, ref str
 	if id, perr := ids.Parse[ids.Project](ref); perr == nil {
 		return Project{ID: id}, nil
 	}
-	return Project{}, errs.New(errs.NotFound, "no project "+work.Quote(ref)+" on the roster in "+r.Where()).
+	return Project{}, errs.New(errs.NotFound, "no project "+work.Quote(ref)+" on the roster of "+r.Label()).
 		WithHint("run `lore project list` to see the projects, or name it by its prj_ id")
 }
 

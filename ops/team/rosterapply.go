@@ -168,7 +168,7 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 				actorFieldActive: value.BoolOf(true)}}, nil
 	}
 	if err != nil {
-		return RosterResult{}, errs.Prefix("the joining person is not on the roster in "+r.Where()+" after org.import", err).
+		return RosterResult{}, errs.Prefix("the joining person is not on the roster of "+r.Label()+" after org.import", err).
 			WithHint("lore actor register, then lore setup join again")
 	}
 	res.Actor = actor.ID.String()
@@ -523,7 +523,7 @@ func ApplyAdmin(ctx context.Context, d AdminDeps, req AdminRequest) (RosterResul
 	}
 	actor, err := r.Get(ctx, schema.TableActors, r.Caller().Any())
 	if err != nil {
-		return RosterResult{}, errs.Prefix("the admin is not on the roster in "+r.Where()+" after org.create", err).
+		return RosterResult{}, errs.Prefix("the admin is not on the roster of "+r.Label()+" after org.create", err).
 			WithHint("lore actor register")
 	}
 	res.Actor = actor.ID.String()
@@ -1072,7 +1072,7 @@ func AddIdentityEmail(ctx context.Context, profiles profilestore.Store, email st
 	}
 	actor, err := r.Get(ctx, schema.TableActors, r.Caller().Any())
 	if err != nil {
-		return RosterResult{}, errs.Prefix("you are not on the roster in "+r.Where(), err).WithHint("lore actor register")
+		return RosterResult{}, errs.Prefix("you are not on the roster of "+r.Label(), err).WithHint("lore actor register")
 	}
 	w := &writer{r: r, actor: actor, today: r.Today()}
 	if err = w.identity(ctx, []string{email}, email, ""); err != nil {
@@ -1161,7 +1161,7 @@ func ApplyJoinMember(ctx context.Context, d JoinDeps, req MemberJoinRequest) (Ro
 	}
 	actor, matched := findMember(ctx, r, emails)
 	if matched == "" {
-		return RosterResult{}, notMember(ctx, req.Org, r.Where(), emails)
+		return RosterResult{}, notMember(ctx, req.Org, r.Label(), emails)
 	}
 	res.Actor = actor.ID.String()
 	w := &writer{r: r, actor: actor, today: r.Today()}
@@ -1214,10 +1214,10 @@ func CheckMember(ctx context.Context, profiles profilestore.Store, org string, e
 	}
 	a, matched := findMember(ctx, r, emails)
 	if matched == "" {
-		if err := leftMember(ctx, r, org, r.Where(), emails); err != nil {
+		if err := leftMember(ctx, r, org, r.Label(), emails); err != nil {
 			return err
 		}
-		return notMember(ctx, org, r.Where(), emails)
+		return notMember(ctx, org, r.Label(), emails)
 	}
 	return addressClash(ctx, r, emails, a.ID.String())
 }
@@ -1226,7 +1226,7 @@ func CheckMember(ctx context.Context, profiles profilestore.Store, org string, e
 // offboarded (devco R-18: the join said "not a member" and asked for
 // member add, which a person still on the roster does not need); nil
 // when the primary email names no such person.
-func leftMember(ctx context.Context, r profilestore.Roster, org, where string, emails []string) error {
+func leftMember(ctx context.Context, r profilestore.Roster, org, label string, emails []string) error {
 	for _, e := range emails[:min(1, len(emails))] {
 		for _, ref := range []string{"email:" + e, humanKeyPrefix + e} {
 			a, err := r.ResolveActor(ctx, ref)
@@ -1241,7 +1241,7 @@ func leftMember(ctx context.Context, r profilestore.Roster, org, where string, e
 			if h := fieldText(a, schema.FieldActorHandle); h != "" {
 				handle = "@" + h
 			}
-			return errs.New(errs.Refused, e+" is on "+org+"'s roster ("+where+") but marked as left"+since+"; nothing was written").
+			return errs.New(errs.Refused, e+" is on the roster of "+label+" but marked as left"+since+"; nothing was written").
 				WithHint("ask an admin of " + org + " to run: lore actor rejoin --actor " + handle + " --type employee (or contractor, intern, client_contact), then run the join line again")
 		}
 	}
@@ -1281,9 +1281,9 @@ func findMember(ctx context.Context, r profilestore.Roster, emails []string) (ro
 // in each) needs nothing more, the identity step is answered again with
 // that address (devco N-4: the hint only asked the admin to add the
 // address given, which for a second org was the first org's address).
-func notMember(ctx context.Context, org, where string, emails []string) error {
+func notMember(ctx context.Context, org, label string, emails []string) error {
 	setup := cmp.Or(joinSetupOf(ctx), op.SetupOf(ctx), org)
-	return errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+org+" ("+where+"); nothing was written").
+	return errs.New(errs.NotFound, strings.Join(emails, ", ")+" is not a member of "+label+"; nothing was written").
 		WithHint("if the admin of " + org + " added you under another email, answer the identity step with it: lore setup apply --setup " + setup + " --step identity --answers '{\"email\":\"<that email>\"}', then run the join line again; else ask an admin to run: lore member add --email " + emails[0] + ", then lore setup join again (an outsider joins with an invite line instead)")
 }
 

@@ -128,7 +128,7 @@ func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 	r.dev2.MustLore("actor", "register").Never(t, "E_AMBIGUOUS_PROJECT")
 	// until dev2 syncs, dev1's assign names both steps (devco D-224)
 	r.dev1.Lore("task", "add", "too early", "--to", orgNorthwind, "--assign", "@dev2").
-		Fails(t, 27, "E_NOT_FOUND", "they run `lore actor register` and `lore sync` in a repo of the org, then `lore sync` here")
+		Fails(t, 27, "E_NOT_FOUND", "they run `lore actor register --setup <setup>` and `lore sync --setup <setup>`, then `lore sync` here")
 	r.dev2.MustLore("sync")
 	r.dev2.MustLore("actor", "list").Says(t, strayID).Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev1.MustLore("task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@dev2").Never(t, "E_AMBIGUOUS_PROJECT")

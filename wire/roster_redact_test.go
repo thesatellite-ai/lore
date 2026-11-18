@@ -40,14 +40,14 @@ func TestRosterRefusalsNameOrgFolder(t *testing.T) {
 			at   rosterAt
 			want string
 		}{
-			{"org", newRosterAt(store.Source("agency-notes"), "agency org/"), "agency org/"},
+			{"org", newRosterAt(store.Source("agency/org"), "agency org/"), "agency (agency/org)"},
 			{"repo", newRosterAt(store.SourceRepo, repoRosterWhere), repoRosterWhere},
 		} {
 			e := errs.EnvelopeOf(c.err(m.at)).Error
 			if e.Code != c.code {
 				t.Errorf("%s / %s: code %s, want %s", c.name, m.mode, e.Code, c.code)
 			}
-			if !strings.Contains(e.Message, "on the roster in "+m.want) || strings.Contains(e.Message+e.Hint, redactedText) {
+			if !strings.Contains(e.Message, "the roster of "+m.want) || strings.Contains(e.Message+e.Hint, redactedText) {
 				t.Errorf("%s / %s: message %q does not name the roster as %q", c.name, m.mode, e.Message, m.want)
 			}
 			if c.hint && e.Hint == "" {
