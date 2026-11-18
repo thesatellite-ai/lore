@@ -526,3 +526,27 @@ func parseConfigValue(v string) (string, bool) {
 	}
 	return b.String(), true
 }
+
+// IncludePaths is the include.path and includeIf.<cond>.path values of
+// the config file at path, in file order, as written (relative and ~/
+// paths unresolved), read without a git process (devco:D-624: doctor's
+// setup-health freshness check ran `git config --file <f> --get-regexp`
+// per global config file and went over its git budget). ok=false when the
+// file uses syntax parseLocalConfig does not read (the caller asks git);
+// a missing file is no paths and ok.
+func IncludePaths(path string) ([]string, bool) {
+	entries, ok := parseLocalConfig(path)
+	if !ok {
+		return nil, false
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.hasValue {
+			continue
+		}
+		if e.key == "include.path" || strings.HasPrefix(e.key, "includeif.") && strings.HasSuffix(e.key, ".path") {
+			out = append(out, e.value)
+		}
+	}
+	return out, true
+}
