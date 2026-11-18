@@ -149,7 +149,12 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			// client repo (repoIsClient fails closed: an unknown answer keeps
 			// the client wording)
 			client, _ := repoIsClient(ctx, opts)
-			repo.MarkReadOnlyBecause(clientRepoWriteRefusal(remote, orgAliases(ctx, opts, repo.Dir())[attach.ReservedTeam], !client))
+			linked := orgAliases(ctx, opts, repo.Dir())[attach.ReservedTeam]
+			target := ""
+			if linked == "" && opts.RepoLinkTarget != nil {
+				target = opts.RepoLinkTarget(ctx) // devco:D-670: the link's folder, not attached here
+			}
+			repo.MarkReadOnlyBecause(clientRepoWriteRefusal(remote, linked, target, !client))
 		}
 	}
 	st.linkedByRemote = remote

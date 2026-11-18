@@ -259,6 +259,9 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.RepoLinkedByRemote == nil {
 		o.RepoLinkedByRemote = r.LinkedByRemote
 	}
+	if o.RepoLinkTarget == nil {
+		o.RepoLinkTarget = r.LinkTarget
+	}
 	if o.ClientRepo == nil {
 		o.ClientRepo = r.ClientRepo
 	}
@@ -331,6 +334,46 @@ func (r *OrgResolution) LinkedByRemote(ctx context.Context) string {
 		return ""
 	}
 	return s.LinkedByRemote
+}
+
+// LinkTarget is Options.RepoLinkTarget: "<store short name>/<folder>" of
+// the link that names this repo (the default link first, else the first;
+// the links of an old store copy, else the moved link, when no fresh one
+// decides), by the short name of the link's store in the org entry the
+// link belongs to ("" when the entry or the store is not in config.yaml,
+// or no link names the repo). The short name, not the entry name: the
+// entry name answers --to only while the entry's folder is attached, and
+// this is the --to for a repo whose linked folder is not (devco:D-670).
+func (r *OrgResolution) LinkTarget(ctx context.Context) string {
+	s, err := r.Situation(ctx)
+	if err != nil || s == nil || s.Config == nil {
+		return ""
+	}
+	links := s.Result.Links
+	if len(links) == 0 {
+		links = s.OldLinks
+	}
+	if len(links) == 0 && s.Result.MovedLink != nil {
+		links = []orgresolve.Link{*s.Result.MovedLink}
+	}
+	var pick *orgresolve.Link
+	for i := range links {
+		if pick == nil || (links[i].Default && !pick.Default) {
+			pick = &links[i]
+		}
+	}
+	if pick == nil || pick.Folder == "" {
+		return ""
+	}
+	org := s.Config.FindOrg(pick.Entry)
+	if org == nil {
+		return ""
+	}
+	sc := org.StoreFor(pick.StoreURL)
+	if sc == nil || sc.ShortName() == "" {
+		return ""
+	}
+	return sc.ShortName() + targetSep + strings.Trim(pick.Folder, "/")
 }
 
 // Org is Options.Org: the resolved entry's name and identity; nil when no

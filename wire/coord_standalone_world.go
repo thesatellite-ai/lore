@@ -491,10 +491,38 @@ const (
 	envPushClaimsOn = "1"
 )
 
-// requirePushAsked refuses a new claim or hold (what names it) that would
-// push refs/lore/signals to this code repo's own remote when the person
-// did not ask for that push (asked: the command's --push; or
-// LORE_PUSH_CLAIMS=1; or live.autopush: true in config.yaml, the choice
+// pushAsk is what a claim or hold refused for want of --push prints as
+// its next step (devco:D-669): the noun of the refusal ("a claim", "a
+// hold"), the exact command that pushes it now (the person's own command
+// with every flag they gave, plus --push) and, where there is one, the
+// command that does the work without a claim. Why: the refusal printed
+// "run the command again with --push" and "`lore task start --id <id>`
+// works on a task without a claim" for every refusal, a hold's included:
+// a placeholder where the id was known, and a task step in a hold refusal.
+type pushAsk struct {
+	what    string   // the noun the refusal names: "a claim", "a hold", …
+	rerun   []string // the command after "lore", without --push (pushRerun appends it)
+	without []string // a command after "lore" that needs no claim; nil when none
+}
+
+// claimAsk is the pushAsk of `task claim` (and of anything that names the
+// claim of one task): the claim again with --push, or `task start`,
+// which marks the task in progress with no claim and no push.
+func claimAsk(what string, rerun []string, id string) pushAsk {
+	return pushAsk{what: what, rerun: rerun, without: []string{"task", "start", "--id", id}}
+}
+
+// pushNeeded reports whether a new claim or hold here must be asked for
+// with --push (requirePushAsked): the place has a remote, and neither
+// LORE_PUSH_CLAIMS=1 nor live.autopush: true gives a standing go-ahead.
+func (w *coordWorld) pushNeeded() bool {
+	return !w.autopushChosen && w.spot.remote != nil && os.Getenv(envPushClaims) != envPushClaimsOn
+}
+
+// requirePushAsked refuses a new claim or hold (ask names it and its next
+// step) that would push refs/lore/signals to this code repo's own remote
+// when the person did not ask for that push (asked: the command's --push;
+// or LORE_PUSH_CLAIMS=1; or live.autopush: true in config.yaml, the choice
 // to push every write at once). Owner rule D-15: nothing reaches a remote without
 // an explicit push, sync or git push, and a claim is pushed in the same
 // command because it is a lease two people race for: it cannot wait for
@@ -503,18 +531,44 @@ const (
 // remote fails as before (offline). Renewing, releasing or finishing a
 // claim already pushed needs no new go-ahead: it changes what the person
 // published.
-func (w *coordWorld) requirePushAsked(asked bool, what string) error {
-	if asked || w.autopushChosen || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+func (w *coordWorld) requirePushAsked(asked bool, ask pushAsk) error {
+	if asked || !w.pushNeeded() {
 		return nil
 	}
+	hint := pushAskHint(ask)
 	if w.spot.store {
 		// devco:D-580: a linked store's signals ref is a remote too; a claim
 		// there was pushed unasked although --push says it is refused.
-		return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through the signals ref %s of store %s on the store's remote, and lore pushes nothing to a remote unless you ask; nothing was written", what, w.spot.ref, w.spot.label)).
-			WithHint("run the command again with --push to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim); `lore task start --id <id>` works on a task without a claim")
+		return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through the signals ref %s of store %s on the store's remote, and lore pushes nothing to a remote unless you ask; nothing was written", ask.what, w.spot.ref, w.spot.label)).
+			WithHint(hint).WithNext(pushRerun(ask.rerun)[0], pushRerun(ask.rerun)[1:]...)
 	}
-	return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through %s on this repo's remote %s, and lore pushes nothing to a code remote unless you ask; nothing was written", what, signals.CodeRepoRef, w.remoteName)).
-		WithHint("run the command again with --push to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim); `lore task start --id <id>` works on a task without a claim")
+	return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through %s on this repo's remote %s, and lore pushes nothing to a code remote unless you ask; nothing was written", ask.what, signals.CodeRepoRef, w.remoteName)).
+		WithHint(hint).WithNext(pushRerun(ask.rerun)[0], pushRerun(ask.rerun)[1:]...)
+}
+
+// pushRerun is the argv ("lore", …) of rerun with --push appended.
+func pushRerun(rerun []string) []string {
+	return append(append([]string{defaultCommandName}, rerun...), "--push")
+}
+
+// pushAskHint is the hint of a push refusal: the exact command that pushes
+// now, the standing go-ahead, and the claim-free command when there is one.
+func pushAskHint(ask pushAsk) string {
+	h := "run `" + printedCommand(pushRerun(ask.rerun)) + "` to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim and hold)"
+	if len(ask.without) > 0 {
+		h += "; `" + printedCommand(append([]string{defaultCommandName}, ask.without...)) + "` starts the task without a claim and pushes nothing"
+	}
+	return h
+}
+
+// printedCommand is argv as a person pastes it into a POSIX shell: each
+// word that a shell would split or expand is single-quoted (shellWord).
+func printedCommand(argv []string) string {
+	words := make([]string, len(argv))
+	for i, a := range argv {
+		words[i] = shellWord(a)
+	}
+	return strings.Join(words, " ")
 }
 
 // taskInRepo reports whether the claimed task row lives in this checkout's
@@ -1156,7 +1210,7 @@ func docValue(f schema.FieldDef, v canonjson.Value) (value.Value, error) {
 // that names `lore task next --claim` or `lore task claim --id …` appends
 // it, so the printed next step is never the claim refusal (devco:D-607).
 func (w *coordWorld) claimPushFlag() string {
-	if w == nil || w.requirePushAsked(false, "a claim") == nil {
+	if w == nil || !w.pushNeeded() {
 		return ""
 	}
 	return " --push"

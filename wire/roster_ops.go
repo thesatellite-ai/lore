@@ -307,8 +307,12 @@ func (r rosterAt) of() string { return "the roster of " + r.label() }
 
 // handleTakenErr refuses a handle another actor or team holds on r.
 func (r rosterAt) handleTakenErr(handle, holder string) error {
+	org := r.org // devco:D-670: the roster's org is known; "<org>" only for a roster with none
+	if org == "" {
+		org = "<org>"
+	}
 	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on %s", handle, holder, r.of())).
-		WithHint("choose another handle (`lore identity set --org <org> --handle <h>`); handles are unique per roster")
+		WithHint("choose another handle (`lore identity set --org " + org + " --handle <h>`); handles are unique per roster")
 }
 
 // handleMissErr refuses a handle no active actor of r has.

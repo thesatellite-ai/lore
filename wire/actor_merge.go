@@ -158,7 +158,7 @@ func (a *App) MergeActor(ctx context.Context, in opsinfra.ActorMergeIn) (opsinfr
 	f, t := fromCopies[0].r, intoCopies[0].r
 	if fk, tk := actorKindOf(fieldText(f, actorFieldKind)), actorKindOf(fieldText(t, actorFieldKind)); fk != tk && !agentOfPerson(fromCopies, fk, tk, into) {
 		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is a "+fk+" and "+in.Into+" a "+tk+"; only one person's (or one agent's) two ids are merged").
-			WithHint("check the ids with `lore actor show --id <id>`")
+			WithHint("check the ids with `lore actor show --id " + in.From + "` and `lore actor show --id " + in.Into + "`") // devco:D-670: the ids are known
 	}
 	if m := fieldText(f, schema.FieldActorMergedInto); m != "" && m != into.String() {
 		return opsinfra.ActorMergeOut{}, errs.New(errs.Refused, actorMergeVerb+": "+in.From+" is already merged into "+m).

@@ -51,14 +51,47 @@ func TestClientRepoWriteRefusalNamesCause(t *testing.T) {
 }
 
 // TestClientRepoWriteRefusalHint: the hint names the linked folder's
-// attached name when there is one, else how to find it.
+// attached name when there is one; for a link whose folder is not
+// attached, the link's own --to (devco:D-670: it printed "--to
+// <store>/<folder>", a placeholder where the link names the value); and
+// with no link known here, whoami, with no --to at all.
 func TestClientRepoWriteRefusalHint(t *testing.T) {
 	var e *errs.Error
-	if !errors.As(clientRepoWriteRefusal("git.example.test/c/r", "acme", false), &e) || !strings.Contains(e.Hint, "--to acme") {
+	if !errors.As(clientRepoWriteRefusal("git.example.test/c/r", "acme", "", false), &e) || !strings.Contains(e.Hint, "--to acme") {
 		t.Fatalf("linked hint: %+v", e)
 	}
-	if !errors.As(clientRepoWriteRefusal("git.example.test/c/r", "", false), &e) || !strings.Contains(e.Hint, "lore whoami") || !strings.Contains(e.Hint, "--to <store>/<folder>") {
-		t.Fatalf("unlinked hint: %+v", e)
+	if !errors.As(clientRepoWriteRefusal("git.example.test/c/r", "", "kb-acme/web", false), &e) || !strings.Contains(e.Hint, "--to kb-acme/web") || strings.ContainsAny(e.Hint, "<>") {
+		t.Fatalf("not-attached hint: %+v", e)
+	}
+	if !errors.As(clientRepoWriteRefusal("git.example.test/c/r", "", "", false), &e) || !strings.Contains(e.Hint, "lore whoami") || strings.ContainsAny(e.Hint, "<>") || strings.Contains(e.Hint, "--to") {
+		t.Fatalf("unknown-link hint: %+v", e)
+	}
+}
+
+// TestLinkedRepoNotAttachedNamesTheLink is devco:D-670 through open: a
+// repo a store links by its remote, whose linked folder the org does not
+// attach here, is refused naming the link's --to from RepoLinkTarget.
+func TestLinkedRepoNotAttachedNamesTheLink(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	app := newTestAppWith(t, repo, func(o *Options) {
+		o.RepoLinkedByRemote = func(context.Context) string { return "git.example.test/acme/web" }
+		o.RepoIsClient = func(context.Context) (bool, error) { return false, nil }
+		o.RepoLinkTarget = func(context.Context) string { return "kb-acme/web" }
+	})
+	st, err := app.state(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	werr := st.backends[0].Write(context.Background(), nil)
+	var le *errs.Error
+	if !errors.Is(werr, store.ErrReadOnly) || !errors.As(werr, &le) {
+		t.Fatalf("write to a linked repo: %v, want E_STORE_READ_ONLY", werr)
+	}
+	if !strings.Contains(le.Hint, "--to kb-acme/web") || strings.ContainsAny(le.Hint, "<>") {
+		t.Errorf("devco:D-670: hint %q does not name the link's --to kb-acme/web", le.Hint)
 	}
 }
 
@@ -86,6 +119,7 @@ func TestOwnLinkedRepoWriteRefusalIsNotClient(t *testing.T) {
 			app := newTestAppWith(t, repo, func(o *Options) {
 				o.RepoLinkedByRemote = func(context.Context) string { return "git.example.test/acme/web" }
 				o.RepoIsClient = func(context.Context) (bool, error) { return tc.client, nil }
+				o.RepoLinkTarget = func(context.Context) string { return "kb-acme/web" } // the link's folder, not attached (D-670)
 			})
 			st, err := app.state(context.Background())
 			if err != nil {
@@ -95,8 +129,8 @@ func TestOwnLinkedRepoWriteRefusalIsNotClient(t *testing.T) {
 			if werr := st.backends[0].Write(context.Background(), nil); !errors.As(werr, &le) || !errors.Is(werr, store.ErrReadOnly) {
 				t.Fatalf("write: %v, want E_STORE_READ_ONLY", werr)
 			}
-			if !strings.Contains(le.Message, tc.want) || strings.Contains(le.Message, tc.never) || !strings.Contains(le.Hint, "--to ") {
-				t.Fatalf("refusal %q / %q: want %q, never %q, a --to hint", le.Message, le.Hint, tc.want, tc.never)
+			if !strings.Contains(le.Message, tc.want) || strings.Contains(le.Message, tc.never) || !strings.Contains(le.Hint, "--to kb-acme/web") {
+				t.Fatalf("refusal %q / %q: want %q, never %q, the link's --to hint", le.Message, le.Hint, tc.want, tc.never)
 			}
 		})
 	}

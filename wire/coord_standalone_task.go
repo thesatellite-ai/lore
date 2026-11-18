@@ -48,7 +48,7 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 // claimOn is the claim of in.ID on world w: task claim's, and the store
 // task queue's claim of the task it ranked first (devco:D-666).
 func (h standaloneCoord) claimOn(ctx context.Context, w *coordWorld, in opscoord.ClaimIn) (opscoord.Report, error) {
-	if err := w.requirePushAsked(in.Push, "a claim"); err != nil {
+	if err := w.requirePushAsked(in.Push, claimAsk("a claim", claimRerun(in), in.ID)); err != nil {
 		return opscoord.Report{}, err
 	}
 	env := w.env(ctx)
@@ -371,7 +371,7 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 		return opscoord.Report{}, err
 	}
 	env := w.env(ctx)
-	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, "a revoke"); err != nil {
+	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, pushAsk{what: "a revoke", rerun: withFlag([]string{"task", "revoke", "--id", in.ID}, "--from", in.From)}); err != nil {
 		return opscoord.Report{}, err
 	}
 	removed, err := coord.Override(ctx, env, in.ID, coord.OverrideRevoke, nil)
@@ -385,13 +385,57 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 	return opscoord.Report{Lines: append(lines, w.overridePushedLine(removed.Holder != w.actorID))}, nil
 }
 
+// claimRerun is the `task claim` the person ran (every flag they gave,
+// named), without --push: the command a push refusal prints with --push
+// appended (devco:D-669).
+func claimRerun(in opscoord.ClaimIn) []string {
+	argv := []string{"task", "claim", "--id", in.ID}
+	for _, o := range in.Owns {
+		argv = append(argv, "--owns", o)
+	}
+	argv = withSwitch(argv, "--strict", in.Strict)
+	argv = withSwitch(argv, "--coordinate", in.Coordinate)
+	return withFlag(argv, "--from", in.From)
+}
+
+// nextRerun is the `task next --claim` the person ran (its filters and
+// --owns), without --push (devco:D-669). It names no task: task next
+// picks it, so there is no claim-free command with a known id to offer.
+func nextRerun(in opscoord.NextIn) []string {
+	argv := []string{"task", "next", "--claim"}
+	argv = withFlag(argv, "--mission", in.Mission)
+	argv = withFlag(argv, "--repo", in.Repo)
+	argv = withFlag(argv, "--role", in.Role)
+	argv = withFlag(argv, "--store", in.Store) // devco:D-666: a queue of an org store from home
+	for _, o := range in.Owns {
+		argv = append(argv, "--owns", o)
+	}
+	return withSwitch(argv, "--why", in.Why)
+}
+
+// withFlag appends "flag value" to argv when value is set.
+func withFlag(argv []string, flag, value string) []string {
+	if value == "" {
+		return argv
+	}
+	return append(argv, flag, value)
+}
+
+// withSwitch appends a boolean flag to argv when on.
+func withSwitch(argv []string, flag string, on bool) []string {
+	if !on {
+		return argv
+	}
+	return append(argv, flag)
+}
+
 // requireOverridePush is requirePushAsked for a person's override
 // (revoke, reassign; devco:S-17): it asks only when the override changes
 // the signals ref, that is when the task has a claim or a revoke marker on
 // it. An override of a task nobody holds writes its row only, which waits
 // for lore sync like every other row.
-func (w *coordWorld) requireOverridePush(ctx context.Context, env coord.Env, id string, asked bool, what string) error {
-	if asked || w.autopushChosen || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+func (w *coordWorld) requireOverridePush(ctx context.Context, env coord.Env, id string, asked bool, ask pushAsk) error {
+	if asked || !w.pushNeeded() {
 		return nil
 	}
 	v, err := env.Signals.Read(ctx)
@@ -403,7 +447,7 @@ func (w *coordWorld) requireOverridePush(ctx context.Context, env coord.Env, id 
 	if !claimed && !marked {
 		return nil
 	}
-	return w.requirePushAsked(false, what)
+	return w.requirePushAsked(false, ask)
 }
 
 // overridePushedLine says what a revoke sent and to where (devco:S-17: the
@@ -438,7 +482,7 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 	}
 	claim := in.Claim && !in.DryRun
 	if claim {
-		if err = w.requirePushAsked(in.Push, "the claim task next takes"); err != nil {
+		if err = w.requirePushAsked(in.Push, pushAsk{what: "the claim task next takes", rerun: nextRerun(in)}); err != nil {
 			return opscoord.NextOut{}, err
 		}
 	}

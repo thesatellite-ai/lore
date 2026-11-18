@@ -83,6 +83,7 @@ func TestStoryWUPrintedCommandsWork(t *testing.T) {
 // and fails on a refusal of the kind a wrong hint gives.
 func wuRunPrinted(t *testing.T, w *wwWorld, id, dir, out, marker string) {
 	t.Helper()
+	wuNoPlaceholder(t, id, out)
 	cmds := wuPrinted(out, marker)
 	if len(cmds) == 0 {
 		t.Errorf("%s: no %q command printed:\n%s", id, marker, out)
@@ -93,6 +94,31 @@ func wuRunPrinted(t *testing.T, w *wwWorld, id, dir, out, marker string) {
 		t.Logf("printed command lore %s:\n%s", strings.Join(c, " "), r)
 		if bad := wuBadRefusal(r.Code, r.Out()); bad != "" {
 			t.Errorf("%s: the printed command `lore %s` fails where printed (%s):\n%s", id, strings.Join(c, " "), bad, r)
+		}
+	}
+}
+
+// wuPlaceholders are the prose placeholders a printed command must not
+// carry where the command that printed it knows the value (devco:D-670:
+// "--to <store>/<folder>" in a linked repo, "--id <id>" after --id).
+var wuPlaceholders = []string{"<store>", "<folder>", "<org>", "<id>", "<setup>"}
+
+// wuNoPlaceholder fails on a `lore …` command in out that still carries one
+// of wuPlaceholders. Every caller runs in a world whose store, folder, org,
+// ids and setup are all known, so an unfilled one is a hint that cannot be
+// run as printed (the owner's rule: no prose placeholder where the real
+// value is known).
+func wuNoPlaceholder(t *testing.T, id, out string) {
+	t.Helper()
+	for _, line := range strings.Split(out, "\n") {
+		i := strings.Index(line, "lore ")
+		if i < 0 {
+			continue
+		}
+		for _, p := range wuPlaceholders {
+			if strings.Contains(line[i:], p) {
+				t.Errorf("%s: a printed command carries the placeholder %s where the value is known:\n%s", id, p, line)
+			}
 		}
 	}
 }

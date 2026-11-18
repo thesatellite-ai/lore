@@ -16,6 +16,9 @@ package stories
 //	D-657: a heartbeat and a hold release with nothing pushed leave the
 //	       remote as it was; after a pushed claim and a pushed hold they
 //	       move it (the renewal and the release reach the remote)
+//	D-669: the refusal prints the exact command that pushes (the real id,
+//	       --push), run here as printed; a hold's refusal prints the hold
+//	       again with --push and no task step
 
 import (
 	"os/exec"
@@ -85,8 +88,31 @@ func TestStoryWUClaimPushOnlyWhenAsked(t *testing.T) {
 		t.Errorf("devco:D-657: a hold release with no pushed hold moved the store remote's %s (%q -> %q):\n%s", ref, before, got, r)
 	}
 
-	r = m.Lore(app, "task", "claim", "--id", id, "--push").OK(t)
-	t.Logf("claim --push:\n%s", r)
+	// D-669: a hold refused for want of --push names the hold again, with
+	// --push and the name given, never a task step or a placeholder
+	r = m.Lore(app, "hold", "claim", "--name", "ci-suite")
+	t.Logf("hold claim without --push:\n%s", r)
+	if r.Code == 0 || !strings.Contains(r.Out(), "`lore hold claim --name ci-suite --push`") || strings.Contains(r.Out(), "task start") {
+		t.Errorf("devco:D-669: the hold refusal does not print `lore hold claim --name ci-suite --push` alone:\n%s", r)
+	}
+	wuNoPlaceholder(t, "devco:D-669", r.Out())
+	if got := store.Rev(ref); got != before {
+		t.Errorf("devco:D-669: the refused hold moved the store remote's %s", ref)
+	}
+
+	// D-669: the claim's refusal printed the push command; it is run here
+	// exactly as printed (it is the claim --push of this step)
+	r = m.Lore(app, "task", "claim", "--id", id)
+	wuNoPlaceholder(t, "devco:D-669", r.Out())
+	printed := wuPrinted(r.Out(), "run `")
+	if len(printed) != 1 || strings.Join(printed[0], " ") != "task claim --id "+id+" --push" {
+		t.Fatalf("devco:D-669: the claim refusal does not print `lore task claim --id %s --push`: %q\n%s", id, printed, r)
+	}
+	if !strings.Contains(r.Out(), "`lore task start --id "+id+"`") {
+		t.Errorf("devco:D-669: the claim refusal does not name task start with the task's id:\n%s", r)
+	}
+	r = m.Lore(app, printed[0]...).OK(t)
+	t.Logf("claim --push (as printed):\n%s", r)
 	claimed := store.Rev(ref)
 	if claimed == "" || claimed == before {
 		t.Fatalf("devco:D-580: claim --push did not reach the store remote's %s", ref)
