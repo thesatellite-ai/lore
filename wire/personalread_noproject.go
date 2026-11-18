@@ -10,10 +10,19 @@ package wire
 // hold. The reads are served the way the write is:
 //
 //	runPersonalReadNoProject ── not a knowledge read / project here ─▶ usual path
+//	                         ├─ a store checkout (clone) ─▶ usual path (its folder)
 //	                         ├─ no personal store set up ─▶ usual path (its refusal)
 //	                         └─ the personal store alone ─▶ a opened on `me`, eng.Run
 //
 // Nothing is created in the repo (the store-only open has no repo store).
+//
+// devco D-432: a store's git clone is a work tree with no .lore/ either, so
+// once a setup covering it named a personal store (what `setup join` gives
+// every member), every plain read in a clone folder was served by the
+// personal store alone: "(no rules)" there, while sql and --store
+// <org>/<folder> listed the folder's rows. A store checkout is never "a repo
+// with no lore project": its open reads the folder it runs in
+// (storehere.go), with or without a personal store.
 
 import (
 	"context"
@@ -51,7 +60,7 @@ func personalReadOp(name string) bool {
 // the personal store when the command runs in a git repo with no lore
 // project; handled is false when the command takes the usual path.
 func (a *App) runPersonalReadNoProject(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (res op.Result, handled bool, err error) {
-	if e.Spec().Access != op.AccessRead || !personalReadOp(e.Spec().Name) || !insideWorkTree(ctx, a.opts.RepoDir) || !readWithoutProject(ctx, a.opts) {
+	if e.Spec().Access != op.AccessRead || !personalReadOp(e.Spec().Name) || !personalReadPlace(ctx, a.opts) {
 		return op.Result{}, false, nil
 	}
 	me, found, _, err := a.baseStore(ctx, attach.ReservedMe)
@@ -73,6 +82,14 @@ func (a *App) runPersonalReadNoProject(ctx context.Context, e op.Entry, d op.Dec
 	}
 	res, err = eng.Run(ctx, e, d, c)
 	return res, true, err
+}
+
+// personalReadPlace reports whether opts.RepoDir is where a knowledge read
+// is served by the personal store alone: a git repo with no lore project
+// (readWithoutProject), never a store's checkout, whose own open reads the
+// store folder it runs in (devco D-432: the personal store shadowed it).
+func personalReadPlace(ctx context.Context, opts Options) bool {
+	return !inStore(opts.RepoDir) && insideWorkTree(ctx, opts.RepoDir) && readWithoutProject(ctx, opts)
 }
 
 // clientPersonalOnlyNote is the line a read in a client repo no folder is
