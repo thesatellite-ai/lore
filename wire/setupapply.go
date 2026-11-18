@@ -725,6 +725,12 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		}
 		e.Kind, e.Org = onboard.KindMember, inv.Org
 		e.Identity = onboard.SetupIdentity{} // a team setup reads orgs[<org>].identity (3.2); a solo one turned member drops its own
+		// devco D-626: the org entry is checked before anything is written
+		// (retryJoinIdentity below rewrites the entry): a refused join
+		// leaves config.yaml, the entry and the setup as they were.
+		if _, err = team.CheckJoinEntry(ctx, ap.a, inv.Org, inv.Store); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{inv.Store, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}

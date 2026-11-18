@@ -172,7 +172,7 @@ invites:
 
 When Mira runs `lore setup join --invite <line>` and finishes the join step (see [Guided setup](guided-setup.md#step-6--join-a-team-from-an-invite)), lore, in her name:
 
-1. imports the org entry from the store (unless her machine already has one for that store; an entry of the same name for another store is refused with `E_SETUP_ORG_MISMATCH`);
+1. imports the org entry from the store (unless her machine already has one for that store, in any spelling of its url: `git@<alias>:<owner>/<repo>.git` through an ssh host alias of github.com is the same store as `git@github.com:<owner>/<repo>.git`, and the entry keeps the spelling it has; an entry of the same name for another store is refused with `E_SETUP_ORG_MISMATCH` before anything is written, so `config.yaml`, the org entry and the setup stay as they were);
 2. records her email addresses and GitHub user as identity contacts on the roster;
 3. opens a stint of the invite's type, starting today;
 4. adds a membership with the invite's roles on each of its projects;
