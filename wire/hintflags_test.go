@@ -129,3 +129,42 @@ func TestHomeHintAlwaysNamesStoreAndSetup(t *testing.T) {
 		}
 	}
 }
+
+// TestNoStoreHintNamesOnlyFlagsTheCommandTakes (devco:D-674): the refusal
+// outside a repo where no org's setup covers the folder (runOnDefaultStore)
+// had one fixed hint, "--store … (a write: --to …) or --setup", for every
+// command, so `lore context` from the home folder named --to, which context
+// does not take. Every operation's hint, with and without --setup, names
+// --to only when the operation takes it, --store only when it takes it,
+// and --setup only when it was not given.
+func TestNoStoreHintNamesOnlyFlagsTheCommandTakes(t *testing.T) {
+	reg, err := Registry(&App{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range reg.Entries() {
+		to, st, _ := storeFlagsOf(e)
+		for _, setup := range []bool{false, true} {
+			h := noStoreHint(e, setup)
+			if !to && strings.Contains(h, "--to") {
+				t.Errorf("%s takes no --to, but its no-store hint names it (setup given %v): %s", e.Spec().Name, setup, h)
+			}
+			if !st && strings.Contains(h, "--store <org>[/<folder>]") && !strings.Contains(h, notRoutedByStore) {
+				t.Errorf("%s takes no --store, but its no-store hint names it (setup given %v): %s", e.Spec().Name, setup, h)
+			}
+			if setup && strings.Contains(h, "--setup <setup>") && !strings.Contains(h, "lore store list --setup <setup>") {
+				t.Errorf("%s was given --setup, but its no-store hint tells to add it: %s", e.Spec().Name, h)
+			}
+			if !setup && (to || st) && !strings.Contains(h, "--setup <setup>") {
+				t.Errorf("%s's no-store hint does not name --setup: %s", e.Spec().Name, h)
+			}
+		}
+	}
+	e, ok := reg.Lookup("context.fetch")
+	if !ok {
+		t.Fatal("no op context.fetch")
+	}
+	if h := noStoreHint(e, false); strings.Contains(h, "--to") || !strings.Contains(h, "--store <org>[/<folder>]") || !strings.Contains(h, "--setup <setup>") {
+		t.Errorf("context's no-store hint = %q, want --store and --setup and no --to", h)
+	}
+}

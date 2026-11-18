@@ -11,7 +11,7 @@ The first line starts with `ERROR:` and the code. The line under it, starting wi
 # alice, in ~
 $ lore rule list
 ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
-  hint: name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>) or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 ```
 <!-- /example -->
@@ -468,7 +468,7 @@ $ lore rule list --json
   "error": {
     "code": "E_NOT_A_STORE",
     "message": "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read",
-    "hint": "name the store with --store \u003corg\u003e[/\u003cfolder\u003e] (a write: --to \u003corg\u003e/\u003cfolder\u003e) or a setup with --setup \u003csetup\u003e; lore store list and lore setup list show them, or cd into a repo",
+    "hint": "name the store with --store \u003corg\u003e[/\u003cfolder\u003e] or a setup with --setup \u003csetup\u003e; lore store list and lore setup list show them, or cd into a repo",
     "exit": 19,
     "class": "guard",
     "retryable": false,
