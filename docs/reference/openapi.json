@@ -60870,6 +60870,10 @@
                     "type": "string",
                     "description": "read this field's value from stdin (keeps it out of shell history)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "unset": {
                     "type": "array",
                     "description": "field to remove (repeatable)",
@@ -61428,6 +61432,10 @@
                   "note": {
                     "type": "string",
                     "description": "what was checked (kept until the next check)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   },
                   "where": {
                     "type": "array",
@@ -64029,6 +64037,10 @@
                     "type": "string",
                     "description": "read this field's value from stdin (keeps it out of shell history)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "unset": {
                     "type": "array",
                     "description": "field to remove (repeatable)",
@@ -64207,6 +64219,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  }
+                },
                 "additionalProperties": false
               }
             }
@@ -64368,6 +64386,10 @@
                   "note": {
                     "type": "string",
                     "description": "what was checked (kept until the next check)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   },
                   "where": {
                     "type": "array",
@@ -65219,6 +65241,10 @@
                     "type": "string",
                     "description": "the resource that survives (same kind)"
                   },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
+                  },
                   "yes": {
                     "type": "boolean",
                     "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
@@ -65381,6 +65407,10 @@
                   "rewrite_rows": {
                     "type": "boolean",
                     "description": "also rewrite the ref label in every resource that refs this one now (one batch)"
+                  },
+                  "store": {
+                    "type": "string",
+                    "description": "read this store: \u003corg\u003e (every folder of the org), \u003corg\u003e/\u003cfolder\u003e, repo, or a store's name (default every attached store)"
                   }
                 },
                 "required": [
