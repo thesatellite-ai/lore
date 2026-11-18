@@ -61,7 +61,7 @@ func (h standaloneCoord) TaskReassign(ctx context.Context, in opscoord.ReassignI
 	by := w.actorID
 	gone := h.goneActors(ctx)
 	env := w.env(ctx)
-	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, "a reassign of a claimed task"); err != nil {
+	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, pushAsk{what: "a reassign of a claimed task", rerun: reassignRerun(in)}); err != nil {
 		return opscoord.Report{}, err
 	}
 	removed, err := coord.OverrideChecked(ctx, env, in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
@@ -156,8 +156,13 @@ func (h standaloneCoord) TaskReassignPlan(ctx context.Context, in opscoord.Reass
 // the new assignee's actor id on the repo roster.
 func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.ReassignIn) (*coordWorld, string, error) {
 	if strings.TrimSpace(in.Assign) == "" {
+		// devco:D-670: the id the person gave is printed, not "<id>"
+		id := "<id>"
+		if strings.TrimSpace(in.ID) != "" {
+			id = in.ID
+		}
 		return nil, "", errs.New(errs.InvalidInput, "--assign is required: the new assignee").
-			WithHint(`lore task reassign --id <id> --assign "@handle" (or --from "@handle" for every open task of a person)`)
+			WithHint(`lore task reassign --id ` + id + ` --assign "@handle" (or --from "@handle" for every open task of a person)`)
 	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
@@ -322,6 +327,28 @@ func (h standaloneCoord) TaskMerged(ctx context.Context, in opscoord.MergedIn) (
 
 // ---- hold claim / release ----
 
+// holdRerun is the `hold claim` the person ran, without --push: the
+// command a push refusal prints with --push appended (devco:D-669: it
+// printed a task step with a placeholder id instead).
+func holdRerun(in opscoord.HoldClaimIn) []string {
+	argv := []string{"hold", "claim", "--name", in.Name}
+	if in.TTL > 0 {
+		argv = append(argv, "--ttl", in.TTL.String())
+	}
+	argv = withFlag(argv, "--store", in.Store) // devco:D-672: a hold from home names its store
+	return withFlag(argv, "--on", in.On)
+}
+
+// reassignRerun is the `task reassign` the person ran, without --push: a
+// --from batch again (it re-runs every task of that person), else the
+// one task.
+func reassignRerun(in opscoord.ReassignIn) []string {
+	if in.From != "" {
+		return withFlag([]string{"task", "reassign", "--from", in.From}, "--assign", in.Assign)
+	}
+	return withFlag([]string{"task", "reassign", "--id", in.ID}, "--assign", in.Assign)
+}
+
 // Hold places (§7.2; CLI_REFERENCE 3.3 --on).
 const (
 	holdOnProject = "project"
@@ -344,7 +371,7 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.requirePushAsked(in.Push, "a hold"); err != nil {
+	if err = w.requirePushAsked(in.Push, pushAsk{what: "a hold", rerun: holdRerun(in)}); err != nil {
 		return opscoord.Report{}, err
 	}
 	st := w.signalsStore(ctx)

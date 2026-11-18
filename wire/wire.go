@@ -215,6 +215,14 @@ type Options struct {
 	// under ~/.lore, its repo store is read-only, and its git is never
 	// wired (no hooks, .gitignore or .gitattributes lines).
 	RepoLinkedByRemote func(ctx context.Context) string
+	// RepoLinkTarget is the --to that names the store folder this repo's
+	// link points at ("<store short name>/<folder>", which a write's --to
+	// resolves from config.yaml even when that folder is not attached
+	// here), "" when no link names the repo or its store is in no org
+	// entry of config.yaml. Why (devco:D-670): a write refused in a linked
+	// repo whose folder was not attached printed "write there with --to
+	// <store>/<folder>", a placeholder where the link names the value.
+	RepoLinkTarget func(ctx context.Context) string
 	// ClientRepo says whether this checkout is a client repo by a match
 	// (a hosted remote an org's repos: pattern or a client link claims):
 	// the org's name and the folder it is linked to, zero when it is not
@@ -1294,9 +1302,17 @@ func (a *App) confirmClientStoresFile(ctx context.Context, e op.Entry, d op.Deco
 	}
 	if a.opts.RepoIsClient != nil {
 		if client, err := a.opts.RepoIsClient(ctx); err != nil || client {
+			// devco:D-670: the org this client repo belongs to is named when
+			// it is known; the folder stays the person's choice
+			org := "<org>"
+			if a.opts.ClientRepo != nil {
+				if c := a.opts.ClientRepo(ctx); c.Org != "" {
+					org = c.Org
+				}
+			}
 			return errs.New(errs.NeedsConfirm, "this is a client repo: the client can read .lore/stores.yaml and will see the store url").
 				WithQuestion("write the store url into this client repo's .lore/stores.yaml?").
-				WithHint("link the repo instead (`lore org link --org <org> --project <folder>`: the link is kept only in the store), or rerun with --yes")
+				WithHint("link the repo instead (`lore org link --org " + org + " --project <folder>`: the link is kept only in the store), or rerun with --yes")
 		}
 	}
 	if org, ok := a.orgStoreOf(ctx, rawURL); ok {

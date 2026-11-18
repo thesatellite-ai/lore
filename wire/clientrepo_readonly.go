@@ -16,15 +16,24 @@ import (
 // attached here). own is true for a repo of the org's own linked to a
 // store folder (`lore org link --own`): it is no client repo, and calling
 // it one named the wrong cause (devco:V-3). The error wraps
-// store.ErrReadOnly (E_STORE_READ_ONLY).
-func clientRepoWriteRefusal(remote string, linked store.Source, own bool) error {
+// store.ErrReadOnly (E_STORE_READ_ONLY). target is the --to of the link's
+// folder when it is not attached (Options.RepoLinkTarget, "" unknown):
+// the hint names it instead of a "<store>/<folder>" placeholder
+// (devco:D-670).
+func clientRepoWriteRefusal(remote string, linked store.Source, target string, own bool) error {
 	why := "is a client repo with no lore data of its own: lore writes nothing into it"
 	if own {
 		why = "is an own repo whose notes live in its linked store folder, not in the repo"
 	}
 	e := errs.Wrap(errs.StoreReadOnly, "this repository ("+remote+") "+why+", so a write here (such as --to repo, the default of policy set) is refused", store.ErrReadOnly)
+	if linked == "" && target != "" {
+		return e.WithHint("it is linked to " + target + ", which this repo does not attach (`lore whoami` says why): write there with --to " + target)
+	}
 	if linked == "" {
-		return e.WithHint("`lore whoami` names the store folder this repo is linked to; write there with --to <store>/<folder>")
+		// no link of this repo is in config.yaml's org entries: whoami
+		// names the link, and the store has to be set up before --to can
+		// name it, so no --to is printed
+		return e.WithHint("`lore whoami` names the store folder this repo is linked to")
 	}
 	return e.WithHint("it is linked to " + string(linked) + ": write there with --to " + string(linked))
 }
