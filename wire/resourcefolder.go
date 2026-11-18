@@ -35,6 +35,9 @@ type resourceFolder struct {
 	Org, Folder string
 	// Resource is the resource's name (its id when it has none).
 	Resource string
+	// Holder is the folder the resource row lives in when its project
+	// field names another folder (Folder), "" when it is Folder itself.
+	Holder string
 	// Remote is the normalised remote of this repo the resource names.
 	Remote string
 }
@@ -45,8 +48,17 @@ func (f resourceFolder) target() string { return f.Org + targetSep + f.Folder }
 // note is the line printed above the read's answer: which folder it read
 // and the one command that links the repo for good.
 func (f resourceFolder) note() string {
-	return "read " + f.target() + ": its resource " + f.Resource + " names this repo (" + f.Remote + "), which is not linked to a folder; link it: lore org link --org " + f.Org + " --project " + f.Folder + " --own"
+	res := f.Resource
+	if f.Holder != "" {
+		res += " (in " + f.Org + targetSep + f.Holder + ")"
+	}
+	return "read " + f.target() + ": its resource " + res + " names this repo (" + f.Remote + "), which is not linked to a folder; link it: lore org link --org " + f.Org + " --project " + f.Folder + " --own"
 }
+
+// resourceProjectField is the resource field naming the folder (project)
+// the resource belongs to: a resource kept in the org folder for a repo
+// of another project names that project here (devco:D-588).
+const resourceProjectField = "project"
 
 // autoStoreKey carries the store a read with no --store reads when a
 // resource names the repo (outsideTo takes it as the read's --store).
@@ -98,32 +110,48 @@ func (a *App) resourceFolderOf(ctx context.Context, org string) (resourceFolder,
 	for _, r := range remotes {
 		mine[r] = true
 	}
-	for _, f := range a.orgFolders(ctx).Folders {
+	scan := a.orgFolders(ctx)
+	folders := map[string]bool{}
+	for _, f := range scan.Folders {
+		if f.Org == org || f.Label == org {
+			folders[f.Folder] = true
+		}
+	}
+	for _, f := range scan.Folders {
 		if f.Dir == "" || (f.Org != org && f.Label != org) {
 			continue
 		}
 		files, _ := filepath.Glob(filepath.Join(f.Dir, filepath.FromSlash(f.Folder), schema.TableResources, "*.json"))
 		for _, p := range files {
-			name, remote, ok := resourceNamingRemote(p, mine)
-			if ok {
-				return resourceFolder{Org: org, Folder: f.Folder, Resource: name, Remote: remote}, true
+			name, remote, project, ok := resourceNamingRemote(p, mine)
+			if !ok {
+				continue
 			}
+			out := resourceFolder{Org: org, Folder: f.Folder, Resource: name, Remote: remote}
+			if project != "" && project != f.Folder && folders[project] {
+				// devco:D-588: the resource lives in another folder (the org
+				// folder) but names its project: that folder is where the
+				// repo's rules are, and the link the note suggests
+				out.Folder, out.Holder = project, f.Folder
+			}
+			return out, true
 		}
 	}
 	return resourceFolder{}, false
 }
 
-// resourceNamingRemote reads one resource row file: its name and the
-// remote of mine one of its string values names; ok is false when none
-// does or the file is unreadable.
-func resourceNamingRemote(path string, mine map[string]bool) (name, remote string, ok bool) {
+// resourceNamingRemote reads one resource row file: its name, the remote
+// of mine one of its string values names, and its project field's value
+// ("" when it has none); ok is false when no value names a remote of mine
+// or the file is unreadable.
+func resourceNamingRemote(path string, mine map[string]bool) (name, remote, project string, ok bool) {
 	b, err := os.ReadFile(path) //nolint:gosec // a row file of the org's own store clone
 	if err != nil {
-		return "", "", false
+		return "", "", "", false
 	}
 	var top map[string]json.RawMessage
 	if json.Unmarshal(b, &top) != nil {
-		return "", "", false
+		return "", "", "", false
 	}
 	for _, s := range jsonStrings(b, 0) {
 		n, nerr := repourl.Normalize(s)
@@ -136,7 +164,7 @@ func resourceNamingRemote(path string, mine map[string]bool) (name, remote strin
 		}
 	}
 	if remote == "" {
-		return "", "", false
+		return "", "", "", false
 	}
 	name = strings.TrimSuffix(filepath.Base(path), ".json")
 	if raw, has := top["name"]; has {
@@ -145,7 +173,27 @@ func resourceNamingRemote(path string, mine map[string]bool) (name, remote strin
 			name = s
 		}
 	}
-	return name, remote, true
+	return name, remote, resourceFieldText(top["fields"], resourceProjectField), true
+}
+
+// resourceFieldText is the text value of the field named name in a
+// resource row's fields object ({<fld_ id>: {"name": <field>, "v":
+// <value>}}), trimmed; "" when the field is absent or not text.
+func resourceFieldText(fields json.RawMessage, name string) string {
+	var entries map[string]struct {
+		Name string          `json:"name"`
+		V    json.RawMessage `json:"v"`
+	}
+	if json.Unmarshal(fields, &entries) != nil {
+		return ""
+	}
+	for _, e := range entries {
+		var v string
+		if e.Name == name && json.Unmarshal(e.V, &v) == nil {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 // jsonStrings is every string value in the JSON document b (objects and

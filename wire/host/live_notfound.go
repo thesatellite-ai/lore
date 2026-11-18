@@ -10,6 +10,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -182,6 +185,12 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 	case !idKnown:
 		table = nounTable
 	}
+	if hint, none := noBranchHint(h.cfg.WorkDir); none {
+		// devco:D-590: no code branch here (the home folder, a plain
+		// folder, a store's clone): "it may have landed on main while
+		// this branch is older" has no meaning, only the sync does
+		return e.WithHint(hint)
+	}
 	remote, branch := defaultLiveRemote, defaultBranchFallback
 	upToDate := false
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" && !liveDisabled() {
@@ -215,6 +224,29 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		return e.WithHint("this branch has everything on " + branch + " as last fetched: the row may belong to another repo (a row lives in one repo's notes: run the command there), or be newer than that fetch: `" + peek + "`" + storeRowNotYetHint)
 	}
 	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`" + storeRowNotYetHint)
+}
+
+// noBranchHint is the not-found hint of a folder with no code branch to
+// peek (devco:D-590): outside every git checkout, or in a store's clone
+// (whose branch is the store's, synced by lore sync). none is false in a
+// code repo, which keeps the branch hint.
+func noBranchHint(dir string) (hint string, none bool) {
+	if _, _, inStore := rowfs.StoreTop(dir); inStore {
+		return "a row a teammate wrote to this store arrives once they push it and you run `lore sync` here", true
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	for d := abs; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			return "", false
+		}
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+	return "a row a teammate wrote to a store arrives once they push it and you run `lore sync --setup <setup>` (`lore setup list` names your setups)", true
 }
 
 // storeRowNotYetHint ends a not-found hint (devco D-221): a row a teammate
