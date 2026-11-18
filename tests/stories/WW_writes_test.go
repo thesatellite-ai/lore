@@ -783,6 +783,7 @@ func wwRunPlace(t *testing.T, w *wwWorld, p wwPlace, found *wwFindings) map[stri
 	// remote only when it is in wwPushOps (every store stays in the default
 	// push mode, manual, and no input passes --push)
 	w.m.SetEnv(teamharness.EnvPushClaims, "0")
+	known := wKnownActors(w.m.Lore(p.Dir, "actor", "list", "--json").Out()) // W's rule (f), devco:D-620
 	before := wwSnapshot(t, w)
 	var pass, refuse int
 	for _, o := range ops {
@@ -796,7 +797,7 @@ func wwRunPlace(t *testing.T, w *wwWorld, p wwPlace, found *wwFindings) map[stri
 		now := wwSnapshot(t, w)
 		cell := o.Name + "@" + p.Name
 		var bad []string
-		for _, b := range wwCheck(t, w, o, p, args, res, before, now) {
+		for _, b := range wwCheck(t, w, o, p, args, res, before, now, known) {
 			if why := wwWaitingFor(b.Rule, o.Name, p.Name); why != "" {
 				t.Logf("WAITING for %s: %s %s", why, cell, b.Text)
 				continue
@@ -917,7 +918,7 @@ func wwNormalize(out string) string {
 }
 
 // wwCheck is every rule for one run; each broken one is a line.
-func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res teamharness.Result, before, now wwSnap) []wBad {
+func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res teamharness.Result, before, now wwSnap, known map[string]bool) []wBad {
 	var bad []wBad
 	add := func(rule, text string) { bad = append(bad, wBad{rule, text}) }
 	out := res.Out()
@@ -1038,6 +1039,10 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 				add(wwRuleCount, fmt.Sprintf("(b) printed %q but %d commits were made and %d sent", mm[0], moved, pushed))
 			}
 		}
+	}
+	// W's (f): people by name, never a raw act_ id (devco:D-620)
+	for _, l := range wRawActorIDs(args, out, known) {
+		add(wRuleActorID, "(f) a raw actor id where a name belongs: "+l)
 	}
 	return bad
 }

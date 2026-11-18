@@ -397,6 +397,7 @@ func wRunPlace(t *testing.T, s *Story, m *journeys.Machine, p wPlace, reads []wR
 	if err := os.WriteFile(prBody, []byte("## Summary\nmatrix\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	known := wKnownActors(m.Lore(p.Dir, "actor", "list", "--json").Out()) // rule (f), devco:D-620
 	before := wSnapshot(t, s, p, remotes)
 	var pass, refuse int
 	for _, r := range reads {
@@ -405,7 +406,7 @@ func wRunPlace(t *testing.T, s *Story, m *journeys.Machine, p wPlace, reads []wR
 		now := wSnapshot(t, s, p, remotes)
 		cell := r.Name + "@" + p.Name
 		var bad []string
-		for _, b := range wCheck(r, p, res, before, now) {
+		for _, b := range wCheck(r, p, res, before, now, known) {
 			if why := wWaitingFor(b.Rule, r.Name, p.Name); why != "" {
 				t.Logf("WAITING for %s: %s %s", why, cell, b.Text)
 				continue
@@ -438,8 +439,9 @@ func wWaitingFor(rule, opName, place string) string {
 	return ""
 }
 
-// wCheck is the four rules for one run; each broken one is a line.
-func wCheck(r wRead, p wPlace, res teamharness.Result, before, now wSnap) []wBad {
+// wCheck is the rules for one run; each broken one is a line. known is
+// the place's roster ids for rule (f).
+func wCheck(r wRead, p wPlace, res teamharness.Result, before, now wSnap, known map[string]bool) []wBad {
 	var bad []wBad
 	add := func(rule, text string) { bad = append(bad, wBad{rule, text}) }
 	out := res.Out()
@@ -484,6 +486,10 @@ func wCheck(r wRead, p wPlace, res teamharness.Result, before, now wSnap) []wBad
 	// (c) nothing reaches a remote
 	if now.refs != before.refs {
 		add(wRuleRemote, "(c) moved a remote's refs: "+strings.Join(wLineDiff(before.refs, now.refs), "; "))
+	}
+	// (f) people by name, never a raw act_ id (devco:D-620)
+	for _, l := range wRawActorIDs(r.Path, out, known) {
+		add(wRuleActorID, "(f) a raw actor id where a name belongs: "+l)
 	}
 	return bad
 }

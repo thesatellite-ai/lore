@@ -18,10 +18,12 @@
 - (b) Every tracked file of the place's repo is byte-identical (a link by its target), `git status` is unchanged, the file a link points at outside the repo is unchanged, and the home folder never becomes a git repo.
 - (c) No ref of any remote moves (`lore sync` is not a read and is not run).
 - (d) Exit 0 comes with an answer and no error line; a non-zero exit with an error line. `lore check leaks` is a git hook and passes silently.
+- (f) A human (non-`--json`) output names people, never by a raw `act_…` id of an actor the place's roster knows (`lore actor list --json` there), except where the id is the point: a named flag in a hint (`--actor act_…`), an `id:` field, a list's `ID` column, a row path (`actors/act_…`), and the commands about the actor itself (`actor list/show/register/refresh/rename`, `member list/show`, `whoami`, `sync peek`, `migrate run`). An actor no store knows may show as its id (the fallback). `TestStoryWRawActorIDs` checks the rule's shapes.
 - Findings another branch fixes are logged as waiting with their id, never asserted the buggy way, until the fix lands.
 
 ## Findings it guards
 
+- `devco:D-620` (REGRESSIONS.md, `TestStoryWRawActorIDs`, `TestAlreadyDoneNamesTheFinisher`): rule (f); `lore task done` on a finished task and a claim of one said "was already done by act_…"; they now name the finisher by handle (else name).
 - `devco:D-503` (REGRESSIONS.md): `lore why-context show` in the team store's clone committed the folder's project row; a Local read now runs as a read.
 - `devco:D-504` (REGRESSIONS.md): `lore team invite list` with no invites exited 0 with no output; an answer that is only empty lists says `no <list>`.
 - `devco:D-510` (REGRESSIONS.md): from the home folder every read but the roster's refused with a hint naming no `--setup`; the hint now names `--store <org>[/<folder>]` and `--setup <setup>`.

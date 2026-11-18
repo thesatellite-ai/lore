@@ -1385,6 +1385,26 @@ func (o ops) actorName(ctx context.Context, id string) string {
 	return work.Field(r, fieldDisplay)
 }
 
+// actorShown is how a one-line message names an actor recorded by id: its
+// handle, else its display name (actorName), the id only when no store
+// knows it; a text that is not an actor id (a holder label such as
+// "alice", or "someone") is returned as is. The coordination messages
+// name a holder the same way (wire coordWorld.actorShown).
+//
+// Why (devco:D-620): "tsk_… was already done by act_…" made the reader
+// look the id up.
+func (o ops) actorShown(ctx context.Context, id string) string {
+	if !strings.HasPrefix(id, string(ids.PrefixActor)+"_") {
+		return id
+	}
+	if r, ok := o.actorRow(ctx, id); ok {
+		if h := work.Field(r, schema.FieldActorHandle); h != "" {
+			return h
+		}
+	}
+	return o.actorName(ctx, id)
+}
+
 // edit patches the fields whose flags were given.
 func (o ops) edit(ctx context.Context, in EditIn) (work.WriteOut, error) {
 	assign, err := o.resolveAssigns(ctx, in.Assign)
@@ -1613,7 +1633,7 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	// record) changes nothing and names who finished it.
 	if in.Commit == "" && in.PR == 0 {
 		if src, cur, gerr := o.getSource(ctx, in.From, id); gerr == nil && work.Field(cur, work.FieldStatus) == schema.TaskStatusDone {
-			return alreadyDoneOut(id.String(), string(src), work.Field(cur, fieldDoneBy), work.Field(cur, work.FieldCompleted)), nil
+			return alreadyDoneOut(id.String(), string(src), o.actorShown(ctx, work.Field(cur, fieldDoneBy)), work.Field(cur, work.FieldCompleted)), nil // devco:D-620: the name, not the act_ id
 		}
 	}
 	// TASK 6.7: open sub-tasks refuse (E_OPEN_CHILDREN) unless --children
@@ -1627,7 +1647,7 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 		if in.Commit, err = hc.CloseHeldDone(ctx, id.String(), in.Commit, in.PR); err != nil {
 			var ad *AlreadyDoneError
 			if errors.As(err, &ad) {
-				return alreadyDoneOut(id.String(), "", ad.By, ad.At.UTC().Format(time.RFC3339)), nil
+				return alreadyDoneOut(id.String(), "", o.actorShown(ctx, ad.By), ad.At.UTC().Format(time.RFC3339)), nil
 			}
 			return DoneOut{}, err
 		}
