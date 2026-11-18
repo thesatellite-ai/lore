@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 )
 
@@ -120,16 +121,13 @@ func gitConfigFilesRead(ctx context.Context, home string) []string {
 
 // includedPaths are the include.path and includeIf.*.path values of the
 // config file f, as absolute paths (git resolves a relative one against
-// the including file's folder and expands a leading ~/).
+// the including file's folder and expands a leading ~/). The file is
+// parsed in-process (gitfast.IncludePaths); only syntax that parser does
+// not read costs a git process (devco:D-624: doctor runs this twice).
 func includedPaths(ctx context.Context, f, home string) []string {
-	raw, err := gitRun{dir: filepath.Dir(f), args: []string{"config", "--file", f, "--get-regexp", `^include(if\..*)?\.path$`}}.output(ctx)
-	if err != nil {
-		return nil // no include in the file (git exits 1) or an unreadable one
-	}
 	var out []string
-	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
-		_, p, ok := strings.Cut(line, " ")
-		if !ok || p == "" {
+	for _, p := range rawIncludedPaths(ctx, f) {
+		if p == "" {
 			continue
 		}
 		switch {
@@ -139,6 +137,25 @@ func includedPaths(ctx context.Context, f, home string) []string {
 			p = filepath.Join(filepath.Dir(f), p)
 		}
 		out = append(out, p)
+	}
+	return out
+}
+
+// rawIncludedPaths are f's include path values as written: from
+// gitfast.IncludePaths, else from `git config --file f --get-regexp`.
+func rawIncludedPaths(ctx context.Context, f string) []string {
+	if ps, ok := gitfast.IncludePaths(f); ok {
+		return ps
+	}
+	raw, err := gitRun{dir: filepath.Dir(f), args: []string{"config", "--file", f, "--get-regexp", `^include(if\..*)?\.path$`}}.output(ctx)
+	if err != nil {
+		return nil // no include in the file (git exits 1) or an unreadable one
+	}
+	var out []string
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if _, p, ok := strings.Cut(line, " "); ok {
+			out = append(out, p)
+		}
 	}
 	return out
 }

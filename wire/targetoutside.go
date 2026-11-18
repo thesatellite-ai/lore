@@ -609,13 +609,19 @@ func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string, lo
 // names no store of its own (to): the tombstone's "deleted from …"
 // (devco:D-590), else "in no store of any setup" with the folders looked
 // in (devco:D-589). nil when the id was found, or a store is named (that
-// store's own read answers, rowElsewhereErr and the not-found hint).
+// store's own read answers, rowElsewhereErr and the not-found hint), or
+// when there was no store folder to look in at all (no setup, no org
+// entry: devco:D-625): the folder's own E_NOT_A_STORE refusal then says
+// how to get one, as it did before D-589 — "in no store of any setup"
+// names stores that were searched, never an empty machine.
 func (l *rowLookup) answer(to string) error {
 	switch {
 	case l == nil || to != "" || l.livePath != "":
 		return nil
 	case l.gone != nil:
 		return l.gone.err()
+	case len(l.looked) == 0:
+		return nil
 	case storedRowID(l.id):
 		return noStoreHoldsErr(l.id, l.looked)
 	}
