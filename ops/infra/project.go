@@ -395,6 +395,9 @@ type DeletePreviewer interface {
 // (show, archive, unarchive): the json key stays "id" (v0.1.17's), the
 // value may be a name too (work.ProjectRef).
 type ProjectRefIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the project: a name or prj_ id"`
 }
 
@@ -428,6 +431,9 @@ func (o ops) showProject(ctx context.Context, ref string) (ids.ID[ids.Project], 
 
 // ProjectDeleteIn is the input of project.delete.
 type ProjectDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID     string `json:"id" arg:"0" desc:"the project: a name or prj_ id"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).

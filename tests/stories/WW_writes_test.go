@@ -35,6 +35,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -387,7 +388,94 @@ func wwOps(t *testing.T, w *wwWorld) []wwOp {
 	if len(out) < 250 {
 		t.Fatalf("only %d writes in the registry; the walk is broken", len(out))
 	}
+	// devco D-615: a write naming its row by name takes the store flag
+	for _, gap := range wwStoreFlagGaps(reg) {
+		t.Errorf("[WW] %s", gap)
+	}
 	return out
+}
+
+// wwNoStoreFlag are the writes naming something by name that take no
+// store flag (--store <org>[/<folder>], alias --to), by op-name prefix,
+// each with its reason (devco D-615: every other by-name write takes it,
+// from anywhere, as reads take --store; wwStoreFlagGaps fails a new one).
+var wwNoStoreFlag = map[string]string{
+	"actor.":          "the roster: a roster change names its org with --setup (devco D-523, rosterNowhereErr)",
+	"role.":           "the roster (devco D-523)",
+	"contact_type.":   "the roster (devco D-523)",
+	"project.member.": "the roster (devco D-523)",
+	"member.":         "the roster (devco D-523)",
+	"team.":           "the roster (devco D-523)",
+	"setup.":          "a setup of this machine, named by its name",
+	"config.":         "this machine's or this repo's config file, by key",
+	"identity.":       "this machine's identity",
+	"doctor.":         "a finding of this machine's doctor",
+	"store.":          "store admin: names its store itself (--name, --url, --target)",
+	"org.":            "org admin: names its org itself (--org, --old)",
+	"hold.":           "a hold on the repo's signals ref, named by the resource held",
+	"repo.add":        "registers the repo it runs in",
+	"branch.":         "a branch of the repo it runs in",
+	"secrets.":        "the secret entries of a secret manager on this machine",
+}
+
+// wwStoreFlagGaps lists the writes of reg whose first argument takes a
+// name (not only a typed id: the id finds its store, D-586) and that take
+// no store flag and are not in wwNoStoreFlag.
+func wwStoreFlagGaps(reg *op.Registry) []string {
+	var gaps []string
+	for _, e := range reg.Entries() {
+		sp := e.Spec()
+		if sp.OnlyReads() || sp.Hidden {
+			continue
+		}
+		byName, flag := false, false
+		for _, f := range e.InputFields() {
+			switch {
+			case f.Name == "to" || f.Name == "store":
+				flag = true
+			case f.Arg == 0:
+				d := strings.ToLower(f.Desc)
+				byName = strings.Contains(d, "name") || strings.Contains(d, "key") || strings.Contains(d, "@handle")
+			}
+		}
+		if !byName || flag || wwExempt(sp.Name) {
+			continue
+		}
+		gaps = append(gaps, sp.Name+": names its row by name but takes no --store <org>[/<folder>] (alias --to); give it op.StoreFlag or list it in wwNoStoreFlag with a reason")
+	}
+	return gaps
+}
+
+// wwExempt reports whether name is listed in wwNoStoreFlag.
+func wwExempt(name string) bool {
+	for p := range wwNoStoreFlag {
+		if name == p || strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestStoryWWByNameWritesTakeTheStore (devco:D-615) is wwOps' store-flag
+// rule on its own, without the world: every by-name write takes --store.
+func TestStoryWWByNameWritesTakeTheStore(t *testing.T) {
+	reg, err := wire.Registry(&wire.App{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, gap := range wwStoreFlagGaps(reg) {
+		t.Error(gap)
+	}
+	for _, name := range []string{"resource.kind.rename", "resource.kind.edit", "resource.field.rename", "resource.field.remove", "resource.field.retype",
+		"meta.set", "meta.unset", "meta.rename", "meta.edit", "meta.delete", "project.archive", "project.unarchive", "repo.archive", "repo.unarchive"} {
+		e, ok := reg.Lookup(name)
+		if !ok {
+			t.Fatalf("no op %s", name)
+		}
+		if !slices.ContainsFunc(e.InputFields(), func(f op.FieldInfo) bool { return f.Name == "store" }) {
+			t.Errorf("%s takes no --store <org>[/<folder>]", name)
+		}
+	}
 }
 
 // wwCtx is what a per-op override can name.

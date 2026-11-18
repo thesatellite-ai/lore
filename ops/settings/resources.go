@@ -130,6 +130,9 @@ type ResShowIn struct {
 // ResDeleteIn is the input of resource.delete: one resource by name, or
 // the bulk form --kind with --where (CLI_REFERENCE 3.2, XQ1, XQ2).
 type ResDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name   string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --kind --where"`
 	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why (recorded in the audit log)"`
 	Kind   string   `json:"kind,omitempty" flag:"kind" desc:"bulk: delete every resource of this kind matching --where (one batch)"`

@@ -57,6 +57,9 @@ type Purger interface {
 
 // MetaForgetIn is the input of meta.forget.
 type MetaForgetIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Keys    string `json:"keys" arg:"0" rest:"true" flag:"key" desc:"the unused keys to remove (names or mky_ ids, space separated)"`
 	Confirm bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: forget removes the key rows for good"`
 	// Reason is the deleted_reason of the key rows: required while

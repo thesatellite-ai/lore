@@ -38,6 +38,9 @@ const clearValue = "-"
 
 // EditIn is the input of tag.edit.
 type EditIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID    string `json:"id" arg:"0" desc:"the tag: its id (tag_…) or its name"`
 	Name  string `json:"name,omitempty" flag:"name" desc:"new name (snake_case); tagged rows keep the tag (ids are permanent)"`
 	Color string `json:"color,omitempty" flag:"color" desc:"new hex color #RRGGBB (- clears it)"`
