@@ -8,7 +8,7 @@
 |---|---|---|---|
 | **Plain tasks** | a to-do list | one person or one agent does the work | `lore task add`, `lore task start`, `lore task done` |
 | **Agent identity** | a name tag for one agent session, owned by a person | an agent writes notes or takes tasks in a team | `lore agent start --label agent-backend --owner @alice` |
-| **Claim** | your name on the whiteboard next to a task | two or more workers could pick the same task | `lore task next --claim --mission <id> --push`, `lore task claim --id <id> --push` (in a code repo with a remote; `--push` sends the claim there) |
+| **Claim** | your name on the whiteboard next to a task | two or more workers could pick the same task | `lore task next --claim --mission <id> --push`, `lore task claim --id <id> --push` (in a code repo with a remote; a task of an org store also from the home folder or inside the store clone; `--push` sends the claim there) |
 | **Lease and heartbeat** | the claim runs out after 20 minutes unless the agent says "still here" | always, with claims; it is how a crashed agent's task comes free | `lore task heartbeat --daemon --id <id>` |
 | **Dependencies** | "do this one after that one" | one task needs another's code first, maybe in another repo | `lore task add --after <id>` (`<id>:merged` waits for the merge) |
 | **Gate** | a "stop, ask a person" sign on a task | a step is risky: a payment change, a change to the live database, a release | `lore gate request --id <id>`, then a person runs `lore gate approve --id <id>` |
