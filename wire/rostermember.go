@@ -122,7 +122,7 @@ func (a *App) RosterActorRef(ctx context.Context, raw string) (string, bool, err
 // (an email is never shown as "@email").
 func memberMissErr(r rosterAt, raw string) error {
 	m, _ := parseMemberRef(raw)
-	return errs.New(errs.NotFound, "no one is "+m.shown()+" on the roster in "+r.shown()+", now or before").
+	return errs.New(errs.NotFound, "no one is "+m.shown()+" on "+r.of()+", now or before").
 		WithHint("lore member list shows the roster; an actor id (act_…) works too")
 }
 

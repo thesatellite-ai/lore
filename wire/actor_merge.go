@@ -699,16 +699,16 @@ func (a *App) knownActorKeys(ctx context.Context) (map[string]ids.AnyID, error) 
 	}
 	x, done, err := a.rosterApp(ctx, r)
 	if err != nil {
-		return nil, errs.Prefix("read the org roster ("+r.where+")", err)
+		return nil, errs.Prefix("read "+r.of(), err)
 	}
 	defer done()
 	st, err := x.state(ctx)
 	if err != nil {
-		return nil, errs.Prefix("read the org roster ("+r.where+")", err)
+		return nil, errs.Prefix("read "+r.of(), err)
 	}
 	rows, err := st.eng.List(ctx, r.src, schema.TableActors)
 	if err != nil {
-		return nil, errs.Prefix("read the org roster ("+r.where+")", err)
+		return nil, errs.Prefix("read "+r.of(), err)
 	}
 	addActorKeys(out, rows)
 	return out, nil

@@ -168,9 +168,9 @@ func (x *App) rosterFresh(ctx context.Context, r rosterAt) error {
 	case err == nil && !rep.Offline:
 		return nil
 	case err != nil && !errs.Has(err, errs.Offline):
-		return fmt.Errorf("actor register: read the latest roster in %s: %w", r.shown(), err) // its own code (a refused merge, a bad store) stays
+		return fmt.Errorf("actor register: read the latest %s: %w", r.of(), err) // its own code (a refused merge, a bad store) stays
 	}
-	return errs.Wrap(errs.Offline, "cannot register on the roster in "+r.shown()+": its store's remote could not be reached, and registering needs the latest roster (someone who left is refused)", err).
+	return errs.Wrap(errs.Offline, "cannot register on "+r.of()+": its store's remote could not be reached, and registering needs the latest roster (someone who left is refused)", err).
 		WithHint("run `lore actor register` again once the store's remote is reachable (`lore whoami` shows the store's status)")
 }
 
@@ -294,36 +294,42 @@ func (r rosterAt) label() string {
 	return org + " (" + string(r.src) + ")"
 }
 
+// of is r in a sentence, "the roster of acme (acme/org)" or "the roster
+// of this repo": every refusal and step line names a roster this one way,
+// as team list does (devco D-663: "the roster in acme org/" was a second
+// shape beside D-647's "the roster of <entry> (<org>/org)").
+func (r rosterAt) of() string { return "the roster of " + r.label() }
+
 // handleTakenErr refuses a handle another actor or team holds on r.
 func (r rosterAt) handleTakenErr(handle, holder string) error {
-	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on the roster in %s", handle, holder, r.shown())).
+	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on %s", handle, holder, r.of())).
 		WithHint("choose another handle (`lore identity set --org <org> --handle <h>`); handles are unique per roster")
 }
 
 // handleMissErr refuses a handle no active actor of r has.
 func (r rosterAt) handleMissErr(handle string) error {
-	return errs.New(errs.InvalidInput, "no one is @"+handle+" on the roster in "+r.shown()).WithHint(r.missHint())
+	return errs.New(errs.InvalidInput, "no one is @"+handle+" on "+r.of()).WithHint(r.missHint())
 }
 
 // goneErr refuses agents to a caller who left r (status left|archived).
 func (r rosterAt) goneErr(status, ref string) error {
-	return errs.New(errs.StatusChange, "you are "+status+" on the roster in "+r.shown()+", so you cannot start agents there").
+	return errs.New(errs.StatusChange, "you are "+status+" on "+r.of()+", so you cannot start agents there").
 		WithHint("ask an admin to run `lore actor rejoin --actor " + ref + " --type …`")
 }
 
 // unregisteredErr refuses agents to a caller with no row on r.
 func (r rosterAt) unregisteredErr() error {
-	return errs.New(errs.InvalidInput, "you are not on the roster in "+r.shown()+" yet").WithHint("run `lore actor register` first")
+	return errs.New(errs.InvalidInput, "you are not on "+r.of()+" yet").WithHint("run `lore actor register` first")
 }
 
 // deletedRowErr is a roster row of table found only as a tombstone.
 func (r rosterAt) deletedRowErr(table row.Table, id ids.AnyID) error {
-	return errs.New(errs.NotFound, "no "+string(table)+" row "+id.String()+" on the roster in "+r.shown()+" (deleted)")
+	return errs.New(errs.NotFound, "no "+string(table)+" row "+id.String()+" on "+r.of()+" (deleted)")
 }
 
 // actorMissErr is an actor reference no row of r matches.
 func (r rosterAt) actorMissErr(ref string) error {
-	return errs.New(errs.NotFound, "no actor "+ref+" on the roster in "+r.shown()).WithHint(r.missHint())
+	return errs.New(errs.NotFound, "no actor "+ref+" on "+r.of()).WithHint(r.missHint())
 }
 
 // missHint is the hint for a handle missing from the roster.
@@ -333,8 +339,11 @@ func (r rosterAt) missHint() string {
 	}
 	// devco D-224: a register is committed in the teammate's store clone
 	// and reaches the store with their `lore sync` (owner rule U-2), so
-	// "lore sync here" alone left the handle missing.
-	return "they run `lore actor register` and `lore sync` in a repo of the org, then `lore sync` here"
+	// "lore sync here" alone left the handle missing. devco D-662: the
+	// teammate's commands name their setup, so each runs as printed from
+	// any folder (a bare `lore actor register` printed in the home folder
+	// was refused there, E_NOT_A_STORE).
+	return "they run `lore actor register --setup <setup>` and `lore sync --setup <setup>`, then `lore sync` here"
 }
 
 // repoRosterMissHint is the next step for a name the repo's own roster
@@ -531,7 +540,7 @@ func (a *App) personBehind(ctx context.Context, r rosterAt, who identity.Resolve
 			return whoIs{StableKey: own.StableKey, DisplayName: own.Name, Handle: own.Handle, ID: id}, nil
 		}
 	}
-	e := errs.New(errs.InvalidInput, "the agent "+who.StableKey+" has no person behind it on "+r.shown()+", so it cannot "+what).
+	e := errs.New(errs.InvalidInput, "the agent "+who.StableKey+" has no person behind it on "+r.of()+", so it cannot "+what).
 		WithHint("its person runs it in their own terminal, or registers the agent with an owner: `lore agent start --label <l> --owner @<person>`")
 	e.NeedsPerson = true
 	return whoIs{}, e
@@ -652,7 +661,7 @@ func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (Ro
 		return x, err
 	}
 	if near, found := a.nearHandle(ctx, r, h); found {
-		return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on the roster in "+r.shown()).WithHint(nearHandleHint(near, h))
+		return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+r.of()).WithHint(nearHandleHint(near, h))
 	}
 	return RosterActor{}, r.handleMissErr(h)
 }

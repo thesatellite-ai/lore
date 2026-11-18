@@ -899,7 +899,7 @@ func addToTeams(ctx context.Context, r profilestore.Roster, adds map[string][]st
 			return n, err
 		}
 		if !ok {
-			return n, teamMissErr(h, r.Where())
+			return n, teamMissErr(h, r.Label())
 		}
 		list := value.ItemStrings(cur.Fields[schema.FieldTeamMembers])
 		changed := false

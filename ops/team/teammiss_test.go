@@ -21,3 +21,24 @@ func TestTeamMissHintsSyncNotAdd(t *testing.T) {
 		t.Errorf("hint = %q", e.Hint)
 	}
 }
+
+// TestRosterSentencesD663 (devco:D-663): every sentence naming an org
+// roster says "the roster of <org> (<org>/<folder>)", as team list does
+// (D-647), never "the roster in agency org/": a team miss (handle or id),
+// and the add, remove and rename lines.
+func TestRosterSentencesD663(t *testing.T) {
+	t.Parallel()
+	const label = "agency (agency/org)"
+	for _, h := range []string{"web", "tem_0190f0f0f0f07000800000000000dead"} {
+		var e *errs.Error
+		if !errors.As(teamMissErr(h, label), &e) || !strings.Contains(e.Message, "the roster of "+label) {
+			t.Errorf("teamMissErr(%s) = %v", h, e)
+		}
+	}
+	for _, verb := range []string{verbTeamAdded, verbTeamRemoved, verbTeamRenamed} {
+		out := TeamWriteOut{Team: Team{ID: "tem_1", Handle: "web"}, Verb: verb, From: "old", Where: "agency org/", label: label}
+		if txt := out.Text(); !strings.Contains(txt, "the roster of "+label) || strings.Contains(txt, "org/ ") || strings.Contains(txt, "roster in") {
+			t.Errorf("%s: text = %q", verb, txt)
+		}
+	}
+}

@@ -429,6 +429,11 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 	// the store's own report gives its state
 	for _, s := range res.Stores {
 		r.Sent, r.Received, r.Merged = r.Sent+s.Sent, r.Received+s.Received, r.Merged+s.Merged
+		// devco D-660: the commits git counted are the clone's, reported
+		// by the folder whose sync moved it (the others saw no change):
+		// without them the line fell back to rows ("received 7" when 3
+		// commits arrived, a sync --setup after a set-url round trip)
+		r.SentCommits, r.ReceivedCommits = max(r.SentCommits, s.SentCommits), max(r.ReceivedCommits, s.ReceivedCommits)
 		r.Pushed = r.Pushed || s.Pushed // one clone pushes once, for whichever folder synced it
 		if s.Unattached {
 			continue
@@ -471,7 +476,7 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 // whose waiting commits it pushed (waitingOrgPushes), with the code a
 // failed or offline push exits with.
 func waitingPushReport(url string, p opsstores.Report) (opssync.StoreReport, errs.Code) {
-	r := opssync.StoreReport{Store: p.Store, URL: url, Sent: p.Sent, Offline: p.Offline}
+	r := opssync.StoreReport{Store: p.Store, URL: url, Sent: p.Sent, SentCommits: p.SentCommits, Offline: p.Offline}
 	switch {
 	case p.Offline:
 		r.Status = opssync.StoreStatusOffline
