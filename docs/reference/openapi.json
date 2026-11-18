@@ -75061,6 +75061,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "checked_at": {
+                            "type": "string"
+                          },
                           "default": {
                             "type": "boolean"
                           },
@@ -75193,6 +75196,9 @@
                                 "level"
                               ]
                             }
+                          },
+                          "stale": {
+                            "type": "string"
                           },
                           "unfinished": {
                             "type": "array",
@@ -80437,6 +80443,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "checked_at": {
+                      "type": "string"
+                    },
                     "health": {
                       "type": "string"
                     },
@@ -80656,6 +80665,9 @@
                         "name",
                         "kind"
                       ]
+                    },
+                    "stale": {
+                      "type": "string"
                     }
                   },
                   "required": [

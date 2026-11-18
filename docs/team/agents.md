@@ -302,7 +302,7 @@ Running `lore hold claim` again while you hold it renews your hold. A typical li
 - **The claim cap is your team's.** `agents.max_claims_per_agent` is a team policy (default 1): when a second claim is refused, finish or release the first, or ask a person to raise it with `lore policy set --key agents.max_claims_per_agent --value <n>`. Your own `config.yaml` may only lower it; never try to raise it yourself.
 - **Do not run `--no-verify`** on commits or pushes in a client repo: the commit and push hooks are the leak check.
 - **Work on a shared branch.** With branch layers, your claim, notes and done on an isolated work branch stay with that branch until it lands, so your coordinator does not see them. Work on a branch your person marked with `lore branch share --branch <b>` (or on the default branch); `lore branch mode` says which you are on ([branch layers](concepts.md#branch-layers-notes-that-follow-the-code-branch)).
-- **Push your work branch** (or let `lore task note` do it) before any step that might kill your session.
+- **Push your work branch** (`git push origin <branch>`, or let `lore task note` do it when you turned pushes on with `live.autopush: true` in config.yaml or `LORE_PUSH_CLAIMS=1`) before any step that might kill your session; without that setting a note says the branch was not pushed and the command that pushes it.
 
 ## Hooking an agent tool
 

@@ -106,9 +106,10 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder .)
+stores     git@github.com:agency/notes on branch main  (org folder agency: roster, teams, company rules)
            git@github.com:agency/notes-client on branch main
 internal   github.com/agency/notes-client client/
+reads      notes-client/client (this repo's link)
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register

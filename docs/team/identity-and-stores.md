@@ -149,7 +149,7 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_05e9…4603
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
 $ lore sync

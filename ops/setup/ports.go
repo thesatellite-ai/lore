@@ -390,6 +390,19 @@ type SetupSummary struct {
 	// its fix (devco D-483: a "⚠ 1" with nothing naming the warning; the
 	// same list setup show prints).
 	Problems []onboard.CheckResult `json:"problems,omitempty"`
+	// CheckedAt is when the newest result Health counts was made (RFC 3339;
+	// "" when never checked), so a result from an earlier day is never
+	// shown as if it were current (devco D-605).
+	CheckedAt string `json:"checked_at,omitempty"`
+	// Stale says why the stored results no longer stand (a file their
+	// checks read, such as the global git config or a file it includes,
+	// changed after them); Health and Problems are then empty, and the
+	// text says "not checked since <date>" with the check that refreshes
+	// it (setup check --step identity), so setup list never disagrees with setup check (devco D-605).
+	Stale string `json:"stale,omitempty"`
+	// earlier is CheckedAt's local date when it is not today ("" today):
+	// the text table prints it next to the cell.
+	earlier string
 	// Disabled setups stay listed (greyed on Home) but match nothing.
 	Disabled   bool   `json:"disabled,omitempty"`
 	DisabledAt string `json:"disabled_at,omitempty"`
@@ -457,6 +470,9 @@ type ShowOut struct {
 	// Problems are the failing and warning checks Health counts, each with
 	// its fix (B1-25).
 	Problems []onboard.CheckResult `json:"problems,omitempty"`
+	// CheckedAt and Stale are as in SetupSummary (devco D-605).
+	CheckedAt string `json:"checked_at,omitempty"`
+	Stale     string `json:"stale,omitempty"`
 }
 
 // UseIn is setup.use's input.

@@ -218,19 +218,19 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (stor
 
 ## 5. An agent crashes; its work is picked up
 
-`agent-frontend` commits part of the work and records a note, which also pushes its work branch. Then its session dies. Twenty-five minutes later (the lease is 20 minutes, plus 2 minutes of grace), the coordinator's inbox shows the expired claim and where the work is:
+`agent-frontend` commits part of the work, pushes its work branch with `git push` so a replacement can fetch it, and records a note, which sees the branch on the remote (lore pushes nothing on its own: without that push, or `live.autopush: true` in config.yaml or `LORE_PUSH_CLAIMS=1`, which let the note push it, the note prints `work branch … not pushed: … push it with: git push origin <branch>`). Then its session dies. Twenty-five minutes later (the lease is 20 minutes, plus 2 minutes of grace), the coordinator's inbox shows the expired claim and where the work is:
 
 <!-- example: agents#crash-and-reclaim only=1,2,3,4 -->
 ```console
 # agent-frontend, in agents/app
-$ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'
+$ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page' && git push -q -u origin agent-frontend/invite-route
 lore: set lore.clientrepo=true in ~/work/agents/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task note --id tsk_54fe…28f2 --text 'route + loader done, form next'
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency/client2)
 lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_2537…6bbb.json (store agency/client2)
 ✓ note cmt_2537…6bbb on tsk_54fe…28f2
-  pushed work branch agent-frontend/invite-route (commit dfd8dc8) to remote origin so a replacement can fetch it
+  work branch agent-frontend/invite-route (commit dfd8dc8) is on remote origin so a replacement can fetch it
 
 # agent-coord, in api
 $ lore inbox
@@ -397,7 +397,7 @@ created 2026-11-02T10:03:30Z by agent-coord · updated 2026-11-02T11:07:00Z by a
 ## Pitfalls
 
 - **Keep the lease alive.** A long test run must not let the lease expire. Call `lore task heartbeat` (no id: every claim of this session, at most once per `lease.renew_every`) from your agent tool's hook, or run the daemon. `lore task heartbeat --daemon --id <id>` renews at once and then every `lease.renew_every`, and checks every 5 seconds that the process that started it is still running. When that process is gone, it stops (it also stops when the claim ends). So start it from a process that lives as long as the work: the agent's own long-running shell or wrapper script, or the same shell command as the long step (`lore task heartbeat --daemon --id <id> & go test ./...; kill $!`). A detached launch from a short-lived script or tool call (`setsid … &`, then the script exits) stops within seconds, together with that script. It needs the agent's `LORE_ACTOR` and `LORE_SESSION` in its environment. A heartbeat says "alive", not "progress". Record progress with `lore task note`.
-- **Push work before you might die.** `lore task note` pushes the claim's work branch, so a replacement can fetch it. Work never pushed is lost with the session, and `lore mission status` says so.
+- **Push work before you might die.** `lore task note` pushes the claim's work branch when pushes are turned on (`live.autopush: true` or `LORE_PUSH_CLAIMS=1`; otherwise it prints the `git push` that does it), so a replacement can fetch it. Work never pushed is lost with the session, and `lore mission status` says so.
 - **Done is not merged.** A plain `after:` (or `--after <id>`) waits for **merged** when the task it waits for is in another repo, and only for **done** when both are in the same repo. To make a same-repo dependency wait for the merge, add or edit the task with `--after <id>:merged` (`:done` forces the other way): `lore task add --title 'build the invite page' --after tsk_162d…9666:merged`. A plan file's `after:` takes the same suffixes on a key: `after: ["backend:merged"]`. Pass `--commit <sha>` or `--pr <n>` to `lore task done` (a holder finishing on its work branch records the branch HEAD, unless that commit is already on `main`). Otherwise lore cannot see the merge (`merge unknown`); use `lore task merged --id <id>` to mark it by hand. With `merge_check.adapter: github`, lore asks `gh` about pull requests.
 - **Claims fail closed.** Offline, a claim, heartbeat, release, done on a claimed task or an approval fails with `E_OFFLINE` (exit 15). Nothing is queued to happen later.
 - **Speed and scale.** A claim is a git round trip (a second or two). Others see changes on their next fetch. Ten to twenty agents per store branch are fine.

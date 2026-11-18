@@ -39,6 +39,8 @@ Flags:
 ```
 <!-- /help -->
 
+The `reads` row names the store place this folder reads, in the `<org>/<folder>` spelling every command takes: in a repo linked to a folder "`<org>/<folder>` (this repo's link)", inside a folder of a store clone "`<org>/<folder>` (this folder of the store clone)", and in an own repo that is not linked but a resource of the org names, that folder and the `lore org link --org <org> --project <folder> --own` that links it. The `stores` row names the org folder as a place too ("org folder `<org>/<folder>`: roster, teams, company rules").
+
 ### `lore config check`
 
 <!-- help: config check -->

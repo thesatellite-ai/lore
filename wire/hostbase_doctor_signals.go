@@ -8,8 +8,9 @@ package wire
 //	  ─▶ the last fetched copy of this repo's signals ref (no network)
 //	       more than signalsRefLargeFiles files ─▶ warning, degraded
 //	       expired signal files still on it    ─▶ note (the next write drops them; it does not change the status)
-//	  ─▶ remote with autopush: a no-op atomic push of the ref onto itself;
-//	     the remote refusing --atomic ─▶ warning, degraded
+//	  ─▶ remote with autopush the person turned on (live.autopush: true or
+//	     LORE_PUSH_CLAIMS=1, devco D-598): a no-op atomic push of the ref
+//	     onto itself; the remote refusing --atomic ─▶ warning, degraded
 //
 // Read-only: the probe pushes the commit the remote already has under a
 // lease on that same commit, which the remote reports as up to date.
@@ -37,12 +38,14 @@ func (a *App) doctorSignals(ctx context.Context, warn, report func(string)) {
 	if err != nil || w.sit.Role == orgresolve.RoleClient {
 		return
 	}
-	signalsRows(ctx, w.signalsStore(ctx), warn, report)
+	signalsRows(ctx, w.signalsStore(ctx), w.pushesAsked(), warn, report)
 }
 
 // signalsRows are the rows of one signals store (its last fetched copy, and
-// the atomic probe when it pushes on its own).
-func signalsRows(ctx context.Context, st *signals.Store, warn, report func(string)) {
+// the atomic probe when it pushes on its own and the person asked for
+// pushes: probe, devco D-598: even a no-op push is a push, and doctor
+// takes no --push).
+func signalsRows(ctx context.Context, st *signals.Store, probe bool, warn, report func(string)) {
 	v, err := st.Local(ctx)
 	if err != nil {
 		return
@@ -53,7 +56,7 @@ func signalsRows(ctx context.Context, st *signals.Store, warn, report func(strin
 	if exp := v.Expired(); len(exp) > 0 {
 		report(fmt.Sprintf("%s: %d expired signal file(s) still on the ref (the next signals write drops them)", st.Ref, len(exp)))
 	}
-	if st.Remote == nil || !st.Autopush {
+	if st.Remote == nil || !st.Autopush || !probe {
 		return
 	}
 	if err := probeAtomicPush(ctx, st); errors.Is(err, gitremote.ErrAtomicUnsupported) {
