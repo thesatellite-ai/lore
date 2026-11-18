@@ -127,26 +127,22 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 			t.Errorf("[O D-640] a plain read in the store clone folder lists the personal note:\n%s", r)
 		}
 	})
-	// devco:D-642: a member's first write registered their agent actor in
-	// the org store while the row went elsewhere, and that commit read
-	// "lore: memory add act_…" (a memory that is not in it). No commit of
-	// the member's store clone names an actor id under another command's
-	// words; an actor-only commit says "actor register" or "actor copy".
-	s.Step("member/actor-commit-subjects", func() {
-		// the member's agent writes (detection on, a claude_code session):
-		// its actor row is registered by this write
+	// devco:D-642, devco:D-665: a member's first write registered their
+	// agent actor in the org store while the row went elsewhere, and that
+	// commit read "lore: memory add act_…" (a memory that is not in it); a
+	// folder's first write made its project row in a commit read "lore:
+	// rule add prj_…". A commit's subject names only rows it holds, and
+	// every row written on the side (an actor, a folder's project row) is
+	// named in it, in its own commit or listed: "(+ actor act_…)". The
+	// member's agent writes to the folder, to me and in the linked repo.
+	s.Step("member/store-commit-subjects", func() {
 		agent := mwc.With("LORE_HUMAN=", "LORE_NO_DETECT=0", "CLAUDE_CODE_CHILD_SESSION=1", "CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=o-d642")
+		mo.LoreIn(agent, "memory", "add", "--body", "pclone agent note to the folder", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		mo.LoreIn(agent, "memory", "add", "--body", "pclone agent note to me", "--to", "me", "--yes").OK(t)
 		mo.LoreIn(agent, "memory", "add", "--body", "pclone agent note in the linked repo", "--yes").OK(t)
 		mo.LoreIn(mwc, "sync").OK(t)
-		top := oStoreClone(mo, oOwner, "lore-team")
-		out, err := exec.Command("git", "-C", top, "log", "--all", "--format=%s").Output()
-		if err != nil {
-			t.Fatalf("git log in %s: %v", top, err)
-		}
-		for _, subj := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if m := oActorUnderOtherOp.FindStringSubmatch(subj); m != nil && !strings.HasPrefix(m[1], "actor ") {
-				t.Errorf("[O D-642] store commit %q names an actor row under %q", subj, m[1])
-			}
+		for _, top := range []string{oStoreClone(ada, oOwner, "lore-team"), oStoreClone(mo, oOwner, "lore-team")} {
+			oCommitsNameTheirRows(t, top)
 		}
 	})
 	s.Step("member/reads-without-personal-store", func() {
@@ -160,7 +156,96 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 	})
 }
 
-// oActorUnderOtherOp matches a store commit subject naming an actor id
-// right after its operation words ("lore: memory add act_…"): group 1 is
-// the words (devco:D-642).
-var oActorUnderOtherOp = regexp.MustCompile(`^lore: ([a-z ]+?) act_[0-9a-f]+`)
+// oRowID is a row id in a commit subject or a row file name.
+var oRowID = regexp.MustCompile(`\b[a-z]{3}_[0-9a-f]{12,}\b`)
+
+// oSideDirs are the folders of rows lore writes on the side of a command
+// (devco:D-665): an actor row, a folder's project row.
+var oSideDirs = []string{"/actors/", "/projects/"}
+
+// oDiffNames reports whether the commit (head starts with its short
+// hash) writes id into a file it changes: a folder link records the
+// project id in the folder's _meta.json ("lore: link prj_…").
+func oDiffNames(top, head, id string) bool {
+	h, _, _ := strings.Cut(head, " ")
+	out, err := exec.Command("git", "-C", top, "show", "--format=", h).Output()
+	return err == nil && (strings.Contains(string(out), "+"+id) || strings.Contains(string(out), `"`+id+`"`))
+}
+
+// oCommitsNameTheirRows fails every lore commit of the store clone top
+// whose subject names a row id the commit does not touch, that touches an
+// actor or project row its subject does not name, that holds only such
+// side rows under another command's words ("lore: rule add prj_…"), or
+// that adds a new actor row alone under "actor copy" (devco:D-642,
+// devco:D-665). It reads `git log --name-status` of every branch.
+func oCommitsNameTheirRows(t *testing.T, top string) {
+	t.Helper()
+	out, err := exec.Command("git", "-C", top, "log", "--all", "--name-status", "--format=%x00%h %s").Output()
+	if err != nil {
+		t.Fatalf("git log in %s: %v", top, err)
+	}
+	checked := 0
+	for _, entry := range strings.Split(string(out), "\x00")[1:] {
+		lines := strings.Split(strings.TrimSpace(entry), "\n")
+		head := lines[0]
+		_, subj, _ := strings.Cut(head, " ")
+		var files, statuses []string
+		for _, l := range lines[1:] {
+			if st, f, ok := strings.Cut(l, "\t"); ok {
+				statuses, files = append(statuses, st), append(files, f)
+			}
+		}
+		if !strings.HasPrefix(subj, "lore: ") || len(files) == 0 {
+			continue
+		}
+		checked++
+		touched := map[string]bool{}
+		rows, side, newActors := 0, 0, 0
+		for i, f := range files {
+			fid := oRowID.FindAllString(f, -1)
+			for _, id := range fid {
+				touched[id] = true
+			}
+			if len(fid) == 0 {
+				continue
+			}
+			rows++
+			for _, d := range oSideDirs {
+				if strings.Contains("/"+f, d) {
+					side++
+					if d == "/actors/" && statuses[i] == "A" {
+						newActors++
+					}
+				}
+			}
+		}
+		named := map[string]bool{}
+		for _, id := range oRowID.FindAllString(subj, -1) {
+			named[id] = true
+			if !touched[id] && !oDiffNames(top, head, id) {
+				t.Errorf("[O D-665] store commit %q in %s names %s, a row it does not hold:\n%s", head, top, id, strings.Join(files, "\n"))
+			}
+		}
+		for _, f := range files {
+			for _, d := range oSideDirs {
+				if !strings.Contains("/"+f, d) {
+					continue
+				}
+				for _, id := range oRowID.FindAllString(f, -1) {
+					if !named[id] {
+						t.Errorf("[O D-665] store commit %q in %s holds %s, a row its subject does not name", head, top, f)
+					}
+				}
+			}
+		}
+		if rows > 0 && rows == side && !strings.HasPrefix(subj, "lore: actor ") && !strings.HasPrefix(subj, "lore: project ") {
+			t.Errorf("[O D-665] store commit %q in %s holds only actor or project rows under another command's words:\n%s", head, top, strings.Join(files, "\n"))
+		}
+		if rows == 1 && newActors == 1 && strings.HasPrefix(subj, "lore: actor copy ") {
+			t.Errorf("[O D-665] store commit %q in %s adds a new actor row but reads \"actor copy\"", head, top)
+		}
+	}
+	if checked == 0 {
+		t.Fatalf("[O D-665] no lore commit with files in %s: the guard checked nothing", top)
+	}
+}

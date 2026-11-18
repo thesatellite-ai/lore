@@ -610,17 +610,20 @@ func subjectOf(ctx context.Context, op string, changes []store.Change) string {
 	if len(t) > maxTitleLen {
 		t = strings.ToValidUTF8(t[:maxTitleLen], "")
 	}
+	noun, _, _ := strings.Cut(op, ".")
+	own, side := splitSideRows(noun, "", changes)
 	n := "1 row"
-	if len(changes) != 1 {
-		n = strconv.Itoa(len(changes)) + " rows"
+	if own != 1 {
+		n = strconv.Itoa(own) + " rows"
 	}
-	return "lore: " + t + " (" + n + ")"
+	return "lore: " + t + " (" + n + side + ")"
 }
 
 // subject is the commit subject of a batch (B2-4, B3-23): one form for
 // every row, `lore: <op words> <id>`, then `: <title>` for a row with a
 // short title (a task, a plan: `lore: task add tsk_…: Ship the beta (3
-// rows)`). Before, a titled row lost its id (`lore: task add: Ship the
+// rows)`), then the rows written on the side (splitSideRows: `lore:
+// memory add mem_… (+ actor act_…)`). Before, a titled row lost its id (`lore: task add: Ship the
 // beta`) while a rule kept it (`lore: rule add rul_…`): two forms in one
 // log (devco D-569, owner use pass). The
 // row is the first whose table is the operation's noun, else the first
@@ -642,8 +645,13 @@ func subject(op string, changes []store.Change) string {
 		if l := rowTitle(c.Row); l != "" && !removingOp(op) && !looksSecret(l) {
 			s += ": " + l
 		}
-		if len(changes) > 1 {
-			return s + " (" + strconv.Itoa(len(changes)) + " rows)"
+		noun, _, _ := strings.Cut(op, ".")
+		own, side := splitSideRows(noun, string(c.Row.Table), changes)
+		switch {
+		case own > 1:
+			s += " (" + strconv.Itoa(own) + " rows" + side + ")"
+		case side != "":
+			s += " (" + strings.TrimPrefix(side, " ") + ")"
 		}
 		return s
 	}
@@ -675,11 +683,14 @@ func subject(op string, changes []store.Change) string {
 // `lore: actor register act_…: <name>` for a new actor row (Expect zero:
 // the row must not exist yet), `lore: actor copy act_…: <name>` for a
 // refresh. The display name is the row's own short label, already in the
-// file; a removal keeps the id only (B3-23). ok is false for any other
-// batch, which subject words as before.
+// file; a removal keeps the id only (B3-23). A new actor row written
+// outside any command (lore's own registration of an agent at its first
+// write) says "actor register" too (devco:D-665), where it read "actor
+// copy act_…"; a refresh there keeps W-11's "actor copy <id>". ok is false
+// for any other batch, which subject words as before.
 func actorOnlySubject(op string, changes []store.Change) (string, bool) {
-	if len(changes) == 0 || op == purgeOp || op == DefaultOp {
-		return "", false // a write outside any command keeps W-11's "actor copy <id>"
+	if len(changes) == 0 || op == purgeOp {
+		return "", false
 	}
 	noun, _, _ := strings.Cut(op, ".")
 	if tableOfNoun(actorsTable, noun) {
@@ -691,6 +702,9 @@ func actorOnlySubject(op string, changes []store.Change) (string, bool) {
 			return "", false
 		}
 		fresh = fresh && c.Expect.IsZero()
+	}
+	if op == DefaultOp && !fresh {
+		return "", false // a refresh outside any command keeps W-11's "actor copy <id>"
 	}
 	c := changes[0]
 	words := actorCopyWords
@@ -705,6 +719,56 @@ func actorOnlySubject(op string, changes []store.Change) (string, bool) {
 		s += " (" + strconv.Itoa(len(changes)) + " rows)"
 	}
 	return s, true
+}
+
+// sideRowWords name the rows a write makes on the side of a command's own
+// row, per table (devco:D-665): the writer's actor row registered by
+// their first write, the folder's project row made at its first write.
+var sideRowWords = map[string]string{
+	actorsTable:   "actor",
+	projectsTable: "project",
+}
+
+// projectsTable is the table of a folder's project row.
+const projectsTable = "projects"
+
+// maxSideRows bounds the side rows a subject lists by id; the rest are
+// counted.
+const maxSideRows = 2
+
+// splitSideRows splits a command batch (devco:D-665): own is the number
+// of rows that are not side rows, side the subject's words for the side
+// rows, " + actor act_…" or " + actor act_…, project prj_…" ("" when
+// there are none), which the caller puts in the subject's parentheses:
+// `lore: memory add mem_… (+ actor act_…)`, `lore: setup join: <email> (4
+// rows + actor act_…)`, where they read "(2 rows)" and "(5 rows)" before.
+// A side row is one of sideRowWords' tables that is neither the op noun's
+// table nor primary (the subject's own row), so a project add's project
+// row and an actor merge's actor rows stay the command's own rows.
+func splitSideRows(noun, primary string, changes []store.Change) (int, string) {
+	own := 0
+	var listed []string
+	more := 0
+	for _, ch := range changes {
+		table := string(ch.Row.Table)
+		w, ok := sideRowWords[table]
+		if !ok || table == primary || tableOfNoun(table, noun) {
+			own++
+			continue
+		}
+		if len(listed) == maxSideRows {
+			more++
+			continue
+		}
+		listed = append(listed, w+" "+ch.Row.ID.String())
+	}
+	if len(listed) == 0 {
+		return own, ""
+	}
+	if more > 0 {
+		listed = append(listed, strconv.Itoa(more)+" more")
+	}
+	return own, " + " + strings.Join(listed, ", ")
 }
 
 // Words of an actor-only commit (actorOnlySubject): a new actor row, and a
@@ -813,7 +877,7 @@ func tableOfNoun(table, noun string) bool {
 // titleFields are the short title fields a subject may show, per table
 // ("" = any table): a title, and a task list's name. Never a body,
 // content, description or text field (B3-23).
-var titleFields = []struct{ table, field string }{{"", "title"}, {"task_lists", "name"}}
+var titleFields = []struct{ table, field string }{{"", "title"}, {"task_lists", "name"}, {projectsTable, "name"}}
 
 // maxLabelLen bounds a title in a subject, in runes.
 const maxLabelLen = 60
