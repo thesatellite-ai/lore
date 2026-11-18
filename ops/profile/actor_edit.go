@@ -87,7 +87,7 @@ func (o ActorEditOut) Text() string { return o.text() + profilestore.WarningText
 
 // text is Text without the warnings.
 func (o ActorEditOut) text() string {
-	return work.Success + " " + o.ID + " " + o.Name + " edited (" + strings.Join(o.Changed, ", ") + ") in " + o.Where + "\n"
+	return work.Success + " " + o.ID + " " + o.Name + " edited (" + strings.Join(o.Changed, ", ") + ") in the roster of " + o.Where + "\n"
 }
 
 // actorEdit builds the patch, refuses a bad value before anything is

@@ -166,7 +166,7 @@ Use it when an agent holds a task it should not work on any more. The agent's ne
 $ lore agent start --label agent-backend --owner @alice
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_76bd…3f10.json (store agency/org)
-✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_76bd…3f10 agent agent-backend (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website

@@ -166,7 +166,7 @@ func (o ContactRemoveOut) Text() string { return o.text() + profilestore.Warning
 // text is Text without the warnings.
 func (o ContactRemoveOut) text() string {
 	c := o.Contact
-	return work.Success + " " + c.ID + " " + c.Type + " " + c.Value + " removed from " + c.ActorName + " in " + o.Where + " (restorable from the trash)\n"
+	return work.Success + " " + c.ID + " " + c.Type + " " + c.Value + " removed from " + c.ActorName + " in the roster of " + o.Where + " (restorable from the trash)\n"
 }
 
 // contactRemove moves the contact to the trash (DELETION_DESIGN); the

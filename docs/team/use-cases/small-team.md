@@ -19,14 +19,14 @@ Each developer registers once, then shares the registration with `lore sync` (lo
 # alice, in billing
 $ lore actor register
 lore: wrote actors/act_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/actors/act_7a67…9504.json is unchanged)
-✓ act_7a67…9504 alice (@alice) already registered (refreshed) in this repo
+✓ act_7a67…9504 alice (@alice) already registered (refreshed) in the roster of this repo
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
 # bob, in billing
 $ lore actor register
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/billing/.git/config; hook blocks in ~/work/billing/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote actors/act_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/actors/act_2ad3…f891.json is unchanged)
-✓ act_2ad3…f891 bob (@bob) registered in this repo
+✓ act_2ad3…f891 bob (@bob) registered in the roster of this repo
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
 # alice, in billing

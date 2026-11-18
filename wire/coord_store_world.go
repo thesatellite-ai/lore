@@ -74,7 +74,7 @@ func (h standaloneCoord) openStoreWorld(ctx context.Context, id string) (w *coor
 			WithHint("start an agent session with `lore agent start --label <name>`, or set your org identity")
 	}
 	if who.Kind == identity.KindAgent && who.Owner == nil {
-		if err = a.requireRosterAgent(ctx, who.StableKey, org.Name); err != nil {
+		if err = a.requireRosterAgent(ctx, who.StableKey); err != nil {
 			return nil, true, err
 		}
 	}

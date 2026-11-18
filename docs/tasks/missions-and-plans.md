@@ -268,7 +268,7 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 # alice, in website
 $ lore actor register
 lore: wrote actors/act_3b62…e913 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/actors/act_3b62…e913.json is unchanged)
-✓ act_3b62…e913 alice (@alice) already registered (refreshed) in this repo
+✓ act_3b62…e913 alice (@alice) already registered (refreshed) in the roster of this repo
 ```
 <!-- /example -->
 

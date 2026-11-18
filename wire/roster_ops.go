@@ -265,7 +265,8 @@ func (a *App) rosterInactive(ctx context.Context, r rosterAt, handle string) err
 // P3-CMDLORE-5).
 type rosterAt struct {
 	src store.Source
-	// where names it in messages: "this repo", "northwind org/". An org
+	// where is the repo's own roster's name ("this repo"); an org roster
+	// is named by label from src, "northwind (northwind/org)". An org
 	// folder is no secret: it is printed as it is, in a pipe and in CI too.
 	where string
 	// org is the org's name for an org roster ("" for the repo's own): a
@@ -278,8 +279,12 @@ func newRosterAt(src store.Source, where string) rosterAt {
 	return rosterAt{src: src, where: where}
 }
 
-// shown is where for output, success lines and refusals alike.
-func (r rosterAt) shown() string { return r.where }
+// shown is the roster for output: the `where` of every op's JSON and the
+// place a success line names after "in the roster of" ("acme (acme/org)",
+// "this repo"). It is label: a line that named the folder ("registered in
+// acme org/") was a third shape beside "the roster of acme (acme/org)"
+// (devco D-668).
+func (r rosterAt) shown() string { return r.label() }
 
 // label names an org roster as the person knows it: the org entry, then
 // the store folder holding it ("acme (acme/org)"); the repo's own roster

@@ -240,7 +240,7 @@ func (o ContactTypeOut) Text() string { return o.text() + profilestore.WarningTe
 
 // text is Text without the warnings.
 func (o ContactTypeOut) text() string {
-	return work.Success + " contact type " + o.Type.Name + " " + o.Verb + " in " + o.Where + "\n"
+	return work.Success + " contact type " + o.Type.Name + " " + o.Verb + " in the roster of " + o.Where + "\n"
 }
 
 // Verbs of ContactTypeOut.

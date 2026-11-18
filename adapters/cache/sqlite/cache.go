@@ -397,8 +397,12 @@ func (c *Cache) Apply(ctx context.Context, source store.Source, rows []store.Row
 	if source == "" {
 		return errs.New(errs.InvalidInput, "sqlite cache: empty source")
 	}
-	st := c.st
+	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		if st, err = c.current(ctx, tx); err != nil { // another handle may have changed the tables (devco:D-667)
+			return err
+		}
 		applied := make([]store.Row, 0, len(rows))
 		kindsChanged := false
 		var taskIDs []string // the applied tasks rows, for the closure (P3-PERF-1)
@@ -537,8 +541,12 @@ func (c *Cache) Rebuild(ctx context.Context, source store.Source) error {
 	}
 	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
-		for _, name := range c.st.names() {
-			p := c.st.plans[name]
+		now, err := c.current(ctx, tx) // another handle may have changed the tables (devco:D-667)
+		if err != nil {
+			return err
+		}
+		for _, name := range now.names() {
+			p := now.plans[name]
 			if err := clearSource(ctx, tx, p, source); err != nil {
 				return err
 			}
@@ -559,7 +567,6 @@ func (c *Cache) Rebuild(ctx context.Context, source store.Source) error {
 		if err := refreshTaskTree(ctx, tx); err != nil {
 			return err
 		}
-		var err error
 		if st, err = c.loadState(ctx, tx); err != nil {
 			return err
 		}

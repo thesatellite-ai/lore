@@ -178,7 +178,7 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		// An agent actor (LORE_ACTOR) must be on the roster; a detected
 		// coding agent acts for its person (owner rule 2026-11-11), who
 		// is not checked here either.
-		if err = a.requireRosterAgent(ctx, who.StableKey, sit.Result.Org.Name); err != nil {
+		if err = a.requireRosterAgent(ctx, who.StableKey); err != nil {
 			return nil, err
 		}
 	}
@@ -261,8 +261,11 @@ func (w *coordWorld) remoteRepoName(ctx context.Context) string {
 // (BUG-T6, v0.1.17 stores.RosterCheck): an agent its owner started a
 // moment ago on another machine is on the remote roster but not yet in a
 // copy fetched within live.fetch_ttl. A hit costs no extra fetch; a sync
-// that fails leaves the local copy's answer (the refusal) standing.
-func (a *App) requireRosterAgent(ctx context.Context, stableKey, org string) error {
+// that fails leaves the local copy's answer (the refusal) standing. The
+// refusal names the roster as every roster sentence does, "the roster of
+// acme (acme/org)" (devco D-668: "is not on acme's roster" named the org
+// only).
+func (a *App) requireRosterAgent(ctx context.Context, stableKey string) error {
 	r, err := a.coordRoster(ctx)
 	if err != nil {
 		return err
@@ -271,7 +274,7 @@ func (a *App) requireRosterAgent(ctx context.Context, stableKey, org string) err
 	if err != nil || ok {
 		return err
 	}
-	return errs.New(errs.IdentityFailed, identity.EnvActor+"="+stableKey+" is not on "+org+"'s roster (register it with `lore agent start --label …`)").
+	return errs.New(errs.IdentityFailed, identity.EnvActor+"="+stableKey+" is not on "+r.of()+" (register it with `lore agent start --label <label>`)").
 		WithHint("its owner runs `lore agent start --label <l>` first")
 }
 

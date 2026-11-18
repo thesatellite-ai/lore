@@ -60,7 +60,7 @@ created 2026-11-02T10:09:20Z by alice · updated 2026-11-02T10:09:20Z by alice
 alice (work/website)$ lore agent start --label agent-backend --owner @alice
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_76bd560aff0771fab8457dbfa9823f10.json (store agency/org)
-✓ act_76bd560aff0771fab8457dbfa9823f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_76bd560aff0771fab8457dbfa9823f10 agent agent-backend (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 agent-backend (work/website)$ lore task claim --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it

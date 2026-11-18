@@ -27,7 +27,7 @@ $ lore team list
 # tomas, in acme-hub
 $ lore team show --handle @web
 tem_7a67…9504  @web  Web
-roster: agency org/
+roster: agency (agency/org)
 members (2):
   act_2ad3…f891  @tomas  Tomas Weber
   act_162d…9666  @mira  Mira Patel
@@ -99,7 +99,7 @@ $ lore team list --json
       "updated_by": "act_2ad3…f891"
     }
   ],
-  "where": "agency org/"
+  "where": "agency (agency/org)"
 }
 ```
 <!-- /example -->

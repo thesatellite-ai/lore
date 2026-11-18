@@ -32,7 +32,7 @@ Every row of one run (the people, their email and GitHub contacts, stints, membe
 
 ```text
 ✓ added mira@agency.example (act_…) Mira Dev, role member, teams @web
-  4 roster rows in agency org/, one store commit; each person joins on their machine with: lore setup join git@github.com:agency/agency-team.git (matched by their email, no invite)
+  4 roster rows in the roster of agency (agency/org), one store commit; each person joins on their machine with: lore setup join git@github.com:agency/agency-team.git (matched by their email, no invite)
 ```
 
 ## Step 2 — They join

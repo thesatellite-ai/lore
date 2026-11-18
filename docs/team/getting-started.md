@@ -238,7 +238,7 @@ $ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_28f8…03df.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store agency/org)
-✓ act_b4f4…a5b0 Alice Doe (@alice) registered in agency org/
+✓ act_b4f4…a5b0 Alice Doe (@alice) registered in the roster of agency (agency/org)
 ```
 <!-- /example -->
 
