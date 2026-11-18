@@ -238,7 +238,38 @@ func (a *App) List(ctx context.Context, source store.Source, table row.Table) ([
 	if err != nil {
 		return nil, err
 	}
+	if source == store.SourceRepo && a.noRepoStoreHere(ctx, eng) {
+		if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+			// devco D-631: a read under a setup from a plain folder has no
+			// repo store, so it has no repo rows; the setup's stores are
+			// read beside it (repo list, context's render sources). A
+			// write still gets the engine's refusal.
+			return nil, nil
+		}
+	}
 	return eng.List(ctx, source, table)
+}
+
+// noRepoStoreHere reports a store-only open (runOnDefaultStore: a read
+// under a setup from a plain folder) where no attached store answers for
+// the repo store: there is no "this repo" to read rows or a project of.
+func (a *App) noRepoStoreHere(ctx context.Context, eng *engine.Engine) bool {
+	st, err := a.state(ctx)
+	return err == nil && st.storeOnly && st.here == "" && !eng.AnswersRepo()
+}
+
+// SetupReadStores is every attached store when the open is a read under
+// a setup from a plain folder (noRepoStoreHere), ok false anywhere else.
+// devco D-632: `lore context --setup <setup>` reads the setup's stores as
+// its scope, as search and the lists do there; its render sources (the
+// repo store plus the shareable ones) found none of them, so --topics
+// said "(no rows yet)".
+func (a *App) SetupReadStores(ctx context.Context) ([]store.Source, bool) {
+	eng, err := a.Engine(ctx)
+	if err != nil || !a.noRepoStoreHere(ctx, eng) {
+		return nil, false
+	}
+	return engine.ReadStoresOf(eng), true
 }
 
 // Stores implements opsmemory.Env: the attached stores, or none before
@@ -321,6 +352,17 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	}
 	if st, serr := a.state(ctx); serr == nil && st.here != "" {
 		return a.folderProject(ctx, st, st.here) // inside a store folder: its project (storehere.go)
+	}
+	if a.noRepoStoreHere(ctx, eng) {
+		// devco D-631: a read under a setup from a plain folder opens the
+		// setup's stores alone (runOnDefaultStore), none of them the repo
+		// store, so "this repo's project" is nobody's: the place has no
+		// project, and a read that filters by it reads every project's rows
+		// (engine.EveryProject), as rule and memory list do. Before it every
+		// content list (playbook, pattern, handoff, …), link, tag and repo
+		// list failed "no store named repo is attached".
+		return ids.ID[ids.Project]{}, errs.Wrap(errs.NotFound, "this place is no repo and no store folder, so it has no project row yet, and a read never makes one", engine.ErrNoPlaceProject).
+			WithHint("name a folder with --store <org>/<folder> to read one project's rows")
 	}
 	rows, err := eng.List(ctx, store.SourceRepo, schema.TableProjects)
 	if err != nil {

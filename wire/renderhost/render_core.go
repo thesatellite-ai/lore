@@ -157,6 +157,11 @@ type pinSkips struct {
 // renderSources are the stores whose rows may reach the committed render:
 // the repo store first, then every attached store marked shareable.
 func (h *Host) renderSources(ctx context.Context) ([]store.Source, error) {
+	if all, ok := h.app.SetupReadStores(ctx); ok {
+		// a read under a setup from a plain folder: no repo store, the
+		// setup's stores are the whole scope (devco D-632)
+		return all, nil
+	}
 	shared, err := h.app.ShareableStores(ctx)
 	if err != nil {
 		return nil, err

@@ -425,6 +425,15 @@ func New(opts ...Option) (*Engine, error) {
 // Stores lists the attached store names in precedence order.
 func (e *Engine) Stores() []store.Source { return slices.Clone(e.order) }
 
+// AnswersRepo reports whether a store answers for the repo store (one
+// attached as repo, or the alias a store-only open names for it). A
+// store-only open run under a setup from a plain folder has neither
+// (devco D-631): there is no "this repo's project" to ask for.
+func (e *Engine) AnswersRepo() bool {
+	_, err := e.attached(store.SourceRepo)
+	return err == nil
+}
+
 // IsClient reports whether the attached store name is a client repo
 // (Attached.Client); false for an unknown name.
 func (e *Engine) IsClient(name store.Source) bool { return e.stores[name].Client }

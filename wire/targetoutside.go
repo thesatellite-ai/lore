@@ -63,7 +63,7 @@ const projectField = "project"
 // setup's default store, the org store holding this folder's org roster.
 func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (res op.Result, handled bool, err error) {
 	spec := e.Spec()
-	if spec.Local && !storeRoutedLocal(e, d) {
+	if spec.Local && !storeRoutedLocal(e, d) && !contextOutsideRepo(ctx, a.opts.RepoDir, e) {
 		return op.Result{}, false, nil
 	}
 	write := spec.Access == op.AccessWrite
@@ -500,6 +500,17 @@ func plainFolder(ctx context.Context, dir string) bool {
 // a repo not linked to a folder, instead of the repo-only local path.
 func storeRoutedLocal(e op.Entry, d op.Decoder) bool {
 	return e.Spec().Name == contextop.OpFetch && routedStoreRead(e, d)
+}
+
+// contextOutsideRepo reports `lore context` run in a plain folder (no git
+// work tree, no store clone): it reads the setup's stores as search and
+// sql do there (runOnDefaultStore), under --setup or the setup covering
+// the folder. devco D-632: its own refusal named --setup, and `context
+// --topics --setup <setup>` from the home folder still failed "not inside
+// a git work tree", because the Local op only took the store path with
+// --store.
+func contextOutsideRepo(ctx context.Context, dir string, e op.Entry) bool {
+	return e.Spec().Name == contextop.OpFetch && !inStore(dir) && !insideWorkTree(ctx, dir)
 }
 
 // namesHeldRow reports whether e's input names a row by id that a folder

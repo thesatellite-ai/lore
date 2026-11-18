@@ -28,6 +28,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -71,8 +72,14 @@ type ShowIn struct {
 	Links bool   `json:"links,omitempty" flag:"links" desc:"also print the cached link index of every entry"`
 }
 
-// DoctorIn is the (empty) input of store.doctor.
-type DoctorIn struct{}
+// DoctorIn is the input of store.doctor.
+type DoctorIn struct {
+	// Store keeps the report to one store, as every other store command
+	// names one (devco D-633: `store doctor --store <org>` was "unknown
+	// flag"): the store of that name and its folders (<name>/<folder>),
+	// matched by name or url, and the clones of those stores.
+	Store string `json:"store,omitempty" flag:"store" desc:"only this store and its folders (an org's name, me, team, a .lore/stores.yaml name or a store url); default every store"`
+}
 
 // OpenIn is the input of store.open.
 type OpenIn struct {
@@ -605,7 +612,7 @@ func cloneOps(m Manager) []op.Entry {
 			Name: OpDoctor, Summary: "Check every store this repo and machine use (stores.yaml, the org, the personal store) and the v0.1.17 org stores: reachable, unpushed commits and their age, refused pushes, the clone folders",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
 			Examples: []op.Example{{Title: "check", CLI: "lore store doctor", Want: ""}},
-		}, func(ctx context.Context, _ DoctorIn) (ClonesOut, error) {
+		}, func(ctx context.Context, in DoctorIn) (ClonesOut, error) {
 			c, err := cloner(m, "doctor")
 			if err != nil {
 				return ClonesOut{}, err
@@ -616,6 +623,9 @@ func cloneOps(m Manager) []op.Entry {
 			}
 			if sc, ok := upgrade.As[StoreChecker](m); ok {
 				out.Checked = sc.CheckStores(ctx)
+			}
+			if out, err = onlyStore(out, in.Store); err != nil {
+				return ClonesOut{}, err
 			}
 			out = withEmptyLists(out)
 			out.doctor = true
@@ -628,6 +638,41 @@ func cloneOps(m Manager) []op.Entry {
 			return out, nil
 		}),
 	}
+}
+
+// onlyStore keeps out to the store name names (store doctor --store,
+// devco D-633): the checked stores called name or <name>/<folder>, or
+// whose url is name, and the clones of those stores' urls (or whose
+// entries name it). "" keeps everything; a name nothing matches is
+// refused with the names doctor knows, never an empty report.
+func onlyStore(out ClonesOut, name string) (ClonesOut, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return out, nil
+	}
+	match := func(s string) bool { return s == name || strings.HasPrefix(s, name+"/") }
+	urls := map[string]bool{name: true}
+	var checked []StoreCheck
+	var known []string
+	for _, c := range out.Checked {
+		known = append(known, c.Store)
+		if match(c.Store) || c.URL == name {
+			checked = append(checked, c)
+			urls[c.URL] = true
+		}
+	}
+	var clones []CloneView
+	for _, v := range out.Stores {
+		if urls[v.URL] || slices.ContainsFunc(v.Entries, match) {
+			clones = append(clones, v)
+		}
+	}
+	if len(checked) == 0 && len(clones) == 0 {
+		return ClonesOut{}, errs.New(errs.NotFound, "store doctor: no store named "+name+" is used here").
+			WithHint("lore store doctor checks every store; the stores it knows: " + cmp.Or(strings.Join(known, ", "), "none"))
+	}
+	out.Checked, out.Stores = checked, clones
+	return out, nil
 }
 
 // doctorVerdict is nil when no store has a problem (a warning is no
