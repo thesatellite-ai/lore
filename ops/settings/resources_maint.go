@@ -142,6 +142,9 @@ func (o ResLintOut) Text() string {
 
 // FieldRetypeIn is the input of resource.field.retype.
 type FieldRetypeIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind   string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Field  string `json:"field" arg:"1" desc:"the field name"`
 	Type   string `json:"type" arg:"2" desc:"the new value type"`

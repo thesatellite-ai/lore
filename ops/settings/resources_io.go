@@ -829,6 +829,9 @@ type exportElem struct {
 
 // ResRepointIn is the input of resource.repoint.
 type ResRepointIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Old    string   `json:"old" arg:"0" desc:"the resource refs point at now (name or res_ id)"`
 	New    string   `json:"new" arg:"1" desc:"the resource they should point at (same kind)"`
 	Fields []string `json:"fields,omitempty" flag:"fields" desc:"only these ref fields (comma list or repeatable)"`

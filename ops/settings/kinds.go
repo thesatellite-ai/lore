@@ -79,6 +79,9 @@ type KindAddIn struct {
 
 // KindEditIn is the input of resource.kind.edit.
 type KindEditIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind          string `json:"id" arg:"0" desc:"the kind (name or knd_ id)"`
 	Description   string `json:"description,omitempty" flag:"description" desc:"what the kind is"`
 	NameFormat    string `json:"name_format,omitempty" flag:"name-format" desc:"id | dns | ip | text"`
@@ -98,6 +101,9 @@ type KindRef struct {
 
 // RenameIn renames a settings row (old → new).
 type RenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Old string `json:"id" arg:"0" desc:"the current name (or id)"`
 	New string `json:"new_name" arg:"1" desc:"the new name"`
 }
@@ -153,6 +159,9 @@ type FieldEditIn struct {
 
 // FieldRenameIn is the input of resource.field.rename.
 type FieldRenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Old  string `json:"field" arg:"1" desc:"the current field name"`
 	New  string `json:"new_name" arg:"2" desc:"the new field name"`
@@ -165,6 +174,9 @@ type FieldRenameIn struct {
 
 // FieldRemoveIn is the input of resource.field.remove.
 type FieldRemoveIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind  string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Field string `json:"field" arg:"1" desc:"the field name"`
 	Drop  bool   `json:"drop,omitempty" flag:"drop" desc:"also remove the values rows hold (else refused while rows use it)"`

@@ -82,6 +82,9 @@ type ViewNameIn struct {
 // ViewDeleteIn is the input of task.view.delete: the view and the delete
 // reason every trash move takes (INTEG-TRASH-3, DELETION 2.1).
 type ViewDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name   string `json:"name" arg:"0" desc:"the view name or tvw_ id"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }

@@ -109,6 +109,9 @@ type TemplateNameIn struct {
 // TemplateDeleteIn is the input of task.template.delete: the template and
 // the delete reason every trash move takes (INTEG-TRASH-3, DELETION 2.1).
 type TemplateDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name   string `json:"name" arg:"0" desc:"the template name (or its ttp_ id)"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
@@ -123,6 +126,9 @@ type TemplateAddIn struct {
 
 // TemplateRenameIn is the input of task.template.rename.
 type TemplateRenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name    string `json:"name" arg:"0" desc:"the template name (or its ttp_ id)"`
 	NewName string `json:"new_name" arg:"1" desc:"the new name (snake_case); the id stays"`
 }

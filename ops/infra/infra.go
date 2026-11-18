@@ -166,11 +166,17 @@ type ops struct{ env Env }
 
 // IDIn is the input of the verbs that take one row id.
 type IDIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the row id"`
 }
 
 // DeleteIn is the input of repo.delete.
 type DeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID     string `json:"id" arg:"0" desc:"the row id"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
