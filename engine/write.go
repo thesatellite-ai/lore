@@ -925,7 +925,28 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		// answering for it (WithRepoAlias), which e.stores holds by its own
 		// name (a store-only open outside a repo, devco D-422)
 		names = []store.Source{at.Name}
+	} else if n := narrowOf(ctx); n != nil && !e.IsMachineLocal(table) {
+		// D-617: under --store the named stores are searched first, so a
+		// row with a copy there (the caller's actor is in every store) is
+		// that copy; only a row they lack is looked for elsewhere, which
+		// the narrowing then refuses naming where it is (narrow.go); a
+		// tombstone there (a moved row) is no copy either
+		if named := slices.DeleteFunc(slices.Clone(names), func(s store.Source) bool { return !slices.Contains(n.Sources, s) }); len(named) > 0 {
+			src, r, hidden, err := e.locateIn(ctx, named, table, ref.ID)
+			if err == nil && !r.Deleted {
+				return src, r, hidden, nil
+			}
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
+				return "", row.Row{}, false, err
+			}
+		}
 	}
+	return e.locateIn(ctx, names, table, ref.ID)
+}
+
+// locateIn is locateRaw's search of the stores names, in order.
+func (e *Engine) locateIn(ctx context.Context, names []store.Source, table row.Table, id ids.AnyID) (store.Source, row.Row, bool, error) {
+	ref := Ref{Table: table, ID: id}
 	var found []copyHit
 	seen := map[string]bool{} // Locations already looked in: one place counts once
 	for _, name := range names {
@@ -1307,6 +1328,9 @@ func cacheFailed(rows []store.Row, cause error) error {
 // the tombstones and the purged ids (later 542): all land or none does.
 // Other backends get WritePurge and finishW records the audit after it.
 func (e *Engine) writePurge(ctx context.Context, st Attached, p Purger, changes []store.Change, purged []ids.AnyID, evs []Event) error {
+	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
+		return err // D-617: the run's first write lands where --store names (narrow.go)
+	}
 	dropSnapshot(ctx, st)
 	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write
 	pj, ok := st.Backend.(store.PurgeAuditJournal)
@@ -1339,6 +1363,9 @@ func (e *Engine) journalRecords(ctx context.Context, st Attached, evs []Event) (
 // (CLEANUP Qs). Other backends get a plain Write and finish records the
 // audit after it, as before.
 func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.Change, evs []Event) error {
+	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
+		return err // D-617: the run's first write lands where --store names (narrow.go)
+	}
 	ctx = withBatchTrailer(ctx) // XQ1: the commit names its bulk action
 	dropSnapshot(ctx, st)
 	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write

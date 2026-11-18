@@ -1198,8 +1198,10 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		if uerr := a.unreachableTarget(e, d); uerr != nil {
 			return uerr
 		}
+		// D-617: --store naming stores the repo attaches keeps the
+		// command to them (writestore.go narrowToStore)
 		var rerr error
-		res, rerr = eng.Run(ctx, e, d, c)
+		res, rerr = eng.Run(a.narrowToStore(ctx, e, d, eng), e, d, c)
 		return rerr
 	})
 	if err == nil {
