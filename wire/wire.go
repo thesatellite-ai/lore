@@ -1034,7 +1034,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// (mission status, inbox, migrate status, session list, why-context)
 	// refuses outside one with the one repo-only refusal (repoonly.go),
 	// before the Local and store-only paths answer in their own words
-	if !fleetFix(e, d) {
+	if !fleetFix(e, d) && !a.storeQueueRun(ctx, e, d) {
 		if err := repoOnlyRefusal(ctx, e.Spec().Name, a.opts.RepoDir); err != nil {
 			return op.Result{}, err
 		}
@@ -1084,6 +1084,14 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// it alone; the repo open here would refuse with E_NOT_A_STORE
 	if e.Spec().Name == opsinfra.OpActorMerge && !insideWorkTree(ctx, a.opts.RepoDir) {
 		return runDirect(op.WithConfirmed(ctx, c.Yes), e, d)
+	}
+	// task next over an org store with no code repo (--store, or --setup
+	// from home) opens that store itself, per store (coord_store_queue.go,
+	// devco:D-666); the repo open here would refuse with E_NOT_A_STORE
+	// hold claim / release on an org store (--store, or no code repo here)
+	// opens that store itself too (coord_store_hold.go, devco:D-672)
+	if (!inCodeRepo(ctx, a.opts.RepoDir) && a.storeQueueRun(ctx, e, d)) || a.storeHeartbeatRun(ctx, e, d) || a.holdStoreRun(ctx, e, d) {
+		return runDirect(ctx, e, d)
 	}
 	// a write naming its store (--to acme/org) outside any repo runs on
 	// that store alone (targetoutside.go)

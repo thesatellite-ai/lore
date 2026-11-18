@@ -427,6 +427,19 @@ func (i Input) Bool(name string) (value, ok bool) {
 	return false, false
 }
 
+// String returns the value of the string field with json name name; ok is
+// false when there is no such string field. Why: the run's gates read one
+// flag of an op before it runs (task next --store outside a code repo is
+// no repo-only read, devco:D-666), as Bool does for a switch.
+func (i Input) String(name string) (value string, ok bool) {
+	for _, f := range i.fields {
+		if f.Name == name && f.Type == TypeString {
+			return i.v.FieldByIndex(f.index).String(), true
+		}
+	}
+	return "", false
+}
+
 // Op returns the name of the operation the input was decoded for.
 func (i Input) Op() string { return i.op }
 

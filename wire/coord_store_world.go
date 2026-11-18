@@ -28,6 +28,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -39,13 +41,27 @@ import (
 // a store clone). ok=false hands the command back to openWorld: a code
 // repo, no id, or no store of this machine holding the id.
 func (h standaloneCoord) openStoreWorld(ctx context.Context, id string) (w *coordWorld, ok bool, err error) {
+	if id == "" || inCodeRepo(ctx, h.a.opts.RepoDir) {
+		return nil, false, nil
+	}
+	return h.storeWorldOf(ctx, id)
+}
+
+// inCodeRepo reports whether dir is inside a code repo: a git work tree
+// that is no store clone.
+func inCodeRepo(ctx context.Context, dir string) bool {
+	if _, inClone := storeHere(dir); inClone {
+		return false
+	}
+	return insideWorkTree(ctx, dir)
+}
+
+// storeWorldOf is the world of store task id wherever the command runs:
+// the org-store folder holding it, found by the id scan. A code repo's
+// heartbeat with no --id reaches the claims taken from home through it
+// (devco:D-666). ok=false: no store of this machine holds the id.
+func (h standaloneCoord) storeWorldOf(ctx context.Context, id string) (w *coordWorld, ok bool, err error) {
 	a := h.a
-	if id == "" {
-		return nil, false, nil
-	}
-	if _, inClone := storeHere(a.opts.RepoDir); !inClone && insideWorkTree(ctx, a.opts.RepoDir) {
-		return nil, false, nil
-	}
 	look := &rowLookup{id: id}
 	hold, found := a.rowFolderIn(ctx, a.orgFolders(ctx), id, look)
 	if !found {
@@ -62,32 +78,42 @@ func (h standaloneCoord) openStoreWorld(ctx context.Context, id string) (w *coor
 	if org == nil {
 		return nil, false, nil
 	}
-	if err = a.openStoreOnlyOn(ctx, hold, hold.Name, a.companyFolderOf(ctx, hold)...); err != nil {
-		return nil, true, err
+	w, err = h.storeWorldOn(ctx, cfg, org, hold, a.companyFolderOf(ctx, hold)...)
+	return w, true, err
+}
+
+// storeWorldOn is the coordination world on org store folder hold: the
+// App opened store-only on it (also attached beside it for reads), the
+// caller as the person's identity in that store's org, the claims on the
+// store clone's signals ref under hold's folder (useStore).
+func (h standaloneCoord) storeWorldOn(ctx context.Context, cfg *orgconf.Config, org *orgconf.Org, hold attach.Store, also ...attach.Store) (*coordWorld, error) {
+	a := h.a
+	if err := a.openStoreOnlyOn(ctx, hold, hold.Name, also...); err != nil {
+		return nil, err
 	}
 	who, actor, err := a.storeCaller(ctx, hold.Name)
 	if err != nil {
-		return nil, true, err
+		return nil, err
 	}
 	if who.Kind != identity.KindAgent && who.Kind != identity.KindHuman {
-		return nil, true, errs.New(errs.IdentityFailed, "coordination needs an agent actor or a person on the roster").
+		return nil, errs.New(errs.IdentityFailed, "coordination needs an agent actor or a person on the roster").
 			WithHint("start an agent session with `lore agent start --label <name>`, or set your org identity")
 	}
 	if who.Kind == identity.KindAgent && who.Owner == nil {
 		if err = a.requireRosterAgent(ctx, who.StableKey); err != nil {
-			return nil, true, err
+			return nil, err
 		}
 	}
 	dir, _, _, isClone := a.storeClone(ctx, hold.Name)
 	if !isClone {
-		return nil, true, errs.New(errs.Unsupported, "the store holding "+id+" is not a git clone here: its signals ref cannot be reached").
+		return nil, errs.New(errs.Unsupported, "the store holding "+string(hold.Name)+" is not a git clone here: its signals ref cannot be reached").
 			WithHint("`lore store list` lists the stores this machine knows")
 	}
 	repo, err := gitref.Open(ctx, dir, nil)
 	if err != nil {
-		return nil, true, errs.Wrap(errs.Internal, "open the store clone", err)
+		return nil, errs.Wrap(errs.Internal, "open the store clone", err)
 	}
-	w = &coordWorld{
+	w := &coordWorld{
 		a: a, repo: repo, stateDir: filepath.Join(gitbackend.StateDirOf(dir), signalsStateDir),
 		folder: signalsRootFolder, who: who, actorID: actor.String(),
 		sit:      orgresolve.Result{Org: org},
@@ -97,10 +123,10 @@ func (h standaloneCoord) openStoreWorld(ctx context.Context, id string) (w *coor
 	w.remoteName = gitbackend.RemoteName
 	w.remote = &gitremote.Git{Repo: repo, Name: gitbackend.RemoteName}
 	if err = w.useStore(ctx); err != nil {
-		return nil, true, err
+		return nil, err
 	}
 	w.remote = w.spot.remote
-	return w, true, nil
+	return w, nil
 }
 
 // storeCaller is who coordinates on store name: the person's identity in

@@ -1310,6 +1310,7 @@ Flags:
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --repo string        only tasks of this repo (a repo name of the group)
       --role string        plan role (e.g. coordinator)
+      --store string       rank the tasks of this org's store, <org> or <org>/<folder>, from any folder (each claim lands on its folder's store signals ref); from the home folder --setup <setup> ranks that setup's org store (also --to)
       --why                explain the urgency score term by term
       --yes                answer yes to the confirmation without a terminal
 ```
@@ -1502,6 +1503,7 @@ Flags:
       --name string    the resource to hold (a test suite, a staging slot) (required)
       --on string      project (the project's signals ref, the default) or machine
       --push           push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)
+      --store string   hold it on this org store folder's signals ref, <org>/<folder> (or <org> when it has one folder), from any folder; without it the code repo's signals ref (outside a code repo: the store clone here, or the --setup's org store)
       --ttl duration   how long the hold lasts (default: lease.ttl)
       --yes            answer yes to the confirmation without a terminal
 ```
@@ -1521,9 +1523,10 @@ Examples:
   lore hold release --name full-suite
 
 Flags:
-      --json          print the result (or the error) as JSON
-      --name string   the resource to release (required)
-      --yes           answer yes to the confirmation without a terminal
+      --json           print the result (or the error) as JSON
+      --name string    the resource to release (required)
+      --store string   release the hold taken on this org store folder, <org>/<folder> (or <org> when it has one folder), from any folder
+      --yes            answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 

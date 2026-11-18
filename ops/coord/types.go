@@ -96,6 +96,10 @@ type NextIn struct {
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain in the old form, never claiming even with --claim (nothing written)"`
 	// Push: as ClaimIn.Push, for the claim task next --claim takes.
 	Push bool `json:"push,omitempty" flag:"push" desc:"with --claim: push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	// Store ranks the tasks of one org's store, <org> or <org>/<folder>,
+	// from anywhere (devco:D-666): from the home folder `task next
+	// --setup <setup>` ranks the setup's org store the same way.
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"rank the tasks of this org's store, <org> or <org>/<folder>, from any folder (each claim lands on its folder's store signals ref); from the home folder --setup <setup> ranks that setup's org store"`
 }
 
 // NextOut is the output of task.next. Without --claim (a read, or
@@ -208,11 +212,16 @@ type HoldClaimIn struct {
 	On   string        `json:"on,omitempty" flag:"on" desc:"project (the project's signals ref, the default) or machine"`
 	// Push: as ClaimIn.Push, for a hold on the code repo's signals ref.
 	Push bool `json:"push,omitempty" flag:"push" desc:"push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"`
+	// Store holds on an org store folder's signals ref from any folder
+	// (devco:D-672): a resource an org shares, held from the home folder.
+	Store string `json:"store,omitempty" flag:"store" desc:"hold it on this org store folder's signals ref, <org>/<folder> (or <org> when it has one folder), from any folder; without it the code repo's signals ref (outside a code repo: the store clone here, or the --setup's org store)"`
 }
 
 // HoldReleaseIn is the input of hold.release.
 type HoldReleaseIn struct {
 	Name string `json:"name" arg:"0" desc:"the resource to release"`
+	// Store: as HoldClaimIn.Store, the place the hold was taken.
+	Store string `json:"store,omitempty" flag:"store" desc:"release the hold taken on this org store folder, <org>/<folder> (or <org> when it has one folder), from any folder"`
 }
 
 // GateIn is the input of gate.request and gate.approve.

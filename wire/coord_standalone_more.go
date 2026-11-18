@@ -338,11 +338,10 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if in.On != "" && in.On != holdOnProject {
 		return opscoord.Report{}, errs.New(errs.InvalidInput, "--on is project or machine, not "+in.On)
 	}
-	w, err := h.openWorld(ctx)
+	// devco:D-672: --store <org>[/<folder>] (or no code repo here) holds
+	// it on that org store folder's signals ref
+	w, err := h.holdWorld(ctx, holdVerbClaim, in.Name, in.Store, " --push")
 	if err != nil {
-		return opscoord.Report{}, err
-	}
-	if err = w.forHolds(ctx); err != nil {
 		return opscoord.Report{}, err
 	}
 	if err = w.requirePushAsked(in.Push, "a hold"); err != nil {
@@ -375,11 +374,8 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 
 // HoldRelease implements opscoord.Host: remove your own hold.
 func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleaseIn) (opscoord.Report, error) {
-	w, err := h.openWorld(ctx)
+	w, err := h.holdWorld(ctx, holdVerbRelease, in.Name, in.Store, "")
 	if err != nil {
-		return opscoord.Report{}, err
-	}
-	if err = w.forHolds(ctx); err != nil {
 		return opscoord.Report{}, err
 	}
 	_, err = w.signalsStore(ctx).Write(ctx, func(v signals.View) (signals.Change, error) {
