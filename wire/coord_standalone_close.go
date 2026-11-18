@@ -70,7 +70,7 @@ func (t standaloneTeam) closeWorld(ctx context.Context, taskID string) (*coordWo
 func (w *coordWorld) heldOf(ctx context.Context, env coord.Env, id string) (heldState, error) {
 	v, err := env.Signals.Read(ctx)
 	if err != nil {
-		return heldState{}, coordErr(err)
+		return heldState{}, w.coordErr(err)
 	}
 	var hs heldState
 	p := signals.ClaimPath(w.folder, id)
@@ -82,7 +82,7 @@ func (w *coordWorld) heldOf(ctx context.Context, env coord.Env, id string) (held
 	if _, marked := v.Board[signals.DonePath(w.folder, id)]; marked {
 		doc, ok, gerr := env.Rows.Get(ctx, id)
 		if gerr != nil {
-			return heldState{}, coordErr(gerr)
+			return heldState{}, w.coordErr(gerr)
 		}
 		if ok {
 			hs.done, _ = coord.IsAlreadyDone(coord.AlreadyDone(v, w.folder, id, doc))
@@ -113,7 +113,7 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 		if _, err = coord.HolderWrite(ctx, env, taskID, true, func(d coord.Doc, now time.Time) ([]coord.RowWrite, error) {
 			return nil, coord.MarkDone(w.actorID, commit, pr)(d, now)
 		}); err != nil {
-			return commit, coordErr(err)
+			return commit, w.coordErr(err)
 		}
 	case hs.claimed && hs.active:
 		return commit, errs.New(errs.InvalidInput, fmt.Sprintf("%s is held by %s until %s; only the holder can finish it",
@@ -124,7 +124,7 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 			return commit, err
 		}
 		if _, err = coord.OverrideChecked(ctx, env, taskID, coord.OverrideRevoke, coord.MarkDone(w.actorID, commit, pr)); err != nil {
-			return commit, coordErr(err)
+			return commit, w.coordErr(err)
 		}
 	}
 	return commit, nil
@@ -147,7 +147,7 @@ func (t standaloneTeam) CloseHeldCancel(ctx context.Context, taskID string) (str
 	if _, err = coord.Override(ctx, env, taskID, coord.OverrideCancel, func(d coord.Doc) {
 		d.SetStr(fieldStatus, schema.TaskStatusCancelled)
 	}); err != nil {
-		return "", false, coordErr(err)
+		return "", false, w.coordErr(err)
 	}
 	return fmt.Sprintf("%s %s cancelled (claim by %s dropped)", markOK, taskID, holderName(hs.sig)), true, nil
 }
@@ -203,8 +203,8 @@ func (t standaloneTeam) FenceHolder(ctx context.Context, taskID string, rowEpoch
 	}
 	v, err := st.Read(ctx)
 	if err != nil {
-		return coordErr(err)
+		return w.coordErr(err)
 	}
 	_, err = signals.CheckHolder(v, w.caller(), w.folder, taskID, rowEpoch)
-	return coordErr(err)
+	return w.coordErr(err)
 }

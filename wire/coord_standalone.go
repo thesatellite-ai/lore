@@ -247,7 +247,7 @@ func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID,
 		}
 		return []coord.RowWrite{{Table: string(schema.TableComments), ID: cid.String(), Doc: doc}}, nil
 	}); err != nil {
-		return opscoord.Report{}, coordErr(err) // fenced out or offline: nothing written
+		return opscoord.Report{}, w.coordErr(err) // fenced out or offline: nothing written
 	}
 	lines := []string{"✓ note " + cid.String() + " on " + tid.String()}
 	if branch != "" {

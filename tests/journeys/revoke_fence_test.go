@@ -49,7 +49,7 @@ func TestJourneyRevokeFencesAgent(t *testing.T) {
 			Refused(t, "a revoke here is shared through refs/lore/signals", "nothing was written", "--push")
 		agent("task", "note", "--id", ids[0], "--text", "still mine after a refused revoke").OK(t)
 		lead.LoreIn(lc, "task", "revoke", "--id", ids[0], "--push").OK(t).
-			Says(t, "revoked the claim on "+ids[0], "pushed refs/lore/signals to origin", "fenced out", "lore task reassign")
+			Says(t, "revoked the claim on "+ids[0], "on refs/lore/signals of this repo's remote origin (pushed now", "fenced out", "lore task reassign")
 	})
 
 	w.Step("day1/agent-is-told-who-and-kept-off", func() {

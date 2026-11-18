@@ -117,9 +117,9 @@ func (a *App) DropLocalCopies(ctx context.Context, rowIDs []string) (int, error)
 	if len(rowIDs) == 0 {
 		return 0, nil
 	}
-	top, err := a.repoTop(ctx)
-	if err != nil {
-		return 0, err
+	top := a.safetyCopyTop(ctx)
+	if top == "" {
+		return 0, nil // outside any git repo: no checkout, so no lore.db (devco:D-609)
 	}
 	path := filepath.Join(top, filepath.FromSlash(v017LoreDB))
 	if _, serr := os.Stat(path); errors.Is(serr, fs.ErrNotExist) {
@@ -170,8 +170,25 @@ func (a *App) DropLocalCopies(ctx context.Context, rowIDs []string) (int, error)
 // copies for a read: the code repo's top, or inside a store clone the
 // clone's top (a store clone is never a code repo, so repoTop refuses it).
 func (a *App) localTrashTop(ctx context.Context) (string, error) {
-	if sc, ok := storeHere(a.opts.RepoDir); ok {
-		return sc.top, nil
+	if top := a.safetyCopyTop(ctx); top != "" {
+		return top, nil
 	}
-	return a.repoTop(ctx)
+	return a.repoTop(ctx) // outside any git repo: its refusal
+}
+
+// safetyCopyTop is the folder whose .lore/lore.db may hold this machine's
+// v0.1.17 safety copies: a store clone's top, the repo top of a project
+// open, else the git top of the folder the command runs in; "" outside any
+// git repo. devco:D-609: a purge in a linked repo or the home folder runs
+// on a store-only open, whose repoTop refuses (E_NOT_A_STORE), so the purge
+// wrote its tombstone and then failed E_INTERNAL; the folder it runs in
+// still names the checkout whose lore.db a v0.1.17 lore kept.
+func (a *App) safetyCopyTop(ctx context.Context) string {
+	if sc, ok := storeHere(a.opts.RepoDir); ok {
+		return sc.top
+	}
+	if top, err := a.repoTop(ctx); err == nil {
+		return top
+	}
+	return gitTopLevelNow(ctx, a.opts.RepoDir)
 }

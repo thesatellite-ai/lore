@@ -54,7 +54,7 @@ agent-backend (work/agents/api)$ lore inbox
 agent-backend (work/agents/api)$ lore task next --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo api
 next tsk_162df51b7f78b785c97c26b41ea89666 send the invite email from the API   urgency 7.90
   why: +3.90  priority medium; +4.00  blocks 1 open task (tsk_54fe984c9b495744c0217776765a28f2)
-nothing written; take it: lore task next --claim (or lore task claim --id tsk_162df51b7f78b785c97c26b41ea89666)
+nothing written; take it: lore task next --claim --push (or lore task claim --id tsk_162df51b7f78b785c97c26b41ea89666 --push)
 agent-backend (work/agents/api)$ lore task next --claim --mission msn_2ad3618e878ebbf527d34d446ef4f891 --repo api --push
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162df51b7f78b785c97c26b41ea89666.json (store agency/client2)
@@ -169,7 +169,7 @@ agent-frontend-2 (work/agents/fe2/app)$ git fetch -q origin agent-frontend/invit
 dfd8dc8 invite page
 agent-frontend (work/agents/app)$ lore task done --id tsk_54fe984c9b495744c0217776765a28f2
 ERROR: [E_LOST_CLAIM] tsk_54fe984c9b495744c0217776765a28f2 is held by agent:agent-frontend-2 since 11:02AM (your claim is not on the signals ref); your token ct_dfebf… expired 10:50AM
-  hint: stop work on this task; `lore task next --claim` takes other work
+  hint: stop work on this task; `lore task next --claim --push` takes other work
 (exit 12)
 agent-frontend-2 (work/agents/fe2/app)$ git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done --id tsk_54fe984c9b495744c0217776765a28f2 --commit $(git rev-parse HEAD)
 lore: set lore.clientrepo=true in ~/work/agents/fe2/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
