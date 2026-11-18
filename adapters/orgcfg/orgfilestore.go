@@ -52,7 +52,8 @@ type OrgFileStoreAdd struct {
 	// Store is the entry to add.
 	Store OrgFileStore
 	// Push sends the commit to the org store now; without it the commit
-	// stays in the clone and the next write to that store sends it.
+	// stays in the clone until `lore sync` or `lore store push` sends it
+	// (under push auto, the next write to that store does too).
 	Push bool
 	// SetAudience makes Store.Audience the audience of a store the file
 	// already lists (`lore org store audience`, `org store add

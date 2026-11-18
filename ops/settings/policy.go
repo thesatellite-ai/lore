@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -238,6 +239,10 @@ type MachinePolicySource interface {
 // holds no rows and so never blocks a policy set).
 func rankOf(l policy.Level) int { return slices.Index(policy.Levels(), l) }
 
+// policyAdminDoes is what only an admin does, in the refusal of a member's
+// policy write to a company place (devco D-637).
+const policyAdminDoes = "change a policy of the org folder or a store root (it applies to every repo of the org)"
+
 func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	d, ok := policy.Lookup(policy.Key(in.Key))
 	if !ok {
@@ -246,6 +251,9 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	target := targetOf(in.To)
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: a personal store holds no team rules").WithHint("--to repo, --to <store> or --to <store>/<folder>")
+	}
+	if err := profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
+		return RowOut{}, err
 	}
 	if d.Key == policy.KeyContextTargets {
 		// Q-R2-3: only known tool profiles (built-ins + the user's own).
@@ -406,6 +414,9 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 		return RowOut{}, errs.New(errs.InvalidInput, "unknown policy key "+quote(in.Key)).WithHint("lore policy show lists the keys")
 	}
 	target := targetOf(in.To)
+	if err := profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, policyCommand("unset", in.Key, "", in.To)); err != nil {
+		return RowOut{}, err
+	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TablePolicies)
 	if err != nil {
 		return RowOut{}, err

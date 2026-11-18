@@ -21,7 +21,7 @@ func TestOverCoreFixNamesTheListedRows(t *testing.T) {
 	if want := " The largest: rul_big (300 bytes), hfx_big (200 bytes), rul_mid (100 bytes)."; list != want {
 		t.Fatalf("largestPins = %q, want %q", list, want)
 	}
-	fix := overCoreFix(630, pins)
+	fix := overCoreFix(630, pins, budgetFix{})
 	for _, want := range []string{"`lore rule edit --id rul_big --severity should`", "`lore hotfix edit --id hfx_big --severity medium`"} {
 		if !strings.Contains(fix, want) {
 			t.Errorf("fix = %q, want it to name %s", fix, want)

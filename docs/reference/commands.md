@@ -283,7 +283,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 |---|---|---|
 | `lore hold` … | Hold a shared resource (a test suite, a staging slot) with a lease | — |
 | `lore hold claim` | Hold a resource exclusively (same lease, token and renew as a task claim) | [team/agents › Sharing one thing nobody may use twice at once: lore hold](../../docs/team/agents.md#sharing-one-thing-nobody-may-use-twice-at-once-lore-hold) |
-| `lore hold release` | Release a resource you hold | [team/agents › Sharing one thing nobody may use twice at once: lore hold](../../docs/team/agents.md#sharing-one-thing-nobody-may-use-twice-at-once-lore-hold) |
+| `lore hold release` | Release a resource you hold; no --push: it pushes only to clear what your pushed hold published (a hold never pushed is on no remote, and nothing is pushed) | [team/agents › Sharing one thing nobody may use twice at once: lore hold](../../docs/team/agents.md#sharing-one-thing-nobody-may-use-twice-at-once-lore-hold) |
 
 ### lore hotfix
 
@@ -945,7 +945,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore task done` | Mark a task done (with the code that finished it) | [tasks/tasks › Step 6 — Finish a task](../../docs/tasks/tasks.md#step-6--finish-a-task) |
 | `lore task edit` | Edit task fields (only flags you pass are applied) | [tasks/tasks › Step 5 — Change a task](../../docs/tasks/tasks.md#step-5--change-a-task) |
 | `lore task export` | Export tasks as CSV, JSON (the import shape), Markdown or a GitHub issue list | [tasks/tasks › Step 12 — Move tasks in and out with files](../../docs/tasks/tasks.md#step-12--move-tasks-in-and-out-with-files) |
-| `lore task heartbeat` | Renew your claim's lease (alive, not progress) | [team/commands › lore task heartbeat](../../docs/team/commands.md#lore-task-heartbeat) |
+| `lore task heartbeat` | Renew your claim's lease (alive, not progress); no --push: it renews only what your pushed claim published, on the same remote | [team/commands › lore task heartbeat](../../docs/team/commands.md#lore-task-heartbeat) |
 | `lore task history` | Show a task's activity history (field changes, claims; --git for older versions) | [tasks/task-tools › Step 7 — Read a task's history](../../docs/tasks/task-tools.md#step-7--read-a-tasks-history) |
 | `lore task import` | Import tasks from a CSV or JSON file (one batch) | [tasks/tasks › Step 12 — Move tasks in and out with files](../../docs/tasks/tasks.md#step-12--move-tasks-in-and-out-with-files) |
 | `lore task list` | List tasks | [tasks/tasks › Step 2 — See your list](../../docs/tasks/tasks.md#step-2--see-your-list) |
@@ -959,7 +959,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore task recur skip` | Close this instance as skipped and create the next one | [tasks/task-tools › Step 9 — Make a task repeat](../../docs/tasks/task-tools.md#step-9--make-a-task-repeat) |
 | `lore task recur stop` | Stop the series: no further instances (this one stays) | [tasks/task-tools › Step 9 — Make a task repeat](../../docs/tasks/task-tools.md#step-9--make-a-task-repeat) |
 | `lore task relate` | Relate a task to another (duplicates, relates-to, follows-up, blocked-by, blocks) | [tasks/task-tools › Step 5 — Relate tasks to each other](../../docs/tasks/task-tools.md#step-5--relate-tasks-to-each-other) |
-| `lore task release` | Give back a claim you hold | [team/agents › Step 1 — Give back a claim you hold: lore task release](../../docs/team/agents.md#step-1--give-back-a-claim-you-hold-lore-task-release) |
+| `lore task release` | Give back a claim you hold; no --push: it pushes only to clear what your pushed claim published (a claim never pushed is on no remote, and nothing is pushed) | [team/agents › Step 1 — Give back a claim you hold: lore task release](../../docs/team/agents.md#step-1--give-back-a-claim-you-hold-lore-task-release) |
 | `lore task revoke` | Drop the current claim on a task (human override; the holder is fenced out) | [team/agents › Step 2 — Take a claim away: lore task revoke](../../docs/team/agents.md#step-2--take-a-claim-away-lore-task-revoke) |
 | `lore task search` | Full-text search across task title + body (BM25 ranked) | [tasks/tasks › Step 7 — Search your tasks](../../docs/tasks/tasks.md#step-7--search-your-tasks) |
 | `lore task show` | Show task details | [team/commands › lore task show](../../docs/team/commands.md#lore-task-show) |

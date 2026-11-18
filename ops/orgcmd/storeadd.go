@@ -32,7 +32,7 @@ type StoreAddIn struct {
 	URL    string `json:"url" flag:"url" desc:"the store to add: its git url (required)"`
 	Name   string `json:"name,omitempty" flag:"name" desc:"the store's short name (default: the repo name of --url)"`
 	Branch string `json:"branch,omitempty" flag:"branch" desc:"the store branch (default: the store's default branch)"`
-	Push   bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"`
+	Push   bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store <org>, sends it)"`
 	// Audience is who in the org uses the store (D-442): "" or "everyone"
 	// every member, "admins" only the org's admins. Given for a store the
 	// file already lists, it changes that store's audience.

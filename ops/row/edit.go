@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -359,6 +360,15 @@ func (o ops) edit(ctx context.Context, in EditIn) (EditOut, error) {
 	up, ok := upgrade.As[Updater](o.env)
 	if !ok {
 		return EditOut{}, errs.New(errs.Unsupported, "edit: this build's store wiring cannot write rows")
+	}
+	// a company must rule / critical or high hotfix lowered or archived
+	// through the generic write-back is an admin's change, as through
+	// rule/hotfix edit (devco D-637, D-659)
+	if profilestore.TakesOut(v.cur, res.Patch) {
+		if err = profilestore.RequireAdminForRows(ctx, o.env, []profilestore.Placed{{Source: store.Source(v.src), Row: v.cur}},
+			"lower or archive", "lore edit --id "+id.String(), ""); err != nil {
+			return EditOut{}, err
+		}
 	}
 	w, err := up.Update(ctx, engine.Ref{Store: store.Source(v.src), Table: v.cur.Table, ID: id}, res.Patch)
 	if err != nil {

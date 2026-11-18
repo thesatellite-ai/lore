@@ -21541,7 +21541,7 @@
     "/v1/holds/release": {
       "post": {
         "operationId": "hold.release",
-        "summary": "Release a resource you hold",
+        "summary": "Release a resource you hold; no --push: it pushes only to clear what your pushed hold published (a hold never pushed is on no remote, and nothing is pushed)",
         "tags": [
           "hold"
         ],
@@ -41938,7 +41938,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store \u003corg\u003e, sends it)"
                   },
                   "remove": {
                     "type": "array",
@@ -42104,7 +42104,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store \u003corg\u003e, sends it)"
                   },
                   "url": {
                     "type": "string",
@@ -42252,7 +42252,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store \u003corg\u003e, sends it)"
                   },
                   "url": {
                     "type": "string",
@@ -42397,7 +42397,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"
+                    "description": "push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store \u003corg\u003e, sends it)"
                   },
                   "url": {
                     "type": "string",
@@ -103682,7 +103682,7 @@
     "/v1/tasks/heartbeat": {
       "post": {
         "operationId": "task.heartbeat.bulk",
-        "summary": "Renew your claim's lease (alive, not progress)",
+        "summary": "Renew your claim's lease (alive, not progress); no --push: it renews only what your pushed claim published, on the same remote",
         "tags": [
           "task"
         ],
@@ -108205,7 +108205,7 @@
     "/v1/tasks/{id}/heartbeat": {
       "post": {
         "operationId": "task.heartbeat",
-        "summary": "Renew your claim's lease (alive, not progress)",
+        "summary": "Renew your claim's lease (alive, not progress); no --push: it renews only what your pushed claim published, on the same remote",
         "tags": [
           "task"
         ],
@@ -109113,7 +109113,7 @@
     "/v1/tasks/{id}/release": {
       "post": {
         "operationId": "task.release",
-        "summary": "Give back a claim you hold",
+        "summary": "Give back a claim you hold; no --push: it pushes only to clear what your pushed claim published (a claim never pushed is on no remote, and nothing is pushed)",
         "tags": [
           "task"
         ],

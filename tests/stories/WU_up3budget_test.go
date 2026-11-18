@@ -1,0 +1,202 @@
+//go:build stories && !windows
+
+package stories
+
+// WU_up3budget_test.go — owner use pass 3 wrong 3 and weak 11 (devco
+// D-636, D-637) on a repo linked to an org folder: the context budget
+// warning `lore sync` prints named no place, so its raise fell to --to
+// repo there and was refused (E_STORE_READ_ONLY); and it told every member
+// to demote a company must rule, which only an admin of the org may do.
+//
+//	D-636: each printed fix runs exactly as printed, in the linked repo
+//	D-637: a member is told which admin to ask about a company row, never
+//	       given its command; a member's demotion of a company must rule or
+//	       policy write to the org folder is refused; a folder's stays theirs
+
+import (
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/journeys"
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
+)
+
+// Names of the budget story (made up).
+const (
+	wubFolder = "web"
+	wubKey    = "context.budget.internal"
+	wubJoin   = "acme"
+)
+
+// wubRuleID finds a rule id in a list.
+var wubRuleID = regexp.MustCompile(`rul_[0-9a-f]+`)
+
+// wubMember is the member of story WU's budget walk.
+var wubMember = journeys.Person{Name: "Mo Member", Email: "mo@example.test", Login: "mo-gh"}
+
+func TestStoryWUBudgetWarn(t *testing.T) {
+	t.Parallel()
+	s := &Story{World: journeys.NewWorld(t), ID: "WU"}
+	store := s.Remote(wStoreSlug)
+	app := s.Seed(s.Remote(wAppSlug), func(dir string) { PlainRepo(t, dir) })
+	web := s.Seed(s.Remote(wWebSlug), func(dir string) { PlainRepo(t, dir) })
+	m := s.Persona(wAdmin.Name, wAdmin.Email).Laptop()
+	journeys.GitHubLogin(t, s.World, m, wAdmin.Login)
+	pc := m.Clone(app, "platform")
+	m.MoveClone(t, pc, filepath.Join(m.Home, "code", "platform"))
+	journeys.StartTeam(t, m, pc.Dir, wSetup, wOrg, store.SSHURL(), wAdmin, []string{wFolders})
+	m.Lore(pc.Dir, "member", "add", "--email", wubMember.Email, "--name", wubMember.Name, "--handle", "mo", "--role", "member", "--yes").OK(t)
+	m.Lore(m.Home, "org", "config", "set", "--org", wOrg, "--key", "own", "--add", "github.com/acme-co/*", "--yes").OK(t)
+	m.Lore(pc.Dir, "store", "folder", "add", "team", wubFolder).OK(t)
+	wc := m.Clone(web, "web")
+	m.MoveClone(t, wc, filepath.Join(m.Home, "code", "web"))
+	m.Lore(wc.Dir, "org", "link", "--org", wOrg, "--project", wubFolder, "--own", "--yes").OK(t)
+	inWeb := wOrg + "/" + wubFolder
+	m.Lore(wc.Dir, "rule", "add", "--to", wOrg+"/org", "--severity", "must", "--body", strings.Repeat("every company service logs in UTC and keeps request ids. ", 40), "--yes").OK(t)
+	m.Lore(wc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inWeb, "--yes").OK(t)
+	m.Lore(wc.Dir, "sync").OK(t)
+	mo := s.Persona(wubMember.Name, wubMember.Email).Laptop()
+	journeys.GitHubLogin(t, s.World, mo, wubMember.Login)
+	mc := fCodeClone(s, mo, web, "web")
+	journeys.Join(t, mo, mc.Dir, wubJoin, store.SSHURL(), wubMember, []string{wFolders})
+	company := wubRuleIn(t, m, wc.Dir, wOrg+"/org")
+
+	s.Step("D-636/admin-fix-works-where-printed", func() {
+		m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "the web app ships behind a flag", "--yes").OK(t)
+		r := m.Lore(wc.Dir, "sync").OK(t)
+		raise := wubPrinted(t, r.Out(), "raise the budget with `")
+		if !strings.Contains(raise, "--to "+inWeb) {
+			t.Fatalf("devco:D-636: the raise names no linked folder: %s\n%s", raise, r)
+		}
+		wubRun(t, m, wc.Dir, raise).Says(t, wubKey)
+		// an admin may lower the company rule: it is offered as a command
+		if lower := wubPrinted(t, r.Out(), "take a row out of the pinned part with `"); !strings.Contains(lower, company) {
+			t.Errorf("devco:D-637: the admin is not offered the company rule's command: %s", lower)
+		}
+	})
+
+	s.Step("D-637/member-is-sent-to-an-admin", func() {
+		m.Lore(wc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inWeb, "--yes").OK(t)
+		m.Lore(wc.Dir, "sync").OK(t)
+		out := mo.Lore(mc.Dir, "sync").OK(t).Out()
+		if strings.Contains(out, "lore rule edit --id "+company) {
+			t.Fatalf("devco:D-637: a member is told to demote a company must rule:\n%s", out)
+		}
+		if !strings.Contains(out, "ask an admin of "+wOrg+" ("+wAdmin.Name+")") {
+			t.Fatalf("devco:D-637: the member is not told which admin to ask:\n%s", out)
+		}
+		// the folder's budget is the member's to raise, and works as printed
+		wubRun(t, mo, mc.Dir, wubPrinted(t, out, "raise the budget with `")).Says(t, wubKey)
+	})
+
+	s.Step("D-659/member-cannot-bulk-change-company-rows", func() {
+		// every bulk and generic path runs the one-row forms' role check
+		all := "created_at>2000-01-01"
+		mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "should", "--body", "web pages keep one h1", "--yes").OK(t)
+		r := mo.Lore(mc.Dir, "rule", "delete", "--where", all, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", company, wAdmin.Name, "nothing was written")
+		mo.Lore(mc.Dir, "rule", "delete", "--where", "severity=must", "--dry-run").Refused(t, "E_REFUSED", company)
+		mo.Lore(mc.Dir, "rule", "archive", "--where", all).Refused(t, "E_REFUSED", "only an admin of the org", company)
+		mo.Lore(mc.Dir, "row", "move", "--id", company, "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", company)
+		md := mo.Lore(mc.Dir, "row", "markdown", "--id", company).OK(t).Out()
+		if !strings.Contains(md, "severity: must") {
+			t.Fatalf("no severity line in the view:\n%s", md)
+		}
+		mo.Lore(mc.Dir, "row", "edit", "--id", company, "--markdown", strings.Replace(md, "severity: must", "severity: should", 1), "--yes").Refused(t, "E_REFUSED", "only an admin of the org")
+		// a company critical hotfix: one-row and bulk archive/delete too
+		m.Lore(wc.Dir, "hotfix", "add", "--to", wOrg+"/org", "--title", "pager rotates at noon", "--body", "page the next on call at noon UTC", "--severity", "critical", "--yes").OK(t)
+		m.Lore(wc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "sync").OK(t)
+		hfx := regexp.MustCompile(`hfx_[0-9a-f]+`).FindString(mo.Lore(mc.Dir, "hotfix", "list", "--store", wOrg+"/org").OK(t).Out())
+		mo.Lore(mc.Dir, "hotfix", "archive", "--id", hfx).Refused(t, "E_REFUSED", "only an admin of the org")
+		mo.Lore(mc.Dir, "hotfix", "delete", "--id", hfx, "--yes").Refused(t, "E_REFUSED", "only an admin of the org")
+		mo.Lore(mc.Dir, "hotfix", "archive", "--where", "severity=critical").Refused(t, "E_REFUSED", hfx)
+		mo.Lore(mc.Dir, "rule", "show", "--id", company).OK(t).Says(t, "must")
+		// the member's own way on runs exactly as printed and leaves the company rule out
+		narrow := wubPrinted(t, strings.ReplaceAll(r.Out(), "--dry-run", "--dry-run`"), "only the rest: ")
+		got := mo.Lore(mc.Dir, wubFields(t, narrow)...).OK(t).Says(t, "would delete")
+		if strings.Contains(got.Out(), company) {
+			t.Fatalf("devco:D-659: the narrowed bulk form still names the company rule:\n%s", got)
+		}
+		// the admin's printed line is the admin's to run
+		m.Lore(wc.Dir, "rule", "delete", "--where", "severity=must", "--dry-run").OK(t).Says(t, company)
+	})
+
+	s.Step("D-637/member-cannot-demote-company-rows", func() {
+		mo.Lore(mc.Dir, "rule", "edit", "--id", company, "--severity", "should").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name, "nothing was written")
+		mo.Lore(mc.Dir, "rule", "delete", "--id", company, "--yes").Refused(t, "E_REFUSED", "only an admin of the org")
+		mo.Lore(mc.Dir, "rule", "archive", "--id", company).Refused(t, "E_REFUSED", "only an admin of the org")
+		mo.Lore(mc.Dir, "policy", "set", "--key", wubKey, "--value", "30000", "--to", wOrg+"/org", "--yes").Refused(t, "E_REFUSED", "only an admin of the org")
+		mo.Lore(mc.Dir, "rule", "show", "--id", company).OK(t).Says(t, "must")
+		// a project folder's rule stays every member's
+		mo.Lore(mc.Dir, "rule", "edit", "--id", wubRuleIn(t, mo, mc.Dir, inWeb), "--severity", "should").OK(t)
+		// the admin still may
+		m.Lore(wc.Dir, "rule", "edit", "--id", company, "--severity", "should").OK(t)
+	})
+}
+
+// wubPrinted is the command printed after marker (up to the closing
+// backtick), failing when none is.
+func wubPrinted(t *testing.T, out, marker string) string {
+	t.Helper()
+	i := strings.Index(out, marker)
+	if i < 0 {
+		t.Fatalf("no %q in:\n%s", marker, out)
+	}
+	rest := out[i+len(marker):]
+	end := strings.Index(rest, "`")
+	if end < 0 {
+		t.Fatalf("unclosed command after %q:\n%s", marker, out)
+	}
+	return rest[:end]
+}
+
+// wubRun runs a printed `lore …` command in dir, where it was printed,
+// and wants it to succeed (the owner's GUARD).
+func wubRun(t *testing.T, m *journeys.Machine, dir, cmd string) teamharness.Result {
+	t.Helper()
+	return m.Lore(dir, strings.Fields(strings.TrimPrefix(cmd, "lore "))...).OK(t)
+}
+
+// wubFields splits a printed `lore …` command the way a POSIX shell does
+// for the single quotes lore prints, without the leading "lore".
+func wubFields(t *testing.T, cmd string) []string {
+	t.Helper()
+	var out []string
+	var cur strings.Builder
+	in, has := false, false
+	for _, c := range strings.TrimPrefix(strings.TrimSpace(cmd), "lore ") {
+		switch {
+		case c == '\'':
+			in, has = !in, true
+		case c == ' ' && !in:
+			if has {
+				out = append(out, cur.String())
+			}
+			cur.Reset()
+			has = false
+		default:
+			cur.WriteRune(c)
+			has = true
+		}
+	}
+	if in {
+		t.Fatalf("unbalanced quote in %q", cmd)
+	}
+	if has {
+		out = append(out, cur.String())
+	}
+	return out
+}
+
+// wubRuleIn is the id of the first rule kept in place, as listed in dir.
+func wubRuleIn(t *testing.T, m *journeys.Machine, dir, place string) string {
+	t.Helper()
+	r := m.Lore(dir, "rule", "list", "--store", place).OK(t)
+	if got := wubRuleID.FindString(r.Out()); got != "" {
+		return got
+	}
+	t.Fatalf("no rule in %s:\n%s", place, r)
+	return ""
+}

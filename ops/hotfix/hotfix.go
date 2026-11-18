@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -471,6 +472,30 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: withMeta(ctx, o.env, recordOf(kn.LabelerOf(o.env), it.Source, it.Row), it.Row)}, nil
 }
 
+// pinnedSeverity reports whether a hotfix of severity sev is pinned
+// (always written in full into every repo's context: critical, high).
+func pinnedSeverity(sev string) bool {
+	return sev == schema.HotfixSeverityCritical || sev == schema.HotfixSeverityHigh
+}
+
+// keepMember is the --where term that leaves every pinned hotfix out of
+// a bulk form, the member's own way on when it matched company critical
+// or high hotfixes (devco D-659).
+const keepMember = fieldSeverity + ":" + schema.HotfixSeverityLow + "," + schema.HotfixSeverityMedium
+
+// guardCompanyPinned refuses a member's lower severity on a pinned hotfix
+// of a company place (the org folder, a store root): it takes the warning
+// out of what every repo of the org is told, an admin's change like a
+// company must rule (devco D-637; profilestore.RequireAdminAt). line is
+// the command the admin runs. A bad or missing id passes: edit answers it.
+func (o ops) guardCompanyPinned(ctx context.Context, id, does, line string) error {
+	it, err := kn.Show(ctx, o.env, noun, id)
+	if err != nil || !pinnedSeverity(kn.Field(it.Row, fieldSeverity)) {
+		return nil
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, it.Source, does, line)
+}
+
 // edit patches the given fields.
 func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err := kn.OneOf(noun, "severity", in.Severity, schema.HotfixSeverities()); err != nil {
@@ -479,6 +504,11 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	summary, err := checkSummary(in.Summary)
 	if err != nil {
 		return WriteOut{}, err
+	}
+	if in.Severity != "" && !pinnedSeverity(in.Severity) {
+		if err = o.guardCompanyPinned(ctx, in.ID, "lower the severity of a company critical or high hotfix", "lore hotfix edit --id "+in.ID+" --severity "+in.Severity); err != nil {
+			return WriteOut{}, err
+		}
 	}
 	e := kn.Edit{
 		Texts: map[string]string{
@@ -505,11 +535,14 @@ func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	if bulkForm {
-		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun, kn.Now(o.env))
+		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table, Guard: wheredel.CompanyGuard(o.env, noun.Name, "archive", in.Where, keepMember)}, in.Where, in.DryRun, kn.Now(o.env))
 		if werr != nil {
 			return WriteOut{}, werr
 		}
 		return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, bulk: res.Human}, nil
+	}
+	if err = o.guardCompanyPinned(ctx, in.ID, "archive a company critical or high hotfix", "lore hotfix archive --id "+in.ID); err != nil {
+		return WriteOut{}, err
 	}
 	return o.stamp(ctx, in.ID, kn.Now(o.env), "archived")
 }
@@ -531,6 +564,9 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 // delete writes the hotfix's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
+	if err := o.guardCompanyPinned(ctx, in.ID, "delete a company critical or high hotfix", "lore hotfix delete --id "+in.ID+" --yes"); err != nil {
+		return WriteOut{}, err
+	}
 	src, w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {
 		return WriteOut{}, err
