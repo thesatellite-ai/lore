@@ -28,7 +28,9 @@
 - A folder read (`--store acme/sync`, or inside that folder of the store clone) sees the org folder's kinds and lists the folder's resources (stored there, or in `acme/org` with `project = sync`), with a line saying how many org-wide or other folders' resources it left out and naming `lore resource list --store acme`; the same from every folder.
 - `lore resource list` with no `--kind` prints `KIND NAME PROJECT URL`, `CHECKED` only once a row was checked; no cell is wider than 60 characters.
 - `lore org config get` and `lore store doctor` name an own pattern that overlaps repos entries, how many, and that the repos entries win (client).
+- In a repo linked to a store folder, `lore task claim` without `--push` is refused and the store remote is unchanged; with `--push` the claim reaches the store's signals ref signed by the org identity; `lore task release` takes it off and says it pushed (TestStoryWUClaimPushOnlyWhenAsked).
 
 ## Findings it guards
 
 - `devco:D-550`..`devco:D-555`, `devco:D-583`..`devco:D-585` (REGRESSIONS.md).
+- `devco:D-580`..`devco:D-582` (REGRESSIONS.md).

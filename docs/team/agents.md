@@ -29,8 +29,9 @@ Words used below:
  lore inbox                       # what is for me: assignments, handoffs, expired claims
    │
    ▼
- lore task next --claim --mission <id> [--repo <name> | --role <role>] [--owns <paths>]
-   │ (plain lore task next only shows the next task and why; --claim takes it)
+ lore task next --claim --mission <id> [--repo <name> | --role <role>] [--owns <paths>] --push
+   │ (plain lore task next only shows the next task and why; --claim takes it; --push sends the claim
+   │  to the remote that shares it, and without it a claim in a repo with a remote or a store link is refused)
    │ exit 0  → you hold a task (or the one you already held): read it, fetch its work branch
    │ exit 10 → nothing ready; the message says why each task waits. Stop or wait, do not spin.
    │ exit 11 → every claim lost a race; wait a little, then try again
@@ -45,7 +46,7 @@ Words used below:
  git commit/push your branch
  lore task done --id <id> --commit <sha> | --pr <n> [--lesson "<text>" | --no-lesson]
    │
-   └─▶ back to lore task next --claim
+   └─▶ back to lore task next --claim --push
 ```
 
 ## Your coding agent acts as you
@@ -63,15 +64,15 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 | session starts | `lore agent start --label agent-backend --owner @alice`, then export `LORE_ACTOR` and `LORE_SESSION` | you become your own actor on the org's roster; claims record your session |
 | before choosing work | `lore inbox`, `lore search --query "<topic>"` | handoffs and facts other agents saved change what you should do |
 | seeing what is next | `lore task next --mission <id> --repo <name>` | shows the next ready task and why it is next; writes nothing |
-| taking work | `lore task next --claim --mission <id> --repo <name>` | resume-first, respects dependencies, gates, priority and races |
-| a specific task | `lore task claim --id <id> [--owns <paths>]` | when a person told you which task |
+| taking work | `lore task next --claim --mission <id> --repo <name> --push` | resume-first, respects dependencies, gates, priority and races; `--push` sends the claim to the remote teammates read (a code repo's remote or a linked store's), and lore refuses a claim there without it (`LORE_PUSH_CLAIMS=1` in the agent's environment gives that go-ahead for every claim) |
+| a specific task | `lore task claim --id <id> [--owns <paths>] --push` | when a person told you which task |
 | during long steps (tests, builds) | `lore task heartbeat --daemon --id <id>` in the background, started from a process that lives as long as the step | a lease runs out after `lease.ttl` (20m) without a heartbeat; the daemon stops when the process that started it exits |
 | after each meaningful step | `lore task note --id <id> --text "…"` | a replacement agent reads your notes and fetches your pushed branch |
 | learned something others need | `lore memory add --body "…"` | every agent finds it with `lore search` |
 | about to do something risky | `lore gate request --id <id>`, then stop | a person approves with `lore gate approve`; a `LORE_ACTOR` session never can |
 | need the shared test suite alone | `lore hold claim --name full-suite --ttl 30m --push`, then `lore hold release --name full-suite` | one heavy run at a time |
 | finished | `lore task done --id <id> --commit <sha>` or `--pr <n>` | dependents in other repos wait until that code is merged; a task is finished once: no other session is handed it again, and a second done prints who finished it and changes nothing |
-| giving up the task | `lore task release --id <id>` | frees it at once instead of after the lease |
+| giving up the task | `lore task release --id <id>` | frees it at once instead of after the lease; a claim you pushed is released on the remote too, and the line says so |
 | handing to someone specific | `lore handoff add --for @agent-frontend-2 --task <id> --body "…"` | the handoff waits in their inbox |
 | writing anything in a client repo | pass `--to repo` or `--to <org>` for rules and decisions | agents are refused without an explicit target there |
 | posting PR text, an issue comment, a chat message | `lore check pr-body --file <file>` or `… \| lore check pr-body --file -` first | internal notes must never be quoted to a client |
@@ -84,7 +85,7 @@ A team that wants some of this left to people opts in by policy: `lore policy se
 |---|---|---|---|
 | 10 | `E_NO_WORK` | nothing is ready; the message lists why each task waits (dependency not merged, gate, claimed by someone) | stop, or wait and ask again later; report to the coordinator if a dependency looks stuck |
 | 11 | `E_CONTENDED` | ready work exists but other agents won every claim, or another writer won every attempt to push a claim, heartbeat or other coordination write, for about 15 seconds of retries with random waits (the line says how many attempts over how long); when the tasks this agent lost all went to others, `task next` reads the queue again and answers `E_NO_WORK` instead | wait a few seconds (with some randomness) and run the command again (`task next` for a claim) |
-| 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next --claim` for other work |
+| 12 | `E_LOST_CLAIM` | your claim is gone: the lease expired and another agent took the task, or it was revoked | **stop working on that task at once**; do not push more to it; run `task next --claim --push` for other work |
 | 13 | `E_CANCELLED` | a person cancelled the task while you held it | stop; do not finish it |
 | 14 | `E_REASSIGNED` | a person gave the task to someone else | stop; leave a note or handoff if you have useful state |
 | 15 | `E_OFFLINE` | the remote could not be reached, so it could not confirm the write; nothing was queued | retry when the network is back; never assume the write happened |
@@ -131,14 +132,14 @@ store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: up to date
 
 # bob, in website
-$ lore task claim --id tsk_c0f3…b5b8
+$ lore task claim --id tsk_c0f3…b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ claimed tsk_c0f3…b5b8 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 $ lore task release --id tsk_c0f3…b5b8
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
-✓ released tsk_c0f3…b5b8
+✓ released tsk_c0f3…b5b8: the claim is off the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in website
 $ lore sync >/dev/null && lore task show --id tsk_c0f3…b5b8
@@ -169,13 +170,13 @@ lore: wrote ~/.lore/stores/agency/notes/org/actors/act_76bd…3f10.json (store a
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 
 # agent-backend, in website
-$ lore task claim --id tsk_c0f3…b5b8
+$ lore task claim --id tsk_c0f3…b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ claimed tsk_c0f3…b5b8 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in website
-$ lore task revoke --id tsk_c0f3…b5b8
+$ lore task revoke --id tsk_c0f3…b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ revoked the claim on tsk_c0f3…b5b8 (was held by agent-backend)
@@ -189,7 +190,7 @@ ERROR: [E_LOST_CLAIM] tsk_c0f3…b5b8: your claim (token ct_cb04f…) was revoke
 ```
 <!-- /example -->
 
-The revoke also keeps that agent off the task: its `lore task next --claim` takes other work and lists the task under `waiting:` as `revoked from you by <person> at <time>`, and a `lore task claim --id <id>` from any session of the same agent is refused (`E_REFUSED`, naming `lore task reassign --id <id> --assign @<handle>`). Other agents and people may still claim it. The fence lasts until a person runs `lore task reassign` on the task, or for a week. The agent learns who revoked it from the signals ref, so its `E_LOST_CLAIM` names the person and the time even before the task row reaches its clone with a sync. In a code repo with a remote (no store), a revoke of a claimed task changes `refs/lore/signals` there, so it takes `--push` like a claim (`LORE_PUSH_CLAIMS=1` or `live.autopush: true` give the same go-ahead); without it lore refuses and writes nothing. Its success line says `pushed refs/lore/signals to <remote>`; the task row itself waits for your next `lore sync`. `lore task reassign` of a claimed or revoked task there takes `--push` for the same reason.
+The revoke also keeps that agent off the task: its `lore task next --claim` takes other work and lists the task under `waiting:` as `revoked from you by <person> at <time>`, and a `lore task claim --id <id>` from any session of the same agent is refused (`E_REFUSED`, naming `lore task reassign --id <id> --assign @<handle>`). Other agents and people may still claim it. The fence lasts until a person runs `lore task reassign` on the task, or for a week. The agent learns who revoked it from the signals ref, so its `E_LOST_CLAIM` names the person and the time even before the task row reaches its clone with a sync. In a code repo with a remote, or a repo linked to a store folder (the example above), a revoke of a claimed task changes the signals ref that remote or the store's remote shares, so it takes `--push` like a claim (`LORE_PUSH_CLAIMS=1` or `live.autopush: true` give the same go-ahead); without it lore refuses and writes nothing. Its success line says `pushed refs/lore/signals to <remote>`; the task row itself waits for your next `lore sync`. `lore task reassign` of a claimed or revoked task there takes `--push` for the same reason.
 
 ## Step 3 — Give the task to someone else: `lore task reassign`
 
@@ -210,14 +211,14 @@ store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 
 # bob, in website
-$ lore task claim --id tsk_d431…313a
+$ lore task claim --id tsk_d431…313a --push
 lore sync: store ssh://github.com/agency/notes: tasks/tsk_c0f3…b5b8: both sides changed claim_epoch, claim_log; kept the newer edit
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ claimed tsk_d431…313a update the contact page (lease 20m, token ct_87f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in website
-$ lore task reassign --id tsk_d431…313a --assign @alice
+$ lore task reassign --id tsk_d431…313a --assign @alice --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ tsk_d431…313a reassigned to @alice

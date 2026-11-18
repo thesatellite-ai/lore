@@ -21293,7 +21293,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"
+                    "description": "push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"
                   },
                   "ttl": {
                     "type": "integer",
@@ -103264,7 +103264,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "with --claim: push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
+                    "description": "with --claim: push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
                   },
                   "repo": {
                     "type": "string",
@@ -103468,7 +103468,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
+                    "description": "push the dropped claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -106770,7 +106770,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
+                    "description": "push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"
                   },
                   "strict": {
                     "type": "boolean",
@@ -108008,7 +108008,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the dropped claim to this code repo's remote now (refs/lore/signals); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
+                    "description": "push the dropped claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
                   },
                   "yes": {
                     "type": "boolean",
@@ -108454,7 +108454,7 @@
                   },
                   "push": {
                     "type": "boolean",
-                    "description": "push the revoke to this code repo's remote now (refs/lore/signals); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
+                    "description": "push the revoke now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"
                   }
                 },
                 "additionalProperties": false

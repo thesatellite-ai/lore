@@ -18,10 +18,10 @@
 ## If this, then that
 
 - **If one agent works alone in your repo,** use plain tasks. No claims, no agent identity: the agent writes as you.
-- **If two or more agents share one mission** (one shared goal with its tasks), start each one with `lore agent start`, and let each take work with `lore task next --claim --mission <id>` (plain `lore task next` shows what is next and why, writing nothing). It resumes the task the agent already holds, respects dependencies and gates, and handles two agents reaching for the same task at once.
-- **If a person tells an agent which task to do,** use `lore task claim --id <id>` instead of `next`.
+- **If two or more agents share one mission** (one shared goal with its tasks), start each one with `lore agent start`, and let each take work with `lore task next --claim --mission <id> --push` (plain `lore task next` shows what is next and why, writing nothing; `--push` sends the claim to the remote teammates read, and lore refuses a claim in a repo with a remote or a store link without it). It resumes the task the agent already holds, respects dependencies and gates, and handles two agents reaching for the same task at once.
+- **If a person tells an agent which task to do,** use `lore task claim --id <id> --push` instead of `next`.
 - **If a step must never happen without a person,** put a gate on it with `lore gate request --id <id>`. Any person on the roster (the list of people and agents in the org) may approve; a mission's `approvers:` list can narrow that. An agent never can.
-- **If an agent crashed or went quiet,** wait for its lease to run out (20 minutes by default, `lease.ttl`), and another agent takes the task with `lore task next --claim`. To take it back at once, a person runs `lore task revoke --id <id>` or `lore task reassign --id <id>`.
+- **If an agent crashed or went quiet,** wait for its lease to run out (20 minutes by default, `lease.ttl`), and another agent takes the task with `lore task next --claim --push`. To take it back at once, a person runs `lore task revoke --id <id> --push` or `lore task reassign --id <id> --assign @<handle> --push`.
 - **If the work spans several repos,** link them to one project in the store (see [How to lay out your stores](store-layout.md)) and give each task a repo; agents pass `--repo <name>` to `lore task next`.
 - **If two agents must not run the same heavy job at once,** hold a resource around it.
 - **If an agent works in a client's repo,** claims and work notes stay in the agency's store, and the client's copy of the task carries only what the client should see.

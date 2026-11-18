@@ -37,14 +37,14 @@ store me: up to date
 store me/everywhere: up to date
 store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: up to date
-bob (work/website)$ lore task claim --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+bob (work/website)$ lore task claim --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
 ✓ claimed tsk_c0f3c11a5724b0cfd74b256190d9b5b8 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 bob (work/website)$ lore task release --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
-✓ released tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+✓ released tsk_c0f3c11a5724b0cfd74b256190d9b5b8: the claim is off the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 alice (work/website)$ lore sync >/dev/null && lore task show --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
 tsk_c0f3c11a5724b0cfd74b256190d9b5b8 [agency/client]
   title:    send the invoice reminder before Friday
@@ -62,11 +62,11 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_76bd560aff0771fab8457dbfa9823f10.json (store agency/org)
 ✓ act_76bd560aff0771fab8457dbfa9823f10 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
-agent-backend (work/website)$ lore task claim --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+agent-backend (work/website)$ lore task claim --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
 ✓ claimed tsk_c0f3c11a5724b0cfd74b256190d9b5b8 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
-alice (work/website)$ lore task revoke --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8
+alice (work/website)$ lore task revoke --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
 ✓ revoked the claim on tsk_c0f3c11a5724b0cfd74b256190d9b5b8 (was held by agent-backend)
@@ -87,12 +87,12 @@ store me: up to date
 store me/everywhere: up to date
 store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
-bob (work/website)$ lore task claim --id tsk_d4314eba822f1bf5908b2b8ded5f313a
+bob (work/website)$ lore task claim --id tsk_d4314eba822f1bf5908b2b8ded5f313a --push
 lore sync: store ssh://github.com/agency/notes: tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8: both sides changed claim_epoch, claim_log; kept the newer edit
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/client)
 ✓ claimed tsk_d4314eba822f1bf5908b2b8ded5f313a update the contact page (lease 20m, token ct_87f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
-alice (work/website)$ lore task reassign --id tsk_d4314eba822f1bf5908b2b8ded5f313a --assign @alice
+alice (work/website)$ lore task reassign --id tsk_d4314eba822f1bf5908b2b8ded5f313a --assign @alice --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/client)
 ✓ tsk_d4314eba822f1bf5908b2b8ded5f313a reassigned to @alice

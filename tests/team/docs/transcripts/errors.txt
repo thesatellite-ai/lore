@@ -52,7 +52,7 @@ ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: can
 (exit 18)
 
 ### offline claim
-alice (work/website)$ lore task claim --id tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore task claim --id tsk_2ad3618e878ebbf527d34d446ef4f891 --push
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)
