@@ -438,11 +438,14 @@ type Result struct {
 	// Runner's step for something no single operation knows (a delete the
 	// engine purged instead of trashing, P3-DEL-1). Nil = none.
 	edit func(string) string
+	// top are top-level text fields the Runner adds to the JSON form
+	// (WithTopText, topfield.go: the folder a read was routed to).
+	top []topText
 }
 
 // WithTextEdit returns r whose human text (Text) is passed through edit
 // after any edit already set. The JSON form is never edited: it carries the
-// operation's own fields.
+// operation's own fields (and any WithTopText field).
 func (r Result) WithTextEdit(edit func(string) string) Result {
 	if prev := r.edit; prev != nil {
 		r.edit = func(s string) string { return edit(prev(s)) }
@@ -488,7 +491,7 @@ func (r Result) JSON() ([]byte, error) {
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "op: encode result", err)
 	}
-	return b, nil
+	return r.spliceTop(b)
 }
 
 // checkRequired refuses a decoded input whose required fields are zero.

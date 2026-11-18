@@ -16,7 +16,8 @@
 6. `lore context --store acme --for-prompt deploy` and `--store acme/sync` from the home folder, and `--store acme` in `web`.
 7. (`TestStoryWUFolderScope`) With folders `org`, `sync` and `tools`, a `code_repo` kind in `acme/org` and resources in `acme/org` (`project = sync`, `project = tools`, none) and in `acme/sync`: `lore resource list|kinds|kind show|show --store acme/sync` from the home folder and in `platform`, then `lore resource list` inside the `sync` folder of the store clone.
 8. `lore resource list --store acme`, with and without `--kind code_repo` (one resource has a long `purpose`), before and after a `lore resource check`.
-9. `lore org config set --org acme --key own --add 'github.com/acme-co/*'` and two exact `repos` entries under that owner; then `lore org config get --org acme` and `lore store doctor`.
+9. (D-623) In `web`, with a resource of `acme/sync` naming its remote: `lore trash list --json`, `lore rule list --json`, `lore resource list --json`; then `lore rule list --store acme/sync --json` from the home folder.
+10. `lore org config set --org acme --key own --add 'github.com/acme-co/*'` and two exact `repos` entries under that owner; then `lore org config get --org acme` and `lore store doctor`.
 
 ## What must hold
 
@@ -25,6 +26,7 @@
 - A read naming a folder that does not hold the row says `it is in acme/sync` and the read that finds it, never "landed on main" or `lore sync peek`.
 - `lore store list` outside every setup names `lore store list --setup <setup>` for each setup that brings org stores.
 - `lore context --store <org>[/<folder>]` answers from any folder.
+- A read a resource routed to `acme/sync` names it in a top-level `"routed": "acme/sync"` field of its `--json`, an empty answer too; a read naming its store carries no such field.
 - A folder read (`--store acme/sync`, or inside that folder of the store clone) sees the org folder's kinds and lists the folder's resources (stored there, or in `acme/org` with `project = sync`), with a line saying how many org-wide or other folders' resources it left out and naming `lore resource list --store acme`; the same from every folder.
 - `lore resource list` with no `--kind` prints `KIND NAME PROJECT URL`, `CHECKED` only once a row was checked; no cell is wider than 60 characters.
 - `lore org config get` and `lore store doctor` name an own pattern that overlaps repos entries, how many, and that the repos entries win (client).
@@ -34,3 +36,4 @@
 
 - `devco:D-550`..`devco:D-555`, `devco:D-583`..`devco:D-585` (REGRESSIONS.md).
 - `devco:D-580`..`devco:D-582` (REGRESSIONS.md).
+- `devco:D-623` (REGRESSIONS.md).

@@ -104,3 +104,28 @@ func TestHomeHintNeverSaysStoreDoesNotApply(t *testing.T) {
 		}
 	}
 }
+
+// TestHomeHintAlwaysNamesStoreAndSetup (devco:D-622): D-586 reworded the
+// two hints of a command with no store flag to "takes no store flag",
+// which named no flag at all, so the home-folder refusal of ~90 writes
+// (memory delete, task edit, render run, …) left the reader without
+// --store and the where-you-stand write matrix red. Every operation's
+// home-folder hint, with and without --setup, names the store flag
+// (--store or --to), and names --setup unless it was given (D-539).
+func TestHomeHintAlwaysNamesStoreAndSetup(t *testing.T) {
+	reg, err := Registry(&App{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range reg.Entries() {
+		for _, setup := range []bool{false, true} {
+			h := homeHint(e, setup)
+			if !strings.Contains(h, "--store") && !strings.Contains(h, "--to ") {
+				t.Errorf("%s (setup given %v): the home hint names no store flag: %s", e.Spec().Name, setup, h)
+			}
+			if !setup && !strings.Contains(h, "--setup") {
+				t.Errorf("%s (setup given %v): the home hint names no --setup: %s", e.Spec().Name, setup, h)
+			}
+		}
+	}
+}

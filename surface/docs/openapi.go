@@ -195,7 +195,7 @@ func OpenAPI(reg *op.Registry, kinds []schema.TableDef) ([]byte, error) {
 		if !ok {
 			continue
 		}
-		addOperation(&doc, rt, operationOf(e, rt))
+		addOperation(&doc, rt, operationOf(e, rt, reg.TopFields(e.Spec().Name)))
 		if bt, bulk := BulkRoute(e, rt); bulk {
 			twins = append(twins, twin{e, bt})
 		}
@@ -206,7 +206,7 @@ func OpenAPI(reg *op.Registry, kinds []schema.TableDef) ([]byte, error) {
 		if _, taken := doc.Paths[t.rt.Path][strings.ToLower(t.rt.Method)]; taken {
 			continue
 		}
-		o := operationOf(t.e, t.rt)
+		o := operationOf(t.e, t.rt, reg.TopFields(t.e.Spec().Name))
 		o.OperationID += BulkOperationSuffix
 		addOperation(&doc, t.rt, o)
 	}
@@ -290,8 +290,10 @@ func PathIDName(in []op.FieldInfo, path string) string {
 // route accepts the "yes" field.
 func AsksFirst(s op.Spec) bool { return s.Confirm.CanAsk() }
 
-// operationOf describes one route.
-func operationOf(e op.Entry, rt op.Route) *operation {
+// operationOf describes one route; top are the output fields the
+// composition root adds to the operation's result (op.Registry.TopFields:
+// a resource-routed read's "routed", devco D-623), listed after its own.
+func operationOf(e op.Entry, rt op.Route, top []op.FieldInfo) *operation {
 	s := e.Spec()
 	o := &operation{
 		OperationID: s.Name,
@@ -326,7 +328,7 @@ func operationOf(e op.Entry, rt op.Route) *operation {
 	}
 	o.Responses[strconv.Itoa(rt.Status)] = &response{
 		Description: http.StatusText(rt.Status),
-		Content:     map[string]mediaType{mediaJSON: {Schema: objectSchema(e.OutputFields(), false)}},
+		Content:     map[string]mediaType{mediaJSON: {Schema: objectSchema(append(slices.Clone(e.OutputFields()), top...), false)}},
 	}
 	for status, list := range byStatus(codes) {
 		o.Responses[strconv.Itoa(status)] = &response{
