@@ -34,6 +34,7 @@
 - Each store set-url moves its clone to the new owner's folder; `store push` takes the org's name from `$HOME` and its "sent N" is the commits that reached the remote.
 - A member's machine never clones the admins-only stores.
 - Every note names the store it wrote to.
+- Every plain read in a folder of a store clone (and its org folder) lists that folder's rows for the admin and for a member, with and without a personal store; a personal store never answers alone there.
 - Findings another branch fixes are logged as waiting with their id until the fix lands (`oWaiting`).
 
 ## Findings it guards
@@ -52,3 +53,4 @@
 - `devco:D-595` (`TestStoryOIdentityViaInclude`): `setup check --setup <s> --step identity` of a finished setup checks the saved identity (it said "Your name is required"), and `setup list` agrees with it.
 - `devco:D-596` (REGRESSIONS.md, `TestStoryOWhoamiNamesTheFolderItReads`): whoami in a linked repo and in a folder of the store clone printed `(org folder org)` and a link count, never the place it reads; it now has a `reads` row (`acme/web (this repo's link)`, `acme/web (this folder of the store clone)`) and names the org folder `acme/org`.
 - `devco:D-605` (REGRESSIONS.md, `TestStoryOIdentityViaInclude`): after the `[include]`d git config changed, `setup list` kept the stored health as current; it now says `not checked since <date> (~/.gitconfig-rules changed since; check it again with lore setup check --setup <name> --step identity)`, and that check, run as printed, makes it current.
+- `devco:D-432` (REGRESSIONS.md, `TestStoryOPersonalStoreClone`): with a personal store in a setup that covers the store clone (a member after `setup join`), every plain read in the clone folder and its org folder printed "(no rules)"; the personal store answered alone, as in a repo with no lore project. A store checkout now keeps its own open; a linked repo and an unlinked own repo give the same answer as before.

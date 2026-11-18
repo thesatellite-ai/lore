@@ -61,7 +61,7 @@ agency/memories/mem_2ad3…f891.json
 
 The `[me]` label marks personal rows (your own notes). In the agency repo Alice sees both notes. In her scratch repo she sees only the `everywhere/` one.
 
-A repo lore is not set up in (no `.lore/`, such as a docs or skills repo you publish as is) takes personal notes too: `lore rule add --to me …` there writes only to your personal store, and `lore rule list`, `lore memory list` and `lore search` there read your personal store alone, so nothing is ever written into the repo. When you later start an org, `lore move --id <id> --to <org>/<folder>` shares such a note: it takes the folder's project.
+A repo lore is not set up in (no `.lore/`, such as a docs or skills repo you publish as is) takes personal notes too: `lore rule add --to me …` there writes only to your personal store, and `lore rule list`, `lore memory list` and `lore search` there read your personal store alone, so nothing is ever written into the repo. A store's own clone is not such a repo: inside a folder of a store clone a plain read lists that folder's rows (and its org folder's), the same with or without a personal store. When you later start an org, `lore move --id <id> --to <org>/<folder>` shares such a note: it takes the folder's project.
 
 To sync between machines, make a new, empty private repo of your own into your personal store with `lore store init --name me --url <url>` (it becomes a lore-only notes repo and is recorded as `personal.store`). From then on a `--to me` note lands in that repo's `_store/` folder with the label `[me]`, not under a company folder, and loads in every repo. Below, a second machine (`alice-devbox`) that already has `personal.store` set to the same URL sees the laptop's note on its first command:
 
