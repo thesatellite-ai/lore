@@ -111,3 +111,17 @@ func TestOverCoreFixOnlyAdminsLowerCompanyRows(t *testing.T) {
 		t.Errorf("the left-out line gives a member a company policy command: %s", l)
 	}
 }
+
+// TestOverCoreFixUnplacedPrintsNoPlaceholder guards devco D-658: when the
+// place the budget is set cannot be named here, the raise printed a
+// placeholder --to no shell runs; it prints no policy command then, only
+// `lore whoami`, which works anywhere.
+func TestOverCoreFixUnplacedPrintsNoPlaceholder(t *testing.T) {
+	pins := []privatePin{{id: "rul_big", kind: privatePinRule, text: strings.Repeat("r", 5000)}}
+	f := budgetFix{unplaced: true}
+	for _, got := range []string{overCoreFix(5000, pins, f), leftOutLine(3, 1000, 5000, f)} {
+		if strings.Contains(got, "lore policy set") || strings.Contains(got, "<store") || !strings.Contains(got, "`lore whoami`") {
+			t.Errorf("devco:D-658: an unplaced raise prints a command that cannot work:\n%s", got)
+		}
+	}
+}

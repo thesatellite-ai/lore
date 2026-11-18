@@ -13,6 +13,9 @@ package stories
 //	D-639: release is the named exemption to --push (its help says so):
 //	       it pushes only to clear what a pushed claim published, so a
 //	       release with no pushed claim leaves the remote as it was
+//	D-657: a heartbeat and a hold release with nothing pushed leave the
+//	       remote as it was; after a pushed claim and a pushed hold they
+//	       move it (the renewal and the release reach the remote)
 
 import (
 	"os/exec"
@@ -63,6 +66,25 @@ func TestStoryWUClaimPushOnlyWhenAsked(t *testing.T) {
 		t.Errorf("devco:D-639: task release --help does not say it pushes with no --push, and why:\n%s", help)
 	}
 
+	// D-657: with no pushed claim and no pushed hold, a heartbeat and a
+	// hold release have nothing on the remote to renew or clear: the
+	// store remote's signals ref stays where it was
+	r = m.Lore(app, "task", "heartbeat", "--id", id)
+	t.Logf("heartbeat with no pushed claim:\n%s", r)
+	if got := store.Rev(ref); got != before {
+		t.Errorf("devco:D-657: a heartbeat with no pushed claim moved the store remote's %s (%q -> %q):\n%s", ref, before, got, r)
+	}
+	r = m.Lore(app, "hold", "claim", "--name", wucHold)
+	t.Logf("hold claim without --push:\n%s", r)
+	if r.Code == 0 || !strings.Contains(r.Out(), "--push") {
+		t.Errorf("devco:D-657: a hold in the linked repo without --push was not refused:\n%s", r)
+	}
+	r = m.Lore(app, "hold", "release", "--name", wucHold)
+	t.Logf("hold release with no pushed hold:\n%s", r)
+	if got := store.Rev(ref); got != before {
+		t.Errorf("devco:D-657: a hold release with no pushed hold moved the store remote's %s (%q -> %q):\n%s", ref, before, got, r)
+	}
+
 	r = m.Lore(app, "task", "claim", "--id", id, "--push").OK(t)
 	t.Logf("claim --push:\n%s", r)
 	claimed := store.Rev(ref)
@@ -80,6 +102,23 @@ func TestStoryWUClaimPushOnlyWhenAsked(t *testing.T) {
 		t.Fatalf("the store remote's signals ref holds no claim of %s: %v", id, store.Files(ref))
 	}
 
+	// D-657: after a pushed claim, a heartbeat renews it on the remote
+	// (the ref moves), and a pushed hold's release clears it there
+	m.Lore(app, "task", "heartbeat", "--id", id).OK(t).Says(t, "renewed")
+	renewed := store.Rev(ref)
+	if renewed == claimed {
+		t.Errorf("devco:D-657: a heartbeat after a pushed claim left the store remote's %s at %q", ref, claimed)
+	}
+	m.Lore(app, "hold", "claim", "--name", wucHold, "--push").OK(t).Says(t, "holding")
+	held := store.Rev(ref)
+	if held == renewed || !hasFileNamed(store, ref, wucHold) {
+		t.Errorf("devco:D-657: hold claim --push did not reach the store remote's %s: %v", ref, store.Files(ref))
+	}
+	m.Lore(app, "hold", "release", "--name", wucHold).OK(t).Says(t, "released")
+	if got := store.Rev(ref); got == held || hasFileNamed(store, ref, wucHold) {
+		t.Errorf("devco:D-657: after hold release the store remote still holds %s (%q -> %q): %v", wucHold, held, got, store.Files(ref))
+	}
+
 	r = m.Lore(app, "task", "release", "--id", id).OK(t)
 	t.Logf("release:\n%s", r)
 	if !strings.Contains(r.Out(), "pushed to the store's remote") {
@@ -88,6 +127,19 @@ func TestStoryWUClaimPushOnlyWhenAsked(t *testing.T) {
 	if hasClaimFile(store, ref, id) {
 		t.Errorf("devco:D-582: after release the store remote still holds the claim of %s: %v", id, store.Files(ref))
 	}
+}
+
+// wucHold is the resource held in the claim-push walk (made up).
+const wucHold = "full-suite"
+
+// hasFileNamed reports a file on ref of r whose path holds name.
+func hasFileNamed(r *teamharness.Remote, ref, name string) bool {
+	for _, f := range r.Files(ref) {
+		if strings.Contains(f, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // hasClaimFile reports a claim file of task id on ref of r.
