@@ -293,7 +293,7 @@ personal   me -> ~/.lore/personal
 
 ## `E_INVALID_ID`
 
-The id you typed does not have the shape of a lore id (a prefix, `_`, then 32 hex characters, such as `tsk_…`): usually a typo or an id cut short. Lore says so (exit 20) instead of answering "not found", so a script can tell a bad id from a row that is really gone (`E_NOT_FOUND`). Copy the id again from `list` output.
+The id you typed does not have the shape of a lore id (a prefix, `_`, then 32 hex characters, such as `tsk_…`): usually a typo or an id cut short. Lore says so (exit 20) instead of answering "not found", so a script can tell a bad id from a row that is really gone (`E_NOT_FOUND`). It is checked first, wherever you run the command: from the home folder or any folder that is no repo, `lore show --id mem_bogus` says `mem_bogus is not a valid lore id … (mem_<32 hex>)`, never that the folder is not a git work tree. Copy the id again from `list` output.
 
 ## `E_SYMLINK_DB`: a lore file is a symbolic link
 

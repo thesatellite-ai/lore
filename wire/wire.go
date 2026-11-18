@@ -1024,6 +1024,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			return op.Result{}, err
 		}
 	}
+	// devco D-634: a malformed row id is refused as one before any store
+	// or git lookup (malformedid.go): from the home folder `show --id
+	// mem_bogus` said "not inside a git work tree"
+	if err := malformedIDErr(e, d); err != nil {
+		return op.Result{}, err
+	}
 	// devco D-508, D-509: a read whose data lives in each code repo
 	// (mission status, inbox, migrate status, session list, why-context)
 	// refuses outside one with the one repo-only refusal (repoonly.go),
@@ -1033,7 +1039,7 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			return op.Result{}, err
 		}
 	}
-	if e.Spec().Local && !storeRoutedLocal(e, d) {
+	if e.Spec().Local && !storeRoutedLocal(e, d) && !contextOutsideRepo(ctx, a.opts.RepoDir, e) {
 		// context in an unlinked own repo a resource of its org names
 		// answers from that resource's folder (resourcefolder.go, D-556)
 		if f, ok := a.resourceRoutedRead(ctx, e, d); ok {

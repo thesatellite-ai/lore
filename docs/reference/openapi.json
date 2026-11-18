@@ -85187,6 +85187,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "properties": {
+                  "store": {
+                    "type": "string",
+                    "description": "only this store and its folders (an org's name, me, team, a .lore/stores.yaml name or a store url); default every store"
+                  }
+                },
                 "additionalProperties": false
               }
             }

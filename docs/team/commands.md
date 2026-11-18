@@ -443,9 +443,12 @@ Examples:
   lore store doctor
 
 Flags:
-      --json   print the result (or the error) as JSON
+      --json           print the result (or the error) as JSON
+      --store string   only this store and its folders (an org's name, me, team, a .lore/stores.yaml name or a store url); default every store
 ```
 <!-- /help -->
+
+`--store <name>` keeps the check to one store, as every other store command names one: `lore store doctor --store acme` checks acme's stores and their folders (`acme/<folder>`) and their clones; a name no store here answers to is refused (`E_NOT_FOUND`) listing the stores doctor knows.
 
 A store whose remote does not answer fails the check with `E_STORE_UNREACHABLE` (exit 15), not `E_INVALID_INPUT`. The line names the store's url (credentials masked) and git's own reason, and tells "cannot reach" (no network: lore keeps working and the commits go out once it answers) from "no git repository at" (a wrong or deleted address: `lore store set-url` fixes it), "cannot read … (permission denied)" (a local folder that exists but this user may not read: the address is right, fix the permissions) and "refused this machine's credentials". A store's unsent commits are a problem only when its push mode sends each write at once (`push now`): under `push manual` (the default) or `push batch` they are the mode working as set, so they are a note (`1 commit(s) not sent yet, the oldest 2m old; push manual: `lore sync` sends them`) and the command exits 0. A folder of a store (`<org>/org`) shares the store's clone and is not counted again.
 
