@@ -202,7 +202,7 @@ $ lore meta set --id tsk_76bd…3f10 --pair priority_band=urgent
 lore: wrote tasks/tsk_76bd…3f10 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_76bd…3f10.json is unchanged)
 tasks tsk_…3f10: set priority_band = urgent
 $ lore meta set --id tsk_76bd…3f10 --pair priority_band=asap
-ERROR: [E_META_VALUE] meta: "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
+ERROR: [E_META_VALUE] "asap" is not an allowed value of priority_band; allowed: low, normal, urgent
   hint: lore meta value add --key priority_band --value <value>
 (exit 20)
 ```

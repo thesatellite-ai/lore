@@ -61,7 +61,7 @@ func staleLinkErr(sl staleLink, org string) error {
 // noLoreProjectErr is Project's answer for a repository with no project.
 func noLoreProjectErr() error {
 	return errs.New(errs.NotFound, "wire: "+noLoreProject).
-		WithHint("run `lore init` in the repository first (or `lore sync`, which writes the project's row file to .lore/data)")
+		WithHint("write to an org's store folder with --to <org>/<folder> (`lore store folder list --store <org>` lists the folders), link the repo to one with `lore org link --org <org> --project <folder> --own` (both keep the repo free of lore files), or run `lore init` for a project of this repo's own")
 }
 
 // loreRanInRepo reports whether lore already keeps state for the git repo
