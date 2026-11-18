@@ -211,7 +211,7 @@ func TestJourneyFoldersManyStores(t *testing.T) {
 		if after := jRepoSnapshot(t, hub.Dir); after != plain {
 			t.Errorf("org link --dry-run changed the client repo:\nbefore %s\nafter  %s", plain, after)
 		}
-		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--yes").OK(t).Says(t, "nothing was written to this repo")
+		lee.LoreIn(hub, "org", "link", tlOrg, "--project", "client_a", "--store", two.SSHURL(), "--yes").OK(t).Says(t, "no tracked file of this repo was written")
 		// devco J-11: the link installs only the commit leak check in
 		// .git/hooks (no tracked file, no ignore); from here on nothing
 		// lore runs in the repo changes it

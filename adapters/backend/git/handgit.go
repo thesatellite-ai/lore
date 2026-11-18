@@ -280,8 +280,10 @@ func (b *Backend) ensureHooksPath(ctx context.Context) error {
 		return nil // the clone names its own hooks folder: the person's choice
 	}
 	var outside string
+	// --includes: a core.hooksPath set in a file the global config pulls in
+	// with [include] skips the hooks as well (devco D-594).
 	for _, scope := range []string{"--global", "--system"} {
-		if v, err := b.git.run(ctx, call{dir: b.work, args: []string{"config", scope, "--get", "core.hooksPath"}}); err == nil && trimmed(v) != "" {
+		if v, err := b.git.run(ctx, call{dir: b.work, args: []string{"config", scope, "--includes", "--get", "core.hooksPath"}}); err == nil && trimmed(v) != "" {
 			outside = trimmed(v)
 			break
 		}

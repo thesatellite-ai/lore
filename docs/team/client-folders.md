@@ -80,7 +80,7 @@ This marks github.com/client/north-web as a CLIENT repo of agency: internal note
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe…28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
 ✓ github.com/client/north-web (prj_54fe…28f2) linked to github.com/agency/notes client_north/ (committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 $ lore store folder list --store team
 store agency folders:
   FOLDER        ID                                    CREATED BY   CREATED               ATTACHED HERE  ROWS
@@ -103,7 +103,7 @@ This marks github.com/client/south-app as a CLIENT repo of agency: internal note
 and the leak guards turn on for everyone in agency.
   link: project prj_05e9…4603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
 ✓ github.com/client/south-app (prj_05e9…4603) linked to github.com/agency/notes client_south/ (committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written
 $ lore task add --title 'set up the staging deploy'
 lore: committed locally to store agency/client_south; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)

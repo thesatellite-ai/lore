@@ -65,6 +65,10 @@ func (s *Session) answerConfig(ctx context.Context, inv invocation) (Reply, bool
 			action = a
 		case a == "--show-scope":
 			showScope = true
+		case a == "--includes":
+			// the snapshot is `git config --list`, which follows includes
+			// and gives included values their including file's scope: a
+			// scoped read with --includes is the same answer (devco D-594)
 		case a == "--global" || a == "--system" || a == "--local" || a == "--worktree":
 			if scope != "" {
 				return Reply{}, false

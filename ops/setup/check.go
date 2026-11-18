@@ -52,6 +52,16 @@ func (e engine) Check(ctx context.Context, in CheckIn) (CheckOut, error) {
 	if answers == nil {
 		answers = s.progress[step.ID].Answers
 	}
+	if answers == nil && s.finished() {
+		// A finished setup keeps no progress (4.11): with no --answers the
+		// check is of what is saved, the same values setup list's health
+		// cell was made from, and its results replace that cell (devco
+		// D-595: `setup check --setup <s> --step identity` answered "Your
+		// name is required" while setup list showed a stored warning).
+		if cfg, cerr := st.Config(ctx); cerr == nil {
+			answers = planStep(step, s.kind, s.entry, s.exists, true, cfg, nil).Values
+		}
+	}
 	answers = e.withoutUnasked(s, step, answers)
 	step = e.askedStep(s, step, answers)
 	answers, routeErr := e.deriveRoute(ctx, step, answers)

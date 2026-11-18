@@ -58,7 +58,7 @@ This marks github.com/client/website as a CLIENT repo of agency-stag: internal n
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
 ✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 $ lore task add --title 'seed staging with demo data' --to agency-stag
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag)

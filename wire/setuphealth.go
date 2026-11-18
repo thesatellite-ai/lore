@@ -17,7 +17,8 @@ package wire
 // (another account, store, folder …) or never checked has no health: Home
 // says "not checked yet" instead of showing results about an entry that no
 // longer exists. Only the note and the disabled flag are left out of the
-// fingerprint: neither changes what a check looks at.
+// fingerprint: neither changes what a check looks at. Results another lore
+// version made read as not checked too (devco D-595).
 
 import (
 	"context"
@@ -46,6 +47,12 @@ const healthFileMode = 0o600
 type healthFile struct {
 	Setups map[string][]onboard.CheckResult `json:"setups"`
 	Saved  map[string]string                `json:"saved,omitempty"`
+	// Versions is setup name → the lore version that made its results
+	// (absent in files written before devco D-595, which therefore read as
+	// not checked): another lore's checks and fixes may differ from this
+	// one's, so its results are not this binary's health (setup list kept a
+	// warning with a fix an older lore wrote until setup check ran again).
+	Versions map[string]string `json:"versions,omitempty"`
 }
 
 // entryFingerprint identifies what a doctor run checked of entry: a hash
@@ -80,7 +87,7 @@ func (a *App) healthPath() string { return filepath.Join(a.opts.Home, cacheDir, 
 
 // readHealth reads the health file; a missing file is an empty one.
 func (a *App) readHealth() (healthFile, error) {
-	hf := healthFile{Setups: map[string][]onboard.CheckResult{}, Saved: map[string]string{}}
+	hf := healthFile{Setups: map[string][]onboard.CheckResult{}, Saved: map[string]string{}, Versions: map[string]string{}}
 	b, err := os.ReadFile(a.healthPath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return hf, nil
@@ -89,13 +96,16 @@ func (a *App) readHealth() (healthFile, error) {
 		return hf, errs.FileIO("read", a.healthPath(), err)
 	}
 	if err := json.Unmarshal(b, &hf); err != nil {
-		return healthFile{Setups: map[string][]onboard.CheckResult{}, Saved: map[string]string{}}, errs.Wrap(errs.Internal, "wire: "+healthFileName+" is not valid JSON", err)
+		return healthFile{Setups: map[string][]onboard.CheckResult{}, Saved: map[string]string{}, Versions: map[string]string{}}, errs.Wrap(errs.Internal, "wire: "+healthFileName+" is not valid JSON", err)
 	}
 	if hf.Setups == nil {
 		hf.Setups = map[string][]onboard.CheckResult{}
 	}
 	if hf.Saved == nil {
 		hf.Saved = map[string]string{}
+	}
+	if hf.Versions == nil {
+		hf.Versions = map[string]string{}
 	}
 	return hf, nil
 }
@@ -113,6 +123,7 @@ func (a *App) RecordHealth(_ context.Context, setup string, results []onboard.Ch
 	hf, _ := a.readHealth() // a broken file is rewritten whole
 	hf.Setups[setup] = append([]onboard.CheckResult{}, results...)
 	hf.Saved[setup] = a.currentFingerprint(setup)
+	hf.Versions[setup] = a.opts.Version
 	b, err := json.Marshal(hf)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "wire: encode "+healthFileName, err)
@@ -137,6 +148,9 @@ func (a *App) SetupHealth(_ context.Context, name string) ([]onboard.CheckResult
 	fp, recorded := hf.Saved[name]
 	if !recorded || fp != a.currentFingerprint(name) {
 		return nil, false
+	}
+	if v, ok := hf.Versions[name]; !ok || v != a.opts.Version {
+		return nil, false // made by another lore (devco D-595)
 	}
 	return rs, true
 }

@@ -74,7 +74,7 @@ func TestJourneyLinkedOwnRepoGetsItsNotes(t *testing.T) {
 		mira.LoreIn(tools, "org", "create", "--org", lgOrg, "--store", store.SSHURL(), "--own", lgOwn,
 			"--key", "human:mira@agency.example", "--name", "Mira", "--yes").OK(t)
 		mira.LoreIn(tools, "store", "folder", "add", "agencystore", "sync").OK(t)
-		mira.LoreIn(sync, "org", "link", "--org", lgOrg, "--project", "sync", "--own", "--yes").OK(t).Says(t, "nothing was written to this repo")
+		mira.LoreIn(sync, "org", "link", "--org", lgOrg, "--project", "sync", "--own", "--yes").OK(t).Says(t, "no tracked file of this repo was written")
 		mira.LoreIn(sync, "rule", "add", "--body", "Always run the migrations before deploy.", "--severity", "must", "--to", lgOrg+"/sync").OK(t)
 		mira.LoreIn(sync, "hotfix", "add", "--title", "worker does not hot-reload", "--body", "the worker does not hot-reload; restart it after a backend change",
 			"--severity", "critical", "--to", lgOrg+"/sync").OK(t)
