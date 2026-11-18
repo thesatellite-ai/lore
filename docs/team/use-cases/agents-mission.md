@@ -218,7 +218,7 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (stor
 
 ## 5. An agent crashes; its work is picked up
 
-`agent-frontend` commits part of the work, pushes its work branch with `git push` so a replacement can fetch it, and records a note, which sees the branch on the remote (lore pushes nothing on its own: without that push, or `live.autopush: true` in config.yaml or `LORE_PUSH_CLAIMS=1`, which let the note push it, the note prints `work branch … not pushed: … push it with: git push origin <branch>`). Then its session dies. Twenty-five minutes later (the lease is 20 minutes, plus 2 minutes of grace), the coordinator's inbox shows the expired claim and where the work is:
+`agent-frontend` commits part of the work, pushes its work branch with `git push` so a replacement can fetch it, and records a note, which sees the branch on the remote (lore pushes nothing on its own: without that push, or `live.autopush: true` in config.yaml or `LORE_PUSH_CLAIMS=1`, which let the note push it, the note prints `work branch … not pushed: … push it with: git push origin <branch>`). Then its session dies. Twenty-five minutes later (the lease is 20 minutes, plus 2 minutes of grace), the coordinator's inbox shows the expired claim and where the work is. Lore judges that from what git already has, never the network: in the repo that holds the branch it says `work branch <b> (on origin)` once this clone has fetched it, else `(not pushed; push with: git push -u origin <b>)`; from another repo of the mission, as here, it names the repo whose clone can tell:
 
 <!-- example: agents#crash-and-reclaim only=1,2,3,4 -->
 ```console
@@ -234,12 +234,12 @@ lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_2537…6bbb.json (s
 
 # agent-coord, in api
 $ lore inbox
-msn_2ad3…f891  EXPIRED  agent-frontend tsk_54fe…28f2 claimed by agent-frontend, lease expired 8 min ago; work branch pushed (agent-frontend/invite-route)
+msn_2ad3…f891  EXPIRED  agent-frontend tsk_54fe…28f2 claimed by agent-frontend, lease expired 8 min ago; work branch agent-frontend/invite-route (in repo app: its clone shows whether it is pushed)
 $ lore mission status --id msn_2ad3…f891
 msn_2ad3…f891 Invite landing page   4 tasks · 2 done · 0 claimed · 0 ready · 1 waiting · 0 gated · 1 expired · 0 blocked
   done      tsk_05e9…4603  allow /invite on the proxy   agent-infra  not merged yet 4m
   done      tsk_162d…9666  send the invite email from the API agent-backend merged 10:28 12m (timebox 1h)
-  expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route 0s (timebox 1h)
+  expired   tsk_54fe…28f2  build the invite page        agent-frontend work branch agent-frontend/invite-route (in repo app: its clone shows whether it is pushed) 0s (timebox 1h)
   waiting   tsk_c0f3…b5b8  deploy to staging                         waits for tsk_54fe…28f2 to be merged (in_progress)
 ```
 <!-- /example -->

@@ -89,6 +89,6 @@ func TestJourneyTaskTeamDefaults(t *testing.T) {
 		jAgentsRun(dev, dc, &jClaude, "sess-win-two-0002", "task", "claim", "--id", ids[0], "--push").Refused(t, "another session").Never(t, "you hold")
 		jAgentsRun(dev, dc, &jClaude, "sess-win-one-0001", "task", "done", "--id", ids[0], "--no-lesson").OK(t)
 		dev.LoreIn(dc, "task", "done", "--id", ids[2], "--no-lesson").OK(t)
-		jAgentsRun(dev, dc, &jClaude, "sess-win-two-0002", "task", "claim", "--id", ids[2], "--push").Refused(t, ids[2]+" was already done by", "lore task next").Never(t, "coord:")
+		jAgentsRun(dev, dc, &jClaude, "sess-win-two-0002", "task", "claim", "--id", ids[2], "--push").Refused(t, ids[2]+" was already done by", "lore task next").Never(t, "coord:", "act_") // D-620: by name
 	})
 }

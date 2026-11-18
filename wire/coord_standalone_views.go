@@ -521,7 +521,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		if open && claimed && !active && ownsIt {
 			wb := "work lost: never pushed"
 			if b := workBranchOf(d, sig); b != "" {
-				wb = "work branch pushed (" + b + ")"
+				wb = cv.workBranchWhere(ctx, d, b) // devco:D-619: from the remote-tracking ref, not the record alone
 			}
 			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxExpired, Who: holderName(sig),
 				Text: fmt.Sprintf("%s claimed by %s, lease expired %s ago; %s", id, holderName(sig), agoText(cv.now().Sub(sig.Expires)), wb)})
@@ -1078,7 +1078,7 @@ func (cv *coordView) missionRow(ctx context.Context, d coord.Doc, ready map[stri
 		if b := workBranchOf(d, s); b == "" {
 			r.Detail = "work lost: never pushed"
 		} else {
-			r.Detail = "work branch " + b
+			r.Detail = cv.workBranchWhere(ctx, d, b) // devco:D-619
 		}
 	case ready[id]:
 		r.State = opscoord.StateReady

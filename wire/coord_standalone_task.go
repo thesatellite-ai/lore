@@ -55,7 +55,7 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	opts.OpenChildren = coord.OpenChildrenOf(docs)
 	cr, err := coord.Claim(ctx, env, in.ID, opts)
 	if err != nil {
-		return opscoord.Report{}, w.coordErr(err)
+		return opscoord.Report{}, w.coordErr(w.namedDoneBy(ctx, err))
 	}
 	var lines []string
 	if in.Coordinate && len(opts.OpenChildren(in.ID)) > 0 {
@@ -233,7 +233,7 @@ func (w *coordWorld) heartbeatDaemon(ctx context.Context, ids []string) (opscoor
 				}
 				renewals++
 				if b := w.workBranch(ctx); b != "" {
-					w.pushWorkBranch(ctx, b) // best effort; mission status reports an unpushed branch
+					w.pushWorkBranch(ctx, b) // best effort; inbox and mission status say "not pushed" from the remote-tracking ref (D-619)
 				}
 			}
 			next = w.a.Now().Add(w.lease.RenewEvery)
@@ -418,7 +418,7 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		lines = append(lines, fmt.Sprintf("! %s failed %d times and is now blocked (owner's inbox)", p, w.agents.MaxAttempts))
 	}
 	if err != nil {
-		return opscoord.NextOut{Lines: lines}, w.coordErr(err)
+		return opscoord.NextOut{Lines: lines}, w.coordErr(w.namedDoneBy(ctx, err))
 	}
 	if res.Resumed {
 		lines = append(lines, fmt.Sprintf("you hold %s; resume, or `lore task release --id %s`", res.Task, res.Task))

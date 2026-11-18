@@ -105,7 +105,7 @@ func (t standaloneTeam) CloseHeldDone(ctx context.Context, taskID, commit string
 	switch {
 	case hs.done != nil && !hs.mine:
 		// G-10: finished once; a second done changes nothing and says who.
-		return commit, &opstask.AlreadyDoneError{Task: taskID, By: hs.done.By, At: hs.done.At}
+		return commit, &opstask.AlreadyDoneError{Task: taskID, By: w.actorShown(ctx, hs.done.By), At: hs.done.At}
 	case hs.mine || hs.hadClaim:
 		if commit == "" {
 			commit = w.workBranchHead(ctx)
