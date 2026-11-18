@@ -88,8 +88,11 @@ func TestJourneyStoreScope(t *testing.T) {
 		lee.Lore(sync, "sql", "--query", "select count(*) as n from rules_all").OK(t).Never(t, "a source needs")
 		// D-433: the roster is found from a store folder
 		lee.Lore(sync, "task", "edit", "--id", syncTask, "--assign", "@lee").OK(t).Says(t, tlLee.Name).Never(t, "no store named")
-		// D-434: the real reason, and where to run it
-		lee.Lore(sync, "task", "next").Fails(t, 23, "store clone, not a code repo", "lore org link").Never(t, "needs a git repository")
+		// devco:D-679: since D-666 (store tasks are claimable from home and
+		// a store clone) a store folder's task next ranks that folder's own
+		// tasks instead of refusing as D-434 once did; it never reaches into
+		// a sibling folder and never asks for a git repository.
+		lee.Lore(sync, "task", "next").OK(t).Says(t, jssSyncTask).Never(t, jssOpsTask, "needs a git repository", "store clone, not a code repo")
 	})
 
 	w.Step("day2/the-parent-folder-covers-the-org", func() {

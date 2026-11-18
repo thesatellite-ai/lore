@@ -107,7 +107,7 @@ A feature that changes what a person does over time (a new command, a new kind o
 
 ## Every scenario and every bug is a replayable regression
 
-A story is one scenario lore was tried against, written down so it can run again: who the people are, what they do in plain words, and what must hold afterwards (`tests/stories/<id>-<name>.md`), plus a hermetic Go test that replays it end to end with the real binary. Every finding ever fixed has a row in `tests/stories/REGRESSIONS.md` naming the test that guards it, and a guard test fails when a row names a test that does not exist or a finding has no test. The stories run in the full gate (`task check` and `task check:after-land`, step `stories`), not in `task check:fast`.
+A story is one scenario lore was tried against, written down so it can run again: who the people are, what they do in plain words, and what must hold afterwards (`tests/stories/<id>-<name>.md`), plus a hermetic Go test that replays it end to end with the real binary. Every finding ever fixed has a row in `tests/stories/REGRESSIONS.md` naming the test that guards it, and a guard test fails when a row names a test that does not exist or a finding has no test. The stories run in the full gate (`task check` and `task check:after-land`, in two steps: `stories-ww` runs story WW, the write matrix and the suite's longest test, and `stories` every other story), not in `task check:fast`.
 
 Every new scenario, bug fix or feature lands with its story, its test and its REGRESSIONS.md row in the same commit, or it does not land. How: [tests/stories/README.md](../tests/stories/README.md).
 
