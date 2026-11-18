@@ -106,7 +106,7 @@ func TestOrgLinkClientLeakSmoke(t *testing.T) {
 	}
 	before := treeFiles(t, w.repo)
 	rep, err := h.Link(ctx, opsorgcmd.LinkIn{Org: "agency", Project: "acme"}, true)
-	if err != nil || !strings.Contains(strings.Join(rep.Lines, "\n"), "nothing was written to this repo") {
+	if err != nil || !strings.Contains(strings.Join(rep.Lines, "\n"), "no tracked file of this repo was written") {
 		t.Fatalf("link: %v %v", rep.Lines, err)
 	}
 	if after := treeFiles(t, w.repo); len(after) != len(before) {

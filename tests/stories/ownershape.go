@@ -64,6 +64,11 @@ type OwnerShape struct {
 	// alias per account often keys the identity on the remote; a check
 	// that only understands gitdir: rules misses it (devco D-533).
 	IncludeByRemote bool
+	// ViaInclude puts the includeIf and insteadOf blocks in ~/.gitconfig-rules,
+	// which ~/.gitconfig pulls in with [include] path=: a person whose main
+	// config is shared or copied often keeps it that way, and git follows
+	// it, so a check reading only the top file misses the rule (devco D-594).
+	ViaInclude bool
 }
 
 // OwnerMachine is a journeys Machine shaped like the owner's laptop.
@@ -134,6 +139,11 @@ func (o *OwnerMachine) WriteGitconfig(t testing.TB) {
 	}
 	for _, owner := range sh.OrgOwners {
 		fmt.Fprintf(&b, "[url \"git@%s:%s/\"]\n\tinsteadOf = git@github.com:%s/\n\tinsteadOf = https://github.com/%s/\n", sh.Alias, owner, owner, owner)
+	}
+	if sh.ViaInclude {
+		writeFile(t, filepath.Join(o.Home, ".gitconfig-rules"), b.String())
+		appendFile(t, filepath.Join(o.Home, ".gitconfig"), "[include]\n\tpath = .gitconfig-rules\n")
+		return
 	}
 	appendFile(t, filepath.Join(o.Home, ".gitconfig"), b.String())
 }

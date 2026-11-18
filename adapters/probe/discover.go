@@ -5,7 +5,7 @@ package probe
 // adapters/ghapi) and git's includeIf identities with their folders.
 //
 //	wire setupdiscover ─▶ GHToken(user)        gh auth token --hostname github.com --user X (stdout → ghapi.Token)
-//	                   ─▶ IncludeIdentities()  git config --global --get-regexp includeif.*.path
+//	                   ─▶ IncludeIdentities()  git config --global --includes --get-regexp includeif.*.path
 //	                                           ─▶ git config --file <each> user.name / user.email
 
 import (
@@ -112,7 +112,11 @@ func (p *Prober) IncludeIdentities(ctx context.Context) []IncludeIdentity {
 	// holds it (GIT_CONFIG_GLOBAL or ~/.gitconfig), not against $HOME
 	// (devco D-530: a relative path read against the wrong folder found no
 	// file, so the person's includeIf identity went unseen).
-	r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--global", "--show-origin", "--get-regexp", `^includeif\..*\.path$`))
+	// --includes follows [include] path= (and includeIf) inside the global
+	// file: git leaves includes off for --global unless asked, so a rule in a
+	// file the global config pulls in went unseen (devco D-594); its origin
+	// is then the included file, which is what a relative path is read against.
+	r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--global", "--includes", "--show-origin", "--get-regexp", `^includeif\..*\.path$`))
 	if !r.ok() {
 		return nil
 	}

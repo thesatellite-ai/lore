@@ -260,7 +260,7 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if res.CreatedFolder {
 		created = "created; "
 	}
-	lines = append(lines, linkDoneLine(plan, res.StoreURL, created+state), "  nothing was written to this repo")
+	lines = append(lines, linkDoneLine(plan, res.StoreURL, created+state), repoUntouchedLine(ctx, s.Dir))
 	return opsorgcmd.Report{Lines: lines}, nil
 }
 
@@ -392,8 +392,21 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 		state = "committed in the local clone; `lore sync` sends it"
 	}
 	lines = append(lines, fmt.Sprintf("✓ unlinked %s from %s (%d link(s) removed; %s)", s.ProjectID, org.Name, res.Removed, state),
-		"  nothing was written to this repo")
+		repoUntouchedLine(ctx, s.Dir))
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// repoUntouchedLine closes org link / unlink: the link lives in the store,
+// and no tracked file of the repo at dir changed. A client repo's link
+// installs lore's leak guard hook in the clone before the link runs, so
+// "nothing was written to this repo" right after the line saying so read
+// as a contradiction (devco D-597): the line names the hook when the clone
+// has it.
+func repoUntouchedLine(ctx context.Context, dir string) string {
+	if dir != "" && commitGuardInstalled(ctx, dir) {
+		return "  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks"
+	}
+	return "  no tracked file of this repo was written"
 }
 
 // storeSignature is the author of a store commit: the entry's identity

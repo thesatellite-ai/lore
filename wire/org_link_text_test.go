@@ -70,7 +70,7 @@ func TestOrgLinkUnlinkTexts(t *testing.T) {
 	}
 	wantLines(t, "link", rep.Lines, pid, append(append([]string{}, client...),
 		"✓ github.com/acme/app ({pid}) linked to github.com/agency/notes acme/ (created; pushed)",
-		"  nothing was written to this repo")...)
+		"  no tracked file of this repo was written")...)
 
 	// --own on a client repo: refused with the next step.
 	_, err = h.Link(ctx, opsorgcmd.LinkIn{Org: "agency", Project: "acme", Own: true}, true)
@@ -97,7 +97,7 @@ func TestOrgLinkUnlinkTexts(t *testing.T) {
 	}
 	wantLines(t, "link --own", rep.Lines, sitePID, append(append([]string{}, own...),
 		"✓ github.com/agency/site ({pid}) linked to github.com/agency/notes site/ (created; pushed)",
-		"  nothing was written to this repo")...)
+		"  no tracked file of this repo was written")...)
 
 	// Unlink the client repo: dry run, done, then nothing left.
 	unlink := []string{
@@ -114,7 +114,7 @@ func TestOrgLinkUnlinkTexts(t *testing.T) {
 	}
 	wantLines(t, "unlink", rep.Lines, pid, append(append([]string{}, unlink...),
 		"✓ unlinked {pid} from agency (1 link(s) removed; pushed)",
-		"  nothing was written to this repo")...)
+		"  no tracked file of this repo was written")...)
 	if rep, err = h.Unlink(ctx, opsorgcmd.UnlinkIn{Org: "agency", Project: "acme"}, true); err != nil {
 		t.Fatalf("unlink again: %v", err)
 	}

@@ -10,6 +10,7 @@
 - `~/.ssh/config` has `Host github-<org>` / `HostName github.com` with the org account's key, and `url."git@github-<org>:<owner>/".insteadOf` rewrites the org's GitHub owners (ssh and https forms) to it.
 - The fake ssh carries git over the alias (`git-upload-pack`, `git-receive-pack`) to the same bare repos a plain url reaches, so a push through the alias lands on the fake GitHub.
 - `s.MoveRemote` is a GitHub transfer: the bare repo moves to another owner (optionally leaving a stale copy).
+- `ViaInclude` puts the includeIf and insteadOf blocks in `~/.gitconfig-rules`, which `~/.gitconfig` pulls in with `[include] path=`.
 - `GitignoredLore` and `ClaudeLinkOut` make a repo that ignores `.lore/` and one whose `CLAUDE.md` is a link out of the repo.
 
 **Test.** `TestStoryOOwnerShape` (tests/stories/O_owner_shape_test.go), about 60 s.
@@ -47,3 +48,5 @@
 - `devco:D-561`, `devco:D-562`, `devco:D-564`, `devco:D-565`, `devco:D-567`, `devco:D-569` (REGRESSIONS.md): a home-folder sync claimed a push that sent nothing and never said which setup it covered; an admin's set-url rewrote the shared org file unasked (now `E_NEEDS_CONFIRM` until `--yes`, a local path called out), miscounted unpushed commits, left a net-zero pair of commits and an empty `stores/_local/`; whoami showed `_local/<path>`; one place had two labels; commit subjects had two forms. The story's set-url steps pass `--yes`; the owner-shaped home sync and set-url round trip run in TestJourneyHomeSyncAndStoreMoveSayWhatHappened.
 - Waiting: `devco:D-540` (set-url cannot name the org's second store from `$HOME`; store show prints no sto_ id), `devco:D-541` (set-url on an empty admins-only store hints `--name acme` with that store's url).
 - `devco:D-571`..`devco:D-574` (REGRESSIONS.md): owner use pass polish: store show of a named store prints its clone and folders, lists align and count, the private budget warning names its fix commands once per change, and context --for-file matches whole paths.
+- `devco:D-594` (`TestStoryOIdentityViaInclude`): with the includeIf rule in a file `~/.gitconfig` includes, `setup check --step identity` warned "no includeIf gitdir: rule for that folder sets …"; it now follows the include as git does and passes.
+- `devco:D-595` (`TestStoryOIdentityViaInclude`): `setup check --setup <s> --step identity` of a finished setup checks the saved identity (it said "Your name is required"), and `setup list` agrees with it.
