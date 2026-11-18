@@ -90,7 +90,7 @@ $ find ~/.lore/cache -name '*.db' | sed -e 's#/sto_[0-9a-z]*/#/<store id>/#' -e 
 ```console
 # alice, in website
 $ lore store init --name synced --url file://$HOME/Dropbox/notes
-ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
+ERROR: [E_NETWORK_FS] the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
 ```

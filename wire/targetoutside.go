@@ -71,6 +71,14 @@ func (a *App) runOutsideRepo(ctx context.Context, e op.Entry, d op.Decoder, c op
 		return op.Result{}, false, nil
 	}
 	if inStore(a.opts.RepoDir) {
+		// devco D-640: the store-here open attaches the clone's folder (and
+		// its company folder), never the personal store, so `--to me` and
+		// `--store me` there answered "no store named me is attached; your
+		// personal store is not set up" while whoami showed it. A command
+		// naming the personal store runs on it alone, as from a plain folder.
+		if namesPersonalStore(e, d) {
+			return a.runStoreOnly(ctx, e, d, c)
+		}
 		// a store clone's top, or a read naming its scope there (scope.go)
 		return a.runInStoreClone(ctx, e, d, c)
 	}
@@ -742,4 +750,24 @@ func routedWriteStore(in op.Input) string {
 		return ""
 	}
 	return name
+}
+
+// namesPersonalStore reports whether the command names the personal store
+// as its place: `--to me[/<folder>]`, or a read's `--store me[/<folder>]`
+// (devco D-640: inside a store clone those run on the personal store, which
+// the clone's own open does not attach). An input that does not decode
+// names nothing; the usual path reports the decode error.
+func namesPersonalStore(e op.Entry, d op.Decoder) bool {
+	in, err := e.Decode(d)
+	if err != nil {
+		return false
+	}
+	n := scopeOf(in)
+	for _, place := range []string{n.to, n.store} {
+		base, _, _ := strings.Cut(place, targetSep)
+		if base == attach.ReservedMe {
+			return true
+		}
+	}
+	return false
 }

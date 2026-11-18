@@ -105,6 +105,26 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 		check("member+me/linked-repo", mo, mwc.Dir, pcFolderReads[:4])
 		check("member+me/unlinked-repo", mo, mpc.Dir, []pcRead{{[]string{"memory", "list"}, "pclone personal note [me]"}})
 	})
+	// devco D-640: `--to me` inside the store clone folder said "no store
+	// named me is attached; your personal store is not set up" although
+	// whoami there showed the personal store; the hint made a second one.
+	// The write and a read of me work there as from home, and the folder's
+	// plain reads still list the folder's rows (D-432).
+	s.Step("member/to-me-in-clone-folder", func() {
+		dir := filepath.Join(oStoreClone(mo, oOwner, "lore-team"), oFolder)
+		r := mo.Lore(dir, "memory", "add", "--to", "me", "--body", "pclone note written in the clone folder", "--yes")
+		if r.Code != 0 || strings.Contains(r.Out(), "not set up") {
+			t.Fatalf("[O D-640] `lore memory add --to me` in the store clone folder is refused:\n%s", r)
+		}
+		check("member+me/clone-folder-me", mo, dir, []pcRead{
+			{[]string{"memory", "list", "--store", "me"}, "pclone note written in the clone folder"},
+			{[]string{"memory", "list", "--store", "me"}, "pclone personal note"},
+		})
+		check("member+me/clone-folder-after-me", mo, dir, pcFolderReads)
+		if r := mo.Lore(dir, "memory", "list"); strings.Contains(r.Out(), "pclone note written in the clone folder") {
+			t.Errorf("[O D-640] a plain read in the store clone folder lists the personal note:\n%s", r)
+		}
+	})
 	s.Step("member/reads-without-personal-store", func() {
 		mo.Lore(mo.Home, "setup", "edit", "--name", oMSetup, "--personal-store", "none", "--yes").OK(t)
 		clone("member-me", mo)

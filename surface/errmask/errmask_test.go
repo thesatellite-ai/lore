@@ -41,3 +41,30 @@ func TestEnvelopeMasksEveryPersonText(t *testing.T) {
 		t.Fatal("caller's next args were changed in place")
 	}
 }
+
+// TestNoInternalPackagePrefix (devco D-641): no envelope a person reads
+// starts a message, or a ": " join in it, with an internal Go package name
+// ("wire: this repository has no lore project"); prefixes naming a lore
+// command or git are kept.
+func TestNoInternalPackagePrefix(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"wire: this repository has no lore project", "this repository has no lore project"},
+		{"store acme: wire: write the actor row to store me: engine: no store named me is attached", "store acme: write the actor row to store me: no store named me is attached"},
+		{"rowfs: meta: read _meta.json: bad json", "read _meta.json: bad json"},
+		{"git: the folder is not inside a git work tree", "git: the folder is not inside a git work tree"},
+		{"migrate: nothing to do", "migrate: nothing to do"},
+		{"wire", "wire"},
+		{"the row: wire: x", "the row: x"},
+	}
+	for _, c := range cases {
+		got := Of(errs.New(errs.NotFound, c.in)).Error.Message
+		if got != c.want {
+			t.Errorf("message %q shows as %q, want %q", c.in, got, c.want)
+		}
+		for _, p := range internalPackages {
+			if strings.HasPrefix(got, p+": ") || strings.Contains(got, ": "+p+": ") {
+				t.Errorf("message %q still shows the internal prefix %q: %q", c.in, p, got)
+			}
+		}
+	}
+}

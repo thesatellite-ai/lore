@@ -44,7 +44,7 @@ alice (work/website)$ lore rule list --repo shop
 rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
 rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Buttons are blue.
 alice (work/website)$ lore rule list --repo blog
-ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+ERROR: [E_NOT_FOUND] no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
 (exit 27)
 

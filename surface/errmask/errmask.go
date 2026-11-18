@@ -12,6 +12,7 @@ package errmask
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -23,7 +24,7 @@ import (
 // (already hash-only) are kept as they are.
 func Envelope(env errs.Envelope) errs.Envelope {
 	b := &env.Error
-	b.Message = gitleaks.MaskText(b.Message)
+	b.Message = gitleaks.MaskText(withoutPackagePrefixes(b.Message))
 	b.Hint = gitleaks.MaskText(b.Hint)
 	b.Question = gitleaks.MaskText(b.Question)
 	if b.Next != nil {
@@ -53,4 +54,31 @@ func maskAll(in []string) []string {
 		out[i] = gitleaks.MaskText(s)
 	}
 	return out
+}
+
+// internalPackages are the Go package names whose "<name>: " prefix some
+// error messages start with (errs.New(…, "wire: …"), errs.Prefix chains).
+// None of them is a lore command or a word a person knows, so the surface
+// drops them (devco D-641: "[E_NOT_FOUND] wire: this repository has no
+// lore project"). Prefixes that name a lore command or a tool a person
+// runs (git:, migrate:, sync:, task:, …) are kept: they say where it failed.
+var internalPackages = []string{
+	"wire", "engine", "attach", "rowfs", "rowmd", "meta", "sqlite", "ids", "row",
+	"repourl", "localstate", "gitleaks", "orgcfg", "gitref", "gitremote", "gitfast",
+	"lorehome", "onboard", "schema", "op", "value",
+}
+
+// withoutPackagePrefixes is msg with every internal package prefix removed
+// where one starts the message or follows a ": " join (errs.Prefix puts
+// what + ": " before the inner message, so a prefix can sit mid-chain).
+func withoutPackagePrefixes(msg string) string {
+	parts := strings.Split(msg, ": ")
+	out := parts[:0]
+	for i, p := range parts {
+		if i < len(parts)-1 && slices.Contains(internalPackages, p) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ": ")
 }

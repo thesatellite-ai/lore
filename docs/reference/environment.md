@@ -142,7 +142,7 @@ A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWO
 # alice, in Dropbox/website
 $ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/Dropbox/website/.git/config; hook blocks in ~/work/Dropbox/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
+ERROR: [E_NETWORK_FS] the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list

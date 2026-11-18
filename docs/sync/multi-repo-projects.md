@@ -83,7 +83,7 @@ $ lore rule list --repo shop
 rul_05e9…4603 [must/always] Run the tests before you push.
 rul_c0f3…b5b8 [must/always] Buttons are blue.
 $ lore rule list --repo blog
-ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+ERROR: [E_NOT_FOUND] no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
 (exit 27)
 ```
