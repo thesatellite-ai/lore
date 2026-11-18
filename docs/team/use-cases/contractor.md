@@ -70,7 +70,7 @@ $ lore actor register
 lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e9…4603.json (store agency/.)
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_c0f3…b5b8.json (store agency/.)
-✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency ./
+✓ act_c0f3…b5b8 Alice Doe (@alice) registered in the roster of agency (agency/.)
 $ lore memory add --body 'the client staging database is restored every Sunday night'
 lore: committed locally to store notes-client/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3…b5b8.json (store agency/client)
@@ -118,7 +118,7 @@ lore actor register: store clone ~/.lore/stores/agency/notes: set up for plain g
 lore: committed locally to store agency; lore sync sends it
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_b4f4…a5b0.json (store agency/.)
-✓ act_b4f4…a5b0 Bob Roe (@bob) registered in agency ./
+✓ act_b4f4…a5b0 Bob Roe (@bob) registered in the roster of agency (agency/.)
 $ lore memory list
 mem_76bd…3f10 [retrieved] the client staging database is restored every Sunday night [agency/client]
 

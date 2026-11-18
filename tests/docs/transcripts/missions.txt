@@ -151,7 +151,7 @@ ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task o
 ### register
 alice (work/website)$ lore actor register
 lore: wrote actors/act_3b6283bc4392c556bbae5f094246e913 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/actors/act_3b6283bc4392c556bbae5f094246e913.json is unchanged)
-✓ act_3b6283bc4392c556bbae5f094246e913 alice (@alice) already registered (refreshed) in this repo
+✓ act_3b6283bc4392c556bbae5f094246e913 alice (@alice) already registered (refreshed) in the roster of this repo
 
 ### handoff
 alice (work/website)$ lore task add --title 'Write the about page'

@@ -62,8 +62,21 @@ func newCaches() *caches {
 	return &caches{by: map[store.Source]*sqlite.Cache{}, paths: map[store.Source]string{}}
 }
 
-// open opens source's cache file at path.
+// open opens source's cache file at path. A path another source already
+// opened shares that source's handle, like the combined cache does: two
+// handles on one file each kept their own list of typed tables, so a kind
+// table one created or dropped was missing from the other's, and its next
+// write failed E_INTERNAL (devco:D-667: a repo linked with `--project org`
+// names the org folder as its own source, at the org store's file).
 func (c *caches) open(ctx context.Context, source store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
+	if f := c.openedAt(path); f != nil {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.by[source] = f
+		c.paths[source] = path
+		c.order = append(c.order, source)
+		return nil
+	}
 	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
 		return wrapOpen(err, "wire: open the cache of store "+string(source))
@@ -73,6 +86,18 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 	c.by[source] = f
 	c.paths[source] = path
 	c.order = append(c.order, source)
+	return nil
+}
+
+// openedAt is the handle a source already opened at path, nil if none.
+func (c *caches) openedAt(path string) *sqlite.Cache {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for s, p := range c.paths {
+		if p == path {
+			return c.by[s]
+		}
+	}
 	return nil
 }
 

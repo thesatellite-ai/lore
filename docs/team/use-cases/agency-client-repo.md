@@ -71,7 +71,7 @@ $ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe…28f2.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
-✓ act_2ad3…f891 Alice Doe (@alice) registered in agency org/
+✓ act_2ad3…f891 Alice Doe (@alice) registered in the roster of agency (agency/org)
 $ lore sync
 lore: pushed store agency/org: commit 601d285 to branch main (3 commits, 2 row files)
 store me: up to date
@@ -86,7 +86,7 @@ lore actor register: store clone ~/.lore/stores/agency/notes: set up for plain g
 lore: committed locally to store agency/org; lore sync sends it
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_05e9…4603.json (store agency/org)
-✓ act_05e9…4603 Bob Roe (@bob) registered in agency org/
+✓ act_05e9…4603 Bob Roe (@bob) registered in the roster of agency (agency/org)
 lore: pushed store agency/org: commit 86dbae4 to branch main (1 commit, 1 row file)
 store me: up to date
 store me/everywhere: up to date
@@ -224,7 +224,7 @@ Agents must say where a rule goes in a client repo. Lore refuses to guess for th
 $ lore agent start --label agent-backend --owner @alice
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_3b62…e913.json (store agency/org)
-✓ act_3b62…e913 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_3b62…e913 agent agent-backend (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 $ lore rule add --body 'require prepayment from this client'
 ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or agency); nothing written

@@ -230,12 +230,12 @@ type RoleWriteOut struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// Text is "✓ role designer_lead added in agency org/".
+// Text is "✓ role designer_lead added in the roster of agency (agency/org)".
 func (o RoleWriteOut) Text() string { return o.text() + profilestore.WarningText(o.Warnings) }
 
 // text is Text without the warnings.
 func (o RoleWriteOut) text() string {
-	return work.Success + " role " + o.Role.Name + " " + o.Verb + " in " + o.Where + "\n"
+	return work.Success + " role " + o.Role.Name + " " + o.Verb + " in the roster of " + o.Where + "\n"
 }
 
 // Role write verbs.

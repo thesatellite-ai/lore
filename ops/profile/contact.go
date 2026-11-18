@@ -74,7 +74,7 @@ type ContactOut struct {
 // contact types).
 const verbAlreadyThere = "already there"
 
-// Text is "✓ acn_… github mirap added to Mira Patel (@mira) [primary, identity] in agency org/".
+// Text is "✓ acn_… github mirap added to Mira Patel (@mira) [primary, identity] in the roster of agency (agency/org)".
 func (o ContactOut) Text() string { return o.text() + profilestore.WarningText(o.Warnings) }
 
 // text is Text without the warnings.
@@ -92,7 +92,7 @@ func (o ContactOut) text() string {
 	if fl := c.flags(); fl != "" {
 		b.WriteString(" [" + fl + "]")
 	}
-	b.WriteString(" in " + o.Where + "\n")
+	b.WriteString(" in the roster of " + o.Where + "\n")
 	if o.Merged != "" {
 		b.WriteString("  merged " + o.Merged + " into " + c.ActorID + " (its rows are not rewritten; reports follow merged_into)\n")
 	}

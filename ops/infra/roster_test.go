@@ -86,9 +86,9 @@ func TestActorDeleteAlwaysRefused(t *testing.T) {
 
 func TestActorRegisterText(t *testing.T) {
 	cases := map[string]ActorRegisterOut{
-		"✓ act_1 Alice (@alice) registered in this repo\n":            {ID: "act_1", Kind: RegisterKindHuman, Name: "Alice", Handle: "alice", Created: true, Where: "this repo"},
-		"✓ act_1 Alice already registered (refreshed) in this repo\n": {ID: "act_1", Kind: RegisterKindHuman, Name: "Alice", Where: "this repo"},
-		"✓ act_2 agent agent-fe registered in agency org/\n":          {ID: "act_2", Kind: RegisterKindAgent, Label: "agent-fe", Created: true, Where: "agency org/"},
+		"✓ act_1 Alice (@alice) registered in the roster of this repo\n":            {ID: "act_1", Kind: RegisterKindHuman, Name: "Alice", Handle: "alice", Created: true, Where: "this repo"},
+		"✓ act_1 Alice already registered (refreshed) in the roster of this repo\n": {ID: "act_1", Kind: RegisterKindHuman, Name: "Alice", Where: "this repo"},
+		"✓ act_2 agent agent-fe registered in the roster of agency (agency/org)\n":  {ID: "act_2", Kind: RegisterKindAgent, Label: "agent-fe", Created: true, Where: "agency (agency/org)"},
 	}
 	for want, o := range cases {
 		if got := o.Text(); got != want {
@@ -100,8 +100,8 @@ func TestActorRegisterText(t *testing.T) {
 // TestActorRegisterViaContactText: a register answered by an identity
 // contact (TEAM_PROFILES 6.3) says which person and which contact.
 func TestActorRegisterViaContactText(t *testing.T) {
-	o := ActorRegisterOut{ID: "act_1", Kind: RegisterKindHuman, Name: "Mira Patel", Handle: "mira", Where: "agency org/", ViaContact: "email:mira.patel@gmail.com"}
-	want := "✓ act_1 Mira Patel (@mira) already registered as Mira Patel via identity contact email:mira.patel@gmail.com in agency org/\n"
+	o := ActorRegisterOut{ID: "act_1", Kind: RegisterKindHuman, Name: "Mira Patel", Handle: "mira", Where: "agency (agency/org)", ViaContact: "email:mira.patel@gmail.com"}
+	want := "✓ act_1 Mira Patel (@mira) already registered as Mira Patel via identity contact email:mira.patel@gmail.com in the roster of agency (agency/org)\n"
 	if got := o.Text(); got != want {
 		t.Errorf("got %q want %q", got, want)
 	}

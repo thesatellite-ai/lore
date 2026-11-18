@@ -42,7 +42,7 @@ tasks:
 $ lore agent start --label agent-coord --owner @alice
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
-✓ act_7a67…9504 agent agent-coord (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
+✓ act_7a67…9504 agent agent-coord (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 
 # agent-coord, in api
@@ -90,7 +90,7 @@ $ lore agent start --label agent-backend --owner @alice
 lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/api/.git/config; hook blocks in ~/work/agents/api/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_d431…313a.json (store agency/org)
-✓ act_d431…313a agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
+✓ act_d431…313a agent agent-backend (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-d5ea7c9e
 
 # agent-backend, in agents/api
@@ -111,7 +111,7 @@ $ lore agent start --label agent-frontend --owner @alice
 lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/app/.git/config; hook blocks in ~/work/agents/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store agency/org)
-✓ act_b4f4…a5b0 agent agent-frontend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
+✓ act_b4f4…a5b0 agent agent-frontend (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-004ed4ce
 
 # agent-frontend, in agents/app
@@ -126,7 +126,7 @@ $ lore agent start --label agent-infra --owner @alice
 lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/infra/.git/config; hook blocks in ~/work/agents/infra/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_28f8…03df.json (store agency/org)
-✓ act_28f8…03df agent agent-infra (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
+✓ act_28f8…03df agent agent-infra (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 export LORE_ACTOR=agent:agent-infra LORE_SESSION=s-ba4ad92d
 
 # agent-infra, in agents/infra
@@ -253,7 +253,7 @@ $ lore agent start --label agent-frontend-2 --owner @alice
 lore agent start: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/agents/fe2/app/.git/config; hook blocks in ~/work/agents/fe2/app/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b69e…5ed7.json (store agency/org)
-✓ act_b69e…5ed7 agent agent-frontend-2 (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
+✓ act_b69e…5ed7 agent agent-frontend-2 (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 export LORE_ACTOR=agent:agent-frontend-2 LORE_SESSION=s-04c3d965
 
 # agent-frontend-2, in agents/fe2/app

@@ -120,7 +120,7 @@ func RequireAdmin(ctx context.Context, r Roster, does, line string) error {
 	if a.May() {
 		return nil
 	}
-	return errs.New(errs.Refused, "only an admin of the org can "+does+", and you are not one on "+r.Where()+"'s roster; nothing was written").
+	return errs.New(errs.Refused, "only an admin of the org can "+does+", and you are not one on the roster of "+r.Where()+"; nothing was written").
 		WithHint("ask " + a.Who() + " to run: " + line)
 }
 

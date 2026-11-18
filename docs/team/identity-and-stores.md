@@ -120,7 +120,7 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-✓ act_2ad3…f891 Bob Roe (@bob) registered in agency org/
+✓ act_2ad3…f891 Bob Roe (@bob) registered in the roster of agency (agency/org)
 ✓ you are agency's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
 $ cat ~/.lore/config.yaml
 orgs:

@@ -117,7 +117,8 @@ type ActorRegisterOut struct {
 	Label  string `json:"label,omitempty"`
 	// Created is false when the actor was already registered (refreshed).
 	Created bool `json:"created"`
-	// Where names the roster: "agency org/" or "this repo".
+	// Where names the roster: "agency (agency/org)" or "this repo"; a
+	// line says "registered in the roster of <where>" (devco D-668).
 	Where string `json:"where"`
 	// ViaContact is set when the caller's key is an identity contact of
 	// this existing actor (TEAM_PROFILES 6.3, TP-4): nothing was written,
@@ -130,7 +131,7 @@ type ActorRegisterOut struct {
 // "✓ <id> agent <label> registered in <where>".
 func (o ActorRegisterOut) Text() string {
 	if o.Kind == RegisterKindAgent {
-		return work.Success + " " + o.ID + " agent " + o.Label + " registered in " + o.Where + "\n"
+		return work.Success + " " + o.ID + " agent " + o.Label + " registered in the roster of " + o.Where + "\n"
 	}
 	verb := "registered"
 	switch {
@@ -143,7 +144,7 @@ func (o ActorRegisterOut) Text() string {
 	if o.Handle != "" {
 		h = " (" + handleMark + o.Handle + ")"
 	}
-	return work.Success + " " + o.ID + " " + o.Name + h + " " + verb + " in " + o.Where + "\n"
+	return work.Success + " " + o.ID + " " + o.Name + h + " " + verb + " in the roster of " + o.Where + "\n"
 }
 
 // ActorDeactivateIn is the input of actor.deactivate.

@@ -26,8 +26,8 @@ func TestRosterLabelD647(t *testing.T) {
 		if got := (&profileRoster{at: c.at}).Label(); got != c.want {
 			t.Errorf("Label() = %q, want %q", got, c.want)
 		}
-		if got := (&profileRoster{at: c.at}).Where(); got != c.at.where {
-			t.Errorf("Where() = %q, want %q unchanged", got, c.at.where)
+		if got := (&profileRoster{at: c.at}).Where(); got != c.want {
+			t.Errorf("Where() = %q, want %q: success lines name the roster as the refusals do (devco D-668)", got, c.want)
 		}
 	}
 }

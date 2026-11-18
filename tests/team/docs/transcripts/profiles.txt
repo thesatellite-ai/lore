@@ -3,15 +3,15 @@
 tomas (work/acme-hub)$ lore actor edit --actor @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (title, timezone, location) in agency org/
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (title, timezone, location) in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor edit --actor @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in agency org/
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor edit --actor @mira --clear photo_url,bio
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a670ae8548ed05bf57ad29ad0759504.json (store agency/org)
-✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in agency org/
+✓ act_7a670ae8548ed05bf57ad29ad0759504 Mira Patel edited (photo_url, bio) in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor edit --actor @mira --timezone 'Istanbul time'
 ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA zone name
   hint: give an IANA zone name such as Europe/Istanbul or America/New_York
@@ -21,25 +21,25 @@ ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA z
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type email --value mira@agency.example --label work --primary --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_2ad3618e878ebbf527d34d446ef4f891.json (store agency/org)
-✓ acn_2ad3618e878ebbf527d34d446ef4f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in agency org/
+✓ acn_2ad3618e878ebbf527d34d446ef4f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type email --value mira.patel@example.com --label personal --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_162df51b7f78b785c97c26b41ea89666.json (store agency/org)
-✓ acn_162df51b7f78b785c97c26b41ea89666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in agency org/
+✓ acn_162df51b7f78b785c97c26b41ea89666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type github --value mira-agency --label work --primary --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_54fe984c9b495744c0217776765a28f2.json (store agency/org)
-✓ acn_54fe984c9b495744c0217776765a28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in agency org/
+✓ acn_54fe984c9b495744c0217776765a28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type github --value mirap --label personal --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_05e99e22e9e86e96fe4daa7777994603.json (store agency/org)
-✓ acn_05e99e22e9e86e96fe4daa7777994603 github mirap added for Mira Patel (@mira) [identity] in agency org/
+✓ acn_05e99e22e9e86e96fe4daa7777994603 github mirap added for Mira Patel (@mira) [identity] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type phone --value '+90 532 000 0000' --label work --primary
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/org)
-✓ acn_c0f3c11a5724b0cfd74b256190d9b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in agency org/
+✓ acn_c0f3c11a5724b0cfd74b256190d9b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type github --value mirap --label personal --identity
-· acn_05e99e22e9e86e96fe4daa7777994603 github mirap already there [identity] in agency org/
+· acn_05e99e22e9e86e96fe4daa7777994603 github mirap already there [identity] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact list --type phone
 acn_c0f3c11a5724b0cfd74b256190d9b5b8 Mira Patel (@mira)       phone     +90 532 000 0000             work       primary           tel:+905320000000
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type phone --value 12 --label work
@@ -71,15 +71,15 @@ created 2026-11-02T10:00:00Z by mira · updated 2026-11-02T10:00:00Z by tomas
 tomas (work/acme-hub)$ lore actor contact add --actor @mira --type linkedin --value mira-patel --label work
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd560aff0771fab8457dbfa9823f10.json (store agency/org)
-✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel added for Mira Patel (@mira) [primary] in agency org/
+✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel added for Mira Patel (@mira) [primary] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact edit --id acn_76bd560aff0771fab8457dbfa9823f10 --note 'old profile, not updated'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd560aff0771fab8457dbfa9823f10.json (store agency/org)
-✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel edited for Mira Patel (@mira) [primary] in agency org/
+✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel edited for Mira Patel (@mira) [primary] in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore actor contact remove --id acn_76bd560aff0771fab8457dbfa9823f10 --reason 'account closed'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd560aff0771fab8457dbfa9823f10.json (store agency/org)
-✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel removed from Mira Patel (@mira) in agency org/ (restorable from the trash)
+✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel removed from Mira Patel (@mira) in the roster of agency (agency/org) (restorable from the trash)
 tomas (work/acme-hub)$ lore actor contact list --actor @mira --identity
 acn_2ad3618e878ebbf527d34d446ef4f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
 acn_162df51b7f78b785c97c26b41ea89666 Mira Patel (@mira)       email     mira.patel@example.com       personal   identity          mailto:mira.patel@example.com
@@ -90,11 +90,11 @@ acn_05e99e22e9e86e96fe4daa7777994603 Mira Patel (@mira)       github    mirap   
 tomas (work/acme-hub)$ lore contact-type add --name bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/contact_types/ctp_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/org)
-✓ contact type bitbucket added in agency org/
+✓ contact type bitbucket added in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore contact-type edit --name github --label GitHub
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/contact_types/ctp_b4f4765e593d51fd1352985e8af3a5b0.json (store agency/org)
-✓ contact type github edited in agency org/
+✓ contact type github edited in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore contact-type list
 github       handle  identity  changed   GitHub       https://github.com/{value}
 gitlab       handle  identity  built-in  GitLab       https://gitlab.com/{value}
@@ -129,7 +129,7 @@ ERROR: [E_PERIOD_OVERLAP] period 2026-01-12 → now is still open while 2026-02-
 tomas (work/acme-hub)$ lore role add --name tech_writer --label 'Technical writer'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_4c590afb2a0cc7ae1b97b7e4e62d6c38.json (store agency/org)
-✓ role tech_writer added in agency org/
+✓ role tech_writer added in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore role list
 lead  Lead — leads the project
 dev  Developer — writes the code
@@ -146,11 +146,11 @@ ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
 tomas (work/acme-hub)$ lore role edit --name tech_writer --description 'writes the user docs'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_4c590afb2a0cc7ae1b97b7e4e62d6c38.json (store agency/org)
-✓ role tech_writer updated in agency org/
+✓ role tech_writer updated in the roster of agency (agency/org)
 tomas (work/acme-hub)$ lore role edit --name qa --retire
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_3b6283bc4392c556bbae5f094246e913.json (store agency/org)
-✓ role qa updated in agency org/
+✓ role qa updated in the roster of agency (agency/org)
 
 ### members
 tomas (work/acme-hub)$ lore project member add --project acme-hub --actor @mira --role dev,reviewer
@@ -354,7 +354,7 @@ This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/c
 
 ✓ wrote org/lore-org.yaml (committed in the local clone; `lore sync` pushes it)
 ✓ added org entry acme
-✓ act_8567cf97b52ccbe51c3bd8cd91d6366f Ana Lima (@ana) registered in acme org/
+✓ act_8567cf97b52ccbe51c3bd8cd91d6366f Ana Lima (@ana) registered in the roster of acme (acme/org)
 ✓ you are acme's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
   teammates join with: lore setup join --invite git@github.com:acme/lore-notes (after lore member add puts them on the roster)
   use the store in a repo with no lore data (written only into the store): lore org link --org acme --project <folder> (a repo matching the org's own: patterns and none of its repos: patterns links as an own repo, any other as a client repo)

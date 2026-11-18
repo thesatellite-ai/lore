@@ -9,7 +9,7 @@ tomas (work)$ lore team list
 1 team
 tomas (work/acme-hub)$ lore team show --handle @web
 tem_7a670ae8548ed05bf57ad29ad0759504  @web  Web
-roster: agency org/
+roster: agency (agency/org)
 members (2):
   act_2ad3618e878ebbf527d34d446ef4f891  @tomas  Tomas Weber
   act_162df51b7f78b785c97c26b41ea89666  @mira  Mira Patel
@@ -59,7 +59,7 @@ tomas (work)$ lore team list --json
       "updated_by": "act_2ad3618e878ebbf527d34d446ef4f891"
     }
   ],
-  "where": "agency org/"
+  "where": "agency (agency/org)"
 }
 
 ### refusals

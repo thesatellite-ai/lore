@@ -50,7 +50,8 @@ type Store interface {
 type Roster interface {
 	// Source is the store the rows live in ("agency/org").
 	Source() store.Source
-	// Where names it for messages ("agency org/"); hidden in quiet output.
+	// Where names it for messages ("agency (agency/org)", after "the
+	// roster of"); hidden in quiet output.
 	Where() string
 	// Label names it where a sentence says whose roster it is: "the
 	// roster of agency (agency/org)", the org entry and the store folder

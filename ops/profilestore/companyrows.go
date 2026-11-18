@@ -99,7 +99,7 @@ func RequireAdminForRows(ctx context.Context, env PlaceEnv, rows []Placed, verb,
 		hint = narrow + "; or " + hint
 	}
 	return errs.New(errs.Refused, "only an admin of the org can "+verb+" "+rowList(hit)+" (a must rule or a critical/high hotfix of the company place "+string(at)+
-		", which every repo of the org reads), and you are not one on "+r.Where()+"'s roster; nothing was written").WithHint(hint)
+		", which every repo of the org reads), and you are not one on the roster of "+r.Where()+"; nothing was written").WithHint(hint)
 }
 
 // rowList is "rul_a" / "rul_a, rul_b" / "rul_a, … and 3 more".
