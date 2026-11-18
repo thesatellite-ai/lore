@@ -232,7 +232,9 @@ func wuHintFlagsAccepted(t *testing.T, w *wwWorld, id string, args []string, out
 	}
 	help := w.m.Lore(w.m.Home, append(append([]string{}, path...), "--help")...).Out()
 	for _, f := range wuFlagRe.FindAllString(hint, -1) {
-		if f == "--help" || f == "--json" || strings.Contains(hint, f+" does not apply") {
+		// a hint saying the command is "not routed by --store" (devco
+		// D-622, the D-586 wording) names the flag as one it does not take
+		if f == "--help" || f == "--json" || strings.Contains(hint, f+" does not apply") || strings.Contains(hint, "not routed by "+f) {
 			continue
 		}
 		// a flag of another command the hint names ("lore setup list --x")

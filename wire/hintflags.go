@@ -20,6 +20,13 @@ import (
 // (adapters/backend/git notAWorkTreeHomeHint) that names the store flags.
 const homeHintMarker = "name the store from here with --to <org>/<folder>"
 
+// notRoutedByStore is how the home hint of a command with no store flag
+// names --store (devco D-622): literally, so the reader learns the flag
+// that would not reach the row, but never as "does not apply" (D-586: a
+// reader could not tell that from "a store would not work") nor as if the
+// person had passed it (D-589).
+const notRoutedByStore = "not routed by --store <org>/<folder>"
+
 // fitHomeHint returns err with its hint rewritten for e when it is the
 // home-folder E_NOT_A_STORE refusal; any other error is returned as is.
 func fitHomeHint(ctx context.Context, e op.Entry, err error) error {
@@ -57,8 +64,10 @@ func homeHint(e op.Entry, setupGiven bool) string {
 		if id && !to && !st {
 			// the command takes no store flag: its id names the row
 			// (never "--store does not apply", devco D-586: a reader
-			// cannot tell that from "a store would not work")
-			ways = append(ways, "add --setup <setup> so the row's id finds its store (the id names the row: the command takes no store flag)")
+			// cannot tell that from "a store would not work"). The flag is
+			// named literally (devco D-622): "takes no store flag" left a
+			// reader, and the where-you-stand matrix, without --store.
+			ways = append(ways, "add --setup <setup> so the row's id finds its store (the id names the row; the command is "+notRoutedByStore+")")
 		} else {
 			ways = append(ways, "or a setup with --setup <setup>")
 		}
@@ -66,7 +75,8 @@ func homeHint(e op.Entry, setupGiven bool) string {
 	if len(ways) == 0 {
 		// context, and a command given --setup that still has no store here:
 		// it reads or writes the repo it runs in
-		return "cd into a git checkout (or the store's clone): this command takes no store flag, it works on the folder it runs in; lore setup list shows each setup's folders and lore store list --setup <setup> its clones"
+		// (devco D-622: name --store literally, as D-586's wording did not)
+		return "cd into a git checkout (or the store's clone): this command works on the folder it runs in and is " + notRoutedByStore + "; lore setup list shows each setup's folders and lore store list --setup <setup> its clones"
 	}
 	return "cd into a git checkout, or " + strings.Join(ways, " ") + "; lore store list and lore setup list show them"
 }

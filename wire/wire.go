@@ -671,7 +671,13 @@ func Registry(a *App) (*op.Registry, error) {
 	// plain files sweep 3.2: lore where (alias lore files), every path lore keeps.
 	entries = append(entries, opswhere.Ops(a)...)
 	entries = append(entries, opsprojectshared.Ops()...)
-	return op.NewRegistry(entries...)
+	reg, err := op.NewRegistry(entries...)
+	if err != nil {
+		return nil, err
+	}
+	// devco D-623: a resource-routed read's --json names the folder it
+	// read (resourcefolder.go); the OpenAPI document promises the field.
+	return reg.WithTopFields(routedTopFields), nil
 }
 
 // Registry returns the operations every surface mounts.

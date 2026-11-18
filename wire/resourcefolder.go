@@ -71,11 +71,7 @@ type autoStoreKey struct{}
 // naming the repo's remote. ok is false otherwise (the usual path and its
 // refusal).
 func (a *App) resourceRoutedRead(ctx context.Context, e op.Entry, d op.Decoder) (resourceFolder, bool) {
-	spec := e.Spec()
-	if spec.Access == op.AccessWrite || !orgReadOp(spec) || !rowRead(spec.Name) {
-		return resourceFolder{}, false
-	}
-	if spec.Local && spec.Name != contextop.OpFetch {
+	if !resourceRoutable(e.Spec()) {
 		return resourceFolder{}, false
 	}
 	if UntouchedRepo(ctx, a.opts.RepoDir) == "" || linkedByRemote(ctx, a.opts) != "" {
@@ -96,6 +92,35 @@ func (a *App) resourceRoutedRead(ctx context.Context, e op.Entry, d op.Decoder) 
 		return resourceFolder{}, false
 	}
 	return a.resourceFolderOf(ctx, org)
+}
+
+// resourceRoutable reports whether a resource can route the operation
+// spec in an unlinked own repo: a read of rows naming no store of its own
+// (not a store, live, sync or migrate command), never a write, and no
+// Local command but context.
+func resourceRoutable(spec op.Spec) bool {
+	if spec.Access == op.AccessWrite || !orgReadOp(spec) || !rowRead(spec.Name) {
+		return false
+	}
+	return !spec.Local || spec.Name == contextop.OpFetch
+}
+
+// routedField is the top-level --json field of a resource-routed read
+// (devco D-623): the <org>/<folder> it read, so an empty answer still says
+// where it looked. The text line (note) says the same for a person.
+var routedField = op.FieldInfo{
+	Name: op.RoutedField,
+	Type: op.TypeString,
+	Desc: "the <org>/<folder> this read answered from when a resource of the org named this unlinked repo (absent otherwise)",
+}
+
+// routedTopFields declares routedField on every operation a resource can
+// route (op.Registry.WithTopFields), for the OpenAPI document.
+func routedTopFields(spec op.Spec) []op.FieldInfo {
+	if !resourceRoutable(spec) {
+		return nil
+	}
+	return []op.FieldInfo{routedField}
 }
 
 // resourceFolderOf scans the resource rows of every folder of org's
@@ -235,7 +260,7 @@ func (a *App) runResourceRouted(ctx context.Context, e op.Entry, d op.Decoder, c
 		return res, handled, err
 	}
 	note := f.note()
-	return res.WithTextEdit(func(s string) string { return note + "\n" + s }), true, nil
+	return res.WithTextEdit(func(s string) string { return note + "\n" + s }).WithTopText(op.RoutedField, f.target()), true, nil
 }
 
 // autoStoreOf is the store a resource-routed read reads ("" for any

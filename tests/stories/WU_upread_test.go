@@ -20,11 +20,15 @@ package stories
 //	D-556: in web, with a resource of acme/sync naming web's remote, list,
 //	       search, trash list and context read acme/sync and say so
 //	D-557: decision show (every noun's show) names the store/folder
+//	D-623: those routed reads' --json name acme/sync in a top-level
+//	       "routed" field, an empty answer too; a read naming its store
+//	       has none
 
 import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/tests/journeys"
@@ -104,6 +108,21 @@ func TestStoryWUReadsFromAnywhere(t *testing.T) {
 		// the repo stays untouched: nothing was created in it
 		if _, err := os.Stat(filepath.Join(wc.Dir, ".lore")); err == nil {
 			t.Fatalf("a read created .lore/ in %s", wc.Dir)
+		}
+	})
+
+	s.Step("D-623/routed-json-names-the-folder", func() {
+		// devco D-623: the note line is text only; an empty --json answer
+		// (the trash is empty) said nothing of where it looked
+		routed := `"routed": "` + inSync + `"`
+		for _, args := range [][]string{{"trash", "list", "--json"}, {"rule", "list", "--json"}, {"resource", "list", "--json"}} {
+			if out := m.Lore(wc.Dir, args...).OK(t).Out(); !strings.Contains(out, routed) {
+				t.Errorf("lore %s in the unlinked repo: no %s in its --json:\n%s", strings.Join(args, " "), routed, out)
+			}
+		}
+		// a read that names its store was not routed: no field
+		if out := m.Lore(m.Home, "rule", "list", "--store", inSync, "--json").OK(t).Out(); strings.Contains(out, `"routed"`) {
+			t.Errorf("rule list --store %s --json carries a routed field:\n%s", inSync, out)
 		}
 	})
 
