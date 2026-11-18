@@ -204,7 +204,9 @@ func TestOrgNoOrgRepoRefusesProfileWrites(t *testing.T) {
 	c.MustLore("init", "--non-interactive", "--name=tool")
 	c.CommitAll("lore")
 	c.AdminPush("origin", "main")
-	c.MustLore("actor", "register").Says(t, "Solo Poe", "(@solo)", "in this repo")
+	// devco D-668 (owner use pass 3): every roster line names "the roster
+	// of <org>", here "the roster of this repo" (D-677)
+	c.MustLore("actor", "register").Says(t, "Solo Poe", "(@solo)", "in the roster of this repo")
 	for _, args := range [][]string{
 		{"actor", "edit", "@solo", "--title", "x"},
 		{"actor", "contact", "add", "@solo", "github", "solo-dev"},

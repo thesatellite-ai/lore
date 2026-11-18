@@ -83,8 +83,17 @@ func TestStoryWAAUp3Lists(t *testing.T) {
 	})
 
 	s.Step("D-634/malformed-id-is-no-lore-id", func() {
-		for _, args := range [][]string{{"show", "--id", "mem_bogus"}, {"memory", "show", "--id", "mem_bogus"}, {"show", "--id", "mem_bogus", "--setup", wSetup}} {
-			m.Lore(m.Home, args...).Fails(t, 20).Says(t, "not a valid lore id", "mem_<32 hex>").Never(t, "git work tree")
+		// D-676: a kind's own command keeps its kind-specific words
+		// ("is not a memory id"); a command of no one kind names a lore id
+		for _, c := range []struct {
+			args []string
+			says string
+		}{
+			{[]string{"show", "--id", "mem_bogus"}, "not a valid lore id"},
+			{[]string{"memory", "show", "--id", "mem_bogus"}, `"mem_bogus" is not a memory id`},
+			{[]string{"show", "--id", "mem_bogus", "--setup", wSetup}, "not a valid lore id"},
+		} {
+			m.Lore(m.Home, c.args...).Fails(t, 20).Says(t, c.says, "mem_<32 hex>").Never(t, "git work tree")
 		}
 	})
 }

@@ -1034,8 +1034,9 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	}
 	// devco D-634: a malformed row id is refused as one before any store
 	// or git lookup (malformedid.go): from the home folder `show --id
-	// mem_bogus` said "not inside a git work tree"
-	if err := malformedIDErr(e, d); err != nil {
+	// mem_bogus` said "not inside a git work tree"; inside a work tree the
+	// op refuses it in its own words and code (D-676)
+	if err := malformedIDErr(ctx, a.opts.RepoDir, e, d); err != nil {
 		return op.Result{}, err
 	}
 	// devco D-508, D-509: a read whose data lives in each code repo

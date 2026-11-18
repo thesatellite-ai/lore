@@ -64,7 +64,10 @@ func TestMigrateGateNewerRow(t *testing.T) {
 		`","kind":"fact","new_field":1,"source_kind":"manual","updated_at":"2026-11-04T08:09:56.252002894Z","updated_by":"act_0e45506e64357c94a87e70ef1c6bbba9"}`
 	rel := migDataDir + "/memories/" + id + ".json"
 	c.WriteFile(rel, doc)
-	const msg = "row: written by a newer lore (_v 3, this lore reads up to 2)"
+	// no internal "row: " prefix in the error or the list warning: devco
+	// D-641 (owner use pass 3) drops internal package prefixes from every
+	// user-facing message (D-676)
+	const msg = "written by a newer lore (_v 3, this lore reads up to 2)"
 
 	c.Lore("memory", "show", id).Fails(t, th.ExitGuard, "[E_OLD_LORE] "+msg, "hint: upgrade lore: lore upgrade")
 	r := c.Lore("memory", "show", id, "--json")
