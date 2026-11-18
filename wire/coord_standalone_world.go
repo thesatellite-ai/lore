@@ -208,6 +208,9 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 // openWorldFor is openWorld pointed at where task id is coordinated
 // (forTask; "" = the work queue).
 func (h standaloneCoord) openWorldFor(ctx context.Context, id string) (*coordWorld, error) {
+	if sw, ok, serr := h.openStoreWorld(ctx, id); ok {
+		return sw, serr // a store task outside every code repo (devco:D-635)
+	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
 		return nil, err

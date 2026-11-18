@@ -23,6 +23,10 @@ const (
 	jRootFolder  = "client_root"
 	jRootPattern = "Retry with backoff"
 	jRootTag     = "flaky_net"
+	// devco:D-656: a second repo linked to a second folder
+	jRootFolder2 = "client_two"
+	jRootRepo1   = "web-front"
+	jRootRepo2   = "api-back"
 )
 
 func TestJourneyStoreRootReads(t *testing.T) {
@@ -58,6 +62,12 @@ func TestJourneyStoreRootReads(t *testing.T) {
 			t.Fatalf("lore path %s = %s, want it under the %s folder of the store clone", t1, p.Path, jRootFolder)
 		}
 		lee.Lore(c.Dir, "sync").OK(t)
+		// devco:D-656: repos recorded in two folders (a task naming a
+		// --repo the folder's project has not seen records it there)
+		lee.Lore(parent, "store", "folder", "add", "team", jRootFolder2).OK(t)
+		lee.Lore(c.Dir, "task", "add", "Web task", "--to", tlOrg+"/"+jRootFolder, "--repo", jRootRepo1).OK(t)
+		lee.Lore(c.Dir, "task", "add", "Api task", "--to", tlOrg+"/"+jRootFolder2, "--repo", jRootRepo2).OK(t)
+		lee.Lore(c.Dir, "sync").OK(t)
 	})
 
 	w.Step("day2/every-list-answers-at-the-store-root", func() {
@@ -82,6 +92,22 @@ func TestJourneyStoreRootReads(t *testing.T) {
 			}
 			if c.want != "" && !strings.Contains(r.Out(), c.want) {
 				t.Errorf("lore %s at the store root lacks %q:\n%s", strings.Join(c.args, " "), c.want, r)
+			}
+		}
+		// devco:D-656: repo list over every project reads every folder's
+		// repos, at the store root and under --setup from home alike
+		for _, at := range []struct {
+			dir  string
+			args []string
+		}{
+			{storeDir, []string{"repo", "list"}},
+			{lee.Home, []string{"repo", "list", "--setup", tlLeadSetup}},
+		} {
+			r := lee.Lore(at.dir, at.args...).OK(t)
+			for _, want := range []string{jRootRepo1, jRootRepo2} {
+				if !strings.Contains(r.Out(), want) {
+					t.Errorf("lore %s in %s lacks the repo %s recorded in its folder:\n%s", strings.Join(at.args, " "), at.dir, want, r)
+				}
 			}
 		}
 		r := lee.Lore(storeDir, "project", "show")

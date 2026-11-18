@@ -712,7 +712,12 @@ func (a *App) setupOfOrg(org string) string {
 // clones of the stores the config lists (no setup needs to cover the
 // folder the command runs in); ids are unique, so the first hit is it.
 func (a *App) orgHoldingRow(ctx context.Context, in op.Input) string {
-	id := rowIDOf(in)
+	return a.orgOfRow(ctx, rowIDOf(in))
+}
+
+// orgOfRow is orgHoldingRow for row id itself ("" for none): the org of
+// the home's org config whose store clone holds it.
+func (a *App) orgOfRow(ctx context.Context, id string) string {
 	if id == "" {
 		return ""
 	}

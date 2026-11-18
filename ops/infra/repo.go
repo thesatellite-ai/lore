@@ -142,6 +142,55 @@ func (o ops) projectRepos(ctx context.Context, pid string) ([]row.Row, error) {
 	return out, nil
 }
 
+// listedRepos is what repo list shows: project pid's repos in the repo
+// store, or, for every project (pid ""), the repos of every read store
+// (devco:D-656): under --setup or at a store clone root each folder of
+// the org store keeps the repos registered for its project, and the repo
+// store alone missed every one of them. A row read through two stores
+// is listed once.
+func (o ops) listedRepos(ctx context.Context, pid string) ([]work.Sourced, error) {
+	srcs := []store.Source{repoStore}
+	if pid == "" {
+		srcs = append(srcs, engine.ReadStoresOf(o.env)...)
+	}
+	seen := map[string]bool{}
+	var out []work.Sourced
+	for _, src := range srcs {
+		var rows []row.Row
+		var err error
+		if src == repoStore {
+			rows, err = o.projectRepos(ctx, pid)
+		} else {
+			rows, err = o.storeRepos(ctx, src)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			if id := r.ID.String(); !seen[id] {
+				seen[id] = true
+				out = append(out, work.Sourced{Source: src, Row: r})
+			}
+		}
+	}
+	return out, nil
+}
+
+// storeRepos is the live repos rows of read store src.
+func (o ops) storeRepos(ctx context.Context, src store.Source) ([]row.Row, error) {
+	rows, err := o.env.List(ctx, src, schema.TableRepos)
+	if err != nil {
+		return nil, fmt.Errorf("list the repos of %s: %w", src, err)
+	}
+	live := rows[:0:0]
+	for _, r := range rows {
+		if !r.Deleted {
+			live = append(live, r)
+		}
+	}
+	return live, nil
+}
+
 // repoAdd registers a repo in the project (a taken mount name is
 // E_MOUNT_NAME_TAKEN, v0.1.17's text).
 func (o ops) repoAdd(ctx context.Context, in RepoAddIn) (work.WriteOut, error) {
@@ -194,13 +243,9 @@ func (o ops) repoList(ctx context.Context, in RepoListIn) (RepoListOut, error) {
 	if every {
 		project = ""
 	}
-	rows, err := o.projectRepos(ctx, project)
+	sourced, err := o.listedRepos(ctx, project)
 	if err != nil {
 		return RepoListOut{}, err
-	}
-	sourced := make([]work.Sourced, 0, len(rows))
-	for _, r := range rows {
-		sourced = append(sourced, work.Sourced{Source: repoStore, Row: r})
 	}
 	out := RepoListOut{SchemaVersion: SchemaVersion, Kind: KindRepoList, Data: []Repo{}}
 	for _, s := range sortByCreated(sourced) {
