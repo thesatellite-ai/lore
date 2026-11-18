@@ -53,6 +53,11 @@ type healthFile struct {
 	// one's, so its results are not this binary's health (setup list kept a
 	// warning with a fix an older lore wrote until setup check ran again).
 	Versions map[string]string `json:"versions,omitempty"`
+	// GitConfig is setup name → the size and modification time of each
+	// global git config file and file it includes when its results were
+	// recorded (setuphealth_age.go): one that changed since makes setup
+	// list say the results are stale (devco D-605).
+	GitConfig map[string]map[string]string `json:"git_config,omitempty"`
 }
 
 // entryFingerprint identifies what a doctor run checked of entry: a hash
@@ -114,7 +119,7 @@ func (a *App) readHealth() (healthFile, error) {
 // its previous ones in the health file (written atomically), with the
 // fingerprint of the entry they were made for. A file that does not decode
 // is replaced: it only ever holds derived results.
-func (a *App) RecordHealth(_ context.Context, setup string, results []onboard.CheckResult) error {
+func (a *App) RecordHealth(ctx context.Context, setup string, results []onboard.CheckResult) error {
 	if setup == "" {
 		return nil
 	}
@@ -124,6 +129,10 @@ func (a *App) RecordHealth(_ context.Context, setup string, results []onboard.Ch
 	hf.Setups[setup] = append([]onboard.CheckResult{}, results...)
 	hf.Saved[setup] = a.currentFingerprint(setup)
 	hf.Versions[setup] = a.opts.Version
+	if hf.GitConfig == nil {
+		hf.GitConfig = map[string]map[string]string{}
+	}
+	hf.GitConfig[setup] = gitConfigStates(ctx)
 	b, err := json.Marshal(hf)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "wire: encode "+healthFileName, err)

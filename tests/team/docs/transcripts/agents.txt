@@ -137,14 +137,14 @@ lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe984c9b495744c02177
   read its notes: lore task show --id tsk_54fe984c9b495744c0217776765a28f2
 
 ### crash and reclaim
-agent-frontend (work/agents/app)$ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'
+agent-frontend (work/agents/app)$ git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page' && git push -q -u origin agent-frontend/invite-route
 lore: set lore.clientrepo=true in ~/work/agents/app/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 agent-frontend (work/agents/app)$ lore task note --id tsk_54fe984c9b495744c0217776765a28f2 --text 'route + loader done, form next'
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe984c9b495744c0217776765a28f2.json (store agency/client2)
 lore: wrote ~/.lore/stores/agency/notes/client2/comments/cmt_2537f9b2f7de77bfe5ca958860216bbb.json (store agency/client2)
 ✓ note cmt_2537f9b2f7de77bfe5ca958860216bbb on tsk_54fe984c9b495744c0217776765a28f2
-  pushed work branch agent-frontend/invite-route (commit dfd8dc8) to remote origin so a replacement can fetch it
+  work branch agent-frontend/invite-route (commit dfd8dc8) is on remote origin so a replacement can fetch it
 agent-coord (work/api)$ lore inbox
 msn_2ad3618e878ebbf527d34d446ef4f891  EXPIRED  agent-frontend tsk_54fe984c9b495744c0217776765a28f2 claimed by agent-frontend, lease expired 8 min ago; work branch pushed (agent-frontend/invite-route)
 agent-coord (work/api)$ lore mission status --id msn_2ad3618e878ebbf527d34d446ef4f891

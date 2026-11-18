@@ -45,8 +45,9 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 internal   github.com/agency/notes client/
+reads      agency/client (this repo's link)
 links      known  1 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 
@@ -59,7 +60,7 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client3/api
-stores     git@github.com:client3/notes on branch main  (org folder org)
+stores     git@github.com:client3/notes on branch main  (org folder client3/org: roster, teams, company rules)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 

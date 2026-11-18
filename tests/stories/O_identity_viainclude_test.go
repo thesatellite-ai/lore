@@ -10,8 +10,11 @@ package stories
 // includeIf gitdir: rule for that folder sets <org email>".
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStoryOIdentityViaInclude(t *testing.T) {
@@ -41,5 +44,20 @@ func TestStoryOIdentityViaInclude(t *testing.T) {
 		for _, args := range [][]string{{"setup", "list"}, {"doctor", "--all"}} {
 			ada.Lore(ada.Home, args...).Never(t, "--global", "identity.git_email")
 		}
+	})
+	// devco:D-605: a stored result is stale once the git config its check
+	// read changes (here the [include]d file): setup list says when it was
+	// last checked and the check that refreshes it, never the old cell;
+	// that check makes it current again
+	s.Step("D-605/setup-list-stale-after-git-config-change", func() {
+		later := time.Now().Add(time.Minute)
+		if err := os.Chtimes(filepath.Join(ada.Home, ".gitconfig-rules"), later, later); err != nil {
+			t.Fatal(err)
+		}
+		ada.Lore(ada.Home, "setup", "list").OK(t).
+			Says(t, "not checked since ", "~/.gitconfig-rules changed since; check it again with lore setup check --setup "+oSetup+" --step identity)")
+		// the check the line names, exactly as printed
+		ada.Lore(ada.Home, "setup", "check", "--setup", oSetup, "--step", "identity").OK(t)
+		ada.Lore(ada.Home, "setup", "list").OK(t).Never(t, "not checked since", "--global")
 	})
 }

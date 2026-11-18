@@ -257,18 +257,56 @@ func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID,
 			return opscoord.Report{Lines: lines}, nil
 		}
 	}
+	if branch != "" && w.remote != nil {
+		if commit, ok := w.branchOnRemote(ctx, branch); ok {
+			// pushed by the person (git push): say so instead of "not pushed"
+			lines = append(lines, "  work branch "+branch+" (commit "+gitbackend.Pushed{Commit: commit}.Short()+") is on remote "+w.remoteName+" so a replacement can fetch it")
+			return opscoord.Report{Lines: lines}, nil
+		}
+	}
 	switch {
+	case branch != "" && w.remote != nil && !w.pushesAsked():
+		// devco D-598: nothing reaches a remote unless the person asked
+		lines = append(lines, "  work branch "+branch+" not pushed: lore pushes nothing to a remote unless you ask; push it with: git push "+w.remoteName+" "+branch+" (live.autopush: true in config.yaml or LORE_PUSH_CLAIMS=1 pushes it with each note)")
 	case branch != "":
 		lines = append(lines, "  ! work branch "+branch+" NOT pushed (offline or no remote); a replacement cannot fetch it yet")
 	}
 	return opscoord.Report{Lines: lines}, nil
 }
 
+// pushesAsked reports whether the person asked lore to push coordination
+// on its own: live.autopush: true set in config.yaml (not its default) or
+// LORE_PUSH_CLAIMS=1. `task note` and the heartbeat daemon pushed the code
+// work branch whenever autopush was merely on by default, though neither
+// takes --push (devco D-598: nothing reaches a remote without an explicit
+// push, sync or a setting the person turned on).
+func (w *coordWorld) pushesAsked() bool {
+	return w.autopushChosen || os.Getenv(envPushClaims) == envPushClaimsOn
+}
+
+// branchOnRemote reports whether the work branch's head is already what
+// this clone last saw on the remote (refs/remotes/<remote>/<branch>, as a
+// person's own `git push` leaves it), reading local refs only. A note
+// after the person pushed the branch themselves said "not pushed" and
+// told them to push it again (devco D-598 follow-up).
+func (w *coordWorld) branchOnRemote(ctx context.Context, branch string) (commit string, ok bool) {
+	head, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--verify", "-q", "refs/heads/" + branch}})
+	if err != nil {
+		return "", false
+	}
+	seen, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--verify", "-q", "refs/remotes/" + w.remoteName + "/" + branch}})
+	if err != nil {
+		return "", false
+	}
+	h := strings.TrimSpace(string(head))
+	return h, h != "" && h == strings.TrimSpace(string(seen))
+}
+
 // pushWorkBranch pushes the work branch so a replacement agent can fetch
-// it (§7.4 "Work branch"). Best effort: a failed push is reported, never
-// fatal.
+// it (§7.4 "Work branch"), only when the person asked for pushes
+// (pushesAsked). Best effort: a failed push is reported, never fatal.
 func (w *coordWorld) pushWorkBranch(ctx context.Context, branch string) (commit string, ok bool) {
-	if w.remote == nil || !w.autopush {
+	if w.remote == nil || !w.autopush || !w.pushesAsked() {
 		return "", false
 	}
 	_, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"push", "--quiet", w.remoteName, "refs/heads/" + branch + ":refs/heads/" + branch},

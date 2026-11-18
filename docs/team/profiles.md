@@ -627,7 +627,7 @@ machine    mch_017941fe
 agent      none  (no coding agent detected)
 project    (no .lore/data/_meta.json here)
 remotes    github.com/acme/handbook
-stores     git@github.com:acme/lore-notes on branch main  (org folder org)
+stores     git@github.com:acme/lore-notes on branch main  (org folder acme-studio/org: roster, teams, company rules)
 links      known  no project id here yet, so no store link can name this repo
 personal   not set
 ```

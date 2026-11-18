@@ -625,7 +625,7 @@ Y
   local tf; tf=$(id tsk)
 
   note "crash and reclaim"
-  ag agent-frontend work/agents/app "git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'"
+  ag agent-frontend work/agents/app "git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page' && git push -q -u origin agent-frontend/invite-route"
   ag agent-frontend work/agents/app "lore task note --id $tf --text 'route + loader done, form next'"
   CLOCK=$(date -u -d "$CLOCK + 25 minutes" +%Y-%m-%dT%H:%M:%SZ)
   ag agent-coord work/api "lore inbox"
