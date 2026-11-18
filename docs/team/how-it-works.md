@@ -292,7 +292,7 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 # agent-backend, in website
 $ lore task claim --id tsk_d431…313a
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ claimed tsk_d431…313a renew the client SSL certificate (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in ~
@@ -373,8 +373,8 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 # agent-backend, in agents/api
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
 lore: committed locally to store agency/client2; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147…5139.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147…5139.json (store agency/client2)
 ✓ tsk_162d…9666 done (commit 86dbae4, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 86dbae41af28); waiting for merge
   lesson → mem_f147…5139
 
@@ -397,7 +397,7 @@ lore: committed locally to store agency/client2; lore sync sends it
 # agent-frontend, in agents/app
 $ lore task next --claim --mission msn_2ad3…f891 --repo app
 lore: committed locally to store agency/client2; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency/client2)
 ✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
   read its notes: lore task show --id tsk_54fe…28f2
 ```

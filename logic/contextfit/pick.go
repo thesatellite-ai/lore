@@ -91,6 +91,37 @@ func Words(s string) []string {
 	return out
 }
 
+// PathWords returns the words of a repo path that can name its topic:
+// Words(p) without the generic names a file or folder carries in every
+// project (main, index, init, util, test, src …) and file-type words
+// (json, yaml …). `context --for-file main.go` matched notes on the word
+// "main" alone (a branch name) before (D-599); such a path now yields no
+// words, so it is matched by globs, scope and mentions only.
+func PathWords(p string) []string {
+	var out []string
+	for _, w := range Words(p) {
+		if !genericPathWords[w] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// genericPathWords are file stems, folder names and file-type words of
+// four letters or more that appear in most repositories and so say nothing
+// about what a file is for (D-599). Shorter ones (app, mod, lib, src, cmd)
+// are already below minWord.
+var genericPathWords = map[string]bool{
+	"main": true, "index": true, "init": true, "util": true, "utils": true, "test": true, "tests": true,
+	"spec": true, "specs": true, "types": true, "type": true, "common": true, "helper": true, "helpers": true,
+	"base": true, "core": true, "misc": true, "default": true, "defaults": true, "module": true, "modules": true,
+	"package": true, "source": true, "internal": true, "vendor": true, "public": true, "private": true,
+	"shared": true, "libs": true, "export": true, "exports": true, "setup": true, "constants": true,
+	"const": true, "mock": true, "mocks": true, "fixture": true, "fixtures": true, "temp": true,
+	"json": true, "yaml": true, "toml": true, "html": true, "scss": true, "java": true, "rust": true,
+	"swift": true, "kotlin": true, "proto": true, "lock": true, "conf": true, "data": true, "file": true, "files": true,
+}
+
 // stopWords are frequent words of four letters or more that carry no
 // topic, besides querywords' list (the one search reads, D-435).
 var stopWords = map[string]bool{"this": true, "that": true, "with": true, "from": true, "have": true,

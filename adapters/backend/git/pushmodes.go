@@ -961,7 +961,7 @@ func (b *Backend) forcePush(ctx context.Context, tip, expect string) error {
 	case flag == flagUpToDate:
 		return nil
 	case flag == flagForced || flag == flagFastForward:
-		b.recordPush(tip, true, nil) // a compaction rewrites every folder: named by the store
+		b.recordPush(tip, true, pushStats{}) // a compaction rewrites every folder: named by the store
 		return nil
 	case strings.Contains(summary, leaseLost) || slices.ContainsFunc(lostRaceReasons, func(r string) bool { return strings.Contains(summary, r) }):
 		return errs.New(errs.Contended, "another clone pushed while the compaction ran; nothing was changed").

@@ -120,11 +120,11 @@ Use it when you started a task and cannot finish it. The task is free at once, s
 # alice, in website
 $ lore task add --title 'send the invoice reminder before Friday' --to agency && lore sync
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_05e9…4603.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ tsk_c0f3…b5b8 — send the invoice reminder before Friday [medium] → [agency/client]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
-lore: pushed store agency/client: commit 86dbae4 to branch main
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit, 2 row files)
 store me: up to date
 store me/everywhere: up to date
 store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
@@ -133,11 +133,11 @@ store agency/org: up to date
 # bob, in website
 $ lore task claim --id tsk_c0f3…b5b8
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ claimed tsk_c0f3…b5b8 send the invoice reminder before Friday (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 $ lore task release --id tsk_c0f3…b5b8
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ released tsk_c0f3…b5b8
 
 # alice, in website
@@ -171,13 +171,13 @@ export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 # agent-backend, in website
 $ lore task claim --id tsk_c0f3…b5b8
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ claimed tsk_c0f3…b5b8 send the invoice reminder before Friday (lease 20m, token ct_cb04f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in website
 $ lore task revoke --id tsk_c0f3…b5b8
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
 ✓ revoked the claim on tsk_c0f3…b5b8 (was held by agent-backend)
   pushed refs/lore/signals/main to origin: the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
 
@@ -200,10 +200,10 @@ Use it when the work should move to another person; to give a task to a team, us
 # alice, in website
 $ lore task add --title 'update the contact page' --to agency --assign @bob && lore sync
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ tsk_d431…313a — update the contact page [medium] → [agency/client]
   on tasklist tlt_05e9…4603 "default" (the default; --tasklist picks another)
-lore: pushed store agency/client, agency/org: commit 9b40ce7 to branch main
+lore: pushed store agency (the store clone: folders client, org): commit 9b40ce7 to branch main (4 commits, 3 row files)
 store me: up to date
 store me/everywhere: up to date
 store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
@@ -213,13 +213,13 @@ store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 $ lore task claim --id tsk_d431…313a
 lore sync: store ssh://github.com/agency/notes: tasks/tsk_c0f3…b5b8: both sides changed claim_epoch, claim_log; kept the newer edit
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ claimed tsk_d431…313a update the contact page (lease 20m, token ct_87f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in website
 $ lore task reassign --id tsk_d431…313a --assign @alice
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
 ✓ tsk_d431…313a reassigned to @alice
 
 # bob, in website

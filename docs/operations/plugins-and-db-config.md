@@ -39,7 +39,7 @@ ERROR: [E_NOT_FOUND] config key "color" not found
 
 ## Step 2 — Set a rule for the whole team
 
-A note such as "ask Bob before changing the build" is a rule: add it with `lore rule add` so every agent reads it. A setting the team must share, such as how long deleted rows stay in the trash, is a policy. `lore policy set` stores it for this repo (or, with `--to`, for a store or an org) and `lore policy show` prints the value that applies and where it comes from:
+A note such as "ask Bob before changing the build" is a rule: add it with `lore rule add` so every agent reads it. A setting the team must share, such as how long deleted rows stay in the trash, is a policy. `lore policy set` stores it for this repo (or, with `--to`, for a store or an org) and `lore policy show` prints the value that applies and where it comes from. Without `--yes` it asks first, naming where the row goes (this repo's `.lore/` or the store folder), the value now and the new one, who the rule reaches, and the exact command with `--yes`; in a repo linked to a store folder, which holds no rows, the default `--to repo` is refused before anything is asked and the refusal names the `--to` to use:
 
 <!-- example: ops#team-policy -->
 ```console

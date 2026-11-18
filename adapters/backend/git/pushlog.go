@@ -27,6 +27,13 @@ type Pushed struct {
 	// One clone pushes every folder, so the caller names the push by
 	// these, not by the folder that happened to push (bug hunt W-14).
 	Folders []string `json:"folders,omitempty"`
+	// Commits is how many commits the push sent (git rev-list --count
+	// <remote tip before>..<tip>) and Rows how many row files they changed;
+	// 0 when git cannot say (a forced compaction). The push line prints
+	// them, so it agrees with git (devco D-601: a sync printed "sent 7"
+	// while 18 commits went out).
+	Commits int `json:"commits,omitempty"`
+	Rows    int `json:"rows,omitempty"`
 }
 
 // ShortCommitLen is how many hex digits of a commit id output shows.
@@ -47,11 +54,18 @@ type pushLog struct {
 }
 
 // recordPush notes that the remote took tip on the store branch.
-func (b *Backend) recordPush(tip string, forced bool, folders []string) {
+func (b *Backend) recordPush(tip string, forced bool, st pushStats) {
 	l := &b.pushes
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.pushes = append(l.pushes, Pushed{Commit: tip, Branch: b.branch, Remote: RemoteName, Forced: forced, Folders: folders})
+	l.pushes = append(l.pushes, Pushed{Commit: tip, Branch: b.branch, Remote: RemoteName, Forced: forced, Folders: st.folders, Commits: st.commits, Rows: st.rows})
+}
+
+// pushStats is what one push carried: the folders whose row files
+// changed, how many row files, and how many commits.
+type pushStats struct {
+	folders       []string
+	commits, rows int
 }
 
 // TakePushes returns the pushes made since the last call and forgets

@@ -71,6 +71,16 @@ func (b *Backend) MarkReadOnlyBecause(err error) {
 // fetch and sync, which could only fail.
 func (b *Backend) Unwritable() bool { return b.unwritable }
 
+// WriteRefusal is the error a write to this handle would answer (nil when
+// it is writable), so a command can refuse before it asks its question
+// (devco D-603).
+func (b *Backend) WriteRefusal() error {
+	if !b.readOnly {
+		return nil
+	}
+	return b.refusedWrite()
+}
+
 // refusedWrite is the error a write to a read-only handle answers.
 func (b *Backend) refusedWrite() error {
 	if b.readOnlyErr != nil {

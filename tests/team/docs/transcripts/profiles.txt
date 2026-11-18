@@ -231,8 +231,8 @@ ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) is active; leaving ends their stint 
 ### offboard
 tomas (work/acme-hub)$ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
 lore: committed locally to store agency/acme-hub; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191616cfa49f94ede5d5148b8b045c2.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3d8fc9a019dca1371ad55c6a611aa.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191616cfa49f94ede5d5148b8b045c2.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3d8fc9a019dca1371ad55c6a611aa.json (store agency/acme-hub)
 ✓ tsk_b4d3d8fc9a019dca1371ad55c6a611aa — move the invoice export to the new API [medium] → [agency/acme-hub]
   created tasklist tlt_d191616cfa49f94ede5d5148b8b045c2 "default" for tasks added without --tasklist
 tomas (work/acme-hub)$ lore actor offboard --actor @mira --reason 'moved abroad'
@@ -378,8 +378,8 @@ personal   not set
 
 ### machines
 tomas (work/acme-hub)$ lore machine label --label 'office desktop'
-lore: wrote ~/.lore/personal/agency/actors/act_4f89f5fcb1d81152bdf3f52979ebb64b.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_4f89f5fcb1d81152bdf3f52979ebb64b.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me/agency)
 ✓ machine mch_017941fe labelled "office desktop"
 tomas (work/acme-hub)$ lore machine list | cut -c1-38
 ID            LABEL           HOST    
@@ -391,5 +391,5 @@ mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
   runtime:   bare
   last_write: 2026-11-02T10:00:00.000000001Z
 tomas (work/acme-hub)$ lore machine label --label ''
-lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada321d27469d49114b952fdeed0c018.json (store me/agency)
 ✓ machine mch_017941fe label cleared

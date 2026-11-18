@@ -111,10 +111,10 @@ func (o ops) policyOps() []op.Entry {
 			}}, o.policyShow),
 		op.Define(op.Spec{Name: OpPolicySet, Summary: "Set a policy rule at a level (may only tighten a higher level)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Confirm: op.ConfirmRule{Always: true}, RESTNoun: policyREST,
-			Examples: []op.Example{{Title: "keep the trash a year", CLI: "lore policy set --key trash.retention_days --value 365 --yes", Want: "pol_"}}}, o.policySet),
+			Examples: []op.Example{{Title: "keep the trash a year", CLI: "lore policy set --key trash.retention_days --value 365 --yes", Want: "pol_"}}}, o.policySet).Asks(o.policySetQuestion),
 		op.Define(op.Spec{Name: OpPolicyUnset, Summary: "Remove a policy rule's row at a level (the next level up applies again)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.ReasonRequired), Confirm: op.ConfirmRule{Always: true}, RESTNoun: policyREST,
-			Examples: []op.Example{{Title: "back to the level above (or the default)", CLI: "lore policy unset --key trash.retention_days --yes", Want: ""}}}, o.policyUnset),
+			Examples: []op.Example{{Title: "back to the level above (or the default)", CLI: "lore policy unset --key trash.retention_days --yes", Want: ""}}}, o.policyUnset).Asks(o.policyUnsetQuestion),
 	}
 }
 

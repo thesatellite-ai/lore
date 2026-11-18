@@ -248,6 +248,9 @@ type routedAudit struct {
 	// rowFile is where a store keeps a row's file (writelog.go); nil
 	// leaves the write log without paths.
 	rowFile func(store.Source, row.Table, ids.AnyID) string
+	// placeOf is the label a write line names the store by (writelog.go;
+	// nil: the attached name).
+	placeOf func(store.Source) string
 	repo    engine.AuditSink
 	dir     string                  // <home>/StoreAuditDir
 	stems   map[store.Source]string // attached source -> its sto_ id, once known
@@ -413,6 +416,9 @@ func (r *routedAudit) noteWrite(ctx context.Context, ev engine.Event) {
 		return
 	}
 	w := Written{Store: string(ev.Store), key: string(ev.Table) + "/" + ev.ID.String()}
+	if r.placeOf != nil {
+		w.Store = r.placeOf(ev.Store) // "acme/web", not "acme" (devco D-600)
+	}
 	if r.rowFile != nil {
 		w.File = r.rowFile(ev.Store, ev.Table, ev.ID)
 	}

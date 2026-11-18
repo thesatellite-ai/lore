@@ -20,7 +20,7 @@ func TestOverCoreWarnNamesTheFixCommands(t *testing.T) {
 	for _, want := range []string{
 		"20285 bytes, over context.budget.internal 8000",
 		"The largest: hfx_big (9000 bytes), rul_big (5000 bytes), rul_small (100 bytes).",
-		"`lore rule edit --id rul_small --severity should`",
+		"`lore rule edit --id rul_big --severity should`", // the largest listed rule, not the first found (devco D-602)
 		"`lore hotfix edit --id hfx_big --severity medium`",
 		"`lore policy set --key context.budget.internal --value 22000 --yes`",
 	} {

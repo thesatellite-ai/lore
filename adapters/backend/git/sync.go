@@ -745,7 +745,7 @@ func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, er
 	case flagUpToDate:
 		return pushApplied, "", nil
 	case flagFastForward, flagForced, flagDeleted, flagNew:
-		b.recordPush(tip, flag == flagForced, b.pushedFolders(ctx, before, tip))
+		b.recordPush(tip, flag == flagForced, b.pushedStats(ctx, before, tip))
 		b.noteRemoteTip(ctx, tip)
 		return pushApplied, "", nil
 	case flagRejected:
@@ -760,17 +760,34 @@ func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, er
 	}
 }
 
-// pushedFolders is the sorted folders whose row files changed from before
-// to tip (what a push carried); nil when git cannot say.
-func (b *Backend) pushedFolders(ctx context.Context, before, tip string) []string {
-	if before == "" || before == tip {
-		return nil
+// pushedStats is what a push from before to tip carried: the sorted
+// folders whose row files changed, how many row files, and how many
+// commits (git rev-list --count before..tip, every commit of tip when the
+// remote had no branch yet). A count git cannot give stays 0.
+func (b *Backend) pushedStats(ctx context.Context, before, tip string) pushStats {
+	var st pushStats
+	if before == tip {
+		return st
+	}
+	span := tip
+	if before != "" {
+		span = before + ".." + tip
+	}
+	if out, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-list", "--count", span}}); err == nil {
+		st.commits, _ = strconv.Atoi(strings.TrimSpace(string(out)))
+	}
+	if before == "" {
+		return st // the folders of a first push are every folder: named by the store
 	}
 	n, err := b.countRows(ctx, before, tip)
 	if err != nil || len(n) == 0 {
-		return nil
+		return st
 	}
-	return slices.Sorted(maps.Keys(n))
+	st.folders = slices.Sorted(maps.Keys(n))
+	for _, c := range n {
+		st.rows += c
+	}
+	return st
 }
 
 // porcelainVerdict finds the ref line for dst in `git push --porcelain`

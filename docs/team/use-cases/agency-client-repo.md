@@ -73,7 +73,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe…28f2.json (store
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
 ✓ act_2ad3…f891 Alice Doe (@alice) registered in agency org/
 $ lore sync
-lore: pushed store agency/org: commit 601d285 to branch main
+lore: pushed store agency/org: commit 601d285 to branch main (3 commits, 2 row files)
 store me: up to date
 store me/everywhere: up to date
 store agency/client: up to date
@@ -87,7 +87,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_05e9…4603.json (store agency/org)
 ✓ act_05e9…4603 Bob Roe (@bob) registered in agency org/
-lore: pushed store agency/org: commit 86dbae4 to branch main
+lore: pushed store agency/org: commit 86dbae4 to branch main (1 commit, 1 row file)
 store me: up to date
 store me/everywhere: up to date
 store agency/client: up to date
@@ -106,7 +106,7 @@ Notes go to the internal project by default. A project rule goes into the repo w
 # alice, in website
 $ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency/client)
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [project]
@@ -129,13 +129,13 @@ Alice adds an internal task for Bob from the default branch: a task added on a f
 ```console
 # alice, in website
 $ lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
-lore: pushed store agency/client: commit 9b40ce7 to branch main
+lore: pushed store agency/client: commit 9b40ce7 to branch main (2 commits, 1 row file)
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency/client)
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
   created tasklist tlt_d431…313a "default" for tasks added without --tasklist
-lore: pushed store agency/client: commit 05513aa to branch main
+lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 2 row files)
 store me: up to date
 store me/everywhere: up to date
 store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
@@ -148,10 +148,10 @@ $ lore inbox
 -  assigned              tsk_b4f4…a5b0  send invoice reminder before demo (lead)
 $ lore task done --id tsk_b4f4…a5b0 && lore sync >/dev/null && git switch -q -c feat/login
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency/client)
 ✓ tsk_b4f4…a5b0 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
-lore: pushed store agency/client: commit dfd8dc8 to branch main
+lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
 $ git status --short
 ```
 <!-- /example -->

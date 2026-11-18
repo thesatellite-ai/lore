@@ -61,9 +61,9 @@ and the leak guards turn on for everyone in agency-stag.
   no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 $ lore task add --title 'seed staging with demo data' --to agency-stag
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag)
-lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag)
-lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag/client)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag/client)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag/client)
 ✓ tsk_05e9…4603 — seed staging with demo data [medium] → [agency-stag/client]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 $ lore task list

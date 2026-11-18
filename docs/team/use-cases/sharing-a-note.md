@@ -19,7 +19,7 @@ A row lives in exactly one place, so there is no copy: `lore move --id <id> --to
 # alice, in website
 $ lore memory add --body 'checkout must support INR and USD'
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency/client)
 ✓ mem_f147…5139 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [project]
@@ -30,7 +30,7 @@ This becomes visible to everyone with access to repo (client):
 Move it? [y/N] y
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/work/website/.lore/data/memories/mem_f147…5139.json
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency/client)
 ✓ mem_f147…5139 moved to store repo (same id; the old copy is tombstoned)
 $ git status --short
 ?? .lore/data/memories/
