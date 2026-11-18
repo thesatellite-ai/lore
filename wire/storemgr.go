@@ -505,13 +505,21 @@ func (s storeSigner) envFor(ctx context.Context, dir string) ([]string, error) {
 // differences (clone folders and locations are keyed on it), so two urls
 // are compared as one store only through this key.
 func storeKey(raw string) (string, bool) {
+	k, _, ok := storeKeyRemote(raw)
+	return k, ok
+}
+
+// storeKeyRemote is storeKey plus the git remote the key came from (nil
+// for a file:// store), for the comparisons that also ask whether two
+// hosts are one host under two names (sameStoreAs).
+func storeKeyRemote(raw string) (string, *git.Remote, bool) {
 	c, err := canonical(attach.Store{URL: raw})
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
 	u, err := url.Parse(c)
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
 	u.RawQuery, u.Fragment = "", ""
 	if u.Scheme == folder.Scheme {
@@ -519,13 +527,51 @@ func storeKey(raw string) (string, bool) {
 			u.Path = p
 		}
 		u.RawPath = ""
-		return u.String(), true
+		return u.String(), nil, true
 	}
 	r, err := git.RemoteOf(u)
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
-	return r.Norm, true
+	return r.Norm, &r, true
+}
+
+// localRemote reports a git remote that is a local path (no host).
+func localRemote(r git.Remote) bool { return strings.HasPrefix(r.Norm, git.LocalHost+"/") }
+
+// sameStoreAs is the test "names the store raw names" for finding the org
+// entry (or personal store) a store clone's origin belongs to; nil when raw
+// is no store url. Two urls are one store when they share storeKey, or are
+// git remotes with one repository path on hosts that are one host under
+// two names (git.SameRepoViaAlias: an ssh alias the ssh config sends to
+// the other host, or a single-label alias host it does not name).
+//
+// devco D-627: a clone's origin spelled git@<alias>:org/store.git keyed as
+// <alias>/org/store when the ssh config did not rename the alias (a git
+// url.<base>.insteadOf route), so the org lookup missed the org's
+// git@github.com:org/store.git entry although lore uses that very clone
+// for it (CloneDirFor asks SameRepoViaAlias): a read in the clone folder
+// lost the org folder layer and named the store by its folder. Every
+// lookup of a store url in an org entry or store list asks the same rule
+// the clone folder lookup does.
+func sameStoreAs(raw string) func(other string) bool {
+	want, wr, ok := storeKeyRemote(raw)
+	if !ok {
+		return nil
+	}
+	return func(other string) bool {
+		k, r, kok := storeKeyRemote(other)
+		switch {
+		case !kok:
+			return false
+		case k == want:
+			return true
+		case wr == nil || r == nil || localRemote(*wr) || localRemote(*r):
+			return false // a folder store or a local path has no host alias
+		default:
+			return git.SameRepoViaAlias(*wr, *r)
+		}
+	}
 }
 
 // storeOpeners is newOpeners with this App's commit signing: every git
