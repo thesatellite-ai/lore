@@ -210,7 +210,7 @@ A repo whose `.gitignore` ignores `.lore/` keeps the project private to this mac
 
 A command that only reads (`list`, `show`, `search`, `whoami`, `doctor`, `where`, …) never writes into your repo, its `.git` or a store clone's files, and never pushes. It may fetch a store, and when commits wait in a store clone it says `N local commit(s) wait to be pushed; a read never pushes: run lore sync`, once: the next reads stay quiet until the count changes or the store comes back online.
 
-A command that writes names each row file it wrote (`lore: wrote /home/pat/code/app/.lore/data/memories/mem_….json`, or a count per folder when there are many), and every push names the store, the commit and the branch: `lore: pushed store notes: commit 1a2b3c4 to branch main`.
+A command that writes names each row file it wrote (`lore: wrote /home/pat/code/app/.lore/data/memories/mem_….json`, or a count per folder when there are many), and every push names the store, the commit and the branch, with the commits and row files it sent as `git rev-list` and `git diff` count them: `lore: pushed store notes: commit 1a2b3c4 to branch main (3 commits, 4 row files)`. A row written to a folder of an org store is named by its folder (`(store acme/web)`), as search and the lists name it, and one push that carried several folders of a store clone is one line for the whole clone: `lore: pushed store acme (the store clone: folders org, web): …`.
 
 A command that only reads also never sets up git: it does not install the merge driver, hooks, attributes or a clone's identity, in a code repo or a store clone. When something is missing it prints at most one line naming the command that sets it up (`lore sync`, `lore fix`, or the next write), and that command says what it wrote.
 

@@ -47,3 +47,23 @@ func TestWordsAndPick(t *testing.T) {
 		t.Fatalf("uncapped Pick = %+v", all)
 	}
 }
+
+// TestPathWordsSkipsGenericStems: a file's generic stem (main, index,
+// util …) is no topic, so `context --for-file main.go` matches no note on
+// the word "main" alone (D-599); meaningful folder and stem words stay.
+func TestPathWordsSkipsGenericStems(t *testing.T) {
+	cases := map[string]string{
+		"main.go":                       "",
+		"cmd/server/main.go":            "server",
+		"src/index.ts":                  "",
+		"internal/util/init.go":         "",
+		"services/billing/invoice.go":   "services,billing,invoice",
+		"web/components/index.test.tsx": "components",
+		"config/settings.json":          "config,settings",
+	}
+	for p, want := range cases {
+		if got := strings.Join(PathWords(p), ","); got != want {
+			t.Errorf("PathWords(%q) = %q, want %q", p, got, want)
+		}
+	}
+}

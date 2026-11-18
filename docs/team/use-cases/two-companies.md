@@ -87,18 +87,18 @@ Personal notes follow the same split. A note written in an agency repo is filed 
 ```console
 # alice, in website
 $ lore memory add --body 'ask the client PM before touching the payment flow' --to me
-lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
-lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me/agency)
 ✓ mem_76bd…3f10 [me/agency]
   scope: [project]
 
 # alice, in client3-api
 $ lore memory add --body 'client3 deploys only on Tuesdays' --to me
 lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/client3-api/.git/config; hook blocks in ~/work/client3-api/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: wrote ~/.lore/personal/client3/actors/act_162d…9666.json (store me)
-lore: wrote ~/.lore/personal/client3/memories/mem_b4f4…a5b0.json (store me)
-lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me)
+lore: wrote ~/.lore/personal/client3/actors/act_162d…9666.json (store me/client3)
+lore: wrote ~/.lore/personal/client3/memories/mem_b4f4…a5b0.json (store me/client3)
+lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me/client3)
 ✓ mem_b4f4…a5b0 [me/client3]
   scope: [project]
 

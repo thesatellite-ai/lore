@@ -153,7 +153,7 @@ stores     git@github.com:agency/notes on branch main  (org folder org)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
 $ lore sync
-lore: pushed store agency/org: commit 86dbae4 to branch main
+lore: pushed store agency/org: commit 86dbae4 to branch main (3 commits, 3 row files)
 store agency: up to date
 store agency/org: pushed (sent 3, received 0, merged 0, refused 0)
 ```
@@ -194,7 +194,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
   scope: [project]
 $ lore move --id mem_76bd…3f10 --to agency --yes
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency/client)
 lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
 ✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
@@ -328,7 +328,7 @@ me: push batch every 10m, compact off
   epoch     0
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 $ lore sync
-lore: pushed store me: commit 601d285 to branch main
+lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
 store me: pushed (sent 4, received 0, merged 0, refused 0)
 store agency/client: up to date
 store agency/org: up to date
@@ -375,7 +375,7 @@ agency: push batch every 15m, compact off
   epoch     0
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
-lore: pushed store agency/client: commit 86dbae4 to branch main
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit)
 store me: up to date
 store agency/client: up to date
 store agency/org: up to date
@@ -485,11 +485,11 @@ Nothing to do. On Bob's next sync lore sees the higher epoch, moves his copy ont
 # bob, in website
 $ lore memory add --body 'the client wants the invoice on the 1st' --to agency
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (store agency/client)
 ✓ mem_05e9…4603 [agency/client]
   scope: [project]
 $ lore sync
-lore: pushed store agency/client: commit dfd8dc8 to branch main
+lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
 store agency/client: pushed (sent 1, received 0, merged 0, refused 0)
 store agency/org: up to date
 $ lore memory list

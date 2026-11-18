@@ -332,6 +332,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	ra := newRoutedAudit(repoAudit, opts.Home, attached)
 	ra.rowFile = st.rowFileOf
+	ra.placeOf = st.placeLabelOf
 	st.audit = ra
 
 	repoClient, note := repoIsClient(ctx, opts)
@@ -1389,6 +1390,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	ra := newRoutedAudit(storeOnlyAudit{}, opts.Home, attached)
 	ra.rowFile = st.rowFileOf
+	ra.placeOf = st.placeLabelOf
 	st.audit = ra
 	machinePol, polNotes, err := machinePolicy(opts.Home)
 	if err != nil {

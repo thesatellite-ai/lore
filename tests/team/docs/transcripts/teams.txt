@@ -17,8 +17,8 @@ members (2):
 ### assign
 tomas (work/acme-hub)$ lore task add --title 'ship the checkout page' --to agency --assign @web
 lore: committed locally to store agency/acme-hub; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_54fe984c9b495744c0217776765a28f2.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e99e22e9e86e96fe4daa7777994603.json (store agency/acme-hub)
 ✓ tsk_05e99e22e9e86e96fe4daa7777994603 — ship the checkout page [medium] → [agency/acme-hub]
   created tasklist tlt_54fe984c9b495744c0217776765a28f2 "default" for tasks added without --tasklist
 

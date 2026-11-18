@@ -29,17 +29,17 @@ With the 0.1.17 value `personal.store: local` (the first example), `--to me` fil
 ```console
 # alice, in website
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
-lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
-lore: wrote ~/.lore/personal/agency/memories/mem_2ad3…f891.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_162d…9666.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/memories/mem_2ad3…f891.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_162d…9666.json (store me/agency)
 ✓ mem_2ad3…f891 [me/agency]
   scope: [project]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-lore: wrote ~/.lore/personal/everywhere/actors/act_54fe…28f2.json (store me)
-lore: wrote ~/.lore/personal/everywhere/memories/mem_05e9…4603.json (store me)
-lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me)
+lore: wrote ~/.lore/personal/everywhere/actors/act_54fe…28f2.json (store me/everywhere)
+lore: wrote ~/.lore/personal/everywhere/memories/mem_05e9…4603.json (store me/everywhere)
+lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me/everywhere)
 ✓ mem_05e9…4603 [me/everywhere]
   scope: [project]
 

@@ -477,8 +477,8 @@ A leave that has passed its end date does not end on its own: `actor show` and `
 # tomas, in acme-hub
 $ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
 lore: committed locally to store agency/acme-hub; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency/acme-hub)
 ✓ tsk_b4d3…11aa — move the invoice export to the new API [medium] → [agency/acme-hub]
   created tasklist tlt_d191…45c2 "default" for tasks added without --tasklist
 $ lore actor offboard --actor @mira --reason 'moved abroad'
@@ -643,8 +643,8 @@ Every machine that writes to a store keeps a small machine profile there (OS, ar
 ```console
 # tomas, in acme-hub
 $ lore machine label --label 'office desktop'
-lore: wrote ~/.lore/personal/agency/actors/act_4f89…b64b.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_4f89…b64b.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me/agency)
 ✓ machine mch_017941fe labelled "office desktop"
 $ lore machine list | cut -c1-38
 ID            LABEL           HOST    
@@ -656,7 +656,7 @@ mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
   runtime:   bare
   last_write: 2026-11-02T10:00:00.000000001Z
 $ lore machine label --label ''
-lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me/agency)
 ✓ machine mch_017941fe label cleared
 ```
 <!-- /example -->

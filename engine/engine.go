@@ -472,6 +472,16 @@ func (e *Engine) attached(name store.Source) (Attached, error) {
 	return a, nil
 }
 
+// CheckWritable is nil when a write to the store named name may go
+// through here, else the refusal the write would get (unknown, read-only,
+// or refused like an own repo linked to a store folder). An operation that
+// asks before it writes checks it first, so it never asks a question and
+// prints a --yes command for a write that is then refused (devco D-603).
+func (e *Engine) CheckWritable(ctx context.Context, name store.Source) error {
+	_, err := e.writable(ctx, e.StoreName(name))
+	return err
+}
+
 // writable returns the named store when a write may go to it (spec 9.2
 // permission, 0.1.18: attached and not read_only).
 func (e *Engine) writable(ctx context.Context, name store.Source) (Attached, error) {

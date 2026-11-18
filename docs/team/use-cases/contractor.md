@@ -73,8 +73,8 @@ lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_c0f3…b5b8.json (stor
 ✓ act_c0f3…b5b8 Alice Doe (@alice) registered in agency ./
 $ lore memory add --body 'the client staging database is restored every Sunday night'
 lore: committed locally to store notes-client/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3…b5b8.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes-client/client/memories/mem_76bd…3f10.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3…b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes-client/client/memories/mem_76bd…3f10.json (store agency/client)
 ✓ mem_76bd…3f10 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [project]
@@ -84,8 +84,8 @@ lore: wrote ~/.lore/stores/agency/notes/_store/rules/rul_d431…313a.json (store
 ✓ rul_d431…313a [agency/.]
   scope: [project] severity: must
 $ lore sync
-lore: pushed store notes-client/client: commit 601d285 to branch main
-lore: pushed store agency/.: commit 86dbae4 to branch main
+lore: pushed store notes-client/client: commit 601d285 to branch main (2 commits, 2 row files)
+lore: pushed store agency/.: commit 86dbae4 to branch main (3 commits, 3 row files)
 store me: up to date
 store me/everywhere: up to date
 store notes-client/client: pushed (sent 2, received 0, merged 0, refused 0)

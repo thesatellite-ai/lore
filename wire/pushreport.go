@@ -32,7 +32,7 @@ import (
 
 // PushLine is the line a push prints (also matched by tests).
 func PushLine(storeName string, p gitbackend.Pushed) string {
-	s := StorePushLine(storeName, p.Commit, p.Branch)
+	s := StorePushLine(storeName, p.Commit, p.Branch) + pushCounts(p)
 	if p.Forced {
 		s += " (history rewritten: the older commits are folded into one)"
 	}
@@ -43,6 +43,20 @@ func PushLine(storeName string, p gitbackend.Pushed) string {
 // (store row writes, org link and org file writes).
 func StorePushLine(storeName, commit, branch string) string {
 	return "lore: pushed store " + storeName + ": commit " + gitbackend.Pushed{Commit: commit}.Short() + " to branch " + branch
+}
+
+// pushCounts is " (<n> commit(s), <m> row file(s))" for a push whose
+// counts git gave, "" otherwise: the numbers `git rev-list --count` and
+// `git diff --name-only` give for the push (devco D-601).
+func pushCounts(p gitbackend.Pushed) string {
+	if p.Commits <= 0 {
+		return ""
+	}
+	s := " (" + plural(p.Commits, "commit")
+	if p.Rows > 0 {
+		s += ", " + plural(p.Rows, "row file")
+	}
+	return s + ")"
 }
 
 // printPushes prints one PushLine per push to w.
@@ -88,24 +102,29 @@ func (b *storePush) reportPushes() {
 // every folder, so a row written to folder sync/ and pushed by the next
 // command that opened folder core/ is "acme/sync", not "acme/core". name
 // and own are the pushing store's name and folder; a push of only own's
-// rows, or of unknown folders, keeps name.
+// rows, or of unknown folders, keeps name. A push of several folders is
+// one push of the whole store clone, named once: "acme (the store clone:
+// folders core, sync)" (devco D-601: "acme/core, acme/sync, acme/web" read
+// as three pushes, next to a folder line counting only its own rows).
 func pushName(name, own string, folders []string) string {
 	if len(folders) == 0 || (len(folders) == 1 && folders[0] == own) {
 		return name
 	}
 	org, _, _ := strings.Cut(name, "/")
+	if len(folders) == 1 {
+		if folders[0] == rowfs.FolderRoot {
+			return org
+		}
+		return org + "/" + folders[0]
+	}
 	names := make([]string, 0, len(folders))
 	for _, f := range folders {
-		switch {
-		case f == own:
-			names = append(names, name)
-		case f == rowfs.FolderRoot:
-			names = append(names, org)
-		default:
-			names = append(names, org+"/"+f)
+		if f == rowfs.FolderRoot {
+			f = "the store root"
 		}
+		names = append(names, f)
 	}
-	return strings.Join(names, ", ")
+	return org + " (the store clone: folders " + strings.Join(names, ", ") + ")"
 }
 
 // pushShown names one push (pushName) by the store's own name when it has

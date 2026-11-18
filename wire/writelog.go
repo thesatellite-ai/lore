@@ -309,3 +309,20 @@ func rowFileIn(b store.Backend, table row.Table, id ids.AnyID) string {
 func (st *state) rowFileOf(name store.Source, table row.Table, id ids.AnyID) string {
 	return rowFileIn(st.byName[name], table, id)
 }
+
+// placeLabelOf is the attached store name as every write and read line
+// names it: "<store>/<folder>" for a store attached at a folder (the label
+// search, the lists, sql's place column and the "committed locally to
+// store …" note print), else the name itself. Before, the "lore: wrote …
+// (store acme)" line named a linked repo's folder store by its bare
+// attached name next to "committed locally to store acme/web" (devco
+// D-600).
+func (st *state) placeLabelOf(name store.Source) string {
+	if name == "" || name == store.SourceRepo || strings.Contains(string(name), targetSep) {
+		return string(name)
+	}
+	if f := strings.Trim(st.folders[name], "/"); f != "" && f != rowfs.FolderRoot {
+		return string(name) + targetSep + f
+	}
+	return string(name)
+}

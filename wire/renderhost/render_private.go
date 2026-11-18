@@ -387,14 +387,23 @@ func privateOverCoreWarn(p *privatePlan) string {
 // largestPinsShown is how many of the largest pinned rows the warning names.
 const largestPinsShown = 3
 
+// pinsBySize is pins, largest text first (a stable sort, so rows of one
+// size keep their order). The warning's list and its fix both read it, so
+// the fix names the rows the warning listed (devco D-602: the fix named
+// the first pinned rule found, a smaller row the list did not show).
+func pinsBySize(pins []privatePin) []privatePin {
+	ps := slices.Clone(pins)
+	slices.SortStableFunc(ps, func(a, b privatePin) int { return len(b.text) - len(a.text) })
+	return ps
+}
+
 // largestPins is " The largest: <id> (<n> bytes), …" for the n largest
 // pinned rows, "" when there are none.
 func largestPins(pins []privatePin, n int) string {
 	if len(pins) == 0 {
 		return ""
 	}
-	ps := slices.Clone(pins)
-	slices.SortStableFunc(ps, func(a, b privatePin) int { return len(b.text) - len(a.text) })
+	ps := pinsBySize(pins)
 	parts := make([]string, 0, n)
 	for _, pin := range ps[:min(n, len(ps))] {
 		parts = append(parts, fmt.Sprintf("%s (%d bytes)", pin.id, len(pin.text)))
@@ -403,11 +412,12 @@ func largestPins(pins []privatePin, n int) string {
 }
 
 // overCoreFix names the two fixes as commands: take a row out of the
-// pinned part (a lower severity), or raise context.budget.internal to
-// fit what is pinned now.
+// pinned part (a lower severity: the largest pinned rule and the largest
+// pinned hotfix, the rows the warning lists first), or raise
+// context.budget.internal to fit what is pinned now.
 func overCoreFix(coreBytes int, pins []privatePin) string {
 	rule, hotfix := "<rul_id>", "<hfx_id>"
-	for _, pin := range pins {
+	for _, pin := range pinsBySize(pins) {
 		switch {
 		case pin.kind == privatePinRule && rule == "<rul_id>":
 			rule = pin.id

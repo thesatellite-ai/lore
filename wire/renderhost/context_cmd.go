@@ -394,7 +394,7 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 	}
 	rel := filepath.ToSlash(filepath.Clean(p))
 	dir := path.Dir(rel)
-	words := contextfit.Words(rel)
+	words := contextfit.PathWords(rel) // generic stems never match notes (D-599)
 	var picks, notes []contextPick
 	seen := map[string]bool{}
 	add := func(k knowledgeRow, why string) {

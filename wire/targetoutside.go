@@ -28,6 +28,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
@@ -362,6 +363,36 @@ func (a *App) companyFolderOf(ctx context.Context, target attach.Store) []attach
 			continue
 		}
 		return []attach.Store{s}
+	}
+	// no setup covers this folder (a read from the home folder naming
+	// `--store <org>/<folder>`): the company folder comes from the home's
+	// org config, as the target did (orgConfigTarget). Without it the
+	// org's roster was not attached, and `trash list --store acme/web`
+	// printed "by act_…" where every other list names the person (devco
+	// D-604), and the org's kinds and policy did not resolve (D-422).
+	base, _, _ := strings.Cut(string(target.Name), targetSep)
+	return a.orgConfigCompany(base, tk, target.Folder)
+}
+
+// orgConfigCompany is the company folder (org_folder) of org base in the
+// home's org config on the store place tk, as a read-only attach named
+// "<org>/<org folder>"; nil when base has none there or it is folder.
+func (a *App) orgConfigCompany(base, tk, folder string) []attach.Store {
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil || base == "" {
+		return nil
+	}
+	for i := range cfg.Orgs {
+		if cfg.Orgs[i].Name != base {
+			continue
+		}
+		for j := range cfg.Orgs[i].Stores {
+			sc := &cfg.Orgs[i].Stores[j]
+			if sc.OrgFolder == "" || sc.OrgFolder == orgconf.OrgFolderRoot || sc.OrgFolder == folder || placeKey(sc.URL, attachBranch(sc)) != tk {
+				continue
+			}
+			return []attach.Store{{Name: store.Source(base + targetSep + sc.OrgFolder), URL: sc.URL, Folder: sc.OrgFolder, Branch: attachBranch(sc), ReadOnly: true}}
+		}
 	}
 	return nil
 }

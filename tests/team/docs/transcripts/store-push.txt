@@ -33,7 +33,7 @@ me: push batch every 10m, compact off
   epoch     0
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 alice (work/website)$ lore sync
-lore: pushed store me: commit 601d285 to branch main
+lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
 store me: pushed (sent 4, received 0, merged 0, refused 0)
 store agency/client: up to date
 store agency/org: up to date
@@ -78,7 +78,7 @@ agency: push batch every 15m, compact off
   epoch     0
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
-lore: pushed store agency/client: commit 86dbae4 to branch main
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit)
 store me: up to date
 store agency/client: up to date
 store agency/org: up to date
@@ -95,7 +95,7 @@ agency: push batch every 15m, compact off
 ### compact
 bob (work/website)$ lore memory add --body 'the client wants the invoice on the 1st' --to agency
 lore: committed locally to store agency/client; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e99e22e9e86e96fe4daa7777994603.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e99e22e9e86e96fe4daa7777994603.json (store agency/client)
 ✓ mem_05e99e22e9e86e96fe4daa7777994603 [agency/client]
   scope: [project]
 alice (work/website)$ lore store compact --store agency --before 30d --dry-run
@@ -108,7 +108,7 @@ alice (work/website)$ lore store compact --store agency --before 30d --yes
 ✓ compacted agency: 6 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
   pushed store agency: commit 05513aa to branch main
 bob (work/website)$ lore sync
-lore: pushed store agency/client: commit dfd8dc8 to branch main
+lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
 store agency/client: pushed (sent 1, received 0, merged 0, refused 0)
 store agency/org: up to date
 bob (work/website)$ lore memory list

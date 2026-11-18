@@ -58,7 +58,7 @@ and the leak guards turn on for everyone in agency.
   no tracked file of this repo was written
 tomas (work/clients/south-app)$ lore task add --title 'set up the staging deploy'
 lore: committed locally to store agency/client_south; lore sync sends it
-lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
+lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency/client_south)
 ✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
   created tasklist tlt_76bd560aff0771fab8457dbfa9823f10 "default" for tasks added without --tasklist
