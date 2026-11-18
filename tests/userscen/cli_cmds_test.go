@@ -46,23 +46,30 @@ const cliNotAStore = "ERROR: [E_NOT_A_STORE] git: the folder is not inside a git
 // cliNotAStoreHint is E_NOT_A_STORE's next step outside git.
 const cliNotAStoreHint = "cd into a git checkout, or run git init here first"
 
-// cliNoStoreMsg and cliNoStoreHint are the refusal of a row read or
-// write outside a repo that names no store, in a folder no org's setup
-// covers (devco D-421): the hint names --to, never "git init".
-const (
-	cliNoStoreMsg  = "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read"
-	cliNoStoreHint = "name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>) or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo"
-)
+// cliNoStoreMsg is the refusal of a row read or write outside a repo that
+// names no store, in a folder no org's setup covers (devco D-421): its hint
+// names the store flags, never "git init", and only the flags the command
+// takes (devco D-674: a read taking --store alone is not told "a write:
+// --to").
+const cliNoStoreMsg = "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read"
 
 // cliRefusal reports whether stderr is one of the two outside-repo
 // refusals: the repo one (init, render, policy …) or the row one.
 func cliRefusal(stderr string) (msg, hint string, ok bool) {
-	for _, p := range [][2]string{{"git: the folder is not inside a git work tree", cliNotAStoreHint}, {cliNoStoreMsg, cliNoStoreHint}} {
-		if stderr == "ERROR: [E_NOT_A_STORE] "+p[0]+"\n  hint: "+p[1]+"\n" {
-			return p[0], p[1], true
-		}
+	if stderr == "ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree\n  hint: "+cliNotAStoreHint+"\n" {
+		return "git: the folder is not inside a git work tree", cliNotAStoreHint, true
 	}
-	return "", "", false
+	// the row refusal's hint names the flags of the command (devco D-674;
+	// wire TestNoStoreHintNamesOnlyFlagsTheCommandTakes checks which): its
+	// shape is "name the store with …" or "name a setup with …", --setup,
+	// and the cd way out
+	rest, cut := strings.CutPrefix(stderr, "ERROR: [E_NOT_A_STORE] "+cliNoStoreMsg+"\n  hint: ")
+	rest, cut2 := strings.CutSuffix(rest, "\n")
+	if !cut || !cut2 || strings.Contains(rest, "\n") || !strings.HasSuffix(rest, "or cd into a repo") || !strings.Contains(rest, "--setup <setup>") ||
+		(!strings.HasPrefix(rest, "name the store with ") && !strings.HasPrefix(rest, "name a setup with ")) {
+		return "", "", false
+	}
+	return cliNoStoreMsg, rest, true
 }
 
 // cliSolo is one person's initialised checkout.

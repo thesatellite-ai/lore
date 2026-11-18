@@ -40,17 +40,7 @@ func fitHomeHint(ctx context.Context, e op.Entry, err error) error {
 // homeHint is the next step for e refused outside a repo: the store flags
 // e takes, --setup unless it was given, else the repo-only way out (cd).
 func homeHint(e op.Entry, setupGiven bool) string {
-	var to, st, id bool
-	for _, f := range e.InputFields() {
-		switch f.Name {
-		case engine.InputTarget:
-			to = true
-		case readStoreField:
-			st = true
-		case "id":
-			id = true
-		}
-	}
+	to, st, id := storeFlagsOf(e)
 	var ways []string
 	switch {
 	case to && st:
@@ -79,4 +69,54 @@ func homeHint(e op.Entry, setupGiven bool) string {
 		return "cd into a git checkout (or the store's clone): this command works on the folder it runs in and is " + notRoutedByStore + "; lore setup list shows each setup's folders and lore store list --setup <setup> its clones"
 	}
 	return "cd into a git checkout, or " + strings.Join(ways, " ") + "; lore store list and lore setup list show them"
+}
+
+// storeFlagsOf reports which of the flags that place a command e takes:
+// --to (a write's target), --store (a read's store) and --id (a row the
+// id alone finds). Every home-folder hint is built from it, so a hint
+// names a flag only when e takes it (devco D-539, D-674).
+func storeFlagsOf(e op.Entry) (to, st, id bool) {
+	for _, f := range e.InputFields() {
+		switch f.Name {
+		case engine.InputTarget:
+			to = true
+		case readStoreField:
+			st = true
+		case "id":
+			id = true
+		}
+	}
+	return to, st, id
+}
+
+// noStoreHint is the next step of e refused outside a repo where no org's
+// setup gives a default store (runOnDefaultStore). It names only the store
+// flags e takes, and --setup unless it was given (devco D-674: the one
+// fixed hint named "a write: --to <org>/<folder>" for every read, so
+// `lore context` from the home folder named --to, which context does not
+// take). A command with neither store flag is told --setup, or, given
+// it, homeHint's way out.
+func noStoreHint(e op.Entry, setupGiven bool) string {
+	to, st, _ := storeFlagsOf(e)
+	var name string
+	switch {
+	case to && st:
+		name = "name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>)"
+	case st:
+		name = "name the store with --store <org>[/<folder>]"
+	case to:
+		name = "name the store with --to <org>/<folder>"
+	default:
+		// neither store flag (lint, batch list, …): the setup still gives
+		// the default store here, so --setup is the way, and --store is
+		// named as the flag that does not route it (devco D-622)
+		if setupGiven {
+			return homeHint(e, setupGiven)
+		}
+		return "name a setup with --setup <setup> (this command is " + notRoutedByStore + "); lore setup list shows them, or cd into a repo"
+	}
+	if !setupGiven {
+		name += " or a setup with --setup <setup>"
+	}
+	return name + "; lore store list and lore setup list show them, or cd into a repo"
 }

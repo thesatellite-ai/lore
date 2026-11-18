@@ -108,8 +108,10 @@ func TestReadNamingStoreOutsideARepo(t *testing.T) {
 		t.Fatalf("rule list --to %s does not list the rule: %s %v", rosterStore, out, jerr)
 	}
 	_, err = app().Run(ctx, list, op.JSONDecoder{Body: []byte(`{}`)}, op.Caller{})
-	if hint := errs.EnvelopeOf(err).Error.Hint; !errs.Has(err, errs.NotAStore) || !strings.Contains(hint, "--to") || strings.Contains(hint, "git init") {
-		t.Fatalf("rule list with no store, no org: %v (hint %q), want E_NOT_A_STORE naming --to, not git init", err, hint)
+	// the hint names the read's own flag, --store, never a write's --to
+	// (devco D-674), and never git init
+	if hint := errs.EnvelopeOf(err).Error.Hint; !errs.Has(err, errs.NotAStore) || !strings.Contains(hint, "--store <org>") || strings.Contains(hint, "--to") || strings.Contains(hint, "git init") {
+		t.Fatalf("rule list with no store, no org: %v (hint %q), want E_NOT_A_STORE naming --store (not --to), not git init", err, hint)
 	}
 	if entries, rerr := os.ReadDir(plain); rerr != nil || len(entries) != 0 {
 		t.Fatalf("the folder it ran in got files: %v %v", entries, rerr)

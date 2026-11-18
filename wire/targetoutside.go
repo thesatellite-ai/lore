@@ -329,8 +329,10 @@ func (a *App) runOnDefaultStore(ctx context.Context, e op.Entry, d op.Decoder, c
 		// --setup too (devco:D-510, the where-you-stand matrix): from any
 		// folder a person can name the store or the setup, and the hint
 		// named only --to/--store for every read but the roster's (D-499).
+		// It names only the flags e takes (devco D-674: a read was told
+		// "a write: --to", and context takes no --to).
 		return op.Result{}, true, errs.New(errs.NotAStore, "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read").
-			WithHint("name the store with --store <org>[/<folder>] (a write: --to <org>/<folder>) or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo")
+			WithHint(noStoreHint(e, strings.TrimSpace(op.SetupOf(ctx)) != ""))
 	}
 	one, err := orgStoreNamed(ctx, a.opts, r.src)
 	if err != nil {
