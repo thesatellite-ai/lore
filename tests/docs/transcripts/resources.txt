@@ -75,14 +75,15 @@ created res_…e913  service  repo:service/hub_web
 
 ### list and show
 alice (work/infra)$ lore resource list --kind host
-KIND  NAME       IP            OS            PROVIDER
-host  hub_prod   203.0.113.10  ubuntu-24.04  hetzner
-host  hub_stage  203.0.113.11  ubuntu-24.04  aws
+KIND  NAME       PROVIDER  IP
+host  hub_prod   hetzner   203.0.113.10
+host  hub_stage  aws       203.0.113.11
 2 resources
+1 more field not shown: add --wide for every field, or --json
 alice (work/infra)$ lore resource list --kind service --where runs_on=hub_prod --sort name:desc
-KIND     NAME     DB_PASSWORD           RUNS_ON   URL
-service  hub_web                        hub_prod  https://www.example.com
-service  hub_api  gopass://acme/hub/db  hub_prod  https://api.example.com
+KIND     NAME     URL                      RUNS_ON   DB_PASSWORD
+service  hub_web  https://www.example.com  hub_prod
+service  hub_api  https://api.example.com  hub_prod  gopass://acme/hub/db
 2 resources
 alice (work/infra)$ lore resource show --id hub_api
 res_4c590afb2a0cc7ae1b97b7e4e62d6c38  service  repo:service/hub_api
@@ -247,13 +248,14 @@ ERROR: [E_RESOURCE_ARCHIVED] service hub_admin: runs_on: hub_prod is archived
   hint: ref its replacement host hub_prod_new
 (exit 23)
 alice (work/infra)$ lore resource list --kind host --archived
-KIND  NAME          IP            OS            PROVIDER  CHECKED
-host  hub_cache     203.0.113.21  ubuntu-24.04  aws
-host  hub_db        203.0.113.30  ubuntu-24.04  aws       2026-11-02
-host  hub_prod      203.0.113.10  debian-13     hetzner   2026-11-02
-host  hub_prod_new  203.0.113.12  debian-13     hetzner   2026-11-02
-host  hub_stage                   ubuntu-24.04  aws       2026-11-02
+KIND  NAME          PROVIDER  OS            CHECKED
+host  hub_cache     aws       ubuntu-24.04
+host  hub_db        aws       ubuntu-24.04  2026-11-02
+host  hub_prod      hetzner   debian-13     2026-11-02
+host  hub_prod_new  hetzner   debian-13     2026-11-02
+host  hub_stage     aws       ubuntu-24.04  2026-11-02
 5 resources
+1 more field not shown: add --wide for every field, or --json
 
 ### merge
 alice (work/infra)$ lore resource edit --id hub_db --unset ip
@@ -361,9 +363,10 @@ alice (work/infra)$ lore resource edit --id hub_prod_new --set root_user=deploy
 lore: wrote ~/work/infra/.lore/data/resources/res_6a866bb99ce08addfe04ea845052ed8c.json
 ✓ edited server hub_prod_new (res_…ed8c)
 alice (work/infra)$ lore resource list --kind server
-KIND    NAME          ACCESS_KEY                           IP            OS_IMAGE   PROVIDER  RENEWS  ROOT_USER  CHECKED
-server  hub_prod_new  ${secret:gopass://acme/hub/aws-key}  203.0.113.12  debian-13  hetzner           •••        2026-11-02
+KIND    NAME          PROVIDER  ACCESS_KEY                           CHECKED
+server  hub_prod_new  hetzner   ${secret:gopass://acme/hub/aws-key}  2026-11-02
 1 resource
+4 more fields not shown: add --wide for every field, or --json
 alice (work/infra)$ lore resource show --id hub_prod_new --show-sensitive
 ERROR: [E_NEEDS_CONFIRM] resource show?
   hint: ask the person, then rerun with --yes

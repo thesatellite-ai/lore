@@ -52,6 +52,11 @@ type Roster interface {
 	Source() store.Source
 	// Where names it for messages ("agency org/"); hidden in quiet output.
 	Where() string
+	// Label names it where a sentence says whose roster it is: "the
+	// roster of agency (agency/org)", the org entry and the store folder
+	// (devco D-647: "no teams on agency org/'s roster" glued a possessive
+	// onto a folder path).
+	Label() string
 	// Caller is the person running the command: for a coding agent, the
 	// person it acts for (owner rule 2026-11-11); the rows still record
 	// the agent as the writer.

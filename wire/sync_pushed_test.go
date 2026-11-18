@@ -46,8 +46,31 @@ func TestSiblingFolderPushIsUpToDate(t *testing.T) {
 		{"no push", false, 0, 0, "store s: up to date"},
 	} {
 		p := folderPushed(c.pushed, c.sent, c.cloneSent)
-		if got := storeCountsLine("s", storeStatusOf(c.sent, 0, 0, 0, p), c.sent, 0, 0, 0); got != c.want {
+		if got := storeCountsLine("s", storeStatusOf(c.sent, 0, 0, 0, p), syncCounts{sent: c.sent}); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestStoreLineGitCommitsD648: devco D-648, a store line said "sent 5"
+// (rows) after 3 commits went out and "received 4" when 8 commits
+// arrived: sent and received are the commits git counted, the rows follow
+// when they differ; with no commit counted (a backend without commits)
+// the rows stand in, as before.
+func TestStoreLineGitCommitsD648(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		in   syncCounts
+		want string
+	}{
+		{syncCounts{sent: 5, sentCommits: 3, received: 4, receivedCommits: 8}, "store s: pulled and pushed (sent 3, received 8, merged 0, refused 0); rows: 5 sent, 4 received"},
+		{syncCounts{received: 4, receivedCommits: 8}, "store s: pulled (sent 0, received 8, merged 0, refused 0); rows: 4 received"},
+		{syncCounts{sent: 1, sentCommits: 1}, "store s: pushed (sent 1, received 0, merged 0, refused 0)"},
+		{syncCounts{sent: 2}, "store s: pushed (sent 2, received 0, merged 0, refused 0)"},
+	} {
+		got := storeCountsLine("s", storeStatusOf(c.in.sent, c.in.received, 0, 0, c.in.sentCommits > 0), c.in)
+		if got != c.want {
+			t.Errorf("got  %q\nwant %q", got, c.want)
 		}
 	}
 }

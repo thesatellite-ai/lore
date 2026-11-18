@@ -18,7 +18,7 @@ func TestOrgPushReportSentCountsRows(t *testing.T) {
 	if r.Sent != 0 || !r.Pushed || r.Offline {
 		t.Fatalf("store link push: sent %d pushed %v offline %v, want sent 0 pushed true", r.Sent, r.Pushed, r.Offline)
 	}
-	line := storeCountsLine(r.Store, storeStatusOf(r.Sent, 0, 0, 0, r.Pushed), r.Sent, 0, 0, 0)
+	line := storeCountsLine(r.Store, storeStatusOf(r.Sent, 0, 0, 0, r.Pushed), syncCounts{sent: r.Sent})
 	if want := "store client-store: pushed (sent 0, received 0, merged 0, refused 0)"; line != want {
 		t.Fatalf("line %q, want %q", line, want)
 	}

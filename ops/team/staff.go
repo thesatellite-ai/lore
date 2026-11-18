@@ -114,7 +114,9 @@ type StaffAddOut struct {
 	Added   []StaffRow `json:"added"`
 	Already []StaffRow `json:"already,omitempty"`
 	Where   string     `json:"where"`
-	DryRun  bool       `json:"dry_run,omitempty"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label  string
+	DryRun bool `json:"dry_run,omitempty"`
 	// Rows is how many roster rows the add wrote (one store commit).
 	Rows     int      `json:"rows"`
 	Warnings []string `json:"warnings,omitempty"`
@@ -177,7 +179,7 @@ func (o StaffAddOut) Text() string {
 	}
 	switch {
 	case len(o.Added) == 0:
-		b.WriteString("nothing to add on " + o.Where + "'s roster\n")
+		b.WriteString("nothing to add on the roster of " + o.label + "\n")
 	case o.DryRun:
 		b.WriteString("nothing written (--dry-run)\n")
 	default:
@@ -202,12 +204,14 @@ type StaffListIn struct {
 type StaffListOut struct {
 	Members []StaffRow `json:"members"`
 	Where   string     `json:"where"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label string
 }
 
 // Text is a table of the members.
 func (o StaffListOut) Text() string {
 	if len(o.Members) == 0 {
-		return "no members on " + o.Where + "'s roster (lore member add --email <email>)\n"
+		return "no members on the roster of " + o.label + " (lore member add --email <email>)\n"
 	}
 	// N-2: every column is as wide as its widest cell, counted in terminal
 	// cells (a CJK name takes two a character), never a fixed width a long
@@ -334,7 +338,9 @@ type StaffWriteOut struct {
 	Member StaffRow `json:"member"`
 	Verb   string   `json:"verb"`
 	Where  string   `json:"where"`
-	Note   string   `json:"note,omitempty"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label string
+	Note  string `json:"note,omitempty"`
 	// Handover is member remove's hand-over of the leaver's open tasks
 	// (B-12): zero (no Command) on every other member write.
 	Handover Handover `json:"handover,omitzero"`
@@ -375,7 +381,7 @@ func handoverCommand(m StaffRow) string {
 // Text is one success line (and the note, when there is one), then member
 // remove's hand-over.
 func (o StaffWriteOut) Text() string {
-	t := work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on " + o.Where + "'s roster\n"
+	t := work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on the roster of " + o.label + "\n"
 	if o.Note != "" {
 		t += "  note: " + o.Note + "\n"
 	}
@@ -553,7 +559,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		specs = []staffSpec{{Email: in.Email, Name: in.Name, Handle: in.Handle, GitHub: in.GitHub, Role: in.Role, Type: in.Type,
 			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles), StartedOn: startedOn}}
 	}
-	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
+	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), label: r.Label(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
 	plans, err := o.planStaff(ctx, r, specs, in.From, pending, &out)
 	if err != nil {
 		return StaffAddOut{}, err
@@ -562,7 +568,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		return out, nil
 	}
 	if !op.Confirmed(ctx) && !engine.Confirmed(ctx) {
-		q := fmt.Sprintf("add %d people to %s's roster as members (%s)?", len(plans), r.Where(), staffEmails(plans))
+		q := fmt.Sprintf("add %d people to the roster of %s as members (%s)?", len(plans), r.Label(), staffEmails(plans))
 		return StaffAddOut{}, errs.New(errs.NeedsConfirm, "member add: "+q).WithQuestion(q).WithHint("ask the person, then rerun with --yes")
 	}
 	// every row of the run in ONE store commit (engine stage), one push
@@ -1103,7 +1109,7 @@ func (o ops) staffList(ctx context.Context, in StaffListIn) (StaffListOut, error
 	if rows == nil {
 		rows = []StaffRow{}
 	}
-	return StaffListOut{Members: rows, Where: r.Where()}, nil
+	return StaffListOut{Members: rows, Where: r.Where(), label: r.Label()}, nil
 }
 
 // staffFind resolves who on r (email, @handle, act_ id) to its StaffRow.
@@ -1121,7 +1127,7 @@ func staffFind(ctx context.Context, r profilestore.Roster, who string) (row.Row,
 			return a, m, nil
 		}
 	}
-	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on "+r.Where()+"'s roster").WithHint("lore member list")
+	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on the roster of "+r.Label()).WithHint("lore member list")
 }
 
 // orIDs is names when set, else the ids (a show built without names).
@@ -1243,7 +1249,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 	if err != nil {
 		return StaffWriteOut{}, err
 	}
-	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where(), Note: note}, nil
+	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where(), label: r.Label(), Note: note}, nil
 }
 
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {
@@ -1274,7 +1280,7 @@ func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, 
 		h.OpenTasks = []HandoverTask{}
 	}
 	h.Command = handoverCommand(m)
-	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where(), Handover: h}, nil
+	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where(), label: r.Label(), Handover: h}, nil
 }
 
 // personHandle is raw as a person's roster handle: without its @,

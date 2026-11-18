@@ -19,6 +19,9 @@ import (
 func TestLeakBlockedExplainAndHints(t *testing.T) {
 	t.Parallel()
 	text := leakcheck.Finding{Rule: leakcheck.RuleText, Where: LeakWherePRBody, RowID: "mem_1", Words: 9, Label: "store agency: memories/mem_1", Detail: "9 words match internal note mem_1"}
+	// D-651: an id finding's detail already names its label; explain must
+	// not print "store agency store agency".
+	id := leakcheck.Finding{Rule: leakcheck.RuleID, Where: "commit message", RowID: "rul_1", Label: "store agency", Detail: "names a row of store agency"}
 	actor := leakcheck.Finding{Rule: leakcheck.RuleActor, Where: "push .lore/data/actors/act_1.json", RowID: "act_1", Path: ".lore/data/actors/act_1.json", Detail: "actor file carries stable_key, email: remove them"}
 	cases := []struct {
 		name     string
@@ -30,9 +33,11 @@ func TestLeakBlockedExplainAndHints(t *testing.T) {
 		wantHint string // substring; "" = no hint at all
 	}{
 		{"pr body, plain", LeakWherePRBody, []leakcheck.Finding{text}, false,
-			[]string{"matches internal note mem_1 (9 words)"}, []string{"[text rule]", "store agency"}, "Remove the internal text before posting"},
+			[]string{"matches internal note mem_1 (9 words in a row; the check blocks a verbatim copy of 8 or more words)"}, []string{"[text rule]", "store agency"}, "Remove the internal text before posting"},
 		{"pr body, explain", LeakWherePRBody, []leakcheck.Finding{text}, true,
 			[]string{"[text rule] 9 words match internal note mem_1 store agency: memories/mem_1"}, []string{"(9 words)"}, "Remove the internal text before posting"},
+		{"id finding, explain: label once (D-651)", LeakWherePRBody, []leakcheck.Finding{id}, true,
+			[]string{"[id rule] names a row of store agency"}, []string{"store agency store agency"}, "Remove the internal text before posting"},
 		{"actor finding only: no hint", LeakWherePush, []leakcheck.Finding{actor}, false,
 			[]string{"actor file carries stable_key, email"}, []string{"actor delete"}, ""},
 		{"actor finding, explain", LeakWherePush, []leakcheck.Finding{actor}, true,

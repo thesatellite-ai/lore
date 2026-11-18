@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
@@ -179,6 +180,9 @@ type ResListIn struct {
 	Sort          []string `json:"sort,omitempty" flag:"sort" desc:"sort by name, last_checked, archived_at or a field: <key>, <key>:asc or <key>:desc (repeatable; default name)"`
 	Archived      bool     `json:"archived,omitempty" flag:"archived" desc:"include archived resources"`
 	ShowSensitive bool     `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+	// Wide prints every field of the kind as a column (devco D-650: the
+	// default with a kind is the narrow view, kindColumns).
+	Wide bool `json:"wide,omitempty" flag:"wide" desc:"print every field of the kind as a column (default: project, url and at most two key fields; --json has every value)"`
 	// Meta and Place are metalist.Flags' --meta/--place (CLI_REFERENCE 3.2
 	// list --meta); the whole struct is not embedded because --sort and
 	// --archived already mean the resource forms here.
@@ -306,6 +310,14 @@ type ResListOut struct {
 	// every marks the no-kind list (resListEvery): its columns are the
 	// common ones (everyColumns), not one kind's fields.
 	every bool
+	// narrow marks a one-kind list without --wide (devco D-650): Text
+	// prints kindColumns of def, not every field.
+	narrow bool
+	def    kindDef
+	// asked are the fields --where and --sort name: the narrow view keeps
+	// them as columns (a sensitive one masked), so a filter shows what it
+	// matched on.
+	asked []string
 	// StaleCount / NeverChecked split a resource stale answer by reason
 	// (checkStateOf; the same counts resource report prints), and Days is
 	// its window; all three are left out of other lists.
@@ -377,6 +389,9 @@ func (o ResListOut) Text() string {
 	if o.every {
 		cols = everyColumns(o.Data)
 	}
+	if o.narrow {
+		cols = kindColumns(o.def, o.Data, o.asked)
+	}
 	checked := slices.ContainsFunc(o.Data, func(r Resource) bool { return r.LastChecked != "" })
 	head := []string{"KIND", "NAME"}
 	for _, c := range cols {
@@ -414,6 +429,10 @@ func (o ResListOut) Text() string {
 		}
 	}
 	b.WriteString(plural.Count(len(o.Data), "resource") + "\n")
+	if o.narrow && len(cols) < len(o.columns) {
+		// devco D-650: say the view is narrow and how to see the rest
+		fmt.Fprintf(&b, "%s not shown: add --wide for every field, or --json\n", plural.Count(len(o.columns)-len(cols), "more field"))
+	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
 	}
@@ -428,6 +447,84 @@ const listCellMax = 60
 // rows sets them (devco D-584): the folder a resource belongs to and where
 // it is, the two most kinds share.
 var everyColumnNames = []string{resProjectField, "url"}
+
+// kindKeyColumnsMax is how many of a kind's own fields the narrow one-kind
+// list adds after project and url (devco D-650).
+const kindKeyColumnsMax = 2
+
+// kindColumns are the narrow one-kind list's field columns (devco D-650:
+// `resource list --kind server` printed every field, ~15 columns and ~400
+// characters a line): the everyColumnNames the kind defines and some row
+// sets, the fields --where and --sort name, then at most kindKeyColumnsMax key fields, required ones first,
+// then those the most rows set (ties by name). A sensitive field prints
+// masked, as in the wide view. --wide and --json carry every field.
+func kindColumns(d kindDef, data []Resource, asked []string) []string {
+	set := func(c string) int {
+		n := 0
+		for _, r := range data {
+			if strings.TrimSpace(r.Values[c]) != "" {
+				n++
+			}
+		}
+		return n
+	}
+	var out []string
+	for _, c := range everyColumnNames {
+		if _, ok := d.byName[c]; ok && set(c) > 0 {
+			out = append(out, c)
+		}
+	}
+	for _, c := range asked {
+		if !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	type cand struct {
+		name     string
+		required bool
+		set      int
+	}
+	var cands []cand
+	for _, n := range d.fieldNames() {
+		f := d.byName[n]
+		if slices.Contains(out, n) {
+			continue
+		}
+		if c := set(n); c > 0 {
+			cands = append(cands, cand{n, flag(f.Row, fRequired), c})
+		}
+	}
+	slices.SortStableFunc(cands, func(a, b cand) int {
+		if a.required != b.required {
+			if a.required {
+				return -1
+			}
+			return 1
+		}
+		return b.set - a.set
+	})
+	for i := 0; i < len(cands) && i < kindKeyColumnsMax; i++ {
+		out = append(out, cands[i].name)
+	}
+	return out
+}
+
+// askedFields are the fields of d that --where and --sort terms name
+// ("env=prod", "has:tags", "cores:desc"), in order, each once.
+func askedFields(d kindDef, terms []string) []string {
+	var out []string
+	for _, t := range terms {
+		t = strings.TrimPrefix(strings.TrimSpace(t), "has:")
+		end := strings.IndexFunc(t, func(r rune) bool { return !(r == '_' || r == '.' || unicode.IsLetter(r) || unicode.IsDigit(r)) })
+		if end >= 0 {
+			t = t[:end]
+		}
+		if _, ok := d.byName[t]; ok && !slices.Contains(out, t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 // everyColumns are the everyColumnNames some row of data sets.
 func everyColumns(data []Resource) []string {
@@ -1230,7 +1327,7 @@ func (o ops) resListKind(ctx context.Context, in ResListIn) (ResListOut, error) 
 	if err != nil {
 		return ResListOut{}, err
 	}
-	out := ResListOut{Data: []Resource{}, columns: d.fieldNames()}
+	out := ResListOut{Data: []Resource{}, columns: d.fieldNames(), narrow: !in.Wide, def: d, asked: askedFields(d, append(slices.Clone(in.Where), in.Sort...))}
 	type hit struct {
 		res Resource
 		row located

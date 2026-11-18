@@ -31,6 +31,8 @@ const (
 	DefaultSource store.Source = "agency/org"
 	// DefaultWhere names it in messages.
 	DefaultWhere = "agency org/"
+	// DefaultLabel names it in "the roster of …" (Roster.Label).
+	DefaultLabel = "agency (agency/org)"
 	// fakeIDTime is the fixed 48-bit time part of the fake's random ids.
 	fakeIDTime = 0x01890a5d8a2b
 	// fieldHandle and fieldStableKey are actors columns ResolveActor reads.
@@ -143,6 +145,7 @@ func (r roster) Warnings() []string { return slices.Clone(*r.warns) }
 
 func (r roster) Source() store.Source      { return DefaultSource }
 func (r roster) Where() string             { return DefaultWhere }
+func (r roster) Label() string             { return DefaultLabel }
 func (r roster) Caller() ids.ID[ids.Actor] { return r.f.CallerID }
 func (r roster) Today() time.Time {
 	y, m, d := r.f.Now.Date()

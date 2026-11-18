@@ -287,6 +287,34 @@ type ResultOut struct {
 	// Warnings are the engine's warnings of the write (W_AUDIT_DEFERRED:
 	// the audit record is kept with the rows and added later).
 	Warnings []Warning `json:"warnings,omitempty"`
+	// label shows a store in Text (storeLabeler; nil = the attached name).
+	label func(string) string
+}
+
+// storeLabeler is the Env upgrade that names a store as a row's label
+// reads (wire.App.StoreLabel: "acme/sync" for the org store attached at
+// its sync folder under the bare org name in a linked repo).
+type storeLabeler interface {
+	StoreLabel(name store.Source) string
+}
+
+// labeled is out with its Text naming each store by the Env's label
+// (devco D-647: a restore in a linked repo printed "(memories, acme)"
+// while the same restore from the home folder printed "(memories,
+// acme/sync)"). The JSON keeps the attached store names.
+func (o ops) labeled(out ResultOut) ResultOut {
+	if l, ok := upgrade.As[storeLabeler](o.env); ok {
+		out.label = func(s string) string { return l.StoreLabel(store.Source(s)) }
+	}
+	return out
+}
+
+// storeShown is s as Text names it.
+func (o ResultOut) storeShown(s string) string {
+	if o.label == nil || s == "" {
+		return s
+	}
+	return o.label(s)
 }
 
 // Comment is one comment a purge takes with its row (INTEG-TRASH-6).
@@ -522,7 +550,7 @@ func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 	if err != nil {
 		return ResultOut{}, err
 	}
-	return resultOf("restored", res, false), nil
+	return o.labeled(resultOf("restored", res, false)), nil
 }
 
 // purge is trash.purge (DELETION 3.5, 2.6): by target, --older-than or
@@ -555,7 +583,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 			return ResultOut{}, err
 		}
 		if in.DryRun {
-			return resultOf("would purge", plan, true), nil
+			return o.labeled(resultOf("would purge", plan, true)), nil
 		}
 		if !in.Confirm {
 			return ResultOut{}, needsConfirm(ctx, "purge removes "+target+" (its dependents in the trash, its comments and links too) for good; only a tombstone stays", "trash", "purge", "--id", target, "--confirm")
@@ -567,7 +595,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		if err = o.dropLocalCopies(ctx, res); err != nil {
 			return ResultOut{}, err
 		}
-		return resultOf("purged", res, false), nil
+		return o.labeled(resultOf("purged", res, false)), nil
 	}
 	cutoff := time.Time{}
 	args := []string{"trash", "purge", "--expired", "--confirm"}
@@ -587,12 +615,12 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return ResultOut{}, err
 	}
 	if in.DryRun {
-		return resultOf("would purge", res, true), nil
+		return o.labeled(resultOf("would purge", res, true)), nil
 	}
 	if err = o.dropLocalCopies(ctx, res); err != nil {
 		return ResultOut{}, err
 	}
-	return resultOf("purged", res, false), nil
+	return o.labeled(resultOf("purged", res, false)), nil
 }
 
 // ArchivedPurger is the optional Env upgrade `purge --archived-before`
@@ -627,12 +655,12 @@ func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool
 		return ResultOut{}, err
 	}
 	if dry {
-		return resultOf("would purge", res, true), nil
+		return o.labeled(resultOf("would purge", res, true)), nil
 	}
 	if err = o.dropLocalCopies(ctx, res); err != nil {
 		return ResultOut{}, err
 	}
-	return resultOf("purged", res, false), nil
+	return o.labeled(resultOf("purged", res, false)), nil
 }
 
 // overruled is `trash list --overruled` (DELETION 3.7): the alive rows a
@@ -1126,18 +1154,18 @@ func (o ResultOut) Text() string {
 	}
 	b.WriteString("\n")
 	for _, it := range o.Rows {
-		b.WriteString("  " + it.ID + " (" + it.Table + ", " + it.Store + ")\n")
+		b.WriteString("  " + it.ID + " (" + it.Table + ", " + o.storeShown(it.Store) + ")\n")
 	}
 	if len(o.Comments) > 0 {
 		b.WriteString("with " + count(len(o.Comments), "comment") + " on them\n")
 		for _, c := range o.Comments {
-			b.WriteString("  " + c.ID + " (comments, " + c.Store + ")\n")
+			b.WriteString("  " + c.ID + " (comments, " + o.storeShown(c.Store) + ")\n")
 		}
 	}
 	if len(o.Links) > 0 {
 		b.WriteString("with " + count(len(o.Links), "link") + " to them\n")
 		for _, l := range o.Links {
-			b.WriteString("  " + l.ID + " (" + l.Table + ", " + l.Store + ")\n")
+			b.WriteString("  " + l.ID + " (" + l.Table + ", " + o.storeShown(l.Store) + ")\n")
 		}
 	}
 	if o.Action == "purged" {

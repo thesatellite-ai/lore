@@ -8,12 +8,14 @@ package wire
 
 import (
 	"context"
-	"strings"
+	"slices"
+	"strconv"
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	pluralword "github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 )
@@ -96,8 +98,7 @@ func (h *standaloneOrg) OrgConfigSet(ctx context.Context, in opsorgcmd.ConfigSet
 	}
 	next := opsorgcmd.NewList(cur, in)
 	file := orgcfg.OrgFilePath(sc.OrgFolder) + " in " + sc.URL
-	lines := []string{"set " + in.Key + " of org " + in.Org + " (" + file + "):",
-		"  was: " + orNoneList(cur), "  now: " + orNoneList(next)}
+	lines := append([]string{"set " + in.Key + " of org " + in.Org + " (" + file + "):"}, listDiffLines(cur, next)...)
 	if in.Key == opsorgcmd.ConfigKeyRepos {
 		lines = append(lines, "  a repo a repos: pattern matches is a client repo (leak guards on), even when an own: pattern matches it too")
 	}
@@ -126,12 +127,27 @@ func (h *standaloneOrg) OrgConfigSet(ctx context.Context, in opsorgcmd.ConfigSet
 	return opsorgcmd.Report{Lines: lines}, nil
 }
 
-// orNoneList is a pattern list as one line, "(none)" when empty.
-func orNoneList(v []string) string {
-	if len(v) == 0 {
-		return "(none)"
+// listDiffLines is a change of a pattern list as one line per entry taken
+// out ("  - p") or added ("  + p"), then the list's size before and after
+// (devco D-649: the whole list, 66 entries, was printed twice, as was and
+// now, in the confirmation and again in the result). A list that does
+// not change says so.
+func listDiffLines(cur, next []string) []string {
+	var out []string
+	for _, p := range cur {
+		if !slices.Contains(next, p) {
+			out = append(out, "  - "+p)
+		}
 	}
-	return strings.Join(v, ", ")
+	for _, p := range next {
+		if !slices.Contains(cur, p) {
+			out = append(out, "  + "+p)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"  no change (" + pluralword.Of(len(cur), "entry", "entries") + ")"}
+	}
+	return append(out, "  "+pluralword.Of(len(cur), "entry", "entries")+" -> "+strconv.Itoa(len(next)))
 }
 
 // compile-time check: the org host offers org config.

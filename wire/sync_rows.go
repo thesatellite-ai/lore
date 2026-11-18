@@ -270,10 +270,10 @@ func (s syncRows) syncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	cloneSent := storeCloneSent(res.Stores, func(name string) string { return s.app.storeURLOf(ctx, name) })
 	for _, r := range res.Stores {
 		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
-			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held, Pushed: r.Pushed})
+			SentCommits: r.SentCommits, ReceivedCommits: r.ReceivedCommits, Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held, Pushed: r.Pushed})
 		shown := s.app.shownStoreName(ctx, r.Store) // B-9: the store's own name (storeshown.go)
 		pushed := folderPushed(r.Pushed, r.Sent, cloneSent[storeCloneKey(r.Store, s.app.storeURLOf(ctx, r.Store))])
-		line := storeCountsLine(shown, storeStatusOf(r.Sent, r.Received, r.Merged, r.Refused, pushed), r.Sent, r.Received, r.Merged, r.Refused)
+		line := storeCountsLine(shown, storeStatusOf(r.Sent, r.Received, r.Merged, r.Refused, pushed), syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused})
 		if pushed && r.Sent == 0 {
 			line += syncPushedNoRows
 		}
@@ -1046,11 +1046,46 @@ const storeStatusRefused = "refused"
 // printed "sent 1, received 0, merged 0, refused 0" and "pushed (sent 3,
 // received 0, merged 0)"): "store <name>: up to date", or the status and
 // every count.
-func storeCountsLine(name, status string, sent, received, merged, refused int) string {
+func storeCountsLine(name, status string, c syncCounts) string {
 	if status == opssync.StoreStatusUpToDate {
 		return "store " + name + ": " + status
 	}
-	return fmt.Sprintf("store %s: %s (sent %d, received %d, merged %d, refused %d)", name, status, sent, received, merged, refused)
+	sent, received := orRows(c.sentCommits, c.sent), orRows(c.receivedCommits, c.received)
+	return fmt.Sprintf("store %s: %s (sent %d, received %d, merged %d, refused %d)", name, status, sent, received, c.merged, c.refused) + rowsNote(c)
+}
+
+// syncCounts are a store line's numbers: rows sent, received, merged and
+// refused, and the commits git counted going out and coming in.
+type syncCounts struct {
+	sent, sentCommits, received, receivedCommits, merged, refused int
+}
+
+// orRows is the commits git counted, or the rows when it counted none (a
+// backend without commits): a store line's "sent" and "received" are
+// commits, counted with rev-list over the tips before and after, so they
+// agree with git and with the push line (devco D-648: "sent 5" after 3
+// commits went out, "received 4" when 8 commits arrived).
+func orRows(commits, rows int) int {
+	if commits > 0 {
+		return commits
+	}
+	return rows
+}
+
+// rowsNote names the rows behind the commit counts when they differ
+// ("; rows: 5 sent, 4 received"); nothing when they agree.
+func rowsNote(c syncCounts) string {
+	var parts []string
+	if c.sentCommits > 0 && c.sent != c.sentCommits {
+		parts = append(parts, strconv.Itoa(c.sent)+" sent")
+	}
+	if c.receivedCommits > 0 && c.received != c.receivedCommits {
+		parts = append(parts, strconv.Itoa(c.received)+" received")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; rows: " + strings.Join(parts, ", ")
 }
 
 const syncPushedNoRows = "; pushed local commit(s) with no note rows (store links or org settings)"

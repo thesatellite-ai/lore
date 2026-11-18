@@ -294,13 +294,15 @@ func memberWord(n int) string { return fmt.Sprintf("%d member(s)", n) }
 type TeamListOut struct {
 	Teams []Team `json:"teams"`
 	Where string `json:"where"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label string
 }
 
 // Text is v0.1.17's list: "@<handle> <name> <n> member(s)", a removed
-// team marked, or "no teams on <where>'s roster".
+// team marked, or "no teams on the roster of <where>".
 func (o TeamListOut) Text() string {
 	if len(o.Teams) == 0 {
-		return "no teams on " + o.Where + "'s roster\n"
+		return "no teams on the roster of " + o.label + "\n"
 	}
 	// devco D-572: columns as wide as their widest cell (a name longer than
 	// the old fixed 24 ran into the member count), and a count line.
@@ -646,7 +648,7 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	if err != nil {
 		return TeamListOut{}, err
 	}
-	out := TeamListOut{Teams: []Team{}, Where: r.Where()}
+	out := TeamListOut{Teams: []Team{}, Where: r.Where(), label: r.Label()}
 	for _, x := range rows {
 		t := teamOf(x, actors)
 		t.Pending = pending[t.Handle]

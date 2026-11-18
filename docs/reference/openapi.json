@@ -60920,6 +60920,16 @@
             }
           },
           {
+            "name": "wide",
+            "in": "query",
+            "required": false,
+            "description": "print every field of the kind as a column (default: project, url and at most two key fields; --json has every value)",
+            "schema": {
+              "type": "boolean",
+              "description": "print every field of the kind as a column (default: project, url and at most two key fields; --json has every value)"
+            }
+          },
+          {
             "name": "meta_where",
             "in": "query",
             "required": false,
@@ -90722,10 +90732,16 @@
                               "received": {
                                 "type": "integer"
                               },
+                              "received_commits": {
+                                "type": "integer"
+                              },
                               "refused": {
                                 "type": "integer"
                               },
                               "sent": {
+                                "type": "integer"
+                              },
+                              "sent_commits": {
                                 "type": "integer"
                               },
                               "status": {

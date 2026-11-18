@@ -104,7 +104,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4765e593d51fd1352985
 lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 2 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 1, received 0, merged 0, refused 0); rows: 2 sent
 store agency/org: up to date
 bob (work/website)$ lore sync >/dev/null; lore task list
 ○ tsk_b4f4765e593d51fd1352985e8af3a5b0 send invoice reminder before demo [medium]  [agency/client]
@@ -137,14 +137,14 @@ alice (work/website)$ git status --short
 alice (work/website)$ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 alice (work/website)$ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 alice (work/website)$ git reset -q src/notes.ts && rm -rf src
 alice (work/website)$ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
 alice (work/website)$ lore check pr-body --file pr.md
 ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
-  PR body                                  matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (11 words)
+  PR body                                  matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (11 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text before posting
 (exit 19)
 alice (work/website)$ printf 'Fixes checkout totals for INR.\n' | lore check pr-body --file -

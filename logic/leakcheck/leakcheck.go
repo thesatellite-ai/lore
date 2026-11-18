@@ -255,6 +255,31 @@ type Finding struct {
 // org store's org/ folder, never to the client repo.
 const StableKeyBlocks = true
 
+// TextDetail is the text rule's one-line detail: the internal note by id
+// and the run length, plus the threshold, so a user who pasted a shorter
+// copy that passed knows where the line is (D-651).
+func TextDetail(rowID string, words int) string {
+	return fmt.Sprintf("matches internal note %s (%d words in a row; the check blocks a verbatim copy of %d or more words)", rowID, words, MinRunWords)
+}
+
+// Describe is the line a refusal prints for f. Plain: the detail, the text
+// rule naming the note by id only. explain adds the rule and the source
+// label, once: a detail that already names the label ("names a row of
+// store acme") does not get it a second time (D-651).
+func (f Finding) Describe(explain bool) string {
+	detail := f.Detail
+	if f.Rule == RuleText && !explain {
+		detail = TextDetail(f.RowID, f.Words)
+	}
+	if !explain {
+		return detail
+	}
+	if f.Label != "" && !strings.Contains(detail, f.Label) {
+		detail += " " + f.Label
+	}
+	return fmt.Sprintf("[%s rule] %s", f.Rule, detail)
+}
+
 // Blocking returns the findings that block (Warn unset).
 func Blocking(fs []Finding) []Finding {
 	var out []Finding
@@ -858,7 +883,7 @@ func textHits(it Item, content string, idx *Index, allowed map[string]bool) []Fi
 			}
 			if f, ok := best[row]; !ok || n > f.Words {
 				best[row] = Finding{Rule: RuleText, Where: it.Where, Line: words[i].line, RowID: row, Label: idx.IDs[row], Words: n,
-					Detail: fmt.Sprintf("matches internal note %s (%d words)", row, n)}
+					Detail: TextDetail(row, n)}
 			}
 		}
 	}

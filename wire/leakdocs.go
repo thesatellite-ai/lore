@@ -202,13 +202,7 @@ func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 	var hints []string
 	seen := map[string]bool{}
 	for _, f := range fs {
-		detail := f.Detail
-		if f.Rule == leakcheck.RuleText && !explain {
-			detail = fmt.Sprintf("matches internal note %s (%d words)", f.RowID, f.Words)
-		}
-		if explain {
-			detail = fmt.Sprintf("[%s rule] %s %s", f.Rule, detail, f.Label)
-		}
+		detail := f.Describe(explain)
 		fmt.Fprintf(&b, "\n  %-40s %s", f.Where, detail)
 		if f.Rule == leakcheck.RuleActor {
 			continue // its detail says what to remove; `lore actor delete` is refused (v0.1.17 leakFix gives none)

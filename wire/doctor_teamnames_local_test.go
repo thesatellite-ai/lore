@@ -14,9 +14,11 @@ import (
 // this machine is its session row (`lore agent start`, a machine-local row:
 // no actors row is written into any store, P3-LOCAL-1) was the one writer
 // doctor showed as a raw act_ id. It is named "<person> via <tool>" for
-// both key widths of the collision rule once a sessions row names the
-// tool; an agent of a tool no session names, or of another person, keeps
-// the id; the person is named by the identity when no store holds a row.
+// both key widths of the collision rule; since D-652 that holds before any
+// sessions row names the tool and for every tool lore detects (an agent of
+// a tool used on another day), while an agent of a person no store or
+// identity here knows keeps the id; the person is named by the identity
+// when no store holds a row.
 func TestTeamVersionsNameHookOnlyAgent(t *testing.T) {
 	t.Parallel()
 	a := openWith(t, gitRepo(t), Options{})
@@ -42,8 +44,8 @@ func TestTeamVersionsNameHookOnlyAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := a.teamActorNamer(ctx)(agents[0].String()); got != agents[0].String() {
-		t.Fatalf("no session yet: %q, want the id", got)
+	if got := a.teamActorNamer(ctx)(agents[0].String()); got != "alice via claude_code" {
+		t.Fatalf("no session yet: %q, want alice via claude_code (D-652)", got)
 	}
 	if _, err := a.FindOrCreateSession(ctx, "prj_a", SessionDetails{ActorID: agents[0].String(), Tool: "claude_code", ToolSessionID: "placeholder-session"}); err != nil {
 		t.Fatal(err)
@@ -54,7 +56,7 @@ func TestTeamVersionsNameHookOnlyAgent(t *testing.T) {
 		agents[1].String():    "alice via claude_code",
 		person.String():       "alice",
 		strangers[0].String(): strangers[0].String(),
-		otherTool[0].String(): otherTool[0].String(),
+		otherTool[0].String(): "alice via codex",
 	} {
 		if got := name(in); got != want {
 			t.Errorf("name(%q) = %q, want %q", in, got, want)
