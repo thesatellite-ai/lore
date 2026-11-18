@@ -252,7 +252,7 @@ When a coding agent writes for you, the commit is still signed as the table abov
 
 ## Admins-only stores
 
-An org often has notes only its admins may read: servers, domains, registrar and cloud accounts, where a secret lives. Put them in a store of their own and mark it for admins: `lore org store add --org acme --url git@github.com:acme/ops.git --audience admins --push --yes` (or, for a store the org already lists, `lore org store audience --org acme --url git@github.com:acme/ops.git --audience admins --push --yes`). The store's entry in `lore-org.yaml` gets `audience: admins`; `--audience everyone` removes the key again. Give only the admins access to the repo on the git host: the git host is what keeps the notes private, the key is what keeps members' lore from trying. The org's repo patterns change the same way, with no hand edit of `lore-org.yaml`: `lore org config set --org acme --key repos --add 'github.com/acme/client-*' --push --yes` (a client pattern wins over an own one that matches the same repo); `lore org config get --org acme` shows them, and names each own pattern that overlaps repos entries and that the repos entries win.
+An org often has notes only its admins may read: servers, domains, registrar and cloud accounts, where a secret lives. Put them in a store of their own and mark it for admins: `lore org store add --org acme --url git@github.com:acme/ops.git --audience admins --push --yes` (or, for a store the org already lists, `lore org store audience --org acme --url git@github.com:acme/ops.git --audience admins --push --yes`). The store's entry in `lore-org.yaml` gets `audience: admins`; `--audience everyone` removes the key again. Give only the admins access to the repo on the git host: the git host is what keeps the notes private, the key is what keeps members' lore from trying. The org's repo patterns change the same way, with no hand edit of `lore-org.yaml`: `lore org config set --org acme --key repos --add 'github.com/acme/client-*' --push --yes` (a client pattern wins over an own one that matches the same repo; the confirmation and the result print the change, one `+ <pattern>` or `- <pattern>` line per entry added or taken out and the list's size before and after, never the whole list); `lore org config get --org acme` shows them, and names each own pattern that overlaps repos entries and that the repos entries win.
 
 What each person's lore does with it:
 
@@ -329,7 +329,7 @@ me: push batch every 10m, compact off
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 $ lore sync
 lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
-store me: pushed (sent 4, received 0, merged 0, refused 0)
+store me: pushed (sent 1, received 0, merged 0, refused 0); rows: 4 sent
 store agency/client: up to date
 store agency/org: up to date
 $ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD

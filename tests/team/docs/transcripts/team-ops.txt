@@ -35,7 +35,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3c11a5724b0cfd74b256
 lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit, 2 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 1, received 0, merged 0, refused 0); rows: 2 sent
 store agency/org: up to date
 bob (work/website)$ lore task claim --id tsk_c0f3c11a5724b0cfd74b256190d9b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
@@ -85,7 +85,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8
 lore: pushed store agency (the store clone: folders client, org): commit 9b40ce7 to branch main (4 commits, 3 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 4, received 0, merged 0, refused 0); rows: 2 sent
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 bob (work/website)$ lore task claim --id tsk_d4314eba822f1bf5908b2b8ded5f313a --push
 lore sync: store ssh://github.com/agency/notes: tasks/tsk_c0f3c11a5724b0cfd74b256190d9b5b8: both sides changed claim_epoch, claim_log; kept the newer edit

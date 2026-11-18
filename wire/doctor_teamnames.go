@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
@@ -41,7 +42,7 @@ const viaTool = " via "
 func (a *App) teamActorNamer(ctx context.Context) func(string) string {
 	st, err := a.state(ctx)
 	seen := map[string]string{}
-	var local map[string]string
+	var local, roster map[string]string
 	return func(actor string) string {
 		if actor == "" {
 			return unknownWriter
@@ -59,6 +60,12 @@ func (a *App) teamActorNamer(ctx context.Context) func(string) string {
 					local = a.localActorNames(ctx, st)
 				}
 				n = local[actor]
+			}
+			if n == "" {
+				if roster == nil {
+					roster = rosterAgentNames(ctx, st)
+				}
+				n = roster[actor]
 			}
 		}
 		if n == "" {
@@ -118,22 +125,72 @@ func (a *App) localActorNames(ctx context.Context, st *state) map[string]string 
 	if !st.actor.IsZero() && st.who.DisplayName != "" {
 		out[st.actor.String()] = st.who.DisplayName
 	}
-	sessions, err := a.Sessions(ctx, 0)
-	if err != nil {
-		return out
+	var tools []string
+	if sessions, err := a.Sessions(ctx, 0); err == nil {
+		for _, s := range sessions {
+			tools = append(tools, s.Tool)
+		}
 	}
-	for _, s := range sessions {
-		if s.Tool == "" {
+	addAgentNames(out, pid, pname, append(tools, knownAgentTools()...))
+	return out
+}
+
+// knownAgentTools are the tools lore detects (agentdetect.Builtin): a
+// detected agent's id derives from its owner and tool alone, so doctor can
+// name an agent whose only saves came from a tool this machine's sessions
+// rows no longer name (D-652: an agent of the admin in a tool used on
+// another day showed as a raw act_ id among named writers).
+func knownAgentTools() []string {
+	ds := agentdetect.Builtin()
+	out := make([]string, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, d.Tool)
+	}
+	return out
+}
+
+// addAgentNames adds (when absent) "<owner name> via <tool>" for each
+// detected-agent id of owner in each tool (both key widths, 6.1).
+func addAgentNames(out map[string]string, owner ids.ID[ids.Actor], ownerName string, tools []string) {
+	for _, tool := range tools {
+		if tool == "" {
 			continue
 		}
-		agents, aerr := identity.DetectedAgentIDs(pid, s.Tool)
-		if aerr != nil {
+		agents, err := identity.DetectedAgentIDs(owner, tool)
+		if err != nil {
 			continue
 		}
 		for _, id := range agents {
 			if _, ok := out[id.String()]; !ok {
-				out[id.String()] = pname + viaTool + s.Tool
+				out[id.String()] = ownerName + viaTool + tool
 			}
+		}
+	}
+}
+
+// rosterAgentNames names the detected agents of every named human actor
+// of every attached store, in every tool lore detects: a teammate's agent
+// saves rows before (or without) its own actors row reaching this machine,
+// and its id is derived from the person's id and the tool, so doctor names
+// it "<person> via <tool>" instead of printing the id (D-652, D-620 class).
+func rosterAgentNames(ctx context.Context, st *state) map[string]string {
+	out := map[string]string{}
+	tools := knownAgentTools()
+	for _, name := range st.eng.Stores() {
+		rows, err := st.eng.List(ctx, name, schema.TableActors)
+		if err != nil {
+			continue
+		}
+		for _, r := range rows {
+			if r.Deleted || fieldText(r, schema.FieldActorKind) != schema.ActorKindHuman {
+				continue
+			}
+			pname := actorDisplayName(r, "")
+			id, perr := ids.Parse[ids.Actor](r.ID.String())
+			if pname == "" || perr != nil {
+				continue
+			}
+			addAgentNames(out, id, pname, tools)
 		}
 	}
 	return out

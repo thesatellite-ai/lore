@@ -223,7 +223,7 @@ func TestTeamRemoveAndBack(t *testing.T) {
 	if !strings.Contains(out.Text(), "lore team add --handle @web brings it back") {
 		t.Errorf("text = %q", out.Text())
 	}
-	if l, _ := teamList(x.ctx, x.e, TeamListIn{}); len(l.Teams) != 0 || !strings.HasPrefix(l.Text(), "no teams on agency org/") {
+	if l, _ := teamList(x.ctx, x.e, TeamListIn{}); len(l.Teams) != 0 || !strings.HasPrefix(l.Text(), "no teams on the roster of agency (agency/org)") {
 		t.Errorf("list after remove = %+v", l)
 	}
 	if l, _ := teamList(x.ctx, x.e, TeamListIn{All: true}); len(l.Teams) != 1 || !strings.Contains(l.Text(), removedMark) {

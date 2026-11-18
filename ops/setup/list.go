@@ -312,9 +312,35 @@ func (e engine) health(ctx context.Context, st Store, hs HealthSource, name stri
 	}
 	if day != now.Local().Format(time.DateOnly) {
 		v.earlier = day
+		v.problems = agedProblems(v.problems, name, day)
 	}
 	return v
 }
+
+// agedProblems are problems from a check of an earlier day with their
+// stored fix replaced by the check that refreshes them (devco D-646: setup
+// list kept printing the fix an older check wrote, "git config --global
+// user.email …", after the person had set the identity another way, until
+// `setup check` ran): a fix is advice for the machine as it was that day,
+// so it is shown only from a check of today. The detail (what was found)
+// stays. The command works where it is printed: an identity check
+// refreshes with the identity step, anything else with lore doctor --all.
+func agedProblems(ps []onboard.CheckResult, setup, day string) []onboard.CheckResult {
+	out := make([]onboard.CheckResult, len(ps))
+	for i, p := range ps {
+		again := "lore doctor --all"
+		if strings.HasPrefix(string(p.Check), identityCheckPrefix) {
+			again = "lore setup check --setup " + setup + " --step " + string(onboard.StepIdentity)
+		}
+		p.Fix = onboard.Fix{Text: "found on " + day + "; its fix may be out of date: check again with " + again}
+		out[i] = p
+	}
+	return out
+}
+
+// identityCheckPrefix starts the id of every check the identity step runs
+// (identity.git_email, …).
+const identityCheckPrefix = "identity."
 
 // healthText is the text table's Health cell of s: "not checked since
 // <date> (<why>; check it again with lore setup check --setup <name>

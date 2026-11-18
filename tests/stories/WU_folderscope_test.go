@@ -17,6 +17,10 @@ package stories
 //	       sync folder of the store clone
 //	D-584: the default view is KIND NAME PROJECT URL (CHECKED only when a
 //	       row was checked); long text is cut like other lists
+//	D-650: `resource list --kind server` (a kind with ten fields) keeps the
+//	       narrow view; --wide prints every field
+//	D-647: team list names the roster "the roster of acme (acme/org)",
+//	       never "acme org/'s roster" (nor does member show of no one)
 //	D-585: `org config get --org acme` and `store doctor` name an own
 //	       pattern that overlaps exact repos entries, and that the exact
 //	       entry wins
@@ -87,6 +91,41 @@ func TestStoryWUFolderScope(t *testing.T) {
 		}
 		m.Lore(filepath.Join(storeCloneDir(t, m), "org"), "resource", "check", "--id", "sync_go", "--yes").OK(t)
 		m.Lore(m.Home, "resource", "list", "--store", wOrg).OK(t).Says(t, "CHECKED")
+	})
+
+	s.Step("D-650/kind-list-is-narrow-by-default", func() {
+		// a server kind with many fields: --kind keeps the narrow view
+		// (KIND NAME, project/url, at most two key fields), --wide and
+		// --json carry every field
+		fields := []string{"project", "url", "ip", "access", "config_repo", "owner_team", "os", "region", "rack", "notes"}
+		lore("resource", "kind", "add", "--kind", "server", "--to", inOrg)
+		for _, f := range fields {
+			lore("resource", "field", "add", "--kind", "server", "--field", f, "--type", "text", "--to", inOrg)
+		}
+		args := []string{"resource", "add", "--kind", "server", "--name", "web1", "--to", inOrg}
+		for _, f := range fields {
+			args = append(args, "--set", f+"="+strings.Repeat(f+"-value ", 3))
+		}
+		lore(args...)
+		r := m.Lore(m.Home, "resource", "list", "--kind", "server", "--store", wOrg).OK(t)
+		head := strings.Fields(strings.SplitN(r.Out(), "\n", 2)[0])
+		if len(head) > 6 || head[2] != "PROJECT" || head[3] != "URL" {
+			t.Fatalf("resource list --kind server head %v: want KIND NAME PROJECT URL and at most two more\n%s", head, r.Out())
+		}
+		r.Says(t, "web1", "more fields not shown: add --wide for every field, or --json")
+		m.Lore(m.Home, "resource", "list", "--kind", "server", "--store", wOrg, "--wide").OK(t).
+			Says(t, "OWNER_TEAM", "CONFIG_REPO", "RACK", "NOTES").Never(t, "not shown")
+		m.Lore(m.Home, "resource", "list", "--kind", "server", "--store", wOrg, "--json").OK(t).Says(t, "rack-value")
+	})
+
+	s.Step("D-647/roster-named-by-org-entry-and-folder", func() {
+		// "no teams on acme org/'s roster" glued a possessive onto a
+		// folder path: the roster is "the roster of acme (acme/org)"
+		m.Lore(m.Home, "member", "show", "--who", "nobody@example.test", "--setup", wSetup).Refused(t, "nobody@example.test").Never(t, "/'s roster")
+		r := m.Lore(m.Home, "team", "list", "--setup", wSetup).OK(t).Never(t, "/'s roster")
+		if strings.Contains(r.Out(), "no teams") {
+			r.Says(t, "no teams on the roster of acme (acme/org)")
+		}
 	})
 
 	s.Step("D-585/own-pattern-overlapping-repos-entries", func() {

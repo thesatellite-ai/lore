@@ -34,7 +34,7 @@ me: push batch every 10m, compact off
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 alice (work/website)$ lore sync
 lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
-store me: pushed (sent 4, received 0, merged 0, refused 0)
+store me: pushed (sent 1, received 0, merged 0, refused 0); rows: 4 sent
 store agency/client: up to date
 store agency/org: up to date
 alice (work/website)$ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD

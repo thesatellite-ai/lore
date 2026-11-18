@@ -25,7 +25,7 @@ func TestStoreSyncLineOneShape(t *testing.T) {
 		{0, 0, 0, 2, false, "store s: refused (sent 0, received 0, merged 0, refused 2)"},
 	} {
 		status := storeStatusOf(c.sent, c.received, c.merged, c.refused, c.pushed)
-		own := storeCountsLine("s", status, c.sent, c.received, c.merged, c.refused)
+		own := storeCountsLine("s", status, syncCounts{sent: c.sent, received: c.received, merged: c.merged, refused: c.refused})
 		if own != c.want {
 			t.Errorf("own repo line = %q, want %q", own, c.want)
 		}

@@ -205,14 +205,14 @@ A write printed `lore live: landed on main; this checkout is on <branch>, so tho
 
 ## `E_LEAK_BLOCKED`
 
-A **leak** is internal or personal content reaching something the client can read. A commit, a live write to a client repo or a pull request text contains internal content: a row id of another project, a pointer to an internal row, or a run of 8 or more words that also appears in an internal or personal note. The message names the file and line, the matching note, and the two ways out:
+A **leak** is internal or personal content reaching something the client can read. A commit, a live write to a client repo or a pull request text contains internal content: a row id of another project, a pointer to an internal row, or a run of 8 or more words that also appears in an internal or personal note (a text finding says so: `matches internal note mem_… (12 words in a row; the check blocks a verbatim copy of 8 or more words)`, so a shorter copy that passed is below the line, not missed; `--explain` adds the rule and the note's store, named once). The message names the file and line, the matching note, and the two ways out:
 
 <!-- example: agency#leak-blocked only=2 -->
 ```console
 # alice, in website
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```

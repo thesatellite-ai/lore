@@ -281,6 +281,19 @@ func newRosterAt(src store.Source, where string) rosterAt {
 // shown is where for output, success lines and refusals alike.
 func (r rosterAt) shown() string { return r.where }
 
+// label names an org roster as the person knows it: the org entry, then
+// the store folder holding it ("acme (acme/org)"); the repo's own roster
+// keeps where ("this repo"). profilestore.Roster.Label is this, as the
+// ops print "the roster of <label>" (devco D-647: "no teams on acmeops
+// org/'s roster" glued a possessive onto a folder path).
+func (r rosterAt) label() string {
+	org, _, ok := strings.Cut(string(r.src), targetSep)
+	if r.src == store.SourceRepo || !ok || org == "" {
+		return r.where
+	}
+	return org + " (" + string(r.src) + ")"
+}
+
 // handleTakenErr refuses a handle another actor or team holds on r.
 func (r rosterAt) handleTakenErr(handle, holder string) error {
 	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on the roster in %s", handle, holder, r.shown())).

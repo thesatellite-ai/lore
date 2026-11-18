@@ -166,13 +166,7 @@ func asClientLine(f leakcheck.Finding, explain bool) string {
 	if f.Line > 0 {
 		where = fmt.Sprintf("%s:%d", where, f.Line)
 	}
-	detail := f.Detail
-	if !explain && f.Rule == leakcheck.RuleText {
-		detail = fmt.Sprintf("matches internal note %s (%d words)", f.RowID, f.Words)
-	}
-	if explain {
-		detail = fmt.Sprintf("[%s rule] %s %s", f.Rule, detail, f.Label)
-	}
+	detail := f.Describe(explain)
 	return fmt.Sprintf("  %-40s %s\n      fix: %s", where, detail, leakFix(LeakWhereCommit, f.Path))
 }
 

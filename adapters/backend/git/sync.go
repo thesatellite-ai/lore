@@ -315,6 +315,15 @@ func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushe
 			return rep, err
 		}
 	}
+	if before != "" && before != after {
+		// devco D-648: what arrived, counted by git (a merge commit too)
+		if rep.CommitsIn, err = b.countCommits(ctx, before, after); err != nil {
+			return rep, err
+		}
+		if pushed && rep.CommitsIn >= rep.Commits {
+			rep.CommitsIn -= rep.Commits // this sync's own pushed commits did not arrive
+		}
+	}
 	for f, n := range received {
 		if f != rep.Folder {
 			rep.Others = addFolderCount(rep.Others, f, store.FolderCount{Received: n})

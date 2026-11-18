@@ -138,7 +138,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store
 lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 2 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 1, received 0, merged 0, refused 0); rows: 2 sent
 store agency/org: up to date
 
 # bob, in website
@@ -186,7 +186,7 @@ If someone pastes internal text into a file of the client's repo, the commit is 
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
@@ -208,7 +208,7 @@ Agents check a pull request body or comment before posting it. The same text is 
 $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
 $ lore check pr-body --file pr.md
 ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
-  PR body                                  matches internal note mem_c0f3…b5b8 (11 words)
+  PR body                                  matches internal note mem_c0f3…b5b8 (11 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text before posting
 (exit 19)
 $ printf 'Fixes checkout totals for INR.\n' | lore check pr-body --file -

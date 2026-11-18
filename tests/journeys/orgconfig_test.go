@@ -41,9 +41,11 @@ func TestJourneyOrgConfig(t *testing.T) {
 		lee.Lore(parent, "org", "config", "set", "--org", tlOrg, "--key", "colour", "--add", ocPattern, "--yes").
 			Refused(t, "is not one of own, repos")
 		lee.Lore(parent, "org", "config", "set", "--org", tlOrg, "--key", "repos", "--add", ocPattern).
-			Refused(t, "now: ", ocPattern, "--yes")
+			Refused(t, "  + "+ocPattern, "--yes")
+		// devco D-649: the change as +/- lines and the size, not the
+		// whole list twice (was/now)
 		lee.Lore(parent, "org", "config", "set", "--org", tlOrg, "--key", "repos", "--add", ocPattern, "--yes").OK(t).
-			Says(t, "✓ repos in", "changed", "org entry "+tlOrg+" copies it")
+			Says(t, "  + "+ocPattern, "✓ repos in", "changed", "org entry "+tlOrg+" copies it").Never(t, "was: ", "now: ")
 		lee.Lore(parent, "org", "config", "get", "--org", tlOrg, "--key", "repos").OK(t).Says(t, ocPattern)
 		lee.Lore(parent, "org", "config", "set", "--org", tlOrg, "--key", "repos", "--add", ocPattern, "--yes").OK(t).
 			Says(t, "nothing committed")

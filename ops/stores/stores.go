@@ -666,6 +666,11 @@ type Report struct {
 	Store    string `json:"store"`
 	Sent     int    `json:"sent"`
 	Received int    `json:"received"`
+	// SentCommits / ReceivedCommits are the commits the sync pushed and
+	// brought in, counted by git (store.SyncReport.Commits, CommitsIn):
+	// Sent and Received count rows (devco D-648).
+	SentCommits     int `json:"sent_commits,omitempty"`
+	ReceivedCommits int `json:"received_commits,omitempty"`
 	// Merged counts rows merged field by field because both sides changed.
 	Merged int `json:"merged"`
 	// Refused counts rows the sync could not apply (each is listed in
@@ -803,7 +808,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	pushRefused := true // every refusal is a push the remote refused (not a merge refusal)
 	for _, d := range done {
 		n, rep := d.name, d.rep
-		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail, Pushed: rep.Pushed}
+		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, SentCommits: rep.Commits, ReceivedCommits: rep.CommitsIn, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail, Pushed: rep.Pushed}
 		var held []store.Refusal
 		for _, x := range rep.Refused {
 			if x.Held {

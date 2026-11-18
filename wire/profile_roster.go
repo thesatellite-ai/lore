@@ -224,6 +224,10 @@ func (p *profileRoster) Source() store.Source { return p.at.src }
 // Where implements profilestore.Roster (hidden in quiet output, §6.5).
 func (p *profileRoster) Where() string { return p.at.shown() }
 
+// Label implements profilestore.Roster: the org entry and the store
+// folder ("acme (acme/org)", devco D-647).
+func (p *profileRoster) Label() string { return p.at.label() }
+
 // Caller implements profilestore.Roster.
 func (p *profileRoster) Caller() ids.ID[ids.Actor] { return p.person }
 

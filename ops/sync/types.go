@@ -123,13 +123,17 @@ type ConflictNote struct {
 // StoreReport is one attached store's sync result (ops/stores.Report's
 // shape, repeated here so the sync noun imports no other noun).
 type StoreReport struct {
-	Store    string   `json:"store"`
-	Sent     int      `json:"sent"`
-	Received int      `json:"received"`
-	Merged   int      `json:"merged"`
-	Refused  int      `json:"refused"`
-	Problems []string `json:"problems,omitempty"`
-	Offline  bool     `json:"offline,omitempty"`
+	Store    string `json:"store"`
+	Sent     int    `json:"sent"`
+	Received int    `json:"received"`
+	// SentCommits / ReceivedCommits are the commits behind Sent and
+	// Received (rows), counted by git (devco D-648).
+	SentCommits     int      `json:"sent_commits,omitempty"`
+	ReceivedCommits int      `json:"received_commits,omitempty"`
+	Merged          int      `json:"merged"`
+	Refused         int      `json:"refused"`
+	Problems        []string `json:"problems,omitempty"`
+	Offline         bool     `json:"offline,omitempty"`
 	// HeldBy names the store folder whose refusal held this folder's push
 	// and Held is the line that says so (ops/stores.HeldLine); empty when
 	// the folder's push was its own.

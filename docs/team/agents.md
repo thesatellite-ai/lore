@@ -128,7 +128,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store
 lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit, 2 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 1, received 0, merged 0, refused 0); rows: 2 sent
 store agency/org: up to date
 
 # bob, in website
@@ -207,7 +207,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store
 lore: pushed store agency (the store clone: folders client, org): commit 9b40ce7 to branch main (4 commits, 3 row files)
 store me: up to date
 store me/everywhere: up to date
-store agency/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/client: pushed (sent 4, received 0, merged 0, refused 0); rows: 2 sent
 store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 
 # bob, in website
