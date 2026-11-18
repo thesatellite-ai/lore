@@ -31,10 +31,11 @@ func (sp setupProber) JoinPerson(ctx context.Context, setup, answer, email strin
 	var (
 		got   team.RosterPerson
 		found bool
+		org   string // the entry the roster was read under (D-645)
 	)
 	read := func(ctx context.Context, entry string) error {
 		p, ok, err := team.FindRosterPerson(ctx, orgRosterStore{a: sp.a, org: entry}, []string{email})
-		got, found = p, ok
+		got, found, org = p, ok, entry
 		return err
 	}
 	ctx = team.WithJoinSetup(ctx, setup)
@@ -65,7 +66,7 @@ func (sp setupProber) JoinPerson(ctx context.Context, setup, answer, email strin
 		}
 	}
 	if !found {
-		return opssetup.JoinPerson{}, false
+		return opssetup.JoinPerson{Org: org}, false
 	}
-	return opssetup.JoinPerson{Name: got.Name, GitHub: got.GitHub}, true
+	return opssetup.JoinPerson{Name: got.Name, GitHub: got.GitHub, Org: org}, true
 }

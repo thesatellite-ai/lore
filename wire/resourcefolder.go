@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/resquar"
 	"github.com/thesatellite-ai/lore/op"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
 	"github.com/thesatellite-ai/lore/schema"
@@ -137,18 +138,21 @@ func (a *App) resourceFolderOf(ctx context.Context, org string) (resourceFolder,
 	}
 	scan := a.orgFolders(ctx)
 	folders := map[string]bool{}
+	byDir := map[string][]string{}
 	for _, f := range scan.Folders {
 		if f.Org == org || f.Label == org {
 			folders[f.Folder] = true
+			byDir[f.Dir] = append(byDir[f.Dir], f.Folder)
 		}
 	}
 	for _, f := range scan.Folders {
 		if f.Dir == "" || (f.Org != org && f.Label != org) {
 			continue
 		}
+		names := storeValueNames(f.Dir, append([]string{f.Folder}, byDir[f.Dir]...))
 		files, _ := filepath.Glob(filepath.Join(f.Dir, filepath.FromSlash(f.Folder), schema.TableResources, "*.json"))
 		for _, p := range files {
-			name, remote, project, ok := resourceNamingRemote(p, mine)
+			name, remote, project, ok := resourceNamingRemote(p, mine, names)
 			if !ok {
 				continue
 			}
@@ -165,11 +169,45 @@ func (a *App) resourceFolderOf(ctx context.Context, org string) (resourceFolder,
 	return resourceFolder{}, false
 }
 
+// valueNamer is the current name of the allowed value vid of the kind
+// field fid (OQ-AV: a closed value is stored as its val_ id); ok is false
+// when no field row of the store knows the id.
+type valueNamer func(fid, vid string) (string, bool)
+
+// storeValueNames is the valueNamer of the store clone dir: it reads the
+// kind_fields row of fid in each of folders in turn (the resource's own
+// folder first, then the org's other folders: a kind is usually defined
+// in the org folder) and maps vid by its value_ids.
+func storeValueNames(dir string, folders []string) valueNamer {
+	return func(fid, vid string) (string, bool) {
+		if fid == "" || strings.ContainsAny(fid, `/\.`) {
+			return "", false
+		}
+		for _, folder := range folders {
+			b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(folder), schema.TableKindFields, fid+".json")) //nolint:gosec // a row file of the org's own store clone
+			if err != nil {
+				continue
+			}
+			var row struct {
+				ValueIDs json.RawMessage `json:"value_ids"`
+			}
+			if json.Unmarshal(b, &row) != nil {
+				continue
+			}
+			if n, ok := resquar.ValueIDsOf(row.ValueIDs)[vid]; ok && strings.TrimSpace(n) != "" {
+				return strings.TrimSpace(n), true
+			}
+		}
+		return "", false
+	}
+}
+
 // resourceNamingRemote reads one resource row file: its name, the remote
 // of mine one of its string values names, and its project field's value
-// ("" when it has none); ok is false when no value names a remote of mine
-// or the file is unreadable.
-func resourceNamingRemote(path string, mine map[string]bool) (name, remote, project string, ok bool) {
+// as text ("" when it has none; a select value resolved to its name by
+// names); ok is false when no value names a remote of mine or the file
+// is unreadable.
+func resourceNamingRemote(path string, mine map[string]bool, names valueNamer) (name, remote, project string, ok bool) {
 	b, err := os.ReadFile(path) //nolint:gosec // a row file of the org's own store clone
 	if err != nil {
 		return "", "", "", false
@@ -198,25 +236,44 @@ func resourceNamingRemote(path string, mine map[string]bool) (name, remote, proj
 			name = s
 		}
 	}
-	return name, remote, resourceFieldText(top["fields"], resourceProjectField), true
+	return name, remote, resourceFieldText(top["fields"], resourceProjectField, names), true
 }
 
 // resourceFieldText is the text value of the field named name in a
 // resource row's fields object ({<fld_ id>: {"name": <field>, "v":
-// <value>}}), trimmed; "" when the field is absent or not text.
-func resourceFieldText(fields json.RawMessage, name string) string {
+// <value>}}), trimmed; "" when the field is absent or not text. A closed
+// (select) value is stored as its val_ id in v with its name in v_name
+// (OQ-AV): it is the value's current name by names, else the v_name
+// label, never the val_ id (devco:D-643: the owner's project field was a
+// select, and the link hint fell back to the folder holding the row).
+func resourceFieldText(fields json.RawMessage, name string, names valueNamer) string {
 	var entries map[string]struct {
-		Name string          `json:"name"`
-		V    json.RawMessage `json:"v"`
+		Name  string          `json:"name"`
+		V     json.RawMessage `json:"v"`
+		VName json.RawMessage `json:"v_name"`
 	}
 	if json.Unmarshal(fields, &entries) != nil {
 		return ""
 	}
-	for _, e := range entries {
+	for fid, e := range entries {
 		var v string
-		if e.Name == name && json.Unmarshal(e.V, &v) == nil {
-			return strings.TrimSpace(v)
+		if e.Name != name || json.Unmarshal(e.V, &v) != nil {
+			continue
 		}
+		v = strings.TrimSpace(v)
+		if len(e.VName) == 0 || string(e.VName) == "null" {
+			return v
+		}
+		if names != nil {
+			if n, ok := names(fid, v); ok {
+				return n
+			}
+		}
+		var label string
+		if json.Unmarshal(e.VName, &label) == nil {
+			return strings.TrimSpace(label)
+		}
+		return ""
 	}
 	return ""
 }

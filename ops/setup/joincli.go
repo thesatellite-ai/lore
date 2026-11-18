@@ -6,7 +6,9 @@ package setup
 // page for 30 idle minutes and offer a "solo setup personal" for the
 // folder. Now:
 //
-//	setup.join ─▶ JoinOut.Web.Setup  the setup to make (the org, or the
+//	setup.join ─▶ JoinOut.Web.Setup  the setup to make (the org: the
+//	                                 invite's, or the name the store's
+//	                                 lore-org.yaml gives, D-645; else the
 //	                                 store url's owner: acme for
 //	                                 git@host:acme/team-store.git)
 //	           ─▶ JoinOut.Commands   the `lore setup apply` lines that make
@@ -173,6 +175,13 @@ type joinIdentity struct {
 	// NameFrom and GitHubFrom say where the prefilled values came from
 	// (JoinOut.PrefillNote).
 	NameFrom, GitHubFrom string
+	// Org is the org name the store's lore-org.yaml gives (JoinPerson.Org),
+	// "" when the store was not read: a join by store url names its setup
+	// for it (devco D-645).
+	Org string
+	// SetupFrom says where the join lines' setup name came from when it is
+	// the org's name read from the store ("" otherwise; JoinOut.PrefillNote).
+	SetupFrom string
 }
 
 // joinEmail is the identity of a join of org: the invite's address, else
@@ -312,6 +321,12 @@ func JoinOf(ctx context.Context) JoinContext {
 type JoinPerson struct {
 	Name   string `json:"name,omitempty"`
 	GitHub string `json:"github,omitempty"`
+	// Org is the org entry name the store's lore-org.yaml gives (devco
+	// D-645: a join by store url named its setup for the url's GitHub
+	// owner, another name than the org's). A finder sets it whenever it
+	// read the store, also when the roster has no member with the address
+	// (ok false then, Name and GitHub empty).
+	Org string `json:"org,omitempty"`
 }
 
 // JoinPersonFinder is the optional Prober upgrade that reads the roster
@@ -333,7 +348,12 @@ func (e engine) joinPerson(ctx context.Context, id joinIdentity, setup, answer, 
 	}
 	where := cmp.Or(org, setup)
 	if f, ok := pr.(JoinPersonFinder); ok && strings.Contains(id.Email, "@") && answer != "" {
-		if p, found := f.JoinPerson(ctx, setup, answer, id.Email); found {
+		p, found := f.JoinPerson(ctx, setup, answer, id.Email)
+		if onboard.ValidSetupName(p.Org) {
+			// devco:D-645: the roster is the org's, never the url owner's
+			id.Org, where = p.Org, cmp.Or(org, p.Org)
+		}
+		if found {
 			// a name member add derived from the address (bob for
 			// bob@acme.example, no --name given) is a placeholder: git's
 			// user.name is a better guess then
@@ -367,6 +387,9 @@ func prefillNote(id joinIdentity, commands []string) string {
 		parts = append(parts, "GitHub account from "+id.GitHubFrom)
 	case hasGitHub:
 		parts = append(parts, "GitHub account from this machine's gh login or ssh keys (the roster has no GitHub login for you)")
+	}
+	if id.SetupFrom != "" {
+		parts = append(parts, "setup name "+id.Org+" from "+id.SetupFrom)
 	}
 	if len(parts) == 0 {
 		return ""
