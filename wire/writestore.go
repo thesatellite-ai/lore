@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/store"
@@ -133,4 +134,47 @@ func homeCommand(e op.Entry, in op.Input, name string) string {
 		parts = append(parts, "--"+f, shellWord(tv.Text))
 	}
 	return strings.Join(append(parts, "--store", name), " ")
+}
+
+// narrowToStore is the D-617 step: inside a code repo, a command whose
+// --store names stores the repo attaches works on those stores alone
+// (engine narrow.go): a row named by id or found by name in another
+// attached store is refused naming where it is, never read or written
+// there. A store clone (its own folder routing), a command naming no
+// store or the repo, and a name the repo does not attach (D-616 refused
+// the write already; a read's own paths answer) keep ctx as it is.
+func (a *App) narrowToStore(ctx context.Context, e op.Entry, d op.Decoder, eng *engine.Engine) context.Context {
+	if _, in := storeHere(a.opts.RepoDir); in {
+		return ctx
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return ctx // the engine's Run reports the decode error itself
+	}
+	name := routedWriteStore(in)
+	if e.Spec().Access != op.AccessWrite {
+		name = strings.TrimSpace(scopeOf(in).store)
+	}
+	if name == "" || name == string(store.SourceRepo) {
+		return ctx
+	}
+	a.mu.Lock()
+	var folders map[store.Source]string
+	if a.st != nil {
+		folders = maps.Clone(a.st.folders)
+	}
+	a.mu.Unlock()
+	n := engine.Narrow{Named: name, Shown: map[store.Source]string{}}
+	alias := eng.StoreName(store.Source(name))
+	for _, src := range eng.Stores() {
+		shown := string(src)
+		if f := strings.Trim(folders[src], "/"); f != "" && !strings.Contains(shown, targetSep) {
+			shown += targetSep + f // a store at a folder is shown as <store>/<folder>
+		}
+		n.Shown[src] = shown
+		if src == alias || string(src) == name || shown == name || strings.HasPrefix(string(src), name+targetSep) {
+			n.Sources = append(n.Sources, src)
+		}
+	}
+	return engine.WithNarrow(ctx, n)
 }

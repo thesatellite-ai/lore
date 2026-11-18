@@ -6,7 +6,8 @@ package stories
 // name their row by name take --store <org>[/<folder>] (alias --to) from
 // the home folder as reads do (devco D-615), and inside a code repo a
 // --store naming a store or folder the repo does not attach is refused,
-// never written elsewhere (devco D-616).
+// never written elsewhere (devco D-616), and a --store naming an attached
+// store keeps the command to it (devco D-617).
 //
 //	day1: StartTeam (acme), the kind code_repo with fields in acme/org, a
 //	      meta key and a memory in acme/sync, a repo ~/code/web linked to
@@ -86,5 +87,23 @@ func TestStoryWNNames(t *testing.T) {
 		m.LoreIn(wc, "memory", "add", "--body", "a web note").OK(t)
 		m.LoreIn(wc, "project", "archive", "--id", wFolder, "--store", wOrg+"/"+wFolder, "--yes").OK(t).Never(t, "not attached")
 		m.LoreIn(wc, "project", "unarchive", "--id", wFolder, "--store", wOrg+"/"+wFolder, "--yes").OK(t)
+	})
+
+	s.Step("D-617/in-a-repo-an-attached-store-narrows-the-lookup", func() {
+		inWeb := wOrg + "/" + wFolder
+		// by name: the kind lives in acme/org, --store names acme/web
+		m.LoreIn(wc, "resource", "kind", "edit", "--id", "code_repos", "--description", "web only", "--store", inWeb, "--yes").
+			Refused(t, "E_NOT_FOUND", "is not in "+inWeb+"; it is in "+inOrg+" (use --store "+inOrg+")").Never(t, "updated")
+		m.Lore(m.Home, "resource", "kind", "show", "--id", "code_repos", "--store", inOrg).OK(t).Says(t, "edited in web").Never(t, "web only")
+		m.LoreIn(wc, "resource", "kind", "edit", "--id", "code_repos", "--description", "org edit", "--store", inOrg, "--yes").OK(t)
+		// by id: a memory of acme/org, read and written with --store acme/web
+		orgMem := wuMemID.FindString(m.LoreIn(wc, "memory", "add", "--body", "an org note", "--to", inOrg).OK(t).Out())
+		m.LoreIn(wc, "memory", "show", "--id", orgMem, "--store", inWeb).
+			Refused(t, "E_NOT_FOUND", " in "+inWeb+"; it is in "+inOrg, "--store "+inOrg).Never(t, "an org note")
+		m.LoreIn(wc, "meta", "set", "--id", orgMem, "--pair", "owning_team=web", "--store", inWeb, "--yes").
+			Refused(t, "is not in "+inWeb+"; it is in "+inOrg)
+		m.LoreIn(wc, "memory", "show", "--id", orgMem, "--store", inOrg).OK(t).Says(t, "an org note").Never(t, "owning_team")
+		// the org name covers every folder the repo attaches
+		m.LoreIn(wc, "memory", "show", "--id", orgMem, "--store", wOrg).OK(t).Says(t, "an org note")
 	})
 }

@@ -83,6 +83,10 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 			return op.Result{}, err
 		}
 	}
+	// D-617: a row named by id lives in a store --store names (narrow.go)
+	if err := e.refuseNarrowedIDs(ctx, in.IDArgs()); err != nil {
+		return op.Result{}, err
+	}
 	if c.Agent != "" {
 		// POLICY (spec 9.2): agents.person_only names commands, so it is
 		// checked here, before the confirmation, for CLI and REST alike.
