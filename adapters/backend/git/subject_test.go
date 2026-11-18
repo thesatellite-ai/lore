@@ -100,3 +100,45 @@ func TestSubjectNeverCarriesFreeText(t *testing.T) {
 		t.Fatalf("secret title subject = %q, want %q", got, want)
 	}
 }
+
+// TestSubjectActorOnlyBatch pins devco:D-642: a member's first write
+// registered their agent actor in the org store while the command's row
+// went elsewhere, and that commit read "lore: memory add act_…" although
+// it held no memory. A batch of only actor rows says what it is: register
+// for a new row (with the display name), copy for a refresh; a batch that
+// holds the command's own row keeps the command's words.
+func TestSubjectActorOnlyBatch(t *testing.T) {
+	t.Parallel()
+	g := newGen(t)
+	mk := func(table row.Table, p ids.Prefix, field, text string) store.Change {
+		t.Helper()
+		id, err := ids.Natural(p, text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := value.TextOf(text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stamp := g.clock.Now(hlc.HLC{})
+		r, err := store.FromRow(row.Row{Table: table, ID: id, HLC: stamp, UpdatedAt: stamp.Wall, UpdatedBy: stamp.Actor, Fields: map[string]value.Value{field: v}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return store.Change{Row: r}
+	}
+	agent := mk("actors", ids.PrefixActor, "display_name", "Lee Park via claude_code")
+	id := agent.Row.ID.String()
+	if got, want := subject("memory.add", []store.Change{agent}), "lore: actor register "+id+": Lee Park via claude_code"; got != want {
+		t.Fatalf("actor-only memory add subject = %q, want %q", got, want)
+	}
+	refresh := agent
+	refresh.Expect = g.clock.Now(hlc.HLC{})
+	if got, want := subject("memory.add", []store.Change{refresh}), "lore: actor copy "+id+": Lee Park via claude_code"; got != want {
+		t.Fatalf("actor refresh subject = %q, want %q", got, want)
+	}
+	mem := mk("memories", ids.PrefixMemory, "body", "a note")
+	if got, want := subject("memory.add", []store.Change{agent, mem}), "lore: memory add "+mem.Row.ID.String()+" (2 rows)"; got != want {
+		t.Fatalf("memory add with actor copy subject = %q, want %q", got, want)
+	}
+}

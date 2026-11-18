@@ -33,6 +33,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
+	"github.com/thesatellite-ai/lore/logic/actorsource"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -631,6 +632,9 @@ func subjectOf(ctx context.Context, op string, changes []store.Change) string {
 // back to the id too. A write made outside a command is named after its
 // table (`lore: machine register mch_…`); a purge keeps `lore: purge <id>`.
 func subject(op string, changes []store.Change) string {
+	if s, ok := actorOnlySubject(op, changes); ok {
+		return s
+	}
 	c := primaryChange(op, changes)
 	words := strings.ReplaceAll(op, ".", " ")
 	s := "lore: " + words + " " + c.Row.ID.String()
@@ -662,11 +666,78 @@ func subject(op string, changes []store.Change) string {
 	return s
 }
 
+// actorOnlySubject is the subject of a batch that holds only actor rows
+// and none of the command's own (devco:D-642): a member's first write
+// registers their agent actor ("<name> via claude_code") in the org
+// store, while the row the command wrote went to another store, so that
+// store's commit carried just the actor row under "lore: memory add
+// act_…", naming a memory that is not in it. It says what the commit is:
+// `lore: actor register act_…: <name>` for a new actor row (Expect zero:
+// the row must not exist yet), `lore: actor copy act_…: <name>` for a
+// refresh. The display name is the row's own short label, already in the
+// file; a removal keeps the id only (B3-23). ok is false for any other
+// batch, which subject words as before.
+func actorOnlySubject(op string, changes []store.Change) (string, bool) {
+	if len(changes) == 0 || op == purgeOp || op == DefaultOp {
+		return "", false // a write outside any command keeps W-11's "actor copy <id>"
+	}
+	noun, _, _ := strings.Cut(op, ".")
+	if tableOfNoun(actorsTable, noun) {
+		return "", false // an actor command (actor merge, actor add): its own words
+	}
+	fresh := true
+	for _, c := range changes {
+		if string(c.Row.Table) != actorsTable || c.Row.Deleted {
+			return "", false
+		}
+		fresh = fresh && c.Expect.IsZero()
+	}
+	c := changes[0]
+	words := actorCopyWords
+	if fresh {
+		words = actorRegisterWords
+	}
+	s := "lore: " + words + " " + c.Row.ID.String()
+	if l := actorName(c.Row); l != "" && !looksSecret(l) {
+		s += ": " + l
+	}
+	if len(changes) > 1 {
+		s += " (" + strconv.Itoa(len(changes)) + " rows)"
+	}
+	return s, true
+}
+
+// Words of an actor-only commit (actorOnlySubject): a new actor row, and a
+// refresh of one that exists.
+const (
+	actorRegisterWords = "actor register"
+	actorCopyWords     = "actor copy"
+)
+
+// actorName is an actor row's display name, first line, shortened like a
+// title; "" when it has none or cannot be read.
+func actorName(r store.Row) string {
+	d, err := r.Decode()
+	if err != nil || len(r.Doc) == 0 {
+		return ""
+	}
+	v, ok := d.Fields[actorsource.FieldDisplayName]
+	if !ok || v == nil || v.Kind() != value.KindText {
+		return ""
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(v.String()), "\n")
+	line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+	if rs := []rune(line); len(rs) > maxLabelLen {
+		line = string(rs[:maxLabelLen-1]) + "…"
+	}
+	return line
+}
+
 // backgroundTitles name the writes lore makes by itself, per table; any
 // other table is "<noun> save".
 var backgroundTitles = map[string]string{
 	"machines": "machine register",
-	"actors":   "actor copy",
+	"actors":   actorCopyWords,
 }
 
 // backgroundWords is the words of a write made outside a command.

@@ -16,7 +16,9 @@ package stories
 // way, so the answer there is the same with and without a personal store.
 
 import (
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -125,6 +127,28 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 			t.Errorf("[O D-640] a plain read in the store clone folder lists the personal note:\n%s", r)
 		}
 	})
+	// devco:D-642: a member's first write registered their agent actor in
+	// the org store while the row went elsewhere, and that commit read
+	// "lore: memory add act_…" (a memory that is not in it). No commit of
+	// the member's store clone names an actor id under another command's
+	// words; an actor-only commit says "actor register" or "actor copy".
+	s.Step("member/actor-commit-subjects", func() {
+		// the member's agent writes (detection on, a claude_code session):
+		// its actor row is registered by this write
+		agent := mwc.With("LORE_HUMAN=", "LORE_NO_DETECT=0", "CLAUDE_CODE_CHILD_SESSION=1", "CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=o-d642")
+		mo.LoreIn(agent, "memory", "add", "--body", "pclone agent note in the linked repo", "--yes").OK(t)
+		mo.LoreIn(mwc, "sync").OK(t)
+		top := oStoreClone(mo, oOwner, "lore-team")
+		out, err := exec.Command("git", "-C", top, "log", "--all", "--format=%s").Output()
+		if err != nil {
+			t.Fatalf("git log in %s: %v", top, err)
+		}
+		for _, subj := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if m := oActorUnderOtherOp.FindStringSubmatch(subj); m != nil && !strings.HasPrefix(m[1], "actor ") {
+				t.Errorf("[O D-642] store commit %q names an actor row under %q", subj, m[1])
+			}
+		}
+	})
 	s.Step("member/reads-without-personal-store", func() {
 		mo.Lore(mo.Home, "setup", "edit", "--name", oMSetup, "--personal-store", "none", "--yes").OK(t)
 		clone("member-me", mo)
@@ -135,3 +159,8 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 		}
 	})
 }
+
+// oActorUnderOtherOp matches a store commit subject naming an actor id
+// right after its operation words ("lore: memory add act_…"): group 1 is
+// the words (devco:D-642).
+var oActorUnderOtherOp = regexp.MustCompile(`^lore: ([a-z ]+?) act_[0-9a-f]+`)
