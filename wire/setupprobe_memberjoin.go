@@ -104,18 +104,13 @@ func (sp setupProber) memberJoinFound(ctx context.Context, r opssetup.ProbeReque
 		name = cmp.Or(answerText(ans, onboard.QIDName), name)
 		// devco:D-644: a check writes nothing: the import's access rule,
 		// clone and machine id go again, whatever the roster said
-		guard := guardHome(sp.a.opts.Home)
-		defer func() { _ = guard.undo() }()
-		_, err = host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(emails[0]), Name: name, Handle: answerText(ans, onboard.QIDHandle), SkipRegister: true,
+		err = probeImport(ctx, host, sp.a.opts.Home, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(emails[0]), Name: name, Handle: answerText(ans, onboard.QIDHandle), SkipRegister: true,
 			Admit: func(ctx context.Context, entry string) error {
 				if aerr := admit(ctx, entry); aerr != nil {
 					return aerr
 				}
 				return errProbeAdmitted
-			}}, true)
-		if errors.Is(err, errProbeAdmitted) {
-			err = nil
-		}
+			}})
 	}
 	switch {
 	case err == nil:

@@ -10,13 +10,13 @@ package wire
 //
 //	invite line ─▶ entry here for its org ─▶ CheckInviteJoin (a re-run)
 //	            ─▶ no entry ─▶ org.import, Admit = CheckInviteJoin, then
-//	               errProbeAdmitted takes the entry out again
+//	               the home put back as it was (probeImport: entry, access
+//	               rule, store clone)
 //	the error's code ─▶ the one check it belongs to fails; the others pass
 
 import (
 	"cmp"
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -87,17 +87,16 @@ func (sp setupProber) inviteJoinCheck(ctx context.Context, r opssetup.ProbeReque
 			return skip(notHereDetail(r.Check.ID)), true
 		}
 		name, _, _ := strings.Cut(emails[0], "@")
-		_, err = host.Import(ctx, orgcmd.ImportIn{URL: inv.Store, Key: humanKeyOf(emails[0]), Name: cmp.Or(answerText(ans, onboard.QIDName), name),
+		// devco:D-655: a check writes nothing: the import's entry, access
+		// rule and store clone go again, whatever the invite check said
+		err = probeImport(ctx, host, sp.a.opts.Home, orgcmd.ImportIn{URL: inv.Store, Key: humanKeyOf(emails[0]), Name: cmp.Or(answerText(ans, onboard.QIDName), name),
 			Handle: answerText(ans, onboard.QIDHandle), As: inv.Org, SkipRegister: true,
 			Admit: func(ctx context.Context, entry string) error {
 				if cerr := check(ctx, entry, false); cerr != nil {
 					return cerr
 				}
 				return errProbeAdmitted
-			}}, true)
-		if errors.Is(err, errProbeAdmitted) {
-			err = nil
-		}
+			}})
 	}
 	if err == nil {
 		return result(onboard.StatusOK, "", nil), true
