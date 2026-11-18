@@ -75,13 +75,23 @@ func (sc FolderScope) note(left int, from []store.Source) string {
 // stale, resource report: devco D-586), so its whole-org form is that
 // same read with --store <org>.
 func (sc FolderScope) noteFor(left int, from []store.Source, opName string) string {
+	return sc.noteForID(left, from, opName, "")
+}
+
+// noteForID is noteFor for a read naming one resource (resource graph,
+// resource impact: devco D-618), whose whole-org form keeps its --id.
+func (sc FolderScope) noteForID(left int, from []store.Source, opName, id string) string {
 	org, _, _ := strings.Cut(string(sc.Source), "/")
 	names := make([]string, 0, len(from))
 	for _, s := range from {
 		names = append(names, string(s))
 	}
+	cmd := strings.ReplaceAll(opName, ".", " ")
+	if id != "" {
+		cmd += " --id " + id
+	}
 	return fmt.Sprintf("folder %s: the resources stored there and those of %s whose %s is %s; %s (org-wide or another folder's) are not listed: lore %s --store %s",
-		sc.Source, strings.Join(names, ", "), resProjectField, sc.Folder, plural.Count(left, "more resource"), strings.ReplaceAll(opName, ".", " "), org)
+		sc.Source, strings.Join(names, ", "), resProjectField, sc.Folder, plural.Count(left, "more resource"), cmd, org)
 }
 
 // folderScope is the folder this read's resource lists keep to (ok false:
@@ -155,7 +165,7 @@ func (o ops) resourceInScope(ctx context.Context, key, opName string) (located, 
 // else the flag and the read that lists every resource of the org.
 func scopeHint(opName, key, org string) string {
 	switch opName {
-	case OpResCheck, OpResGraph, OpResArchive:
+	case OpResCheck, OpResGraph, OpResImpact, OpResArchive:
 		return fmt.Sprintf("name the org instead: lore %s --id %s --store %s", strings.ReplaceAll(opName, ".", " "), key, org)
 	}
 	return fmt.Sprintf("name the org instead with --store %s; lore resource list --store %s lists every resource of the org", org, org)
