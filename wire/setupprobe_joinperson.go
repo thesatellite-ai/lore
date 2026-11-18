@@ -8,12 +8,12 @@ package wire
 //
 //	answer ─▶ org entry here (name, or its store url) ─▶ local roster
 //	       ─▶ a store url no entry has ─▶ org.import with Admit reading the
-//	          roster, then always taken back (errProbeAdmitted)
+//	          roster, then always taken back: entry, access rule and store
+//	          clone (probeImport, devco D-655)
 //	       ─▶ anything else ─▶ not found (git's values stay)
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/ops/orgcmd"
@@ -54,14 +54,17 @@ func (sp setupProber) JoinPerson(ctx context.Context, setup, answer, email strin
 			return opssetup.JoinPerson{}, false
 		}
 		name, _, _ := strings.Cut(email, "@")
-		_, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(email), Name: name, SkipRegister: true,
+		// devco:D-655: the plan writes nothing: the import's entry, access
+		// rule and store clone go again (probeImport), the prefill keeps
+		// only what it read
+		err := probeImport(ctx, host, sp.a.opts.Home, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(email), Name: name, SkipRegister: true,
 			Admit: func(ctx context.Context, entry string) error {
 				if rerr := read(ctx, entry); rerr != nil {
 					return rerr
 				}
-				return errProbeAdmitted // nothing stays in the config
-			}}, true)
-		if err != nil && !errors.Is(err, errProbeAdmitted) {
+				return errProbeAdmitted
+			}})
+		if err != nil {
 			return opssetup.JoinPerson{}, false
 		}
 	}

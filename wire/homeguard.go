@@ -17,12 +17,15 @@ package wire
 //	                     removed (and its owner folder when left empty)
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/ops/orgcmd"
 )
 
 // guardedHomeFiles are the lore-home files a join's org import may write,
@@ -126,6 +129,31 @@ func (g homeGuard) failed(err error) error {
 	}
 	if uerr := g.undo(); uerr != nil {
 		return errors.Join(err, errs.Wrap(errs.Internal, "the join's changes to "+g.home+" could not all be taken back", uerr))
+	}
+	return err
+}
+
+// probeImportMu serialises the taken-back imports of the setup checks and
+// prefills: one guard's undo must never remove a clone another import is
+// reading, and a guard taken while another import runs would keep its clone.
+var probeImportMu sync.Mutex
+
+// probeImport is org import for a setup read (a step's check, the join
+// plan's roster prefill): it runs in, Admit's errProbeAdmitted is a yes
+// (nil), and the lore home is always put back as it was, whatever the
+// roster said (devco D-655: the join plan's prefill took the entry back
+// but kept config.yaml and the store clone, so a plan never applied left
+// the home changed). Only apply keeps what an import writes.
+func probeImport(ctx context.Context, host orgcmd.Host, home string, in orgcmd.ImportIn) error {
+	probeImportMu.Lock()
+	defer probeImportMu.Unlock()
+	guard := guardHome(home)
+	_, err := host.Import(ctx, in, true)
+	if errors.Is(err, errProbeAdmitted) {
+		err = nil
+	}
+	if uerr := guard.undo(); uerr != nil {
+		return errors.Join(err, errs.Wrap(errs.Internal, "the setup read's changes to "+home+" could not all be taken back", uerr))
 	}
 	return err
 }

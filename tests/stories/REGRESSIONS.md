@@ -10,7 +10,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 
 | state | rows |
 |---|---|
-| fixed | 1982 |
+| fixed | 1983 |
 | open | 1 |
 | on-hold | 14 |
 | owner | 6 |
@@ -962,6 +962,7 @@ Every new scenario or finding lands with its test and its row here in the same c
 | devco:D-632 | finding | owner use pass 3 (wrong 2): `lore context --topics/--topic/--for-prompt --setup <setup>` from the home folder failed E_NOT_A_STORE "not inside a git work tree" although context's own refusal hint named --setup | fixed | TestStoryWAAUp3Lists | Summary: context is a Local op and took the store path only with --store (D-555); wire/targetoutside.go contextOutsideRepo sends it, in a plain folder (no work tree, no store clone), through runOutsideRepo to the setup's stores as search and sql; wire/renderhost renderSources reads every store of that open (App.SetupReadStores) instead of the repo store plus shareable ones, which found none ("(no rows yet)"); the plain refusal's printed commands are followed where printed (wyFollow); docs/team/client-folders.md |
 | devco:D-633 | finding | owner use pass 3 (weak 6): `lore store doctor --store <org>` was "unknown flag" while every other store command takes --store | fixed | TestStoreDoctorTakesStore, TestStoryWAAUp3Lists | Summary: ops/stores DoctorIn gains `store` (API: store.doctor in.store); onlyStore keeps the checked stores named <name> or <name>/<folder> (or with that url) and their clones, and refuses a name nothing matches with E_NOT_FOUND listing the stores doctor knows; docs/team/commands.md, docs/reference regenerated; break-verified |
 | devco:D-634 | finding | owner use pass 3 (weak 7): a malformed id (`lore show --id mem_bogus`, `memory show --id mem_bogus`) in the home folder said "git: the folder is not inside a git work tree" instead of naming the bad id | fixed | TestMalformedIDRefusedFirstD634, TestStoryWAAUp3Lists | Summary: wire/malformedid.go malformedIDErr runs first in App.run: an `--id` shaped like a lore id (a registered prefix and "_") that ids.ParseAny refuses is E_INVALID_ID (exit 20) "<id> is not a valid lore id … (<prefix>_<32 hex>)" before any store or git lookup; id fields whose desc takes a name, a machine id prefix, a key, a handle, a number, a sha or a reference are left to their op; docs/team/troubleshooting.md; break-verified |
+| devco:D-655 | finding | owner use pass 3 leftover of D-644: `setup join --invite <store url>` (the plan, before any apply) read the roster for its prefill through an org import that took the entry back but left config.yaml and the store clone stores/<owner>/<repo> in the home, so a plan never applied changed ~/.lore | fixed | TestJoinPlanPrefillLeavesHome, TestStoryOAliasMemberJoin | Summary: wire/homeguard probeImport runs every setup read's org import (join plan prefill JoinPerson, the join step's invite.found check, the invite-line checks) under guardHome and always undoes it (config.yaml, state/store-clones.json, new clone folders), serialised so one undo never removes a clone another read uses; only apply keeps what an import writes; story O cell: plan only, then the whole home tree (state/ and machine.json included) compared byte for byte; docs team/guided-setup.md; break-verified |
 
 ## lore-adoptfix
 

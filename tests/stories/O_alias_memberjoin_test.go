@@ -75,6 +75,19 @@ func TestStoryOAliasMemberJoin(t *testing.T) {
 		}
 	})
 
+	// devco:D-655: the join plan (`setup join --invite <url>`, before any
+	// apply) reads the roster to prefill the name; that read imported the
+	// org and took the entry back but kept the store clone under stores/.
+	// A plan that is never applied leaves every file of the home as it was,
+	// state/ and machine.json included.
+	s.Step("D-655/join-plan-leaves-home-byte-identical", func() {
+		before := oHomeFiles(t, mo)
+		mo.Lore(mwc.Dir, "setup", "join", "--invite", aliasURL, "--no-open").OK(t).Says(t, "roster of "+oOrg)
+		if after := oHomeFiles(t, mo); after != before {
+			t.Errorf("a join plan that was never applied changed the home:\nbefore\n%s\nafter\n%s", before, after)
+		}
+	})
+
 	// devco:D-645: the setup the join lines make is named for the org, not
 	// for the store url's owner, and the prefill note names the org
 	s.Step("D-645/join-setup-name-is-the-org", func() {
