@@ -393,6 +393,11 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 // failed its write. The row it finds is the row it wanted: it re-reads the
 // folder and uses it.
 func (a *App) createFolderProject(ctx context.Context, st *state, target store.Source, pid ids.ID[ids.Project], fields map[string]value.Value) (value.Ref, error) {
+	// devco:D-665: the row is made on the side of the command that wrote
+	// to the folder first (a rule add, a team invite), so its own commit is
+	// named for it, "lore: project add prj_…: <folder>", never "lore: rule
+	// add prj_…" (a rule that is not in that commit).
+	ctx = store.WithCommitOp(ctx, folderProjectOp)
 	_, err := st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
 	if errors.Is(err, store.ErrStale) {
 		if _, rerr := st.eng.Refresh(ctx, target); rerr != nil {
@@ -406,6 +411,10 @@ func (a *App) createFolderProject(ctx context.Context, st *state, target store.S
 	}
 	return value.RefOf(pid.Any())
 }
+
+// folderProjectOp names the commit of a folder's project row
+// (createFolderProject).
+const folderProjectOp = "project.add"
 
 // folderProjectIDOf is target's folder project id (_meta.json project_id,
 // or the id its first write records); zero when the backend has no folder
