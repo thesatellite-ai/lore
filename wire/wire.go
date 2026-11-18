@@ -976,7 +976,9 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	}
 	a.refreshMovedStores() // servestale.go: a serving App follows a store set-url made since it opened
 	res, err := a.run(ctx, e, d, c)
-	err = fitHomeHint(ctx, e, err) // hintflags.go (devco:D-539)
+	err = fitHomeHint(ctx, e, err)        // hintflags.go (devco:D-539)
+	err = a.goneRowAnswer(ctx, e, d, err) // rowgone.go (devco:D-590)
+	err = purgedAsDeclared(e, err)        // rowgone.go: E_PURGED only where declared
 	if err != nil && top != "" {
 		removeEmptyDirs(filepath.Join(top, loreFolderName))
 	}

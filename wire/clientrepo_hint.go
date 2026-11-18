@@ -112,7 +112,7 @@ func clientRepoStep(c ClientRepo) string {
 	if c.Folder != "" {
 		return "this is a client repo of " + c.Org + ", linked to " + c.Org + "/" + c.Folder + ": lore keeps its notes there, never in the client's repository (name it per write with --to " + c.Org + "/" + c.Folder + "; `lore whoami` shows the link)"
 	}
-	return "this is a client repo of " + c.Org + ": lore keeps its notes in " + c.Org + "'s store, never in the client's repository; link it with `lore org link --org " + c.Org + " --project <folder>` (`lore store folder list --store " + c.Org + "` lists the folders), or name a folder per write with --to " + c.Org + "/<folder>"
+	return "this is a client repo of " + c.Org + ": lore keeps its notes in " + c.Org + "'s store, never in the client's repository; link it with `lore org link --org " + c.Org + " --project <folder>` (`lore store folder list --store " + c.Org + "` lists the folders), or name a folder per write with --to " + c.Org + "/<folder> and per read with --store " + c.Org + "/<folder>" // devco:D-591: a read there takes --store
 }
 
 // advisesInit reports whether s tells the person to run lore init.

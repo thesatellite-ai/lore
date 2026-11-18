@@ -9,6 +9,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/trash"
@@ -357,4 +358,21 @@ func (e *Engine) Resurrected(ctx context.Context) ([]Resurrected, error) {
 		}
 	}
 	return out, nil
+}
+
+// IsPurged reports whether the attached store named source lists id as
+// purged (its _purged.json, or the backend's own list). A caller that
+// found the id's tombstone uses it to tell a purge (E_PURGED: gone for
+// good) from any other delete (devco:D-590: "deleted from <org>/<folder>"
+// with the trash list command). False for a backend that keeps no list.
+func (e *Engine) IsPurged(ctx context.Context, source store.Source, id ids.AnyID) (bool, error) {
+	st, err := e.attached(source)
+	if err != nil {
+		return false, err
+	}
+	set, err := purgedSet(ctx, st)
+	if err != nil {
+		return false, fmt.Errorf("purge list of %s: %w", source, err)
+	}
+	return set[id.String()], nil
 }

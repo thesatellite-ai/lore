@@ -68,6 +68,8 @@ type idSearch struct {
 	id       string
 	attached []string // the stores attached here
 	folders  []string // "<org>/<folder>" of the org's store clones read
+	// gone is the tombstone an attached store holds for id (devco:D-590)
+	gone *goneRow
 }
 
 // attachFolderOfID is the B2-21 step (see the file comment); the returned
@@ -85,7 +87,27 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 	if err != nil {
 		return nil, nil // the operation reports the open error itself
 	}
-	if _, _, gerr := eng.Get(ctx, engine.Ref{ID: anyID}); gerr == nil || !errs.Has(gerr, errs.NotFound) {
+	src, got, gerr := eng.Get(ctx, engine.Ref{ID: anyID})
+	if gerr == nil && got.Deleted {
+		// devco:D-590: an attached store holds the row's tombstone (Get
+		// returns tombstones); the read's not-found says where and when
+		// it was deleted (a trashed row answers E_IN_TRASH, untouched).
+		// The repo's own tombstone is left to the repo's read: its live
+		// ref keeps its own purge list and dated answer (live_notfound.go
+		// whyMissingCode), which a purge before a sync only reaches there.
+		if src == store.SourceRepo {
+			return nil, nil
+		}
+		day := ""
+		if !got.HLC.Wall.IsZero() {
+			day = got.HLC.Wall.UTC().Format(dayLayout)
+		}
+		// a purged id is gone for good: E_PURGED, never the trash list
+		// (an unreadable list counts as purged, as purgedInFolderOf)
+		purged, perr := eng.IsPurged(ctx, src, anyID)
+		return &idSearch{id: id, gone: &goneRow{id: id, place: string(src), day: day, purged: purged || perr != nil}}, nil
+	}
+	if gerr == nil || !errs.Has(gerr, errs.NotFound) {
 		return nil, nil
 	}
 	search := &idSearch{id: id}
@@ -99,6 +121,7 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		// clone, which is under no setup's folders)
 		scan = a.cloneIDScan(ctx, sc)
 	}
+	var gone *goneRow
 	for _, f := range scan.Folders {
 		name := f.Org
 		if name == "" {
@@ -117,9 +140,20 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		if len(hits) == 0 {
 			continue
 		}
+		if live, g := liveHit(hits, id, target); !live {
+			// devco:D-590: a tombstone is no row to read there; never
+			// "it is in <folder>" for a deleted row
+			if gone == nil {
+				gone = g
+			}
+			continue
+		}
 		a.attachExtra(attach.Store{Name: store.Source(target), URL: f.URL, Folder: f.Folder, Branch: f.Branch})
 		_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s, which is not attached here; read from there for this command (lore store add … --folder %s attaches it for good)\n", id, target, f.Folder)
 		return nil, nil
+	}
+	if gone != nil {
+		return nil, gone.err()
 	}
 	return search, nil
 }
@@ -197,6 +231,9 @@ func (s *idSearch) withSearchHint(err error) error {
 	var e *errs.Error
 	if s == nil || !errors.As(err, &e) || e.Code != errs.NotFound || !strings.Contains(e.Message, s.id) {
 		return err
+	}
+	if s.gone != nil {
+		return s.gone.err()
 	}
 	sort.Strings(s.attached)
 	sort.Strings(s.folders)

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -141,7 +142,11 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	// folder holding the row, beside the folder `to` names (devco D-433):
 	// before it every such write outside a repo needed one
 	var holder []attach.Store
-	if h, ok := a.rowFolderOutside(ctx, in); ok {
+	h, ok, look := a.rowLookupOutside(ctx, in)
+	if err := look.answer(to); err != nil {
+		return op.Result{}, true, err
+	}
+	if ok {
 		switch {
 		case to == "":
 			// ids are unique across the org's stores: a read by id finds
@@ -522,32 +527,71 @@ const idField = "id"
 // writable attach entry named <org>/<folder>; ok is false when the input
 // names no id or no folder of the org's stores holds it.
 func (a *App) rowFolderOutside(ctx context.Context, in op.Input) (attach.Store, bool) {
+	h, ok, _ := a.rowLookupOutside(ctx, in)
+	return h, ok
+}
+
+// rowLookup is what rowLookupOutside found for an id no live row file
+// holds: a tombstone of it (gone), and every folder it looked in.
+type rowLookup struct {
+	id     string
+	gone   *goneRow
+	looked []string
+	// livePath is the live row file found (a trashed row is live), ""
+	// when none was
+	livePath string
+}
+
+// rowLookupOutside is rowFolderOutside with what it found when no folder
+// holds the row live (nil when the input names no id): a tombstone
+// (devco:D-590) or the folders it looked in (devco:D-589).
+func (a *App) rowLookupOutside(ctx context.Context, in op.Input) (attach.Store, bool, *rowLookup) {
 	// trash restore and purge name their row as target (--id on the CLI):
 	// the trashed row stays in its folder, so a restore by id finds it
 	// there as an edit by id does (devco:D-543: the `restore: lore trash
 	// restore --id …` line a delete prints)
 	id := rowIDOf(in)
 	if id == "" {
-		return attach.Store{}, false
+		return attach.Store{}, false, nil
 	}
+	look := &rowLookup{id: id}
 	// this folder's org first; then every org of the config (the home
 	// folder is under no setup, and an id names one row anywhere: D-553)
-	if h, ok := a.rowFolderIn(ctx, a.orgFolders(ctx), id); ok {
-		return h, true
+	if h, ok := a.rowFolderIn(ctx, a.orgFolders(ctx), id, look); ok {
+		return h, true, look
 	}
-	return a.rowFolderIn(ctx, a.everyOrgFolders(ctx), id)
+	h, ok := a.rowFolderIn(ctx, a.everyOrgFolders(ctx), id, look)
+	return h, ok, look
 }
 
-// rowFolderIn is rowFolderOutside over one scan of org-store folders.
-func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string) (attach.Store, bool) {
+// rowFolderIn is rowFolderOutside over one scan of org-store folders; a
+// folder holding only a tombstone of id is no holder (look records it,
+// with every folder looked in).
+func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string, look *rowLookup) (attach.Store, bool) {
 	for _, f := range scan.Folders {
 		if f.Dir == "" {
 			continue
+		}
+		base := f.Org
+		if base == "" {
+			base = f.Label
+		}
+		place := base + targetSep + f.Folder
+		if !slices.Contains(look.looked, place) {
+			look.looked = append(look.looked, place)
 		}
 		hits, _ := filepath.Glob(filepath.Join(f.Dir, filepath.FromSlash(f.Folder), "*", id+".json"))
 		if len(hits) == 0 {
 			continue
 		}
+		live, gone := liveHit(hits, id, place)
+		if !live {
+			if look.gone == nil {
+				look.gone = gone
+			}
+			continue
+		}
+		look.livePath = liveFile(hits)
 		// the name --to takes for it: the org entry attaching this very
 		// folder, else <org>/<folder>
 		k := placeKey(f.URL, f.Branch)
@@ -556,13 +600,26 @@ func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string) (a
 				return attach.Store{Name: s.Name, URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
 			}
 		}
-		base := f.Org
-		if base == "" {
-			base = f.Label
-		}
-		return attach.Store{Name: store.Source(base + targetSep + f.Folder), URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
+		return attach.Store{Name: store.Source(place), URL: f.URL, Folder: f.Folder, Branch: f.Branch}, true
 	}
 	return attach.Store{}, false
+}
+
+// answer is the refusal for an id no folder holds live, when the command
+// names no store of its own (to): the tombstone's "deleted from …"
+// (devco:D-590), else "in no store of any setup" with the folders looked
+// in (devco:D-589). nil when the id was found, or a store is named (that
+// store's own read answers, rowElsewhereErr and the not-found hint).
+func (l *rowLookup) answer(to string) error {
+	switch {
+	case l == nil || to != "" || l.livePath != "":
+		return nil
+	case l.gone != nil:
+		return l.gone.err()
+	case storedRowID(l.id):
+		return noStoreHoldsErr(l.id, l.looked)
+	}
+	return nil
 }
 
 // trashTargetField is the input field trash restore and trash purge name

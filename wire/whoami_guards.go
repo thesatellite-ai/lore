@@ -55,16 +55,33 @@ func guardsOffRepoLine(ctx context.Context, s *orgcfg.Situation, lines []string)
 	if s == nil || s.NotGitRepo || s.Result.Role != orgresolve.RoleClient || commitGuardInstalled(ctx, s.Dir) {
 		return lines
 	}
-	fix := "lore fix"
-	if s.LinkedByRemote != "" {
-		fix = guardLinkFix(s)
+	fix := "lore fix here installs it"
+	switch {
+	case s.LinkedByRemote != "":
+		fix = guardLinkFix(s) + " here installs it"
+	case !loreFolderAt(gitTop(ctx, s.Dir)):
+		// devco:D-587: lore fix refuses in a repo with no lore data
+		// ("nothing to fix"), so the step is the link that installs it
+		fix = unlinkedGuardFix(s)
 	}
 	for i, l := range lines {
 		if strings.Contains(l, guardsOnText) && strings.Contains(strings.TrimSpace(l), "repo") {
-			lines[i] = strings.Replace(l, guardsOnText, "guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; "+fix+" here installs it", 1)
+			lines[i] = strings.Replace(l, guardsOnText, "guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; "+fix, 1)
 		}
 	}
 	return lines
+}
+
+// unlinkedGuardFix is the guard step of a client repo no store links and
+// lore holds no data in (devco:D-587): `lore org link` installs the commit
+// guard there, and lore fix refuses ("nothing to fix"), so whoami names
+// the link and the command that lists the folders it takes.
+func unlinkedGuardFix(s *orgcfg.Situation) string {
+	org := "<org>"
+	if s.Result.Org != nil {
+		org = s.Result.Org.Name
+	}
+	return "`lore org link --org " + org + " --project <folder>` installs it (`lore store folder list --store " + org + "` lists the folders)"
 }
 
 // guardLinkFix is the command that installs the commit guard in a client
