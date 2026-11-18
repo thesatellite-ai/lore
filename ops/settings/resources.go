@@ -15,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/filter"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
@@ -293,6 +294,9 @@ type ResListOut struct {
 	// kind's fields; stale: none).
 	columns []string
 	stale   bool
+	// every marks the no-kind list (resListEvery): its columns are the
+	// common ones (everyColumns), not one kind's fields.
+	every bool
 	// StaleCount / NeverChecked split a resource stale answer by reason
 	// (checkStateOf; the same counts resource report prints), and Days is
 	// its window; all three are left out of other lists.
@@ -301,6 +305,28 @@ type ResListOut struct {
 	Days         int `json:"days,omitempty"`
 	// Notes are metalist's lines after the rows (unregistered key, …).
 	Notes []string `json:"notes,omitempty"`
+	// left / leftFrom count the resources a folder-scoped list left out
+	// and the stores they are in (devco D-583, FolderScope.note).
+	left     int
+	leftFrom []store.Source
+}
+
+// addLeft counts n resources left out from the stores from.
+func (o *ResListOut) addLeft(n int, from []store.Source) {
+	o.left += n
+	for _, s := range from {
+		if !slices.Contains(o.leftFrom, s) {
+			o.leftFrom = append(o.leftFrom, s)
+		}
+	}
+}
+
+// withScopeNote adds the folder-scope line when rows were left out.
+func (o ResListOut) withScopeNote(sc FolderScope, ok bool) ResListOut {
+	if ok && o.left > 0 {
+		o.Notes = append(o.Notes, sc.note(o.left, o.leftFrom))
+	}
+	return o
 }
 
 // Text implements op.Texter: the CLI_REFERENCE 3.2 tables.
@@ -323,17 +349,31 @@ func (o ResListOut) Text() string {
 	}
 	// devco D-572: aligned columns (terminal cells, textwidth) and a count
 	// line, like every other list; the rows were raw tab-separated cells.
+	// devco D-584: the no-kind list shows the common columns (project,
+	// url) instead of none, CHECKED only when a row was checked, and every
+	// cell is cut to listCellMax so one long value cannot widen the table.
+	cols := o.columns
+	if o.every {
+		cols = everyColumns(o.Data)
+	}
+	checked := slices.ContainsFunc(o.Data, func(r Resource) bool { return r.LastChecked != "" })
 	head := []string{"KIND", "NAME"}
-	for _, c := range o.columns {
+	for _, c := range cols {
 		head = append(head, strings.ToUpper(c))
 	}
-	rows := [][]string{append(head, "CHECKED")}
+	if checked {
+		head = append(head, "CHECKED")
+	}
+	rows := [][]string{head}
 	for _, r := range o.Data {
 		cells := []string{r.Kind, r.Name}
-		for _, c := range o.columns {
-			cells = append(cells, r.shown(c))
+		for _, c := range cols {
+			cells = append(cells, contextfit.Cut(oneLine(r.shown(c)), listCellMax))
 		}
-		rows = append(rows, append(cells, dayOf(r.LastChecked)))
+		if checked {
+			cells = append(cells, dayOf(r.LastChecked))
+		}
+		rows = append(rows, cells)
 	}
 	ws := textwidth.Columns(rows)
 	for i, row := range rows {
@@ -358,6 +398,29 @@ func (o ResListOut) Text() string {
 	}
 	return b.String()
 }
+
+// listCellMax is the widest a resource list cell prints (as sql's
+// table cells); the full value is in resource show and --json.
+const listCellMax = 60
+
+// everyColumnNames are the fields the no-kind list prints when any of its
+// rows sets them (devco D-584): the folder a resource belongs to and where
+// it is, the two most kinds share.
+var everyColumnNames = []string{resProjectField, "url"}
+
+// everyColumns are the everyColumnNames some row of data sets.
+func everyColumns(data []Resource) []string {
+	var out []string
+	for _, c := range everyColumnNames {
+		if slices.ContainsFunc(data, func(r Resource) bool { return strings.TrimSpace(r.Values[c]) != "" }) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// oneLine folds a multi-line value into one table line.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // byWho is " (by <how>)" for a checked_by value, "" when unset (RQ8).
 func byWho(by string) string {
@@ -1117,6 +1180,17 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	if strings.TrimSpace(in.Kind) == "" {
 		return o.resListEvery(ctx, in)
 	}
+	out, err := o.resListKind(ctx, in)
+	if err != nil {
+		return ResListOut{}, err
+	}
+	sc, scoped := o.folderScope()
+	return out.withScopeNote(sc, scoped), nil
+}
+
+// resListKind is resource list of one kind, without the folder-scope
+// note (resListEvery sums the left-out rows of every kind into one).
+func (o ops) resListKind(ctx context.Context, in ResListIn) (ResListOut, error) {
 	d, err := o.kindDefRead(ctx, in.Kind)
 	if err != nil {
 		return ResListOut{}, err
@@ -1142,6 +1216,7 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 		got resValues
 	}
 	var hits []hit
+	sc, scoped := o.folderScope()
 	for _, r := range where(rows, map[string]string{rKind: d.kind.Row.ID.String()}) {
 		if text(r.Row, rArchivedAt) != "" && !in.Archived {
 			continue
@@ -1158,6 +1233,11 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 		v, verr := o.view(ctx, r, in.ShowSensitive)
 		if verr != nil {
 			return ResListOut{}, verr
+		}
+		if scoped && !sc.keeps(r.Src, v) {
+			// devco D-583: a folder's list keeps its own resources
+			out.addLeft(1, []store.Source{r.Src})
+			continue
 		}
 		hits = append(hits, hit{res: v, row: r, got: stored})
 	}
@@ -1209,7 +1289,7 @@ func (o ops) resListEvery(ctx context.Context, in ResListIn) (ResListOut, error)
 	if err != nil {
 		return ResListOut{}, err
 	}
-	out := ResListOut{Data: []Resource{}}
+	out := ResListOut{Data: []Resource{}, every: true}
 	seen := map[string]bool{}
 	for _, k := range ks.Data {
 		if seen[k.ID] {
@@ -1218,11 +1298,12 @@ func (o ops) resListEvery(ctx context.Context, in ResListIn) (ResListOut, error)
 		seen[k.ID] = true
 		one := in
 		one.Kind = k.ID
-		got, lerr := o.resList(ctx, one)
+		got, lerr := o.resListKind(ctx, one)
 		if lerr != nil {
 			return ResListOut{}, lerr
 		}
 		out.Data = append(out.Data, got.Data...)
+		out.addLeft(got.left, got.leftFrom)
 		for _, n := range got.Notes {
 			if !slices.Contains(out.Notes, n) {
 				out.Notes = append(out.Notes, n)
@@ -1236,7 +1317,8 @@ func (o ops) resListEvery(ctx context.Context, in ResListIn) (ResListOut, error)
 		return strings.Compare(a.Name, b.Name)
 	})
 	out.Count = len(out.Data)
-	return out, nil
+	sc, scoped := o.folderScope()
+	return out.withScopeNote(sc, scoped), nil
 }
 
 // noteSensitiveFilter is RES 3.12's line under a list whose --where

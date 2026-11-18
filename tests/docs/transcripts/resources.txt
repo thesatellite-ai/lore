@@ -75,12 +75,12 @@ created res_…e913  service  repo:service/hub_web
 
 ### list and show
 alice (work/infra)$ lore resource list --kind host
-KIND  NAME       IP            OS            PROVIDER  CHECKED
+KIND  NAME       IP            OS            PROVIDER
 host  hub_prod   203.0.113.10  ubuntu-24.04  hetzner
 host  hub_stage  203.0.113.11  ubuntu-24.04  aws
 2 resources
 alice (work/infra)$ lore resource list --kind service --where runs_on=hub_prod --sort name:desc
-KIND     NAME     DB_PASSWORD           RUNS_ON   URL                      CHECKED
+KIND     NAME     DB_PASSWORD           RUNS_ON   URL
 service  hub_web                        hub_prod  https://www.example.com
 service  hub_api  gopass://acme/hub/db  hub_prod  https://api.example.com
 2 resources

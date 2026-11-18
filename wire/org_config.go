@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 )
@@ -60,7 +61,9 @@ func (h *standaloneOrg) OrgConfigGet(ctx context.Context, in opsorgcmd.ConfigGet
 		}
 		out.Stores = append(out.Stores, s)
 	}
-	return out, nil
+	// devco D-585: an own pattern covering repos entries is named, with
+	// the rule that decides (repos wins)
+	return out.WithOverlaps(orgresolve.OwnRepoOverlaps(out.Own, out.Repos)), nil
 }
 
 // nonNil is s, or an empty list for JSON.

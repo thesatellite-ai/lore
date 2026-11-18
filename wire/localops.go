@@ -26,6 +26,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
@@ -232,4 +233,36 @@ func (a *App) DoctorClones(ctx context.Context) (opsstores.ClonesOut, error) {
 		})
 	}
 	return out, nil
+}
+
+// noteOwnRepoOverlaps adds to the checked store holding an org's
+// lore-org.yaml one note per own: pattern that overlaps the org's repos:
+// entries, and which wins (devco D-585, orgresolve.OwnRepoOverlaps). The
+// lists are the store's lore-org.yaml (what org config get shows) when the
+// clone holds one, else the machine's org entry.
+func (a *App) noteOwnRepoOverlaps(ctx context.Context, checked []opsstores.StoreCheck) {
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return
+	}
+	done := map[string]bool{}
+	for i := range checked {
+		c := &checked[i]
+		org := cloneOrgEntry(a.opts.Home, c.URL)
+		if org == nil || done[org.Name] {
+			continue
+		}
+		sc := org.OrgFolderStore()
+		if sc == nil || !sameStoreURL(sc.URL, c.URL) {
+			continue
+		}
+		done[org.Name] = true
+		own, repos := org.Own, org.Repos
+		if sg, ok := orgSuggestionLocal(ctx, a.opts.Home, cfg, org); ok {
+			own, repos = sg.Doc.Own, sg.Doc.Repos
+		}
+		for _, l := range orgresolve.OwnRepoOverlaps(own, repos) {
+			c.Notes = append(c.Notes, "org "+org.Name+": "+l)
+		}
+	}
 }
