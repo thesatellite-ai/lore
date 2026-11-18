@@ -633,7 +633,7 @@ func (o ops) resDeleteWithDependents(ctx context.Context, in ResDeleteIn) (ResDe
 	if err != nil {
 		return ResDeleteOut{}, err
 	}
-	idx, err := o.buildIndex(ctx, nil)
+	idx, err := o.buildIndex(ctx, nil, indexScope{})
 	if err != nil {
 		return ResDeleteOut{}, err
 	}

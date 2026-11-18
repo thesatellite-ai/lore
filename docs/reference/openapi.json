@@ -64811,6 +64811,12 @@
                           "name": {
                             "type": "string"
                           },
+                          "outside": {
+                            "type": "boolean"
+                          },
+                          "store": {
+                            "type": "string"
+                          },
                           "via": {
                             "type": "array",
                             "items": {
@@ -65235,6 +65241,12 @@
                             "type": "string"
                           },
                           "name": {
+                            "type": "string"
+                          },
+                          "outside": {
+                            "type": "boolean"
+                          },
+                          "store": {
                             "type": "string"
                           },
                           "via": {

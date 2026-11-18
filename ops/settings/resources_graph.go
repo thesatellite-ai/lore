@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Impact and graph (RESOURCES 3.21): one generic walk over every ref field
@@ -70,6 +71,13 @@ type GraphNode struct {
 	Hops     int        `json:"hops"`
 	Via      []GraphVia `json:"via"`
 	Archived bool       `json:"archived,omitempty"`
+	// Store is where the resource is stored (<org>/<folder>, as resource
+	// list's store): a graph read through --store <org>/<folder> walks the
+	// folder and the org folder, so each node says which (devco D-621).
+	Store string `json:"store,omitempty"`
+	// Outside marks a node a folder-scoped graph reached but does not walk
+	// further: it belongs to the org or another folder (devco D-618).
+	Outside bool `json:"outside,omitempty"`
 }
 
 // GraphLink is an open task or incident linked to a node (3.21 rule 7).
@@ -127,14 +135,26 @@ type resIndex struct {
 	nodes    map[string]resNode
 	out, in  map[string][]resEdge
 	kindByID map[string]string
+	// outside are the resources a folder-scoped read left out of nodes
+	// (devco D-618): a ref into one prints its name, marked, and is
+	// never walked further.
+	outside map[string]resNode
 	// notes are the RES 3.13 last good warnings of conflicted kinds.
 	notes []string
 }
 
+// indexScope names the read a graph index is built for: a folder-scoped
+// open (--store <org>/<folder>) keeps that folder's resources and notes
+// the rest under the whole-org form of opName --id id. Zero = every
+// attached store's resources (the delete impact set walks them all).
+type indexScope struct {
+	opName, id string
+}
+
 // buildIndex reads every resource and decodes its ref fields (rule 2:
 // every ref field of every kind counts; fields narrows to some names).
-func (o ops) buildIndex(ctx context.Context, fields []string) (resIndex, error) {
-	idx := resIndex{nodes: map[string]resNode{}, out: map[string][]resEdge{}, in: map[string][]resEdge{}, kindByID: map[string]string{}}
+func (o ops) buildIndex(ctx context.Context, fields []string, scope indexScope) (resIndex, error) {
+	idx := resIndex{nodes: map[string]resNode{}, out: map[string][]resEdge{}, in: map[string][]resEdge{}, kindByID: map[string]string{}, outside: map[string]resNode{}}
 	kinds, err := liveDefRows(ctx, o.env, engine.ReadStoresOf(o.env), schema.TableKinds)
 	if err != nil {
 		return idx, err
@@ -167,6 +187,27 @@ func (o ops) buildIndex(ctx context.Context, fields []string) (resIndex, error) 
 	rows, err := liveRows(ctx, o.env, o.resStores(), schema.TableResources)
 	if err != nil {
 		return idx, err
+	}
+	if scope.opName != "" {
+		// a folder's graph walks that folder's resources, as its list
+		// shows them (devco D-618); the rest only label a ref into them
+		all := rows
+		var left int
+		var leftFrom []store.Source
+		if rows, left, leftFrom = o.inFolderScope(ctx, rows); left > 0 {
+			kept := map[string]bool{}
+			for _, r := range rows {
+				kept[r.Row.ID.String()] = true
+			}
+			for _, r := range all {
+				if id := r.Row.ID.String(); !kept[id] {
+					idx.outside[id] = resNode{l: r, kind: idx.kindByID[text(r.Row, rKind)]}
+				}
+			}
+			if sc, ok := o.folderScope(); ok {
+				idx.addNote(sc.noteForID(left, leftFrom, scope.opName, scope.id))
+			}
+		}
 	}
 	for _, r := range rows {
 		id := r.Row.ID.String()
@@ -221,6 +262,9 @@ func errMessage(err error) string {
 func (idx resIndex) label(id string) string {
 	n, ok := idx.nodes[id]
 	if !ok {
+		if out, isOut := idx.outside[id]; isOut {
+			return out.kind + " " + text(out.l.Row, rName) + " (" + string(out.l.Src) + ", outside this folder)"
+		}
 		return "? " + id + " (not in this view)"
 	}
 	return n.kind + " " + text(n.l.Row, rName)
@@ -268,7 +312,9 @@ func (idx resIndex) walk(root string, w walkOpts) ([]GraphNode, string) {
 					hops[to] = h
 					n := &GraphNode{ID: to, Hops: h, Archived: archived(to)}
 					if nd, ok := idx.nodes[to]; ok {
-						n.Kind, n.Name = nd.kind, text(nd.l.Row, rName)
+						n.Kind, n.Name, n.Store = nd.kind, text(nd.l.Row, rName), string(nd.l.Src)
+					} else if out, isOut := idx.outside[to]; isOut {
+						n.Kind, n.Name, n.Store, n.Outside = out.kind, text(out.l.Row, rName), string(out.l.Src), true
 					}
 					byID[to] = n
 					order = append(order, to)
@@ -369,7 +415,7 @@ func (o ops) resGraph(ctx context.Context, in GraphIn) (GraphOut, error) {
 	if err != nil {
 		return GraphOut{}, err
 	}
-	idx, err := o.buildIndex(ctx, splitFields(in.Fields))
+	idx, err := o.buildIndex(ctx, splitFields(in.Fields), indexScope{opName: OpResGraph, id: in.Name})
 	if err != nil {
 		return GraphOut{}, err
 	}
@@ -384,11 +430,13 @@ func (o ops) resImpact(ctx context.Context, in ImpactIn) (GraphOut, error) {
 	if err != nil {
 		return GraphOut{}, err
 	}
-	root, err := o.resourceByName(ctx, in.Name, "")
+	// a folder-scoped impact names a resource of that folder, as graph
+	// does (devco D-618)
+	root, err := o.resourceInScope(ctx, in.Name, OpResImpact)
 	if err != nil {
 		return GraphOut{}, err
 	}
-	idx, err := o.buildIndex(ctx, splitFields(in.Fields))
+	idx, err := o.buildIndex(ctx, splitFields(in.Fields), indexScope{opName: OpResImpact, id: in.Name})
 	if err != nil {
 		return GraphOut{}, err
 	}
