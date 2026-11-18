@@ -25,7 +25,7 @@ func (j journaled) RewriteRepoV1(ctx context.Context, t row.Table, dry bool) ([]
 	return j.RewriteV1(ctx, t, dry)
 }
 
-func (j journaled) Finish(_ context.Context, _ bool, count int) (Finished, error) {
+func (j journaled) Finish(_ context.Context, _ PushChoice, count int) (Finished, error) {
 	if count == 0 {
 		return Finished{}, nil
 	}
@@ -55,10 +55,10 @@ func TestRunTeamLockJournal(t *testing.T) {
 		input   string
 		want    []string
 	}{
-		{"lock, rows changed", true, true, `{"team_lock":true}`, []string{"team lock: taken", "backup: refs/lore-backup/migrate/x", "pushed", teamLockReleasedLine}},
-		{"lock, no-op", true, false, `{"team_lock":true}`, []string{"team lock: taken", teamLockReleasedLine}},
-		{"no lock surface, rows changed", false, true, `{"team_lock":true}`, []string{noTeamLockLine, "backup: refs/lore-backup/migrate/x", "pushed"}},
-		{"no lock surface, no-op", false, false, `{"team_lock":true}`, []string{noTeamLockLine}},
+		{"lock, rows changed", true, true, `{"team_lock":true,"push":true}`, []string{"team lock: taken", "backup: refs/lore-backup/migrate/x", "pushed", teamLockReleasedLine}},
+		{"lock, no-op", true, false, `{"team_lock":true,"push":true}`, []string{"team lock: taken", teamLockReleasedLine}},
+		{"no lock surface, rows changed", false, true, `{"team_lock":true,"push":true}`, []string{noTeamLockLine, "backup: refs/lore-backup/migrate/x", "pushed"}},
+		{"no lock surface, no-op", false, false, `{"team_lock":true,"push":true}`, []string{noTeamLockLine}},
 		{"lock not asked, rows changed", true, true, `{}`, []string{localLockLine, "backup: refs/lore-backup/migrate/x", "pushed"}},
 		{"lock, --no-push no-op", true, false, `{"team_lock":true,"no_push":true}`, nil},
 		{"lock, --dry-run", true, true, `{"dry_run":true}`, nil},

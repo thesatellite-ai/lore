@@ -62,7 +62,7 @@ const noTeamLockLine = "team lock: not available on this surface (no signals ref
 // asked for --team-lock: only this machine's lock guarded it, and nothing
 // was written to the remote for the lock (A-7: the lock used to push
 // refs/lore/signals to origin on every run).
-const localLockLine = "team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time"
+const localLockLine = "team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time"
 
 // teamLockReleasedLine ends the journal of a run that took T.
 const teamLockReleasedLine = "team lock released"

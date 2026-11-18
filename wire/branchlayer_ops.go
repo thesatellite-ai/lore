@@ -3,9 +3,10 @@ package wire
 // branchlayer_ops.go — opsbranch.Env on the App (BRANCH_LAYERS_SPEC 13):
 // every verb finds the layer wrapper of the repo's project folder
 // (branchlayer.go) and asks its git clone (adapters/backend/git layer.go,
-// layerland.go). Land, drop, restore and purge push at once (explicit
-// acts); promote and the isolate/share choice write locally and reach the
-// remote with lore sync.
+// layerland.go). Land, drop, restore, purge and rename push at once
+// (explicit remote acts; each output says it pushed, devco D-614); promote
+// and the isolate/share choice write locally and reach the remote with
+// lore sync.
 
 import (
 	"context"
@@ -537,7 +538,7 @@ func (a *App) BranchDrop(ctx context.Context, in opsbranch.DropIn) (opsbranch.Do
 		return opsbranch.DoneOut{}, err
 	}
 	forgetLayerCache(a.opts.Home, lb, key.Branch) // devco:V-17
-	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ dropped the notes of " + key.Branch + " (" + what + ") to the trash (" + trash + "); lore branch restore --branch " + key.Branch + " brings them back"}}, nil
+	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ dropped the notes of " + key.Branch + " (" + what + ") to the trash (" + trash + "; " + opsbranch.PushedText(true) + "); lore branch restore --branch " + key.Branch + " brings them back"}}, nil
 }
 
 // BranchRestore implements opsbranch.Env.
@@ -585,13 +586,13 @@ func (a *App) BranchRestore(ctx context.Context, in opsbranch.RestoreIn) (opsbra
 		if rerr != nil {
 			return opsbranch.DoneOut{}, rerr
 		}
-		return opsbranch.DoneOut{OK: true, Lines: []string{"✓ restored the notes of " + key.Branch + " (" + opsbranch.RowsText(rowCounts(rows)) + ") and reverted their landing on " + lb.gb.Branch() + " (commit " + short7(rev) + ", pushed)"}}, nil
+		return opsbranch.DoneOut{OK: true, Lines: []string{"✓ restored the notes of " + key.Branch + " (" + opsbranch.RowsText(rowCounts(rows)) + ") and reverted their landing on " + lb.gb.Branch() + " (commit " + short7(rev) + "; both " + opsbranch.PushedText(true) + ")"}}, nil
 	}
 	rows, err := lb.gb.LayerRows(ctx, l)
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
-	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ restored the notes of " + key.Branch + " (" + opsbranch.RowsText(rowCounts(rows)) + "); a landing made before stays on " + lb.gb.Branch() +
+	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ restored the notes of " + key.Branch + " (" + opsbranch.RowsText(rowCounts(rows)) + "; " + opsbranch.PushedText(true) + "); a landing made before stays on " + lb.gb.Branch() +
 		"; lore sync keeps them open until the branch writes again or lore branch drop --branch " + key.Branch + " drops them"}}, nil
 }
 
@@ -822,5 +823,5 @@ func (a *App) BranchRename(ctx context.Context, in opsbranch.RenameIn) (opsbranc
 	if err != nil {
 		return opsbranch.DoneOut{}, err
 	}
-	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ the notes of " + in.From + " (" + opsbranch.RowsText(rowCounts(rows)) + ") now belong to " + in.To}}, nil
+	return opsbranch.DoneOut{OK: true, Lines: []string{"✓ the notes of " + in.From + " (" + opsbranch.RowsText(rowCounts(rows)) + ") now belong to " + in.To + " (" + opsbranch.PushedText(true) + ")"}}, nil
 }

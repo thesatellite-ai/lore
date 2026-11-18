@@ -2,7 +2,7 @@
 ### a git store
 alice (work/website)$ lore store init --name notes --url git@github.com:acme/notes
 lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
-✓ created store notes (sto_7a670ae8548ed05bf57ad29ad0759504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store notes (sto_7a670ae8548ed05bf57ad29ad0759504) on git@github.com:acme/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ lore task add --title 'Renew the TLS certificate' --to notes --no-live
 lore: committed locally to store notes; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)

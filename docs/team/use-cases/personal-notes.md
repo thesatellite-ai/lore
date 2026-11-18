@@ -70,7 +70,7 @@ To sync between machines, make a new, empty private repo of your own into your p
 # alice, in scratch
 $ lore store init --name me --url git@github.com:alice/lore-me --yes
 lore store init: store clone ~/.lore/stores/alice/lore-me: git user set to alice <alice@devbox> (your lore identity)
-✓ created store me (sto_c0f3…b5b8) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_c0f3…b5b8) on git@github.com:alice/lore-me: pushed its first commit (the store marker); recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website
 $ lore memory add --body 'my invoice template lives in the shared drive' --to me

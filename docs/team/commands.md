@@ -292,7 +292,7 @@ New error codes: `E_CONTACT_TAKEN`, `E_CONTACT_TYPE`, `E_ROLE_UNKNOWN`, `E_STATU
 ### `lore store init`
 
 <!-- help: store init -->
-Make a git repo or folder a lore store and attach it (me = your personal store)
+Make a git repo or folder a lore store and attach it (me = your personal store); a git url gets the store's first commit pushed
 
 ```text
 Usage:
@@ -307,7 +307,7 @@ Examples:
 Flags:
       --json                print the result (or the error) as JSON
       --name string         the store's name in this repo (me = your personal store) (required)
-      --url string          git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)
+      --url string          git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me); a new git store's first commit (its marker) is pushed there at once, which is what creates the store
       --visibility string   internal (default) or shareable: whether its rows may reach client repos
       --yes                 answer yes to the confirmation without a terminal
 ```

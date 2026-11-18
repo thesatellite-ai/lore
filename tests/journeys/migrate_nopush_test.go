@@ -62,7 +62,7 @@ func TestJourneyMigrateWritesNothingToTheRemote(t *testing.T) {
 	})
 
 	w.Step("day3/team-lock-is-asked-for-and-cleaned-up", func() {
-		olga.LoreIn(oc, "migrate", "run", "--team-lock").OK(t).
+		olga.LoreIn(oc, "migrate", "run", "--team-lock", "--push").OK(t).
 			Says(t, "team lock: pushed a hold to refs/lore/signals on the remote origin", "removed from the remote when the run ends", "team lock released")
 		if repo.Has("refs/lore/signals") {
 			t.Fatal("the team lock's signals ref stayed on the remote after the run")

@@ -37,6 +37,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -370,7 +371,7 @@ func (a *App) RewriteRepoV1(ctx context.Context, table row.Table, dryRun bool) (
 }
 
 // Finish implements opsmigrate.Journal (rule 4 step 7).
-func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Finished, error) {
+func (a *App) Finish(ctx context.Context, push opsmigrate.PushChoice, count int) (opsmigrate.Finished, error) {
 	var none opsmigrate.Finished
 	top, path, err := a.journalPath(ctx)
 	if err != nil {
@@ -463,7 +464,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 				lines = append(lines, line)
 				line = w // B1-14: named before the person commits, never the values
 			}
-		case p.Clone && p.ownTip() && push:
+		case p.Clone && p.ownTip() && a.migrationSends(ctx, push, p.Name):
 			if !pushed[p.Dir] {
 				if serr := a.syncPlace(ctx, p.Name); serr != nil {
 					line += "; push failed (" + serr.Error() + "): run `lore sync`"
@@ -474,7 +475,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 			p.Pushed = true
 			line += ", store commit " + shortOID(p.TipAfter) + ", pushed"
 		case p.Clone && p.ownTip():
-			line += ", store commit " + shortOID(p.TipAfter) + " (local, not pushed)"
+			line += ", store commit " + shortOID(p.TipAfter) + " " + a.notPushedWhy(ctx, push, p.Name)
 		}
 		lines = append(lines, line)
 	}
@@ -485,8 +486,8 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 	// the next command (FlattenAfterMigrate); a store whose only change
 	// was its marker (no row of it in this repo's places) counts too
 	var layout []string
-	if push {
-		layout = a.FlattenAfterMigrate(ctx)
+	if push != opsmigrate.PushNever {
+		layout = a.FlattenAfterMigrate(ctx, push == opsmigrate.PushNow)
 	}
 	if !changed && count == 0 && len(j.ConfigKeys) == 0 && len(layout) == 0 {
 		return none, a.dropBackup(ctx, snaps, top, path, j)
@@ -532,6 +533,43 @@ func (a *App) dropBackup(ctx context.Context, snaps git.Snapshots, top, path str
 		all = append(all, errs.Wrap(errs.Internal, "migrate: remove the journal", err))
 	}
 	return errors.Join(all...)
+}
+
+// migrationSends reports whether a migration run or rollback pushes the
+// commit it made in attached store name: always with --push, never with
+// --no-push/--offline, else only a store in push mode now (devco D-612:
+// the run pushed every store by default, past push mode manual).
+func (a *App) migrationSends(ctx context.Context, choice opsmigrate.PushChoice, name string) bool {
+	switch choice {
+	case opsmigrate.PushNow:
+		return true
+	case opsmigrate.PushNever:
+		return false
+	}
+	return a.placePushMode(ctx, name) == storepush.ModeNow
+}
+
+// placePushMode is the push mode of attached store name; the default
+// (manual) when it is not attached or not a pushing store.
+func (a *App) placePushMode(ctx context.Context, name string) storepush.Mode {
+	if st, err := a.state(ctx); err == nil {
+		if sp := storePushOf(st.byName[store.Source(name)]); sp != nil {
+			return sp.pushSettings().Push
+		}
+	}
+	return storepush.Default().Push
+}
+
+// notPushedWhy is the "(local, not pushed: …; push with: …)" tail of a
+// migration line whose store commit stayed local: why, and the exact
+// command that sends it (devco D-612: every output says whether it
+// pushed).
+func (a *App) notPushedWhy(ctx context.Context, choice opsmigrate.PushChoice, name string) string {
+	why := "--no-push"
+	if choice == opsmigrate.PushPerMode {
+		why = "store " + name + " is in push mode " + string(a.placePushMode(ctx, name))
+	}
+	return "(local, not pushed: " + why + "; push with: lore store push --store " + name + ")"
 }
 
 // syncPlace syncs (fetch, merge, push) the attached store name.
@@ -772,6 +810,12 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 	}
 	if !pl.pushed {
 		return line + ", store commit (local)", nil
+	}
+	if choice := opsmigrate.PushChoiceFrom(ctx); !a.migrationSends(ctx, choice, p.Name) {
+		// devco D-612: the migration reached the remote, so its undo must
+		// too, but only when the person asked (--push) or the store pushes
+		// every write (push mode now)
+		return line + ", store commit " + a.notPushedWhy(ctx, choice, p.Name), nil
 	}
 	if err := a.syncPlace(ctx, p.Name); err != nil {
 		return line + ", store commit; push failed (" + err.Error() + "): run `lore sync`", nil

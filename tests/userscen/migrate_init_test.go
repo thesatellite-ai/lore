@@ -271,7 +271,7 @@ func TestMigrateClientRepo(t *testing.T) {
 	c.AdminPush("origin", "main")
 	clientRefs := client.Refs("refs/lore")
 
-	out := th.DecodeJSON[migRunOut](t, c.Lore("migrate", "run", "--team-lock", "--json"))
+	out := th.DecodeJSON[migRunOut](t, c.Lore("migrate", "run", "--team-lock", "--push", "--json"))
 	// The count also holds the org's personal-store and roster steps (see
 	// the migrate report); the planted branch row is the one asserted here.
 	if !slices.Contains(out.Rows, k.table+"/"+id) {

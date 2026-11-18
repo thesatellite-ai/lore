@@ -50,13 +50,13 @@ Alice creates the three stores (from a plain folder of hers, `stores`, which att
 # alice, in stores
 $ lore store init --name agency --url git@github.com:agency/notes --yes && lore store init --name client --url git@github.com:agency/notes-client --yes && lore store init --name client2 --url git@github.com:agency/notes-client2 --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_7a67…9504) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore store init: store clone ~/.lore/stores/agency/notes-client: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
 lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-✓ created store client (sto_2ad3…f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
+✓ created store client (sto_2ad3…f891) on git@github.com:agency/notes-client: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 lore store init: store clone ~/.lore/stores/agency/notes-client2: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store client2 (sto_162d…9666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
+✓ created store client2 (sto_162d…9666) on git@github.com:agency/notes-client2: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org link --org agency --project client --store git@github.com:agency/notes-client --yes

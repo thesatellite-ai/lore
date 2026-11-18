@@ -20,7 +20,8 @@
 //	       ─► rowfs.DeclareRepo ─► features ∪ {name}, min_lore_version = max(floor, Since)
 //
 // run with a Journal (journal.go): lock ─► Begin (backup ref, journal or
-// resume) ─► steps ─► Finish (push unless --no-push/--offline); plus
+// resume) ─► steps ─► Finish (push per each store's push mode; --push
+// always, --no-push/--offline never, devco D-612); plus
 // status, rollback (FQ5) and unlock.
 package migrate
 
@@ -180,14 +181,18 @@ type ActorRecorder interface {
 // RunIn is the input of migrate.run.
 type RunIn struct {
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"list the files that would be rewritten; change nothing"`
+	// Push sends the store commits now whatever each store's push mode
+	// says; without it the push mode decides (devco D-612: the run pushed
+	// by default, past a store in push mode manual).
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the store commits now, whatever each store's push mode says (default: a store in push mode now pushes; manual and batch keep the commit local and the run prints the command that sends it)"`
 	// NoPush keeps the store commits local (rollback is then a local undo).
-	NoPush bool `json:"no_push,omitempty" flag:"no-push" desc:"commit the store changes but do not push them"`
+	NoPush bool `json:"no_push,omitempty" flag:"no-push" desc:"commit the store changes but do not push them, even to a store in push mode now"`
 	// Offline rewrites the repo's branch files only (FORMAT_EVOLUTION 7.3).
 	Offline bool `json:"offline,omitempty" flag:"offline" desc:"branch files only: skip the settings, live rows and stores (they need the network)"`
 	// TeamLock also holds the team lock on the remote's refs/lore/signals
 	// while the run lasts (FORMAT_EVOLUTION 7.2). Off by default: the lock
 	// is a push, and nothing pushes unless the person asks (A-7).
-	TeamLock bool `json:"team_lock,omitempty" flag:"team-lock" desc:"also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the run lasts (removed when it ends), so a teammate cannot migrate at the same time; ignored with --dry-run, --no-push and --offline"`
+	TeamLock bool `json:"team_lock,omitempty" flag:"team-lock" desc:"also hold the team migration lock: pushes a hold to refs/lore/signals on the remote while the run lasts (removed when it ends), so a teammate cannot migrate at the same time; needs --push; ignored with --dry-run, --no-push and --offline"`
 	// MachineLocal copies the repo's v0.1.17 machine-local rows into this
 	// machine's store even from a checkout that is not this machine's own
 	// (wire machinecopy.go says when it is).
@@ -395,12 +400,20 @@ func Ops(rw Rewriter) []op.Entry {
 
 // run is migrate.run (FORMAT_EVOLUTION rule 4, steps 2-7): lock (M) →
 // Begin (backup ref + journal, or resume) → settings → live → rewrites
-// (--offline: the repo's rows only) → Finish (push unless --no-push or
-// --offline). Lock order M then T (7.5); T only for a run that pushes
-// (not --dry-run, --no-push or --offline: nothing reaches a teammate) and
-// was asked for it (--team-lock: T itself is a push to the remote).
+// (--offline: the repo's rows only) → Finish (each store's push mode
+// decides; --push always pushes, --no-push/--offline never). Lock order M
+// then T (7.5); T only for a run that pushes (not --dry-run, --no-push or
+// --offline: nothing reaches a teammate) and was asked for it
+// (--team-lock: T itself is a push to the remote, so it needs --push).
 func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	out := RunOut{DryRun: in.DryRun, Rows: []string{}, Steps: []string{}, Verbose: in.Verbose}
+	choice, err := pushChoice(in.Push, in.NoPush, in.Offline)
+	if err != nil {
+		return RunOut{}, err
+	}
+	if !in.DryRun && choice == PushPerMode && in.TeamLock {
+		return RunOut{}, teamLockNeedsPush("lore migrate run")
+	}
 	if g, ok := rw.(PullFirstGate); ok {
 		if err := g.MigratePullFirst(ctx); err != nil {
 			return RunOut{}, err
@@ -422,7 +435,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 	if in.MachineLocal {
 		ctx = WithMachineLocal(ctx)
 	}
-	pushes := !in.DryRun && !in.NoPush && !in.Offline
+	pushes := !in.DryRun && choice != PushNever
 	if !in.DryRun && !pushes {
 		ctx = WithNoPush(ctx) // --no-push / --offline: no write or sync of the run pushes
 	}
@@ -541,7 +554,7 @@ func run(ctx context.Context, rw Rewriter, in RunIn) (RunOut, error) {
 		}
 	}
 	if journaled && !in.DryRun {
-		fin, err := j.Finish(ctx, !in.NoPush && !in.Offline, out.Count)
+		fin, err := j.Finish(ctx, choice, out.Count)
 		if err != nil {
 			return RunOut{}, err
 		}
@@ -612,7 +625,8 @@ func baseOps(rw Rewriter) []op.Entry {
 			Errors: []errs.Code{errs.Stale, errs.StoreLocked, errs.StoreReadOnly, errs.InvalidInput, errs.OldLore, errs.MigrateLocked, errs.ConfigInvalid, errs.NotAStore, errs.Unsupported, errs.Refused, errs.Internal}, // Unsupported: outside a code repo (devco D-523)
 			Examples: []op.Example{
 				{Title: "see what would change", CLI: "lore migrate run --dry-run", Want: "count:"},
-				{Title: "rewrite once the whole team runs 0.1.18", CLI: "lore migrate run", Want: "count:"},
+				{Title: "rewrite once the whole team runs 0.1.18 (each store's push mode decides the push)", CLI: "lore migrate run", Want: "count:"},
+				{Title: "rewrite and push the store commits now", CLI: "lore migrate run --push", Want: "count:"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) {
 			return run(ctx, rw, in)

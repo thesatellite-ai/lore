@@ -236,7 +236,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 	}
 	ps := make([]*th.Pending, len(clones))
 	for i, c := range clones {
-		ps[i] = c.Prepare("migrate", "run", "--team-lock")
+		ps[i] = c.Prepare("migrate", "run", "--team-lock", "--push")
 	}
 	results := w.Simultaneously(ps...)
 	ok := 0
@@ -248,7 +248,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 		// Locked out: once the winner released, a rerun completes (7.8).
 		deadline := time.Now().Add(testtime.Scale(30 * time.Second))
 		for {
-			rr := clones[i].Lore("migrate", "run", "--team-lock")
+			rr := clones[i].Lore("migrate", "run", "--team-lock", "--push")
 			if raceOutcome(t, rr) == "ok" {
 				break
 			}

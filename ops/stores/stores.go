@@ -124,7 +124,7 @@ type Entry struct {
 // InitIn is the input of store.init.
 type InitIn struct {
 	Name       string `json:"name" arg:"0" desc:"the store's name in this repo (me = your personal store)"`
-	URL        string `json:"url,omitempty" arg:"1" desc:"git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)"`
+	URL        string `json:"url,omitempty" arg:"1" desc:"git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me); a new git store's first commit (its marker) is pushed there at once, which is what creates the store"`
 	Visibility string `json:"visibility,omitempty" flag:"visibility" desc:"internal (default) or shareable: whether its rows may reach client repos"`
 	// RepoOptional (callers only, never the CLI): the store is made for
 	// this machine, not for the repo the command runs in. The setup page's
@@ -144,6 +144,10 @@ type InitOut struct {
 	ID       string `json:"id"`
 	// Already is true when the url was already a 0.1.18 store.
 	Already bool `json:"already,omitempty"`
+	// Pushed is true when the new store's first commit (its marker) was
+	// pushed to the git url. Publishing the store is what a git url asks
+	// for, so it takes no --push; the output says it (devco D-613).
+	Pushed bool `json:"pushed,omitempty"`
 	// Following names the setups that were on the default local folder
 	// ~/.lore/stores/_me and now follow personal.store (store init me with
 	// another url): a person has one personal store `me`.
@@ -320,7 +324,7 @@ func Ops(m Manager) []op.Entry {
 	// The v0.1.17 clone commands (show, open, forget, doctor) come last (clones.go).
 	return append([]op.Entry{
 		op.Define(op.Spec{
-			Name: OpInit, Summary: "Make a git repo or folder a lore store and attach it (me = your personal store)",
+			Name: OpInit, Summary: "Make a git repo or folder a lore store and attach it (me = your personal store); a git url gets the store's first commit pushed",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
 			// CFG7: attaching in a client repo writes the url into a file
 			// the client reads, so it asks first (the composition root).

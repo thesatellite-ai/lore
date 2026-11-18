@@ -121,7 +121,12 @@ func (o InitOut) Text() string {
 	if o.Personal {
 		where = configFileShown() + " (personal.store, the target of --to me)"
 	}
-	line := "✓ created store " + o.Name + " (" + o.ID + ") at " + o.URL + "; recorded in " + where + "\n"
+	at := " at " + o.URL
+	if o.Pushed {
+		// devco D-613: the one push store init makes, said where it happens
+		at = " on " + o.URL + ": pushed its first commit (the store marker)"
+	}
+	line := "✓ created store " + o.Name + " (" + o.ID + ")" + at + "; recorded in " + where + "\n"
 	if o.Already {
 		line = "✓ " + o.URL + " is already a lore store (" + o.ID + "); recorded as " + o.Name + " in " + where + "\n"
 	}
@@ -130,6 +135,9 @@ func (o InitOut) Text() string {
 			return "✓ " + o.URL + " is already a lore store (" + o.ID + "): it is org " + o.Org + "'s store, so it stays attached through the org entry in " + lorehome.Shown() + "/config.yaml (not this repo's " + storesFileShown + ")\n"
 		}
 		verb := "created store"
+		if o.Pushed {
+			verb = "created and pushed the first commit of store"
+		}
 		setup := o.OrgSetup
 		if setup == "" {
 			setup = "<your admin setup>"

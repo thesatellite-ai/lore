@@ -38,7 +38,7 @@ Once per company: turn a new, empty repo into the store. Run `lore store init --
 # alice, in tools
 $ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_7a67…9504) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 ```
 <!-- /example -->
 

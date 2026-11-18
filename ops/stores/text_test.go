@@ -279,3 +279,24 @@ func TestStoreInitNamesLoreHome(t *testing.T) {
 		t.Fatalf("store init under LORE_HOME=%s: %q", home, line)
 	}
 }
+
+// TestInitTextSaysItPushedD613 (devco D-613): store init with a git url
+// pushes the new store's first commit (that is what creates the store
+// there) with no --push, so the line says it; a folder store or a url that
+// was already a store pushes nothing and says nothing of a push.
+func TestInitTextSaysItPushedD613(t *testing.T) {
+	t.Parallel()
+	got := InitOut{Name: "agency", URL: "git@h:a/n", ID: "sto_1", Pushed: true}.Text()
+	if !strings.Contains(got, "created store agency (sto_1) on git@h:a/n: pushed its first commit (the store marker)") {
+		t.Errorf("a pushed init: %q", got)
+	}
+	org := InitOut{Name: "agency", URL: "git@h:a/n", ID: "sto_1", Pushed: true, Org: "acme"}.Text()
+	if !strings.Contains(org, "created and pushed the first commit of store sto_1") {
+		t.Errorf("a pushed org-store init: %q", org)
+	}
+	for _, o := range []InitOut{{Name: "me", URL: "file:///m", ID: "sto_2", Personal: true}, {Name: "agency", URL: "git@h:a/n", ID: "sto_1", Already: true}} {
+		if got := o.Text(); strings.Contains(got, "push") {
+			t.Errorf("an init that pushed nothing speaks of a push: %q", got)
+		}
+	}
+}

@@ -204,10 +204,10 @@ orgs:
     repos: [github.com/client/*]
 alice (work/website)$ LORE_ORG=agency lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ LORE_ORG=freelance lore store init --name freelance --url git@github.com:other/notes --yes
 lore store init: store clone ~/.lore/stores/other/notes: git user set to Alice <alice@example.com> (your identity in org freelance)
-✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) on git@github.com:other/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ cat .lore/stores.yaml
 stores:
     - name: agency

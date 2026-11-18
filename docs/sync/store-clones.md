@@ -23,7 +23,7 @@ The first time lore clones or writes to the store it prints what it set up, incl
 # alice, in website
 $ lore store init --name notes --url git@github.com:acme/notes
 lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
-✓ created store notes (sto_7a67…9504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store notes (sto_7a67…9504) on git@github.com:acme/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ lore task add --title 'Renew the TLS certificate' --to notes --no-live
 lore: committed locally to store notes; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)

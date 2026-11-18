@@ -4,9 +4,11 @@
 // /v1/branch/…) and the reference come from one definition.
 //
 //	lore branch list|show|mode            ─► Env (read)
-//	lore branch land|drop|restore|purge   ─► Env (write; land, drop,
-//	                                           restore and purge push: they
-//	                                           are explicit acts)
+//	lore branch land|drop|restore|purge|  ─► Env (write; these five push
+//	            rename                         to the store's remote at once:
+//	                                           they are explicit remote acts,
+//	                                           and every help line and output
+//	                                           says so, devco D-614)
 //	lore branch promote|isolate|share     ─► Env (write; nothing pushed)
 //
 // The work (refs in the store clone, the policy rows) is wire's: this
@@ -334,9 +336,9 @@ func (o LandOut) Text() string {
 		return s + " (nothing changed)\n"
 	}
 	if o.Into != "" {
-		return fmt.Sprintf("✓ landed %s of %s into the notes of %s (pushed); %s's notes are in the trash\n", RowsText(o.Rows), o.Branch, o.Into, o.Branch)
+		return fmt.Sprintf("✓ landed %s of %s into the notes of %s (%s); %s's notes are in the trash\n", RowsText(o.Rows), o.Branch, o.Into, PushedText(o.Pushed), o.Branch)
 	}
-	s := fmt.Sprintf("✓ landed %s of %s into %s: commit %s on %s (pushed)", RowsText(o.Rows), o.Branch, o.Folder, short(o.Commit), o.StoreBranch)
+	s := fmt.Sprintf("✓ landed %s of %s into %s: commit %s on %s (%s)", RowsText(o.Rows), o.Branch, o.Folder, short(o.Commit), o.StoreBranch, PushedText(o.Pushed))
 	switch {
 	case len(o.Kept) > 0:
 		s += fmt.Sprintf("; %s stay with %s (lore branch land --branch %s lands them later)", RowsText(o.Kept), o.Branch, o.Branch)
@@ -353,6 +355,16 @@ func (o LandOut) Text() string {
 		s += fmt.Sprintf("; %d row(s) changed on both sides were merged field by field", o.Merged)
 	}
 	return s + "\n"
+}
+
+// PushedText is how a branch verb's output says where its change went:
+// these verbs push at once, and an output never leaves the reader to guess
+// whether a remote moved (devco D-614).
+func PushedText(pushed bool) string {
+	if pushed {
+		return "pushed to the store's remote"
+	}
+	return "not pushed; lore sync sends it"
 }
 
 // DropIn is the input of branch.drop.
@@ -397,7 +409,7 @@ func (o PurgeOut) Text() string {
 	if len(o.Purged) == 0 {
 		return "nothing to purge\n"
 	}
-	return fmt.Sprintf("✓ purged %d trashed copy(ies) of branch notes for good:\n  %s\n", len(o.Purged), strings.Join(o.Purged, "\n  "))
+	return fmt.Sprintf("✓ purged %d trashed copy(ies) of branch notes for good (%s):\n  %s\n", len(o.Purged), PushedText(true), strings.Join(o.Purged, "\n  "))
 }
 
 // PromoteIn is the input of branch.promote.
@@ -457,17 +469,17 @@ func Ops(env Env) []op.Entry {
 			op.Example{Title: "the notes of a branch", CLI: "lore branch show --branch feat/experiment"}), func(ctx context.Context, in ShowIn) (ShowOut, error) { return env.BranchShow(ctx, in) }),
 		op.Define(r(OpMode, "Say whether a code branch keeps its own notes (isolated) or writes to the shared notes, and which rule decided",
 			op.Example{Title: "this branch's mode", CLI: "lore branch mode"}), func(ctx context.Context, in ModeIn) (ModeOut, error) { return env.BranchMode(ctx, in) }),
-		op.Define(local(w(OpLand, "Squash a code branch's own notes into the shared notes as one commit and push it (after the branch merged)",
+		op.Define(local(w(OpLand, "Squash a code branch's own notes into the shared notes as one commit and push it to the store's remote (after the branch merged)",
 			[]errs.Code{errs.LandConflict, errs.NotAStore, errs.NeedsConfirm},
 			op.Example{Title: "land a merged branch's notes", CLI: "lore branch land --branch feat/experiment --pr 123"},
 			op.Example{Title: "see what would land", CLI: "lore branch land --branch feat/experiment --dry-run"},
 			op.Example{Title: "land only the tasks and memories", CLI: "lore branch land --branch feat/experiment --kinds tasks,memories"},
 			op.Example{Title: "land a stacked branch into its parent", CLI: "lore branch land --branch feat/b --into feat/a"})), func(ctx context.Context, in LandIn) (LandOut, error) { return env.BranchLand(ctx, in) }),
-		op.Define(w(OpDrop, "Move a code branch's own notes to the trash without landing them",
+		op.Define(w(OpDrop, "Move a code branch's own notes to the trash without landing them; pushes to the store's remote at once",
 			nil, op.Example{Title: "drop the notes of an abandoned branch", CLI: "lore branch drop --branch fix-login"}), func(ctx context.Context, in DropIn) (DoneOut, error) { return env.BranchDrop(ctx, in) }),
-		op.Define(w(OpRestore, "Bring a code branch's dropped or landed notes back from the trash",
+		op.Define(w(OpRestore, "Bring a code branch's dropped or landed notes back from the trash; pushes to the store's remote at once",
 			[]errs.Code{errs.NameTaken, errs.LandConflict}, op.Example{Title: "bring dropped notes back", CLI: "lore branch restore --branch fix-login"}), func(ctx context.Context, in RestoreIn) (DoneOut, error) { return env.BranchRestore(ctx, in) }),
-		op.Define(w(OpPurge, "Delete trashed branch notes for good",
+		op.Define(w(OpPurge, "Delete trashed branch notes for good, on the store's remote too (pushes at once)",
 			[]errs.Code{errs.NeedsConfirm}, op.Example{Title: "purge trashed notes older than 90 days", CLI: "lore branch purge --older-than 90d --confirm"}), func(ctx context.Context, in PurgeIn) (PurgeOut, error) { return env.BranchPurge(ctx, in) }),
 		op.Define(w(OpPromote, "Put rows of this branch's own notes into the shared notes now (an urgent rule)",
 			[]errs.Code{errs.LandConflict}, op.Example{Title: "share one rule now", CLI: "lore branch promote --ids rul_0193f2a7c4b77e1d8a3f5b6c7d8e9f00"}), func(ctx context.Context, in PromoteIn) (DoneOut, error) { return env.BranchPromote(ctx, in) }),
@@ -479,7 +491,7 @@ func Ops(env Env) []op.Entry {
 			[]errs.Code{errs.NeedsConfirm, errs.LeakBlocked}, op.Example{Title: "preview the workflow", CLI: "lore branch install-action --dry-run"})), func(ctx context.Context, in InstallActionIn) (DoneOut, error) {
 			return env.BranchInstallAction(ctx, in)
 		}),
-		op.Define(w(OpRename, "Move a code branch's notes to its new name after git branch -m",
+		op.Define(w(OpRename, "Move a code branch's notes to its new name after git branch -m; pushes to the store's remote at once",
 			[]errs.Code{errs.NameTaken}, op.Example{Title: "follow a renamed branch", CLI: "lore branch rename --from feat/x --to feat/y"}), func(ctx context.Context, in RenameIn) (DoneOut, error) { return env.BranchRename(ctx, in) }),
 		op.Define(w(OpShare, "Make a code branch write to the shared notes, for everyone in this project folder",
 			[]errs.Code{errs.PolicyDenied}, op.Example{Title: "share a long-lived branch", CLI: "lore branch share --branch integration"}), func(ctx context.Context, in ChoiceIn) (DoneOut, error) { return env.BranchChoose(ctx, in, false) }),
