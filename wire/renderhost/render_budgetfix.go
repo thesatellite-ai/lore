@@ -37,14 +37,27 @@ type budgetFix struct {
 	unplaced bool
 	// company holds the ids of pinned rows kept on company ground.
 	company map[string]bool
-	// admins is the org's admins and whether the caller is one; its zero
-	// value (no roster) refuses nobody.
+	// admins is the admins of the place the budget is set (and of every
+	// company row rowAdmins does not name) and whether the caller is one;
+	// its zero value (no roster) refuses nobody.
 	admins profilestore.Admins
+	// rowAdmins is the admins a company row is judged by when its store
+	// is another org's (an ops folder's row read from a company repo,
+	// devco D-681), so the member is sent to that org's admins.
+	rowAdmins map[string]profilestore.Admins
+}
+
+// adminsOf is the admins who may change pinned row id.
+func (f budgetFix) adminsOf(id string) profilestore.Admins {
+	if ad, ok := f.rowAdmins[id]; ok {
+		return ad
+	}
+	return f.admins
 }
 
 // mayLower reports whether the caller may take pinned row id out of the
 // pinned part (a member may not for a company row).
-func (f budgetFix) mayLower(id string) bool { return !f.company[id] || f.admins.May() }
+func (f budgetFix) mayLower(id string) bool { return !f.company[id] || f.adminsOf(id).May() }
 
 // mayRaise reports whether the caller may raise the budget where it is set.
 func (f budgetFix) mayRaise() bool { return !f.raiseCompany || f.admins.May() }
@@ -77,29 +90,30 @@ func (f budgetFix) raiseText(coreBytes int) string {
 	return "to raise it, ask " + f.admins.Who() + "; the admin would run `" + f.raiseCmd(coreBytes) + "`"
 }
 
-// planBudgetFix reads where the budget is set and the org's admins, and
-// which pinned rows are on company ground (profilestore.CompanyGround, the
-// answer the role check of each printed write gives). Only called when the
-// pinned part is over the budget, so a render under budget never opens
-// the roster.
+// planBudgetFix reads where the budget is set and which pinned rows are on
+// company ground, each judged by the roster of its own store's org
+// (profilestore.Judge: the answer the role check of each printed write
+// gives; devco D-681: in the ops store clone an ops folder's row and
+// budget were judged by the company roster and printed to a member as
+// their own commands). One Judge per render opens each org's roster once;
+// only called when the pinned part is over the budget, so a render under
+// budget never opens a roster.
 func (h *Host) planBudgetFix(ctx context.Context, bodies []privateBody) budgetFix {
 	var f budgetFix
 	if h.app == nil {
 		return f
 	}
+	j := profilestore.NewJudge(h.app)
 	var placed bool
-	f.to, f.raiseCompany, placed = h.app.PolicyPlace(ctx, policy.KeyContextBudgetInternal)
+	f.to, f.raiseCompany, f.admins, placed = h.app.PolicyPlaceJudged(ctx, policy.KeyContextBudgetInternal, j)
 	f.unplaced = !placed
-	f.admins, _ = h.app.OrgAdmins(ctx)
 	f.company = map[string]bool{}
+	f.rowAdmins = map[string]profilestore.Admins{}
 	for _, b := range bodies {
 		for _, pin := range b.pins {
-			lv, ok := h.app.StoreLevel(pin.src)
-			if !ok {
-				lv = ""
-			}
-			if profilestore.CompanyGround(lv, pin.src, f.admins.Org) {
+			if company, ad := j.At(ctx, pin.src); company {
 				f.company[pin.id] = true
+				f.rowAdmins[pin.id] = ad
 			}
 		}
 	}
@@ -122,12 +136,13 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 			hotfix = pin.id
 		}
 	}
-	var lower, ask, adminRuns []string
+	var lower, adminRuns []string
+	var ask askList
 	ruleCmd := "lore rule edit --id " + rule + " --severity should"
 	if f.mayLower(rule) {
 		lower = append(lower, "`"+ruleCmd+"`")
 	} else {
-		ask = append(ask, "lower "+rule)
+		ask.add(f.adminsOf(rule), "lower "+rule)
 		if rule != "<rul_id>" {
 			adminRuns = append(adminRuns, "`"+ruleCmd+"`")
 		}
@@ -137,7 +152,7 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 		if f.mayLower(hotfix) {
 			lower = append(lower, "`"+hotfixCmd+"`")
 		} else {
-			ask = append(ask, "lower "+hotfix)
+			ask.add(f.adminsOf(hotfix), "lower "+hotfix)
 			adminRuns = append(adminRuns, "`"+hotfixCmd+"`")
 		}
 	}
@@ -151,17 +166,17 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 	case f.mayRaise():
 		can = append(can, "raise the budget with `"+f.raiseCmd(coreBytes)+"`")
 	default:
-		ask = append(ask, fmt.Sprintf("raise %s to %d in %s", policy.KeyContextBudgetInternal, budgetToFit(coreBytes), f.to))
+		ask.add(f.admins, fmt.Sprintf("raise %s to %d in %s", policy.KeyContextBudgetInternal, budgetToFit(coreBytes), f.raisePlace()))
 		adminRuns = append(adminRuns, "`"+f.raiseCmd(coreBytes)+"`")
 	}
 	out := strings.Join(can, ", or ")
-	if len(ask) == 0 {
+	if ask.empty() {
 		return out
 	}
 	// company rows and policies are an admin's change (devco D-637,
 	// D-681): the member is told whom to ask, and the commands are labelled
 	// as the admin's, so none reads as the member's own next step
-	adm := "ask " + f.admins.Who() + " to " + strings.Join(ask, " or ") + " (company rows and policies are changed by an admin)"
+	adm := ask.text() + " (company rows and policies are changed by an admin)"
 	if len(adminRuns) > 0 {
 		adm += "; the admin would run " + strings.Join(adminRuns, " or ")
 	}
@@ -169,4 +184,45 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 		return adm
 	}
 	return out + "; or " + adm
+}
+
+// raisePlace is where the raise writes, for a sentence: the --to, or "this
+// folder" when the raise writes to the repo (a store clone's own folder).
+func (f budgetFix) raisePlace() string {
+	if f.to == "" {
+		return "this folder"
+	}
+	return f.to
+}
+
+// askList is what a member asks of which admins, in the order the fixes
+// are listed: rows of another org's store go to that org's admins (devco
+// D-681), so one line may name two orgs.
+type askList struct {
+	who  []string
+	what map[string][]string
+}
+
+// add records that the admins ad are asked to do what.
+func (l *askList) add(ad profilestore.Admins, what string) {
+	w := ad.Who()
+	if l.what == nil {
+		l.what = map[string][]string{}
+	}
+	if _, seen := l.what[w]; !seen {
+		l.who = append(l.who, w)
+	}
+	l.what[w] = append(l.what[w], what)
+}
+
+// empty reports whether nothing is asked.
+func (l askList) empty() bool { return len(l.who) == 0 }
+
+// text is "ask <who> to a or b; or ask <other> to c".
+func (l askList) text() string {
+	parts := make([]string, 0, len(l.who))
+	for _, w := range l.who {
+		parts = append(parts, "ask "+w+" to "+strings.Join(l.what[w], " or "))
+	}
+	return strings.Join(parts, "; or ")
 }

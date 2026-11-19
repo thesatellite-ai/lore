@@ -131,3 +131,33 @@ func TestOverCoreFixUnplacedPrintsNoPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+// TestOverCoreFixAsksEachRowsOwnOrg guards devco D-681: in the ops store
+// clone an ops folder's pinned rule was judged by the company roster and
+// printed to an ops member as their own command. A row of another org's
+// store goes to that org's admins, the budget to its place's admins, and
+// an admin of the row's org keeps the command.
+func TestOverCoreFixAsksEachRowsOwnOrg(t *testing.T) {
+	pins := []privatePin{{id: "rul_ops", kind: privatePinRule, text: strings.Repeat("r", 5000)}}
+	ops := profilestore.Admins{Org: "acmeops", Names: []string{"Oli Ops"}}
+	co := profilestore.Admins{Org: "acme", Names: []string{"Ada Admin"}}
+	member := budgetFix{to: "acme/web", raiseCompany: true, company: map[string]bool{"rul_ops": true}, rowAdmins: map[string]profilestore.Admins{"rul_ops": ops}, admins: co}
+	got := overCoreFix(5000, pins, member)
+	if own, _, _ := strings.Cut(got, "the admin would run"); strings.Contains(own, "rule edit --id rul_ops") || strings.Contains(own, "lore policy set") {
+		t.Errorf("devco:D-681: an ops member is given an ops row's command as their own:\n%s", got)
+	}
+	want := "ask an admin of acmeops (Oli Ops) to lower rul_ops; or ask an admin of acme (Ada Admin) to raise context.budget.internal to 7000 in acme/web"
+	if !strings.Contains(got, want) {
+		t.Errorf("member's fix lacks %q:\n%s", want, got)
+	}
+	opsAdmin := member
+	opsAdmin.rowAdmins = map[string]profilestore.Admins{"rul_ops": {Org: "acmeops", Names: []string{"Oli Ops"}, Caller: true}}
+	if got := overCoreFix(5000, pins, opsAdmin); !strings.Contains(got, "take a row out of the pinned part with `lore rule edit --id rul_ops --severity should`") {
+		t.Errorf("an ops admin lost the ops row's command:\n%s", got)
+	}
+	// a company budget raised in a store clone's own folder (no --to)
+	clone := budgetFix{raiseCompany: true, admins: ops}
+	if got := overCoreFix(5000, nil, clone); strings.Contains(got, " in ;") || !strings.Contains(got, "raise context.budget.internal to 7000 in this folder") {
+		t.Errorf("a clone-folder raise names no place:\n%s", got)
+	}
+}
