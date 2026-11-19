@@ -154,6 +154,9 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	if err := look.answer(to); err != nil {
 		return op.Result{}, true, err
 	}
+	if named, found := look.holderNamed(to); found {
+		h = named // an id live in two folders: the one --store names
+	}
 	if ok {
 		switch {
 		case to == "":
@@ -450,6 +453,15 @@ func (a *App) outsideTarget(ctx context.Context, to string, write, create bool) 
 			return t, newFolder{}, rerr
 		}
 	}
+	if !found && base == attach.ReservedMe {
+		// devco D-690: with personal_store: none, `--to me` from a store
+		// folder or the home folder said "no store named me … cd into a
+		// repo that attaches me" (no repo does); give the setup's refusal,
+		// whose placeholder form names `lore setup list`, as a repo does
+		if err := checkPersonalTarget(a.withSetupOfClone(ctx), a.opts.Home, a.projectDir(), to, func() []string { return nil }); err != nil {
+			return attach.Store{}, newFolder{}, err
+		}
+	}
 	if !found {
 		return attach.Store{}, newFolder{}, errs.New(errs.NotFound, "no store named "+base+" is set up for this folder, and outside a repo only the setup's stores can be named").
 			WithHint("lore store list shows the stores --to takes here; or cd into a repo that attaches " + base)
@@ -561,6 +573,35 @@ type rowLookup struct {
 	// livePath is the live row file found (a trashed row is live), ""
 	// when none was
 	livePath string
+	// live is every folder of the scan holding the id live, in scan
+	// order (the first is the holder rowFolderIn answers). Two or more is
+	// an id an older lore derived without the folder (devco D-689): a
+	// read by id with no --store is refused naming each (answer), and
+	// one naming a place reads that place's row (holderNamed).
+	live []liveHolder
+}
+
+// liveHolder is one folder holding a looked-up id live: the store --to
+// takes for it and its <org>/<folder> label.
+type liveHolder struct {
+	store attach.Store
+	place string
+	dir   string // the folder on disk: one folder reached twice counts once
+}
+
+// holderNamed is the live holder the command's --store/--to value names
+// (by its store name or its <org>/<folder> label), when the id is live in
+// more than one folder; ok is false otherwise.
+func (l *rowLookup) holderNamed(to string) (attach.Store, bool) {
+	if l == nil || len(l.live) < 2 || to == "" {
+		return attach.Store{}, false
+	}
+	for _, h := range l.live {
+		if string(h.store.Name) == to || h.place == to {
+			return h.store, true
+		}
+	}
+	return attach.Store{}, false
 }
 
 // rowLookupOutside is rowFolderOutside with what it found when no folder
@@ -612,10 +653,20 @@ func (a *App) rowFolderIn(ctx context.Context, scan orgFolderScan, id string, lo
 			}
 			continue
 		}
-		look.livePath = liveFile(hits)
-		return a.orgFolderStore(ctx, f), true
+		// devco D-689: keep scanning, so an id live in two folders is seen
+		// as two rows (answer refuses it) rather than the first folder's
+		dir := filepath.Clean(filepath.Join(f.Dir, filepath.FromSlash(f.Folder)))
+		if !slices.ContainsFunc(look.live, func(h liveHolder) bool { return h.place == place || h.dir == dir }) {
+			look.live = append(look.live, liveHolder{store: a.orgFolderStore(ctx, f), place: place, dir: dir})
+		}
+		if look.livePath == "" {
+			look.livePath = liveFile(hits)
+		}
 	}
-	return attach.Store{}, false
+	if len(look.live) == 0 {
+		return attach.Store{}, false
+	}
+	return look.live[0].store, true
 }
 
 // orgFolderStore is org folder f as a store --to takes: the org entry
@@ -647,6 +698,12 @@ func (a *App) orgFolderStore(ctx context.Context, f orgFolder) attach.Store {
 // names stores that were searched, never an empty machine.
 func (l *rowLookup) answer(to string) error {
 	switch {
+	case l != nil && to == "" && len(l.live) > 1:
+		places := make([]string, len(l.live))
+		for i, h := range l.live {
+			places[i] = h.place
+		}
+		return engine.AmbiguousIDErr(l.id, places)
 	case l == nil || to != "" || l.livePath != "":
 		return nil
 	case l.gone != nil:
@@ -693,6 +750,36 @@ func (a *App) withSetupOfTarget(ctx context.Context, in op.Input) context.Contex
 		return ctx
 	}
 	if name := a.setupOfOrg(base); name != "" {
+		return op.WithSetup(ctx, name)
+	}
+	return ctx
+}
+
+// withSetupOfClone is ctx with the setup of the org whose stores include
+// the store clone this folder is in, when no setup is named already and
+// exactly one enabled setup belongs to that org (setupOfOrg); any other
+// case keeps ctx. Why (devco D-690): a store clone sits under no setup's
+// folders, so `--to me` there under personal_store: none found no setup
+// and said "no store named me … cd into a repo that attaches me" instead
+// of the setup's refusal. The org is found as the clone's read scope finds
+// it (cloneOrgEntry: the org entry listing the clone's store url).
+func (a *App) withSetupOfClone(ctx context.Context) context.Context {
+	if op.SetupOf(ctx) != "" {
+		return ctx
+	}
+	sc, in := storeHere(a.opts.RepoDir)
+	if !in {
+		return ctx
+	}
+	root, err := storeHereEntry(a.opts.Home, storeCheckout{top: sc.top, shown: sc.shown, folder: rowfs.FolderRoot, isGit: sc.isGit})
+	if err != nil {
+		return ctx
+	}
+	org := cloneOrgEntry(a.opts.Home, root.URL)
+	if org == nil {
+		return ctx
+	}
+	if name := a.setupOfOrg(org.Name); name != "" {
 		return op.WithSetup(ctx, name)
 	}
 	return ctx
