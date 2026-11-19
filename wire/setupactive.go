@@ -82,6 +82,10 @@ type SetupResolution struct {
 	Folder string `json:"folder,omitempty"`
 	// Steps is every step in order with its outcome.
 	Steps []SetupExplainStep `json:"steps"`
+	// byStoreClone: step 5 chose the setup by the org whose store clone
+	// the folder is (devco D-693), not by the repo's org; that org is then
+	// the hint the org resolution uses (setupHint), as a folder match's is.
+	byStoreClone bool
 }
 
 // SetupQuery is everything ResolveSetup reads; every field is a seam.
@@ -236,14 +240,26 @@ func ResolveSetup(ctx context.Context, q SetupQuery) (SetupResolution, error) {
 		}
 	}
 
-	// 5. org match
+	// 5. org match. Inside a store clone the org is the store's own (the
+	// org entry whose store the clone's origin is, devco D-693): no folder
+	// rule matches a clone (step 4), and a code repo's org rules (links,
+	// own: patterns) do not name a store, so before it a clone of the
+	// org's store resolved no setup and no org; its writes went out as
+	// the OS user, and the org's admin was refused as "not an admin".
+	cloneOrg := ""
+	if !done && res.Folder != "" {
+		cloneOrg = storeCloneOrg(q.Home, res.Folder)
+	}
 	switch {
 	case done:
 		trace(opssetup.WhyOrg, SetupStepNotReached, "")
-	case q.OrgOf == nil:
+	case cloneOrg == "" && q.OrgOf == nil:
 		trace(opssetup.WhyOrg, SetupStepMiss, "the org was not checked")
 	default:
-		org, oerr := q.OrgOf(ctx)
+		org, oerr := cloneOrg, error(nil)
+		if org == "" {
+			org, oerr = q.OrgOf(ctx)
+		}
 		var of []onboard.SetupEntry
 		for _, s := range enabled {
 			if org != "" && s.Org == org {
@@ -259,6 +275,9 @@ func ResolveSetup(ctx context.Context, q SetupQuery) (SetupResolution, error) {
 			trace(opssetup.WhyOrg, SetupStepMiss, "no setup is for org "+org)
 		case len(of) > 1:
 			return refuse(opssetup.WhyOrg, "org "+org+": "+of[0].Name+", "+of[1].Name, setupAmbiguousOrg(org, of))
+		case cloneOrg != "":
+			choose(of[0], opssetup.WhyOrg, org+" (this store clone's org)")
+			res.byStoreClone = true
 		default:
 			choose(of[0], opssetup.WhyOrg, org)
 		}
@@ -437,14 +456,14 @@ func plainOrgOf(home, dir string) func(context.Context) (string, error) {
 // the org already resolved, nothing to add).
 func setupHint(res SetupResolution) orgresolve.SetupHint {
 	e := res.Entry
-	if e.Org == "" || !e.Kind.HasOrg() || res.Active.Why == opssetup.WhyOrg {
+	if e.Org == "" || !e.Kind.HasOrg() || (res.Active.Why == opssetup.WhyOrg && !res.byStoreClone) {
 		return orgresolve.SetupHint{}
 	}
 	why := res.Active.Why
 	if res.Active.Detail != "" {
 		why += " " + res.Active.Detail
 	}
-	return orgresolve.SetupHint{Name: e.Name, Org: e.Org, Why: why}
+	return orgresolve.SetupHint{Name: e.Name, Org: e.Org, Why: why, StoreClone: res.byStoreClone}
 }
 
 // setupIdentity is the solo setup's identity for the chain (3.4); nil for

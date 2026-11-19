@@ -51,7 +51,7 @@ func (a *App) CreateClass(ctx context.Context, target store.Source, table row.Ta
 		if err != nil {
 			return "", err
 		}
-		to, err := a.opts.DefaultTarget(ctx, q)
+		to, err := a.routedDefault(ctx, q)
 		if err != nil {
 			return "", err
 		}

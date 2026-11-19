@@ -122,19 +122,19 @@ func TestJourneyStoreReadsEverything(t *testing.T) {
 		lee.Lore(ops, "search", "--query", "rotate token", "--all-repos").OK(t).Says(t, jsrSyncTask)
 	})
 	w.Step("day3/sql-labels-each-place-like-search", func() {
-		// D-568: `source` stays the attached name queries filter on; `place`
-		// is the label search prints, so the linked repo's rows read as
-		// <org>/<folder> in sql too
+		// D-568: `place` is the label search prints, so the linked repo's
+		// rows read as <org>/<folder> in sql too; D-685: `source` is that
+		// same label, one name per folder in every placement
 		const q = "SELECT source, place, count(*) AS n FROM rules_all GROUP BY 1, 2 ORDER BY 1, 2"
 		r := lee.Lore(app, "sql", "--internal", "--query", q).OK(t)
 		lee.Lore(app, "search", "--query", "sync rule").OK(t).Says(t, "["+tlOrg+"/"+jsrSync+"]", "["+tlOrg+"/org]")
-		for _, row := range []string{tlOrg + `\s+` + tlOrg + "/" + jsrSync + `\s+1`, tlOrg + `/org\s+` + tlOrg + `/org\s+1`} {
+		for _, row := range []string{tlOrg + "/" + jsrSync + `\s+` + tlOrg + "/" + jsrSync + `\s+1`, tlOrg + `/org\s+` + tlOrg + `/org\s+1`} {
 			if !regexp.MustCompile(`(?m)^` + row + `\s*$`).MatchString(r.Out()) {
 				t.Errorf("sql source/place row %q missing:\n%s", row, r.Out())
 			}
 		}
-		// the source column still filters as before
-		lee.Lore(app, "sql", "--internal", "--query", "SELECT body FROM rules_all WHERE source = '"+tlOrg+"'").OK(t).
+		// the source column filters on the folder-qualified name (D-685)
+		lee.Lore(app, "sql", "--internal", "--query", "SELECT body FROM rules_all WHERE source = '"+tlOrg+"/"+jsrSync+"'").OK(t).
 			Says(t, jsrSync+" rule one", "(1 row)")
 	})
 	w.Step("day3/the-org-reads-the-same-everywhere", func() {

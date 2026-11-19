@@ -163,6 +163,12 @@ type SetupHint struct {
 	Org string
 	// Why says how the setup was chosen ("folder ~/www/projects/agency/**").
 	Why string
+	// StoreClone: the folder is a clone of this org's own store (a store
+	// checkout, no code repo), and the setup was chosen by that. The
+	// store's org then decides right after LORE_ORG, above the code-repo
+	// rules (devco D-693): an ops org's store under the company's own:
+	// pattern is still the ops org's.
+	StoreClone bool
 }
 
 // SetupMismatch is set when rules 1–5 resolve another org than the active
@@ -285,6 +291,21 @@ func Resolve(in Inputs) (Result, error) {
 		choose(o, StepEnv, "LORE_ORG="+in.EnvOrg, explicitRole(o, links, in.Remotes))
 	} else {
 		trace(StepEnv, OutcomeMiss, "LORE_ORG is not set")
+	}
+
+	// ── A store clone: the org whose store it is (devco D-693) ─────────
+	// A store checkout is no code repo: links, own:/repos: patterns and a
+	// committed org.yaml name code repos, so the org whose store the clone
+	// is decides there, as the setup step chose it.
+	// storeCloneDecided keeps the setup hint block below from tracing
+	// StepSetup a second time ("not reached") after this rule hit it.
+	storeCloneDecided := false
+	if hint := in.Setup; !decided && hint.StoreClone && hint.Org != "" {
+		if o := cfg.FindOrg(hint.Org); o != nil {
+			trace(StepSetup, OutcomeHit, fmt.Sprintf("setup %s (%s): this folder is a clone of %s's store", hint.Name, hint.Why, o.Name))
+			choose(o, StepSetup, "store clone of "+o.Name+" (setup "+hint.Name+")", RoleOwn)
+			storeCloneDecided = true
+		}
 	}
 
 	// ── Rule 2: repo_orgs (lore org use) ───────────────────────────────
@@ -434,7 +455,7 @@ func Resolve(in Inputs) (Result, error) {
 	// Below every F10 rule: a store link or a pattern naming another org
 	// stays the truth (fail closed: a client repo inside a setup's folder
 	// keeps its leak guards), and the clash is recorded as a mismatch.
-	if hint := in.Setup; hint.Org != "" {
+	if hint := in.Setup; hint.Org != "" && !storeCloneDecided {
 		o := cfg.FindOrg(hint.Org)
 		switch {
 		case decided:

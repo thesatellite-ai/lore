@@ -52,3 +52,40 @@ func TestResolveStoreAttachedTwiceFallsThrough(t *testing.T) {
 		t.Fatalf("resolved %q by %v, want acme by the own pattern", r.OrgName(), r.Step)
 	}
 }
+
+// TestResolveStoreCloneHint (devco D-693): in a clone of an org's store
+// the store's org decides, above a code-repo own: pattern of another org
+// that the store's remote also matches (an ops org's store kept under the
+// company's GitHub owner), with no setup mismatch; a plain setup hint
+// keeps losing to the pattern, as before. The trace names the setup step
+// once (it listed it hit, then "not reached").
+func TestResolveStoreCloneHint(t *testing.T) {
+	t.Parallel()
+	cfg := &orgconf.Config{Orgs: []orgconf.Org{
+		{Name: "acme", Own: []string{"github.com/acme-co/*"}},
+		{Name: "acmeops"},
+	}}
+	remotes := []string{"github.com/acme-co/lore-ops"}
+	r, err := Resolve(Inputs{Config: cfg, Remotes: remotes, Setup: SetupHint{Name: "acmeops-admin", Org: "acmeops", Why: "org acmeops", StoreClone: true}})
+	if err != nil || r.Org == nil || r.Org.Name != "acmeops" || r.SetupMismatch != nil || r.Role != RoleOwn {
+		t.Fatalf("store clone: got org %v role %s mismatch %+v err %v, want acmeops own", r.Org, r.Role, r.SetupMismatch, err)
+	}
+	// `lore explain org` lists the setup step once: hit by the store clone,
+	// never again as "not reached" from the setup hint block
+	setupLines := 0
+	for _, l := range r.Trace {
+		if l.Step == StepSetup {
+			setupLines++
+			if l.Outcome != OutcomeHit {
+				t.Errorf("store clone trace: setup step %s (%s), want hit", l.Outcome, l.Reason)
+			}
+		}
+	}
+	if setupLines != 1 {
+		t.Errorf("store clone trace lists the setup step %d times, want once: %+v", setupLines, r.Trace)
+	}
+	r, err = Resolve(Inputs{Config: cfg, Remotes: remotes, Setup: SetupHint{Name: "acmeops-admin", Org: "acmeops", Why: "folder ~/ops/**"}})
+	if err != nil || r.Org == nil || r.Org.Name != "acme" || r.SetupMismatch == nil {
+		t.Fatalf("plain hint: got org %v mismatch %+v err %v, want acme by pattern with a mismatch", r.Org, r.SetupMismatch, err)
+	}
+}

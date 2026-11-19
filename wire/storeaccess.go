@@ -72,22 +72,36 @@ func sshAliasResolver(ctx context.Context) orgconf.AliasResolver {
 // answers are cached for the process: the ssh config is read once per
 // host per run, from the file only (no ssh process, no network).
 func init() {
-	var cache sync.Map // host → aliasAnswer
-	gitbackend.SetAliasHosts(func(host string) (string, bool) {
-		if v, ok := cache.Load(host); ok {
-			a := v.(aliasAnswer)
-			return a.hostName, a.ok
-		}
-		al, ok := sshAliasResolver(context.Background())(host)
-		cache.Store(host, aliasAnswer{hostName: al.HostName, ok: ok})
+	gitbackend.SetAliasHosts(aliasHostResolver(
+		func(host string) (orgconf.SSHAlias, bool) { return sshAliasResolver(context.Background())(host) },
+		setupAliasHost,
+	))
+}
+
+// aliasHostResolver is the answer SetAliasHosts installs: the HostName
+// ssh reads for host (sshConfig, cached per host for the process), else a
+// setup's github.host_alias (setupHost), asked again on every ssh miss
+// because the lore home and its setups may differ per call. devco D-684:
+// the ssh miss was cached first and answered from the cache on the next
+// call, so only a process's first question about an alias the ssh config
+// does not name (a fake or bare HOME, a machine whose ~/.ssh/config lives
+// elsewhere) reached the setup; `lore sync` in a linked client repo cloned
+// as git@<host_alias>:<owner>/<repo>.git asked first for a store url, then
+// saw its own remote unresolved, matched no link and attached no store.
+func aliasHostResolver(sshConfig orgconf.AliasResolver, setupHost func(string) (string, bool)) gitbackend.AliasHostFunc {
+	var cache sync.Map // host → aliasAnswer (the ssh config's answer only)
+	return func(host string) (string, bool) {
+		a, ok := cache.Load(host)
 		if !ok {
-			// not cached: the lore home (and its setups) may differ per call
-			if hn, sok := setupAliasHost(host); sok {
-				return hn, true
-			}
+			al, sok := sshConfig(host)
+			a = aliasAnswer{hostName: al.HostName, ok: sok}
+			cache.Store(host, a)
 		}
-		return al.HostName, ok
-	})
+		if ans := a.(aliasAnswer); ans.ok {
+			return ans.hostName, true
+		}
+		return setupHost(host)
+	}
 }
 
 // init gives the backend's same-store test git's own url rewrite
@@ -134,7 +148,7 @@ func setupAliasHost(host string) (string, bool) {
 	return "", false
 }
 
-// aliasAnswer is one cached answer of the alias-host resolver.
+// aliasAnswer is one cached ssh-config answer of the alias-host resolver.
 type aliasAnswer struct {
 	hostName string
 	ok       bool
