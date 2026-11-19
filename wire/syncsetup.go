@@ -193,6 +193,13 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 	}
 	synced := map[string]bool{} // normalized urls this pass reported
 	for i, one := range stores {
+		if org := orgOfURL(a.opts.Home, one.URL); org != "" && out.Data.Pass != opssync.PassStore && refusedClone(a.opts.Home, one.URL, one.Branch) {
+			// D-726: an org store this login may not read (the link
+			// reader's no-access record) is skipped with one line, never
+			// a failed store; `lore sync` in its clone still tries it
+			out.Lines = append(out.Lines, "store "+string(one.Name)+": skipped: no access ("+orgNoAccessHint(org)+")")
+			continue
+		}
 		r, code := a.syncOneStore(ctx, one)
 		name := ""
 		if i < len(shown) {
@@ -218,6 +225,7 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 	// (an admin's set-url) is copied now, so the teammate follows in this
 	// sync, not at their next command (local reads only, no network)
 	refreshOrgSources(ctx, a.opts.Home, nil)
+	out.Lines = append(out.Lines, droppedStoreNotes(a.opts.Home)...) // D-727: a store no longer read, said once
 	if len(out.Data.Stores) == 0 {
 		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
 		return out, nil

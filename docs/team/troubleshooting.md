@@ -140,7 +140,7 @@ A **link** tells lore that a store folder holds the agency's private notes for t
 # bob, in website
 $ lore memory add --body 'the client wants weekly demos'
 ERROR: [E_LINK_UNKNOWN] cannot tell where this write belongs: org store agency, agency/org has no local copy and cannot be reached
-  hint: go online once (the store is then kept locally), or name the target: --to repo or --to <store>
+  hint: check which account the key logs in as (`ssh -T git@github.com`); a setup with that store's account (`lore setup`) reaches it through the account's host alias or key, or name the target: --to repo or --to <store>
 (exit 18)
 ```
 <!-- /example -->

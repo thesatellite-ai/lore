@@ -478,6 +478,11 @@ func (b *Backend) checkout(ctx context.Context) error {
 		if accessRefused(fetchErr) {
 			return errs.Wrap(errs.StoreUnreachable, msgAccessRefused, fetchErr).WithHint(HintAccessRefused)
 		}
+		if NoAccessRecorded(b.work) {
+			// D-726: the org link reader already saw the forge refuse
+			// this login; the fetch's own text may not say so
+			return errs.Wrap(errs.StoreUnreachable, msgAccessRefused, errors.Join(ErrNoAccessRecorded, fetchErr)).WithHint(HintAccessRefused)
+		}
 		return errs.Wrap(errs.StoreUnreachable, "git: the store has no local copy yet and cannot be reached", fetchErr).
 			WithHint("go online once; afterwards the local copy is used")
 	}
@@ -569,6 +574,9 @@ func AccessRefused(err error) bool { return accessRefused(err) }
 // accessRefused reports a failed fetch whose remote refused this machine's
 // credentials (accessRefusedText), as opposed to a remote that never answered.
 func accessRefused(err error) bool {
+	if errors.Is(err, ErrNoAccessRecorded) {
+		return true
+	}
 	msg := stderrOf(err)
 	return slices.ContainsFunc(accessRefusedText, func(t string) bool { return strings.Contains(msg, t) })
 }

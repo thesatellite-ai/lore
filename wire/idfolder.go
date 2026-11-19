@@ -163,7 +163,7 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 // (attached already: the read looked there).
 func (a *App) cloneIDScan(ctx context.Context, sc storeCheckout) orgFolderScan {
 	all := a.cloneFolderScan(ctx, sc)
-	out := orgFolderScan{Unread: all.Unread, Searched: all.Searched}
+	out := orgFolderScan{Unread: all.Unread, Searched: all.Searched, NoAccess: all.NoAccess}
 	for _, f := range all.Folders {
 		if f.Dir == sc.top && f.Folder == sc.folder {
 			continue
@@ -206,6 +206,7 @@ func (a *App) cloneFolderScan(ctx context.Context, sc storeCheckout) orgFolderSc
 	for k, v := range others.Unread {
 		scan.Unread[k] = v
 	}
+	scan.NoAccess = others.NoAccess
 	return scan
 }
 

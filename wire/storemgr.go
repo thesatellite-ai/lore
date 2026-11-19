@@ -622,7 +622,11 @@ func (a *App) openStore(ctx context.Context, canon, raw string) (store.Backend, 
 	if err != nil {
 		return nil, err
 	}
-	return o.Open(ctx, canon, a.opts.openOptions())
+	b, err := o.Open(ctx, canon, a.opts.openOptions())
+	if err != nil {
+		return nil, orgNoAccessError(a.opts.Home, raw, err) // D-726: name the org, not "go online"
+	}
+	return b, nil
 }
 
 // AddStore implements opsstores.Manager.

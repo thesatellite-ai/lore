@@ -26,6 +26,7 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -56,6 +57,10 @@ const (
 var (
 	// ErrStoreOffline: the store could not be fetched and no copy exists.
 	ErrStoreOffline = errors.New("orgcfg: store is offline")
+	// ErrStoreNoAccess: the forge refused this login a store a link must
+	// read (no access, or the store is gone; devco D-726): asking an
+	// admin fixes it, waiting for the network never does.
+	ErrStoreNoAccess = errors.New("orgcfg: no access to the store")
 	// ErrNoStoreBranch: the store has no such branch (never created here).
 	ErrNoStoreBranch = errors.New("orgcfg: store branch does not exist")
 	// ErrStoreEmpty: the store repo has no branch at all (a brand-new
@@ -429,7 +434,25 @@ func (g *GitLinks) pickLinkStore(ctx context.Context, plan orgresolve.LinkPlan) 
 		if berr := ensureClone(ctx, dir, sc.URL, own); berr != nil {
 			return "", berr
 		}
-		if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil && lastFetch(dir).IsZero() {
+		// D-726: a store this login may not read is skipped like the
+		// link reader skips it (it cannot hold a folder this person
+		// links to); only the store --store names refuses, with the cause
+		_, _, refused := noAccessAt(dir)
+		var ferr error
+		if !refused {
+			ferr = fetchLocked(ctx, g.Route, dir, g.now())
+			var k gitfault.Kind
+			if k, refused = noAccessFault(ferr); refused {
+				markNoAccess(dir, k, g.now())
+			}
+		}
+		if refused {
+			if n == plan.StoreURL {
+				return "", fmt.Errorf("%w: %s (%s's store; your git login cannot read it, or it is gone)", ErrStoreNoAccess, n, o.Name)
+			}
+			continue
+		}
+		if ferr != nil && lastFetch(dir).IsZero() {
 			return "", fmt.Errorf("%w: %s (cannot tell which store holds %s/)", ErrStoreOffline, n, plan.Folder)
 		}
 		if holder != "" {

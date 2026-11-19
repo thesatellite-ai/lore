@@ -35,10 +35,6 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
-// noAccessFile records, in a store clone's .git/lore, that the last fetch
-// was refused: "<kind> <RFC 3339 time>".
-const noAccessFile = "no-access"
-
 // NoAccess is one org store this machine's login could not reach at its
 // last fetch (devco D-726).
 type NoAccess struct {
@@ -69,7 +65,7 @@ func noAccessFault(err error) (gitfault.Kind, bool) {
 
 // noAccessPath is the record's file in clone dir.
 func noAccessPath(dir string) string {
-	return filepath.Join(gitbackend.StateDirOf(dir), noAccessFile)
+	return gitbackend.NoAccessPath(dir) // the backend's open reads it too
 }
 
 // markNoAccess records a refused fetch of the clone at dir. Best effort:

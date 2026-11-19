@@ -76,4 +76,14 @@ func TestStoryOTeamStore(t *testing.T) {
 		r = mo.LoreIn(mwc, "memory", "add", "--body", "member note for the client", "--to", "lore-secret/secret", "--yes")
 		oCheck(t, "D-727/member-in-team-writes", r.Code == 0, "a member on @secret cannot write into the team store's folder:\n%s", r)
 	})
+
+	s.Step("D-727/member-leaves-the-team-told-once", func() {
+		ada.LoreIn(pc, "team", "member", "remove", "--handle", "@secret", "--members", oMemOrg.Email, "--yes").OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		first := mo.LoreIn(mwc, "sync")
+		oCheck(t, "D-727/member-left-team-note", first.Code == 0 && strings.Contains(first.Out(), "lore-secret: no longer read: audience team:@secret, you are not on it") &&
+			strings.Contains(first.Out(), "lore store forget --url "), "the sync that drops the team store does not say so once:\n%s", first)
+		again := mo.LoreIn(mwc, "sync")
+		oCheck(t, "D-727/member-left-team-note-once", again.Code == 0 && !strings.Contains(again.Out(), "no longer read"), "the dropped team store is said again:\n%s", again)
+	})
 }

@@ -448,6 +448,10 @@ func linkError(err error) error {
 		return errs.New(errs.NotAStore, err.Error()).WithHint(hintEmptyStore)
 	case errors.Is(err, orgcfg.ErrNoStoreBranch):
 		return errs.New(errs.InvalidInput, err.Error()).WithHint(hintNoBranch)
+	case errors.Is(err, orgcfg.ErrStoreNoAccess):
+		// D-726: the forge refused this login; an admin grants access
+		return errs.New(errs.StoreUnreachable, strings.Replace(err.Error(), "orgcfg: no access to the store", "no access to the store", 1)).
+			WithHint("Ask an admin of the org for read access to it, then run `lore sync` and link again; or link into another store of the org (`lore store list` names them)")
 	case errors.Is(err, orgcfg.ErrStoreOffline):
 		if k := gitfault.Classify(err.Error()); k == gitfault.Missing {
 			// G-16: the host answers that there is no repository: the
