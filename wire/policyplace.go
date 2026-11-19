@@ -10,8 +10,8 @@ package wire
 //	  org folder             ──▶ --to <org>/org            (company: admins)
 //	  store root             ──▶ --to <the store's name>   (company: admins)
 //	  folder                 ──▶ --to <org>/<folder>       (company when the
-//	                             folder is of the org's own store: admins,
-//	                             devco D-681; another store's: members too)
+//	                             folder is of its org's own store: that
+//	                             org's admins, devco D-681)
 //	  repo, or the default   ──▶ the repo: no --to in a repo with .lore/,
 //	                             --to <org>/<folder> in a linked repo,
 //	                             --to <store>/<folder> of the link when
@@ -41,22 +41,28 @@ import (
 // print a command then, since no --to it could print would work (devco
 // D-658: it printed the literal `--to <store>` and `--to <store>/<folder>`).
 func (a *App) PolicyPlace(ctx context.Context, key policy.Key) (to string, company bool, ok bool) {
-	to, ok = a.policyPlace(ctx, key)
-	return to, ok && to != "" && a.companyGround(ctx, store.Source(to)), ok
+	to, company, _, ok = a.PolicyPlaceJudged(ctx, key, profilestore.NewJudge(a))
+	return to, company, ok
 }
 
-// companyGround reports whether the --to label place names company ground
-// (profilestore.CompanyGround) of this folder's org, the same answer the
-// role check of the write it prints gives (devco D-681: a project folder
-// of the company store is company ground, so a member is never printed a
-// policy write there).
-func (a *App) companyGround(ctx context.Context, place store.Source) bool {
-	ad, _ := a.OrgAdmins(ctx)
-	lv, known := a.StoreLevel(place)
-	if !known {
-		lv = ""
+// PolicyPlaceJudged is PolicyPlace judged by j (one per render, so each
+// org's roster opens once), plus the admins who may write there when the
+// place is company ground. The place is judged as the write's role check
+// judges it (profilestore.RequireAdminAt): by the roster of its own
+// store's org, and the repo ("" --to) inside a store clone as the folder
+// it is (devco D-681: in the ops store clone an ops folder's budget was
+// judged by the company roster and printed to a member as their command).
+func (a *App) PolicyPlaceJudged(ctx context.Context, key policy.Key, j *profilestore.Judge) (to string, company bool, admins profilestore.Admins, ok bool) {
+	to, ok = a.policyPlace(ctx, key)
+	if !ok {
+		return to, false, profilestore.Admins{}, false
 	}
-	return profilestore.CompanyGround(lv, place, ad.Org)
+	place := store.Source(to)
+	if to == "" {
+		place = store.SourceRepo
+	}
+	company, admins = j.At(ctx, place)
+	return to, company, admins, true
 }
 
 // policyPlace is PolicyPlace's --to and ok.
@@ -149,21 +155,4 @@ func onlyStoreAt(eng *engine.Engine, lv policy.Level) (store.Source, bool) {
 		return "", false
 	}
 	return got[0], true
-}
-
-// OrgAdmins is who the roster of this folder's org names as its admins
-// and whether the caller is one, for a hint that may only send an admin's
-// command to an admin (devco D-637). ok is false when no org roster is
-// readable here (no org: nothing is admin-only).
-func (a *App) OrgAdmins(ctx context.Context) (profilestore.Admins, bool) {
-	r, done, err := a.Roster(ctx, false)
-	defer done()
-	if err != nil || r == nil || r.Source() == store.SourceRepo {
-		return profilestore.Admins{}, false
-	}
-	ad, err := profilestore.ReadAdmins(ctx, r)
-	if err != nil {
-		return profilestore.Admins{}, false
-	}
-	return ad, true
 }

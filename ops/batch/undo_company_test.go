@@ -111,7 +111,9 @@ func (e *companyEnv) rule(t *testing.T, src store.Source, sev string) row.Row {
 // (the one-row and bulk forms refuse a member, D-637/D-659). A member's
 // undo of a create batch that added one, or of an edit batch whose undo
 // lowers one, is refused naming the row and the admin, before any write;
-// an admin's goes on; a project folder's rows stay every member's.
+// an admin's goes on; a project folder of the company store is company
+// ground too (devco D-681); another org's folder with no roster here is
+// every member's.
 func TestBatchUndoCompanyRowsAdminOnly(t *testing.T) {
 	ctx := engine.WithConfirmed(context.Background())
 	for _, c := range []struct {
@@ -124,7 +126,10 @@ func TestBatchUndoCompanyRowsAdminOnly(t *testing.T) {
 		{"member undoes the add of a company must rule", false, "acme/org", "create", true},
 		{"member undoes the raise of a company rule to must", false, "acme/org", "edit", true},
 		{"admin undoes the add of a company must rule", true, "acme/org", "create", false},
-		{"member undoes the add of a project folder's must rule", false, "acme/web", "create", false},
+		// devco D-681: a project folder of the company store is company ground
+		{"member undoes the add of a project folder's must rule", false, "agency/web", "create", true},
+		{"admin undoes the add of a project folder's must rule", true, "agency/web", "create", false},
+		{"member undoes the add of another org's folder's must rule", false, "acme/web", "create", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e := newCompanyEnv(t, c.asAdmin)

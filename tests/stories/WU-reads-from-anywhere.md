@@ -24,6 +24,7 @@
 12. (`TestStoryWUClaimPushOnlyWhenAsked`, D-639) A `task release` after the refused claim, and `task release --help`.
 13. (`TestStoryWUClaimPushOnlyWhenAsked`, D-669) `lore hold claim --name ci-suite` with no `--push`; then the claim's refusal, and the command it printed, run exactly as printed.
 14. (`TestStoryWUOpsFolderGround`, D-681) Ada also runs the ops setup `acmeops` (store `github.com/acme-co/lore-ops`, under the company's own pattern) with folder `infra`; Mo is a member of both rosters. In the ops store clone's `infra` folder Mo is refused a demotion and a pin of an `acmeops/infra` must rule, naming the `acmeops/org` roster; Ada may. Then one cell per (org folder, project folder, ops folder) × (pin set, policy set, rule edit --severity, rule delete --where): Mo is refused with "ask an admin of <org> (Ada Admin)", and Ada runs the printed line as printed.
+15. (`TestStoryWUOpsFolderGround`, D-681) Ada links the ops tools repo to `acmeops/infra`, adds a long must rule there and sets its budget to 1000. Mo's sync in the tools repo warns that the pinned part is over budget and sends Mo to `an admin of acmeops (Ada Admin)` for the rule and the budget; the commands show only as what the admin would run, and Mo running the rule edit is refused. Ada's sync gives her the commands and she runs the printed rule edit where it was printed. A bulk delete of the folder's must rules that Mo restores from the trash: Mo's `lore batch undo` of that batch takes nothing out, and the rules stay.
 
 ## What must hold
 

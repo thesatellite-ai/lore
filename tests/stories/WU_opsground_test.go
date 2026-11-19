@@ -13,9 +13,16 @@ package stories
 //	D-681/ops-folder: in the ops store clone's folder a member of the ops
 //	       roster is refused a demotion, a pin and a policy write, naming
 //	       the ops roster; the ops admin runs the printed command
+//	D-681/ops-budget-warning: in the ops tools repo (linked to the infra
+//	       folder) the over-budget warning sends an ops member to the ops
+//	       org's admins for the folder's pinned row and budget; the ops
+//	       admin is given the commands and runs them where printed
+//	D-681/batch-undo: a member's undo of an admin's restored bulk delete
+//	       never takes the folder's must rules out again
 
 import (
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -133,7 +140,79 @@ func TestStoryWUOpsFolderGround(t *testing.T) {
 			m.Lore(p.adminRows, "rule", "delete", "--where", "body~="+bulk, "--yes").OK(t)
 		}
 	})
+
+	s.Step("D-681/ops-budget-warning-member-asks-ops-admin", func() {
+		// the over-budget warning judges each pinned row and the budget's
+		// place by its own store's roster: in the ops store clone an ops
+		// folder's rule and budget were judged by the company roster and
+		// printed to an ops member as their own commands (refused when run)
+		// the ops tools repo reads the infra folder (a link, no .lore/ of its
+		// own), so its render carries the folder's pinned rows and budget
+		m.Lore(m.Home, "org", "config", "set", "--org", wogOpsOrg, "--key", "own", "--add", "github.com/acmeops-co/*", "--yes").OK(t)
+		m.Lore(tc.Dir, "org", "link", "--org", wogOpsOrg, "--project", wogFolder, "--own", "--yes").OK(t)
+		m.Lore(tc.Dir, "rule", "add", "--to", inInfra, "--severity", "must", "--body", strings.Repeat("every infra change ships as a reviewed plan rolled out in waves. ", 40), "--yes").OK(t)
+		m.Lore(tc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inInfra, "--yes").OK(t)
+		aout := m.Lore(tc.Dir, "sync").OK(t).Out()
+		out := mo.Lore(mt.Dir, "sync").OK(t).Out()
+		own, admins, _ := strings.Cut(out, "the admin would run")
+		if strings.Contains(own, "lore rule edit --id") || strings.Contains(own, "lore policy set") {
+			t.Fatalf("devco:D-681: an ops member is given an ops folder's fix as their own command:\n%s", out)
+		}
+		if !strings.Contains(own, "ask an admin of "+wogOpsOrg+" ("+wAdmin.Name+")") {
+			t.Fatalf("devco:D-681: the ops member is not sent to the ops org's admins:\n%s", out)
+		}
+		// what the member is told the admin would run is refused for them
+		if lower := wubPrinted(t, admins, "`lore rule edit"); lower != "" {
+			mo.Lore(mt.Dir, wubFields(t, "lore rule edit"+lower)...).Refused(t, "E_REFUSED", "only an admin of the org")
+		}
+		// the ops admin keeps the commands and runs them where printed
+		if strings.Contains(aout, "ask an admin") {
+			t.Fatalf("devco:D-681: the ops admin is sent to an admin:\n%s", aout)
+		}
+		lower := wubPrinted(t, aout, "take a row out of the pinned part with `")
+		wubRun(t, m, tc.Dir, lower)
+	})
+
+	s.Step("D-681/batch-undo-never-takes-must-rules-out-for-a-member", func() {
+		// an admin's bulk delete of an ops folder's must rules, restored
+		// from the trash by a member (restoring adds, which a member may):
+		// the member's undo of that batch never takes the rules out again
+		// (the batch log is the admin's machine's; no command makes a
+		// create batch of rules, so the refusal itself is the unit's,
+		// TestBatchUndoCompanyRowsAdminOnly), and the admin's undo of the
+		// same shape on their machine skips the restored rows
+		minfra := filepath.Join(opsCloneDir(t, m), wogFolder)
+		moinfra := filepath.Join(opsCloneDir(t, mo), wogFolder)
+		bulkDelete := func(mark string) string {
+			for i := 0; i < 2; i++ {
+				m.Lore(tc.Dir, "rule", "add", "--to", inInfra, "--severity", "must", "--body", mark+" "+strconv.Itoa(i), "--yes").OK(t)
+			}
+			m.Lore(tc.Dir, "sync").OK(t)
+			del := m.Lore(minfra, "rule", "delete", "--where", "body~="+mark, "--yes").OK(t).Out()
+			bat := wogBatch.FindString(del)
+			if bat == "" {
+				t.Fatalf("no batch printed by the bulk delete:\n%s", del)
+			}
+			m.Lore(minfra, "sync").OK(t)
+			return bat
+		}
+		bat := bulkDelete("member batch cell")
+		mo.Lore(mt.Dir, "sync").OK(t)
+		mo.Lore(moinfra, "trash", "restore", "--id", bat).OK(t)
+		r := mo.Lore(moinfra, "batch", "undo", "--id", bat, "--yes")
+		if out := r.Out(); !strings.Contains(out, "nothing to undo") && !strings.Contains(out, "E_REFUSED") {
+			t.Fatalf("devco:D-681: a member's undo of an admin's batch did something:\n%s", out)
+		}
+		mo.Lore(moinfra, "rule", "list").OK(t).Says(t, "member batch cell 0", "member batch cell 1")
+		abat := bulkDelete("admin batch cell")
+		m.Lore(minfra, "trash", "restore", "--id", abat).OK(t)
+		m.Lore(minfra, "batch", "undo", "--id", abat, "--yes").OK(t).Says(t, "not in the trash")
+		m.Lore(minfra, "rule", "list").OK(t).Says(t, "admin batch cell 0", "admin batch cell 1")
+	})
 }
+
+// wogBatch finds a batch id in output.
+var wogBatch = regexp.MustCompile(`bat_[0-9A-Za-z]+`)
 
 // opsCloneDir is the ops store clone under the machine's lore home.
 func opsCloneDir(t *testing.T, m *journeys.Machine) string {
