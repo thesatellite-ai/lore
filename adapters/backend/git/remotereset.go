@@ -486,6 +486,13 @@ func RepointOrigin(ctx context.Context, dir, origin string) error {
 	if _, err := r.run(ctx, call{dir: dir, args: []string{"remote", "set-url", "--", RemoteName, origin}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: point the clone "+dir+" at "+origin, err)
 	}
+	return markRepointed(dir, origin)
+}
+
+// markRepointed drops the remote-tip note of the clone at dir and writes
+// the repointed mark (RepointOrigin): origin now names another repository
+// than the one the clone's remote knowledge describes.
+func markRepointed(dir, origin string) error {
 	if err := os.Remove(remoteTipPath(dir)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return errs.FileIO("remove", remoteTipPath(dir), err)
 	}

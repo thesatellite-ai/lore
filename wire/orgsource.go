@@ -107,7 +107,41 @@ func refreshOrgSources(ctx context.Context, home string, urls map[store.Source]s
 	if err != nil || cfg == nil {
 		return
 	}
-	only := orgsOfStores(cfg, urls)
+	refreshOrgEntries(ctx, home, cfg, orgsOfStores(cfg, urls))
+}
+
+// refreshSyncedOrgSources refreshes only the org entries that list one of
+// the stores a sync touched (urls): a repo sync's fetch may bring an
+// admin's lore-org.yaml move, and the teammate follows in that sync (devco
+// D-699). Unlike refreshOrgSources it never falls back to every entry, so
+// a sync in org A's repo, or of personal stores only, never reads org B's
+// clone (D-278).
+func refreshSyncedOrgSources(ctx context.Context, home string, urls map[store.Source]string) {
+	if home == "" || len(urls) == 0 {
+		return
+	}
+	cfg, _, err := orgcfg.LoadConfig(home)
+	if err != nil || cfg == nil {
+		return
+	}
+	if only := orgsSynced(cfg, urls); len(only) > 0 {
+		refreshOrgEntries(ctx, home, cfg, only)
+	}
+}
+
+// orgsSynced is the org entries a sync of the stores urls refreshes: those
+// listing one of them, and none (never every entry, unlike the open's
+// refresh) when no url is an org's store (devco D-278, D-699).
+func orgsSynced(cfg *orgconf.Config, urls map[store.Source]string) map[string]bool {
+	if len(urls) == 0 {
+		return nil
+	}
+	return orgsOfStores(cfg, urls)
+}
+
+// refreshOrgEntries copies lore-org.yaml into the org entries of cfg that
+// only names (every entry when only is nil); see refreshOrgSources.
+func refreshOrgEntries(ctx context.Context, home string, cfg *orgconf.Config, only map[string]bool) {
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
 		if only != nil && !only[o.Name] {
