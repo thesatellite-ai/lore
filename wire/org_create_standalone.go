@@ -19,6 +19,7 @@ package wire
 //	          ─▶ name, id:, repo_orgs, defaults.client_repos in one write
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -370,6 +371,47 @@ func respellSibling(typed, file, sibling string) (string, bool) {
 
 // Import implements opsorgcmd.Host.
 func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes bool) (opsorgcmd.Report, error) {
+	rep, err := h.importFrom(ctx, in, yes, nil)
+	var note *orgcfg.OrgStoreNoteError
+	if !errors.As(err, &note) || note.Note.MainStore == "" || in.Branch != "" {
+		return rep, err
+	}
+	// devco:D-721: the url is one of an org's other stores; its
+	// lore-store.yaml names the org's main store, which holds the org:
+	// import (join) that, and the other store comes with the org's entry
+	// as the org lists it. Followed once, never round a loop.
+	main := in
+	main.URL = note.Note.MainStore
+	rep, merr := h.importFrom(ctx, main, yes, &note.Note)
+	if merr != nil && errs.CodeOf(merr) == errs.Offline {
+		return rep, secondStoreError(note.Note)
+	}
+	if merr != nil {
+		return rep, merr
+	}
+	if !yes {
+		rep.Lines = append([]string{secondStoreLine(note.Note)}, rep.Lines...)
+	}
+	return rep, nil
+}
+
+// secondStoreLine says the url typed is another store of an org and the
+// import follows its main store (devco:D-721).
+func secondStoreLine(n orgcfg.OrgStoreNote) string {
+	return n.Store + " is a store of org " + cmp.Or(n.Org, "<unnamed>") + "; the org lives in its main store " + n.MainStore + ", so this joins that"
+}
+
+// secondStoreError is the refusal for another store of an org whose main
+// store cannot be read from here: the printed join names the main store.
+func secondStoreError(n orgcfg.OrgStoreNote) error {
+	return errs.New(errs.InvalidInput, "this is a store of org "+cmp.Or(n.Org, "<unnamed>")+" (its main store is "+n.MainStore+"), and the main store could not be read from here").
+		WithHint("join with the main store: lore setup join --invite " + n.MainStore + " (ask the org's admin for read access if that fails too)")
+}
+
+// importFrom is Import of one url; via is the other store the url was
+// named by (nil when typed), so a main store that again holds no org is
+// not followed further.
+func (h *standaloneOrg) importFrom(ctx context.Context, in opsorgcmd.ImportIn, yes bool, via *orgcfg.OrgStoreNote) (opsorgcmd.Report, error) {
 	cfg, err := h.loadOrgConfig()
 	if err != nil {
 		return opsorgcmd.Report{}, err
@@ -378,6 +420,10 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	in.URL = typed.URL
 	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: cfg, Now: h.wall(), Route: typed.withRule(h.router())}
 	sg, err := g.ReadSuggestion(ctx, in.URL, in.Branch)
+	var note *orgcfg.OrgStoreNoteError
+	if err != nil && via == nil && errors.As(err, &note) && note.Note.MainStore != "" {
+		return opsorgcmd.Report{}, err // Import follows it
+	}
 	if err != nil {
 		return opsorgcmd.Report{}, importError(err, in.URL)
 	}
@@ -709,6 +755,17 @@ func orgNotSentError(url string) error {
 		WithHint("ask the org's admin to run lore sync, then run this again")
 }
 
+// noOrgNamedError is the refusal for a lore store that holds no
+// lore-org.yaml and whose lore-store.yaml names no org (devco:D-721): an
+// org whose admin has not sent it yet (their team step pushed the store
+// before the org file), or another store of an org made before org store
+// add named the org in it. The two look the same from here, so the
+// refusal names both ways on: the admin's sync, or the main store's url.
+func noOrgNamedError(url string) error {
+	return errs.New(errs.InvalidInput, "the store holds no org yet: the admin who made the org has not sent it (it stays on their machine until their first lore sync), or "+url+" is another store of an org, not its main store").
+		WithHint("ask the org's admin to run lore sync, then run this again; if it is another store of the org, join with its main store: lore setup join --invite <the org's main store url>")
+}
+
 // importMissingHint is the way on from importError's missing repository.
 func importMissingHint(url string) string {
 	return "check the address for a typo and import again: lore org import --url <store-url>; if " + url +
@@ -722,6 +779,10 @@ func orgFileError(err error, url string) error {
 		return errs.New(errs.InvalidInput, err.Error()).
 			WithHint("that store already suggests an org: adopt it with `lore org import --url " + url + "`")
 	case errors.Is(err, orgcfg.ErrNoOrgFile):
+		var note *orgcfg.OrgStoreNoteError
+		if errors.As(err, &note) {
+			return noOrgNamedError(url)
+		}
 		return orgNotSentError(url)
 	}
 	return linkError(err)
