@@ -494,7 +494,7 @@ Jump to: [actor](#lore-actor) · [agent](#lore-agent) · [api](#lore-api) · [ar
 | `lore org set` | Write the committed .lore/org.yaml (only in the org's own repos) | [team/identity-and-stores › Step 5 — Let a repo name its org for everyone: lore org set](../../docs/team/identity-and-stores.md#step-5--let-a-repo-name-its-org-for-everyone-lore-org-set) |
 | `lore org store` … | The stores of an org (add) | — |
 | `lore org store add` | Add a store to an org: its lore-org.yaml (committed in the org store's clone; --push sends it) and this machine's org entry | — |
-| `lore org store audience` | Set who in an org uses one of its stores (admin only): admins (members' lore never reads it) or everyone | — |
+| `lore org store audience` | Set who in an org uses one of its stores (admin only): admins (members' lore never reads it), team:@<team> (only that team and the admins) or everyone | — |
 | `lore org store remove` | Retire a store from an org (admin only): drop it from its lore-org.yaml so members stop cloning and fetching it; the store and its notes are kept | — |
 | `lore org use` | Choose the org entry for this project on this machine (not committed) | [team/commands › lore org use](../../docs/team/commands.md#lore-org-use) |
 

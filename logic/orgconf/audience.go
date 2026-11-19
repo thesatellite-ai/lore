@@ -9,11 +9,18 @@ package orgconf
 // an admin's org entry only; a member's entry never lists it, so nothing
 // on a member's machine tries to read it.
 //
-//	lore-org.yaml stores ─▶ Shared.ForPerson(admin) ─▶ the entry's stores
-//	                                               └▶ skipped (doctor's note)
+//	lore-org.yaml stores ─▶ Shared.ForPerson(viewer) ─▶ the entry's stores
+//	                                                └▶ skipped (doctor's note)
+//
+// devco D-727: `audience: team:@<handle>` keeps a store to one roster
+// team (and the admins). A member outside the team never has it in their
+// org entry, so their lore never clones, fetches or names it (not even in
+// doctor's note: they have no reason to know it exists); a member who
+// joins the team gets it at their next open after the roster change.
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -33,21 +40,95 @@ const (
 	AudienceAdmins Audience = "admins"
 )
 
+// audienceTeamPrefix starts a team audience: "team:@" and the roster
+// team's handle (D-727). Only that team's members and the org's admins
+// use the store.
+const audienceTeamPrefix = "team:@"
+
+// TeamAudience is the audience of the roster team handle (with or
+// without its @).
+func TeamAudience(handle string) Audience {
+	return Audience(audienceTeamPrefix + strings.TrimPrefix(strings.TrimSpace(handle), "@"))
+}
+
+// Team is the team handle (no @) of a team audience; ok is false for
+// every other audience.
+func (a Audience) Team() (handle string, ok bool) {
+	h, ok := strings.CutPrefix(string(a), audienceTeamPrefix)
+	if !ok || !validTeamHandle(h) {
+		return "", false
+	}
+	return h, true
+}
+
+// teamHandleChars are the characters of a roster team handle (ops/team
+// handleChars: one lowercase word).
+const teamHandleChars = "abcdefghijklmnopqrstuvwxyz0123456789_-"
+
+// validTeamHandle is the roster's handle rule (ops/team teamHandle): one
+// lowercase word of letters, digits, '_' and '-', starting with a letter
+// or digit.
+func validTeamHandle(h string) bool {
+	if h == "" || strings.Trim(h, teamHandleChars) != "" {
+		return false
+	}
+	c := h[0]
+	return c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
+}
+
+// Known reports whether a is an audience lore knows: everyone, admins or
+// a team audience with a valid handle.
+func (a Audience) Known() bool {
+	if a == AudienceEveryone || a == AudienceAdmins {
+		return true
+	}
+	_, ok := a.Team()
+	return ok
+}
+
+// Viewer is what decides which of an org's stores one person uses: an
+// admin uses every store; a member uses the everyone stores and those of
+// the teams (handles, no @) they belong to.
+type Viewer struct {
+	Admin bool
+	Teams []string
+}
+
+// For reports whether the person v uses a store of audience a. An
+// audience lore does not know is the admins' (fail safe).
+func (a Audience) For(v Viewer) bool {
+	if v.Admin || a.ForMembers() {
+		return true
+	}
+	if h, ok := a.Team(); ok {
+		return slices.Contains(v.Teams, h)
+	}
+	return false
+}
+
 // audienceEveryoneWord is how a command names AudienceEveryone
 // (`--audience everyone`); the file leaves the key out.
 const audienceEveryoneWord = "everyone"
 
 // AudienceWords are the values a command takes, for hints.
-var AudienceWords = []string{audienceEveryoneWord, string(AudienceAdmins)}
+var AudienceWords = []string{audienceEveryoneWord, string(AudienceAdmins), audienceTeamPrefix + "<team>"}
 
-// ParseAudience reads a command's --audience value ("everyone" or
-// "admins", any case).
+// ParseAudience reads a command's --audience value ("everyone", "admins"
+// or "team:@<handle>", any case; the @ may be left out).
 func ParseAudience(s string) (Audience, error) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
+	w := strings.ToLower(strings.TrimSpace(s))
+	switch w {
 	case audienceEveryoneWord, "":
 		return AudienceEveryone, nil
 	case string(AudienceAdmins):
 		return AudienceAdmins, nil
+	}
+	if h, ok := strings.CutPrefix(w, "team:"); ok {
+		a := TeamAudience(h)
+		if _, valid := a.Team(); !valid {
+			return "", fmt.Errorf("audience %q: the team handle must be one lowercase word (letters, digits, '_' and '-'), e.g. team:@web", s)
+		}
+		return a, nil
 	}
 	return "", fmt.Errorf("audience %q: use one of %s", s, strings.Join(AudienceWords, ", "))
 }
@@ -65,14 +146,22 @@ func (a Audience) String() string {
 
 // AdminsOnly reports whether s is used only by the org's admins. The org
 // folder's store (the roster and company rules every member needs) never
-// is, whatever its audience says.
-func (s Store) AdminsOnly() bool { return s.OrgFolder == "" && !s.Audience.ForMembers() }
+// is, whatever its audience says. A team store is not (D-727): its team's
+// members read it and link repos to it.
+func (s Store) AdminsOnly() bool {
+	_, team := s.Audience.Team()
+	return s.Restricted() && !team
+}
 
-// HasAdminsOnly reports whether sh lists a store only admins use (so the
-// caller has to know whether the person is an admin).
-func (sh Shared) HasAdminsOnly() bool {
+// Restricted reports whether some members of the org do not use s: an
+// admins-only or a team store. The org folder's store never is.
+func (s Store) Restricted() bool { return s.OrgFolder == "" && !s.Audience.ForMembers() }
+
+// HasRestricted reports whether sh lists a store some members do not use
+// (so the caller has to know the person's role and teams).
+func (sh Shared) HasRestricted() bool {
 	for _, s := range sh.Stores {
-		if s.AdminsOnly() {
+		if s.Restricted() {
 			return true
 		}
 	}
@@ -80,18 +169,22 @@ func (sh Shared) HasAdminsOnly() bool {
 }
 
 // ForPerson is sh as one person's org entry holds it: an admin's copy is
-// the whole file; a member's leaves out every admins-only store, which
-// comes back as skipped (in file order) for doctor's note.
-func (sh Shared) ForPerson(admin bool) (Shared, []Store) {
-	if admin || !sh.HasAdminsOnly() {
+// the whole file; a member's leaves out every store they do not use. The
+// admins-only ones come back as skipped (in file order) for doctor's
+// note; a team store of a team they are not in is left out without a
+// word (D-727: they never hear of it).
+func (sh Shared) ForPerson(v Viewer) (Shared, []Store) {
+	if v.Admin || !sh.HasRestricted() {
 		return sh, nil
 	}
 	out := sh
 	out.Stores = nil
 	var skipped []Store
 	for _, s := range sh.Stores {
-		if s.AdminsOnly() {
-			skipped = append(skipped, s)
+		if s.Restricted() && !s.Audience.For(v) {
+			if s.AdminsOnly() {
+				skipped = append(skipped, s)
+			}
 			continue
 		}
 		out.Stores = append(out.Stores, s)

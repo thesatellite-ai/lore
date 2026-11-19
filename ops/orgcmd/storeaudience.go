@@ -1,8 +1,9 @@
 package orgcmd
 
 // storeaudience.go — `lore org store audience` (devco D-442): mark a store
-// of the org as used only by its admins (servers, domains, accounts), or
-// open it to every member again. Before it, an admins-only store sat in
+// of the org as used only by its admins (servers, domains, accounts), by
+// one roster team and the admins (D-727: a client's store), or open it to
+// every member again. Before it, an admins-only store sat in
 // lore-org.yaml like any other: every member's lore cloned it, failed,
 // and treated their own repos as client repos; the only way out was a
 // second org.
@@ -33,7 +34,7 @@ const OpStoreAudience = "org.store.audience"
 type StoreAudienceIn struct {
 	Org      string `json:"org,omitempty" flag:"org" desc:"the org entry (default: the only org entry on this machine, else the active setup's org)"`
 	URL      string `json:"url" flag:"url" desc:"the store: its git url (required; lore store list names the org's stores)"`
-	Audience string `json:"audience" flag:"audience" desc:"who uses the store: admins (only the org's admins; members' lore never reads it) or everyone (required)"`
+	Audience string `json:"audience" flag:"audience" desc:"who uses the store: admins (only the org's admins; members' lore never reads it), team:@<team> (only that roster team's members and the admins) or everyone (required)"`
 	Push     bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store <org>, sends it)"`
 }
 
@@ -49,8 +50,9 @@ func StoreAudienceCommand(org, url string, a orgconf.Audience) string {
 
 // storeAudienceOp is org.store.audience bound to o.
 func storeAudienceOp(o ops, spec func(name, summary string, errCodes []errs.Code, mayAsk bool, ex ...op.Example) op.Spec, codes []errs.Code) op.Entry {
-	return op.Define(spec(OpStoreAudience, "Set who in an org uses one of its stores (admin only): admins (members' lore never reads it) or everyone", codes, true,
+	return op.Define(spec(OpStoreAudience, "Set who in an org uses one of its stores (admin only): admins (members' lore never reads it), team:@<team> (only that team and the admins) or everyone", codes, true,
 		op.Example{Title: "keep the servers store to admins", CLI: "lore org store audience --org agency --url git@github.com:agency/ops.git --audience admins --push --yes", Want: "admins"},
+		op.Example{Title: "keep a client's store to its team", CLI: "lore org store audience --org agency --url git@github.com:agency/clientco.git --audience team:@clientco --push --yes", Want: "team:@clientco"},
 		op.Example{Title: "open it to every member again", CLI: "lore org store audience --org agency --url git@github.com:agency/ops.git --audience everyone --push --yes", Want: "everyone"}),
 		func(ctx context.Context, in StoreAudienceIn) (Report, error) {
 			if strings.TrimSpace(in.URL) == "" {
@@ -58,7 +60,7 @@ func storeAudienceOp(o ops, spec func(name, summary string, errCodes []errs.Code
 					WithHint("lore store list names the org's stores (SOURCE org); then: lore org store audience --org <org> --url <url> --audience admins")
 			}
 			if strings.TrimSpace(in.Audience) == "" {
-				return Report{}, errs.New(errs.InvalidInput, "say who uses the store with --audience admins or --audience everyone").
+				return Report{}, errs.New(errs.InvalidInput, "say who uses the store with --audience admins, --audience team:@<team> or --audience everyone").
 					WithHint("lore org store audience --org <org> --url " + in.URL + " --audience admins")
 			}
 			if _, err := orgconf.ParseAudience(in.Audience); err != nil {

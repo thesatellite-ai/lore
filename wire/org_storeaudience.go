@@ -10,6 +10,8 @@ package wire
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -36,6 +38,39 @@ func audiencePushNote(res orgcfg.OrgFileResult, storeURL string) string {
 		return " (committed; the org store is unreachable, the next write to it pushes)"
 	}
 	return " (committed in this machine's clone of the store, not pushed; push it with: " + StorePushCommand(storeURL) + ")"
+}
+
+// audienceTeamLine says what a team store means, in every command's plan
+// that makes one (D-727).
+func audienceTeamLine(team string) string {
+	return "audience: team:@" + team + ": only @" + team + "'s members and the org's admins use it; every other member's lore never clones, fetches or names it"
+}
+
+// checkAudience refuses an audience the org cannot take (D-727): a team
+// audience naming a team the org's roster (in this machine's clone of the
+// org folder's store sc) does not hold. cmd is the command, without its
+// --audience, that the hint names again.
+func checkAudience(ctx context.Context, home string, sc *orgconf.Store, org string, aud orgconf.Audience, cmd string) error {
+	team, ok := aud.Team()
+	if !ok {
+		return nil
+	}
+	teams := orgcfg.TeamHandles(ctx, home, sc.URL, sc.OrgFolder)
+	if slices.Contains(teams, team) {
+		return nil
+	}
+	e := errs.New(errs.NotFound, "--audience team:@"+team+": org "+org+"'s roster has no team @"+team)
+	if len(teams) == 0 {
+		return e.WithHint("make the team first: lore team add --handle @" + team + " --members @<member>; then: " + cmd + " --audience team:@" + team)
+	}
+	return e.WithHint("its teams: @" + strings.Join(teams, ", @") + "; e.g. " + cmd + " --audience team:@" + teams[0] + " (or make it: lore team add --handle @" + team + " --members @<member>)")
+}
+
+// orgAudienceRefusal is the refusal of a store audience change by a person
+// with no admin setup of org (the rule every org config write follows).
+func orgAudienceRefusal(org, cmd string) error {
+	return errs.New(errs.Refused, "org store audience: only an admin of "+org+" sets who uses its stores; this machine has no admin setup of "+org).
+		WithHint("ask the org admin to run `" + cmd + " --push --yes`")
 }
 
 // StorePushCommand is the command that pushes a store clone's commits,
@@ -68,8 +103,7 @@ func (h *standaloneOrg) SetStoreAudience(ctx context.Context, in opsorgcmd.Store
 	}
 	cmd := opsorgcmd.StoreAudienceCommand(in.Org, in.URL, aud)
 	if !isOrgAdmin(h.home, in.Org) {
-		return opsorgcmd.Report{}, errs.New(errs.Refused, "org store audience: only an admin of "+in.Org+" sets who uses its stores; this machine has no admin setup of "+in.Org).
-			WithHint("ask the org admin to run `" + cmd + " --push --yes`")
+		return opsorgcmd.Report{}, orgAudienceRefusal(in.Org, cmd)
 	}
 	sc := o.OrgFolderStore()
 	if sc == nil {
@@ -80,8 +114,11 @@ func (h *standaloneOrg) SetStoreAudience(ctx context.Context, in opsorgcmd.Store
 		sc = &o.Stores[0]
 	}
 	if n, nerr := repourl.NormalizeStore(sc.URL); nerr == nil && n == want && !aud.ForMembers() {
-		return opsorgcmd.Report{}, errs.New(errs.Refused, "org store audience: "+want+" holds "+in.Org+"'s org folder (its roster, teams and company rules), which every member reads; it cannot be admins-only").
-			WithHint("keep admins' notes in a store of their own: lore org store add --org " + in.Org + " --url <url> --audience admins --push --yes")
+		return opsorgcmd.Report{}, errs.New(errs.Refused, "org store audience: "+want+" holds "+in.Org+"'s org folder (its roster, teams and company rules), which every member reads; it cannot be for "+aud.String()+" only").
+			WithHint("keep those notes in a store of their own: lore org store add --org " + in.Org + " --url <url> --audience " + aud.String() + " --push --yes")
+	}
+	if err := checkAudience(ctx, h.home, sc, in.Org, aud, "lore org store audience --org "+in.Org+" --url "+in.URL); err != nil {
+		return opsorgcmd.Report{}, err
 	}
 	if o.StoreFor(want) == nil {
 		return opsorgcmd.Report{}, errs.New(errs.NotFound, "org "+in.Org+" lists no store "+want).
@@ -89,7 +126,9 @@ func (h *standaloneOrg) SetStoreAudience(ctx context.Context, in opsorgcmd.Store
 	}
 	file := orgcfg.OrgFilePath(sc.OrgFolder) + " in " + sc.URL
 	lines := []string{"set who uses store " + want + " in org " + in.Org + ": " + aud.String()}
-	if aud == orgconf.AudienceAdmins {
+	if team, ok := aud.Team(); ok {
+		lines = append(lines, "  "+audienceTeamLine(team), "  a member outside @"+team+" drops the store at their next sync after they get the commit; their clone of it, if any, stays on disk and is no longer read")
+	} else if aud == orgconf.AudienceAdmins {
 		lines = append(lines, "  "+audienceAdminsLine, "  members' lore drops the store at their next open after they get the commit; their clone of it, if any, stays on disk")
 	} else {
 		lines = append(lines, "  every member's lore clones and reads it after they get the commit")

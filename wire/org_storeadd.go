@@ -47,6 +47,16 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 		}
 		sc = &o.Stores[0]
 	}
+	if aud != orgconf.AudienceEveryone {
+		// D-727: keeping a store from some members is an org config
+		// change, an admin's (the rule of lore org store audience)
+		if !isOrgAdmin(h.home, in.Org) {
+			return opsorgcmd.Report{}, orgAudienceRefusal(in.Org, opsorgcmd.StoreAddCommand(in.Org, in.URL)+" --audience "+aud.String())
+		}
+		if err := checkAudience(ctx, h.home, sc, in.Org, aud, opsorgcmd.StoreAddCommand(in.Org, in.URL)); err != nil {
+			return opsorgcmd.Report{}, err
+		}
+	}
 	named := ""
 	if in.Name == "" {
 		// devco T-5: the name the person gave the store in this repo
@@ -64,6 +74,8 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	lines := []string{"add store " + want + " to org " + in.Org + ":", "  " + file + " lists it (" + push + ")", "  this machine's org entry " + in.Org + " copies it"}
 	if aud == orgconf.AudienceAdmins {
 		lines = append(lines, "  "+audienceAdminsLine)
+	} else if team, ok := aud.Team(); ok {
+		lines = append(lines, "  "+audienceTeamLine(team))
 	}
 	if named != "" {
 		lines = append(lines, named)

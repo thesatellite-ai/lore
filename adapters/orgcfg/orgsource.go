@@ -166,17 +166,33 @@ func (s Suggestion) Shared() orgconf.Shared {
 }
 
 // SharedFor is Shared as the org entry of the person with identity key
-// (human:<email>) holds it (D-442): the whole file for an admin of the
-// org (an open roster stint with org_role admin in the org folder, at the
-// commit the file was read at, as for an org-file change, R-7), else
-// without the admins-only stores, which come back as skipped. A file with
-// no admins-only store skips the roster read.
+// (human:<email>) holds it (D-442, D-727): the whole file for an admin of
+// the org (an open roster stint with org_role admin in the org folder, at
+// the commit the file was read at, as for an org-file change, R-7), else
+// without the admins-only stores (which come back as skipped) and the
+// team stores of teams the person is not in (left out without a word). A
+// file with no such store skips the roster read.
 func (s Suggestion) SharedFor(ctx context.Context, key string) (orgconf.Shared, []orgconf.Store) {
 	sh := s.Shared()
-	if !sh.HasAdminsOnly() {
+	if !sh.HasRestricted() {
 		return sh, nil
 	}
-	return sh.ForPerson(s.IsAdmin(ctx, key))
+	return sh.ForPerson(s.ViewerOf(ctx, key))
+}
+
+// ViewerOf is the person with identity key as the org's stores see them
+// at the commit the suggestion was read at: admin or not, and their
+// roster teams. No key, or a suggestion not read from a clone, is a
+// member of no team (fail safe: they only miss the restricted stores).
+func (s Suggestion) ViewerOf(ctx context.Context, key string) orgconf.Viewer {
+	if s.IsAdmin(ctx, key) {
+		return orgconf.Viewer{Admin: true}
+	}
+	email, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(key)), "human:")
+	if !ok || email == "" || s.dir == "" || s.at == "" {
+		return orgconf.Viewer{}
+	}
+	return orgconf.Viewer{Teams: teamsAt(ctx, s.dir, s.at, s.Folder, email)}
 }
 
 // IsAdmin reports whether the person with identity key is an admin of the

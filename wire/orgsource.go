@@ -154,12 +154,13 @@ func refreshOrgEntries(ctx context.Context, home string, cfg *orgconf.Config, on
 		mine, _ := sg.SharedFor(ctx, orgPersonKey(cfg, o))
 		switch orgconf.StateOf(o, sg.StoreID, sg.Version) {
 		case orgconf.SourceCurrent:
-			if !adminsOnlyDiffer(orgconf.SharedOf(o), mine) {
+			if !restrictedDiffer(orgconf.SharedOf(o), mine) {
 				continue
 			}
-			// D-442: the file is unchanged but the person's role is not
-			// (made an admin: the admins' store comes in; no longer one:
-			// it goes), so the entry is copied again.
+			// D-442, D-727: the file is unchanged but the person's role
+			// or teams are not (made an admin or added to a team: the
+			// store comes in; no longer: it goes, its clone left on
+			// disk), so the entry is copied again.
 		case orgconf.SourceStale:
 		case orgconf.SourceUnstamped, orgconf.SourceOtherStore:
 			if !orgconf.SharedOf(o).Equal(mine) {
@@ -186,14 +187,15 @@ func mineOf(ctx context.Context, cfg *orgconf.Config, o *orgconf.Org, sg orgcfg.
 	return sg.SharedFor(ctx, orgPersonKey(cfg, o))
 }
 
-// adminsOnlyDiffer reports whether the entry's copy have and the person's
-// copy of the current file want list different admins-only stores: the
-// person's role changed since the copy (D-442).
-func adminsOnlyDiffer(have, want orgconf.Shared) bool {
+// restrictedDiffer reports whether the entry's copy have and the person's
+// copy of the current file want list different admins-only or team
+// stores: the person's role or teams changed since the copy (D-442,
+// D-727).
+func restrictedDiffer(have, want orgconf.Shared) bool {
 	names := func(sh orgconf.Shared) []string {
 		var out []string
 		for _, s := range sh.Stores {
-			if s.AdminsOnly() {
+			if s.Restricted() {
 				out = append(out, s.URL)
 			}
 		}

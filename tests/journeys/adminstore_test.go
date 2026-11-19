@@ -133,7 +133,7 @@ func TestJourneyAdminOnlyStore(t *testing.T) {
 			t.Fatalf("lore-org.yaml still has an audience:\n%s", got)
 		}
 		tt.lore(tlLee, "org", "store", "audience", "--org", tlOrg, "--url", tt.store.SSHURL(), "--audience", "admins", "--yes").
-			Refused(t, "org folder", "cannot be admins-only")
+			Refused(t, "org folder", "cannot be for admins only")
 	})
 }
 

@@ -467,8 +467,8 @@ func (o *Org) validate() []error {
 			add(fmt.Errorf("%s: same store and branch as stores[%d]", w, j))
 		}
 		stores[key] = i
-		if s.Audience != AudienceEveryone && s.Audience != AudienceAdmins {
-			add(fmt.Errorf("%s.audience %q: use %q or leave it out (every member)", w, s.Audience, AudienceAdmins))
+		if !s.Audience.Known() {
+			add(fmt.Errorf("%s.audience %q: use %q, %q or leave it out (every member)", w, s.Audience, AudienceAdmins, audienceTeamPrefix+"<team>"))
 		}
 		if s.OrgFolder != "" {
 			orgFolders++

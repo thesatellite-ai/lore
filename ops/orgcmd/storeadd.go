@@ -36,7 +36,7 @@ type StoreAddIn struct {
 	// Audience is who in the org uses the store (D-442): "" or "everyone"
 	// every member, "admins" only the org's admins. Given for a store the
 	// file already lists, it changes that store's audience.
-	Audience string `json:"audience,omitempty" flag:"audience" desc:"who uses the store: everyone (default) or admins (servers, domains, accounts: members' lore never reads it)"`
+	Audience string `json:"audience,omitempty" flag:"audience" desc:"who uses the store: everyone (default), admins (servers, domains, accounts: members' lore never reads it) or team:@<team> (only that roster team's members and the admins; admin only)"`
 }
 
 // StoreAdder is the optional Host upgrade behind org.store.add (an
