@@ -1011,15 +1011,14 @@ func orgFolderStore(home, org string) (attach.Store, bool, error) {
 // caller closes it.
 func openOrgFolderApp(ctx context.Context, opts Options, org string, one attach.Store) (*App, error) {
 	opts.Org = func(context.Context) (*identity.Org, error) {
-		cfg, _, err := orgcfg.LoadConfig(opts.Home)
+		o, ok, err := orgIdentityOf(opts.Home, org)
 		if err != nil {
 			return nil, err
 		}
-		e := cfg.FindOrg(org)
-		if e == nil {
+		if !ok {
 			return nil, errs.New(errs.NotFound, "no org named "+org+" in "+lorehome.Shown()+"/"+ConfigFile).WithHint("lore org import --url <store-url> --as " + org)
 		}
-		return &identity.Org{Name: e.Name, Identity: identity.Entry{Key: e.Identity.Key, Name: e.Identity.Name, Handle: e.Identity.Handle}}, nil
+		return o, nil
 	}
 	x, err := New(detachedOpts(opts))
 	if err != nil {

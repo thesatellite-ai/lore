@@ -261,4 +261,34 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		mo.Lore(mc.Dir, "sync").OK(t)
 		mo.Lore(mc.Dir, "rule", "add", "--to", inOther, "--body", "api pages are cached", "--yes").OK(t)
 	})
+
+	s.Step("D-694/refused-add-lines-work-as-printed", func() {
+		// the step above ended with Mo on @api (wrcOther): the admin takes
+		// him off again so his add there is refused once more
+		admin("team", "member", "remove", "--handle", "@"+wrcOther, "--members", "@mo")
+		admin("sync")
+		mo.Lore(mc.Dir, "sync").OK(t)
+		// a member's add in another team's folder names the admin's exact
+		// add and the roster line that puts the member on that folder's
+		// team; the admin runs both exactly as printed, in the repo the
+		// member was in, and the member then adds there himself
+		r := mo.Lore(mc.Dir, "rule", "add", "--to", inOther, "--severity", "should", "--body", "api errors carry a code", "--yes")
+		r.Refused(t, "E_REFUSED", "company folder "+inOther, "ask an admin of "+wOrg)
+		add, team, ok := strings.Cut(wogPrintedLine(t, r.Out()), ", or to put you on team @"+wrcOther+", whose folder it is: ")
+		if !ok {
+			t.Fatalf("devco:D-694 cell add line: the refusal names no roster line for team @%s:\n%s", wrcOther, r)
+		}
+		if want := "lore rule add --body 'api errors carry a code' --severity should --to " + inOther + " --yes"; add != want {
+			t.Fatalf("devco:D-694 cell add line: the admin's add is %q, want %q", add, want)
+		}
+		if want := "lore team member add --handle @" + wrcOther + " --members @mo"; team != want {
+			t.Fatalf("devco:D-694 cell add line: the roster line is %q, want %q", team, want)
+		}
+		id := wubRuleID.FindString(m.Lore(wc.Dir, wubFields(t, add)...).OK(t).Out())
+		m.Lore(wc.Dir, wubFields(t, team)...).OK(t)
+		m.Lore(wc.Dir, "rule", "show", "--id", id).OK(t).Says(t, "api errors carry a code", inOther)
+		admin("sync")
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "memory", "add", "--to", inOther, "--body", "api pages are 50 rows", "--yes").OK(t)
+	})
 }

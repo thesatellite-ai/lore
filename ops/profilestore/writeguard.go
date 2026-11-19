@@ -198,13 +198,32 @@ func (g WriteGuard) GuardWrite(ctx context.Context, target store.Source, writes 
 			return nil
 		}
 	}
-	return refusal(ctx, r, a, place, kinds[0], hit)
+	return refusal(ctx, r, a, place, PlaceTo(ctx, g.Env, src), kinds[0], hit)
 }
 
 // refusal is the E_REFUSED of the guard: the command's wording (WithAsk)
-// when it gave one, else what the write does.
-func refusal(ctx context.Context, r Roster, a Admins, src store.Source, kind string, w engine.GuardedWrite) error {
+// when it gave one, else what the write does. to is the full place an
+// admin's line names (PlaceTo). A policy change no command named (a batch
+// undo or an import of a policy row) gets the exact `lore policy set|unset
+// … --to <org>/<folder> --yes` that makes it, and a member's add outside
+// their team's folder the admin's exact add with that --to plus the roster
+// command putting them on the folder's team (devco D-694); any other
+// change asks for the same command, which an admin runs as written.
+func refusal(ctx context.Context, r Roster, a Admins, src store.Source, to, kind string, w engine.GuardedWrite) error {
 	does, line := guardDoes(src, kind, w), "the same command"
+	switch kind {
+	case ChangePolicy:
+		if c, ok := policyRowCommand(w, to); ok {
+			line = c
+		}
+	case ChangeAdd:
+		if c, ok := addRowCommand(w, to); ok {
+			line = c
+		}
+		if c, ok := teamLine(ctx, r, folderOf(src)); ok {
+			line += ", or " + c
+		}
+	}
 	if k, ok := askOf(ctx); ok {
 		does, line = k.does, k.line
 	}

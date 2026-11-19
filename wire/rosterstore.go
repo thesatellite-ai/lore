@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -226,6 +227,49 @@ func knownList(what string, names []string) string {
 		return ""
 	}
 	return " (" + what + ": " + strings.Join(names, ", ") + ")"
+}
+
+// orgIdentityOf is org's entry in the machine config as the identity
+// chain's org (identity.Org: the key, name and handle the person uses in
+// that org); ok is false when the config names no such org. It is the one
+// conversion openOrgFolderApp and asOrg share.
+func orgIdentityOf(home, org string) (*identity.Org, bool, error) {
+	cfg, _, err := orgcfg.LoadConfig(home)
+	if err != nil {
+		return nil, false, err
+	}
+	e := cfg.FindOrg(org)
+	if e == nil {
+		return nil, false, nil
+	}
+	return &identity.Org{Name: e.Name, Identity: identity.Entry{Key: e.Identity.Key, Name: e.Identity.Name, Handle: e.Identity.Handle}}, true, nil
+}
+
+// asOrg is opts for an App that reads org's roster beside the command's
+// own (rosterApp's pinned roster: the write guard's RosterOfOrg, a read
+// naming --store <org>): its Org hook answers org's own entry when the
+// machine config has one with an identity key, so the roster's Caller is
+// the person as that org knows them, the identity its store rows and
+// commits are made as (devco D-694). Why: the command's hook answers the
+// folder's org; a person who is an admin of a second org under another
+// address was judged as their first-org self, found on no roster there,
+// refused as a non-admin and told to ask themselves. Any other case
+// (no entry, no key, an unreadable config) keeps the command's hook.
+func asOrg(opts Options, org string) Options {
+	if org == "" {
+		return opts
+	}
+	prev := opts.Org
+	opts.Org = func(ctx context.Context) (*identity.Org, error) {
+		if o, ok, err := orgIdentityOf(opts.Home, org); err == nil && ok && strings.TrimSpace(o.Identity.Key) != "" {
+			return o, nil
+		}
+		if prev == nil {
+			return nil, nil
+		}
+		return prev(ctx)
+	}
+	return opts
 }
 
 var _ profilestore.OrgRosterer = (*App)(nil)

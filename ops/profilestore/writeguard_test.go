@@ -119,6 +119,89 @@ func hintOf(err error) string {
 	return ""
 }
 
+// TestWriteGuardPolicyRowLine (devco D-694): a member's policy change no
+// command named (a batch undo or an import of a policy row) is refused
+// with the exact `lore policy set|unset … --to <org>/<folder> --yes` that
+// makes it, built from the row, never "the same command".
+func TestWriteGuardPolicyRowLine(t *testing.T) {
+	ctx := context.Background()
+	member, err := ids.New[ids.Actor]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := ids.New[ids.Actor]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mem := newGroundEnv(t, member, admin)
+	id, err := ids.ParseAny("pol_" + strings.TrimPrefix(admin.String(), "act_"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := value.JSONOf([]byte(`["feat/a","feat/b"]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := row.Row{Table: schema.TablePolicies, ID: id, Fields: map[string]value.Value{"key": txt(t, "branches.shared"), "value": list}}
+	gone := row.Row{Table: schema.TablePolicies, ID: id, Deleted: true} // a tombstone carries no fields
+	for name, c := range map[string]struct {
+		w    engine.GuardedWrite
+		want string
+	}{
+		"undo of an unset": {engine.GuardedWrite{After: set}, "lore policy set --key branches.shared --value 'feat/a, feat/b' --to agency/web --yes"},
+		"undo of a set":    {engine.GuardedWrite{Before: &set, After: gone}, "lore policy unset --key branches.shared --to agency/web --yes"},
+	} {
+		err := profilestore.WriteGuard{Env: mem}.GuardWrite(ctx, "agency/web", []engine.GuardedWrite{c.w})
+		if !errs.Has(err, errs.Refused) || !strings.HasSuffix(hintOf(err), "to run: "+c.want) {
+			t.Errorf("%s: %v hint %q, want E_REFUSED ending with %q", name, err, hintOf(err), c.want)
+		}
+	}
+}
+
+// TestWriteGuardAddLine (devco D-694, coordinator note): a member's add
+// outside the folder of a team they are on is refused with lines that
+// work as printed: the admin's exact add with --to <org>/<folder> --yes,
+// and the roster command that puts the member on the folder's team (or
+// makes that team); the org folder names no team.
+func TestWriteGuardAddLine(t *testing.T) {
+	ctx := context.Background()
+	member, err := ids.New[ids.Actor]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := ids.New[ids.Actor]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mem := newGroundEnv(t, member, admin)
+	anyID := func(prefix string) ids.AnyID {
+		id, perr := ids.ParseAny(prefix + "_" + strings.TrimPrefix(admin.String(), "act_"))
+		if perr != nil {
+			t.Fatal(perr)
+		}
+		return id
+	}
+	mem.Put(row.Row{Table: schema.TableTeams, ID: anyID("tem"), Fields: map[string]value.Value{
+		"handle": txt(t, "web"), schema.FieldTeamMembers: txt(t, admin.String()),
+	}})
+	must := row.Row{Table: schema.TableRules, ID: anyID("rul"), Fields: map[string]value.Value{"severity": txt(t, "must"), "body": txt(t, "never push")}}
+	add := "lore rule add --body 'never push' --severity must --to "
+	for src, want := range map[store.Source][]string{
+		"agency/web": {add + "agency/web --yes, or to put you on team @web, whose folder it is: lore team member add --handle @web --members "},
+		"agency/app": {add + "agency/app --yes, or to make team @app for that folder with you on it: lore team add --handle @app --members "},
+		"agency/org": {add + "agency/org --yes"},
+	} {
+		err := profilestore.WriteGuard{Env: mem}.GuardWrite(ctx, src, []engine.GuardedWrite{{After: must}})
+		h := hintOf(err)
+		if !errs.Has(err, errs.Refused) || !strings.Contains(h, "to run: "+want[0]) || strings.Contains(h, "the same command") {
+			t.Errorf("add in %s: %v hint %q, want it to hold %q", src, err, h, want[0])
+		}
+		if src == "agency/org" && strings.Contains(h, "lore team") {
+			t.Errorf("add in the org folder: hint %q names a team command, but no team owns the org folder", h)
+		}
+	}
+}
+
 // TestWriteGuardTeamsAreAdminOnly (devco D-694 rule gap): a team is a
 // member's add right (a member on @web adds rules in agency/web), so in an
 // org store every team change is an admin's: before the fix a member put
