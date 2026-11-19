@@ -149,7 +149,7 @@ func TestStoryJ4Upgrade(t *testing.T) {
 		// the signpost for 0.1.17 teammates, and commits nothing itself
 		// (lore never commits a code repo): it prints the one commit to make.
 		mr := ola.LoreIn(ca, "migrate", "run").OK(t)
-		mr.Says(t, "by Ola Old <ola@example.test>", ".0-needs-lore-0.1.18-or-newer", "git add .lore/data && git commit")
+		mr.Says(t, "by Ola Old, ", ".0-needs-lore-0.1.18-or-newer", "git add .lore/data && git commit")
 		s.NamedFlags(t, mr)
 		if ca.Head() != before {
 			t.Error("lore migrate run committed in a code repo by itself")

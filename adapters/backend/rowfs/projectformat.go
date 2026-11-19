@@ -6,7 +6,11 @@ package rowfs
 //
 //	"format": 2            the format the project's rows are written in
 //	"migrated_by": "…"     the person who ran `lore migrate run` that raised
-//	                       it, "Name <email>" (never an agent: T-1)
+//	                       it, by display name (never an agent: T-1; never
+//	                       an email or actor id, devco:D-705: a client
+//	                       repo's leak check refuses a roster email or id in
+//	                       a committed file; older builds wrote "Name
+//	                       <email>", read as is)
 //	"migrated_via": "…"    the agent the person ran it through, when one
 //	                       did ("claude_code (agent:auto/…)"); audit only,
 //	                       as the Lore-Agent trailer of a commit
@@ -56,7 +60,8 @@ type ProjectFormat struct {
 	// derived from min_lore_version or the rows).
 	Recorded bool `json:"recorded"`
 	// MigratedBy and MigratedAt are the person who ran the migration that
-	// raised the format ("Name <email>"), and when ("" when not recorded).
+	// raised the format (their display name; "Name <email>" in a file an
+	// older build wrote), and when ("" when not recorded).
 	MigratedBy string `json:"migrated_by,omitempty"`
 	MigratedAt string `json:"migrated_at,omitempty"`
 	// MigratedVia is the agent the person ran it through ("" when the

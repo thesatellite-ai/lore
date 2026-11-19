@@ -82,7 +82,7 @@ func TestJourneyMigrateUnattachedFolder(t *testing.T) {
 	w.Step("day2/migrate-run-upgrades-it-and-the-printed-push-sends-it", func() {
 		before := w.Git(w.Root, "--git-dir", bare, "rev-parse", "main")
 		lap.LoreIn(app, "migrate", "run").OK(t).
-			Says(t, "Upgraded 2 rows", muMemID, muPrjID, "not pushed: store acme is in push mode manual; push with: lore store push --store acme").
+			Says(t, "Upgraded 2 rows", muMemID, muPrjID, "not pushed: store acme is in push mode manual; lore sync sends it; this store alone: lore store push --store acme").
 			Never(t, ", pushed")
 		if after := w.Git(w.Root, "--git-dir", bare, "rev-parse", "main"); after != before {
 			t.Fatalf("lore migrate run pushed to a store in push mode manual: %s -> %s", before, after)
