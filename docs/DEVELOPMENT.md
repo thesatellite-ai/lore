@@ -201,12 +201,9 @@ Changing this module and an importing build together: keep both clones side by s
 
 ## Releases
 
-This repository publishes no binaries. A release of the core is a version tag, made by `.github/workflows/release.yml`:
+This repository publishes no binaries. A release of the core is a version tag on `dev`, made by `.github/workflows/release.yml` dispatched on the `dev` ref: `gh workflow run release.yml --ref dev -f tag=vX.Y.Z` tags `dev`'s head at that moment. Releases are built from `dev`; nothing is squashed into `main` any more (`main` stays where it is, and a push to `main` without `[skip release]` in the commit **subject** still makes the next patch tag there).
 
-1. **push to `main`** → the next patch tag (`vX.Y.Z`) is created and pushed. Add `[skip release]` to the commit **subject** to opt out.
-2. **workflow_dispatch with `tag=`** → that tag on the current ref (use for minor/major bumps).
-
-The commit a release tags passes the full `task check` first, never only `task check:fast` ("Landing" above).
+Every fix in the tagged commit landed on `task check:fast` with its own story ("Landing" above); the full `task check` runs on `dev` when the owner asks for it.
 
 No binary is built here and the workflow creates no GitHub Release. The tag is also the Go module version an importing build requires, so a tag is permanent: never move or reuse one, fix forward with the next version.
 

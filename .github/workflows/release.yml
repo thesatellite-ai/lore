@@ -13,8 +13,12 @@ name: Release tag
 #                                 Put `[skip release]` in the commit
 #                                 SUBJECT to opt out (most commits do).
 #
-#   2. workflow_dispatch, tag=X → create and push tag X on the current ref
-#                                 (use for a minor or major bump).
+#   2. workflow_dispatch, tag=X → create and push tag X on the head of the
+#                                 ref it runs on. Releases are built from
+#                                 dev: run it with --ref dev
+#                                 (gh workflow run release.yml --ref dev
+#                                 -f tag=vX.Y.Z); main is no longer part
+#                                 of a release.
 #
 # No binary is built here and no GitHub Release is created.
 on:
