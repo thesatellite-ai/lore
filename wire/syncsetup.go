@@ -211,6 +211,7 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 			add(r, code, "")
 		}
 	}
+	a.forwardStoreMoves(ctx, a.pushNotes()) // D-699: a set-url move owed to an old address, once the new one has it
 	if len(out.Data.Stores) == 0 {
 		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
 		return out, nil

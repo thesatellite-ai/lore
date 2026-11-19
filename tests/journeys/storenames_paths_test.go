@@ -53,9 +53,11 @@ func TestJourneyStoreNamesAgreeOnEveryPath(t *testing.T) {
 		lee.LoreIn(app, "store", "list").OK(t).Says(t, teamOrg, "client-store")
 		// client-store holds the store link `lore org link` wrote in the
 		// client repo above, a commit with no note rows: this sync sends it
-		// and says so (N-3), under the store's one name (D-279)
+		// and says so (N-3), under the store's one name (D-279), counting
+		// the commits it sent as every push line does (D-698: "sent 0"
+		// under a push line of 2 commits read as nothing went out)
 		lee.LoreIn(app, "sync").OK(t).Says(t, "store "+teamOrg+": pushed",
-			"store client-store: pushed (sent 0, received 0, merged 0, refused 0); pushed local commit(s) with no note rows")
+			"store client-store: pushed (sent 2, received 0, merged 0, refused 0); pushed 2 local commits with no note rows")
 	})
 
 	w.Step("day1/client-repo-sync-names-the-same-stores", func() {

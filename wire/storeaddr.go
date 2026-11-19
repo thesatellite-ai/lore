@@ -45,10 +45,15 @@ type storeAddrRecord struct {
 	Stores map[string]storeAddrRecordEntry `json:"stores"`
 }
 
-// storeAddrRecordEntry is one store's recorded address.
+// storeAddrRecordEntry is one store's recorded address. Forward lists the
+// old addresses an admin's set-url still owes the move commit (Branch is
+// the store branch it is on): the next explicit push sends it there so
+// teammates whose clone points there follow (storemove_forward.go, D-699).
 type storeAddrRecordEntry struct {
-	URL   string `json:"url"`
-	SetAt string `json:"set_at"`
+	URL     string   `json:"url"`
+	SetAt   string   `json:"set_at"`
+	Forward []string `json:"forward,omitempty"`
+	Branch  string   `json:"branch,omitempty"`
 }
 
 // storeAddrRecordPath is <home>/state/store-addresses.json.
@@ -74,7 +79,18 @@ func readStoreAddrRecord(home string) storeAddrRecord {
 // recordStoreAddress writes id's address into the record.
 func recordStoreAddress(home, id, raw string, now time.Time) error {
 	r := readStoreAddrRecord(home)
-	r.Stores[id] = storeAddrRecordEntry{URL: raw, SetAt: now.UTC().Format(time.RFC3339)}
+	e := storeAddrRecordEntry{URL: raw, SetAt: now.UTC().Format(time.RFC3339), Branch: r.Stores[id].Branch}
+	for _, f := range r.Stores[id].Forward {
+		if !storeaddr.Same(f, raw) {
+			e.Forward = append(e.Forward, f) // a move back to an old address owes it nothing
+		}
+	}
+	r.Stores[id] = e
+	return writeStoreAddrRecord(home, r)
+}
+
+// writeStoreAddrRecord writes the record file in one rename.
+func writeStoreAddrRecord(home string, r storeAddrRecord) error {
 	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return errs.Wrap(errs.Internal, "wire: encode the store address record", err)

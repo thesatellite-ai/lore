@@ -47,7 +47,7 @@ func TestJourneyHomeSyncAndStoreMoveSayWhatHappened(t *testing.T) {
 	w.Step("day1/home-sync-claims-no-push", func() {
 		r := lee.Lore(lee.Home, "sync").OK(t)
 		r.Says(t, "no setup covers this folder", "lore sync --setup <name>", "yours: "+tlLeadSetup).
-			Never(t, "pushed (sent 0", "pushed local commit(s) with no note rows")
+			Never(t, "pushed (sent", "with no note rows")
 		lee.Lore(lee.Home, "sync", "--setup", tlLeadSetup).OK(t).Says(t, "store "+tlOrg+": up to date").
 			Never(t, "no setup covers this folder")
 	})

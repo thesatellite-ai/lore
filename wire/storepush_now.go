@@ -22,6 +22,9 @@ var _ opsstores.StorePusherNow = (*App)(nil)
 // store's url (the op resolved a name to its entry).
 func (a *App) PushStoreNow(ctx context.Context, in opsstores.PushIn) (opsstores.PushOut, error) {
 	out, _, err := a.pushStoreNow(ctx, in, nil)
+	if err == nil && !out.Offline {
+		a.forwardStoreMoves(ctx, a.pushNotes()) // D-699: a set-url move owed to an old address
+	}
 	return out, err
 }
 

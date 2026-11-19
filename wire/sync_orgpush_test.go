@@ -50,13 +50,16 @@ func TestOrgPushReportCountsCommitsD684(t *testing.T) {
 	}
 }
 
-// TestStoreLineNoNoteRowsSaysSentZeroD527: a sync that pushes a waiting
-// org store clone holding only a store link commit says "sent 0" with the
-// "no note rows" note, as D-527 fixed it, though the push report now
-// carries the commits git moved (D-684): the line read "sent 2, …; rows: 0
-// sent; pushed local commit(s) with no note rows". The commits stay in the
-// report (--json sent_commits); a push with note rows keeps its commits.
-func TestStoreLineNoNoteRowsSaysSentZeroD527(t *testing.T) {
+// TestStoreLineNoNoteRowsNamesCommitsD698: a sync that pushes commits with
+// no note row (a waiting store link, a set-url move of lore-org.yaml) says
+// how many commits went out, as the stderr push line "(2 commits)" does:
+// "sent 2, …; pushed 2 local commits with no note rows". Owner use pass 5
+// weak 4: after set-url, "pushed store …: commit … (1 commit)" was followed
+// by "pushed (sent 0, …); pushed local commit(s) with no note rows" while
+// every other line's "sent" counts commits. The D-527 note stays; the
+// bare "rows: 0 sent" never shows (D-684-g5sync); a push with note rows
+// keeps its commits and no note.
+func TestStoreLineNoNoteRowsNamesCommitsD698(t *testing.T) {
 	t.Parallel()
 	const url = "git@example.test:acme-co/client-store.git"
 	p := orgPushReport("client-store", opsstores.PushOut{Store: "client-store", Sent: 2, Rows: 0}, storeNowPush{sentCommits: 2}, nil)
@@ -64,12 +67,16 @@ func TestStoreLineNoNoteRowsSaysSentZeroD527(t *testing.T) {
 	if r.SentCommits != 2 {
 		t.Fatalf("[devco:D-684] report sent_commits = %d, want the 2 commits git sent", r.SentCommits)
 	}
-	want := "store client-store: pushed (sent 0, received 0, merged 0, refused 0)" + syncPushedNoRows
+	want := "store client-store: pushed (sent 2, received 0, merged 0, refused 0); pushed 2 local commits with no note rows (store links or org settings)"
 	if got := syncStoreLines(r, "")[0]; got != want {
-		t.Fatalf("[devco:D-527] line = %q, want %q", got, want)
+		t.Fatalf("[devco:D-698] line = %q, want %q", got, want)
 	}
-	if got := storeSyncLine("acme/org", opssync.StoreStatusPushed, syncCounts{sent: 0, sentCommits: 2}, true); got != "store acme/org: pushed (sent 0, received 0, merged 0, refused 0)"+syncPushedNoRows {
-		t.Fatalf("[devco:D-527] code repo line = %q", got)
+	if got := storeSyncLine("acme/org", opssync.StoreStatusPushed, syncCounts{sent: 0, sentCommits: 1}, true); got != "store acme/org: pushed (sent 1, received 0, merged 0, refused 0); pushed 1 local commit with no note rows (store links or org settings)" {
+		t.Fatalf("[devco:D-698] code repo line = %q", got)
+	}
+	// no commit count (a backend without commits): the D-527 note alone
+	if got := storeSyncLine("acme/org", opssync.StoreStatusPushed, syncCounts{}, true); got != "store acme/org: pushed (sent 0, received 0, merged 0, refused 0)"+syncPushedNoRows {
+		t.Fatalf("[devco:D-527] uncounted line = %q", got)
 	}
 	p = orgPushReport("acme", opsstores.PushOut{Store: "acme", Sent: 8, Rows: 4}, storeNowPush{sentCommits: 8, receivedCommits: 2, received: 2}, nil)
 	r, _ = waitingPushReport(url, p)

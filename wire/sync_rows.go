@@ -1012,9 +1012,6 @@ func folderPushed(clonePushed bool, sent, cloneSent int) bool {
 	return clonePushed && (sent > 0 || cloneSent == 0)
 }
 
-// syncPushedNoRows follows the line of a store whose sync pushed local
-// commits that carry no row (a store link, the org file): "sent 0" alone
-// read as nothing left the machine under the push line (devco J-4).
 // storeStatusOf is the opssync.StoreStatus* word of a store's sync from
 // its counts: what moved, refused when the store only refused rows (they
 // stay here), or up to date.
@@ -1085,21 +1082,33 @@ func rowsNote(c syncCounts) string {
 	return "; rows: " + strings.Join(parts, ", ")
 }
 
-const syncPushedNoRows = "; pushed local commit(s) with no note rows (store links or org settings)"
+// syncNoNoteRows is the tail of a store line whose push carried no note
+// row: the commits that went out are store links or org settings.
+const syncNoNoteRows = " with no note rows (store links or org settings)"
+
+// syncPushedNoRows is that note when git gave no commit count (a backend
+// without commits).
+const syncPushedNoRows = "; pushed local commit(s)" + syncNoNoteRows
 
 // storeSyncLine is a store's sync line once the sync knows whether its
-// push ran: storeCountsLine, and for a push whose commits carry no note
-// row (a store link, the org file) "sent 0" with syncPushedNoRows, never
-// the commits as "sent 2; rows: 0 sent" (devco D-527, broken again by the
-// D-684 commit counts of a waiting org store push). "sent" there is the
-// note rows that went out; the commits git moved stay on the push line
-// on stderr ("lore: pushed store <store>: commit … (2 commits)") and in
-// --json's sent_commits. Every path that prints a store line (code repo,
-// setup or home folder, waiting org store push) goes through here.
+// push ran. One rule for every push (devco D-698, owner use pass 5 weak
+// 4): "sent" is the commits that went out, as the stderr push line
+// "lore: pushed store <s>: commit … (2 commits)" and --json sent_commits
+// count them, and the note rows are named beside it. A push whose commits
+// carry no note row (a store link, the org file, a set-url move) says so
+// with the count: "pushed (sent 2, …); pushed 2 local commits with no note
+// rows (…)", never "sent 0" under a push line of 2 commits, and never the
+// bare "rows: 0 sent" without the reason (devco D-527). Every path that
+// prints a store line (code repo, setup or home folder, waiting org store
+// push) goes through here.
 func storeSyncLine(name, status string, c syncCounts, pushed bool) string {
 	if !pushed || c.sent != 0 || status == opssync.StoreStatusUpToDate {
 		return storeCountsLine(name, status, c)
 	}
-	c.sentCommits = 0 // no note row went out: the line's sent is 0, its note says what did
-	return storeCountsLine(name, status, c) + syncPushedNoRows
+	if c.sentCommits <= 0 {
+		return storeCountsLine(name, status, c) + syncPushedNoRows
+	}
+	n := c.sentCommits
+	c.sent = n // the note below names the rows: no "rows: 0 sent" beside it
+	return storeCountsLine(name, status, c) + "; pushed " + plural(n, "local commit") + syncNoNoteRows
 }
