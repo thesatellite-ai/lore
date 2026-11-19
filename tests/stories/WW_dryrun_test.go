@@ -22,6 +22,7 @@ package stories
 
 import (
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -152,6 +153,9 @@ func TestStoryWWDryRunWritesNothing(t *testing.T) {
 					before := drySnap(t, m.Home)
 					r := m.Lore(p.Dir, args...)
 					ran++
+					if miss := wwDryOldTidy(pn, o.Name, args, r.Out()); miss != "" {
+						bad = append(bad, pn+": lore "+strings.Join(args, " ")+" (exit "+strconv.Itoa(r.Code)+") does not list "+miss+" (the cell would prove nothing about the old format's tidy):\n    "+strings.TrimSpace(r.Out()))
+					}
 					if d := dryDiff(before, drySnap(t, m.Home)); len(d) > 0 {
 						if len(d) > 4 {
 							d = append(d[:4], "…")
@@ -166,4 +170,22 @@ func TestStoryWWDryRunWritesNothing(t *testing.T) {
 		t.Errorf("[WW dry-run] %s", b)
 	}
 	t.Logf("%d dry runs in %d places, %d changed files", ran, len(wwDryPlaces), len(bad))
+}
+
+// wwDryOldTidy is what a store.adopt --move dry run in the 0.1.17 repo
+// (V017Repo: format-1 rows, _meta.json, 0.1.17's generated LORE.md, all
+// committed) failed to list of the old format's tidy ("" when it listed it
+// all, or the cell is another one): devco D-719 removes the generated
+// LORE.md and, once every note left, _meta.json; the dry run must name
+// both, so the cell proves the old format's whole move writes nothing.
+func wwDryOldTidy(place, opName string, args []string, out string) string {
+	if place != "v0117" || opName != "store.adopt" || !slices.Contains(args, "--move") {
+		return ""
+	}
+	for _, want := range []string{"would remove .lore/LORE.md", "would remove .lore/data/_meta.json"} {
+		if !strings.Contains(out, want) {
+			return "`" + want + "`"
+		}
+	}
+	return ""
 }

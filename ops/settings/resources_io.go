@@ -557,6 +557,18 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	if err != nil {
 		return ResImportOut{}, batchRefusal("", "nothing written (all or nothing)", err)
 	}
+	// FB-RES-1: every new row gets its res_ id before anything is written
+	// (see below); D-717: with those ids every record is screened for
+	// secrets before the first write, a dry run too, so the refusal names
+	// every keyed record and one answer covers the whole file.
+	pend, err := o.pendingOf(ctx, target, plan, existing)
+	if err != nil {
+		return ResImportOut{}, err
+	}
+	secrets, planned, err := o.planResImportSecrets(withPending(ctx, pend), in, format, target, plan, existing)
+	if err != nil {
+		return ResImportOut{}, err
+	}
 	if in.DryRun {
 		return out, nil
 	}
@@ -572,17 +584,13 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 		return ResImportOut{}, err
 	}
 	out.Batch = bid.String()
-	// FB-RES-1 (PC-RES-1 "both or neither"): every new row gets its res_ id
-	// before anything is written, so a ref to another row of the file
-	// (forward, a cycle, itself) resolves to that id at once and each row
-	// is written exactly once with all its refs. The writes are staged
+	// FB-RES-1 (PC-RES-1 "both or neither"): every new row has its res_ id
+	// (pend, pinned above), so a ref to another row of the file (forward,
+	// a cycle, itself) resolves to that id at once and each row is written
+	// exactly once with all its refs. The writes are staged
 	// (engine.Staging) and land in ONE backend batch at engine.Commit: a
 	// row that fails while being written (a secret found, a policy, a
 	// value) leaves the store exactly as it was.
-	pend, err := o.pendingOf(ctx, target, plan, existing)
-	if err != nil {
-		return ResImportOut{}, err
-	}
 	sctx := withPending(engine.Staging(bctx), pend)
 	// a refused import (any return before Commit) closes its stage, so the
 	// open-stage tracking does not keep its rows for the process
@@ -593,6 +601,11 @@ func (o ops) resImport(ctx context.Context, in ResImportIn) (ResImportOut, error
 	}
 	for _, p := range plan {
 		rctx := engine.WithImport(sctx, origin.Import{Source: format, ExtID: p.extID})
+		if sp, ok := o.env.(SecretPlanner); ok {
+			if id, ok := planned[p.extID]; ok {
+				rctx = sp.SecretsForRow(rctx, secrets, id) // this record's part of the answer
+			}
+		}
 		sets := append(slices.Clone(p.first), p.later...)
 		var got RowOut
 		var werr error

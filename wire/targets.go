@@ -12,6 +12,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/model/ids"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -426,4 +428,59 @@ func (a *App) ensureFolderProject(ctx context.Context) {
 	if err != nil && a.opts.Notice != nil {
 		a.opts.Notice("the folder " + string(nf.target) + " has no project row yet (" + err.Error() + "); its rows are saved")
 	}
+}
+
+// folderProjectFirst records the folder project row of a `--to
+// <store>/<folder>` write before the row itself, in the same batch, when
+// the row names a project (devco D-718). ensureFolderProject runs only
+// after the write, so the first task or memory written into a fresh
+// folder found no folder project to belong to and kept the calling repo's
+// project_id; the engine (placeFolderProject) now finds the folder's row
+// and points the new row at it. A refused write leaves no project row
+// behind (the batch is dropped).
+func (a *App) folderProjectFirst(ctx context.Context, st *state, target store.Source, fields map[string]value.Value) error {
+	if _, named := fields[repoProjectField]; !named {
+		return nil
+	}
+	nf, ok := ctx.Value(newFolderKey{}).(newFolder)
+	// "" is the call's own target, the folder --to named (task add's
+	// default list is created that way)
+	if !ok || nf.target == "" || (target != "" && nf.target != target) {
+		return nil
+	}
+	if _, err := a.rosterProject(ctx, st, nf.target, nf.folder); err != nil {
+		return fmt.Errorf("folder project of %s: %w", target, err)
+	}
+	return nil
+}
+
+// targetFolderProject is the project of the store folder a `--to
+// <store>/<folder>` command names (devco D-718): its natural id from the
+// folder's _meta.json, so every noun resolves "this project" (the row's
+// project_id, a tag or parent looked up by name) in the folder the row
+// goes to, not in the repo the command runs in. As inside a store folder
+// (folderProject), a write records the folder's project row when it has
+// none yet (task add's default list names it before the task does); a
+// read never creates one. ok is false when the command names no folder or
+// a store root, and the caller falls back to the repo's project.
+func (a *App) targetFolderProject(ctx context.Context) (ids.ID[ids.Project], bool, error) {
+	nf, ok := ctx.Value(newFolderKey{}).(newFolder)
+	if !ok || nf.target == "" {
+		return ids.ID[ids.Project]{}, false, nil
+	}
+	st, err := a.state(ctx)
+	if err != nil {
+		return ids.ID[ids.Project]{}, false, nil
+	}
+	pid, err := folderProjectIDOf(ctx, st, nf.target)
+	if err != nil || pid.IsZero() {
+		return ids.ID[ids.Project]{}, false, nil
+	}
+	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+		return pid, true, nil
+	}
+	if _, err := a.rosterProject(ctx, st, nf.target, nf.folder); err != nil {
+		return ids.ID[ids.Project]{}, false, fmt.Errorf("folder project of %s: %w", nf.target, err)
+	}
+	return pid, true, nil
 }

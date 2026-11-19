@@ -338,6 +338,27 @@ func TestStoryOOwnerShape(t *testing.T) {
 		noPush(before, "task next reads from every placement")
 	})
 
+	// devco:D-718 (owner migrating real repos, brief item 12): in the own
+	// repo linked to one folder (web -> acme/web), `task add` and `memory
+	// add --to acme/api` stamped the calling repo's project (acme/web's) on
+	// the row written into acme/api, so api's own reads missed it. Each row
+	// file in the store clone carries api's project, never web's.
+	s.Step("admin/write-to-another-folder-stamps-its-project", func() {
+		top := oStoreClone(ada, oOwner, "lore-team")
+		api, webDir := wFindDir(t, top, "api"), wFindDir(t, top, oFolder)
+		for noun, args := range map[string][]string{
+			"task":   {"--title", "d718 web writes an api task"},
+			"memory": {"--body", "d718 web writes an api memory"},
+		} {
+			r := ada.LoreIn(wc, append([]string{noun, "add", "--json", "--to", oOrg + "/api", "--yes"}, args...)...).OK(t)
+			id := wwJSONID(r.Stdout)
+			want, webPrj := wfpFolderProject(t, api), wfpFolderProject(t, webDir)
+			got, found := wfpRowProject(t, api, id)
+			oCheck(t, "D-718/"+noun, id != "" && found && got == want && got != webPrj, "%s add --to %s/api from the repo linked to %s/%s: row %q (in api: %v) carries project_id %q, want api's %q (web's is %q):\n%s", noun, oOrg, oOrg, oFolder, id, found, got, want, webPrj, r)
+		}
+		ada.LoreIn(wc, "task", "list", "--to", oOrg+"/api").OK(t).Says(t, "d718 web writes an api task")
+	})
+
 	// devco:D-695, D-696, D-704 (owner use pass 5 weak 1, 2, 10): commands
 	// from the home folder on a machine with two org setups (acme and the
 	// second org kite, both admin).

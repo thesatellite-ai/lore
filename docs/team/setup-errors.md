@@ -87,11 +87,11 @@ ERROR: [E_SETUP_STEP_ORDER] step identity needs kind first
 
 ### `E_JOIN_ORG_UNKNOWN` (exit 27)
 
-**Cause:** `lore setup join --invite <name>` names an org this machine has no entry for. A member an admin added with `lore member add` joins from a fresh machine, where the org's name means nothing yet.
+**Cause:** `lore setup join --invite <name>` names an org this machine has no entry for. A member an admin added with `lore member add` joins from a fresh machine, where the org's name means nothing yet. lore never turns the name into a url: an org's store can sit on any host under any repo name (whatever url the admin made the org with), so deriving it would be a guess at someone else's repository.
 
 ```console
 $ lore setup join --invite toy --no-open
-ERROR: [E_JOIN_ORG_UNKNOWN] setup join: no org named "toy" on this machine yet; join with the org's store url the admin gave you
+ERROR: [E_JOIN_ORG_UNKNOWN] setup join: no org named "toy" on this machine yet; a fresh machine joins by the org's store url (lore does not guess it from the name): lore setup join --invite <store-url>, the url your admin gave you
   hint: lore setup join --invite "<the org's store url>" (lore member add printed it for your admin); an outsider: paste the whole line starting with lore-invite:v1:
 (exit 27)
 ```

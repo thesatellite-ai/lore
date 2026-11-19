@@ -182,6 +182,11 @@ type joinIdentity struct {
 	// SetupFrom says where the join lines' setup name came from when it is
 	// the org's name read from the store ("" otherwise; JoinOut.PrefillNote).
 	SetupFrom string
+	// MainStore is JoinPerson.MainStore: the org's main store when the
+	// answer was another store of the org (devco:D-721).
+	MainStore string
+	// Refusal is JoinPerson.Refusal.
+	Refusal error
 }
 
 // joinEmail is the identity of a join of org: the invite's address, else
@@ -327,6 +332,13 @@ type JoinPerson struct {
 	// read the store, also when the roster has no member with the address
 	// (ok false then, Name and GitHub empty).
 	Org string `json:"org,omitempty"`
+	// MainStore is the org's main store url when the answer was another
+	// store of the org that names it (devco:D-721): the join lines use it.
+	MainStore string `json:"main_store,omitempty"`
+	// Refusal is the join step's own refusal of the answer when reading it
+	// tells for sure the step cannot work (a lore store naming no org,
+	// devco:D-721): setup join returns it rather than print lines that fail.
+	Refusal error `json:"-"`
 }
 
 // JoinPersonFinder is the optional Prober upgrade that reads the roster
@@ -353,6 +365,7 @@ func (e engine) joinPerson(ctx context.Context, id joinIdentity, setup, answer, 
 			// devco:D-645: the roster is the org's, never the url owner's
 			id.Org, where = p.Org, cmp.Or(org, p.Org)
 		}
+		id.MainStore, id.Refusal = p.MainStore, p.Refusal
 		if found {
 			// a name member add derived from the address (bob for
 			// bob@acme.example, no --name given) is a placeholder: git's

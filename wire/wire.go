@@ -1494,8 +1494,15 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	if _, err := a.Engine(ctx); err != nil {
 		return opsstores.SyncOut{}, err
 	}
+	// devco:D-721: an admin's sync names the org in its other stores
+	// before they sync, so each store's own push sends the marker
+	var namedOrg []string
+	if only == "" {
+		namedOrg = a.nameOrgInStores(ctx)
+	}
 	out, err := opsstores.SyncAll(ctx, a, only)
 	if err == nil && only == "" {
+		out.Notes = append(out.Notes, namedOrg...)
 		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx, out.Stores)...)
 		a.forwardStoreMoves(ctx, a.pushNotes()) // D-699: a set-url move owed to an old address
 		if !syncWasOffline(out) {

@@ -24,6 +24,9 @@ package stories
 //	       rules only in their own team's folder
 //	D-658: a budget set at the store root names that store in its raise
 //	       (never the literal `<store>`), and the raise runs as printed
+//	D-725: the over-budget warning goes only to who can fix it (an admin
+//	       of the folder), once per sync; the default budget (32000) holds
+//	       a real folder's pinned part
 
 import (
 	"path/filepath"
@@ -41,6 +44,8 @@ const (
 	wubKey    = "context.budget.internal"
 	wubJoin   = "acme"
 	wubRoot   = "kb" // the whole store attached in a repo set up with lore init (D-658)
+	// wubWarn is the over-budget warning's own words (D-725: an admin's only)
+	wubWarn = "pinned rules and hotfixes of the internal stores are"
 )
 
 // wubRuleID finds a rule id in a list.
@@ -93,25 +98,30 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		}
 	})
 
-	s.Step("D-637/member-is-sent-to-an-admin", func() {
+	s.Step("D-725/only-admins-are-warned-once", func() {
+		// devco D-725 (owner, replaces D-637's ask-an-admin warning): a
+		// member of a company folder may change neither its pinned rows
+		// nor its budget, so the over-budget warning is not theirs: every
+		// sync warned every member. The admin of the folder gets it once
+		// per sync, with commands that run as printed.
 		m.Lore(wc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inWeb, "--yes").OK(t)
-		m.Lore(wc.Dir, "sync").OK(t)
+		m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web errors carry a request id", "--yes").OK(t)
+		aout := m.Lore(wc.Dir, "sync").OK(t).Out()
+		if n := strings.Count(aout, wubWarn); n != 1 {
+			t.Fatalf("devco:D-725: the admin's sync warns %d times, want once:\n%s", n, aout)
+		}
+		raise := wubPrinted(t, aout, "raise the budget with `")
 		out := mo.Lore(mc.Dir, "sync").OK(t).Out()
-		if own, _, _ := strings.Cut(out, "the admin would run"); strings.Contains(own, "lore rule edit --id "+company) {
-			t.Fatalf("devco:D-637: a member is told to demote a company must rule:\n%s", out)
+		for _, bad := range []string{wubWarn, "lore policy set", "lore rule edit", "the admin would run"} {
+			if strings.Contains(out, bad) {
+				t.Fatalf("devco:D-725: a member's sync prints %q (a fix only an admin may make):\n%s", bad, out)
+			}
 		}
-		if !strings.Contains(out, "ask an admin of "+wOrg+" ("+wAdmin.Name+")") {
-			t.Fatalf("devco:D-637: the member is not told which admin to ask:\n%s", out)
-		}
-		// devco D-681: the project folder's budget is company ground too: the
-		// member gets no policy command of their own, only the admin's, labelled
-		own, admins, _ := strings.Cut(out, "the admin would run")
-		if strings.Contains(own, "lore policy set") || strings.Contains(own, "--severity should`") {
-			t.Fatalf("devco:D-681: a member is given a shared-setting command:\n%s", out)
-		}
-		raise := wubPrinted(t, admins, "`lore policy set")
-		mo.Lore(mc.Dir, wubFields(t, "lore policy set"+raise)...).Refused(t, "E_REFUSED", "only an admin of the org")
-		wubRun(t, m, wc.Dir, "lore policy set"+raise).Says(t, wubKey)
+		// --report gives the member the sizes and no command
+		mo.Lore(mc.Dir, "render", "--report").OK(t).Says(t, "the pinned part alone is", "changed by an admin of the org").Never(t, "lore policy set", "lore rule edit")
+		// what the admin was told is the admin's: refused for the member, runs for the admin
+		mo.Lore(mc.Dir, wubFields(t, raise)...).Refused(t, "E_REFUSED", "only an admin of the org")
+		wubRun(t, m, wc.Dir, raise).Says(t, wubKey)
 	})
 
 	s.Step("D-658/store-root-budget-names-the-store", func() {
@@ -222,6 +232,19 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		mo.Lore(mc.Dir, "policy", "unset", "--key", "branches.isolated", "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
 		m.Lore(wc.Dir, "branch", "share", "--branch", "feat/mo-share", "--undo", "--yes").OK(t).Says(t, "removed the share choice")
 		m.Lore(wc.Dir, "policy", "unset", "--key", "branches.isolated", "--to", inWeb, "--yes").OK(t)
+	})
+
+	s.Step("D-725/default-budget-holds-a-real-folder", func() {
+		// devco D-725: the default 8000 sat under the pinned part of most
+		// real folders (17-23 KB in 300-row folders); with no budget set,
+		// a folder pinning ~20 KB renders with no warning for anyone
+		m.Lore(pc.Dir, "policy", "unset", "--key", wubKey, "--to", wubRoot, "--yes").OK(t)
+		m.Lore(wc.Dir, "policy", "unset", "--key", wubKey, "--to", inWeb, "--yes").OK(t)
+		m.Lore(wc.Dir, "policy", "show", "--id", wubKey).OK(t).Says(t, "32000\tdefault")
+		m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", strings.Repeat("every web page is served with a strict content security policy. ", 300), "--yes").OK(t)
+		m.Lore(wc.Dir, "sync").OK(t).Never(t, wubWarn)
+		mo.Lore(mc.Dir, "sync").OK(t).Never(t, wubWarn)
+		m.Lore(wc.Dir, "render", "--report").OK(t).Says(t, wubKey+" 32000").Never(t, "the pinned part alone is")
 	})
 }
 

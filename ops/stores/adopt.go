@@ -113,6 +113,14 @@ type AdoptOut struct {
 	// names the ones that changed meanwhile and stay (rerun to take them).
 	LiveRemoved int      `json:"live_removed,omitempty"`
 	LiveKept    []string `json:"live_kept,omitempty"`
+	// Tidied are the repo's lore files --move removed beside the row files
+	// (devco D-719), slash paths from the repo's top: the stale
+	// .lore/LORE.md (a linked repo renders none, and a client repo's leak
+	// guard refused every commit touching it), and in a repo still on the
+	// lore 0.1.17 format its project row and _meta.json, so nothing of the
+	// old format is left there (read, never migrated). AdoptTidyWhy says
+	// why each went.
+	Tidied []string `json:"tidied,omitempty"`
 	// Link is what --move's `lore org link` of the repo to the folder says
 	// (its plan on a dry run).
 	Link []string `json:"link,omitempty"`
@@ -234,9 +242,48 @@ func adoptOp(m Manager) op.Entry {
 // .lore/data`), a message naming where the rows went. One spelling for the
 // printed line, the JSON next step and the run, so what is printed is what
 // works.
-func AdoptCommitCommand(top, place string) string {
+// The tidied files outside .lore/data (D-719: .lore/LORE.md) are staged
+// with it, named each, since `git add` of a path that is gone and was
+// never tracked fails.
+func AdoptCommitCommand(top, place string, tidied ...string) string {
 	top = cdArg(top) // one shell word also when the repo path holds a space (devco D-724)
-	return "git -C " + top + " add -A .lore/data && git -C " + top + " commit -m \"" + AdoptCommitMessage(place) + "\""
+	return "git -C " + top + " add -A " + strings.Join(AdoptCommitPaths(tidied), " ") + " && git -C " + top + " commit -m \"" + AdoptCommitMessage(place) + "\""
+}
+
+// AdoptCommitPaths are the pathspecs of that commit's `git add -A`:
+// .lore/data, then each tidied file outside it.
+func AdoptCommitPaths(tidied []string) []string {
+	out := []string{AdoptDataDir}
+	for _, p := range tidied {
+		if !strings.HasPrefix(p, AdoptDataDir+"/") {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// AdoptDataDir is the repo's row folder from its top, slash separated.
+const AdoptDataDir = ".lore/data"
+
+// AdoptLoreMD is the repo's rendered context file, which --move removes
+// when lore generated it (D-719).
+const AdoptLoreMD = ".lore/LORE.md"
+
+// AdoptTidyOutside are the files outside .lore/data that --move may
+// remove (adoptTidy): what a commit of the removal must stage beside
+// .lore/data, and what doctor's commit line looks for (D-719).
+func AdoptTidyOutside() []string { return []string{AdoptLoreMD} }
+
+// AdoptTidyWhy is why --move removed the tidied file p (D-719).
+func AdoptTidyWhy(p string) string {
+	switch {
+	case p == AdoptLoreMD:
+		return "lore renders no LORE.md in a repo linked to a store folder, and the stale one kept old notes in the repo"
+	case strings.HasSuffix(p, "/_meta.json"):
+		return "the repo's lore 0.1.17 format marker: no notes are left in the repo, so nothing needs migrating"
+	default:
+		return "the repo's own lore 0.1.17 place row: the folder is its own project"
+	}
 }
 
 // AdoptCommitMessage is the subject of that repo commit.
@@ -322,7 +369,21 @@ func (o AdoptOut) Text() string {
 	case o.Removed > 0 && o.Commit != "":
 		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data and committed it (" + o.Commit + "); push it with the repo as usual\n")
 	case o.Removed > 0:
-		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (" + AdoptCommitCommand(o.From, o.Store+"/"+o.Folder) + "); lore's hook knows the rows live there now\n")
+		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (" + AdoptCommitCommand(o.From, o.Store+"/"+o.Folder, o.Tidied...) + "); lore's hook knows the rows live there now\n")
+	}
+	verbTidy := "removed "
+	if o.DryRun {
+		verbTidy = "would remove "
+	}
+	for _, p := range o.Tidied {
+		b.WriteString("  " + verbTidy + p + " (" + AdoptTidyWhy(p) + ")\n")
+	}
+	if o.Removed == 0 && len(o.Tidied) > 0 && !o.DryRun {
+		if o.Commit != "" {
+			b.WriteString("  committed it (" + o.Commit + "); push it with the repo as usual\n")
+		} else {
+			b.WriteString("  review and commit it (" + AdoptCommitCommand(o.From, o.Store+"/"+o.Folder, o.Tidied...) + ")\n")
+		}
 	}
 	// a moved row's bare id names the folder's copy at once, also before
 	// the repo commit is pushed (devco D-713); a dry run reads the moving

@@ -647,6 +647,13 @@ func emailOfKey(key string) string {
 	return rest
 }
 
+// isRoutedTable reports whether the table folder name holds a kind F14
+// routes: the notes a repo linked to a store folder keeps there (D-723).
+func isRoutedTable(table string) bool {
+	_, ok := routeKinds[row.Table(table)]
+	return ok
+}
+
 // routeKinds maps a core table to the kind name F14's routing rules
 // (defaults.client_repos, routing.client_repos) use for it.
 var routeKinds = map[row.Table]string{
@@ -706,6 +713,12 @@ func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.
 		}
 		return r.linkedFolderTarget(ctx, s)
 	}
+	if s.Result.Role != orgresolve.RoleClient {
+		// D-723: an own repo linked to a store folder that keeps no notes
+		// of its own writes to that folder; one not attached here is
+		// refused with the exact --to (L-4), as a repo linked by remote is.
+		return r.linkedFolderTarget(ctx, s)
+	}
 	attached, err := r.OrgStores(ctx)
 	if err != nil {
 		return "", err
@@ -719,10 +732,15 @@ func (r *OrgResolution) DefaultTarget(ctx context.Context, q WriteQuery) (store.
 	return "", nil
 }
 
-// linkedFolderTarget is the attached store of the folder a link by remote
-// names (OrgStores attaches it under the entry's name); "" when it is not
-// attached, and then the write fails on the read-only repo cache as before.
+// linkedFolderTarget is the attached store of the folder a link names
+// (OrgStores attaches it under the entry's name), for a repo linked by
+// remote (no lore files) and an own repo whose notes moved out (D-723);
+// a linked folder that is not attached is refused naming the --to.
 func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situation) (store.Source, error) {
+	why := "this repo keeps no notes of its own and its link"
+	if s.LinkedByRemote != "" {
+		why = "this repo holds no lore files and its store link by remote (" + s.LinkedByRemote + ")"
+	}
 	attached, err := r.OrgStores(ctx)
 	if err != nil {
 		return "", err
@@ -737,7 +755,7 @@ func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situat
 		// the org store attached at the linked folder; one attached at its
 		// root (the link's store is not the entry's) is not that folder
 		if a.Name == store.Source(s.Result.Org.Name) && linked[a.Folder] {
-			r.routed = "this repo holds no lore files; its store link by remote (" + s.LinkedByRemote + ") names " + string(a.Name) + "/" + a.Folder
+			r.routed = why + " names " + string(a.Name) + "/" + a.Folder
 			return a.Name, nil
 		}
 	}
@@ -748,7 +766,7 @@ func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situat
 	for _, l := range s.Result.Links {
 		if l.Entry == s.Result.Org.Name && l.Folder != "" {
 			to := s.Result.Org.Name + "/" + l.Folder
-			return "", errs.New(errs.ReadOnly, "this repo holds no lore files and its store link by remote ("+s.LinkedByRemote+") names folder "+l.Folder+" of "+l.StoreURL+", which is not attached here, so a write has nowhere to go").
+			return "", errs.New(errs.ReadOnly, why+" names folder "+l.Folder+" of "+l.StoreURL+", which is not attached here, so a write has nowhere to go").
 				WithHint("name the folder: --to " + to + " (or add that store to the org entry in " + lorehome.Shown() + "/config.yaml so writes go there by themselves)")
 		}
 	}
@@ -828,6 +846,9 @@ func (r *OrgResolution) decide(ctx context.Context, explicit bool, kind string, 
 	}
 	if s.Committed != nil {
 		in.CommittedProject = s.Committed.Project
+	}
+	if res.Role != orgresolve.RoleClient && len(in.Links) > 0 {
+		in.RepoHoldsNotes = orgcfg.HoldsNotes(s.Dir, isRoutedTable) // D-723: read only where F14 uses it
 	}
 	if res.Org != nil {
 		in.PersonalDefaults = res.Org.Defaults.ClientRepos

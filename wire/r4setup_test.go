@@ -53,3 +53,22 @@ func TestProjectMissOutsideRepoPointsIntoTheRepo(t *testing.T) {
 		t.Fatalf("inside: %+v", le)
 	}
 }
+
+// TestStoreNamingNoOrgCannotTell (devco:D-721): a lore store that holds no
+// lore-org.yaml and names no org in its lore-store.yaml is either an org's
+// main store not sent yet or another store of an org; the refusal said "the
+// admin who made the org has not sent it", which lore cannot know. It now
+// says lore cannot tell whose store it is, prints the join by the org's
+// main store url, and carries errNoOrgNamed so setup join refuses too.
+func TestStoreNamingNoOrgCannotTell(t *testing.T) {
+	url := "git@git.example:acme/ops.git"
+	err := orgFileError(&orgcfg.OrgStoreNoteError{Note: orgcfg.OrgStoreNote{Store: "git.example/acme/ops"}, Branch: "main"}, url)
+	var le *errs.Error
+	if !errors.As(err, &le) || le.Code != errs.InvalidInput || !errors.Is(err, errNoOrgNamed) {
+		t.Fatalf("got %v", err)
+	}
+	if !strings.Contains(le.Message, "lore cannot tell whose store "+url) || strings.Count(err.Error(), errNoOrgNamed.Error()) != 1 ||
+		strings.Contains(le.Message+le.Hint, "has not sent it") || !strings.Contains(le.Hint, "lore setup join --invite <the org's main store url>") {
+		t.Fatalf("message %q hint %q", err.Error(), le.Hint)
+	}
+}

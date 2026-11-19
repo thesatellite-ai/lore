@@ -116,9 +116,9 @@ An org's store, `me` or a store named by its `sto_` id lives in `~/.lore/config.
 $ lore store folder add --store notes --folder golang
 ✓ created folder golang in notes (prj_2ad3…f891; shown only in repos that attach it)
 $ lore memory add --to notes/golang --body 'Close every channel from the sender side.'
+lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3…f891.json (store notes/golang)
 lore: wrote ~/stores/agency-notes/golang/actors/act_162d…9666.json (store notes/golang)
 lore: wrote ~/stores/agency-notes/golang/memories/mem_54fe…28f2.json (store notes/golang)
-lore: wrote ~/stores/agency-notes/golang/projects/prj_2ad3…f891.json (store notes/golang)
 ✓ mem_54fe…28f2 [notes/golang]
   scope: [project]
 $ cat .lore/stores.yaml

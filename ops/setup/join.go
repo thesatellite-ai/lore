@@ -54,8 +54,15 @@ func quoteShort(s string) string {
 // added joins from a fresh machine, where only the org's store url can be
 // resolved; setup.join and the join step's apply both answer with it, so
 // the page and the command say the same thing.
+//
+// devco:D-722: the name is never turned into a url. An org's store is any
+// url its admin gave `lore org create --store` (any host, any repo name),
+// so lore has no rule that derives it from the name: trying
+// github.com/<org>/… would be a guess at a host and a repo, and could
+// reach someone else's repository. A fresh machine therefore joins by the
+// store url, and the message and the help say so.
 func UnknownOrgErr(org string) error {
-	return errs.New(errs.JoinOrgUnknown, "setup join: no org named "+quoteShort(org)+" on this machine yet; join with the org's store url the admin gave you").
+	return errs.New(errs.JoinOrgUnknown, "setup join: no org named "+quoteShort(org)+" on this machine yet; a fresh machine joins by the org's store url (lore does not guess it from the name): lore setup join --invite <store-url>, the url your admin gave you").
 		WithHint("lore setup join --invite \"<the org's store url>\" (lore member add printed it for your admin); an outsider: paste the whole line starting with " + InvitePrefix)
 }
 
@@ -131,6 +138,9 @@ func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOu
 	}
 	id := e.joinEmail(ctx, e.rosterEmail(ctx, name, org), cmp.Or(inv.Org, name))
 	id = e.joinPerson(ctx, id, name, org, inv.Org)
+	if id.Refusal != nil {
+		return JoinOut{}, id.Refusal
+	}
 	if named == "" && inv.Org == "" && id.Org != "" {
 		// devco:D-645: a join by store url names its setup for the org the
 		// store's lore-org.yaml names (the admin's setup, the entry the
@@ -144,7 +154,15 @@ func (e engine) joinMember(ctx context.Context, org string, noOpen bool) (JoinOu
 	if err != nil {
 		return JoinOut{}, err
 	}
-	cmds := joinCommands(cmp.Or(name, joinFallbackName), org, id, plan)
-	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: org}, Invite: inv, Plan: plan,
-		Commands: cmds, Org: inv.Org, IdentityNote: id.Note, PrefillNote: prefillNote(id, cmds)}, nil
+	answer, storeNote := org, ""
+	if id.MainStore != "" {
+		// devco:D-721: the url is another store of the org; the org lives
+		// in its main store, and the join line answers with that url (the
+		// join step would follow it too, but a printed line says what runs)
+		answer = id.MainStore
+		storeNote = org + " is a store of org " + cmp.Or(id.Org, name) + "; the org lives in its main store " + id.MainStore + ", so the join line uses that url"
+	}
+	cmds := joinCommands(cmp.Or(name, joinFallbackName), answer, id, plan)
+	return JoinOut{Web: WebStart{Setup: name, NoOpen: noOpen, Invite: answer}, Invite: inv, Plan: plan,
+		Commands: cmds, Org: inv.Org, StoreNote: storeNote, IdentityNote: id.Note, PrefillNote: prefillNote(id, cmds)}, nil
 }

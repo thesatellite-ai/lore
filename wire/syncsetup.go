@@ -191,6 +191,12 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 			codes = append(codes, code)
 		}
 	}
+	// devco:D-721: an admin's sync names the org in its other stores
+	// before they sync, so each store's own push below sends the marker
+	var namedOrg []string
+	if out.Data.Pass != opssync.PassStore {
+		namedOrg = a.nameOrgInStores(ctx)
+	}
 	synced := map[string]bool{} // normalized urls this pass reported
 	for i, one := range stores {
 		if org := orgOfURL(a.opts.Home, one.URL); org != "" && out.Data.Pass != opssync.PassStore && refusedClone(a.opts.Home, one.URL, one.Branch) {
@@ -211,6 +217,7 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		}
 	}
 	if out.Data.Pass != opssync.PassStore {
+		out.Lines = append(out.Lines, namedOrg...)
 		// D-224: an org store written from a folder in no setup (`lore
 		// store folder add` from ~) said "lore sync sends it"; its clone's
 		// waiting commits go out here as they do from a repo

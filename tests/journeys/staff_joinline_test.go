@@ -5,7 +5,8 @@ package journeys
 // staff_joinline_test.go — the join line member add prints works on the
 // new person's fresh machine (B2-1). Lee adds Ann; the output names the
 // org's store url; on Ann's fresh laptop the org's name alone is refused
-// as an unknown org (E_JOIN_ORG_UNKNOWN, pointing at the store url), and
+// as an unknown org (E_JOIN_ORG_UNKNOWN: a fresh machine joins by the
+// store url, lore never guesses it from the name, devco D-722), and
 // the printed store url is accepted. Run with no terminal (B-10), the
 // printed join line answers with the `lore setup apply` lines of a member
 // setup named after the org (the name the store's lore-org.yaml gives,
@@ -36,10 +37,16 @@ func TestJourneyStaffJoinLine(t *testing.T) {
 	w.Step("day1/ann-on-a-fresh-laptop", func() {
 		ann := tt.person(tlAnn)
 		dir := tt.repo[tlAnn.Email].Dir
+		// devco:D-722: the refusal says why (a fresh machine, no guessed
+		// url) and prints the command that works; the help says the same
 		ann.Lore(dir, "setup", "join", tlOrg, "--no-open").
-			Refused(t, "E_JOIN_ORG_UNKNOWN", "no org named", "store url").
+			Refused(t, "E_JOIN_ORG_UNKNOWN", "no org named", "a fresh machine joins by the org's store url", "lore setup join --invite <store-url>").
 			Never(t, "E_INVITE_INVALID")
-		ann.Lore(dir, "setup", "join", url, "--no-open", "--json").OK(t).Says(t, url)
+		ann.Lore(dir, "setup", "join", "--help").OK(t).
+			Says(t, "by its store url", "the org's name works only on a machine that already has the org").
+			Never(t, "by its name or store url")
+		// the printed command with the url member add gave works as printed
+		ann.Lore(dir, "setup", "join", "--invite", url, "--no-open", "--json").OK(t).Says(t, url)
 	})
 
 	w.Step("day1/ann-joins-without-a-terminal", func() {

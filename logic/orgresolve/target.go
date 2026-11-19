@@ -65,6 +65,11 @@ type TargetInputs struct {
 	// CommittedProject is .lore/org.yaml's project (an own repo's internal
 	// folder), "" when none.
 	CommittedProject string
+	// RepoHoldsNotes: the repo's .lore/data holds a live note row of its
+	// own (orgcfg.HoldsNotes). An own repo linked to a store folder that
+	// holds none writes to that folder (D-723); one that does keeps
+	// writing next to its notes.
+	RepoHoldsNotes bool
 }
 
 // TargetDecision is where the row goes, and why (printed by --dry-run).
@@ -118,7 +123,21 @@ func ResolveTarget(in TargetInputs) (TargetDecision, error) {
 	if in.LinkUnknown {
 		return TargetDecision{}, ErrLinkUnknown
 	}
-	if in.Role != RoleClient || in.Org == "" {
+	if in.Org == "" {
+		return TargetDecision{Repo: true, Rule: "own repo or no org: this repo"}, nil
+	}
+	if in.Role != RoleClient {
+		// D-723: an own repo linked to a store folder whose notes moved
+		// out (adopt --remove-source, move) writes to that folder, as its
+		// reads do; before, the row and its author's actor row went back
+		// into the code repo's .lore/data.
+		if len(in.Links) > 0 && !in.RepoHoldsNotes {
+			f, why, err := defaultLink(in)
+			if err != nil {
+				return TargetDecision{}, err
+			}
+			return TargetDecision{Folder: f, Rule: "this repo keeps no notes of its own; its link names " + in.Org + "/" + f + " (" + why + ")"}, nil
+		}
 		return TargetDecision{Repo: true, Rule: "own repo or no org: this repo"}, nil
 	}
 	where, src := effectiveDefault(in.Kind, in.StoreDefaults, in.PersonalDefaults)

@@ -542,7 +542,7 @@ type RemoveOut struct {
 
 // JoinIn is setup.join's input.
 type JoinIn struct {
-	Invite string `json:"invite" arg:"0" desc:"your org's name or store url (a member an admin added with lore member add), or an invite line starting with lore-invite:v1:"`
+	Invite string `json:"invite" arg:"0" desc:"your org's store url (a member an admin added with lore member add; the org's name works only on a machine that already has the org), or an invite line starting with lore-invite:v1:"`
 	NoOpen bool   `json:"no_open,omitempty" flag:"no-open" desc:"print the page address instead of opening a browser"`
 	// Web opens the page without a terminal (cmd/lore reads --web; the op
 	// only reports it), e.g. over ssh with the port forwarded.
@@ -570,6 +570,9 @@ type JoinOut struct {
 	// Org is the org joined when the answer names it (an invite line or
 	// an org name); "" for a store url until the join reads the store.
 	Org string `json:"org,omitempty"`
+	// StoreNote says the url given is another store of an org and the
+	// lines join its main store instead (devco:D-721); "" otherwise.
+	StoreNote string `json:"store_note,omitempty"`
 	// IdentityNote says why the identity line asks for an address instead
 	// of carrying git's email: that email is another org's identity on
 	// this machine (devco N-4); "" otherwise.
@@ -584,6 +587,9 @@ type JoinOut struct {
 // follows them).
 func (o JoinOut) Text() string {
 	var b strings.Builder
+	if o.StoreNote != "" {
+		b.WriteString(o.StoreNote + "\n")
+	}
 	b.WriteString("To join from the command line (no browser needed), run in order:\n")
 	for _, c := range o.Commands {
 		b.WriteString("  " + c + "\n")

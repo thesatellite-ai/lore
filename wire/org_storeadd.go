@@ -8,12 +8,14 @@ package wire
 // next `lore org refresh` (or the automatic one) once it is pushed.
 
 import (
+	"cmp"
 	"context"
 
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/logic/storeaddr"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsorgcmd "github.com/thesatellite-ai/lore/ops/orgcmd"
 )
@@ -77,6 +79,10 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	} else if team, ok := aud.Team(); ok {
 		lines = append(lines, "  "+audienceTeamLine(team))
 	}
+	otherStore := !storeaddr.Same(in.URL, sc.URL)
+	if otherStore {
+		lines = append(lines, "  "+want+"'s lore-store.yaml names the org and its main store "+sc.URL+", so a join by its url finds the org")
+	}
 	if named != "" {
 		lines = append(lines, named)
 	}
@@ -114,9 +120,33 @@ func (h *standaloneOrg) AddStore(ctx context.Context, in opsorgcmd.StoreAddIn, y
 	if err := writeOrgSource(h.home, configLockWait, in.Org, mine, sg.Source()); err != nil {
 		return opsorgcmd.Report{Lines: lines}, err
 	}
-	lines = append(lines, "✓ org entry "+in.Org+" lists it (version "+short(sg.Version)+")",
-		"  next: lore org link --org "+in.Org+" --project <folder> --store "+in.URL)
+	lines = append(lines, "✓ org entry "+in.Org+" lists it (version "+short(sg.Version)+")")
+	if otherStore {
+		lines = append(lines, markStoreOrg(ctx, g, orgcfg.OrgStoreMark{URL: in.URL, Branch: in.Branch, Org: cmp.Or(sg.Doc.Name, in.Org),
+			MainStore: sc.URL, Signature: storeSignature(o)}, want))
+	}
+	lines = append(lines, "  next: lore org link --org "+in.Org+" --project <folder> --store "+in.URL)
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// markStoreOrg names the org and its main store in the added store's
+// lore-store.yaml (devco:D-721) and says how that went in one line. The
+// commit waits in the store's clone for the next `lore sync`, also with
+// --push: pushing it would send the store's other waiting commits (a link
+// made before) under the org file's --push. It never fails the add: a
+// store that is no lore store yet, or that does not answer, is named by
+// an admin's next `lore sync`.
+func markStoreOrg(ctx context.Context, g *orgcfg.GitLinks, m orgcfg.OrgStoreMark, want string) string {
+	res, err := g.MarkOrgStore(ctx, m)
+	switch {
+	case err != nil:
+		return "· " + want + "'s lore-store.yaml does not name the org yet (" + err.Error() + "); the admin's next lore sync names it"
+	case res.NotAStore:
+		return "· " + want + " is no lore store yet; once it is, the admin's next lore sync names the org in its lore-store.yaml"
+	case res.Existed:
+		return "· " + want + "'s lore-store.yaml already names org " + m.Org
+	}
+	return "✓ " + want + "'s lore-store.yaml names org " + m.Org + " and its main store (committed; lore sync sends it)"
 }
 
 // storesFileName is the name top's .lore/stores.yaml gives the store of

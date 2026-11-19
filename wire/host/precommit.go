@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -122,7 +123,15 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	// D-710: rows `lore store adopt --remove-source` moved to a store are
 	// not; the marker keeps only what is still waiting to be committed
 	hand, moved, places := withoutMovedOut(ctx, root, handDeletedRows(ctx, repo, root, changed))
-	wire.PruneMovedOut(ctx, root, rowPaths(moved))
+	// D-719: `lore store adopt --move` of a 0.1.17-format repo removes its
+	// _meta.json too (no notes left, nothing to migrate) and records it;
+	// that deletion commits, one by hand is still refused (H-3)
+	metaMoved := metaMovedOut(ctx, root, changed)
+	waiting := rowPaths(moved)
+	if metaMoved {
+		waiting = append(waiting, metaFilePath)
+	}
+	wire.PruneMovedOut(ctx, root, waiting)
 	if herr := handDeleteError(hand); herr != nil {
 		wire.HookIndexRestore(ctx, root)
 		return herr
@@ -134,7 +143,11 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	if err != nil {
 		return errs.Wrap(errs.Internal, "pre-commit: core registry", err)
 	}
-	bad, notes := checkChangedFiles(ctx, repo, root, reg, changed)
+	checked := changed
+	if metaMoved {
+		checked = slices.DeleteFunc(slices.Clone(changed), func(p string) bool { return p == metaFilePath })
+	}
+	bad, notes := checkChangedFiles(ctx, repo, root, reg, checked)
 	for _, n := range notes {
 		h.line(n)
 	}
@@ -452,6 +465,20 @@ func checkChangedFiles(ctx context.Context, repo *gitref.Repo, root string, reg 
 		}
 	}
 	return bad, notes
+}
+
+// metaMovedOut reports whether this commit removes the project's
+// _meta.json because `lore store adopt --move` moved every note of a
+// 0.1.17-format repo out and recorded it (wire.RecordMovedOut, D-719):
+// the file is gone, among the changes, and in the marker.
+func metaMovedOut(ctx context.Context, root string, changed []string) bool {
+	if !slices.Contains(changed, metaFilePath) {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(metaFilePath))); !errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return wire.MovedOut(ctx, root)[metaFilePath] != ""
 }
 
 // checkChangedFile is checkChangedFiles for one file p with HEAD's copy

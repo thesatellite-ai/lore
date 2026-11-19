@@ -26,6 +26,8 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -34,6 +36,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -190,10 +193,40 @@ func movedOutLine(moved []handDeletedRow, places []string) string {
 }
 
 // movedOutDoctorLine is doctor's note for the same rows, with the command
-// that commits the removal from anywhere.
-func movedOutDoctorLine(root string, moved []handDeletedRow, places []string) string {
+// that commits the removal from anywhere: opsstores.AdoptCommitCommand,
+// the one adopt prints and --commit runs, so tidied (files outside
+// .lore/data adopt --move removed and nobody staged yet, movedOutTidied)
+// are staged with the rows; `add -A .lore/data` alone left a removed
+// .lore/LORE.md out of the commit, still tracked (devco D-719).
+func movedOutDoctorLine(root string, moved []handDeletedRow, places, tidied []string) string {
 	where := strings.Join(places, ", ")
-	return countRows(len(moved)) + " removed from .lore/data by `lore store adopt --remove-source` live in " + where + " now; commit the removal: git -C " + root + " add -A .lore/data && git -C " + root + " commit -m \"lore: move the notes to " + where + "\""
+	with := ""
+	if len(tidied) > 0 {
+		with = " (" + strings.Join(tidied, ", ") + " went with them)"
+	}
+	return countRows(len(moved)) + " removed from .lore/data by `lore store adopt --remove-source` live in " + where + " now" + with + "; commit the removal: " + opsstores.AdoptCommitCommand(root, where, tidied...)
+}
+
+// movedOutTidied are the files outside .lore/data that `lore store adopt
+// --move` removes beside the rows (opsstores.AdoptTidyOutside) and that
+// are gone from root's work tree while git still tracks them unstaged:
+// the paths doctor's commit command must name. A deletion already staged
+// is left out, since `git add` of a path in neither the work tree nor the
+// index fails (D-715). A git error lists nothing.
+func movedOutTidied(ctx context.Context, repo *gitref.Repo, root string) []string {
+	var out []string
+	for _, rel := range opsstores.AdoptTidyOutside() {
+		changed, staged, _, err := changedUnderStaged(ctx, repo, root, rel)
+		if err != nil {
+			continue
+		}
+		for _, p := range changed {
+			if _, serr := os.Lstat(filepath.Join(root, filepath.FromSlash(p))); p == rel && !staged[p] && errors.Is(serr, fs.ErrNotExist) {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // rowPaths are the paths of rows.

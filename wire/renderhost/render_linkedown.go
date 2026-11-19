@@ -36,6 +36,10 @@ type privateReport struct {
 	Bytes    int    `json:"bytes"`     // the store files' size
 	Core     int    `json:"core"`      // bytes of the pinned part
 	OverCore bool   `json:"over_core"` // the pinned part alone is over the budget
+	// fix is the warning's fix for this caller, "" when they can make
+	// none (a member of a company folder, devco D-725): the report then
+	// names no command, as the warning is not printed to them.
+	fix string
 }
 
 // text is the --report section ("" for nil).
@@ -49,8 +53,15 @@ func (r *privateReport) text() string {
 	fmt.Fprintf(&b, "  pinned rules/hotfixes  %4d  full (never cut)\n", r.Pinned)
 	fmt.Fprintf(&b, "  rows shown             %4d  %d bytes\n", r.Rows, r.Bytes)
 	fmt.Fprintf(&b, "  notes left out         %4d  %s %d bytes\n", r.LeftOut, policy.KeyContextBudgetInternal, r.Budget)
-	if r.OverCore {
-		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d; fix: a lower severity (`lore rule edit --id <id> --severity should`) or `lore policy set --key %s --value %d --yes`\n", r.Core, policy.KeyContextBudgetInternal, r.Budget, policy.KeyContextBudgetInternal, budgetToFit(r.Core))
+	// devco D-725: the fix is the warning's own (commands that run where
+	// printed, with the --to of the place the budget is set), and only for
+	// whoever may make it; it printed `lore policy set … --yes` with no
+	// --to, to members too
+	switch {
+	case r.OverCore && r.fix != "":
+		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d; fix: %s\n", r.Core, policy.KeyContextBudgetInternal, r.Budget, r.fix)
+	case r.OverCore:
+		fmt.Fprintf(&b, "  the pinned part alone is %d bytes, over %s %d; its rows and budget are changed by an admin of the org\n", r.Core, policy.KeyContextBudgetInternal, r.Budget)
 	}
 	return b.String()
 }
@@ -70,8 +81,12 @@ func (h *Host) privateReportOf(ctx context.Context, root string) *privateReport 
 	for _, f := range p.files {
 		size += len(f.body)
 	}
-	return &privateReport{Dir: h.redact(p.dir), Stores: len(p.stores), Pinned: p.pinned, Rows: p.rows, LeftOut: p.leftOut,
+	r := &privateReport{Dir: h.redact(p.dir), Stores: len(p.stores), Pinned: p.pinned, Rows: p.rows, LeftOut: p.leftOut,
 		Budget: p.budget, Bytes: size, Core: p.coreBytes, OverCore: p.budget > 0 && p.coreBytes > p.budget}
+	if p.overCoreWarns() {
+		r.fix = overCoreFix(p.coreBytes, p.pins, p.fix)
+	}
+	return r
 }
 
 // noRepoFile is the one decision render's report, dry run and write take

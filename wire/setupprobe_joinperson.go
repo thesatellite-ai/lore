@@ -14,6 +14,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/ops/orgcmd"
@@ -32,6 +33,7 @@ func (sp setupProber) JoinPerson(ctx context.Context, setup, answer, email strin
 		got   team.RosterPerson
 		found bool
 		org   string // the entry the roster was read under (D-645)
+		main  string // the org's main store, when answer was another store of it (D-721)
 	)
 	read := func(ctx context.Context, entry string) error {
 		p, ok, err := team.FindRosterPerson(ctx, orgRosterStore{a: sp.a, org: entry}, []string{email})
@@ -58,18 +60,24 @@ func (sp setupProber) JoinPerson(ctx context.Context, setup, answer, email strin
 		// rule and store clone go again (probeImport), the prefill keeps
 		// only what it read
 		err := probeImport(ctx, host, sp.a.opts.Home, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(email), Name: name, SkipRegister: true,
+			Followed: func(m string) { main = m },
 			Admit: func(ctx context.Context, entry string) error {
 				if rerr := read(ctx, entry); rerr != nil {
 					return rerr
 				}
 				return errProbeAdmitted
 			}})
+		if errors.Is(err, errNoOrgNamed) {
+			// devco:D-721: the join step refuses this store the same way;
+			// setup join says so instead of printing lines that fail
+			return opssetup.JoinPerson{Refusal: err}, false
+		}
 		if err != nil {
 			return opssetup.JoinPerson{}, false
 		}
 	}
 	if !found {
-		return opssetup.JoinPerson{Org: org}, false
+		return opssetup.JoinPerson{Org: org, MainStore: main}, false
 	}
-	return opssetup.JoinPerson{Name: got.Name, GitHub: got.GitHub, Org: org}, true
+	return opssetup.JoinPerson{Name: got.Name, GitHub: got.GitHub, Org: org, MainStore: main}, true
 }
