@@ -89,6 +89,7 @@ type adoptSourceRows struct {
 
 // Adopt implements opsstores.Adopter.
 func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName string) (opsstores.AdoptOut, error) {
+	given := name                                              // the store as the person named it, for the printed reruns
 	at, err := a.folderStore(ctx, adoptVerb, name, folderName) // the org's store that holds the folder (foldertarget.go)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
@@ -166,6 +167,13 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
+	// D-717: every row the batch writes gets the secret scan of a normal
+	// write before anything is written (refused: nothing in the store).
+	scan, err := a.adoptSecretPlan(ctx, in, at, src, given, folderName, changes)
+	if err != nil {
+		return opsstores.AdoptOut{}, err
+	}
+	defer scan.close()
 	adopted = append(adopted, mapped...)
 	for _, k := range slices.Clone(adopted) {
 		adopted = append(adopted, srcRows.links[k.ID.String()]...)
@@ -182,6 +190,10 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		}
 		return out, nil
 	}
+	var redacted []engine.RedactedWrite
+	if changes, redacted, err = scan.apply(ctx, changes); err != nil {
+		return opsstores.AdoptOut{}, err
+	}
 	if len(changes) > 0 {
 		subject := adoptSubject + folderName + " from " + filepath.Base(top) + " (" + plural(len(changes), "row") + ")"
 		pushed, note, cerr := a.commitStoreEdit(ctx, src, name, subject, func(dir string) ([]string, error) {
@@ -191,6 +203,9 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 			return opsstores.AdoptOut{}, errs.Prefix(adoptVerb+": write "+label+"/"+folderName, cerr)
 		}
 		out.Pushed, out.Note = pushed, note
+		if terr := scan.redactTasks(ctx, redacted); terr != nil {
+			out.Left = append(out.Left, terr.Error())
+		}
 	}
 	place := label + "/" + folderName
 	if in.Move {
