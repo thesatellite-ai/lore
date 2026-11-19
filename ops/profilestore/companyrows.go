@@ -17,6 +17,7 @@ package profilestore
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -133,12 +134,14 @@ func requireAdminForGroup(ctx context.Context, env PlaceEnv, src store.Source, v
 	if a.May() {
 		return nil
 	}
-	hint := "ask " + a.Who() + " to run: " + line
+	err = refuseMember(r, a, verb+" "+rowList(hit)+" (a must rule or a critical/high hotfix of the company folder "+string(at)+", which every repo reading it is told)", line)
 	if narrow != "" {
-		hint = narrow + "; or " + hint
+		var e *errs.Error
+		if errors.As(err, &e) {
+			return e.WithHint(narrow + "; or " + e.Hint)
+		}
 	}
-	return errs.New(errs.Refused, "only an admin of the org can "+verb+" "+rowList(hit)+" (a must rule or a critical/high hotfix of the company folder "+string(at)+
-		", which every repo reading it is told), and you are not one on the roster of "+r.Where()+"; nothing was written").WithHint(hint)
+	return err
 }
 
 // rowList is "rul_a" / "rul_a, rul_b" / "rul_a, … and 3 more".

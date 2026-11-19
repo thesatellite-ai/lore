@@ -100,7 +100,7 @@ func TestStoryBL25CacheFollowsTheMode(t *testing.T) {
 	})
 	s.Step("day1/per-branch-isolate-moves-dev-to-its-own-cache", func() {
 		w.aapp.Git("switch", "-q", "dev")
-		w.admin.LoreIn(w.aapp, "branch", "isolate", "--branch", "dev").OK(t)
+		w.admin.LoreIn(w.aapp, "branch", "isolate", "--branch", "dev", "--yes").OK(t)
 		w.admin.LoreIn(w.aapp, "memory", "add", "--body", "dev keeps this one").OK(t).Says(t, "dev notes")
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Says(t, "dev keeps this one", "dev writes for everyone")
 		if len(w.layerCacheOf("dev")) == 0 {
@@ -110,14 +110,14 @@ func TestStoryBL25CacheFollowsTheMode(t *testing.T) {
 	})
 	s.Step("day1/per-branch-share-moves-feat-a-to-mains-cache", func() {
 		w.aapp.Git("switch", "-q", "feat/a")
-		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "feat/a").OK(t).Says(t, "shared notes")
+		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "feat/a", "--yes").OK(t).Says(t, "shared notes")
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Says(t, "the checkout runs on port 8080").Never(t, "note of feat-a only")
 		if got := w.layerCacheOf("feat/a"); len(got) != 0 {
 			t.Fatalf("shared feat/a kept its layer cache: %v", got)
 		}
 		w.noLeak(t, "note of feat-a only", "dev keeps this one")
 		// back to isolated: its own cache again, its notes back
-		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "feat/a", "--undo").OK(t)
+		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "feat/a", "--undo", "--yes").OK(t)
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Says(t, "note of feat-a only")
 		if len(w.layerCacheOf("feat/a")) == 0 {
 			t.Fatal("feat/a isolated again reads through no layer cache")

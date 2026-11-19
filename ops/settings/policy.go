@@ -253,6 +253,18 @@ func (o ops) requirePolicyAdmin(ctx context.Context, target store.Source, _ poli
 	return profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, line)
 }
 
+// adminTo is the --to of the line a refused member hands an admin: the
+// full place (profilestore.PlaceTo, devco D-697), so the admin's run from
+// any folder changes exactly the folder the member meant; the person's
+// own spelling for the repo of a code repo, which is never company ground.
+func (o ops) adminTo(ctx context.Context, target store.Source, to string) string {
+	full := profilestore.PlaceTo(ctx, o.env, target)
+	if full == "" || store.Source(full) == store.SourceRepo {
+		return to
+	}
+	return full
+}
+
 func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	d, ok := policy.Lookup(policy.Key(in.Key))
 	if !ok {
@@ -262,7 +274,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: a personal store holds no team rules").WithHint("--to repo, --to <store> or --to <store>/<folder>")
 	}
-	if err := o.requirePolicyAdmin(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
+	if err := o.requirePolicyAdmin(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, o.adminTo(ctx, target, in.To))); err != nil {
 		return RowOut{}, err
 	}
 	if d.Key == policy.KeyContextTargets {
@@ -424,7 +436,7 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 		return RowOut{}, errs.New(errs.InvalidInput, "unknown policy key "+quote(in.Key)).WithHint("lore policy show lists the keys")
 	}
 	target := targetOf(in.To)
-	if err := o.requirePolicyAdmin(ctx, target, policy.Key(in.Key), policyCommand("unset", in.Key, "", in.To)); err != nil {
+	if err := o.requirePolicyAdmin(ctx, target, policy.Key(in.Key), policyCommand("unset", in.Key, "", o.adminTo(ctx, target, in.To))); err != nil {
 		return RowOut{}, err
 	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TablePolicies)

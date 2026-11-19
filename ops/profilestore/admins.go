@@ -127,8 +127,44 @@ func RequireAdmin(ctx context.Context, r Roster, does, line string) error {
 	if a.May() {
 		return nil
 	}
+	if k, ok := askOf(ctx); ok {
+		// the running command's own wording (WithAsk) wins: a check made
+		// inside another command (branch share runs policy set) prints the
+		// line of the command the person typed (devco D-697)
+		does, line = k.does, k.line
+	}
+	return refuseMember(r, a, does, line)
+}
+
+// refuseMember is the one refusal of a member's admin-only change, for
+// every command check and the write guard alike: what only an admin does,
+// the roster, and the line an admin runs.
+func refuseMember(r Roster, a Admins, does, line string) error {
 	return errs.New(errs.Refused, "only an admin of the org can "+does+", and you are not one on the roster of "+r.Where()+"; nothing was written").
 		WithHint("ask " + a.Who() + " to run: " + line)
+}
+
+// Labeler is the Env upgrade that names an attached store as the lists
+// and --to name it: "acme/web" for the store acme attached at its folder
+// web (wire.App StoreLabel).
+type Labeler interface {
+	StoreLabel(name store.Source) string
+}
+
+// PlaceTo is the --to a printed command names for src, so the command
+// changes exactly that place wherever it is run (devco D-697): the full
+// "<store>/<folder>" of a linked folder, never the bare name it is
+// attached under in this repo (an admin running `--to acme` from their
+// HOME set the store-wide policy instead of the folder's), the bare name
+// only for a store attached at its root. A repo source inside a store
+// clone is the folder it stands for (placeOf); the repo of a code repo
+// stays "repo".
+func PlaceTo(ctx context.Context, env PlaceEnv, src store.Source) string {
+	src, _ = placeOf(ctx, env, src)
+	if l, ok := upgrade.As[Labeler](env); ok && src != store.SourceRepo {
+		return l.StoreLabel(src)
+	}
+	return string(src)
 }
 
 // Leveler is the Env upgrade that says an attached store's settings level

@@ -8862,6 +8862,10 @@
                   "undo": {
                     "type": "boolean",
                     "description": "remove this choice again"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -8929,6 +8933,16 @@
           },
           "409": {
             "description": "E_CONTENDED, E_POLICY_DENIED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
@@ -9861,6 +9875,10 @@
                   "undo": {
                     "type": "boolean",
                     "description": "remove this choice again"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
                   }
                 },
                 "required": [
@@ -9928,6 +9946,16 @@
           },
           "409": {
             "description": "E_CONTENDED, E_POLICY_DENIED, E_READ_ONLY, E_REFUSED, E_STALE, E_STORE_LOCKED, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
             "content": {
               "application/json": {
                 "schema": {
