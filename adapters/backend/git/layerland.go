@@ -509,6 +509,9 @@ func (b *Backend) pushLanding(ctx context.Context) error {
 		case pushOffline:
 			return errs.New(errs.Offline, "the landing commit "+short(h)+" is made but the store's remote could not be reached ("+msg+"); the layer stays open").
 				WithHint("run lore sync to push it, then lore branch land again to move the layer to the trash")
+		case pushKept:
+			return errs.New(errs.Refused, "the landing commit "+short(h)+" is kept on this machine, not pushed: "+msg).
+				WithHint("the layer stays open; lore sync status shows the held change")
 		case pushRefused:
 			return errs.New(errs.Refused, "the store's remote refused the landing commit: "+msg).
 				WithHint("the commit stays local; lore sync status shows it")
