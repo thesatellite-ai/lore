@@ -11,23 +11,25 @@ import (
 	"github.com/thesatellite-ai/lore/store"
 )
 
-// Who signs a store clone's commits and merges, the same source a hand
-// edit in the clone uses (D-h) wherever that is safe:
+// Who signs a store clone's commits and merges:
 //
-//	org store (WithSigner)  the clone's git identity when its email is the
-//	                        org identity's (one author for lore's commits
-//	                        and hand edits; owner report 2026-11-12), else
-//	                        the org identity: a personal git email never
-//	                        signs an org store's commit (Q-R2-1, spec 6.5)
+//	org store (WithSigner)  the org identity (orgs[<org>].identity), name
+//	                        and email, for every commit lore makes there,
+//	                        whatever op makes it and whatever the clone's
+//	                        git user says (D-714: org link signed as the org
+//	                        identity while adopt let a git user.name with
+//	                        the org email sign; one rule now). lore sets the
+//	                        clone's own git user to that same identity
+//	                        (cloneidentity.go), so a hand commit matches.
+//	                        A personal git email never signs an org store's
+//	                        commit (Q-R2-1, spec 6.5)
 //	any other store         FLAG4: the clone's git identity when git has
 //	                        one, else the lore identity (`lore whoami`,
 //	                        WithIdentity), else the opener's author
 //	                        (WithAuthor, default DefaultAuthor)
 //
-// To have lore's org commits carry your git name, give the clone a git
-// identity with the org email (an includeIf for ~/.lore/stores, or git
-// config in the clone). lore never writes git config: the fallback is passed
-// as GIT_AUTHOR_*/GIT_COMMITTER_* on that one git call only.
+// lore never writes global git config: the org identity is passed as
+// GIT_AUTHOR_*/GIT_COMMITTER_* on that one git call only.
 //
 // One exception: a person's own change lore commits for them (a hand
 // edit, store.PersonAuthored) is authored by the person
@@ -61,13 +63,10 @@ func (b *Backend) identityEnv(ctx context.Context, explicit Signature) ([]string
 	if !explicit.IsZero() {
 		return signatureEnv(explicit), nil
 	}
-	// An org store (owner signature): the clone's git identity signs when
-	// it uses the org identity's email, as a hand edit there does (D-h),
-	// so lore's commits and the person's carry one author (owner report
-	// 2026-11-12: the org display name from lore beside the git user name from
-	// git, one email); any other git identity (a personal email) never
-	// signs an org store's commit (Q-R2-1, LORE_TEAM_SPEC 6.5): the org
-	// identity does.
+	// An org store (owner signature): the org identity signs, whatever the
+	// clone's git user says (D-714: one author for every op's commit; a
+	// git user.name beside the org email no longer signs some ops' commits
+	// and not others; a personal email never signs, Q-R2-1, spec 6.5).
 	if s, ok := b.cfg.ownerSigner(); ok {
 		if store.PersonAuthored(ctx) {
 			// brief 2.1: a hand edit is committed as the person who made it;
@@ -77,9 +76,6 @@ func (b *Backend) identityEnv(ctx context.Context, explicit Signature) ([]string
 				return nil, err
 			}
 			return append(authorEnv(p), committerEnv(s)...), nil
-		}
-		if sameEmail(gitEmail(ctx, b.git, b.work), s.Email) {
-			return nil, nil
 		}
 		return signatureEnv(s), nil
 	}
@@ -91,9 +87,8 @@ func (b *Backend) identityEnv(ctx context.Context, explicit Signature) ([]string
 }
 
 // WithSigner names the org identity of a store that belongs to an org: it
-// signs the store's commits and merges unless the clone's git identity
-// uses the same email (then git signs). A zero or unusable signature is
-// ignored (the FLAG4 rule).
+// signs every commit and merge lore makes in the store (D-714). A zero or
+// unusable signature is ignored (the FLAG4 rule).
 func WithSigner(s Signature) Option { return func(c *config) { c.signer = s } }
 
 // ownerSigner is the WithSigner signature when it can be written into a
@@ -112,22 +107,10 @@ func validSignature(s Signature) bool {
 }
 
 // SignerEnv is the identity environment of a commit lore makes itself
-// (outside a Backend) in an org store signed by s: nil when the git
-// identity of dir uses s's email (git signs, as for a hand edit), else s
-// as GIT_AUTHOR_*/GIT_COMMITTER_*. ok is false when s is not usable; the
-// caller then applies the FLAG4 rule (IdentityEnv).
-func SignerEnvFor(ctx context.Context, dir string, s Signature) (env []string, ok bool) {
-	if !validSignature(s) {
-		return nil, false
-	}
-	if bin, err := lookGit(DefaultBinary); err == nil && sameEmail(gitEmail(ctx, runner{bin: bin}, dir), s.Email) {
-		return nil, true
-	}
-	return signatureEnv(s), true
-}
-
-// SignerEnv is s as GIT_AUTHOR_*/GIT_COMMITTER_*; ok is false when s is
-// not usable.
+// (outside a Backend) in an org store signed by s: s as
+// GIT_AUTHOR_*/GIT_COMMITTER_*, the same rule as a Backend's commits
+// (D-714), whatever the worktree's git user says. ok is false when s is
+// not usable; the caller then applies the FLAG4 rule (IdentityEnv).
 func SignerEnv(s Signature) (env []string, ok bool) {
 	if !validSignature(s) {
 		return nil, false
@@ -290,23 +273,4 @@ func (b *Backend) commitEnv(ctx context.Context, explicit Signature) ([]string, 
 		return nil, err
 	}
 	return append(b.dateEnv(), id...), nil
-}
-
-// gitEmail is the committer email git uses in dir ("" when none): the
-// environment first, then config, as git reads them.
-func gitEmail(ctx context.Context, r runner, dir string) string {
-	if e := os.Getenv(envCommitterEmail); e != "" {
-		return e
-	}
-	out, err := r.run(ctx, call{dir: dir, args: []string{"config", "--get", "user.email"}})
-	if err != nil {
-		return os.Getenv(envEmail)
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// sameEmail reports whether a and b are one address (case-insensitive).
-func sameEmail(a, b string) bool {
-	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
-	return a != "" && strings.EqualFold(a, b)
 }

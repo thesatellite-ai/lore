@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
@@ -585,15 +586,11 @@ func (r *OrgResolution) OrgSigners(ctx context.Context) ([]OrgSigner, error) {
 	var out []OrgSigner
 	for i := range cfg.Orgs {
 		org := &cfg.Orgs[i]
-		if strings.TrimSpace(org.Identity.Key) == "" || len(org.Stores) == 0 {
+		sig, ok := orgCommitSigner(org)
+		if !ok || len(org.Stores) == 0 {
 			continue
 		}
-		email := emailOfKey(org.Identity.Key)
-		name := strings.TrimSpace(org.Identity.Name)
-		if name == "" {
-			name, _, _ = strings.Cut(email, "@")
-		}
-		s := OrgSigner{Name: name, Email: email}
+		s := OrgSigner{Name: sig.Name, Email: sig.Email}
 		for _, st := range org.Stores {
 			s.StoreURLs = append(s.StoreURLs, st.URL)
 		}
@@ -619,6 +616,29 @@ func (r *OrgResolution) OrgStoreURLs(ctx context.Context) ([]OrgStoreURL, error)
 }
 
 // emailOfKey is the email of a `human:<email>` key, "" for another shape.
+// orgCommitSigner is the one author of every commit lore makes in a store
+// of org o (D-714), whichever op makes it: the git backend's writes and
+// merges (OrgSigners → git.WithSigner), wire's own commits (adopt, folder
+// add/remove, init, migrate: storeSigner.envFor) and the org-file commits
+// of link, unlink, org config, org store add/remove/audience and set-url
+// (storeSignature). It is orgs[<org>].identity: the identity's name (the
+// email's local part when it has none) and the email of its key. ok is
+// false when the org has no identity with an email.
+func orgCommitSigner(o *orgconf.Org) (git.Signature, bool) {
+	if o == nil {
+		return git.Signature{}, false
+	}
+	email := emailOfKey(strings.TrimSpace(o.Identity.Key))
+	if email == "" {
+		return git.Signature{}, false
+	}
+	name := strings.TrimSpace(o.Identity.Name)
+	if name == "" {
+		name, _, _ = strings.Cut(email, "@")
+	}
+	return git.Signature{Name: name, Email: email}, true
+}
+
 func emailOfKey(key string) string {
 	_, rest, ok := strings.Cut(key, ":")
 	if !ok || !strings.Contains(rest, "@") {

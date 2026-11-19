@@ -416,18 +416,15 @@ func repoUntouchedLine(ctx context.Context, dir string) string {
 	return "  no tracked file of this repo was written"
 }
 
-// storeSignature is the author of a store commit: the entry's identity
-// (§6.5: never a personal git email), else lore's last resort.
+// storeSignature is the author of an org-file commit (link, unlink, org
+// config, org store add/remove/audience, set-url): the org identity, the
+// same one every other commit in the org's stores carries
+// (orgCommitSigner, D-714; §6.5: never a personal git email), else lore's
+// last resort.
 func storeSignature(o *orgconf.Org) gitref.Signature {
 	when := time.Now()
-	if o != nil && o.Identity.Key != "" {
-		name := o.Identity.Name
-		if name == "" {
-			name = o.Name
-		}
-		if email := emailOfKey(o.Identity.Key); email != "" {
-			return gitref.Signature{Name: name, Email: email, When: when}
-		}
+	if sig, ok := orgCommitSigner(o); ok {
+		return gitref.Signature{Name: sig.Name, Email: sig.Email, When: when}
 	}
 	return gitref.Signature{Name: fallbackStoreName, Email: fallbackStoreEmail, When: when}
 }

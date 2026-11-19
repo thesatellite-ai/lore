@@ -94,10 +94,10 @@ func TestUnusableIdentityFallsBackToAuthor(t *testing.T) {
 	}
 }
 
-// Q-R2-1 with one author (owner report 2026-11-12): an org store's
-// commits and merges are signed by the org identity when the clone's git
-// identity uses another (personal) email; when the clone's git identity
-// uses the org identity's email, git signs, as a hand edit there would. A
+// Q-R2-1, D-714: an org store's commits and merges are signed by the org
+// identity whatever the clone's git user says: a personal email, or the
+// org email beside another user.name (the owner's shape: org link signed as
+// the org identity while adopt took the git user.name; one rule now). A
 // store without an owner keeps FLAG4 (the git identity wins), and an
 // unusable owner signature is ignored.
 func TestOwnerSignerAndGitIdentity(t *testing.T) {
@@ -127,8 +127,8 @@ func TestOwnerSignerAndGitIdentity(t *testing.T) {
 		}
 	}
 	write(t, same, store.Change{Row: g.row(newID(t), "same", hlc.HLC{})})
-	if got := gitT(t, same.Dir(), "log", "-1", "--format=%an|%ae"); got != "git-handle|LORE@northwind.invalid" {
-		t.Fatalf("org store whose git identity uses the org email signed %q, want the git identity", got)
+	if got := gitT(t, same.Dir(), "log", "-1", "--format=%an|%ae|%cn|%ce"); got != want {
+		t.Fatalf("devco:D-714 org store whose git user is git-handle with the org email signed %q, want the org identity %q", got, want)
 	}
 	person := "Git Person|person@gmail.invalid"
 	for name, c := range map[string]*Backend{"plain": plain, "unusable signer": unusable} {
