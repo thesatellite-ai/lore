@@ -69,7 +69,17 @@ func TestJourneyUnreachableOrgStore(t *testing.T) {
 	})
 
 	w.Step("day1/ann-cannot-write-the-store-she-cannot-reach", func() {
-		ann.Lore(filepath.Join(ann.Home, "code"), "memory", "add", "--body", "x", "--to", "lore-secret/vendors", "--yes").Refused(t, "E_STORE_UNREACHABLE")
+		ann.Lore(filepath.Join(ann.Home, "code"), "memory", "add", "--body", "x", "--to", "lore-secret/vendors", "--yes").Refused(t, "E_STORE_UNREACHABLE").Says(t, "no access to lore-secret", "Ask an admin of "+tlOrg).Never(t, "go online")
+	})
+
+	w.Step("day1/ann-folder-scans-skip-the-store-quietly", func() {
+		// every path that walks all org stores (folder scans, a link
+		// picking its store) skips the refused one without a fetch and
+		// says it once, never "could not read" or "offline"
+		outside := filepath.Join(ann.Home, "code")
+		ann.Lore(outside, "project", "list").OK(t).Says(t, "lore-secret: no access, skipped").Never(t, "could not read", "ERROR")
+		tt.lore(tlAnn, "org", "link", "--org", tlOrg, "--project", "vendors", "--store", sec.SSHURL(), "--yes").
+			Refused(t, "E_STORE_UNREACHABLE").Says(t, "no access to the store", "Ask an admin").Never(t, "offline", "retry when")
 	})
 
 	w.Step("day1/lee-unaffected", func() {

@@ -676,7 +676,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 			if unreachable == nil {
 				unreachable = map[store.Source]error{}
 			}
-			unreachable[s.Name] = oerr
+			unreachable[s.Name] = orgNoAccessError(home, s.URL, oerr) // D-726
 			continue
 		case oerr != nil:
 			for _, o := range opened {

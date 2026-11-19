@@ -67,6 +67,7 @@ var homeLayout = []homeEntry{
 	{Pattern: "state/local.db*", What: "the local state's file before it moved into state/machine.db; lore moves it on its next run", ByHand: "leave it: lore moves its rows and removes it"},
 	{Pattern: "state/" + "store-clones.json", What: "store clones that are not at their usual place: your own clone (`lore store use`) or a second store with the same name", ByHand: "deleting it makes lore use its own clones under stores/ again (your clone stays where it is)", Readme: true},
 	{Pattern: "state/trusted-stores.json", What: "stores a repo's .lore/stores.yaml attaches on a host outside your org that you trusted (`lore store trust`)", ByHand: "deleting it makes lore ask again before it reads them", Readme: true},
+	{Pattern: "state/" + droppedStoresFile + "*", What: "team or admins-only stores lore stopped reading for you, kept until your next `lore sync` says so once", ByHand: "safe to delete (only that note is lost)", Readme: true},
 	{Pattern: "state/store-addresses.json*", What: "store addresses lore remembers for this machine", ByHand: "deleting it makes lore ask for them again", Readme: true},
 	{Pattern: "state/discover-cache.json*", What: "what `lore setup` found on this machine (accounts, keys), kept for a while", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "state/suggest-again.json", What: "setup suggestions you put off", ByHand: "deleting it brings them back", Readme: true},

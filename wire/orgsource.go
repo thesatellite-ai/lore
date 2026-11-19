@@ -168,7 +168,11 @@ func refreshOrgEntries(ctx context.Context, home string, cfg *orgconf.Config, on
 			}
 		}
 		sh, _ := keepMovedStores(home, orgconf.SharedOf(o), mine)
-		_ = writeOrgSource(home, orgRefreshLockWait, o.Name, sh, sg.Source()) // best effort, see above
+		if writeOrgSource(home, orgRefreshLockWait, o.Name, sh, sg.Source()) == nil { // best effort, see above
+			// D-727: a team (or admins) store this copy stops listing
+			// for the person is said once, by the next lore sync
+			recordDroppedStores(home, droppedRestricted(o.Name, orgconf.SharedOf(o), mine, sg.Shared()))
+		}
 	}
 }
 

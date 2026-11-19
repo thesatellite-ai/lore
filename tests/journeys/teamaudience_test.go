@@ -91,7 +91,7 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 		tt.lore(tlLee, "team", "member", "add", "--handle", "@secret", "--members", "@ann", "--yes").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
 		asAllow(t, ann, taSecretSlug)
-		tt.lore(tlAnn, "sync").OK(t)
+		tt.lore(tlAnn, "sync").OK(t).Never(t, "no longer read")
 		if cfg := asConfig(t, ann); !strings.Contains(cfg, "lore-secret") {
 			t.Fatalf("Ann's org entry lacks the @secret store after joining the team:\n%s", cfg)
 		}
@@ -105,7 +105,12 @@ func TestJourneyTeamAudienceStore(t *testing.T) {
 		w.AdvanceDays(1)
 		tt.lore(tlLee, "team", "member", "remove", "--handle", "@secret", "--members", "@ann", "--yes").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
-		tt.lore(tlAnn, "sync").OK(t)
+		// D-727: the sync that drops the store says so once, with why
+		// and what to do with the clone left on disk; never again
+		tt.lore(tlAnn, "sync").OK(t).Says(t, "lore-secret: no longer read: audience team:@secret, you are not on it",
+			"is left as it is: lore store forget --url ", " --yes removes it")
+		tt.lore(tlAnn, "sync").OK(t).Never(t, "no longer read")
+		tt.lore(tlAnn, "whoami").OK(t).Never(t, "no longer read")
 		if cfg := asConfig(t, ann); strings.Contains(cfg, "lore-secret") {
 			t.Fatalf("Ann's org entry still lists the @secret store after leaving the team:\n%s", cfg)
 		}

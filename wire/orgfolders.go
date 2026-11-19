@@ -27,8 +27,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -61,6 +63,10 @@ type orgFolderScan struct {
 	Folders  []orgFolder
 	Unread   map[string]error
 	Searched []string
+	// NoAccess lists the stores skipped because the forge refused this
+	// login at the last fetch (devco D-726): never opened again until
+	// `lore sync` retries, and named in one quiet note, not as an error.
+	NoAccess []string
 }
 
 // orgFolders walks every store of the org entries this command sees. No
@@ -96,8 +102,16 @@ func (a *App) foldersOf(ctx context.Context, entries []opsstores.Entry) orgFolde
 		seen[k] = true
 		label := a.shortLabel(e.URL) // the org's name for the org folder's store
 		scan.Searched = append(scan.Searched, label)
+		if refusedClone(a.opts.Home, e.URL, e.Branch) {
+			scan.NoAccess = append(scan.NoAccess, label) // D-726: no fetch, no error
+			continue
+		}
 		dir, derr := a.storeDir(ctx, attach.Store{Name: store.Source(label), URL: e.URL, Branch: e.Branch})
 		if derr != nil {
+			if git.AccessRefused(derr) {
+				scan.NoAccess = append(scan.NoAccess, label)
+				continue
+			}
 			scan.Unread[label] = derr
 			continue
 		}
@@ -216,7 +230,21 @@ func (s orgFolderScan) missDetail() string {
 	for _, label := range slices.Sorted(maps.Keys(s.Unread)) {
 		b.WriteString("; could not read " + label + ": " + s.Unread[label].Error())
 	}
+	for _, label := range s.NoAccess {
+		b.WriteString("; skipped " + label + " (no access)")
+	}
 	return b.String()
+}
+
+// refusedClone reports whether the clone of the store at url (branch ""
+// = its default clone) holds the no-access record of a refused fetch.
+func refusedClone(home, url, branch string) bool {
+	norm, err := repourl.NormalizeStore(url)
+	if err != nil {
+		return false
+	}
+	dir, _, err := git.CloneDirFor(home, git.Remote{Norm: norm}, branch)
+	return err == nil && git.NoAccessRecorded(dir)
 }
 
 var _ opsinfra.OrgFolderLister = (*App)(nil)
@@ -235,6 +263,9 @@ func (a *App) OrgFolderProjects(ctx context.Context) ([]opsinfra.FolderProject, 
 	var notes []string
 	for _, label := range slices.Sorted(maps.Keys(scan.Unread)) {
 		notes = append(notes, "could not read the folders of "+label+": "+scan.Unread[label].Error()+" (run `lore sync`, then list again)")
+	}
+	for _, label := range scan.NoAccess {
+		notes = append(notes, label+": no access, skipped (ask an admin of the org for read access to it, then run `lore sync`)")
 	}
 	return out, notes, nil
 }

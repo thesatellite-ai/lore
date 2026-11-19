@@ -1507,6 +1507,7 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	// (an admin's set-url) is copied now, for the stores this sync touched
 	// only (D-278), so the teammate follows in this sync
 	refreshSyncedOrgSources(ctx, a.opts.Home, a.syncedStoreURLs(ctx, out.Stores))
+	out.Notes = append(out.Notes, droppedStoreNotes(a.opts.Home)...) // D-727: said once
 	a.forgetStoreChecks(ctx, out.Stores)
 	return out, err
 }
