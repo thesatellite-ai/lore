@@ -584,10 +584,7 @@ func syncStoreLines(r opssync.StoreReport, name string) []string {
 	case opssync.StoreStatusOffline:
 		line = head + "offline: " + r.Error
 	default:
-		line = storeCountsLine(name, r.Status, syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused})
-		if r.Pushed && r.Sent == 0 {
-			line += syncPushedNoRows
-		}
+		line = storeSyncLine(name, r.Status, syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused}, r.Pushed)
 	}
 	if r.Held != "" {
 		line = head + r.Held

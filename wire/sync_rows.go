@@ -273,10 +273,7 @@ func (s syncRows) syncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			SentCommits: r.SentCommits, ReceivedCommits: r.ReceivedCommits, Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held, Pushed: r.Pushed})
 		shown := s.app.shownStoreName(ctx, r.Store) // B-9: the store's own name (storeshown.go)
 		pushed := folderPushed(r.Pushed, r.Sent, cloneSent[storeCloneKey(r.Store, s.app.storeURLOf(ctx, r.Store))])
-		line := storeCountsLine(shown, storeStatusOf(r.Sent, r.Received, r.Merged, r.Refused, pushed), syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused})
-		if pushed && r.Sent == 0 {
-			line += syncPushedNoRows
-		}
+		line := storeSyncLine(shown, storeStatusOf(r.Sent, r.Received, r.Merged, r.Refused, pushed), syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused}, pushed)
 		if r.Unattached {
 			line += syncUnattachedFolder
 		}
@@ -1089,3 +1086,20 @@ func rowsNote(c syncCounts) string {
 }
 
 const syncPushedNoRows = "; pushed local commit(s) with no note rows (store links or org settings)"
+
+// storeSyncLine is a store's sync line once the sync knows whether its
+// push ran: storeCountsLine, and for a push whose commits carry no note
+// row (a store link, the org file) "sent 0" with syncPushedNoRows, never
+// the commits as "sent 2; rows: 0 sent" (devco D-527, broken again by the
+// D-684 commit counts of a waiting org store push). "sent" there is the
+// note rows that went out; the commits git moved stay on the push line
+// on stderr ("lore: pushed store <store>: commit … (2 commits)") and in
+// --json's sent_commits. Every path that prints a store line (code repo,
+// setup or home folder, waiting org store push) goes through here.
+func storeSyncLine(name, status string, c syncCounts, pushed bool) string {
+	if !pushed || c.sent != 0 || status == opssync.StoreStatusUpToDate {
+		return storeCountsLine(name, status, c)
+	}
+	c.sentCommits = 0 // no note row went out: the line's sent is 0, its note says what did
+	return storeCountsLine(name, status, c) + syncPushedNoRows
+}
