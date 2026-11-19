@@ -121,8 +121,8 @@ func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool, org st
 		}
 		// named as `lore store list` names it (the org's name for its main
 		// store), not by its clone folder (N-3)
-		res, perr := a.PushStoreNow(ctx, opsstores.PushIn{Store: cs.url, Branch: branch})
-		r := orgPushReport(cmp.Or(orgStoreLabel(a.opts.Home, cs.url), orgStoreShortName(cs.norm)), res, perr)
+		res, moved, perr := a.pushStoreNow(ctx, opsstores.PushIn{Store: cs.url, Branch: branch}, a.pushNotes())
+		r := orgPushReport(cmp.Or(orgStoreLabel(a.opts.Home, cs.url), orgStoreShortName(cs.norm)), res, moved, perr)
 		out = append(out, orgPush{report: r, url: cs.url})
 	}
 	return out
@@ -134,8 +134,12 @@ func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool, org st
 // "pushed", never a bare "sent 0" (N-3). Its "sent" counts row files like
 // every other store line of a sync: res.Sent is the push's commits since
 // D-517, and a store link commit read "sent 2" without the "no note rows"
-// note (D-527).
-func orgPushReport(name string, res opsstores.PushOut, perr error) opsstores.Report {
+// note (D-527). Its "sent" and "received" print the commits git counted
+// (moved), as every store line does: the push merges a teammate's commits
+// first, and the line said "sent 4, received 0" (the rows sent, nothing
+// received) when 7 commits went out on top of 2 that arrived (devco
+// D-684, a client repo outside every setup's folders).
+func orgPushReport(name string, res opsstores.PushOut, moved storeNowPush, perr error) opsstores.Report {
 	r := opsstores.Report{Store: name}
 	if perr != nil {
 		r.Problems = []string{perr.Error()}
@@ -143,6 +147,7 @@ func orgPushReport(name string, res opsstores.PushOut, perr error) opsstores.Rep
 	}
 	// D-561: a push that sent no commit is no push, whatever the clone held
 	r.Sent, r.Offline, r.Pushed = res.Rows, res.Offline, !res.Offline && res.Sent > 0
+	r.SentCommits, r.Received, r.ReceivedCommits = moved.sentCommits, moved.received, moved.receivedCommits
 	return r
 }
 
