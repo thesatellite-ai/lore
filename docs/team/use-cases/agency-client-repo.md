@@ -71,6 +71,7 @@ $ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe…28f2.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
 ✓ act_2ad3…f891 Alice Doe (@alice) registered in the roster of agency (agency/org)
 $ lore sync
 lore: pushed store agency/org: commit 601d285 to branch main (3 commits, 2 row files)
@@ -107,6 +108,7 @@ Notes go to the internal project by default. A project rule goes into the repo w
 $ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [project]
@@ -133,6 +135,7 @@ lore: pushed store agency/client: commit 9b40ce7 to branch main (2 commits, 1 ro
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency/client)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
   created tasklist tlt_d431…313a "default" for tasks added without --tasklist
 lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 2 row files)

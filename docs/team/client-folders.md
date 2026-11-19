@@ -107,6 +107,7 @@ and the leak guards turn on for everyone in agency.
 $ lore task add --title 'set up the staging deploy'
 lore: committed locally to store agency/client_south; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency/client_south)
+lore: wrote ~/.lore/stores/agency/notes/client_south/_meta.json (store agency/client_south)
 ✓ tsk_c0f3…b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
   created tasklist tlt_76bd…3f10 "default" for tasks added without --tasklist

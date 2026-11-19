@@ -106,6 +106,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_7a67…9504.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_162d…9666.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
 This adds to ~/.lore/config.yaml:
     name: agency
     identity:
@@ -196,6 +197,7 @@ $ lore move --id mem_76bd…3f10 --to agency --yes
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency/client)
 lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
 mem_76bd…3f10 [retrieved] the client replies faster on WhatsApp than email [agency/client]

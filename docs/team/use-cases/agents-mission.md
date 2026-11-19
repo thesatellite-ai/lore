@@ -49,6 +49,7 @@ export LORE_ACTOR=agent:agent-coord LORE_SESSION=s-10e90368
 $ lore mission apply --file invite.yaml
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote 10 row file(s) in ~/.lore/stores/agency/notes/client2 (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ msn_2ad3…f891 Invite landing page (created) → [agency/client2]
   tsk_162d…9666 send the invite email from the API  timebox 1h
   tsk_54fe…28f2 build the invite page         timebox 1h  after backend
@@ -75,6 +76,7 @@ First Alice marks the agents' work branches shared, once each for the project fo
 $ lore branch share --branch agent-backend/invite --yes
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/policies/pol_76bd…3f10.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ agent-backend/invite now writes to the shared notes for everyone in client2 (policy branches.shared; lore sync shares the choice)
 $ lore branch share --branch agent-frontend/invite-route --yes
 lore: committed locally to store agency/client2; lore sync sends it
@@ -166,6 +168,7 @@ task     tsk_162d…9666  send the invite email from the API  [agency/client2]  
 $ lore task done --id tsk_05e9…4603
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_05e9…4603.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ tsk_05e9…4603 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 ```

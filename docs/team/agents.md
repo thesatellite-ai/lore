@@ -123,6 +123,7 @@ $ lore task add --title 'send the invoice reminder before Friday' --to agency &&
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_05e9…4603.json (store agency/client)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ tsk_c0f3…b5b8 — send the invoice reminder before Friday [medium] → [agency/client]
   created tasklist tlt_05e9…4603 "default" for tasks added without --tasklist
 lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit, 2 row files)
@@ -139,6 +140,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store
 $ lore task release --id tsk_c0f3…b5b8
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ released tsk_c0f3…b5b8: the claim is off the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in website
@@ -179,6 +181,7 @@ lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store
 $ lore task revoke --id tsk_c0f3…b5b8 --push
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_c0f3…b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ revoked the claim on tsk_c0f3…b5b8 (was held by agent-backend)
   on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch): the holder is fenced out now and lore task next will not hand it this task again until a person runs `lore task reassign`; the task row itself waits for your next lore sync
 

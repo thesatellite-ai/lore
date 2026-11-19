@@ -1007,6 +1007,14 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 			}
 		}
 		moved += len(log)
+		// (b) devco:D-691: the "lore: wrote …" lines name the files the
+		// write's commits in this store clone hold ("wrote 4 row file(s)"
+		// over a commit of 1 file)
+		if isStore && res.Code == 0 {
+			if said, held := wwWroteIn(out, c), wwCommitFiles(w, c, before.tips[c]); said > 0 && said != held {
+				add(wwRuleCount, fmt.Sprintf("(b) the write lines name %d file(s) in the %s store clone, its new commits hold %d", said, w.owner[c], held))
+			}
+		}
 		if !allowed[c] {
 			add(wwRuleScope, fmt.Sprintf("(d) committed %d to %s, outside the target", len(log), c))
 		}
@@ -1118,6 +1126,41 @@ func wwNewCommits(w *wwWorld, c, old string) []string {
 		}
 	}
 	return out
+}
+
+// wwWroteRe is one write line: N row files in a folder, or one file
+// written or removed.
+var wwWroteRe = regexp.MustCompile(`(?m)^lore: (?:wrote (\d+) row file\(s\) in (\S+)|(?:wrote|removed) (\S+))`)
+
+// wwWroteIn is how many files the write lines of out name under clone c.
+func wwWroteIn(out, c string) int {
+	n := 0
+	for _, m := range wwWroteRe.FindAllStringSubmatch(out, -1) {
+		switch {
+		case m[1] != "" && strings.HasPrefix(m[2], c+string(filepath.Separator)):
+			k, _ := strconv.Atoi(m[1])
+			n += k
+		case m[3] != "" && strings.HasPrefix(m[3], c+string(filepath.Separator)):
+			n++
+		}
+	}
+	return n
+}
+
+// wwCommitFiles counts the distinct files the commits new on c's branches
+// hold (old is the for-each-ref listing before).
+func wwCommitFiles(w *wwWorld, c, old string) int {
+	args := []string{"log", "--name-only", "--format=", "--branches"}
+	for _, l := range strings.Split(strings.TrimSpace(old), "\n") {
+		if f := strings.Fields(l); len(f) == 2 {
+			args = append(args, "^"+f[1])
+		}
+	}
+	files := map[string]bool{}
+	for _, f := range strings.Fields(w.s.TryGit(c, args...).Stdout) {
+		files[f] = true
+	}
+	return len(files)
 }
 
 // wwRemoteMoved counts the commits that reached r between two ref lists.

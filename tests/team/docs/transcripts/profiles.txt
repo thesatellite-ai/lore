@@ -79,6 +79,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd560aff0771fab
 tomas (work/acme-hub)$ lore actor contact remove --id acn_76bd560aff0771fab8457dbfa9823f10 --reason 'account closed'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd560aff0771fab8457dbfa9823f10.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
 ✓ acn_76bd560aff0771fab8457dbfa9823f10 linkedin mira-patel removed from Mira Patel (@mira) in the roster of agency (agency/org) (restorable from the trash)
 tomas (work/acme-hub)$ lore actor contact list --actor @mira --identity
 acn_2ad3618e878ebbf527d34d446ef4f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
@@ -233,6 +234,7 @@ tomas (work/acme-hub)$ lore task add --title 'move the invoice export to the new
 lore: committed locally to store agency/acme-hub; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191616cfa49f94ede5d5148b8b045c2.json (store agency/acme-hub)
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3d8fc9a019dca1371ad55c6a611aa.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/_meta.json (store agency/acme-hub)
 ✓ tsk_b4d3d8fc9a019dca1371ad55c6a611aa — move the invoice export to the new API [medium] → [agency/acme-hub]
   created tasklist tlt_d191616cfa49f94ede5d5148b8b045c2 "default" for tasks added without --tasklist
 tomas (work/acme-hub)$ lore actor offboard --actor @mira --reason 'moved abroad'
@@ -339,6 +341,7 @@ lore: committed locally to store acme/org; lore sync sends it
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e20cdd829de837b50a73f9dc3c291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567cf97b52ccbe51c3bd8cd91d6366f.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actor_periods/apd_71f07e3f4ec7ebaeff7d0686d814c07d.json (store acme/org)
+lore: wrote ~/.lore/stores/acme/lore-notes/org/_meta.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:
 
     name: acme

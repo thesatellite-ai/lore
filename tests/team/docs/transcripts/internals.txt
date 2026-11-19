@@ -80,6 +80,7 @@ alice (work/website)$ lore task add --title 'renew the client SSL certificate' -
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_76bd560aff0771fab8457dbfa9823f10.json (store agency/client)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ tsk_d4314eba822f1bf5908b2b8ded5f313a — renew the client SSL certificate [medium] → [agency/client]
   created tasklist tlt_76bd560aff0771fab8457dbfa9823f10 "default" for tasks added without --tasklist
 alice (work/website)$ lore memory add --body 'the client wants a demo every second Friday'
