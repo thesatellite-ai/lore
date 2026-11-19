@@ -145,7 +145,7 @@ type Adopter interface {
 // --move's link adds the codes of `lore org link` (an offline or
 // ambiguous org, an org that disagrees with the repo's).
 var adoptErrors = append(append([]errs.Code{}, visibilityErrors...), errs.Refused, errs.PolicyDenied, errs.NotProjectRoot, errs.Stale,
-	errs.Offline, errs.OrgAmbiguous, errs.OrgDisagrees, errs.Unsupported)
+	errs.Offline, errs.OrgAmbiguous, errs.OrgDisagrees, errs.Unsupported, errs.SecretDetected)
 
 // SplitTarget splits "<store>/<folder>" at its last slash (a store url
 // holds slashes, a folder name never does). A bare "<folder>" has no

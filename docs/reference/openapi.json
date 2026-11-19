@@ -85031,7 +85031,7 @@
             }
           },
           "409": {
-            "description": "E_CANCELLED, E_NOT_PROJECT_ROOT, E_ORG_AMBIGUOUS, E_ORG_DISAGREES, E_POLICY_DENIED, E_REFUSED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "description": "E_CANCELLED, E_NOT_PROJECT_ROOT, E_ORG_AMBIGUOUS, E_ORG_DISAGREES, E_POLICY_DENIED, E_REFUSED, E_SECRET_DETECTED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {

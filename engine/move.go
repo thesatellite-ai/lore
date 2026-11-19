@@ -262,14 +262,21 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		} else if moved.Origin, err = withMove(cur.Origin, moved.HLC, actor.String(), e.placeOf(src), e.placeOf(to)); err != nil {
 			return Written{}, err
 		}
+		// D-717: a --not-a-secret answer records its allow entries beside
+		// the copy, as a create does (the move wrote none: the hook and
+		// lore lint then flagged the kept value in the new store).
+		var allows []row.Row
+		if allows, err = e.allowRows(cl, sc.accepted, cur.ID, actor, moved.HLC); err != nil {
+			return Written{}, err
+		}
 		var got stored
-		if got, err = e.put(ctx, dst, moved, hlc.HLC{}); err != nil {
+		if got, err = e.put(ctx, dst, moved, hlc.HLC{}, allows...); err != nil {
 			return Written{}, err
 		}
 		ev := Event{Op: cl.op, Action: ActionCreate, Store: to, Table: cur.Table, ID: cur.ID, HLC: moved.HLC, Actor: actor,
 			SecretsAccepted: sc.accepted, SecretsRedacted: sc.redacted}
 		var aw []Warning
-		if aw, err = e.finishW(ctx, to, []store.Row{got.doc}, ev); err != nil {
+		if aw, err = e.finishW(ctx, to, got.docs(), append(got.allowEvents(cl.op, to), ev)...); err != nil {
 			return Written{}, err
 		}
 		dropped = append(dropped, aw...) // W_AUDIT_DEFERRED of the copy (later 542)

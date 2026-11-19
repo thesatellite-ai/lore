@@ -184,6 +184,7 @@ $ git status --short
 ```console
 $ lore store adopt --target team/client_east --move --commit --yes
 ```
+- Every row adopt writes gets the same secret scan as any write, before anything is written. A row holding something that looks like a key refuses the whole adopt (nothing reaches the store), naming each row and its masked finding, never the value, and printing the three reruns: `--secret-unstored` (each value becomes `${secret:unstored}` plus a store-then-rotate task), `--secret-ref "<manager>://<entry>"` (one for all, or one per finding in the order listed) or `--not-a-secret --reason "<why>"` (kept, with an allow entry in the folder). `--dry-run` shows the same refusal.
 - A v0.1.17 repo needs no `lore migrate run` first: its rows are read as migrate would write them (format steps, tags folded into `tag_ids`, an agent's live stamp `…/agent` read as a stable actor).
 - Moving a single row is still `lore move --id <id> --to <store>/<folder>`.
 
