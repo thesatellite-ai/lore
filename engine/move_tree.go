@@ -47,6 +47,9 @@ func (e *Engine) refuseOrphanChild(ctx context.Context, to store.Source, cur row
 	if err != nil {
 		return errs.Wrap(errs.InvalidInput, ""+cur.ID.String()+" has a parent_id that is not an id: "+strconv.Quote(p), err)
 	}
+	if _, ok := stagedLive(ctx, to, cur.Table, pid); ok {
+		return nil // the parent moves in the same batch, before it (MoveMany, D-712)
+	}
 	_, gone, err := e.getRow(ctx, to, cur.Table, pid)
 	switch {
 	case err == nil && !gone:
@@ -80,6 +83,9 @@ func (e *Engine) noteMovedAlone(ctx context.Context, to store.Source, moved row.
 	pid, err := ids.ParseAny(p)
 	if err != nil {
 		return errs.Wrap(errs.InvalidInput, ""+moved.ID.String()+" has a parent_id that is not an id: "+strconv.Quote(p), err)
+	}
+	if _, ok := stagedLive(ctx, to, schema.TableTasks, pid); ok {
+		return nil // its parent moves in the same batch (MoveMany, D-712)
 	}
 	_, gone, err := e.getRow(ctx, to, schema.TableTasks, pid)
 	switch {

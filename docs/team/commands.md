@@ -678,20 +678,25 @@ Move any row to another store, keeping its id (the old copy is tombstoned)
 
 ```text
 Usage:
-  lore move --id <id>
+  lore move [--id <id>]
 
 Examples:
   # move a row to your personal store
   lore row move --id mem_0c3a --to me
+  # move every row of a folder to another store, one commit per store (list first)
+  lore move --from notes/old --to notes/new --dry-run
 
 Flags:
-      --drop-internal      into a client repo: remove the row's internal metadata values instead of refusing
-      --id string          any row id (required)
-      --json               print the result (or the error) as JSON
-      --to string          the target store: repo | me | <store>[/<folder>] (required)
-      --with-children      a task: move its whole subtree too; every sub-task keeps its id and parent
-      --with-time string   totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)
-      --yes                answer yes to the confirmation without a terminal
+      --drop-internal       into a client repo: remove the row's internal metadata values instead of refusing
+      --dry-run             with --from: list what would move, write nothing
+      --from string         bulk move: every row of this store or folder (<store>[/<folder>], repo or me), in one commit at --to and one at --from
+      --id string           any row id (or --from for every row of a store or folder)
+      --json                print the result (or the error) as JSON
+      --to string           the target store: repo | me | <store>[/<folder>] (required)
+      --where stringArray   with --from: only rows matching this filter (field=value, field~=text, created_at<2026-06-01, table=memories; repeatable, all must match)
+      --with-children       a task: move its whole subtree too; every sub-task keeps its id and parent
+      --with-time string    totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)
+      --yes                 answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 

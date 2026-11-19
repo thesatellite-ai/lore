@@ -1265,7 +1265,10 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		res, rerr = eng.Run(a.narrowToStore(ctx, e, d, eng), e, d, c)
 		return rerr
 	})
-	if err == nil {
+	// devco D-712: a preview (--dry-run) wrote nothing, so it makes no
+	// folder project row and sends no profile: `lore move --from … --to
+	// <store>/<folder> --dry-run` committed "project add" in the target
+	if err == nil && !previewRun(e, d) {
 		a.ensureFolderProject(ctx) // the folder written to has its project row
 		a.afterWrite(ctx, e)       // OV3 MACH-AUTO: the profile goes with the next ordinary write
 	}

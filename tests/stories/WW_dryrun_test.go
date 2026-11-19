@@ -60,6 +60,20 @@ func wwDryOrg(c wwCtx) string {
 	return wOrg
 }
 
+// wwDryOverride gives a dry-run cell the input its dry run needs where
+// the generated one (required flags only) never reaches it: the bulk move
+// (devco D-712) lists a whole store or folder only with --from, so its
+// cell moves the place's org folder (or the repo) to the personal store.
+var wwDryOverride = map[string]func(c wwCtx) []string{
+	"row.move": func(c wwCtx) []string {
+		from := c.p.To
+		if from == "" {
+			from = "repo"
+		}
+		return []string{"--from", from, "--to", "me"}
+	},
+}
+
 // wwDryFlag is the flag every dry run takes.
 const wwDryFlag = "dry-run"
 
@@ -126,7 +140,11 @@ func TestStoryWWDryRunWritesNothing(t *testing.T) {
 			p := w.places[pn]
 			c := wwCtx{w: w, p: p, org: p.Org, ids: w.ids[p.Org]}
 			for _, o := range ops {
-				cells := [][]string{append(wwInput(o, c, body), "--"+wwDryFlag)}
+				base := append(wwInput(o, c, body), "--"+wwDryFlag)
+				if f, ok := wwDryOverride[o.Name]; ok {
+					base = append(append(append([]string{}, o.Path...), f(c)...), "--"+wwDryFlag)
+				}
+				cells := [][]string{base}
 				for _, v := range wwDryVariants[o.Name] {
 					cells = append(cells, append(append(append([]string{}, o.Path...), v(c)...), "--"+wwDryFlag))
 				}

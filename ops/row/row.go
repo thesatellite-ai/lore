@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -85,8 +86,11 @@ type ShowIn struct {
 
 // MoveIn is the input of row.move.
 type MoveIn struct {
-	ID           string `json:"id" arg:"0" desc:"any row id"`
-	To           string `json:"to" flag:"to" desc:"the target store: repo | me | <store>[/<folder>]"`
+	ID string `json:"id,omitempty" arg:"0" desc:"any row id (or --from for every row of a store or folder)"`
+	To string `json:"to" flag:"to" desc:"the target store: repo | me | <store>[/<folder>]"`
+	// Bulk form (devco D-712): every matching row of one store or folder,
+	// one write at --to and one at the source (move_many.go).
+	BulkFlags
 	DropInternal bool   `json:"drop_internal,omitempty" flag:"drop-internal" desc:"into a client repo: remove the row's internal metadata values instead of refusing"`
 	WithTime     string `json:"with_time,omitempty" flag:"with-time" desc:"totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)"`
 	WithChildren bool   `json:"with_children,omitempty" flag:"with-children" desc:"a task: move its whole subtree too; every sub-task keeps its id and parent"`
@@ -297,10 +301,27 @@ type MoveOut struct {
 	Notes []string `json:"notes,omitempty"`
 	// Children are the sub-tasks --with-children moved, parents first.
 	Children []string `json:"children,omitempty"`
+	// From is the --from store or folder of a bulk move ("" for one row);
+	// Rows are the rows it moved (or, with DryRun, would move), each with
+	// the store it left (devco D-712).
+	From   string     `json:"from,omitempty"`
+	Rows   []MovedRow `json:"rows,omitempty"`
+	DryRun bool       `json:"dry_run,omitempty"`
+	// Duplicates are the rows a bulk move brings that repeat a row --to
+	// already holds (devco D-724, the shape of store.adopt's): listed,
+	// both kept, never merged; the dry run lists them too.
+	Duplicates []opsstores.NearDuplicate `json:"duplicates,omitempty"`
+	// next is the bulk move's printed next step (the run of a dry run).
+	next string
+	// setup is the " --setup <name>" the printed commands carry ("" none).
+	setup string
 }
 
 // Text is the human form of a move.
 func (o MoveOut) Text() string {
+	if o.From != "" {
+		return o.bulkText()
+	}
 	var b strings.Builder
 	b.WriteString("✓ " + o.ID + " moved to store " + o.To + " (same id; the old copy is tombstoned)\n")
 	if len(o.Children) > 0 {
@@ -332,7 +353,8 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: OpMove, Summary: "Move any row to another store, keeping its id (the old copy is tombstoned)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{Always: true},
 			Errors: []errs.Code{errs.InvalidID, errs.InvalidInput, errs.NotFound, errs.InTrash, errs.MetaInternal, errs.MetaQuarantined, errs.LeakBlocked,
-				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move --id mem_0c3a --to me"}}}, o.move).Asks(o.moveQuestion),
+				errs.StoreReadOnly, errs.Stale, errs.Unsupported, errs.NotImplemented, errs.Internal}, Examples: []op.Example{{Title: "move a row to your personal store", CLI: "lore row move --id mem_0c3a --to me"},
+				{Title: "move every row of a folder to another store, one commit per store (list first)", CLI: "lore move --from notes/old --to notes/new --dry-run"}}}, o.move).Asks(o.moveQuestion),
 	}
 }
 
@@ -801,6 +823,12 @@ func actorText(a Actor) string {
 // move is row.move: engine.MoveWith keeps the id for every noun (PROV5,
 // XQ5); --drop-internal and --with-time pass through (MQ11, TQ3).
 func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
+	if bulk, err := in.bulk(); err != nil || bulk {
+		if err != nil {
+			return MoveOut{}, err
+		}
+		return o.moveMany(ctx, in)
+	}
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil {
 		return MoveOut{}, lookup.BadID(strings.TrimSpace(in.ID)+" is not a row id", err)
@@ -835,12 +863,17 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 	// moving a company must rule / critical or high hotfix out of its
 	// place takes it from every repo of the org: an admin's change, as
 	// its delete is (devco D-659)
+	// the full place (a linked folder arrives as the bare org name, D-697)
+	// and the --setup given, so the admin's line moves this row anywhere
+	place := profilestore.PlaceTo(ctx, o.env, store.Source(to))
+	line := "lore row move --id " + id.String() + " --to " + place + setupFlag(ctx)
 	if src, r, gerr := o.env.Get(ctx, engine.Ref{ID: id}); gerr == nil && !r.Deleted {
 		if err = profilestore.RequireAdminForRows(ctx, o.env, []profilestore.Placed{{Source: src, Row: r}},
-			"move", "lore row move --id "+id.String()+" --to "+to, ""); err != nil {
+			"move", line, ""); err != nil {
 			return MoveOut{}, err
 		}
 	}
+	ctx = moveAsk(ctx, "move "+id.String()+" to "+place, line+" --yes")
 	w, err := mv.MoveWith(ctx, engine.Ref{ID: id}, store.Source(to), engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, WithChildren: in.WithChildren})
 	if err != nil {
 		return MoveOut{}, err

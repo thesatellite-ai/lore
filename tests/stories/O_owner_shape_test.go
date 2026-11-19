@@ -627,6 +627,83 @@ func TestStoryOOwnerShape(t *testing.T) {
 		oCheck(t, "D-699/member-clone-at-the-new-repo", wqGit(t, mclone, "rev-parse", "HEAD") == wqGit(t, fresh.Dir, "rev-parse", "main"),
 			"the member's lore does not read the new repo after following: clone %s", mclone)
 	})
+
+	// devco:D-712 (owner bulk moves item 9): the admin moves an org
+	// folder's notes to another folder from the home folder with --setup
+	// (two org setups on this machine): the dry run writes nothing and its
+	// printed next step runs as printed from home; the move makes one
+	// commit per folder it touches, keeps every id, and a teammate's sync
+	// sees the notes in the new folder. A member's bulk move into the
+	// company folder is refused with the exact bulk line an admin runs,
+	// and the admin runs it as printed. Before: `lore move --from` was an
+	// unknown flag (one `lore move --id` per row, two commits each).
+	s.Step("admin/bulk-move-org-folder-from-home", func() {
+		from, to := oOrg+"/legacy", oOrg+"/archive"
+		ada.LoreIn(pc, "store", "folder", "add", "team", "legacy").OK(t)
+		ada.LoreIn(pc, "store", "folder", "add", "team", "archive").OK(t)
+		// archive is in use already: its first write made its project row
+		// (its own commit), so the move's step counts the move alone
+		ada.LoreIn(pc, "memory", "add", "--body", "the archive folder's first note", "--to", to, "--yes").OK(t)
+		var moved []string
+		for _, body := range []string{"legacy deploys used the old cdn", "legacy builds ran on node 18", "legacy logs lived in the old bucket"} {
+			moved = append(moved, oAddedID(t, ada.LoreIn(pc, "memory", "add", "--json", "--body", body, "--to", from, "--yes").OK(t)))
+		}
+		ada.LoreIn(pc, "sync").OK(t)
+		clone := oStoreClone(ada, oNewOwner, "lore-team-next")
+		head := func() string { return wqGit(t, clone, "rev-parse", "HEAD") }
+		before, h0 := refs(), head()
+		r := ada.Lore(ada.Home, "move", "--from", from, "--to", to, "--setup", oSetup, "--dry-run")
+		oCheck(t, "D-712/dry-run", r.Code == 0 && strings.Contains(r.Out(), "would move 3 row(s) from "+from+" to "+to+" (nothing written, --dry-run)"), "move --from %s --to %s --setup %s --dry-run from home: want the list of 3 rows, got:\n%s", from, to, oSetup, r)
+		oCheck(t, "D-712/dry-run-writes-nothing", head() == h0 && s.Git(clone, "status", "--porcelain") == "", "the bulk move's dry run changed the store clone (%s -> %s)", h0, head())
+		noPush(before, "the bulk move's dry run")
+		m := oMoveNext.FindStringSubmatch(r.Out())
+		if m == nil {
+			t.Fatalf("[O D-712/next] the dry run prints no next step:\n%s", r)
+		}
+		r = ada.Lore(ada.Home, wubFields(t, m[1])...)
+		oCheck(t, "D-712/next-as-printed", r.Code == 0 && strings.Contains(r.Out(), "moved 3 row(s) from "+from+" to "+to), "the dry run's next step %q run from home as printed: want the move, got:\n%s", m[1], r)
+		got := wctCount(t, clone, h0+"..HEAD")
+		oCheck(t, "D-712/one-commit-per-folder", got == 2, "the bulk move of 3 rows between two folders of one store made %d commits, want 2 (one at --to, one at --from)", got)
+		ada.Lore(ada.Home, "sync", "--setup", oSetup).OK(t)
+		mo.LoreIn(mwc, "sync").OK(t)
+		in := mo.Lore(mo.Home, "memory", "list", "--store", to, "--json").OK(t).Out()
+		left := mo.Lore(mo.Home, "memory", "list", "--store", from, "--json").OK(t).Out()
+		for _, id := range moved {
+			oCheck(t, "D-712/teammate-sees-same-id", id != "" && strings.Contains(in, id) && !strings.Contains(left, id), "after a sync the member does not see %s in %s (or still in %s):\nin %s: %s\nin %s: %s", id, to, from, to, in, from, left)
+		}
+
+		// the member's bulk move of his own team folder's notes into the
+		// company folder: refused, nothing written, the admin's exact line
+		mo.LoreIn(mwc, "memory", "add", "--body", "bulk cell one for the company", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		mo.LoreIn(mwc, "memory", "add", "--body", "bulk cell two for the company", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		mclone := oStoreClone(mo, oNewOwner, "lore-team-next")
+		mh := wqGit(t, mclone, "rev-parse", "HEAD")
+		r = mo.LoreIn(mwc, "move", "--from", oOrg+"/"+oFolder, "--to", oOrg+"/org", "--where", "body~=bulk cell", "--yes")
+		r.Refused(t, "E_REFUSED", "only an admin of the org", oAdminOrg.Name, "nothing was written")
+		oCheck(t, "D-712/member-nothing-committed", wqGit(t, mclone, "rev-parse", "HEAD") == mh, "the member's refused bulk move committed to his store clone")
+		line := wogPrintedLine(t, r.Out())
+		want := "lore move --from " + oOrg + "/" + oFolder + " --to " + oOrg + "/org --where 'body~=bulk cell' --yes"
+		oCheck(t, "D-712/member-admin-line", line == want, "the member's refused bulk move names the admin line %q, want %q:\n%s", line, want, r)
+		mo.LoreIn(mwc, "sync").OK(t)
+		ada.LoreIn(wc, "sync").OK(t)
+		ada.LoreIn(wc, wubFields(t, line)...).OK(t).Says(t, "moved 2 row(s) from "+oOrg+"/"+oFolder+" to "+oOrg+"/org")
+	})
+}
+
+// oMoveNext is a bulk move dry run's printed next step.
+var oMoveNext = regexp.MustCompile(`next: (lore move --from [^\n]+)`)
+
+// oAddedID is the id an add printed with --json.
+func oAddedID(t testing.TB, r teamharness.Result) string {
+	t.Helper()
+	var got struct {
+		ID   string `json:"id"`
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal([]byte(r.Stdout), &got)
+	return got.ID + got.Data.ID
 }
 
 // oClaimHint is task next's "(or lore task claim --id … --push …)" line.

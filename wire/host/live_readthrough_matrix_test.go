@@ -4,8 +4,8 @@ package host
 // f02213ad): every write shape a command can send for a row Get read
 // through from origin/<default> (live_landed.go landedCopy), on both write
 // paths (Write and the journal's WriteAudited), for both read-through
-// cases (the work tree has no copy after a committed delete, or holds an
-// older copy equal to HEAD). Each write expects the landed copy Get served;
+// case (the work tree holds an older copy equal to HEAD; a committed
+// delete is no longer read through, devco D-713). Each write expects the landed copy Get served;
 // it must land in the branch data, not answer E_STALE, and an Expect that
 // names any other version must still be refused.
 
@@ -60,7 +60,12 @@ func TestLiveBackend_ReadThroughWriteMatrix(t *testing.T) {
 		olderInTree bool // the work tree holds an older copy (== HEAD)
 	}
 	var cases []tc
-	for _, older := range []bool{false, true} {
+	// Only the older-branch-copy case: a work tree with no copy after a
+	// committed delete is not read through since devco D-713 (the merge
+	// base holds the file: this checkout removed it; see
+	// live_landed_removed_test.go), and a row that landed after the last
+	// pull goes live or is refused (pullWouldAdd), never materialised here.
+	for _, older := range []bool{true} {
 		cases = append(cases,
 			tc{name: "edit", olderInTree: older},
 			tc{name: "delete", deleteWrite: true, olderInTree: older},
@@ -93,14 +98,6 @@ func TestLiveBackend_ReadThroughWriteMatrix(t *testing.T) {
 					if err := j.Write(f.ctx, []store.Change{{Row: older}}); err != nil {
 						t.Fatal(err)
 					}
-				} else {
-					// origin/main holds the row; this checkout committed its delete.
-					rel := rtCommitFile(t, dir, landed)
-					gitT(t, dir, "add", "-A")
-					gitT(t, dir, "commit", "-q", "-m", "landed")
-					gitT(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
-					gitT(t, dir, "rm", "-q", rel)
-					gitT(t, dir, "commit", "-q", "-m", "rm")
 				}
 				got, err := f.b.Get(f.ctx, landed.Table, landed.ID)
 				if err != nil || got.HLC.Compare(landed.HLC) != 0 || got.Deleted != c.landedGone {

@@ -129,7 +129,10 @@ var aliasWhat = map[string]string{
 // aliasDecoder decodes through inner, then replaces the input's `to` field
 // (json name engine.InputTarget) when it equals from.
 type aliasDecoder struct {
-	inner    op.Decoder
+	inner op.Decoder
+	// field is the json name of the input field rewritten ("" = the
+	// target, engine.InputTarget; bulkFromField for a bulk move's source)
+	field    string
 	from, to string
 }
 
@@ -138,13 +141,20 @@ func (d aliasDecoder) Decode(dst reflect.Value, fields []op.FieldInfo) error {
 	if err := d.inner.Decode(dst, fields); err != nil {
 		return err
 	}
-	setTarget(dst, d.from, d.to)
+	field := d.field
+	if field == "" {
+		field = engine.InputTarget
+	}
+	setField(dst, field, d.from, d.to)
 	return nil
 }
 
 // setTarget walks a decoded input struct (embedded structs included) and
 // sets every string field tagged json:"to" holding from to to.
-func setTarget(v reflect.Value, from, to string) {
+func setTarget(v reflect.Value, from, to string) { setField(v, engine.InputTarget, from, to) }
+
+// setField is setTarget for the string fields tagged json:"<field>".
+func setField(v reflect.Value, field, from, to string) {
 	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return
@@ -158,11 +168,11 @@ func setTarget(v reflect.Value, from, to string) {
 	for i := range t.NumField() {
 		f, fv := t.Field(i), v.Field(i)
 		if f.Anonymous {
-			setTarget(fv, from, to)
+			setField(fv, field, from, to)
 			continue
 		}
 		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-		if name == engine.InputTarget && fv.Kind() == reflect.String && fv.CanSet() && fv.String() == from {
+		if name == field && fv.Kind() == reflect.String && fv.CanSet() && fv.String() == from {
 			fv.SetString(to)
 		}
 	}
