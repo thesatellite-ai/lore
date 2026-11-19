@@ -29,7 +29,7 @@ func TestCommitTrailers(t *testing.T) {
 			t.Fatalf("%s trailers %q, want %q", rev, body, want)
 		}
 	}
-	if got := (config{}).withTrailers("subj"); got != "subj" {
+	if got := (config{}).withTrailers(context.Background(), "subj"); got != "subj" {
 		t.Fatalf("no trailers changed the message: %q", got)
 	}
 }
@@ -51,5 +51,23 @@ func TestPerWriteTrailers(t *testing.T) {
 	write(t, a, store.Change{Row: g.row(newID(t), "b", hlc.HLC{})})
 	if body := gitT(t, a.Dir(), "log", "-1", "--format=%(trailers:only,unfold)"); strings.TrimSpace(body) != "Lore-Version: 0.1.18" {
 		t.Fatalf("next commit kept the per-write trailer: %q", body)
+	}
+}
+
+// devco:D-695: a trailer func is asked with the write's own ctx, so a
+// caller resolves the trailer as the row's actor was resolved (the setup
+// a write from the home folder was routed to rides on ctx). Before, it was
+// asked with no ctx and wire resolved the home folder's identity.
+func TestTrailerFuncGetsWriteCtx(t *testing.T) {
+	type key struct{}
+	f := WithTrailerFunc(func(ctx context.Context) []string {
+		v, _ := ctx.Value(key{}).(string)
+		return []string{"Lore-Agent: " + v}
+	})
+	var c config
+	f(&c)
+	ctx := context.WithValue(context.Background(), key{}, "claude_code (agent:auto/claude_code/setupkey)")
+	if got := c.withTrailers(ctx, "subj"); !strings.HasSuffix(got, "Lore-Agent: claude_code (agent:auto/claude_code/setupkey)") {
+		t.Fatalf("the trailer func did not see the write's ctx: %q", got)
 	}
 }

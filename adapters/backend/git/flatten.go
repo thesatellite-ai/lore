@@ -270,7 +270,7 @@ func (b *Backend) FlattenLayout(ctx context.Context) (FlattenResult, error) {
 			"\nThe store's own rows (actors, machines, …) live in " + rowfs.StoreDataDir + "/, apart from the project folders and the org folder." +
 			"\nlore-store.yaml now says lore_store: " + strconv.Itoa(rowfs.MarkerVersion) + "; a lore older than this layout refuses the store and asks to upgrade."
 	}
-	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(msg)}, env: env}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(ctx, msg)}, env: env}); err != nil {
 		return res, errs.Wrap(errs.Internal, "git: commit the store layout move", err).
 			WithHint("check the clone with git -C " + b.work + " status, then run the command again (lore finishes the move)")
 	}

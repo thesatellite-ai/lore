@@ -293,7 +293,7 @@ func (b *Backend) FlattenPersonal(ctx context.Context) (PersonalFlattenResult, e
 	msg := PersonalFlattenSubject + "\n\n" + "lore 0.1.17 filed personal notes for every repo under everywhere/; this lore reads them from " + rowfs.StoreDataDir + "/." +
 		"\nNotes 0.1.17 filed under an org's folder stay there and load only in that org's repos." +
 		"\nThe old paths stay in this store's history."
-	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(msg)}, env: env}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(ctx, msg)}, env: env}); err != nil {
 		return res, errs.Wrap(errs.Internal, "git: commit the personal store move", err).
 			WithHint("check the clone with git -C " + b.work + " status, then run the command again (lore finishes the move)")
 	}

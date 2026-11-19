@@ -339,7 +339,7 @@ func (b *Backend) revertLocked(ctx context.Context, landing, branch string) (str
 		return "", errors.Join(errs.New(errs.InvalidInput, "the landing "+short(landing)+" of "+branch+" is already reverted; nothing changed").
 			WithHint("restore without --revert"), putBack())
 	}
-	msg := b.cfg.withTrailers("lore: revert the landing of "+branch+" ("+short(landing)+")", "Lore-Land-Revert: "+landing)
+	msg := b.cfg.withTrailers(ctx, "lore: revert the landing of "+branch+" ("+short(landing)+")", "Lore-Land-Revert: "+landing)
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", msg}, env: env}); err != nil {
 		return "", errors.Join(errs.Wrap(errs.Internal, "git: commit the revert", err), b.abortSquash(ctx), putBack())
 	}

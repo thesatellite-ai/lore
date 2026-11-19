@@ -450,7 +450,7 @@ func (b *Backend) squashLayer(ctx context.Context, tip string, req LandRequest) 
 	if len(conflicts) > 0 {
 		return "", nil, errors.Join(landConflict(req.Key.Branch, b.branch, conflicts, false), b.abortLanding(ctx))
 	}
-	msg := b.cfg.withTrailers(req.Subject, req.Trailers...)
+	msg := b.cfg.withTrailers(ctx, req.Subject, req.Trailers...)
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", msg}, env: env}); err != nil {
 		return "", nil, errors.Join(errs.Wrap(errs.Internal, "git: commit the landing", err), b.abortLanding(ctx))
 	}

@@ -159,6 +159,16 @@ func (a *App) rosterNowhereErr(read bool) error {
 		// a person who read `team list --store <org>` does not try it on
 		// a change next
 		ways = append(ways, "name the setup of the org with --setup <setup>"+knownList("setups", setups)+" (--store <org> names the org for the roster reads, `lore team list --store <org>`, not for a change)"+knownList("orgs", orgs))
+		if len(setups) > 1 {
+			// devco:D-704: two org setups, no default and not exactly one
+			// admin: say the exact flag to add for each, and the one step
+			// that makes the home folder answer without it from now on
+			var adds []string
+			for _, s := range setups {
+				adds = append(adds, "--setup "+s)
+			}
+			ways = append(ways, "add "+strings.Join(adds, " or ")+" to the same command; or make one setup the default so the home folder uses it: `lore setup edit --name "+setups[0]+" --default`")
+		}
 	}
 	ways = append(ways, "or cd into a code repo or a store clone of the org")
 	verb := "read the teams and people from"

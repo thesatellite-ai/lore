@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -337,6 +338,64 @@ func TestStoryOOwnerShape(t *testing.T) {
 		noPush(before, "task next reads from every placement")
 	})
 
+	// devco:D-695, D-696, D-704 (owner use pass 5 weak 1, 2, 10): commands
+	// from the home folder on a machine with two org setups (acme and the
+	// second org kite, both admin).
+	//   D-695: an agent's write from home `--to <org>/<folder>` credited the
+	//   row to the setup's agent while the commit's Lore-Agent trailer named
+	//   the home folder's fallback agent (another key); the trailer is the
+	//   same one a write from inside the setup's repo carries.
+	//   D-696: `task next --setup <second org's setup>` printed "(or lore
+	//   task claim --id … --push)" and that line, run as printed from home,
+	//   failed "no store named kite is set up for this folder … the stores
+	//   --to takes here" (and task release --id the same).
+	//   D-704: member add from home refused with two org setups; with a
+	//   default org setup it runs on that setup and says so.
+	s.Step("admin/home-two-setups", func() {
+		agentEnv := []string{"LORE_HUMAN=", "LORE_NO_DETECT=0", "CLAUDE_CODE_CHILD_SESSION=1", "CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=o-d695"}
+		home := (&teamharness.Clone{A: ada.Actor, Dir: ada.Home}).With(agentEnv...)
+		top := oStoreClone(ada, oOwner, "lore-team")
+		trailer := func() string {
+			for _, l := range strings.Split(s.Git(top, "log", "-1", "--format=%B"), "\n") {
+				if strings.HasPrefix(l, "Lore-Agent:") {
+					return l
+				}
+			}
+			return ""
+		}
+		pc.With(agentEnv...).Lore("memory", "add", "--body", "agent note from the org repo", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		inRepo := trailer()
+		r := home.Lore("memory", "add", "--body", "agent note from home", "--to", oOrg+"/"+oFolder, "--yes")
+		fromHome := trailer()
+		oCheck(t, "D-695/trailer", r.Code == 0 && inRepo != "" && fromHome == inRepo, "an agent's write from home names another agent in its commit trailer than the same write in the org's repo (repo %q, home %q):\n%s", inRepo, fromHome, r)
+
+		before := refs()
+		r = ada.Lore(ada.Home, "member", "add", "--email", "pat.home@acme.example", "--name", "Pat Home", "--yes")
+		oCheck(t, "D-704/two-setups-refusal", r.Code != 0 && strings.Contains(r.Out(), "--setup "+oSetup) && strings.Contains(r.Out(), "--default"), "member add from home with two admin org setups and no default: want the refusal naming the full command with --setup and the default, got:\n%s", r)
+		ada.Lore(ada.Home, "setup", "edit", "--name", oSetup, "--default", "--yes").OK(t)
+		r = ada.Lore(ada.Home, "member", "add", "--email", "pat.home@acme.example", "--name", "Pat Home", "--yes")
+		oCheck(t, "D-704/default-setup", r.Code == 0 && strings.Contains(r.Out(), "setup "+oSetup), "member add from home with default setup %s: want it added there and the setup named, got:\n%s", oSetup, r)
+		noPush(before, "member add from home")
+		// with the company setup the default (the home folder resolves it),
+		// the second org's task by id from home
+		ada.Lore(kc.Dir, "task", "add", "--json", "--title", "kite queue task", "--to", oKite+"/org", "--yes").OK(t)
+		ada.LoreIn(kc, "sync").OK(t)
+		r = ada.Lore(ada.Home, "task", "next", "--setup", oKSetup)
+		m := oClaimHint.FindStringSubmatch(r.Out())
+		oCheck(t, "D-696/hint", r.Code == 0 && m != nil, "task next --setup %s from home prints no claim line:\n%s", oKSetup, r)
+		if m != nil {
+			args := strings.Fields(m[1])
+			c := ada.Lore(ada.Home, args...)
+			oCheck(t, "D-696/claim-as-printed", c.Code == 0, "the printed %q run from home failed:\n%s", "lore "+m[1], c)
+			oCheck(t, "D-696/no-unasked-flag", !strings.Contains(c.Out(), "--to"), "the claim from home talks about --to, which was never typed:\n%s", c)
+			id := args[slices.Index(args, "--id")+1]
+			c = ada.Lore(ada.Home, "task", "release", "--id", id)
+			oCheck(t, "D-696/release", c.Code == 0, "task release --id %s from home failed:\n%s", id, c)
+		}
+
+		ada.Lore(ada.Home, "setup", "edit", "--name", oSetup, "--no-default", "--yes").OK(t)
+	})
+
 	s.Step("admin/store-moves-org", func() {
 		team2 = s.MoveRemote(t, team, oNewOwner, false)
 		ops2 = s.MoveRemote(t, ops, oNewOwner, false)
@@ -505,3 +564,6 @@ func TestStoryOOwnerShape(t *testing.T) {
 		oCheck(t, "seturl-empty-store", r.Code == 0 || !strings.Contains(r.Out(), "--name "+oOrg+" "), "set-url --name lore-vault refuses and tells the person to set-url the org's team store (--name %s) to the vault's url:\n%s", oOrg, r)
 	})
 }
+
+// oClaimHint is task next's "(or lore task claim --id … --push …)" line.
+var oClaimHint = regexp.MustCompile(`\(or lore (task claim --id \S+[^)]*)\)`)

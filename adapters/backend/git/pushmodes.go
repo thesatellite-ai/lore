@@ -301,7 +301,7 @@ func (b *Backend) squashOnto(ctx context.Context, remote, h string) (string, err
 		if err != nil {
 			return err
 		}
-		if next, err = b.commitTree(ctx, run+"^{tree}", []string{next}, b.cfg.withTrailers(msg), env); err != nil {
+		if next, err = b.commitTree(ctx, run+"^{tree}", []string{next}, b.cfg.withTrailers(ctx, msg), env); err != nil {
 			return err
 		}
 		run = ""
@@ -645,7 +645,7 @@ func (b *Backend) replayOnto(ctx context.Context, remote, h, base string) (bool,
 	}
 	target := remote
 	if tree != rtree {
-		target, err = b.commitTree(ctx, tree, []string{remote}, b.cfg.withTrailers(replaySubject+strconv.Itoa(b.epochAt(ctx, remote))), env)
+		target, err = b.commitTree(ctx, tree, []string{remote}, b.cfg.withTrailers(ctx, replaySubject+strconv.Itoa(b.epochAt(ctx, remote))), env)
 		if err != nil {
 			return false, nil, joinKeep(err, b.abortThenReset(ctx, h))
 		}
@@ -880,7 +880,7 @@ func (b *Backend) rewrite(ctx context.Context, chain []chainCommit, cut int, cut
 	date := "@" + strconv.FormatInt(old.at.Unix(), 10) + " +0000"
 	env = append(env, "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
 	msg := snapshotSubject + cutoff.UTC().Format(time.DateOnly) + "\n\n" + strconv.Itoa(len(chain)-cut) + " commits squashed; every row is kept"
-	prev, err := b.commitTree(ctx, old.tree, nil, b.cfg.withTrailers(msg), env)
+	prev, err := b.commitTree(ctx, old.tree, nil, b.cfg.withTrailers(ctx, msg), env)
 	if err != nil {
 		return "", err
 	}
@@ -935,7 +935,7 @@ func (b *Backend) epochCommit(ctx context.Context, tip string, m rowfs.Marker) (
 	if err != nil {
 		return "", err
 	}
-	return b.commitTree(ctx, tree, []string{tip}, b.cfg.withTrailers(compactSubject+strconv.Itoa(m.Epoch)+")"), env)
+	return b.commitTree(ctx, tree, []string{tip}, b.cfg.withTrailers(ctx, compactSubject+strconv.Itoa(m.Epoch)+")"), env)
 }
 
 // leaseLost is git's refusal of a --force-with-lease whose expected value

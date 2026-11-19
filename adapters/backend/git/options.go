@@ -77,7 +77,7 @@ type config struct {
 	// (WithTrailers): lore's own commits only, never a person's (FQ7).
 	trailers []string
 	// trailerFuncs add trailers asked for at each commit (WithTrailerFunc)
-	trailerFuncs []func() []string
+	trailerFuncs []func(context.Context) []string
 	// route gives the per-call git options and environment of the active
 	// setup's ssh route (WithRoute); nil = none.
 	route func(ctx context.Context, remote string) (args, env []string)
@@ -177,10 +177,13 @@ func WithTrailers(lines ...string) Option {
 }
 
 // WithTrailerFunc adds trailer lines asked for at each commit (f is
-// called then, so a caller can resolve them lazily): wire names the agent
-// a person's commits were made through (Lore-Agent) here, because a
-// clone's git identity is always the person (owner bug 12).
-func WithTrailerFunc(f func() []string) Option {
+// called then, with the write's ctx, so a caller can resolve them lazily):
+// wire names the agent a person's commits were made through (Lore-Agent)
+// here, because a clone's git identity is always the person (owner bug
+// 12). The ctx is the write's own (devco:D-695): a write from the home
+// folder routed to a setup by its --to credits the row through that
+// setup, and the trailer must name the same actor, not the folder's.
+func WithTrailerFunc(f func(context.Context) []string) Option {
 	return func(c *config) {
 		if f != nil {
 			c.trailerFuncs = append(c.trailerFuncs, f)
@@ -205,11 +208,11 @@ func Join(opts ...Option) Option {
 // extra ones (store.CommitTrailers, e.g. Lore-Moved-To; PROVENANCE 5.4),
 // after one blank line (git interpret-trailers form); msg unchanged when
 // there are none. A blank or multi-line entry is dropped.
-func (c config) withTrailers(msg string, extra ...string) string {
+func (c config) withTrailers(ctx context.Context, msg string, extra ...string) string {
 	var keep []string
 	all := slices.Clone(c.trailers)
 	for _, f := range c.trailerFuncs {
-		all = append(all, f()...)
+		all = append(all, f(ctx)...)
 	}
 	for _, t := range slices.Concat(all, extra) {
 		if t = strings.TrimSpace(t); t != "" && !strings.ContainsAny(t, "\r\n") {

@@ -447,7 +447,7 @@ func (b *Backend) threeWay(ctx context.Context, remote string, env []string) ([]
 	if err != nil || len(refused) > 0 {
 		return nil, refused, partial, err
 	}
-	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(mergeSubject)}, env: env}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(ctx, mergeSubject)}, env: env}); err != nil {
 		return nil, nil, "", errors.Join(errs.Wrap(errs.Internal, "git: commit the merge", err), b.abortMerge(ctx))
 	}
 	b.clearOwnMerge(ctx)
@@ -592,7 +592,7 @@ func (b *Backend) sendPartial(ctx context.Context, remote, partial string) (stri
 	if err != nil {
 		return "", err
 	}
-	c, err := b.commitTree(ctx, partial, []string{remote}, b.cfg.withTrailers(partialSubject), env)
+	c, err := b.commitTree(ctx, partial, []string{remote}, b.cfg.withTrailers(ctx, partialSubject), env)
 	if err != nil {
 		return "", err
 	}

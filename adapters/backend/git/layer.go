@@ -416,7 +416,7 @@ func (b *Backend) declareLayers(ctx context.Context) (string, error) {
 		since = f.Since
 	}
 	msg := "lore: " + b.folder.Name() + " uses branch layers (needs lore " + since + " or later)"
-	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(msg), "--", rel}, env: env}); err != nil {
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(ctx, msg), "--", rel}, env: env}); err != nil {
 		return "", errs.Wrap(errs.Internal, "git: commit the folder's format declaration", err)
 	}
 	return b.head(ctx)

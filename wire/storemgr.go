@@ -420,18 +420,28 @@ func (s storeSigner) fallback(ctx context.Context) git.Signature {
 
 // agentTrailers is the Lore-Agent trailer of lore's own commits when an
 // agent writes for its person (none for the person, the CI actor, or an
-// unresolvable identity). Resolved once, at the first commit.
-func (s storeSigner) agentTrailers() func() []string {
-	var once sync.Once
-	var out []string
-	return func() []string {
-		once.Do(func() {
-			who, err := resolveIdentity(context.Background(), s.opts)
-			if err != nil || who.Agent == "" {
-				return
-			}
+// unresolvable identity). It resolves the identity with the write's ctx,
+// as the row's actor is resolved (devco:D-695): a write from the home
+// folder that `--to <org>/<folder>` routed to the org's setup credits the
+// row to the setup's agent (its key), and the trailer named the home
+// folder's fallback agent (another key) because it resolved without the
+// setup ctx carries. Resolved once per setup choice (op.SetupOf), at the
+// first commit made with it.
+func (s storeSigner) agentTrailers() func(context.Context) []string {
+	var mu sync.Mutex
+	done := map[string][]string{}
+	return func(ctx context.Context) []string {
+		key := op.SetupOf(ctx)
+		mu.Lock()
+		defer mu.Unlock()
+		if out, ok := done[key]; ok {
+			return out
+		}
+		var out []string
+		if who, err := resolveIdentity(ctx, s.opts); err == nil && who.Agent != "" {
 			out = []string{gitcommit.AgentTrailer(who.Label, who.Agent)}
-		})
+		}
+		done[key] = out
 		return out
 	}
 }
