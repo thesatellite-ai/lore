@@ -61,7 +61,7 @@ func TestJourneyOrgStoreAdd(t *testing.T) {
 	// it said "sent 0" (outside a repo: "up to date") under its own push
 	// line; the store's line now says it pushed commits with no rows.
 	w.Step("day1/sync-says-it-sent-the-link", func() {
-		tt.lore(tlLee, "sync").OK(t).Says(t, "lore: pushed store client-store", "pushed local commit(s) with no note rows")
-		tt.lore(tlLee, "sync").OK(t).Never(t, "pushed local commit(s) with no note rows")
+		tt.lore(tlLee, "sync").OK(t).Says(t, "lore: pushed store client-store", "with no note rows (store links or org settings)")
+		tt.lore(tlLee, "sync").OK(t).Never(t, "with no note rows")
 	})
 }

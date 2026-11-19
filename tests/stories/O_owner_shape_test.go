@@ -563,6 +563,33 @@ func TestStoryOOwnerShape(t *testing.T) {
 		r := ada.LoreIn(pc, "store", "set-url", "--name", "lore-vault", "--url", vault2.SSHURL(), "--yes")
 		oCheck(t, "seturl-empty-store", r.Code == 0 || !strings.Contains(r.Out(), "--name "+oOrg+" "), "set-url --name lore-vault refuses and tells the person to set-url the org's team store (--name %s) to the vault's url:\n%s", oOrg, r)
 	})
+
+	// devco:D-698, D-699 (owner use pass 5 weak 4 and 5): the admin moves
+	// the org's store to a NEW repo while the old one still exists, then
+	// runs `lore sync --setup <s>` from home. The move commit went only to
+	// the new address, so the member (whose clone uses the old one) pulled
+	// the old repo and stayed there, though set-url promised "every
+	// teammate's lore follows it"; and the sync said "sent 0" under a push
+	// line of "(1 commit)".
+	s.Step("admin/store-moves-to-a-new-repo-member-follows", func() {
+		fresh := s.Remote("github.com/" + oNewOwner + "/lore-team-next")
+		wqGit(t, team2.Dir, "push", "-q", "--mirror", fresh.Dir) // the history copied over; the old repo stays
+		r := ada.Lore(ada.Home, "store", "set-url", "--name", oOrg, "--url", fresh.SSHURL(), "--yes").OK(t)
+		oCheck(t, "D-699/seturl-says-who-follows", strings.Contains(r.Out(), "also sends the move to the old address "+team2.SSHURL()) && !strings.Contains(r.Out(), "every teammate's lore follows it after their next sync"),
+			"set-url to a new repo while the old one exists: want the line saying the old address gets the move too, got:\n%s", r)
+		r = ada.Lore(ada.Home, "sync", "--setup", oSetup).OK(t)
+		oCheck(t, "D-699/old-address-gets-the-move", strings.Contains(r.Stderr, "at its old address "+team2.SSHURL()+" too") && wqGit(t, team2.Dir, "rev-parse", "main") == wqGit(t, fresh.Dir, "rev-parse", "main"),
+			"lore sync --setup %s after set-url: want the move pushed to the old address too, got:\n%s", oSetup, r)
+		oCheck(t, "D-698/sent-counts-commits", !strings.Contains(r.Stdout, "pushed (sent 0") && (!strings.Contains(r.Stdout, "with no note rows") || strings.Contains(r.Stdout, " local commit with no note rows") || strings.Contains(r.Stdout, " local commits with no note rows")),
+			"lore sync --setup %s: a push line said sent 0 or the no-note-rows note named no commits:\n%s", oSetup, r)
+		mo.LoreIn(mwc, "sync").OK(t)
+		cfg, err := os.ReadFile(mo.LorePath("config.yaml"))
+		oCheck(t, "D-699/member-follows", err == nil && strings.Contains(string(cfg), fresh.SSHURL()), "the member's config does not follow the move to %s (%v):\n%s", fresh.SSHURL(), err, cfg)
+		mo.LoreIn(mwc, "sync").OK(t)
+		mclone := oStoreClone(mo, oNewOwner, "lore-team-next")
+		oCheck(t, "D-699/member-clone-at-the-new-repo", wqGit(t, mclone, "rev-parse", "HEAD") == wqGit(t, fresh.Dir, "rev-parse", "main"),
+			"the member's lore does not read the new repo after following: clone %s", mclone)
+	})
 }
 
 // oClaimHint is task next's "(or lore task claim --id … --push …)" line.

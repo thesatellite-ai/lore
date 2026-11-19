@@ -155,7 +155,16 @@ func (a *App) SetStoreURL(ctx context.Context, in opsstores.SetURLIn) (opsstores
 		out.Changed = true
 	}
 	left := leftClonesLine(leftClones(ctx, a.opts.Home, out.ID, raw), old)
-	out.OrgFiles = a.moveOrgFiles(ctx, moved.orgs, in.Name, old, raw)
+	var committed bool
+	out.OrgFiles, committed = a.moveOrgFiles(ctx, moved.orgs, in.Name, old, raw)
+	if committed {
+		// D-699: teammates follow the move from lore-org.yaml, which they
+		// pull from the address their clone uses: an old repo that still
+		// exists gets the move too, at the next explicit push
+		if fwd := forwardAddresses(old, raw); len(fwd) > 0 && recordStoreForward(a.opts.Home, out.ID, raw, src.Branch, fwd) == nil {
+			out.OrgFiles = append(out.OrgFiles, forwardPlanLine(OrgStoreName(a.opts.Home, raw), fwd, raw))
+		}
+	}
 	if carrying {
 		// the org file commit above lands in the carried clone: its line
 		// counts what waits after it (D-562)
@@ -182,7 +191,7 @@ func (a *App) confirmOrgMove(ctx context.Context, name, from, raw string) error 
 		return nil
 	}
 	who := strings.Join(orgs, ", ")
-	plan := "store set-url would move store " + name + " to " + raw + " for everyone in " + who + ": it commits the new address to lore-org.yaml of " + who + ", and every teammate's lore follows it after their next sync"
+	plan := "store set-url would move store " + name + " to " + raw + " for everyone in " + who + ": it commits the new address to lore-org.yaml of " + who + ", and a teammate's lore follows it at their next sync once the move reaches the address their clone uses: your next lore sync sends it to " + raw + " and to the old address while that still answers (a renamed repo redirects anyway)"
 	if repourl.IsLocalRemote(raw) {
 		plan += "; " + raw + " is a path on this machine, which no teammate can reach, so their lore would lose the store until it moves back"
 	}
@@ -216,9 +225,9 @@ func adminOrgsNaming(home, url string) []string {
 
 // moveOrgFiles commits the move to each org's lore-org.yaml this machine
 // administers; for another org it says who must, naming the store asked
-// about (name), never the org's own store (D-541).
-func (a *App) moveOrgFiles(ctx context.Context, orgs []string, name string, old []string, raw string) []string {
-	var lines []string
+// about (name), never the org's own store (D-541). committed is true when
+// a move commit now waits in (or went to) the store.
+func (a *App) moveOrgFiles(ctx context.Context, orgs []string, name string, old []string, raw string) (lines []string, committed bool) {
 	for _, org := range orgs {
 		if !isOrgAdmin(a.opts.Home, org) {
 			// H-12: the org's lore-org.yaml is every member's address of
@@ -227,9 +236,34 @@ func (a *App) moveOrgFiles(ctx context.Context, orgs []string, name string, old 
 			lines = append(lines, "lore-org.yaml of "+org+" left as it is: only an admin of "+org+" changes the store's address for the whole org (this machine now uses "+raw+"); ask an admin to run lore store set-url --name "+name+" --url "+raw)
 			continue
 		}
-		lines = append(lines, a.moveOrgFile(ctx, org, name, old, raw))
+		line, did := a.moveOrgFile(ctx, org, name, old, raw)
+		lines, committed = append(lines, line), committed || did
 	}
-	return lines
+	return lines, committed
+}
+
+// forwardAddresses are the old addresses a teammate's clone may still use:
+// every old address but the new one and paths on this machine (no
+// teammate fetches from those).
+func forwardAddresses(old []string, raw string) []string {
+	var out []string
+	for _, o := range old {
+		if o != "" && !storeaddr.Same(o, raw) && !repourl.IsLocalRemote(o) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// forwardPlanLine is set-url's line saying who follows the move and when
+// (D-699: "every teammate's lore follows it" held only for a renamed repo).
+func forwardPlanLine(name string, fwd []string, raw string) string {
+	shown := make([]string, 0, len(fwd))
+	for _, f := range fwd {
+		shown = append(shown, repourl.Mask(f))
+	}
+	at := strings.Join(shown, ", ")
+	return "the next lore sync (or lore store push --store " + name + ") also sends the move to the old address " + at + ", so a teammate whose lore still uses it follows at their next sync; if the old address is gone, teammates follow only when it redirects to " + repourl.Mask(raw) + " (a renamed repo), otherwise each teammate runs: lore store set-url --name " + name + " --url " + repourl.Mask(raw)
 }
 
 // moveAddressOnly is set-url of a store that holds nothing yet (D-541: an
@@ -268,7 +302,7 @@ func (a *App) moveAddressOnly(ctx context.Context, out opsstores.SetURLOut, src 
 	out.Changed = len(out.Places)+len(out.Folders) > 0
 	dropEmptyClone(ctx, cloneDir)
 	out.Clone = joinLines(seeded, "the store holds nothing yet at either address, so only its address moved; its first write goes to "+raw)
-	out.OrgFiles = a.moveOrgFiles(ctx, moved.orgs, out.Name, old, raw)
+	out.OrgFiles, _ = a.moveOrgFiles(ctx, moved.orgs, out.Name, old, raw)
 	return out, nil
 }
 
@@ -503,18 +537,18 @@ func moveConfigURLs(home string, old []string, raw string) (configMove, error) {
 // address) and stamps the entry with the file's new version. It returns
 // the line store set-url prints; a failure is a line too (the move on this
 // machine stands; teammates still import the old address until it lands).
-func (a *App) moveOrgFile(ctx context.Context, org, name string, old []string, raw string) string {
+func (a *App) moveOrgFile(ctx context.Context, org, name string, old []string, raw string) (string, bool) {
 	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
 	if err != nil || cfg == nil {
-		return "lore-org.yaml of " + org + " not updated: " + lorehome.Shown() + "/" + ConfigFile + " could not be read"
+		return "lore-org.yaml of " + org + " not updated: " + lorehome.Shown() + "/" + ConfigFile + " could not be read", false
 	}
 	o := cfg.FindOrg(org)
 	if o == nil {
-		return "lore-org.yaml of " + org + " not updated: the entry is gone"
+		return "lore-org.yaml of " + org + " not updated: the entry is gone", false
 	}
 	sc := o.OrgFolderStore()
 	if sc == nil {
-		return "" // no store holds the org's lore-org.yaml
+		return "", false // no store holds the org's lore-org.yaml
 	}
 	// D-540: lore-org.yaml lives in the org folder's store (sc.URL, raw
 	// when that store moved) and lists every store of the org, so a second
@@ -523,19 +557,19 @@ func (a *App) moveOrgFile(ctx context.Context, org, name string, old []string, r
 	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: a.opts.Home, Config: cfg, Now: a.opts.Wall, Route: storeRouter(a.opts.Home, a.projectDir())}
 	res, err := g.MoveOrgFileStore(ctx, orgcfg.OrgFileMove{URL: sc.URL, Branch: sc.Branch, Old: old, New: raw, Org: org, Signature: storeSignature(o)})
 	if err != nil {
-		return "lore-org.yaml of " + org + " still names the old address (" + orgFileError(err, sc.URL).Error() + "); run `lore store set-url --name " + name + " --url " + raw + "` again when the store takes the commit, so teammates importing the org get the new address"
+		return "lore-org.yaml of " + org + " still names the old address (" + orgFileError(err, sc.URL).Error() + "); run `lore store set-url --name " + name + " --url " + raw + "` again when the store takes the commit, so teammates importing the org get the new address", false
 	}
 	mine, _ := mineOf(ctx, cfg, o, res.Suggestion)
 	if werr := writeOrgSource(a.opts.Home, configLockWait, org, mine, res.Suggestion.Source()); werr != nil {
-		return "lore-org.yaml of " + org + " updated, but the entry's source stamp was not written: " + werr.Error() + "; `lore org refresh --org " + org + "` writes it"
+		return "lore-org.yaml of " + org + " updated, but the entry's source stamp was not written: " + werr.Error() + "; `lore org refresh --org " + org + "` writes it", true
 	}
 	where := "pushed"
 	switch {
 	case res.Undone:
 		// D-565: back where it was before an unpushed move: no commit left
-		return "lore-org.yaml of " + org + " names " + raw + " again: the earlier move to another address was never pushed, so both move commits were dropped and nothing waits to be sent; orgs[" + org + "] stamped with version " + short(res.Suggestion.Version)
+		return "lore-org.yaml of " + org + " names " + raw + " again: the earlier move to another address was never pushed, so both move commits were dropped and nothing waits to be sent; orgs[" + org + "] stamped with version " + short(res.Suggestion.Version), false
 	case !res.Changed:
-		return "lore-org.yaml of " + org + " already names " + raw + " (version " + short(res.Suggestion.Version) + ")"
+		return "lore-org.yaml of " + org + " already names " + raw + " (version " + short(res.Suggestion.Version) + ")", false
 	case res.Offline:
 		where = "committed in the local clone; offline, pushed by the next command"
 	case !res.Pushed:
@@ -545,7 +579,7 @@ func (a *App) moveOrgFile(ctx context.Context, org, name string, old []string, r
 	if repourl.IsLocalRemote(raw) {
 		line += "; " + raw + " is a path on this machine: teammates cannot fetch from it" // D-562
 	}
-	return line
+	return line, true
 }
 
 // storeIDAt opens the store src names and returns its marker's sto_ id

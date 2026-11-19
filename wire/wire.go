@@ -1477,6 +1477,7 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	out, err := opsstores.SyncAll(ctx, a, only)
 	if err == nil && only == "" {
 		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx, out.Stores)...)
+		a.forwardStoreMoves(ctx, a.pushNotes()) // D-699: a set-url move owed to an old address
 		if !syncWasOffline(out) {
 			out.Notes = append(out.Notes, a.sweepLayers(ctx)...) // BRANCH_LAYERS 9, 10 (branchlayer_sweep.go)
 		}
