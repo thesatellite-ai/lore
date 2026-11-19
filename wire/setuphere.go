@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -49,6 +50,16 @@ func (a *App) SetupHere(ctx context.Context) (onboard.Here, error) {
 	cfg, err := ReadSetupsConfig(home)
 	if err != nil {
 		return onboard.Here{}, err
+	}
+	// devco D-682: a store clone is a git repo but never a code repo: it is
+	// named as the store it is, never offered lore init (storehere.go)
+	if sc, in := storeHere(dir); in {
+		h := onboard.Here{State: onboard.HereStoreClone, Dir: dir, Root: sc.top, Stores: []string{}, Pointers: []string{},
+			StoreName: storeCloneName(home, sc)}
+		if sc.folder != rowfs.FolderRoot {
+			h.StoreFolder = sc.folder
+		}
+		return h, nil
 	}
 	f := onboard.HereFacts{Dir: dir, Root: gitTopLevel(ctx, dir)}
 	f.Git = f.Root != ""

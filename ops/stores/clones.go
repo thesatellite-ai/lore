@@ -133,6 +133,15 @@ type StoreChecker interface {
 	CheckStores(ctx context.Context) []StoreCheck
 }
 
+// DoctorScoper is the optional host side of store.doctor that names the
+// orgs a run is kept to: the org of a setup the command names (--setup,
+// LORE_SETUP). Why (devco D-687): `store doctor --setup <company>` also
+// listed another setup's store clone (the ops store) with its warning, a
+// store that setup never uses. nil keeps every org store's clone.
+type DoctorScoper interface {
+	DoctorOrgScope(ctx context.Context) []string
+}
+
 // StoreCheck is one store's health as store.doctor reports it.
 type StoreCheck struct {
 	Store string `json:"store"`
@@ -200,7 +209,12 @@ type ClonesOut struct {
 	// document that still says why it failed.
 	Error  string `json:"error,omitempty"`
 	doctor bool
-	fail   error
+	// only is the --store filter of store doctor ("" none): with it a
+	// first section that kept no store is left out, so the report never
+	// says "stores this repo and machine use: none" and then checks the
+	// named store's clone (devco D-687).
+	only string
+	fail error
 }
 
 // DoctorSummary is store doctor's last line: how many stores it checked
@@ -331,8 +345,10 @@ func doctorOrgHead() string {
 func (o ClonesOut) Text() string {
 	var b strings.Builder
 	if o.doctor {
-		b.WriteString(doctorUsedHead + "\n")
-		if len(o.Checked) == 0 {
+		if len(o.Checked) > 0 || o.only == "" {
+			b.WriteString(doctorUsedHead + "\n")
+		}
+		if len(o.Checked) == 0 && o.only == "" {
 			b.WriteString(doctorNoneUsed + "\n")
 		}
 		for _, c := range o.Checked {
@@ -624,9 +640,13 @@ func cloneOps(m Manager) []op.Entry {
 			if sc, ok := upgrade.As[StoreChecker](m); ok {
 				out.Checked = sc.CheckStores(ctx)
 			}
+			if ds, ok := upgrade.As[DoctorScoper](m); ok {
+				out = orgScoped(out, ds.DoctorOrgScope(ctx))
+			}
 			if out, err = onlyStore(out, in.Store); err != nil {
 				return ClonesOut{}, err
 			}
+			out.only = strings.TrimSpace(in.Store)
 			out = withEmptyLists(out)
 			out.doctor = true
 			out.Summary = summarize(out)
@@ -638,6 +658,27 @@ func cloneOps(m Manager) []op.Entry {
 			return out, nil
 		}),
 	}
+}
+
+// orgScoped keeps the org-store section of out to the clones of orgs (an
+// entry of one of them, or the url of a store the first section checks);
+// nil orgs keeps every clone (DoctorScoper, devco D-687).
+func orgScoped(out ClonesOut, orgs []string) ClonesOut {
+	if len(orgs) == 0 {
+		return out
+	}
+	urls := map[string]bool{}
+	for _, c := range out.Checked {
+		urls[c.URL] = true
+	}
+	var clones []CloneView
+	for _, v := range out.Stores {
+		if urls[v.URL] || slices.ContainsFunc(v.Entries, func(e string) bool { return slices.Contains(orgs, e) }) {
+			clones = append(clones, v)
+		}
+	}
+	out.Stores = clones
+	return out
 }
 
 // onlyStore keeps out to the store name names (store doctor --store,

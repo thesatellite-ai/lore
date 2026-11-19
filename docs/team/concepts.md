@@ -189,6 +189,8 @@ In every repo lore picks **at most one org**, by the first rule that answers:
  6. nothing matched                  no org: your fallback identity, everywhere/ notes only
 ```
 
+A store's own clone (its remote is the url of a store exactly one entry attaches) belongs to that entry before rule 5: the clone of an ops store kept under the company's GitHub owner is the ops org's, even though the company's `own:` pattern matches its url (`matched by: store url … of <org> (this is its clone)`).
+
 If two entries match at the same rule, that is an error (`E_ORG_AMBIGUOUS`): lore never guesses. `lore whoami` prints the result and the rule that decided it. `lore whoami --explain` prints every rule with hit or miss.
 
 <!-- example: two-orgs#whoami-per-repo only=4 lines=20 -->

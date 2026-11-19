@@ -35,6 +35,19 @@ const (
 	DefaultOut = ".lore/LORE.md"
 )
 
+// The json names of render's read-only modes besides --dry-run
+// (op.Spec.ReadModes): set, the run writes nothing (RunIn.ReadOnly).
+const (
+	inputCheck  = "check"
+	inputReport = "report"
+	inputTrend  = "trend"
+)
+
+// ReadModes are the json names of every read-only mode of render.run,
+// --dry-run first, as RunIn.ReadOnly reads them. Why exported: the host's
+// store-clone gate lets exactly these through (D-682).
+var ReadModes = []string{op.InputDryRun, inputCheck, inputReport, inputTrend}
+
 // restNoun keeps the REST collection "render" un-pluralised.
 const restNoun = "render"
 
@@ -187,7 +200,9 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{
 			Name: OpRun, Summary: "Render .lore/LORE.md from scoped knowledge and point your AI tools at it",
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
-			Errors: []errs.Code{errs.InvalidInput, errs.BadPath, errs.Refused, errs.NotAStore, errs.ConfigInvalid, errs.NotFound, errs.Unsupported, errs.Internal},
+			// the modes RunIn.ReadOnly names (--dry-run is one for every op)
+			ReadModes: []string{inputCheck, inputReport, inputTrend},
+			Errors:    []errs.Code{errs.InvalidInput, errs.BadPath, errs.Refused, errs.NotAStore, errs.ConfigInvalid, errs.NotFound, errs.Unsupported, errs.Internal},
 			Examples: []op.Example{
 				{Title: "render and wire the repo's tools", CLI: "lore render", Want: ""},
 				{Title: "wire one more tool and keep it in context.targets", CLI: "lore render --add-target claude_code", Want: ""},

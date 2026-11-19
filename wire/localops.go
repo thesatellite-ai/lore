@@ -68,7 +68,10 @@ func (a *App) runLocal(ctx context.Context, e op.Entry, d op.Decoder, c op.Calle
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		ctx = WithNoCreate(ctx) // doctor_nocreate.go: a read never sets a repo up
 	}
-	if e.Spec().OnlyReads() {
+	if e.Spec().OnlyReads() || e.Spec().Previews(in) {
+		// devco:D-682: a preview (--dry-run, render --check/--report/
+		// --trend) is a read too: render --dry-run in a store folder with
+		// no project row committed "lore: project add prj_…: <folder>".
 		// devco:D-503: a Local read skips engine.Run, which is what marks a
 		// call's access; unmarked, the engine it opens took it for a write.
 		// lore why-context show in a store clone made and committed the

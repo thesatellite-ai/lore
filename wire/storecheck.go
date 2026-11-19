@@ -26,10 +26,12 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 )
 
 var _ opsstores.StoreChecker = (*App)(nil)
+var _ opsstores.DoctorScoper = (*App)(nil)
 
 // Store doctor problem texts.
 const (
@@ -233,4 +235,19 @@ func reasonOf(err error) string {
 		return e.Message + ": " + reasonOf(e.Cause)
 	}
 	return e.Message
+}
+
+// DoctorOrgScope implements opsstores.DoctorScoper (devco D-687): the org
+// of a setup the command names (--setup, LORE_SETUP), so store doctor's
+// org-store section lists that setup's clones only; nil (every org store)
+// when no setup is named, the named one has no org, or none resolves.
+func (a *App) DoctorOrgScope(ctx context.Context) []string {
+	res, err := a.SetupResolution(ctx, "")
+	if err != nil || res.Entry.Org == "" || !res.Entry.Kind.HasOrg() {
+		return nil
+	}
+	if w := res.Active.Why; w != opssetup.WhyFlag && w != opssetup.WhyEnv {
+		return nil
+	}
+	return []string{res.Entry.Org}
 }

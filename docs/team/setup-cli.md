@@ -65,6 +65,8 @@ setup resolution (first step that answers wins):
 ```
 <!-- /example -->
 
+Inside a store clone (`~/.lore/stores/<owner>/<repo>` or a folder of it) the line names the store instead, for example "This folder: the clone of store agency (folder web), a lore store, not a code repo", and says that lore reads and writes the folder you stand in (`lore task list`) while `lore init` and setups are for code repos.
+
 The rules, first match wins: the `--setup` flag, `LORE_SETUP`, this repo's pin, the most specific folder glob, the org of the repo (when exactly one setup has it), the default setup, none. [Many setups, chosen by folder](guided-setup.md#step-4--know-which-setup-a-folder-uses) has the full table.
 
 ## Step 2 — Look at one setup
