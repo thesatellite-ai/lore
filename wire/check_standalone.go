@@ -150,7 +150,19 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	// Secrets first, in every repo (hooksecrets.go), then F16 (client repos).
 	old, serr := a.hookSecrets(ctx, root, checkWhereCommit, docs)
 	if serr == nil {
-		serr = a.LeakCheckDocsExplain(ctx, l.res, checkWhereCommit, docs, in.Explain)
+		// devco:D-720: F16 reads only the lines this commit adds, so an
+		// edit to an already-committed file is not refused for its old text.
+		leakDocs := docs
+		if in.Staged || in.CommitMsg == "" {
+			added, aerr := stagedAddedLines(ctx, root)
+			if aerr != nil {
+				serr = aerr
+			}
+			leakDocs = addedLinesOnly(docs, added)
+		}
+		if serr == nil {
+			serr = a.LeakCheckDocsExplain(ctx, l.res, checkWhereCommit, leakDocs, in.Explain)
+		}
 	}
 	if serr != nil {
 		// D3: a refused commit leaves the index as the person staged it,
