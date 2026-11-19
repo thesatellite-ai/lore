@@ -38,7 +38,7 @@ func TestStoryWXOwnRepoNeverListed(t *testing.T) {
 
 	declare := "lore org config set --org " + wOrg + " --key own --add " + wAppSlug + " --yes"
 	s.Step("D-525/says-why-and-the-way-out", func() {
-		m.Lore(pc.Dir, "whoami").OK(t).Says(t, "treated as a client repo", "no own: pattern of "+wOrg+" matches "+wAppSlug, declare)
+		m.Lore(pc.Dir, "whoami").OK(t).Says(t, "treated as a client repo", "no own: pattern of "+wOrg+" matches this repo's remote "+wAppSlug, declare)
 		m.Lore(pc.Dir, "fix").Says(t, "agent hooks", "skipped: treated as a client repo", declare)
 	})
 

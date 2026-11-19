@@ -47,13 +47,16 @@ func markClientRepo(ctx context.Context, root string, res *OrgResolution) {
 		// to change (`lore check leaks` run by hand there)
 		return
 	}
-	client := false
+	client, why := false, ""
 	if res != nil {
 		s, err := res.Situation(ctx)
 		if err != nil || s == nil || s.ResolveErr != nil || s.Result.LinkUnknown {
 			return // cannot tell: keep what the last check knew
 		}
 		client = s.Result.Role == orgresolve.RoleClient
+		// devco D-706: client only by the fail-closed default (no repos:
+		// pattern or client link names it) says why and how to mark it own
+		why = UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.Remotes))
 	}
 	cur, _ := gitRun{dir: top, args: []string{"config", "--local", "--get", ClientRepoGitKey}}.output(ctx)
 	on := strings.TrimSpace(string(cur)) == clientRepoMarkOn
@@ -62,7 +65,7 @@ func markClientRepo(ctx context.Context, root string, res *OrgResolution) {
 		if _, err := (gitRun{dir: top, args: []string{"config", "--local", ClientRepoGitKey, clientRepoMarkOn}}).output(ctx); err == nil {
 			// no hidden magic: a key lore sets in a person's git config is
 			// named the first time (plain files sweep 3.2)
-			_, _ = fmt.Fprintln(os.Stderr, "lore: set "+ClientRepoGitKey+"="+clientRepoMarkOn+" in "+localGitConfigFile(ctx, top)+": this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset "+ClientRepoGitKey+"` removes it)")
+			_, _ = fmt.Fprintln(os.Stderr, "lore: set "+ClientRepoGitKey+"="+clientRepoMarkOn+" in "+localGitConfigFile(ctx, top)+": this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset "+ClientRepoGitKey+"` removes it)"+unlistedSuffix(why))
 		}
 	case !client && len(strings.TrimSpace(string(cur))) > 0:
 		if _, err := (gitRun{dir: top, args: []string{"config", "--local", "--unset-all", ClientRepoGitKey}}).output(ctx); err == nil {
@@ -81,4 +84,13 @@ func localGitConfigFile(ctx context.Context, top string) string {
 		return p
 	}
 	return filepath.Join(top, ".git", "config")
+}
+
+// unlistedSuffix is why ("" or UnlistedOwnStep) as a sentence appended to
+// a line that says "client repo"; "" when there is nothing to add.
+func unlistedSuffix(why string) string {
+	if why == "" {
+		return ""
+	}
+	return "; " + why
 }

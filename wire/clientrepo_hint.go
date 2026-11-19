@@ -53,7 +53,15 @@ func UnlistedOwnStep(c ClientRepo) string {
 	if c.Unlisted == "" || c.Remote == "" {
 		return ""
 	}
-	return "no own: pattern of " + c.Unlisted + " matches " + c.Remote + ", so lore treats it as a client repo (fail closed); if it is " + c.Unlisted + "'s own repo: lore org config set --org " + c.Unlisted + " --key own --add " + c.Remote + " --yes"
+	step := "no own: pattern of " + c.Unlisted + " matches this repo's remote " + c.Remote + ", so lore treats it as a client repo (fail closed); if it is " + c.Unlisted + "'s own repo: lore org config set --org " + c.Unlisted + " --key own --add " + c.Remote + " --yes"
+	if host, _, _ := strings.Cut(c.Remote, "/"); !strings.Contains(host, ".") {
+		// devco D-706: a server reached by its ssh name (host:/srv/git/x)
+		// has no forge host; the pattern names it the way this machine
+		// spells it, and a teammate who reaches it under another name
+		// needs that spelling too
+		step += " (" + host + " is this machine's name for the server; a teammate who reaches it under another name adds that spelling too)"
+	}
+	return step
 }
 
 // UnlistedClientRepo is ClientRepo for a checkout that resolves to role
@@ -65,16 +73,20 @@ func UnlistedClientRepo(org *orgconf.Org, links []orgresolve.Link, remotes []str
 	if org == nil || len(remotes) == 0 || orgresolve.ClientByMatch(org, links, remotes) {
 		return ClientRepo{}
 	}
-	// The own: line is a command for the team's shared lore-org.yaml: never
-	// name a host with no dot there, which is one person's ssh alias that no
-	// teammate's remote spells the same way (D-531: the alias of a repo is
-	// resolved to its host before this; one that is not stays unnamed).
+	// The own: line is a command for the team's shared lore-org.yaml: a
+	// remote on a forge host (a dot in it) is named first, the spelling
+	// every teammate shares (D-531: an ssh alias is resolved to its host
+	// before this). devco D-706: a repo whose only remote is a server
+	// reached by its ssh name (scp-style myhost:/srv/git/tools, or
+	// ssh://myhost/srv/git/tools; both normalise to myhost/srv/git/tools)
+	// was client with no word why and no way out; its remote is named too,
+	// with the caveat UnlistedOwnStep adds.
 	for _, r := range remotes {
 		if host, _, _ := strings.Cut(r, "/"); strings.Contains(host, ".") {
 			return ClientRepo{Unlisted: org.Name, Remote: r}
 		}
 	}
-	return ClientRepo{}
+	return ClientRepo{Unlisted: org.Name, Remote: remotes[0]}
 }
 
 // initCommandText is how a hint names lore init.
