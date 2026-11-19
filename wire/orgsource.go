@@ -318,6 +318,11 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 		return nil, nil
 	}
 	var out []DoctorFinding
+	for _, n := range orgcfg.NoAccessStores(a.opts.Home, cfg, nil) {
+		// D-726: a store this login cannot reach is skipped by every read;
+		// information with what to ask, nothing for lore to fix
+		out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorNote, Message: orgcfg.NoAccessNote(n)})
+	}
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
 		sg, ok := orgSuggestionLocal(ctx, a.opts.Home, cfg, o)

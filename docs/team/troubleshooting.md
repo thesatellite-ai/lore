@@ -139,8 +139,8 @@ A **link** tells lore that a store folder holds the agency's private notes for t
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants weekly demos'
-ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
-  hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
+ERROR: [E_LINK_UNKNOWN] cannot tell where this write belongs: org store agency, agency/org has no local copy and cannot be reached
+  hint: go online once (the store is then kept locally), or name the target: --to repo or --to <store>
 (exit 18)
 ```
 <!-- /example -->
