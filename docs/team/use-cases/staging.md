@@ -45,7 +45,7 @@ $ lore org use --entry agency-stag
 $ lore whoami
 org        agency-stag  (matched by: lore org use (this machine))
 identity   Alice Doe <human:alice@agency.example>   act_162d…9666  @alice  (from: org entry (config.yaml orgs[agency-stag].identity))
-repo       treated as a client repo  (guards on: no own: pattern of agency-stag matches github.com/client/website, so lore treats it as a client repo (fail closed); if it is agency-stag's own repo: lore org config set --org agency-stag --key own --add github.com/client/website --yes)
+repo       treated as a client repo  (guards on: no own: pattern of agency-stag matches this repo's remote github.com/client/website, so lore treats it as a client repo (fail closed); if it is agency-stag's own repo: lore org config set --org agency-stag --key own --add github.com/client/website --yes)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891

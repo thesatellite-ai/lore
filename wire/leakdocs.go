@@ -25,6 +25,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -145,7 +146,25 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	if moved {
 		return leakBlocked(leakWhereMove, fs, explain)
 	}
-	return leakBlocked(where, fs, explain)
+	return withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.Remotes)))
+}
+
+// withUnlistedHint adds why (UnlistedOwnStep) to a client repo's leak
+// refusal. devco D-706: a commit refused in a repo that is a client repo
+// only by the fail-closed default never said that it was, nor how an own
+// repo of the org stops being one.
+func withUnlistedHint(err error, why string) error {
+	var e *errs.Error
+	if why == "" || !errors.As(err, &e) {
+		return err
+	}
+	out := *e
+	if out.Hint == "" {
+		out.Hint = why
+	} else {
+		out.Hint += "; " + why
+	}
+	return &out
 }
 
 // leakWhereMove names a write that carries an internal row to the client
