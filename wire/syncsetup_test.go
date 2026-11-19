@@ -74,7 +74,7 @@ func TestWaitingPushReport(t *testing.T) {
 	if got := syncStoreLines(r, "")[0]; strings.Contains(got, "pushed") {
 		t.Errorf("nothing-sent line claims a push: %q", got)
 	}
-	if rep := orgPushReport("lore-x", opsstores.PushOut{}, nil); rep.Pushed {
+	if rep := orgPushReport("lore-x", opsstores.PushOut{}, storeNowPush{}, nil); rep.Pushed {
 		t.Errorf("orgPushReport of a push that sent 0 commits says pushed: %+v", rep)
 	}
 	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Offline: true})

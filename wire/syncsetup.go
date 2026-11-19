@@ -476,7 +476,7 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 // whose waiting commits it pushed (waitingOrgPushes), with the code a
 // failed or offline push exits with.
 func waitingPushReport(url string, p opsstores.Report) (opssync.StoreReport, errs.Code) {
-	r := opssync.StoreReport{Store: p.Store, URL: url, Sent: p.Sent, SentCommits: p.SentCommits, Offline: p.Offline}
+	r := opssync.StoreReport{Store: p.Store, URL: url, Sent: p.Sent, SentCommits: p.SentCommits, Received: p.Received, ReceivedCommits: p.ReceivedCommits, Offline: p.Offline}
 	switch {
 	case p.Offline:
 		r.Status = opssync.StoreStatusOffline
@@ -494,6 +494,9 @@ func waitingPushReport(url string, p opsstores.Report) (opssync.StoreReport, err
 		return r, ""
 	}
 	r.Status, r.Pushed = opssync.StoreStatusPushed, true
+	if r.Received > 0 || r.ReceivedCommits > 0 {
+		r.Status = opssync.StoreStatusBoth // the push merged a teammate's commits first (devco D-684)
+	}
 	return r, ""
 }
 

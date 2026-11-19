@@ -457,6 +457,41 @@ func TestStoryOOwnerShape(t *testing.T) {
 		noPush(before, "member reads from home")
 	})
 
+	// devco:D-684 (owner use pass 4 weak 2): the admin's unpushed store
+	// commits of mixed kinds while the member pushed 2, then `lore sync` in
+	// a repo outside every setup's folders that attaches no store (setup
+	// none): the waiting clone's push said "store acme: pushed (sent 4,
+	// received 0, …)" (rows, nothing received) with no push line
+	s.Step("admin/no-setup-sync-after-member-push", func() {
+		scratch := s.Seed(s.Remote("github.com/solo-dev/scratch"), func(dir string) { PlainRepo(t, dir) })
+		xc := ada.CloneTo(scratch, filepath.Join(ada.Home, "elsewhere", "scratch"))
+		clone := oStoreClone(ada, oNewOwner, "lore-team")
+		ada.LoreIn(pc, "sync").OK(t)
+		ada.Lore(ada.Home, "member", "add", "--email", "pat.one@example.test", "--name", "Pat One", "--setup", oSetup, "--yes").OK(t)
+		ada.Lore(ada.Home, "member", "add", "--email", "pat.two@example.test", "--name", "Pat Two", "--setup", oSetup, "--yes").OK(t)
+		ada.LoreIn(pc, "org", "config", "set", "--org", oOrg, "--key", "repos", "--add", "github.com/client-two/*", "--yes").OK(t)
+		moved := s.MoveRemote(t, team2, "acme-moved", true)
+		ada.Lore(ada.Home, "store", "set-url", "--name", oOrg, "--url", moved.SSHURL(), "--yes").OK(t)
+		ada.Lore(ada.Home, "store", "set-url", "--name", oOrg, "--url", team2.SSHURL(), "--yes").OK(t)
+		ada.LoreIn(wc, "memory", "add", "--body", "the web app's cdn purges on deploy", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		ada.LoreIn(wc, "policy", "set", "--key", "context.budget.internal", "--value", "22000", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		for _, body := range []string{"the member notes the release train", "the member keeps a runbook"} {
+			mo.LoreIn(mwc, "memory", "add", "--body", body, "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		}
+		mo.LoreIn(mwc, "sync").OK(t)
+
+		head := wqGit(t, clone, "rev-parse", "HEAD")
+		remoteBefore := wqGit(t, team2.Dir, "rev-parse", "main")
+		r := ada.Lore(xc.Dir, "sync").OK(t)
+		remoteAfter := wqGit(t, team2.Dir, "rev-parse", "main")
+		sent, received := wqCounts(t, r)
+		went := wctCount(t, team2.Dir, remoteBefore+".."+remoteAfter)
+		arrived := wctCount(t, clone, head+".."+remoteBefore)
+		oCheck(t, "D-684/no-setup-sent", sent == went && went > 0, "lore sync in a repo with no setup says sent %d, git rev-list on the store remote counts %d:\n%s", sent, went, r)
+		oCheck(t, "D-684/no-setup-received", received == arrived && arrived > 0, "lore sync in a repo with no setup says received %d, git counts %d commits the member pushed:\n%s", received, arrived, r)
+		oCheck(t, "D-684/no-setup-push-line", strings.Contains(r.Stderr, "lore: pushed store "+oOrg), "lore sync in a repo with no setup pushed the store with no push line:\n%s", r)
+	})
+
 	s.Step("admin/empty-store-moves", func() {
 		// the empty admins-only store moves too (D-541): the refusal names
 		// the store set-url was given, never the org's team store
