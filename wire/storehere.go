@@ -180,3 +180,19 @@ func personalFolderOf(home string) string {
 	}
 	return fileuri.LocalPath(p)
 }
+
+// storeCloneOrg is the org whose store the store checkout around dir is
+// ("" outside a store checkout, or for a store of no org entry): the org a
+// command run in the clone belongs to, so setup resolution (step 5) picks
+// that org's setup and identity there as in the org's code repos (devco
+// D-693).
+func storeCloneOrg(home, dir string) string {
+	sc, ok := storeHere(dir)
+	if !ok {
+		return ""
+	}
+	if !sc.isGit {
+		return orgOfURL(home, fileuri.URL(sc.top, ""))
+	}
+	return orgOfURL(home, gitbackend.OriginAt(sc.top))
+}

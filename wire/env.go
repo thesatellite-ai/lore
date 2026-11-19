@@ -54,7 +54,7 @@ func (a *App) createFrame(ctx context.Context, target store.Source, table row.Ta
 		return nil, "", err
 	}
 	if target == "" && a.opts.DefaultTarget != nil {
-		to, derr := a.opts.DefaultTarget(ctx, q)
+		to, derr := a.routedDefault(ctx, q)
 		if derr != nil {
 			return nil, "", derr
 		}
@@ -452,7 +452,11 @@ func (a *App) projectInAStore(ctx context.Context, eng *engine.Engine) (ids.ID[i
 
 // guard asks Options.GuardRepoWrite about a create in the repo store.
 func (a *App) guard(ctx context.Context, q WriteQuery, explicit bool) error {
-	if a.opts.GuardRepoWrite == nil {
+	if a.opts.GuardRepoWrite == nil || inStore(a.opts.RepoDir) {
+		// a store checkout's "repo store" is the store folder it runs in,
+		// no code repo: the repo guards (F14 routing, client leak guards)
+		// have nothing to guard there (devco D-693: once the clone resolved
+		// its store's org they refused every plain write in it)
 		return nil
 	}
 	return a.opts.GuardRepoWrite(ctx, q, explicit)

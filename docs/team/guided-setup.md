@@ -268,7 +268,7 @@ For every command, lore picks the active setup with the first rule that answers:
 | 2 | `LORE_SETUP=<name>` | this shell; `lore setup use --name <name>` prints the line to paste |
 | 3 | this repo's pin | `lore setup use --name <name> --here`, stored for this machine only |
 | 4 | folder match | the git top folder (else the current folder) against every setup's `folders`; the most specific glob wins |
-| 5 | org match | the org this repo resolves to, when exactly one setup has that org |
+| 5 | org match | the org this repo resolves to, when exactly one setup has that org; inside a clone of an org's store (`~/.lore/stores/<owner>/<store>`, its top or a folder) the org whose store it is, so the org's identity writes there and an admin of the org passes its admin checks |
 | 6 | the default setup | `default: true` (one setup at most) |
 | 7 | none | lore behaves as it did before setups existed |
 
