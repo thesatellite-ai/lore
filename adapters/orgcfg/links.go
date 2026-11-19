@@ -299,16 +299,27 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		if berr := ensureClone(ctx, dir, sc.URL, own); berr != nil {
 			return nil, entryUnknown, "", berr
 		}
+		if _, _, refused := noAccessAt(dir); refused && !g.Always {
+			continue // D-726: refused at the last fetch; skipped until the next lore sync
+		}
 		last := lastFetch(dir)
 		offline := false
+		var ferr error
 		if res, done := fetched[dir]; done {
-			offline = res != nil
+			offline, ferr = res != nil, res
 		} else if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
-			if ferr := fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil {
+			if ferr = fetchLocked(ctx, g.Route, dir, g.now()); ferr != nil {
 				offline = true
 			} else {
 				last = g.now()
 			}
+		}
+		if k, refused := noAccessFault(ferr); refused {
+			// D-726: the store refused this login (or is gone): not an
+			// outage, so it never makes the entry unknown; it is skipped
+			// for this person and named once by whoami and doctor
+			markNoAccess(dir, k, g.now())
+			continue
 		}
 		branch := sc.EffectiveBranch()
 		if branch != g.DefaultBranch(ctx, norm) && !allowStaging {
@@ -388,6 +399,9 @@ func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Durati
 			continue
 		}
 		seen[dir] = true
+		if _, _, refused := noAccessAt(dir); refused && !g.Always {
+			continue // D-726: skipped until the next lore sync
+		}
 		last := lastFetch(dir)
 		if g.Always || last.IsZero() || g.now().Sub(last) >= ttl {
 			jobs = append(jobs, job{dir: dir, url: sc.URL, norm: norm})

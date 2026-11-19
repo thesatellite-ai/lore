@@ -104,6 +104,7 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 	lines := whoamiLines(s, id, actor, idErr, in.Explain, red, agent, m, personal)
 	lines = guardsOffRepoLine(ctx, s, lines)            // whoami_guards.go: never 'guards on' without the hook (J-11)
 	lines = withReadsRows(lines, w.whoamiReads(ctx, s)) // whoami_reads.go: the <org>/<folder> this folder reads (D-596)
+	lines = withNoAccessRows(w.opts.Home, s, lines)     // whoami_noaccess.go: org stores this login cannot reach, skipped (D-726)
 	if fail == nil {
 		if l := w.identityContact(ctx); l != "" {
 			d.IdentityContact = red.str(strings.TrimPrefix(l, identityContactPrefix))
