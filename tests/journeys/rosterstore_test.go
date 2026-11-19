@@ -61,9 +61,11 @@ func TestJourneyRosterReadsTakeStore(t *testing.T) {
 			lee.Lore(d, "member", "list", "--store", tlOrg).OK(t).Says(t, tlLee.Email, "@"+jrsTeam)
 			lee.Lore(d, "member", "show", "--who", tlLee.Email, "--store", tlOrg).OK(t).Says(t, tlLee.Name)
 			lee.Lore(d, "actor", "list", "--store", tlOrg).OK(t).Says(t, tlLee.Name)
-			// D-499: no flag outside every store and repo names both ways in
+			// D-499: no flag outside every store and repo names both ways in;
+			// devco:D-692: with this machine's one org setup it runs on it
+			// and says so (two setups keep the refusal: story O)
 			for _, args := range [][]string{{"team", "list"}, {"member", "list"}} {
-				lee.Lore(d, args...).Fails(t, 19, "E_NOT_A_STORE", "--store <org>", "--setup <setup>", tlOrg, tlLeadSetup).Never(t, "git init")
+				lee.Lore(d, args...).OK(t).Says(t, "setup "+tlLeadSetup+" (the only org setup on this machine)").Never(t, "git init")
 				lee.Lore(d, append(args, "--setup", tlLeadSetup)...).OK(t).Says(t, "@"+jrsTeam)
 			}
 			lee.Lore(d, "team", "list", "--store", "nosuchorg").Fails(t, 27, "E_NOT_FOUND", "names no org", "--store <org>", tlOrg)

@@ -193,11 +193,23 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 			t.Errorf("lore %v --json outside a repo: want the E_NOT_A_STORE object (exit 19, class guard) and an empty stderr: %s", args, jr)
 		}
 	}
+	// devco:D-683: task next is no repo-only read (--store <org> and
+	// --setup <setup> rank an org store's queue from anywhere): outside a
+	// repo it runs on the machine's only org setup and says so, or refuses
+	// E_UNSUPPORTED naming both ways, never "--store does not apply"
+	if r := a.Lore(dir, "task", "next"); r.Code == 0 {
+		if !strings.Contains(r.Stderr, "(the only org setup on this machine)") {
+			t.Errorf("lore task next outside a repo answered without naming the setup it ranked: %s", r)
+		}
+	} else if r.Code != 23 || !strings.Contains(r.Stderr, "[E_UNSUPPORTED]") || !strings.Contains(r.Stderr, "lore task next --store <org>") ||
+		!strings.Contains(r.Stderr, "lore task next --setup <setup>") || strings.Contains(r.Stderr, "does not apply") {
+		t.Errorf("lore task next outside a repo: want exit 23 naming --store and --setup, never --store not applying: %s", r)
+	}
 	// Repo-only reads (owner 2026-11-17, devco D-508/D-509): missions, the
-	// inbox, task next and agent sessions live in each code repo, so outside
-	// one they refuse E_UNSUPPORTED (exit 23) saying so and to cd into the
-	// repo, --store not applying; never the store reads' E_NOT_A_STORE.
-	for _, args := range [][]string{{"task", "next"}, {"inbox"}, {"session", "list"}} { // run:tests:q-session-outside
+	// inbox and agent sessions live in each code repo, so outside one they
+	// refuse E_UNSUPPORTED (exit 23) saying so and to cd into the repo,
+	// --store not applying; never the store reads' E_NOT_A_STORE.
+	for _, args := range [][]string{{"inbox"}, {"session", "list"}} { // run:tests:q-session-outside
 		r := a.Lore(dir, args...)
 		if r.Code != 23 || r.Stdout != "" || !strings.Contains(r.Stderr, "[E_UNSUPPORTED]") || !strings.Contains(r.Stderr, "in each code repo") ||
 			!strings.Contains(r.Stderr, "cd into the code repo") || !strings.Contains(r.Stderr, "--store does not apply") {

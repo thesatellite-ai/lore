@@ -67,7 +67,10 @@ func TestJourneyRepoOnlyWritesSayWhereTheyWork(t *testing.T) {
 		lee.Lore(storeDir, "directive", "install", "--yes").Fails(t, 23, "E_UNSUPPORTED", "is a lore store clone, not a code repo", "cd into the code repo", "--store does not apply").Never(t, "lore isn't set up")
 	})
 
-	w.Step("day1/a-roster-change-from-home-names-both", func() {
-		lee.Lore(lee.Home, "team", "add", "--handle", "matrix_team", "--yes").Fails(t, 19, "E_NOT_A_STORE", "no roster to change", "--setup <setup>", "--store <org>").Never(t, "git init")
+	// devco:D-692: the home folder of a machine with one org setup runs a
+	// roster change on it and says so (with two, the refusal names
+	// --setup and --store: story O, D-692/home-two-setups)
+	w.Step("day1/a-roster-change-from-home-uses-the-one-setup", func() {
+		lee.Lore(lee.Home, "team", "add", "--handle", "matrix_team", "--yes").OK(t).Says(t, "setup "+tlLeadSetup+" (the only org setup on this machine)", "added on the roster").Never(t, "git init")
 	})
 }

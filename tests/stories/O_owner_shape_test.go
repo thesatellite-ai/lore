@@ -301,6 +301,42 @@ func TestStoryOOwnerShape(t *testing.T) {
 
 	// The store moves to another GitHub org (a transfer), then set-url.
 	var team2, ops2 *teamharness.Remote
+	// devco:D-683: task next over the whole setup, the whole org store and
+	// at the store clone's top attached the company folder twice when a
+	// folder sorted before it ("[E_CONFIG_INVALID] store acme/org attached
+	// twice", no hint); the org's admins-only store's folders rank too.
+	// With two org setups on the machine, plain task next and member add
+	// from home refuse naming --store and --setup (devco:D-692: nothing is
+	// guessed between two setups), and the printed ways work there.
+	s.Step("admin/task-next-every-placement", func() {
+		ada.LoreIn(pc, "store", "folder", "add", "team", "api").OK(t)
+		ada.LoreIn(pc, "task", "add", "--title", "api task before org", "--to", oOrg+"/api", "--yes").OK(t)
+		ada.LoreIn(pc, "task", "add", "--title", "company task", "--to", oOrg+"/org", "--yes").OK(t)
+		before := refs()
+		top := oStoreClone(ada, oOwner, "lore-team")
+		for _, c := range []struct {
+			key, dir string
+			args     []string
+		}{
+			{"home-setup", ada.Home, []string{"--setup", oSetup}},
+			{"home-store-org", ada.Home, []string{"--store", oOrg}},
+			{"home-store-folder", ada.Home, []string{"--store", oOrg + "/api"}},
+			{"store-top", top, nil},
+			{"store-top-setup", top, []string{"--setup", oSetup}},
+			{"ops-store", oStoreClone(ada, oOwner, "lore-ops"), nil},
+		} {
+			r := ada.Lore(c.dir, append([]string{"task", "next"}, c.args...)...)
+			oCheck(t, "D-683/"+c.key, r.Code == 0 && !strings.Contains(r.Out(), "attached twice"), "task next %v in %s: want the ranked store tasks, got:\n%s", c.args, c.dir, r)
+		}
+		r := ada.Lore(ada.Home, "task", "next", "--setup", oSetup)
+		oCheck(t, "D-683/ranks-every-folder", strings.Contains(r.Out(), "api task before org") || strings.Contains(r.Out(), "company task") || strings.Contains(r.Out(), "owner-shape task"), "task next --setup %s names no task of the org's folders:\n%s", oSetup, r)
+		r = ada.Lore(ada.Home, "task", "next")
+		oCheck(t, "D-683/home-plain", r.Code != 0 && strings.Contains(r.Out(), "lore task next --store <org>") && strings.Contains(r.Out(), "--setup <setup>") && !strings.Contains(r.Out(), "does not apply"), "plain task next from home with two org setups: want the refusal naming --store and --setup, got:\n%s", r)
+		r = ada.Lore(ada.Home, "member", "add", "--email", "pat@acme.example", "--name", "Pat", "--yes")
+		oCheck(t, "D-692/home-two-setups", r.Code != 0 && strings.Contains(r.Out(), "--setup <setup>") && strings.Contains(r.Out(), oSetup) && strings.Contains(r.Out(), oKSetup), "member add from home with two org setups: want the refusal naming both setups, got:\n%s", r)
+		noPush(before, "task next reads from every placement")
+	})
+
 	s.Step("admin/store-moves-org", func() {
 		team2 = s.MoveRemote(t, team, oNewOwner, false)
 		ops2 = s.MoveRemote(t, ops, oNewOwner, false)
@@ -402,6 +438,23 @@ func TestStoryOOwnerShape(t *testing.T) {
 		for _, a := range team2.Authors("main") {
 			oCheck(t, "member-author", !strings.Contains(a, oMemPersonal.Email), "a commit on the org store is authored with the member's personal identity: %q", a)
 		}
+	})
+
+	// devco:D-683, D-692: the member's machine has one org setup, so a
+	// plain task next and a roster read from the home folder run on it and
+	// say so; before, task next said "--store does not apply" while
+	// `task next --store <org>` worked
+	s.Step("member/home-routes-to-the-one-setup", func() {
+		before := refs()
+		r := mo.Lore(mo.Home, "task", "next", "--setup", oMSetup)
+		oCheck(t, "D-683/member-home-setup", r.Code == 0, "the member's task next --setup %s from home: want the queue, got:\n%s", oMSetup, r)
+		r = mo.Lore(mo.Home, "task", "next", "--store", oOrg)
+		oCheck(t, "D-683/member-home-store", r.Code == 0, "the member's task next --store %s from home: want the queue, got:\n%s", oOrg, r)
+		r = mo.Lore(mo.Home, "task", "next")
+		oCheck(t, "D-683/member-home-plain", r.Code == 0 && strings.Contains(r.Out(), "setup "+oMSetup+" (the only org setup on this machine)") && !strings.Contains(r.Out(), "does not apply"), "the member's plain task next from home: want the queue of setup %s, got:\n%s", oMSetup, r)
+		r = mo.Lore(mo.Home, "team", "list")
+		oCheck(t, "D-692/member-home-roster", r.Code == 0 && strings.Contains(r.Out(), "setup "+oMSetup), "the member's team list from home: want the roster of setup %s, got:\n%s", oMSetup, r)
+		noPush(before, "member reads from home")
 	})
 
 	s.Step("admin/empty-store-moves", func() {

@@ -39,6 +39,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -99,6 +100,11 @@ type OrgResolution struct {
 	// (FollowConfig); stamp is that file's size and time at that gather.
 	follow bool
 	stamp  string
+	// setup is the --setup choice (op.SetupOf) the kept answer was
+	// gathered for: a call naming another gathers again (devco:D-683: a
+	// hook resolved the folder's org before the run put the only org
+	// setup in ctx, and task next from home then ranked no store).
+	setup string
 }
 
 // now is r.Now, or the wall clock.
@@ -163,6 +169,9 @@ func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error
 			r.reloadLinkConfig()
 		}
 	}
+	if r.done && op.SetupOf(ctx) != r.setup {
+		r.done = false // gathered for another --setup choice
+	}
 	if !r.done && uncachedSituation(ctx) {
 		sit, err := r.gatherWithSetup(ctx)
 		return sit, maskOrgErr(err)
@@ -172,7 +181,7 @@ func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error
 		// seen as a change on the next call
 		r.sit, r.err = r.gatherWithSetup(ctx)
 		r.err = maskOrgErr(r.err)
-		r.done, r.stamp = true, stamp
+		r.done, r.stamp, r.setup = true, stamp, op.SetupOf(ctx)
 	}
 	return r.sit, r.err
 }
