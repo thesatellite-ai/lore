@@ -807,8 +807,9 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil {
 			a.st.unfinished = true
-			a.st.eng.SetRedactHook(a.redactTask) // D21: write-time store-then-rotate task (wire/secretmgrs.go)
-			a.notePlaces(a.st)                   // servestale.go
+			a.st.eng.SetRedactHook(a.redactTask)                    // D21: write-time store-then-rotate task (wire/secretmgrs.go)
+			a.st.eng.SetWriteGuard(profilestore.WriteGuard{Env: a}) // D-694: the role rule of every row write (ops/profilestore/writeguard.go)
+			a.notePlaces(a.st)                                      // servestale.go
 		}
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)

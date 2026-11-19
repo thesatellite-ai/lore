@@ -146,6 +146,8 @@ type IDSource interface {
 // Engine runs operations and their reads and writes. Safe for concurrent
 // use: it holds no mutable state of its own beyond the clock, which locks.
 type Engine struct {
+	// guard is the role check every write passes (writeguard.go).
+	guard WriteGuard
 	// open is every stage (Staging) this engine writes into and that is
 	// not committed or discarded yet, so a lookup that has no context
 	// (ActorAs: agentOwner) still sees an actor row the running write

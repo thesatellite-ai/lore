@@ -153,6 +153,8 @@ lore: wrote ~/.lore/stores/other/notes/_store/actors/act_b4f4…a5b0.json (store
 lore: wrote ~/.lore/stores/other/notes/_store/memories/mem_28f8…03df.json (store freelance)
 ✓ mem_28f8…03df [freelance]
   scope: [project]
+warning: the audit record of act_b4f4…a5b0 is kept with the row and will be added to the audit log by a later write: [E_INTERNAL] wire: the app is closed (W_AUDIT_DEFERRED)
+warning: the audit record of mem_28f8…03df is kept with the row and will be added to the audit log by a later write: [E_INTERNAL] wire: the app is closed (W_AUDIT_DEFERRED)
 ```
 <!-- /example -->
 
