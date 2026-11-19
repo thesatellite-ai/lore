@@ -25,7 +25,12 @@ func lockOverlapped() *windows.Overlapped {
 }
 
 // tryLock opens path and takes an exclusive, non-blocking LockFileEx lock.
-func tryLock(path string) (*fileLock, error) {
+func tryLock(path string) (*fileLock, error) { return tryLockAs(path, true) }
+
+// tryLockAs is tryLock; holder false takes and releases the lock without
+// writing this process's holder line (the probe, LockHolder: a dry run's
+// health check rewrote the lock file, devco:D-708).
+func tryLockAs(path string, holder bool) (*fileLock, error) {
 	if err := refuseLinkedLock(path); err != nil {
 		return nil, err
 	}
@@ -45,6 +50,9 @@ func tryLock(path string) (*fileLock, error) {
 	l := &fileLock{file: f, unlock: func() error {
 		return windows.UnlockFileEx(h, 0, lockLenLow, lockLenHigh, lockOverlapped())
 	}}
+	if !holder {
+		return l, nil
+	}
 	if err := writeHolder(f); err != nil {
 		return nil, errors.Join(err, l.release())
 	}

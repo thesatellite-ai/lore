@@ -40,7 +40,7 @@ func refresh(t *testing.T, dir, own string) PinRefresh {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := refreshSyncActionPin(context.Background(), top, dir, own)
+	r, err := refreshSyncActionPin(context.Background(), top, dir, own, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,5 +322,28 @@ func TestParseSyncActionRejects(t *testing.T) {
 		if _, err := parseSyncAction(bad); err == nil {
 			t.Fatalf("%s: must be rejected", name)
 		}
+	}
+}
+
+// devco:D-708: the dry-run form answers what a real run would write (path,
+// from, to) and leaves the file byte for byte as it was; the real run then
+// makes exactly that move.
+func TestPreviewPinWritesNothing(t *testing.T) {
+	t.Parallel()
+	dir := gitInitRepo(t)
+	file := installAt(t, dir, syncActionOptions{})
+	before := readFile(t, file)
+	p, err := PreviewPin(context.Background(), dir, "0.1.12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Path != file || p.From != "v0.1.11" || p.To != "v0.1.12" || p.Note != "" {
+		t.Fatalf("preview = %+v", p)
+	}
+	if readFile(t, file) != before {
+		t.Fatal("a dry run rewrote the workflow")
+	}
+	if r := refresh(t, dir, "0.1.12"); r != p {
+		t.Fatalf("real run = %+v, preview said %+v", r, p)
 	}
 }

@@ -13,6 +13,15 @@ package stories
 //     pre-commit and commit-msg hooks, goes through in both: _meta.json's
 //     migrated_by names the person by name, never their roster email (the
 //     client repo's leak check refused that very commit) nor actor id.
+//   - devco:D-708: the client repo carries the lore-sync-merge workflow an
+//     older lore pinned; `lore migrate run --dry-run` says the workflow
+//     update would be written and leaves the repo tree, .git/config, its
+//     hooks and the lore home exactly as they were (the dry run rewrote the
+//     workflow while printing "Nothing written").
+//   - devco:D-705 follow-up: a _meta.json lore 0.1.18 already wrote with
+//     migrated_by "Name <email>": the commit lore's hook refuses names
+//     `lore migrate run`, which keeps the name only, and the commit after
+//     it goes through the same hooks.
 //   - devco:D-707: the run also moves the org's lore-org.yaml defaults into
 //     a policy row of the org store; it lists the store commits it made
 //     (store, commit, what) and says `lore sync` sends them, and the org
@@ -42,6 +51,11 @@ const (
 	mrOrgDefaults = "defaults:\n  client_repos:\n    memory: repo\n    decision: " + mrOrg + "\n"
 	// mrClientDir is the org store folder the shop is linked to as a client.
 	mrClientDir = "client_shop"
+	// mrPinVersion is the release the test build pins the workflow to
+	// (LORE_TEST_PIN_VERSION: a test binary is a development build).
+	mrPinVersion = "0.1.19"
+	// mrWorkflow is the lore-sync-merge workflow file of a repo.
+	mrWorkflow = ".github/workflows/lore-sync-merge.yml"
 )
 
 var mrAdmin = journeys.Person{Name: "Cora Admin", Email: "cora@example.test", Login: "cora-gh"}
@@ -49,6 +63,9 @@ var mrAdmin = journeys.Person{Name: "Cora Admin", Email: "cora@example.test", Lo
 // mrStoreCommitLine is the run's line for one store commit it made: the
 // store, the short commit and what it holds.
 var mrStoreCommitLine = regexp.MustCompile(`store commit [0-9a-f]{7} in ` + mrOrg + `[^\n]*: lore: migrate org defaults to policies`)
+
+// mrMigratedAt is _meta.json's migrated_at line.
+var mrMigratedAt = regexp.MustCompile(`"migrated_at": "[^"]*"`)
 
 // mrHooks installs lore's pre-commit and commit-msg entry points in c, as
 // lore 0.1.17 left them in every clone it worked in: the same hook
@@ -106,6 +123,11 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		mrOrgFileWithDefaults(t, s, store)
 		m.Lore(platform.Dir, "sync").OK(t)
 		sc, tc = clone(shop, "legacy-shop"), clone(tools, "tools")
+		// D-708: the workflow as an older lore installed it (auto pin: each
+		// newer lore moves it to its own release)
+		m.LoreIn(sc, "sync", "install-action").OK(t)
+		sc.Git("add", mrWorkflow)
+		sc.Git("commit", "-q", "-m", "lore-sync-merge workflow")
 		mrHooks(t, sc)
 		mrHooks(t, tc)
 		// the shop is the client's code: linked as a client repo of the org
@@ -118,7 +140,17 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		// (fail closed); the tools repo is the org's own
 		m.LoreIn(sc, "whoami").OK(t).Says(t, "client repo")
 		m.LoreIn(tc, "whoami").OK(t).Says(t, "own repo")
-		m.LoreIn(sc, "migrate", "run", "--dry-run").OK(t).Says(t, "org_defaults_to_policy")
+		// D-708: a dry run writes nothing, ever: the workflow update a real
+		// run makes is in its plan, and nothing of the repo or home moved
+		m.SetEnv("LORE_TEST_PIN_VERSION", mrPinVersion)
+		roots := []string{sc.Dir, m.LorePath()}
+		before := drySnap(t, roots...)
+		dry := m.LoreIn(sc, "migrate", "run", "--dry-run").OK(t)
+		dry.Says(t, "org_defaults_to_policy", "Nothing written (dry run)",
+			"would update "+mrWorkflow+" to lore v"+mrPinVersion, "not written (dry run)")
+		if d := dryDiff(before, drySnap(t, roots...)); len(d) > 0 {
+			t.Errorf("lore migrate run --dry-run changed files:\n%s\n%s", strings.Join(d, "\n"), dry)
+		}
 		storeBefore = s.RefsOf(store)
 	})
 
@@ -159,6 +191,41 @@ func TestStoryMRMigrateRealRepos(t *testing.T) {
 		r := tc.TryGit("commit", "-q", "-m", "lore: migrate rows to format 2")
 		if r.Code != 0 || tc.Head() == before {
 			t.Fatalf("lore's own hooks refused the migration commit in an own repo: %s", r)
+		}
+	})
+
+	s.Step("day1/0118-migrated-by-email-left-behind", func() {
+		// D-705 follow-up: lore 0.1.18's migrate wrote "Name <email>" and the
+		// client repo's hook refused the commit, leaving the file uncommitted
+		p := filepath.Join(sc.Dir, ".lore", "data", "_meta.json")
+		meta, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		left := strings.Replace(string(meta), `"migrated_by": "`+mrAdmin.Name+`"`, `"migrated_by": "`+mrAdmin.Name+` <`+mrAdmin.Email+`>"`, 1)
+		if left == string(meta) {
+			t.Fatalf("no migrated_by to age into lore 0.1.18's shape:\n%s", meta)
+		}
+		// 0.1.18's run had its own time: the file differs from the commit
+		// beyond the email, as the uncommitted 0.1.18 migration did
+		left = mrMigratedAt.ReplaceAllString(left, `"migrated_at": "2026-11-19T09:00:00Z"`)
+		writeFile(t, p, left)
+		before := sc.Head()
+		sc.Git("add", ".lore/data")
+		r := sc.TryGit("commit", "-q", "-m", "lore: migrate rows to format 2")
+		if r.Code == 0 || sc.Head() != before || !strings.Contains(r.Stdout+r.Stderr, "run `lore migrate run`, which keeps the name only") {
+			t.Fatalf("the hook's refusal of 0.1.18's _meta.json does not name lore migrate run: %s", r)
+		}
+		mr := m.LoreIn(sc, "migrate", "run").OK(t)
+		mr.Says(t, "migrated_by names an email", "now keeps the name only ("+mrAdmin.Name+")")
+		s.NamedFlags(t, mr)
+		if b, rerr := os.ReadFile(p); rerr != nil || strings.Contains(string(b), "@") {
+			t.Fatalf("_meta.json still names the email (%v):\n%s", rerr, b)
+		}
+		sc.Git("add", ".lore/data")
+		r = sc.TryGit("commit", "-q", "-m", "lore: record who migrated by name")
+		if r.Code != 0 || sc.Head() == before {
+			t.Fatalf("lore's own hooks refused the commit after lore migrate run: %s", r)
 		}
 	})
 

@@ -45,7 +45,7 @@ func (r *Root) LockHolder() (LockState, error) {
 		return st, err
 	}
 	st.PID, st.Since = parseHolder(string(raw))
-	l, err := tryLock(r.lockPath)
+	l, err := tryLockAs(r.lockPath, false) // a probe writes no holder line: it only reads (D-708)
 	if errors.Is(err, errLockBusy) {
 		st.Held = true
 		return st, nil

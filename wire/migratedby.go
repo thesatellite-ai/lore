@@ -20,8 +20,10 @@ package wire
 // wrote with "Name <email>" still reads and is shown as written.
 
 import (
+	"context"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
 )
 
@@ -40,4 +42,69 @@ func migratedBy(who identity.Resolved) (by, via string) {
 		}
 	}
 	return by, via
+}
+
+// migratedByName is the name a recorded migrated_by keeps: the value as it
+// is when it holds no address; for lore 0.1.18's "Name <email>" (or a bare
+// address) the name before the address, "" when there is none. hadEmail
+// reports that the value named an address.
+func migratedByName(v string) (name string, hadEmail bool) {
+	v = strings.TrimSpace(v)
+	if !strings.Contains(v, "@") {
+		return v, false
+	}
+	if i := strings.Index(v, "<"); i >= 0 {
+		name = strings.TrimSpace(v[:i])
+	}
+	if strings.Contains(name, "@") {
+		name = ""
+	}
+	return name, true
+}
+
+// migrateMigratedByEmail is the migrate run step that takes the email out
+// of a migrated_by lore 0.1.18 already wrote (devco:D-705 follow-up).
+// 0.1.18's migrate recorded "Name <email>" and, in a client repo, lore's
+// own pre-commit refused the commit, so the file was left uncommitted; a
+// second run found every row current and said "Nothing to migrate",
+// keeping the email. This step rewrites the value to the name only (the
+// key is left out when no name remains), says so once with the commit to
+// make, and under --dry-run only says what it would write.
+func (a *App) migrateMigratedByEmail(ctx context.Context, dryRun bool) ([]string, error) {
+	top, err := a.repoTop(ctx)
+	if err != nil || top == "" || !loreFolderAt(top) {
+		return nil, nil //nolint:nilerr // no repo with lore data here: no _meta.json to look at
+	}
+	line, err := fixMigratedByEmail(top, dryRun)
+	if err != nil || line == "" {
+		return nil, err
+	}
+	return []string{line}, nil
+}
+
+// fixMigratedByEmail is migrateMigratedByEmail on the checkout at top: the
+// step line ("" when migrated_by names no address, or the project is not
+// recorded in the current format: the run that raises it writes the name
+// only anyway). Every other key of _meta.json is kept.
+func fixMigratedByEmail(top string, dryRun bool) (string, error) {
+	pf, err := rowfs.ReadProjectFormat(top)
+	if err != nil || !pf.Recorded || pf.Format < rowfs.ProjectFormatCurrent {
+		return "", nil //nolint:nilerr // an unreadable _meta.json is the format step's report, not this one's
+	}
+	name, had := migratedByName(pf.MigratedBy)
+	if !had {
+		return "", nil
+	}
+	keep := "the name only (" + name + ")"
+	if name == "" {
+		keep = "no migrated_by (no name to keep)"
+	}
+	const why = ": migrated_by names an email (lore 0.1.18 wrote \"Name <email>\", which lore's leak check refuses in a client repo's commit); "
+	if dryRun {
+		return rowfs.RepoMetaPath + why + "would keep " + keep + ", not written (dry run)", nil
+	}
+	if _, err := rowfs.WriteProjectFormat(top, pf.Format, rowfs.ProjectMigration{By: name, Via: pf.MigratedVia, At: pf.MigratedAt}); err != nil {
+		return "", err
+	}
+	return rowfs.RepoMetaPath + why + "now keeps " + keep, nil
 }

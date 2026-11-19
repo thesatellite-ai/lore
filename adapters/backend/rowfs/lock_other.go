@@ -9,3 +9,6 @@ import "github.com/thesatellite-ai/lore/model/errs"
 func tryLock(string) (*fileLock, error) {
 	return nil, errs.New(errs.Unsupported, "rowfs: no file lock on this platform")
 }
+
+// tryLockAs is tryLock (no OS lock here either way).
+func tryLockAs(path string, _ bool) (*fileLock, error) { return tryLock(path) }

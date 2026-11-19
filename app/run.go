@@ -224,7 +224,7 @@ func run(ctx context.Context, args []string) int {
 	hooks = append(hooks, readOnlyHomeHook(home))          // guard.go: a write in a read-only lore home is refused up front
 	// E-FATES-5: after an upgrade, a writing command or `lore sync` moves an
 	// auto-pinned lore-sync-merge workflow to this release (v0.1.17 notice).
-	hooks = append(hooks, hosthooks.PinRefreshHook(wd, version, os.Stderr))
+	hooks = append(hooks, hosthooks.PinRefreshHook(wd, pinVersion(version), os.Stderr)) // pinversion_*.go: a test seam in loretest builds only
 	// F9: the lazy done -> merged check before task list / next, inbox and
 	// mission status, inside the live hook (mergedcheck.go).
 	hooks = append(hooks, mergedCheckHook(func(ctx context.Context) { app.MergedCheck(ctx, os.Stderr) }))

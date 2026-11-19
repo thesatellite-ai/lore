@@ -152,7 +152,11 @@ func (a *App) MigrateRepoSettings(ctx context.Context, dryRun bool) (opsmigrate.
 	}
 	// branch files only (--offline): the repo's actor copies are among them
 	proj, err := a.migrateActorProjection(ctx, dryRun)
-	return addSettings(out, proj), err
+	if err != nil {
+		return opsmigrate.Settings{}, err
+	}
+	who, err := a.migrateMigratedByEmail(ctx, dryRun) // devco:D-705: 0.1.18's "Name <email>" left behind
+	return addSettings(addSettings(out, proj), opsmigrate.Settings{Steps: who}), err
 }
 
 // addSettings is s followed by more: the lines, rows and named rows of
@@ -313,7 +317,13 @@ func (a *App) migrateSettings(ctx context.Context, dryRun bool) (opsmigrate.Sett
 	if err != nil {
 		return opsmigrate.Settings{}, err
 	}
-	return addSettings(out, projOut), nil
+	// devco:D-705: a migrated_by lore 0.1.18 wrote as "Name <email>" (left
+	// uncommitted after a client repo's hook refused it) keeps the name only
+	who, err := a.migrateMigratedByEmail(ctx, dryRun)
+	if err != nil {
+		return opsmigrate.Settings{}, err
+	}
+	return addSettings(addSettings(out, projOut), opsmigrate.Settings{Steps: who}), nil
 }
 
 // StepPIIPatterns names the pii_patterns step (3.3, SETTINGS ARE DATA).

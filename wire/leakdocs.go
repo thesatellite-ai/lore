@@ -230,6 +230,9 @@ func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 		if f.Detail == leakcheck.DetailOtherProject {
 			h = otherProjectFix // two project rows: re-point, never move or delete the row (b-flow3)
 		}
+		if metaEmailHit(f) {
+			h = metaEmailFix // lore 0.1.18's migrated_by: migrate run rewrites it (devco:D-705)
+		}
 		if !seen[h] {
 			seen[h] = true
 			hints = append(hints, h)
@@ -277,6 +280,20 @@ func leakFix(where, path string) string {
 		return fmt.Sprintf("Not moved: %s carries text of an internal note named above, which stays internal. Remove that part from %s, then move it again; nothing written", id, id)
 	}
 	return "move the row to the org (`lore move --id <id> --to <org>`) or delete it; the rows stay on the live ref until then"
+}
+
+// metaEmailFix is the fix of a roster email in lore's own _meta.json: lore
+// 0.1.18's migrate recorded migrated_by as "Name <email>", and this
+// release's migrate run keeps the name only (wire/migratedby.go
+// migrateMigratedByEmail). "Remove the internal text" sent the person to
+// hand-edit a file lore writes (devco:D-705 follow-up).
+const metaEmailFix = rowfs.RepoMetaPath + " names a person's email in migrated_by (lore 0.1.18 wrote it there): run `lore migrate run`, which keeps the name only, then commit again"
+
+// metaEmailHit reports whether f is a roster email found in a project's
+// .lore/data/_meta.json (any folder of a monorepo).
+func metaEmailHit(f leakcheck.Finding) bool {
+	return strings.HasPrefix(f.Detail, leakcheck.DetailRosterEmail) &&
+		(f.Path == rowfs.RepoMetaPath || strings.HasSuffix(f.Path, "/"+rowfs.RepoMetaPath))
 }
 
 // otherProjectFix is the fix of a "row of another project" finding: the

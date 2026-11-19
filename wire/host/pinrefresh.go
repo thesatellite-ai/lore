@@ -7,6 +7,9 @@ package host
 //
 //	lore sync: updated .github/workflows/lore-sync-merge.yml to lore v0.1.19 (was v0.1.18) — commit it
 //
+//	a dry run (Run.DryRun) previews instead: "would update … (was …);
+//	not written (dry run)" and the file stays as it was (devco:D-708)
+//
 //	operation succeeded ─▶ CLI run, not --read-only, writes rows or is
 //	   `lore sync`, LORE_SYNC / LORE_SYNC_GIT not "0" ─▶ RefreshPin(project)
 //	   ─▶ moved: notice (quiet under LORE_SYNC_QUIET=1) · left alone with a
@@ -53,7 +56,7 @@ func PinRefreshHook(workDir, version string, w io.Writer) Hook {
 		if err != nil || !NeedsPinRefresh(run) {
 			return res, err
 		}
-		once.Do(func() { refreshPin(ctx, workDir, version, w) })
+		once.Do(func() { refreshPin(ctx, workDir, version, run.DryRun, w) })
 		return res, err
 	}}
 }
@@ -78,17 +81,28 @@ func NeedsPinRefresh(run *Run) bool {
 
 // refreshPin runs reposync.RefreshPin for the project holding workDir and
 // prints the outcome. Best effort: the workflow only matters in CI, so a
-// failure is a warning, never a failed command.
-func refreshPin(ctx context.Context, workDir, version string, w io.Writer) {
+// failure is a warning, never a failed command. A dry run (dry) only says
+// what a real run would write (reposync.PreviewPin), always, even under
+// LORE_SYNC_QUIET: it is part of the dry run's plan, and the file stays as
+// it was (devco:D-708: `lore migrate run --dry-run` rewrote it while
+// printing "Nothing written").
+func refreshPin(ctx context.Context, workDir, version string, dry bool, w io.Writer) {
 	root := liveProjectRoot(workDir)
 	if root == "" {
 		return // not a lore project in a git checkout: no workflow of its own
 	}
-	r, err := reposync.RefreshPin(ctx, root, version)
+	pin := reposync.RefreshPin
+	if dry {
+		pin = reposync.PreviewPin
+	}
+	r, err := pin(ctx, root, version)
 	if err != nil {
 		r = reposync.PinRefresh{Note: "could not check the lore-sync-merge workflow: " + err.Error()}
 	}
-	if r.To != "" && os.Getenv(pinQuietEnv) != pinQuietOn {
+	switch {
+	case r.To != "" && dry:
+		_, _ = fmt.Fprintf(w, "%swould update %s to lore %s (was %s); not written (dry run), the same command without --dry-run writes it\n", pinNoticePrefix, reposync.DisplayPath(root, r.Path), r.To, r.From) // stderr plan line
+	case r.To != "" && os.Getenv(pinQuietEnv) != pinQuietOn:
 		_, _ = fmt.Fprintf(w, "%supdated %s to lore %s (was %s) — commit it\n", pinNoticePrefix, reposync.DisplayPath(root, r.Path), r.To, r.From) // stderr notice; nowhere to report a failed write
 	}
 	if r.Note != "" {
