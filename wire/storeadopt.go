@@ -148,6 +148,9 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 			return opsstores.AdoptOut{}, err
 		}
 	}
+	// D-719: the format before anything moves; a 0.1.17-format repo is read
+	// as it is (never migrated) and --move leaves nothing of it behind
+	oldFormat := ProjectFormatOld(top)
 	srcRows, left, err := a.adoptSource(ctx, top)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
@@ -185,8 +188,14 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 			if out.LiveRemoved, err = adoptLiveCount(ctx, top, liveKeys); err != nil {
 				return opsstores.AdoptOut{}, err
 			}
-			if out.Removed > 0 {
-				out.Next = []string{opsstores.AdoptCommitCommand(top, label+"/"+folderName)} // the repo commit the run leaves (or makes, --commit)
+			if in.Move {
+				if out.Tidied, err = adoptTidy(top, oldFormat, adoptedPaths(adopted), false); err != nil {
+					return opsstores.AdoptOut{}, err
+				}
+				out.Left = adoptLeftAfterTidy(out.Left, out.Tidied)
+			}
+			if out.Removed > 0 || len(out.Tidied) > 0 {
+				out.Next = []string{opsstores.AdoptCommitCommand(top, label+"/"+folderName, out.Tidied...)} // the repo commit the run leaves (or makes, --commit)
 			}
 		}
 		return out, nil
@@ -222,6 +231,18 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		out.LiveRemoved, out.LiveKept, lerr = a.adoptLiveRemove(ctx, top, liveKeys)
 		removed, rerr := removeAdopted(top, adopted)
 		out.Removed = len(removed)
+		if in.Move && rerr == nil {
+			// D-719: the stale LORE.md and an old-format repo's place rows
+			// and _meta.json go with the rows; the place rows are rows, so
+			// the hook is told they moved like the others
+			out.Tidied, rerr = adoptTidy(top, oldFormat, adoptedPaths(adopted), true)
+			out.Left = adoptLeftAfterTidy(out.Left, out.Tidied)
+			for _, p := range out.Tidied {
+				if strings.HasPrefix(p, opsstores.AdoptDataDir+"/") {
+					removed = append(removed, p) // _meta.json included: the hook commits its removal (D-719)
+				}
+			}
+		}
 		// D-710: the hook commits these deletions (the rows live in the
 		// store now) instead of refusing them as removed by hand
 		if merr := RecordMovedOut(ctx, top, place, removed); merr != nil && rerr == nil {
@@ -234,12 +255,13 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 			return out, errs.Prefix(adoptVerb+": the rows are in "+place+" but the repo's copies could not all be removed", rerr).
 				WithHint("rerun the same command: it writes nothing new and removes what is left")
 		}
-		if out.Removed > 0 && in.Commit {
-			if out.Commit, err = adoptCommit(ctx, top, place); err != nil {
+		changed := out.Removed > 0 || len(out.Tidied) > 0
+		if changed && in.Commit {
+			if out.Commit, err = adoptCommit(ctx, top, place, out.Tidied); err != nil {
 				return out, err
 			}
-		} else if out.Removed > 0 {
-			out.Next = []string{opsstores.AdoptCommitCommand(top, place)}
+		} else if changed {
+			out.Next = []string{opsstores.AdoptCommitCommand(top, place, out.Tidied...)}
 		}
 	}
 	return out, nil
@@ -617,6 +639,39 @@ func removeAdopted(top string, adopted []store.Key) ([]string, error) {
 		}
 	}
 	return removed, nil
+}
+
+// adoptedPaths are the repo row paths of adopted (slash, from the top),
+// the files --remove-source deletes.
+func adoptedPaths(adopted []store.Key) []string {
+	data := rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)
+	out := make([]string, 0, len(adopted))
+	for _, k := range adopted {
+		out = append(out, path.Join(data, rowfs.RowPath(k.Table, k.ID)))
+	}
+	return out
+}
+
+// adoptLeftAfterTidy drops the "left in the repo" line of each place table
+// whose rows --move tidied away (D-719): they are not left any more.
+func adoptLeftAfterTidy(left, tidied []string) []string {
+	gone := map[string]bool{}
+	for _, p := range tidied {
+		if t, _, ok := strings.Cut(strings.TrimPrefix(p, opsstores.AdoptDataDir+"/"), "/"); ok {
+			gone[t] = true
+		}
+	}
+	if len(gone) == 0 {
+		return left
+	}
+	out := left[:0:0]
+	for _, l := range left {
+		t, _, _ := strings.Cut(l, ":")
+		if !gone[t] {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // adoptRelink moves the --supersedes links lore 0.1.16 and older wrote on

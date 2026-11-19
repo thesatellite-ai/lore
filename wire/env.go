@@ -105,6 +105,9 @@ func (a *App) Create(ctx context.Context, target store.Source, table row.Table, 
 		if aerr := a.ensureNamedActors(ctx, st, target, table, fields); aerr != nil {
 			return engine.Written{}, aerr
 		}
+		if perr := a.folderProjectFirst(ctx, st, target, fields); perr != nil {
+			return engine.Written{}, perr
+		}
 		w, err := st.eng.Create(ctx, target, table, fields)
 		a.wroteTo(target, err)
 		return w, err
@@ -352,6 +355,9 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	}
 	if st, serr := a.state(ctx); serr == nil && st.here != "" {
 		return a.folderProject(ctx, st, st.here) // inside a store folder: its project (storehere.go)
+	}
+	if pid, ok, ferr := a.targetFolderProject(ctx); ferr != nil || ok {
+		return pid, ferr // D-718: --to <store>/<folder> names the project too
 	}
 	if a.noRepoStoreHere(ctx, eng) {
 		// devco D-631: a read under a setup from a plain folder opens the

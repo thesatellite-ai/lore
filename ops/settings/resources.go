@@ -1046,32 +1046,11 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 		return RowOut{}, errs.New(errs.ResourceTaken, d.name()+" "+in.Name+" already exists in "+string(target)+" ("+hit[0].Row.ID.String()+")").
 			WithHint("edit it with lore resource edit --id " + hit[0].Row.ID.String() + " --set …, or pick another name")
 	}
-	vals := map[string]json.RawMessage{}
-	if err = o.applySets(ctx, d, in.Name, sets, vals); err != nil {
+	fields, vals, defaults, err := o.resAddFields(ctx, d, in.Name, sets)
+	if err != nil {
 		return RowOut{}, err
 	}
 	notes := deprecationNotes(d, vals)
-	// RES 3.1: a default fills an unset field on add, before the required check.
-	defaults, err := o.applyDefaults(ctx, d, in.Name, vals)
-	if err != nil {
-		return RowOut{}, err
-	}
-	if err = requireFields(d, in.Name, vals); err != nil {
-		return RowOut{}, err
-	}
-	fields, err := o.valuesPatch(ctx, d, vals, resValues{})
-	if err != nil {
-		return RowOut{}, err
-	}
-	if fields[rKind], err = ref(d.kind.Row.ID); err != nil {
-		return RowOut{}, err
-	}
-	if fields[rName], err = txt(in.Name); err != nil {
-		return RowOut{}, err
-	}
-	if err = o.withHistory(ctx, d, nil, fields); err != nil { // RES 3.22
-		return RowOut{}, err
-	}
 	w, err := o.createRes(ctx, target, d.kind.Row.ID.String(), in.Name, fields)
 	if err != nil {
 		return RowOut{}, err
@@ -1088,6 +1067,39 @@ func (o ops) resAdd(ctx context.Context, in ResAddIn) (RowOut, error) {
 		human += metalist.NoteLine(string(x.Code), x.Message)
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target), Human: human}, nil
+}
+
+// resAddFields builds the row fields a resource add writes for name from
+// sets (values, defaults, the required check, kind, name, history), with
+// the values and the defaults note. Nothing is written: resource import
+// screens these exact fields for secrets before its first write (D-717).
+func (o ops) resAddFields(ctx context.Context, d kindDef, name string, sets []string) (map[string]value.Value, map[string]json.RawMessage, string, error) {
+	vals := map[string]json.RawMessage{}
+	if err := o.applySets(ctx, d, name, sets, vals); err != nil {
+		return nil, nil, "", err
+	}
+	// RES 3.1: a default fills an unset field on add, before the required check.
+	defaults, err := o.applyDefaults(ctx, d, name, vals)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if err = requireFields(d, name, vals); err != nil {
+		return nil, nil, "", err
+	}
+	fields, err := o.valuesPatch(ctx, d, vals, resValues{})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if fields[rKind], err = ref(d.kind.Row.ID); err != nil {
+		return nil, nil, "", err
+	}
+	if fields[rName], err = txt(name); err != nil {
+		return nil, nil, "", err
+	}
+	if err = o.withHistory(ctx, d, nil, fields); err != nil { // RES 3.22
+		return nil, nil, "", err
+	}
+	return fields, vals, defaults, nil
 }
 
 // valuesLine prints "f = v; …" (sensitive values masked unless shown).

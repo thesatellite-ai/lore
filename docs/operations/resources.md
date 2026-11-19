@@ -353,7 +353,7 @@ imported 2 rows (2 created, 0 updated) from csv; batch bat_9a34…b418
 ```
 <!-- /example -->
 
-A ref field in the file may name a row the same file creates, by its bare name or its qualified name (`<kind>/<name>`, `<place>:<kind>/<name>`). An import is one batch, all or nothing. When one row does not fit, nothing is written; `--dry-run` shows why each row fails, and `--skip-errors` writes the valid rows and lists the rest. `--upsert-by name` updates rows that already exist under the same kind and name instead of refusing them; an update merges with the row's stored values, so a column or key the file leaves out (a required one too) keeps its value:
+A ref field in the file may name a row the same file creates, by its bare name or its qualified name (`<kind>/<name>`, `<place>:<kind>/<name>`). An import is one batch, all or nothing. When one row does not fit, nothing is written; `--dry-run` shows why each row fails, and `--skip-errors` writes the valid rows and lists the rest. `--upsert-by name` updates rows that already exist under the same kind and name instead of refusing them; an update merges with the row's stored values, so a column or key the file leaves out (a required one too) keeps its value. Every row of the file is checked for secrets before the first write, `--dry-run` too: when values in several rows look like secrets, the import is refused once, naming each row as `<kind>/<name>`, with the import to run again with one answer for all of them (`--secret-unstored`, `--secret-ref` once for all or once per finding in the order listed, or `--not-a-secret --reason "<why>"`):
 
 <!-- example: resources#import-refused -->
 ```console

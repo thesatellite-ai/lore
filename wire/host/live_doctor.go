@@ -172,7 +172,7 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 				warn(w)
 			}
 			if len(moved) > 0 {
-				note(movedOutDoctorLine(root, moved, places))
+				note(movedOutDoctorLine(root, moved, places, movedOutTidied(ctx, s.repo, root)))
 			}
 		}
 	}

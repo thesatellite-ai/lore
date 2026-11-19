@@ -1098,6 +1098,12 @@ func (s setupStore) OrgStoreURLs(_ context.Context, org string) ([]string, bool,
 	return urls, true, nil
 }
 
+// sameStoreSpelling is sameStoreAs(a)(b), false when a is no store url.
+func sameStoreSpelling(a, b string) bool {
+	f := sameStoreAs(a)
+	return f != nil && f(b)
+}
+
 // memberOrg resolves a member join's answer (`lore setup join --invite <org-or-store-url>`):
 // an org entry on this machine, or the org's store url (imported first
 // when no entry names it, the entry named as the store suggests). It
@@ -1124,6 +1130,12 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 		return cmp.Or(orgForStoreURL(ap.a.opts.Home, answer), orgForStoreURL(ap.a.opts.Home, canon))
 	}
 	if org := find(); org != "" || dryRun {
+		// devco:D-721: an entry that lists the answer as one of the org's
+		// other stores joins by the entry's main store (the join's entry
+		// check compares that one)
+		if o, oerr := ap.a.TeamOrigin(ctx, org); org != "" && oerr == nil && o.Store != "" && !sameStoreSpelling(answer, o.Store) && !sameStoreSpelling(canon, o.Store) {
+			return org, o.Store, nil
+		}
 		return org, answer, nil
 	}
 	if len(emails) == 0 {
@@ -1143,7 +1155,11 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 		admitted = entry
 		return nil
 	}
-	rep, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: "human:" + emails[0], Name: name, Handle: handle, Admit: admit, SkipRegister: true}, true)
+	// devco:D-721: the answer may be another store of the org that names
+	// its main store; the import joins the main store, and so does this join
+	var followed string
+	rep, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: "human:" + emails[0], Name: name, Handle: handle, Admit: admit, SkipRegister: true,
+		Followed: func(m string) { followed = m }}, true)
 	if err != nil {
 		return "", "", errs.Prefix("setup join "+answer, err)
 	}
@@ -1161,6 +1177,9 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	// existed, with an `org rename` hint that failed)
 	if o, oerr := ap.a.TeamOrigin(ctx, org); oerr == nil && o.Store != "" && sameStoreAs(answer) != nil && sameStoreAs(answer)(o.Store) {
 		return org, o.Store, nil
+	}
+	if o, oerr := ap.a.TeamOrigin(ctx, org); followed != "" && oerr == nil && o.Store != "" {
+		return org, o.Store, nil // the main store the import followed to (D-721)
 	}
 	return org, answer, nil
 }

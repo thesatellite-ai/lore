@@ -14,8 +14,12 @@ package stories
 // commit goes through the hooks; the repo then reads each id once.
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
 func TestStoryOAdoptRemoveSourceCommits(t *testing.T) {
@@ -204,6 +208,89 @@ func TestStoryOAdoptListsNearDuplicates(t *testing.T) {
 		}
 		if r := ada.Lore(dc.Dir, "rule", "list", "--json"); strings.Count(r.Out(), "portless") != 1 {
 			t.Errorf("want one portless rule after dropping the copy:\n%s", r.Out())
+		}
+	})
+}
+
+func TestStoryOAdoptRefusesAKey(t *testing.T) {
+	s := New(t, "O")
+	team := s.Remote("github.com/" + oOwner + "/lore-team")
+	platform := s.Seed(s.Remote("github.com/"+oOwner+"/platform"), func(dir string) { PlainRepo(t, dir) })
+	keys := s.Seed(s.Remote("github.com/"+oOwner+"/keys-app"), func(dir string) { PlainRepo(t, dir) })
+
+	ada := s.OwnerShaped(OwnerShape{Personal: oAdminPersonal, Org: oAdminOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner}})
+	pc := ada.CloneTo(platform, ada.OrgDir("platform"))
+	oSetupFlow(t, ada, pc.Dir, oSetup, "admin", oAdminOrg, oAlias,
+		map[string]any{"org": oOrg, "store_url": team.SSHURL()}, []string{"~/code/" + oOrg + "/**"})
+	kc := ada.CloneTo(keys, ada.OrgDir("keys-app"))
+	const folder = "client_keys"
+	place := oOrg + "/" + folder
+	keyA := "AKIA" + strings.Repeat("Q", 4) + "7XKD2M4N5P6R"
+	keyB := "AKIA" + strings.Repeat("Z", 4) + "3WJH8B9C2V4T"
+	var idA, idB string
+
+	// memID is the id of the repo's memory whose body holds word.
+	memID := func(word string) string {
+		t.Helper()
+		paths, _ := filepath.Glob(filepath.Join(kc.Dir, ".lore", "data", "memories", "*.json"))
+		for _, p := range paths {
+			if b, err := os.ReadFile(p); err == nil && strings.Contains(string(b), word) {
+				return strings.TrimSuffix(filepath.Base(p), ".json")
+			}
+		}
+		t.Fatalf("no memory holds %q", word)
+		return ""
+	}
+	// plant swaps word for key in the memory file by hand (no lore write).
+	plant := func(id, word, key string) {
+		t.Helper()
+		rel := ".lore/data/memories/" + id + ".json"
+		body, _ := kc.ReadFile(rel)
+		kc.WriteFile(rel, strings.Replace(body, word, key, 1))
+	}
+	adopt := func(extra ...string) teamharness.Result {
+		return ada.Lore(kc.Dir, append([]string{"store", "adopt", "--target", place, "--yes"}, extra...)...)
+	}
+	stored := func() []string { return team.FilesMatching("refs/heads/main", folder+"/memories/") }
+
+	s.Step("D-717/a-repo-whose-rows-hold-two-keys", func() {
+		ada.Lore(kc.Dir, "init", "--non-interactive", "--name=keys-app").OK(t)
+		ada.Lore(kc.Dir, "memory", "add", "--body", "staging token zerkelmotha", "--to", "repo").OK(t)
+		ada.Lore(kc.Dir, "memory", "add", "--body", "deploy token zerkelmothb", "--to", "repo").OK(t)
+		idA, idB = memID("zerkelmotha"), memID("zerkelmothb")
+		plant(idA, "zerkelmotha", keyA)
+		plant(idB, "zerkelmothb", keyB)
+		ada.Lore(pc.Dir, "store", "folder", "add", oOrg, folder).OK(t)
+	})
+
+	s.Step("D-717/adopt-refused-naming-both-rows-nothing-in-the-store", func() {
+		adopt().Refused(t, idA, idB, "nothing written",
+			"lore store adopt --target "+place+" --yes --secret-unstored",
+			"lore store adopt --target "+place+" --yes --not-a-secret --reason").Never(t, keyA, keyB)
+		adopt("--dry-run").Refused(t, idA, idB).Never(t, keyA, keyB)
+		ada.Lore(pc.Dir, "sync").OK(t)
+		if got := stored(); len(got) != 0 {
+			t.Fatalf("a refused adopt wrote rows into the store: %v", got)
+		}
+		if hits := team.AllObjectsContain(keyA, keyB); len(hits) != 0 {
+			t.Fatalf("the store's history holds a key after a refused adopt (%d of 2)", len(hits))
+		}
+	})
+
+	s.Step("D-717/secret-unstored-as-printed-redacts-both", func() {
+		adopt("--secret-unstored").OK(t).Says(t, "memories 2").Never(t, keyA, keyB)
+		ada.Lore(pc.Dir, "sync").OK(t)
+		got := stored()
+		if len(got) != 2 {
+			t.Fatalf("the folder holds %d memories, want 2: %v", len(got), got)
+		}
+		for _, p := range got {
+			if body, _ := team.Read("refs/heads/main", p); !strings.Contains(body, "${secret:unstored}") {
+				t.Errorf("%s is not redacted:\n%s", p, body)
+			}
+		}
+		if hits := team.AllObjectsContain(keyA, keyB); len(hits) != 0 {
+			t.Errorf("the store's history holds a key after --secret-unstored (%d of 2)", len(hits))
 		}
 	})
 }

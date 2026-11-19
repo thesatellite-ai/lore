@@ -47,6 +47,7 @@ type SecretPlan struct {
 // rowFindings is one row of a bulk copy and its unique findings.
 type rowFindings struct {
 	r    row.Row
+	name string
 	uniq int
 	desc string
 }
@@ -62,6 +63,15 @@ type rowFindings struct {
 // values the batch takes one per finding, in the order the refusal
 // lists them.
 func (e *Engine) PlanSecrets(ctx context.Context, verb, rerun string, target store.Source, rows []row.Row) (SecretPlan, error) {
+	return e.PlanSecretsNamed(ctx, verb, rerun, target, rows, nil)
+}
+
+// PlanSecretsNamed is PlanSecrets for rows that do not exist yet under
+// the ids they are planned with (task import: a record of a file gets its
+// task id at the write): names[id] is how the refusal names that row (the
+// record's file line or external id), so the person can find it; a row
+// without a name reads "table/id" as in PlanSecrets.
+func (e *Engine) PlanSecretsNamed(ctx context.Context, verb, rerun string, target store.Source, rows []row.Row, names map[ids.AnyID]string) (SecretPlan, error) {
 	cl := e.callOf(ctx)
 	var (
 		hit   []rowFindings
@@ -74,10 +84,14 @@ func (e *Engine) PlanSecrets(ctx context.Context, verb, rerun string, target sto
 		if len(r.Fields) == 0 {
 			continue
 		}
-		names := slices.Sorted(maps.Keys(r.Fields))
-		sc, err := e.detect(ctx, cl, target, r.ID, r.Fields, names)
+		name := names[r.ID]
+		if name == "" {
+			name = r.Table.String() + "/" + r.ID.String()
+		}
+		fnames := slices.Sorted(maps.Keys(r.Fields))
+		sc, err := e.detect(ctx, cl, target, r.ID, r.Fields, fnames)
 		if err != nil {
-			return SecretPlan{}, errs.Prefix(verb+": "+r.Table.String()+"/"+r.ID.String()+"; nothing written", err)
+			return SecretPlan{}, errs.Prefix(verb+": "+name+"; nothing written", err)
 		}
 		mode = sc.pol.OnDetect()
 		uniq, _ := uniqueFindings(sc.fieldFindings())
@@ -91,7 +105,7 @@ func (e *Engine) PlanSecrets(ctx context.Context, verb, rerun string, target sto
 		for _, f := range uniq {
 			all = append(all, scanFindingRow{id: r.ID, f: f})
 		}
-		hit = append(hit, rowFindings{r: r, uniq: len(uniq), desc: describe(uniq)})
+		hit = append(hit, rowFindings{r: r, name: name, uniq: len(uniq), desc: describe(uniq)})
 	}
 	if len(hit) == 0 {
 		return SecretPlan{}, nil
@@ -155,7 +169,7 @@ func batchSecretErr(verb, rerun string, hit []rowFindings, total int, all []scan
 	var b strings.Builder
 	b.WriteString(verb + ": " + strconv.Itoa(len(hit)) + " row(s) hold what looks like a secret (" + strconv.Itoa(total) + " finding(s)); nothing written")
 	for _, h := range hit {
-		b.WriteString("\n  " + h.r.Table.String() + "/" + h.r.ID.String() + ": " + h.desc)
+		b.WriteString("\n  " + h.name + ": " + h.desc)
 	}
 	fs := make([]scan.Finding, 0, len(all))
 	for _, x := range all {

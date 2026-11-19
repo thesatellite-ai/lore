@@ -106,9 +106,6 @@ const (
 	// private render leaves out (as v0.1.17's internal render did).
 	privateTaskDone      = "done"
 	privateTaskCancelled = "cancelled"
-	// fallbackInternalBudget is context.budget.internal's default, used
-	// when the policy cannot be read (6.1).
-	fallbackInternalBudget = 8000
 )
 
 // privateImportDir starts the path of every private line lore owns; the
@@ -263,7 +260,7 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		p.locals = nil
 	}
 	if dryRun {
-		if p.budget > 0 && p.coreBytes > p.budget {
+		if p.overCoreWarns() {
 			fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
 		}
 		for _, f := range p.files {
@@ -339,7 +336,7 @@ func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root str
 		fmt.Fprintf(w, "%s private context → %s (%s, %s%s, outside the checkout); %s\n",
 			h.decor.check(), h.redact(p.dir), plural.Count(len(p.stores), "store"), plural.Count(p.rows, "row"), left, where)
 	}
-	if changed && p.budget > 0 && p.coreBytes > p.budget {
+	if changed && p.overCoreWarns() {
 		fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
 	}
 	return nil
@@ -373,6 +370,15 @@ func privateFilesChanged(files []privateFile) bool {
 		}
 	}
 	return false
+}
+
+// overCoreWarns reports whether the over-budget warning is printed: the
+// pinned part alone is over context.budget.internal and the caller can
+// fix it (budgetFix.canFit). Why (devco D-725): a member of a company
+// folder was warned on every sync about rows and a budget only an admin
+// may change, a line they could do nothing with.
+func (p *privatePlan) overCoreWarns() bool {
+	return p.budget > 0 && p.coreBytes > p.budget && p.fix.canFit(p.coreBytes, p.budget, p.pins)
 }
 
 // privateOverCoreWarn is the warning when the pinned part alone is over
@@ -424,7 +430,12 @@ func (h *Host) loadInternalBudget(ctx context.Context) int {
 			return int(n)
 		}
 	}
-	return fallbackInternalBudget
+	// the key's own default (one number, devco D-725: a second copy here
+	// kept 8000 after the policy default moved)
+	if n, found := policy.Defaults().Limit(policy.KeyContextBudgetInternal); found {
+		return int(n)
+	}
+	return 0
 }
 
 // planPrivate gathers the internal stores and builds every file's text.

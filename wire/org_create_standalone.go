@@ -382,6 +382,9 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	// as the org lists it. Followed once, never round a loop.
 	main := in
 	main.URL = note.Note.MainStore
+	if in.Followed != nil {
+		in.Followed(note.Note.MainStore)
+	}
 	rep, merr := h.importFrom(ctx, main, yes, &note.Note)
 	if merr != nil && errs.CodeOf(merr) == errs.Offline {
 		return rep, secondStoreError(note.Note)
@@ -756,15 +759,22 @@ func orgNotSentError(url string) error {
 }
 
 // noOrgNamedError is the refusal for a lore store that holds no
-// lore-org.yaml and whose lore-store.yaml names no org (devco:D-721): an
-// org whose admin has not sent it yet (their team step pushed the store
-// before the org file), or another store of an org made before org store
-// add named the org in it. The two look the same from here, so the
-// refusal names both ways on: the admin's sync, or the main store's url.
+// lore-org.yaml and whose lore-store.yaml names no org (devco:D-721).
+// From here that is either an org's main store whose admin has not sent
+// the org yet, or another store of an org made before `lore org store
+// add` (or the admin's sync) named the org in it. lore cannot tell which,
+// so it says that, and never claims the admin has not sent the org: the
+// printed join names the org's main store url, the command that works.
 func noOrgNamedError(url string) error {
-	return errs.New(errs.InvalidInput, "the store holds no org yet: the admin who made the org has not sent it (it stays on their machine until their first lore sync), or "+url+" is another store of an org, not its main store").
-		WithHint("ask the org's admin to run lore sync, then run this again; if it is another store of the org, join with its main store: lore setup join --invite <the org's main store url>")
+	return errs.Wrap(errs.InvalidInput, "lore cannot tell whose store "+url+" is: it holds no org, and "+errNoOrgNamed.Error(), errNoOrgNamed).
+		WithHint("join with the org's main store url (ask the org's admin for it): lore setup join --invite <the org's main store url>; if " + url + " is the org's main store, the org is still on its admin's machine: ask them to run lore sync, then run this again")
 }
+
+// errNoOrgNamed is the cause of noOrgNamedError, so setup join can tell
+// that refusal from an unreachable store (errors.Is) and refuse before
+// printing lines whose join step would refuse. Its text ends the message,
+// so the printed error says it once.
+var errNoOrgNamed = errors.New("its lore-store.yaml names no org")
 
 // importMissingHint is the way on from importError's missing repository.
 func importMissingHint(url string) string {

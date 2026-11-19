@@ -62,6 +62,25 @@ func (f budgetFix) mayLower(id string) bool { return !f.company[id] || f.adminsO
 // mayRaise reports whether the caller may raise the budget where it is set.
 func (f budgetFix) mayRaise() bool { return !f.raiseCompany || f.admins.May() }
 
+// canFit reports whether the caller can bring the pinned part under the
+// budget themselves: raise the budget where it is set, or take enough of
+// the pinned rows they may change out of it (a place lore cannot name
+// counts as theirs: the line then says how to find it). Why (devco
+// D-725): the warning went to every member of a company folder, though
+// only an admin may change its rows and budget; it goes to who can act.
+func (f budgetFix) canFit(coreBytes, budget int, pins []privatePin) bool {
+	if f.unplaced || f.mayRaise() {
+		return true
+	}
+	left := coreBytes
+	for _, pin := range pins {
+		if f.mayLower(pin.id) {
+			left -= len(pin.text)
+		}
+	}
+	return left <= budget
+}
+
 // unplacedText is the raise when its place cannot be named: a command
 // that works anywhere (`lore whoami`) and the key and value to write.
 func (f budgetFix) unplacedText(coreBytes int) string {

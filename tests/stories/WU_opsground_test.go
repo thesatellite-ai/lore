@@ -141,7 +141,7 @@ func TestStoryWUOpsFolderGround(t *testing.T) {
 		}
 	})
 
-	s.Step("D-681/ops-budget-warning-member-asks-ops-admin", func() {
+	s.Step("D-681/ops-budget-warning-is-the-ops-admins", func() {
 		// the over-budget warning judges each pinned row and the budget's
 		// place by its own store's roster: in the ops store clone an ops
 		// folder's rule and budget were judged by the company roster and
@@ -154,21 +154,17 @@ func TestStoryWUOpsFolderGround(t *testing.T) {
 		m.Lore(tc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inInfra, "--yes").OK(t)
 		aout := m.Lore(tc.Dir, "sync").OK(t).Out()
 		out := mo.Lore(mt.Dir, "sync").OK(t).Out()
-		own, admins, _ := strings.Cut(out, "the admin would run")
-		if strings.Contains(own, "lore rule edit --id") || strings.Contains(own, "lore policy set") {
-			t.Fatalf("devco:D-681: an ops member is given an ops folder's fix as their own command:\n%s", out)
-		}
-		if !strings.Contains(own, "ask an admin of "+wogOpsOrg+" ("+wAdmin.Name+")") {
-			t.Fatalf("devco:D-681: the ops member is not sent to the ops org's admins:\n%s", out)
-		}
-		// what the member is told the admin would run is refused for them
-		if lower := wubPrinted(t, admins, "`lore rule edit"); lower != "" {
-			mo.Lore(mt.Dir, wubFields(t, "lore rule edit"+lower)...).Refused(t, "E_REFUSED", "only an admin of the org")
+		// devco D-725: the ops member may change neither the ops folder's
+		// rows nor its budget, so the warning is not theirs at all
+		if strings.Contains(out, wubWarn) || strings.Contains(out, "lore rule edit --id") || strings.Contains(out, "lore policy set") {
+			t.Fatalf("devco:D-681/D-725: an ops member is warned with an ops folder's fix:\n%s", out)
 		}
 		// the ops admin keeps the commands and runs them where printed
 		if strings.Contains(aout, "ask an admin") {
 			t.Fatalf("devco:D-681: the ops admin is sent to an admin:\n%s", aout)
 		}
+		// what the admin was told is refused for the member
+		mo.Lore(mt.Dir, wubFields(t, wubPrinted(t, aout, "take a row out of the pinned part with `"))...).Refused(t, "E_REFUSED", "only an admin of the org")
 		lower := wubPrinted(t, aout, "take a row out of the pinned part with `")
 		wubRun(t, m, tc.Dir, lower)
 	})

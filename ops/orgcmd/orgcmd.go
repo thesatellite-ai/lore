@@ -115,6 +115,11 @@ type ImportIn struct {
 	// SkipRegister leaves the caller off the roster write: a person
 	// `lore member add` added is on the roster already. Not a flag.
 	SkipRegister bool `json:"-"`
+	// Followed, when set, hears the org's main store url when URL was
+	// another store of the org whose lore-store.yaml named it, and the
+	// import joined the main store instead (devco:D-721): setup join
+	// prints its lines with that url. Not a flag.
+	Followed func(mainStore string) `json:"-"`
 }
 
 // LinkIn is the input of org.link (F11).

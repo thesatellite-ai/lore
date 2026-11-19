@@ -70,6 +70,13 @@ type Marker struct {
 	Visibility Visibility
 	Created    string // YYYY-MM-DD, informational
 	OrgFolder  string // the suggested company-wide folder, informational
+	// Org and OrgStore name the org a store belongs to and that org's
+	// main store (the one holding lore-org.yaml), in each of the org's
+	// other stores: `lore org store add` and an admin's `lore sync` write
+	// them, so a join by this store's url finds the org (devco:D-721).
+	// Both "" in a main store and in a store of no org.
+	Org      string
+	OrgStore string
 	// Epoch counts the compactions of the store's history (`lore store
 	// compact`): a clone whose history carries a lower epoch re-fetches
 	// instead of merging. 0 = never compacted.
@@ -105,6 +112,8 @@ type markerWire struct {
 	Visibility string `yaml:"visibility,omitempty"`
 	Created    string `yaml:"created,omitempty"`
 	OrgFolder  string `yaml:"org_folder,omitempty"`
+	Org        string `yaml:"org,omitempty"`
+	OrgStore   string `yaml:"org_store,omitempty"`
 	Epoch      int    `yaml:"epoch,omitempty"`
 	// The storepush keys (storepush.Key*).
 	PushMode     string `yaml:"push,omitempty"`
@@ -132,7 +141,7 @@ func ParseMarker(b []byte) (Marker, error) {
 		return Marker{}, errs.New(errs.ConfigInvalid, "rowfs: "+MarkerFile+": epoch must not be negative")
 	}
 	m := Marker{Version: w.LoreStore, Visibility: Visibility(w.Visibility), Created: w.Created, OrgFolder: w.OrgFolder,
-		Epoch: w.Epoch, Push: storepush.Raw{Push: w.PushMode, PushEvery: w.PushEvery, Compact: w.Compact, CompactAfter: w.CompactAfter}}
+		Org: w.Org, OrgStore: w.OrgStore, Epoch: w.Epoch, Push: storepush.Raw{Push: w.PushMode, PushEvery: w.PushEvery, Compact: w.Compact, CompactAfter: w.CompactAfter}}
 	if m.Visibility == "" {
 		m.Visibility = VisibilityInternal
 	}
@@ -161,7 +170,7 @@ func (m Marker) Encode() ([]byte, error) {
 		return nil, errs.New(errs.InvalidInput, "rowfs: visibility must be internal or shareable")
 	}
 	w := markerWire{LoreStore: MarkerVersion, ID: m.ID.String(), Visibility: string(m.Visibility), Created: m.Created, OrgFolder: m.OrgFolder,
-		Epoch: m.Epoch, PushMode: m.Push.Push, PushEvery: m.Push.PushEvery, Compact: m.Push.Compact, CompactAfter: m.Push.CompactAfter}
+		Org: m.Org, OrgStore: m.OrgStore, Epoch: m.Epoch, PushMode: m.Push.Push, PushEvery: m.Push.PushEvery, Compact: m.Push.Compact, CompactAfter: m.Push.CompactAfter}
 	b, err := yaml.Marshal(w)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "rowfs: encode "+MarkerFile, err)

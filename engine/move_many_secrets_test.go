@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -112,4 +114,59 @@ func TestMoveManySecretsPlannedForTheBatch(t *testing.T) {
 			t.Fatalf("three refs for two findings: %v", err)
 		}
 	})
+}
+
+// TestWritesReadTheStoredTextNotTheMask (devco:D-717, SECURITY): a row
+// whose key no allow entry accepts (an allow removed with `secrets allow
+// rm`, a row written before the rule) reads masked (devco:R-14). The write
+// paths looked rows up through that masked read, so a bulk move scanned
+// "[redacted …]" instead of the key and moved both rows unrefused, and an
+// edit or a delete wrote the mask over the stored text. Now a bulk move is
+// refused naming both rows, nothing is written, and an edit of another
+// field and a delete keep the stored text as it is.
+func TestWritesReadTheStoredTextNotTheMask(t *testing.T) {
+	t.Parallel()
+	second := "AKIA" + strings.Repeat("Z", 16)
+	w := newBulkWorld(t)
+	w.eng.readScanner = w.eng.scanner // the app masks reads with the write rules
+	refs := []Ref{w.keyedMem(t, "key "+fakeKey+" end"), w.keyedMem(t, "deploy "+second)}
+	ctx := context.WithValue(context.Background(), callKey{}, call{op: "row.move"})
+	if _, got, err := w.eng.Get(ctx, refs[0]); err != nil || strings.Contains(got.Fields["body"].String(), fakeKey) {
+		t.Fatalf("the keyed row does not read masked: %v %v", got.Fields["body"], err)
+	}
+
+	s0, d0 := w.src.count(), w.dst.count()
+	_, err := w.eng.MoveMany(ctx, refs, bulkDst, MoveOptions{SecretRerun: "lore move --from acme/old --to acme/new --yes"})
+	if !errs.Has(err, errs.NeedsConfirm) && !errs.Has(err, errs.SecretDetected) {
+		t.Fatalf("bulk move of two rows whose keys read masked: %v, want a refusal", err)
+	}
+	for _, want := range []string{refs[0].ID.String(), refs[1].ID.String(), "2 row(s)", "nothing written"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not name %q", err, want)
+		}
+	}
+	if ds, ss := w.dst.count()-d0, w.src.count()-s0; ds != 0 || ss != 0 {
+		t.Fatalf("a refused bulk move wrote target %d source %d times, want 0", ds, ss)
+	}
+
+	stored := func(ref Ref) string {
+		t.Helper()
+		sr, err := w.src.Get(context.Background(), ref.Table, ref.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(sr.Doc)
+	}
+	if _, err := w.eng.Update(context.Background(), refs[0], map[string]value.Value{"kind": txt(schema.MemoryKindArchival)}); err != nil {
+		t.Fatal(err)
+	}
+	if doc := stored(refs[0]); !strings.Contains(doc, fakeKey) || strings.Contains(doc, ReadRedacted) {
+		t.Fatalf("an edit of another field rewrote the stored body:\n%s", doc)
+	}
+	if _, err := w.eng.Delete(context.Background(), refs[1]); err != nil {
+		t.Fatal(err)
+	}
+	if doc := stored(refs[1]); !strings.Contains(doc, second) || strings.Contains(doc, ReadRedacted) {
+		t.Fatalf("a delete wrote the mask into the trashed row:\n%s", doc)
+	}
 }

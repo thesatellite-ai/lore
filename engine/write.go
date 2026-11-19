@@ -73,6 +73,9 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 		return Written{}, err
 	}
 	dropNulls(typed)
+	if typed, err = e.placeFolderProject(ctx, target, def, typed); err != nil { // D-718
+		return Written{}, err
+	}
 	names := slices.Sorted(maps.Keys(typed))
 	if err = refuseMarkers(typed, names); err != nil {
 		return Written{}, err
@@ -892,13 +895,23 @@ func (e *Engine) applyStep(s step, actor ids.ID[ids.Actor]) (row.Row, Action) {
 }
 
 // Get returns one row, tombstones included (a tombstone answers "what was
-// this"). The source store is returned with it.
+// this"). The source store is returned with it. It is a read: the text is
+// masked as every read masks it (devco:R-14), unless ctx is WithRawRead.
 func (e *Engine) Get(ctx context.Context, ref Ref) (store.Source, row.Row, error) {
-	return e.locate(ctx, ref)
+	src, r, err := e.locate(ctx, ref)
+	if err != nil {
+		return src, r, err
+	}
+	return src, e.maskRead(ctx, src, r), nil
 }
 
 // locate finds ref's row and the store holding it. A purged id whose live
-// file came back reads as a tombstone (hidePurged).
+// file came back reads as a tombstone (hidePurged). The row is the stored
+// one, never read-masked: locate is the write paths' read (update, move,
+// delete, restore, revert), and a masked row there was scanned without its
+// secret and written back with "[redacted …]" in place of the stored text
+// (devco:D-717: a bulk move after `secrets allow rm` moved two keyed notes
+// unscreened). Get masks for the readers.
 func (e *Engine) locate(ctx context.Context, ref Ref) (store.Source, row.Row, error) {
 	src, r, _, err := e.locateRaw(ctx, ref)
 	return src, r, err
@@ -967,7 +980,7 @@ func (e *Engine) locateIn(ctx context.Context, names []store.Source, table row.T
 		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		found = append(found, copyHit{src: name, row: e.readRow(ctx, name, got), hidden: res})
+		found = append(found, copyHit{src: name, row: e.readRow(WithRawRead(ctx), name, got), hidden: res}) // stored text: see locate
 	}
 	if len(found) == 0 {
 		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "no row "+ref.ID.String(), store.ErrNotFound)

@@ -57,6 +57,7 @@ import (
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	clibuild "github.com/thesatellite-ai/lore/surface/cli"
 )
 
@@ -1021,6 +1022,12 @@ func isV1RowFile(p string) bool {
 func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 	name := e.Spec().Name
 	if strings.HasPrefix(name, migrateNounPrefix) || ctx.Value(fixSafeStepsKey{}) != nil {
+		return nil
+	}
+	// D-719: store adopt reads the 0.1.17 format as it is and (--move)
+	// moves every note out of the repo; "run lore migrate run" is the
+	// wrong step for someone moving the notes into a store
+	if name == opsstores.OpAdopt {
 		return nil
 	}
 	top := gitTopLevel(ctx, a.projectDir())

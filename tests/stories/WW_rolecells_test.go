@@ -13,14 +13,19 @@ package stories
 // email and url is made up.
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/tests/journeys"
 )
+
+// wrcImportRerun is the --secret-unstored rerun a refused task import prints.
+var wrcImportRerun = regexp.MustCompile(`lore task import [^|]*--secret-unstored`)
 
 // Names of the role matrix (made up).
 const (
@@ -219,6 +224,20 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		admin("policy", "unset", "--key", wubKey, "--to", inWeb, "--yes")
 	})
 
+	s.Step("D-725/budget-warning-is-the-admins", func() {
+		// the over-budget warning is a cell too (devco D-725): a member can
+		// change neither the folder's pinned rows nor its budget, so only
+		// the admin is warned, once per sync
+		admin("policy", "set", "--key", wubKey, "--value", "300", "--to", inWeb, "--yes")
+		admin("rule", "add", "--to", inWeb, "--severity", "must", "--body", "role cell budget warns the admin", "--yes")
+		aout := m.Lore(wc.Dir, "sync").OK(t).Out()
+		if n := strings.Count(aout, wubWarn); n != 1 {
+			t.Errorf("devco:D-725 cell budget warning: the admin's sync warns %d times, want once:\n%s", n, aout)
+		}
+		mo.Lore(mc.Dir, "sync").OK(t).Never(t, wubWarn, "lore policy set --key "+wubKey)
+		admin("policy", "unset", "--key", wubKey, "--to", inWeb, "--yes")
+	})
+
 	s.Step("D-694/branch-share-isolate-and-their-undo", func() {
 		// pass 5 wrong 2: a member's branch share in a linked repo
 		refused("branch share", "branch", "share", "--branch", "feat/cell-share", "--yes")
@@ -295,4 +314,65 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		mo.Lore(mc.Dir, "sync").OK(t)
 		mo.Lore(mc.Dir, "memory", "add", "--to", inOther, "--body", "api pages are 50 rows", "--yes").OK(t)
 	})
+
+	s.Step("D-717/task-import-refuses-every-keyed-record", func() {
+		// devco D-717 (SECURITY): a bulk op screens every row before any
+		// write; the refusal names each keyed row and no store clone gets
+		// a commit. The keys are made up, built at run time.
+		keyA := "AKIA" + strings.Repeat("Q", 4) + "7XKD2M4N5P6R"
+		keyB := "AKIA" + strings.Repeat("Z", 4) + "3WJH8B9C2V4T"
+		// task import of a file with keys in two records, as the admin and
+		// as the member in his own team's folder: refused naming both
+		// records, no commit in either store clone
+		csv := filepath.Join(t.TempDir(), "keys.csv")
+		if err := os.WriteFile(csv, []byte("id,title,body\nK-1,one,key "+keyA+"\nK-2,plain,nothing\nK-3,three,key "+keyB+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		var rerun string
+		for _, who := range []struct {
+			m   *journeys.Machine
+			dir string
+		}{{m, wc.Dir}, {mo, mc.Dir}} {
+			before := wrcHead(t, who.m)
+			r := who.m.Lore(who.dir, "task", "import", "--file", csv, "--to", inWeb, "--yes").
+				Refused(t, "task import: 2 row(s) hold what looks like a secret", "line 2 (K-1)", "line 4 (K-3)", "nothing written").Never(t, keyA, keyB)
+			rerun = wrcImportRerun.FindString(r.Out())
+			if !strings.HasPrefix(rerun, "lore task import --file "+csv+" --from csv --to ") {
+				t.Fatalf("devco:D-717 cell task import: no --secret-unstored rerun printed:\n%s", r)
+			}
+			if after := wrcHead(t, who.m); after != before {
+				t.Fatalf("devco:D-717 cell task import: a refused import committed (%s -> %s)", before, after)
+			}
+		}
+		// the member's printed rerun works exactly as printed, where printed
+		mo.Lore(mc.Dir, strings.Fields(rerun)[1:]...).OK(t).Says(t, "3 tasks imported").Never(t, keyA, keyB)
+
+		// bulk move after the allow entries are removed (use pass 5): two
+		// notes kept with --not-a-secret, then every allow entry removed;
+		// a bulk move of both is refused naming both ids, and no store
+		// clone gets a commit
+		var notes []string
+		for _, k := range []string{keyA, keyB} {
+			notes = append(notes, wrcMemID.FindString(m.Lore(wc.Dir, "memory", "add", "--to", inWeb, "--body", "moved key "+k,
+				"--not-a-secret", "--reason", "a made-up fixture", "--yes").OK(t).Out()))
+		}
+		for _, sal := range wrcAllowID.FindAllString(m.Lore(wc.Dir, "secrets", "allow", "list").OK(t).Out(), -1) {
+			m.Lore(wc.Dir, "secrets", "allow", "rm", "--id", sal, "--yes").OK(t)
+		}
+		if left := wrcAllowID.FindAllString(m.Lore(wc.Dir, "secrets", "allow", "list").OK(t).Out(), -1); len(left) > 0 {
+			t.Fatalf("devco:D-717 cell bulk move: allow entries left after rm: %v", left)
+		}
+		before := wrcHead(t, m)
+		m.Lore(wc.Dir, "move", "--from", inWeb, "--to", inOther, "--where", "body~=moved key", "--yes").
+			Refused(t, "bulk move: 2 row(s) hold what looks like a secret", notes[0], notes[1], "nothing written").Never(t, keyA, keyB)
+		if after := wrcHead(t, m); after != before {
+			t.Fatalf("devco:D-717 cell bulk move: a refused move committed (%s -> %s)", before, after)
+		}
+	})
 }
+
+// wrcMemID / wrcAllowID find a memory id and an allow entry id in output.
+var (
+	wrcMemID   = regexp.MustCompile(`mem_[0-9a-z]+`)
+	wrcAllowID = regexp.MustCompile(`sal_[0-9a-z]+`)
+)

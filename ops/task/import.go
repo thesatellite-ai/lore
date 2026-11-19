@@ -399,6 +399,13 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 				Message: recs[i].extID + ": dropped " + d.field + " " + d.text()})
 		}
 	}
+	// D-717: every new record is screened for secrets before the first
+	// write (and before a dry run says what it would create), so the
+	// refusal names each keyed record and a batch answer reaches them all
+	plan, planned, err := o.planImportSecrets(ctx, in, from, target, recs, func(i int) bool { return out.Rows[i].Existing })
+	if err != nil {
+		return ImportOut{}, err
+	}
 	if in.DryRun || len(recs) == out.existing() {
 		return out, nil
 	}
@@ -460,6 +467,9 @@ func (o ops) importTasks(ctx context.Context, in ImportIn) (ImportOut, error) {
 		// XQ9 / PROVENANCE 5.1: the row's _o.import names the importer
 		// kind and the external id (no ext_ source record for a file).
 		rctx := engine.WithImport(wctx, origin.Import{Source: from, ExtID: r.extID})
+		if planned != nil {
+			rctx = o.env.(SecretPlanner).SecretsForRow(rctx, plan, planned[i])
+		}
 		add := AddIn{Title: r.cols[colTitle], Body: r.cols[colBody], Priority: r.cols[colPriority], Commitment: r.cols[colCommitment],
 			Due: r.cols[colDue], DeferUntil: r.cols[colDeferUntil], Tasklist: orDefault(r.cols[colTasklist], defList),
 			Mission: r.cols[colMission], Plan: r.cols[colPlan], Role: r.cols[colRole], Key: r.cols[colKey], To: in.To,

@@ -6,8 +6,9 @@ package journeys
 // admin's first lore sync (devco:K-1, devco:L-1, devco:J-1). Ann applies
 // the join step on a fresh laptop: refused naming the member plan, never
 // the solo one. She saves the member steps and joins while Lee's org is
-// still only on Lee's machine: refused with "the admin has not sent it"
-// and lore sync for the admin, never "commit lore-org.yaml"; her folders
+// still only on Lee's machine: refused with "lore cannot tell whose store"
+// (it could as well be another store of an org, devco:D-721), the join by
+// the main store url and lore sync for the admin, never "commit lore-org.yaml"; her folders
 // step says it waits for the join. A tools answer outside the offered
 // tools is a field error, never a broken config.yaml. After Lee adds Ann
 // and syncs, the same join works.
@@ -41,7 +42,7 @@ func TestJourneyJoinBeforeAdminSync(t *testing.T) {
 			Never(t, "solo")
 		tlFirstSteps(t, ann, dir, tlTeamSetup, "member", tlAnn)
 		ann.Lore(dir, "setup", "apply", tlTeamSetup, "--step", "join", "--answers", join, "--yes").
-			Refused(t, "the admin who made the org has not sent it", "ask the org's admin to run lore sync").
+			Refused(t, "lore cannot tell whose store", "lore setup join --invite <the org's main store url>", "ask them to run lore sync").
 			Never(t, "lore-org.yaml", "<org_folder>")
 		ann.Lore(dir, "setup", "apply", tlTeamSetup, "--step", "folders", "--answers", `{"folders":["`+tlFolders+`"]}`, "--yes").OK(t).
 			Says(t, "takes effect once its join step is done")

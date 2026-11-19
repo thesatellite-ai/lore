@@ -78889,7 +78889,7 @@
     "/v1/setup/join": {
       "post": {
         "operationId": "setup.join",
-        "summary": "Join your org: by its name or store url when an admin added you (lore member add; matched by your email), or from an invite line; prints the lore setup apply lines that join, and on a terminal (or --web) opens the setup page on the join step",
+        "summary": "Join your org: by its store url when an admin added you (lore member add printed it; matched by your email; the org's name works only on a machine that already has the org), or from an invite line; prints the lore setup apply lines that join, and on a terminal (or --web) opens the setup page on the join step",
         "tags": [
           "setup"
         ],
@@ -78902,7 +78902,7 @@
                 "properties": {
                   "invite": {
                     "type": "string",
-                    "description": "your org's name or store url (a member an admin added with lore member add), or an invite line starting with lore-invite:v1:"
+                    "description": "your org's store url (a member an admin added with lore member add; the org's name works only on a machine that already has the org), or an invite line starting with lore-invite:v1:"
                   },
                   "no_open": {
                     "type": "boolean",
@@ -79267,6 +79267,9 @@
                       ]
                     },
                     "prefill_note": {
+                      "type": "string"
+                    },
+                    "store_note": {
                       "type": "string"
                     },
                     "web": {
@@ -85333,6 +85336,12 @@
                           "table",
                           "rows"
                         ]
+                      }
+                    },
+                    "tidied": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "unchanged": {

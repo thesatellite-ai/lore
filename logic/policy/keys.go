@@ -253,7 +253,14 @@ const (
 	defaultContextHookCap       int64 = 9000
 	defaultContextBudgetDir     int64 = 8000
 	defaultContextBudgetDirCdx  int64 = 4000 // 6.1: each Codex folder block
-	defaultContextBudgetIntern  int64 = 8000 // 6.1: all private files of a repo
+	// defaultContextBudgetIntern: all private files of a repo (6.1). Why
+	// 32000 (devco D-725): 8000 sat under the pinned part of most real
+	// folders (300-row folders pin 17-23 KB of must rules and critical or
+	// high hotfixes, plus the org folder's rules), so every sync warned
+	// everyone. 32000 is the claude_code LORE.md budget: a typical
+	// company folder fits with room, and a folder over it pins more than
+	// ~8k tokens per session, which is worth an admin's look.
+	defaultContextBudgetIntern  int64 = 32000
 	defaultContextBudgetPath    int64 = 8000
 	defaultContextDirMinEntries int64 = 3
 	defaultContextChainMaxCodex int64 = 26000 // 6.1: 80% of Codex's 32 KiB cap (G-META-1)
