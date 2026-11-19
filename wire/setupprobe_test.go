@@ -297,6 +297,33 @@ func TestSetupProberPointerFileTools(t *testing.T) {
 	}
 }
 
+// TestSetupProberPointerFileUnusedTool: D-711, a setup tool the repo does
+// not use (it has only CLAUDE.md) gets no pointer file by design, so
+// tools.pointer_file skips it with the command that adds it instead of
+// degrading doctor --all; a tool the repo uses is still checked.
+func TestSetupProberPointerFileUnusedTool(t *testing.T) {
+	ctx := context.Background()
+	h := toolsHarness(t, "0.1.18", "")
+	seedLoreMeta(t, h.Repo)
+	if err := os.WriteFile(filepath.Join(h.Repo, "CLAUDE.md"), []byte("@.lore/LORE.md\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pr, err := h.App.SetupProber(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	me := onboard.SetupEntry{Name: "personal", Kind: onboard.KindSolo, Tools: []string{"claude_code", "cursor"}}
+	probe := func(tool string) opssetup.ProbeResult {
+		return probeOne(t, pr, opssetup.ProbeRequest{Check: check(onboard.CheckToolsPointerFile, onboard.LevelWarn), Setup: me, Target: tool + " " + h.Repo})
+	}
+	if r := probe("cursor"); r.Status != onboard.StatusSkip || !strings.Contains(r.Detail, "does not use cursor") || !strings.Contains(r.Detail, "lore render --add-target cursor") {
+		t.Fatalf("cursor, unused by the repo = %+v, want a skip naming the add command", r)
+	}
+	if r := probe("claude_code"); r.Status != onboard.StatusOK {
+		t.Fatalf("claude_code, wired = %+v, want ok", r)
+	}
+}
+
 // TestSetupProberPathLoreOlder: a release lore on PATH older than this
 // binary turns the install rows into info ("upgrade lore first"); none,
 // the same version, an unreadable one, or a dev build of ours do not.

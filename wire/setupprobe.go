@@ -1742,6 +1742,7 @@ func (sp setupProber) pointerFile(ctx context.Context, r opssetup.ProbeRequest) 
 	if err != nil {
 		return result(onboard.StatusError, err.Error(), nil)
 	}
+	targets, known := sp.repoTargetNames(ctx, root, reg, setupTools(r))
 	var all []toolOne
 	for _, t := range setupTools(r) {
 		v := map[string]string{onboard.VarRepoRoot: root}
@@ -1768,6 +1769,13 @@ func (sp setupProber) pointerFile(ctx context.Context, r opssetup.ProbeRequest) 
 		}
 		b, err := os.ReadFile(filepath.Clean(path))
 		switch {
+		case err != nil && known && !targets[t]:
+			// D-711: a setup tool the repo does not use (no file of it,
+			// not a target) gets no pointer file, by design; nothing is
+			// wrong, so it does not degrade. A file that is there but has
+			// no pointer is the repo's tool and is still checked below.
+			all = append(all, toolOne{tool: t, status: onboard.StatusSkip, vars: v,
+				detail: "this repo does not use " + t + " (no " + p.PointerFile + "); add it with: lore render --add-target " + t})
 		case err != nil:
 			// A plain render writes it only while the tool is one of the
 			// repo's context.targets; the fix (render --add-target) adds it.
@@ -1787,6 +1795,33 @@ func (sp setupProber) pointerFile(ctx context.Context, r opssetup.ProbeRequest) 
 		}
 	}
 	return mergeTools(all)
+}
+
+// repoTargetNames is the tools that get a pointer file in the repo at root
+// by the one target rule (toolprofile.RepoTargets, D-711): the repo's
+// context.targets row when root is the repo this process runs in, else its
+// tool files with setup applied. known is false when the rule cannot be
+// read (a broken row); the caller then checks every setup tool as before.
+func (sp setupProber) repoTargetNames(ctx context.Context, root string, reg *toolprofile.Registry, setup []string) (map[string]bool, bool) {
+	in := toolprofile.RepoTargetsIn{Setup: setup, Probe: repoProbe{root: root}}
+	if top := sp.hereTop(ctx); top != "" && fspath.Canonical(top) == fspath.Canonical(root) {
+		names, ok, _, err := sp.a.contextTargetsSetting(ctx)
+		if err != nil {
+			return nil, false
+		}
+		if ok {
+			in.Row, in.RowSet = names, true
+		}
+	}
+	sel, err := reg.RepoTargets(in)
+	if err != nil {
+		return nil, false
+	}
+	out := make(map[string]bool, len(sel.Profiles))
+	for _, p := range sel.Profiles {
+		out[p.Name] = true
+	}
+	return out, true
 }
 
 // hooks is tools.hooks (4.7, repo × tool, warn): the --agent-hooks plan

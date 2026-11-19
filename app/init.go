@@ -313,13 +313,19 @@ func (i *initHost) WireToolFiles(ctx context.Context, targets []string, fromSetu
 	return lines.String(), err
 }
 
-// SetupTools implements repoinit.Host: the applying setup's tools
-// (wire.App.SetupInitTools).
+// SetupTools implements repoinit.Host: the applying setup's tools that
+// this repo gets (renderhost.SetupToolsHere, D-711: a setup tool the repo
+// does not use is not wired unasked); without render machinery, the
+// setup's list as is (nothing is wired then anyway).
 func (i *initHost) SetupTools(ctx context.Context) repoinit.SetupTools {
 	if i.h.app == nil {
 		return repoinit.SetupTools{}
 	}
-	return i.h.app.SetupInitTools(ctx)
+	if i.h.render == nil {
+		return i.h.app.SetupInitTools(ctx)
+	}
+	setup, profiles, files := i.h.render.SetupToolsHere(ctx, i.wd)
+	return repoinit.SetupTools{Setup: setup, Profiles: profiles, Files: files}
 }
 
 // repoInitWords is `lore repo init`, the registry's own word for repo.init.

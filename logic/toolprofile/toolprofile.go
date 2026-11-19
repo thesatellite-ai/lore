@@ -488,7 +488,8 @@ const (
 	// ReasonSetting: the repo's context.targets settings row (Select).
 	ReasonSetting Reason = "setting"
 	// ReasonSetup: no context.targets row; the tools the guided setup that
-	// applies here chose (A-9), plus every file already wired (FromSetup).
+	// applies here chose, in a repo that used none (A-9), or a setup tool
+	// whose unwired file the repo has, next to the tools it uses (FromSetup).
 	ReasonSetup Reason = "setup"
 )
 
@@ -511,6 +512,11 @@ type Selection struct {
 	// file imports a chosen target's file, so they load lore's pointer
 	// from there (I-14); the caller says so.
 	ViaImport []ViaImport
+	// Skipped are setup tools the repo does not use (no file of theirs
+	// here) in a repo that already uses other tools (ReasonWired,
+	// ReasonDetected, or ReasonSetup over them): not written (D-711); the
+	// caller names each and the command that adds it.
+	Skipped []Profile
 }
 
 // ViaImport is a tool left out of the targets because its pointer file
@@ -670,36 +676,122 @@ func (r *Registry) Select(names []string, probe Probe) (Selection, error) {
 }
 
 // FromSetup is the selection of a repo with no context.targets row whose
-// guided setup chose tools (A-9: `lore render` left Codex and Cursor
-// unwired after setup chose them, until --target). It is base (Resolve's
-// answer) with the setup's tools added: a file lore already wires stays
-// wired (EXISTING REPOS KEEP WORKING), a file only detected is wired only
-// when the setup names its tool, else it stays in Unwired so the caller
-// names it (only when its pointer file exists). An unknown name is skipped (the setup was checked when saved;
-// a profile removed since is not this repo's error).
+// guided setup chose tools. D-711 (owner, 2026-11-19): a pointer goes only
+// to a tool the repo already uses or one the person picked for this repo.
+// The setup's tool list is the person's tools across every repo, so it
+// picks the targets only of a repo that uses no tool yet (base is
+// ReasonFallback: nothing wired, no tool file found), where it replaces
+// the AGENTS.md fallback (A-9: init and render wire the setup's tools in
+// such a repo). In a repo that already uses tools (wired or found), the
+// targets are those tools, plus a setup tool whose file is in the repo but
+// not wired yet (it is used and picked); every other setup tool goes to
+// Skipped so the caller names it and the command that adds it, never
+// writing its file unasked (after `lore org link --own`, render wrote
+// AGENTS.md, .cursor/rules/lore.mdc and .github/copilot-instructions.md
+// into a repo that had only CLAUDE.md). An unknown name is skipped
+// silently (the setup was checked when saved; a profile removed since is
+// not this repo's error).
 func (r *Registry) FromSetup(names []string, base Selection, probe Probe) Selection {
-	sel := Selection{Reason: ReasonSetup}
-	if base.Reason == ReasonWired {
-		sel.Profiles = slices.Clone(base.Profiles)
-	}
+	var chosen []Profile
 	for _, p := range r.profiles {
-		if slices.Contains(names, p.Name) && !slices.ContainsFunc(sel.Profiles, func(q Profile) bool { return q.Name == p.Name }) {
-			sel.Profiles = append(sel.Profiles, p)
+		if slices.Contains(names, p.Name) && p.HasPointerFile() {
+			chosen = append(chosen, p)
 		}
 	}
-	kept, via := dropImporters(probe, sel.Profiles)
-	sel.Profiles, sel.ViaImport = kept, via
-	unwired := slices.Clone(base.Unwired)
-	if base.Reason == ReasonDetected {
-		unwired = append(unwired, base.Profiles...)
+	if len(chosen) == 0 {
+		return base
 	}
-	for _, p := range unwired {
-		if !slices.ContainsFunc(sel.Profiles, func(q Profile) bool { return q.Name == p.Name }) && !slices.ContainsFunc(sel.ViaImport, func(q ViaImport) bool { return q.Profile.Name == p.Name }) &&
-			p.HasPointerFile() && probe.State(p.PointerFile) == FilePresent && len(notImporting(probe, []Profile{p}, sel.Profiles)) == 1 {
+	if base.Reason == ReasonFallback {
+		kept, via := dropImporters(probe, chosen)
+		return Selection{Profiles: kept, Reason: ReasonSetup, ViaImport: via}
+	}
+	sel := Selection{Reason: base.Reason, Profiles: slices.Clone(base.Profiles), ViaImport: slices.Clone(base.ViaImport)}
+	has := func(ps []Profile, p Profile) bool {
+		return slices.ContainsFunc(ps, func(q Profile) bool { return q.Name == p.Name })
+	}
+	via := func(p Profile) bool {
+		return slices.ContainsFunc(sel.ViaImport, func(v ViaImport) bool { return v.Profile.Name == p.Name })
+	}
+	for _, p := range chosen {
+		switch {
+		case has(sel.Profiles, p) || via(p):
+		case probe.State(p.PointerFile) == FilePresent && len(notImporting(probe, []Profile{p}, sel.Profiles)) == 1:
+			sel.Profiles = append(sel.Profiles, p)
+			sel.Reason = ReasonSetup
+		case probe.State(p.PointerFile) == FilePresent:
+			sel.ViaImport = append(sel.ViaImport, viaImportOf(probe, p, sel.Profiles))
+		default:
+			sel.Skipped = append(sel.Skipped, p)
+		}
+	}
+	for _, p := range base.Unwired {
+		if !has(sel.Profiles, p) {
 			sel.Unwired = append(sel.Unwired, p)
 		}
 	}
+	sel.Profiles = r.inOrder(sel.Profiles)
 	return sel
+}
+
+// viaImportOf is the ViaImport of p, whose pointer file imports one of
+// targets' pointer files (notImporting said so).
+func viaImportOf(probe Probe, p Profile, targets []Profile) ViaImport {
+	v := ViaImport{Profile: p}
+	if rd, ok := probe.(Reader); ok {
+		text, _ := rd.Read(p.PointerFile)
+		for _, t := range targets {
+			if t.HasPointerFile() && ImportsFile(text, t.PointerFile) {
+				v.Via = t.PointerFile
+				break
+			}
+		}
+	}
+	return v
+}
+
+// inOrder is ps in registry order, so the stitch order never depends on
+// which rule added a profile.
+func (r *Registry) inOrder(ps []Profile) []Profile {
+	out := make([]Profile, 0, len(ps))
+	for _, p := range r.profiles {
+		if slices.ContainsFunc(ps, func(q Profile) bool { return q.Name == p.Name }) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// RepoTargetsIn is what decides a repo's context targets when no --target
+// is given: its context.targets row (Row, set when RowSet), the tools of
+// the setup that applies there (Setup), and the repo's files (Probe).
+type RepoTargetsIn struct {
+	Row    []string
+	RowSet bool
+	Setup  []string
+	Probe  Probe
+}
+
+// RepoTargets is the one target choice of render, init, directive install
+// and every render a command runs on its own (org link, sync): the
+// context.targets row when the repo has one (Select, an unknown name
+// refused), else the tools the repo uses (Resolve) with the setup's tools
+// applied by FromSetup (D-711). Callers must not combine Select, Resolve
+// and FromSetup themselves, so no path can wire a tool the others skip.
+func (r *Registry) RepoTargets(in RepoTargetsIn) (Selection, error) {
+	if in.RowSet {
+		return r.Select(in.Row, in.Probe)
+	}
+	sel := r.Resolve(in.Probe)
+	if len(in.Setup) > 0 {
+		sel = r.FromSetup(in.Setup, sel, in.Probe)
+	}
+	return sel, nil
+}
+
+// SkippedNote is the line for a setup tool the repo does not use (D-711):
+// its file was not written, and addCmd adds it.
+func (p Profile) SkippedNote(addCmd string) string {
+	return "skipped " + p.Name + " (" + p.PointerFile + "): your setup lists it but this repo does not use it, so no " + p.PointerFile + " was written; add it with: " + addCmd + " " + p.Name
 }
 
 // LimitNote is the warning for a budget of n bytes on p: "" unless p

@@ -434,6 +434,8 @@ Org resolution is how lore decides which org (which company setup) a repo belong
  cached in ~/.lore/cache/links-<entry>.json, rebuilt when a store commit changes
 ```
 
+Linking writes no file of the repo. The render that follows (`lore render`, or the one `lore sync` runs) wires only the coding tools the repo already uses or that you picked for it, never every tool of your setup; see [Which file your coding tool reads](../choosing/render-targets.md).
+
 The link file, as it sits in the store:
 
 <!-- example: internals#store-layout only=5 -->

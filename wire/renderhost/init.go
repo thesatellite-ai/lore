@@ -37,6 +37,12 @@ const (
 // --target), so the printed reason names the setup, not a flag nobody
 // typed (devco J-2).
 func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root string, values []string, fromSetup string) error {
+	if fromSetup != "" {
+		// D-711: the setup's tools are not --target values; they take part
+		// by the one rule (toolprofile.RepoTargets), so a tool the repo
+		// does not use is named, not written.
+		values = nil
+	}
 	pick, err := h.resolveTargets(ctx, root, values, func(ctx context.Context) ([]string, bool, error) {
 		return h.contextTargetsOf(ctx, h.app)
 	})
@@ -54,6 +60,7 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 	for _, v := range pick.sel.ViaImport { // I-14: one pointer, loaded once
 		fmt.Fprintf(w, "%s %s\n", h.decor.muted("·"), v.Note())
 	}
+	h.skippedLines(w, pick)
 	out := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
 	if err := h.stitchRepoPointers(ctx, w, root, pick.targets, out); err != nil { // D-500
 		return err
@@ -83,6 +90,35 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 	}
 	fmt.Fprintf(w, "%s saved as %s; change with: lore policy set --key %s --value <profiles> --yes\n", h.decor.muted("·"), policy.KeyContextTargets, policy.KeyContextTargets)
 	return nil
+}
+
+// SetupToolsHere is the part of the applying setup's tools that the repo
+// at root gets by the one target rule (toolprofile.RepoTargets with no
+// context.targets row, D-711): every setup tool in a repo that uses no
+// tool yet, else only the setup tools the repo already uses. Init names
+// these as the files the setup chose; empty when none.
+func (h *Host) SetupToolsHere(ctx context.Context, root string) (setup string, profiles, files []string) {
+	names, setup := h.setupTools(ctx)
+	if len(names) == 0 {
+		return "", nil, nil
+	}
+	reg, err := h.loadToolRegistry(ctx)
+	if err != nil {
+		return "", nil, nil
+	}
+	sel, err := reg.RepoTargets(toolprofile.RepoTargetsIn{Setup: names, Probe: rootProbe{root: root}})
+	if err != nil {
+		return "", nil, nil
+	}
+	for _, p := range sel.Profiles {
+		if slices.Contains(names, p.Name) {
+			profiles, files = append(profiles, p.Name), append(files, p.PointerFile)
+		}
+	}
+	if len(profiles) == 0 {
+		return "", nil, nil
+	}
+	return setup, profiles, files
 }
 
 // addContextTargets is render --add-target: the repo's effective targets
