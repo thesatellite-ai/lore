@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -179,8 +180,8 @@ func changedFiles(wd string, files []string, before [][]byte) []string {
 		if bytes.Equal(before[i], after[i]) {
 			continue
 		}
-		rel, err := filepath.Rel(wd, f)
-		if err != nil {
+		rel, inside := fspath.Rel(wd, f)
+		if !inside {
 			rel = f
 		}
 		out = append(out, filepath.ToSlash(rel))

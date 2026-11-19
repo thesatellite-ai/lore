@@ -2,72 +2,74 @@
 ### one store per client
 alice (work/stores)$ lore store init --name agency --url git@github.com:agency/notes --yes && lore store init --name client --url git@github.com:agency/notes-client --yes && lore store init --name client2 --url git@github.com:agency/notes-client2 --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_7a670ae8548ed05bf57ad29ad0759504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_7a670ae8548ed05bf57ad29ad0759504) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore store init: store clone ~/.lore/stores/agency/notes-client: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store client (sto_2ad3618e878ebbf527d34d446ef4f891) at git@github.com:agency/notes-client; recorded in .lore/stores.yaml; commit it to share
+lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+✓ created store client (sto_2ad3618e878ebbf527d34d446ef4f891) on git@github.com:agency/notes-client: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 lore store init: store clone ~/.lore/stores/agency/notes-client2: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store client2 (sto_162df51b7f78b785c97c26b41ea89666) at git@github.com:agency/notes-client2; recorded in .lore/stores.yaml; commit it to share
+✓ created store client2 (sto_162df51b7f78b785c97c26b41ea89666) on git@github.com:agency/notes-client2: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ lore org link --org agency --project client --store git@github.com:agency/notes-client --yes
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes-client client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe984c9b495744c0217776765a28f2 at github.com/client/website → github.com/agency/notes-client@main:client/ (default=false)
 ✓ github.com/client/website (prj_54fe984c9b495744c0217776765a28f2) linked to github.com/agency/notes-client client/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 alice (work/website)$ lore actor register
-lore: committed locally to store agency/.; lore sync sends it
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/_store/projects/prj_05e99e22e9e86e96fe4daa7777994603.json (store agency/.)
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/.)
-✓ act_c0f3c11a5724b0cfd74b256190d9b5b8 Alice Doe (@alice) registered in agency ./
+✓ act_c0f3c11a5724b0cfd74b256190d9b5b8 Alice Doe (@alice) registered in the roster of agency (agency/.)
 alice (work/website)$ lore memory add --body 'the client staging database is restored every Sunday night'
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes-client/client/memories/mem_76bd560aff0771fab8457dbfa9823f10.json (store agency)
+lore: committed locally to store notes-client/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes-client/client/actors/act_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes-client/client/memories/mem_76bd560aff0771fab8457dbfa9823f10.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes-client/client/_meta.json (store agency/client)
 ✓ mem_76bd560aff0771fab8457dbfa9823f10 [agency/client]
   filed: defaults.client_repos.memory = agency (a kind not listed goes to the linked project) → the linked project client/
   scope: [project]
 alice (work/website)$ lore rule add --to agency/. --body 'every client estimate is reviewed by two people before it is sent'
-lore: committed locally to store agency/.; lore sync sends it
+lore: committed locally to store agency; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/_store/rules/rul_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/.)
 ✓ rul_d4314eba822f1bf5908b2b8ded5f313a [agency/.]
   scope: [project] severity: must
 alice (work/website)$ lore sync
-lore: pushed store notes-client/client (here: agency): commit 601d285 to branch main
-lore: pushed store agency/.: commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store notes-client/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/.: sent 3, received 0, merged 0, refused 0
+lore: pushed store notes-client/client: commit 601d285 to branch main (2 commits, 2 row files)
+lore: pushed store agency/.: commit 86dbae4 to branch main (3 commits, 3 row files)
+store me: up to date
+store me/everywhere: up to date
+store notes-client/client: pushed (sent 2, received 0, merged 0, refused 0)
+store agency/.: pushed (sent 3, received 0, merged 0, refused 0)
 
 ### contractor view
 bob (work/website)$ lore whoami
 org        agency  (matched by: link in github.com/agency/notes-client client/, project id + remote)
 identity   Bob Roe <human:bob@agency.example>   act_b4f4765e593d51fd1352985e8af3a5b0  @bob  (from: org entry (config.yaml orgs[agency].identity))
-repo       client repo  (guards on)
+repo       client repo  (guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; lore fix here installs it)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe984c9b495744c0217776765a28f2
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder .)
+stores     git@github.com:agency/notes on branch main  (org folder agency: roster, teams, company rules)
            git@github.com:agency/notes-client on branch main
 internal   github.com/agency/notes-client client/
+reads      notes-client/client (this repo's link)
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 bob (work/website)$ lore actor register
-lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore actor register: store clone ~/.lore/stores/agency/notes: git user set to Bob Roe <bob@agency.example> (your identity in org agency)
 lore actor register: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
-lore: committed locally to store agency/.; lore sync sends it
+lore: committed locally to store agency; lore sync sends it
+lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/stores/agency/notes/_store/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store agency/.)
-✓ act_b4f4765e593d51fd1352985e8af3a5b0 Bob Roe (@bob) registered in agency ./
+✓ act_b4f4765e593d51fd1352985e8af3a5b0 Bob Roe (@bob) registered in the roster of agency (agency/.)
 bob (work/website)$ lore memory list
 mem_76bd560aff0771fab8457dbfa9823f10 [retrieved] the client staging database is restored every Sunday night [agency/client]
 bob$ lore store show
 git@github.com:agency/notes
   entries   agency   branches main
-  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:00:35Z
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:00:40Z
   unpushed  refs/heads/main
 git@github.com:agency/notes-client
   entries   agency   branches main

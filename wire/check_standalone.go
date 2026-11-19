@@ -90,13 +90,20 @@ func (l *standaloneLeaks) CheckLeaks(ctx context.Context, in opscheck.LeaksIn) (
 	}
 	switch {
 	case in.CI:
+		// devco R-12: secrets in what the checkout carries, in every repo
+		// (a client repo with no .lore folder above all: its CI is the
+		// backstop for a push that skipped the hooks), then the structure.
+		serr := checkCISecrets(ctx, root, in.Since, os.Getenv)
 		if UntouchedRepo(ctx, root) != "" {
 			// F-3: a client repo holds no lore files by design, so --ci
 			// (run from its root or any subfolder) has no rows to check:
 			// clean, never "run from the project root".
+			if serr != nil {
+				return opscheck.LeaksOut{}, serr
+			}
 			return opscheck.LeaksOut{Message: checkCINoLore}, nil
 		}
-		if cerr := checkCI(ctx, root); cerr != nil {
+		if cerr := joinLeakErrors(serr, checkCI(ctx, root)); cerr != nil {
 			return opscheck.LeaksOut{}, cerr
 		}
 		return opscheck.LeaksOut{Message: checkCIClean}, nil
@@ -176,7 +183,7 @@ func checkCI(ctx context.Context, root string) error {
 	if err != nil {
 		return errs.Wrap(errs.Internal, "read .lore/data", err)
 	}
-	fs := leakcheck.CheckCI(tree, pid)
+	fs := leakcheck.CheckCIMode(tree, pid, leakcheck.CIOwnCopiesKept)
 	if len(fs) == 0 {
 		return nil
 	}
@@ -206,6 +213,24 @@ func checkCI(ctx context.Context, root string) error {
 		hint = append(hint, "ask the author to remove the files listed above that name no command")
 	}
 	return errs.New(errs.LeakBlocked, strings.TrimSuffix(b.String(), "\n")).WithHint(strings.Join(hint, "; "))
+}
+
+// joinLeakErrors is one error for the CI check's two halves (secrets,
+// structure), so a structure finding never hides a secret (devco R-12: the
+// secret was never named because the check failed for another reason).
+// Either may be nil; two E_LEAK_BLOCKED join their messages and hints.
+func joinLeakErrors(a, b error) error {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	var ea, eb *errs.Error
+	if !errors.As(a, &ea) || !errors.As(b, &eb) || ea.Code != errs.LeakBlocked || eb.Code != errs.LeakBlocked {
+		return a
+	}
+	return errs.New(errs.LeakBlocked, ea.Message+"\n"+eb.Message).WithHint(ea.Hint + "; " + eb.Hint)
 }
 
 // keyLoosening joins KeyLooseningsSince findings into one E_LEAK_BLOCKED.

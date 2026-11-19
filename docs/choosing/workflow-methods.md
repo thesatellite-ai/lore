@@ -38,7 +38,7 @@ The other kinds (pattern, snapshot, behaviour, architecture note, cookbook recip
 | an idea, not yet agreed | `lore task add --commitment proposed` (or `someday`) | `lore task triage` lists it until someone says yes |
 
 - **If only a date matters,** use a reminder; if someone has to do something, use a task.
-- **If more than one person or agent works on the same goal,** use a mission, so `lore task next --mission <id>` hands out its tasks in order (see [When to use agents, claims and gates](agents-claims-gates.md)).
+- **If more than one person or agent works on the same goal,** use a mission, so `lore task next --claim --mission <id> --push` hands out its tasks in order (see [When to use agents, claims and gates](agents-claims-gates.md)).
 
 ## Moving notes between branches and people
 

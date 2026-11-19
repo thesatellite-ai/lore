@@ -113,7 +113,8 @@ func (a *App) orgAdminFinding(ctx context.Context, rs orgRosterStore, fix bool) 
 }
 
 // setAdminRole puts org role admin on the open stint, or writes an open
-// employee stint from the actor's first day with it.
+// employee stint from the actor's first day with it (source migrated: a
+// guess the person's real stint replaces).
 func setAdminRole(ctx context.Context, r profilestore.Roster, actor row.Row, open *row.Row, now time.Time) error {
 	role, err := value.TextOf(opsteam.OrgRoleAdmin)
 	if err != nil {
@@ -139,7 +140,14 @@ func setAdminRole(ctx context.Context, r profilestore.Roster, actor row.Row, ope
 	if err != nil {
 		return err
 	}
+	// source migrated: the start is the actor's first day, a guess like the
+	// stint read from the roster, so the person's real stint (period add
+	// --started-on <their first day>) replaces it (devco:D-327)
+	src, err := value.TextOf(schema.PeriodSourceMigrated)
+	if err != nil {
+		return err
+	}
 	_, err = r.Create(ctx, schema.TableActorPeriods, map[string]value.Value{schema.FieldPeriodActor: ref, schema.FieldPeriodType: typ,
-		schema.FieldPeriodStartedOn: day, schema.FieldPeriodOrgRole: role})
+		schema.FieldPeriodStartedOn: day, schema.FieldPeriodOrgRole: role, schema.FieldPeriodSource: src})
 	return err
 }

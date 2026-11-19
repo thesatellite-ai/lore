@@ -31,8 +31,10 @@ import (
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opswhere "github.com/thesatellite-ai/lore/ops/where"
@@ -65,6 +67,7 @@ var whereGitLore = []struct{ pattern, what string }{
 	{"state", "the store lock's journal of audit records not yet acknowledged"},
 	{"audit-pending.jsonl", "the journal of audit records not yet acknowledged (a folder store's)"},
 	{"fetch-stamp", "when lore last fetched the remote"},
+	{"fetch-failed", "when a fetch last could not reach the remote; until live.fetch_ttl has passed, lore does not try again on its own (lore sync always does)"},
 	{"remote-tip", "the store branch's tip on the remote when lore last saw it, so a store repo deleted and made again is noticed, never refilled"},
 	{"remote-reset", "set when lore found the store's repo deleted and made again; nothing is pushed until lore store push --restore or lore store forget"},
 	{gitbackend.IdentityRecordFile, "the user.email lore wrote into this clone's .git/config, so lore keeps only its own value current and never changes one you set"},
@@ -76,6 +79,7 @@ var whereGitLore = []struct{ pattern, what string }{
 	{"compact_stamp", "when lore last compacted the store's history"},
 	{"git-wiring*", "a fingerprint of lore's git wiring (merge driver, hooks), so it is checked only when something changed"},
 	{"live.lock", "the lock of the live ref"},
+	{"live.queue", "the order lore commands waiting for the live lock take it in (one empty file per waiting command)"},
 	{"live.log", "the log of live ref operations"},
 	{"refs-lore-live.*", "live writes not yet confirmed by the remote"},
 	{"held.json", "the claims this machine holds"},
@@ -88,7 +92,10 @@ var whereGitLore = []struct{ pattern, what string }{
 // Where implements opswhere.Env.
 func (a *App) Where(ctx context.Context, in opswhere.ShowIn) (opswhere.Out, error) {
 	home := a.opts.Home
-	out := opswhere.Out{Home: home, Entries: []opswhere.Entry{}}
+	out := opswhere.Out{Home: home, HomeSource: string(lorehome.FromDefault), Entries: []opswhere.Entry{}}
+	if a.opts.HomeSource != "" {
+		out.HomeSource = string(a.opts.HomeSource)
+	}
 	if readme := filepath.Join(home, HomeReadmeFile); fileExists(readme) {
 		out.Readme = readme
 	}
@@ -96,7 +103,7 @@ func (a *App) Where(ctx context.Context, in opswhere.ShowIn) (opswhere.Out, erro
 	out.Entries, out.Unknown = whereHome(home, uses, in.All)
 	out.Entries = append(out.Entries, a.whereStores(ctx, home)...)
 	if top := whereRepoTop(ctx, a.opts.RepoDir); top != "" {
-		if storeTop, _, isStore := rowfs.StoreTop(top); !isStore || storeTop != top {
+		if storeTop, _, isStore := rowfs.StoreTop(top); !isStore || fspath.Canonical(storeTop) != fspath.Canonical(top) { // StoreTop resolves links, top may not (D-389)
 			out.Repo = top
 			out.Entries = append(out.Entries, whereRepo(ctx, top)...)
 			// the repo's cache sits under the lore home, never in the repo
@@ -408,6 +415,8 @@ func whereGitConfig(ctx context.Context, dir, cfg, area string) []opswhere.Entry
 			what = "the merge driver git runs for lore's row files (lore merges them field by field)"
 		case key == ClientRepoGitKey:
 			what = "marks this clone as a client repo, so its commit hook refuses when no lore can check a commit for internal notes"
+		case key == InitedHereGitKey || key == MigratedHereGitKey:
+			what = "this clone ran lore init or the migration, so its commit brings the repo's first render and wiring files (teammates' clones keep theirs out of git status until then)"
 		case strings.HasPrefix(key, "lore."):
 			what = "a lore setting for this clone"
 		case key == gitbackend.ConfigUserName || key == gitbackend.ConfigUserEmail:

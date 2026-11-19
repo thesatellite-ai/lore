@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -128,7 +129,8 @@ func repoKeys(r row.Row) []string {
 	addrs = append(addrs, repoHistory(r).Confirmed()...)
 	for _, a := range addrs {
 		if k, err := repourl.Normalize(a); err == nil {
-			keys = append(keys, pid+" address "+k)
+			// D-532: a row naming the repo by its ssh alias spelling is the same repo
+			keys = append(keys, pid+" address "+orgcfg.CanonicalRemote(k))
 		}
 	}
 	if m := fieldText(r, repoFieldMount); m != "" {

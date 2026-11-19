@@ -2,9 +2,9 @@
 ### from the parent folder
 tomas (work/clients)$ lore store list
 stores:
-  NAME        URL                          FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS
-  agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy  
-  agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy  
+  NAME        URL                          FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE  VISIBILITY  REACH       ADDRESS  AUDIENCE
+  agency      git@github.com:agency/notes          false      main    false     org     internal    local_copy           
+  agency/org  git@github.com:agency/notes  org     false      main    false     org     internal    local_copy           
 count: 2
 tomas (work/clients)$ lore store folder add --store team --folder client_north
 committed locally to store agency; lore sync sends it
@@ -30,8 +30,8 @@ ERROR: [E_NOT_FOUND] store folder add: no store named golang here: golang would 
   hint: here name team, agency, git@github.com:agency/notes; or cd into the repo whose .lore/stores.yaml attaches golang
 (exit 27)
 tomas (work/clients)$ lore store add --name golang --url git@github.com:agency/notes
-ERROR: [E_NOT_A_STORE] store add: it edits a repo's .lore/stores.yaml, and ~/work/clients is not inside a git repo
-  hint: cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)
+ERROR: [E_NOT_A_STORE] the stores a repo attaches (a store command edits a repo's .lore/stores.yaml) live in each code repo: ~/work/clients is not inside a code repo
+  hint: cd into the code repo that should attach (or drop) the store and run it there; --store does not apply (it edits that repo's stores.yaml); outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)
 (exit 19)
 
 ### a client repo attaches one
@@ -40,7 +40,7 @@ This marks github.com/client/north-web as a CLIENT repo of agency: internal note
 and the leak guards turn on for everyone in agency.
   link: project prj_54fe984c9b495744c0217776765a28f2 at github.com/client/north-web → github.com/agency/notes@main:client_north/ (default=false)
 ✓ github.com/client/north-web (prj_54fe984c9b495744c0217776765a28f2) linked to github.com/agency/notes client_north/ (committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 tomas (work/clients/north-web)$ lore store folder list --store team
 store agency folders:
   FOLDER        ID                                    CREATED BY   CREATED               ATTACHED HERE  ROWS
@@ -50,14 +50,16 @@ store agency folders:
 
 ### a client repo with no lore files
 tomas (work/clients/south-app)$ lore org link --org agency --project client_south --yes
+lore: leak guard installed in this clone: ~/work/clients/south-app/.git/hooks/commit-msg (commits are checked for internal notes; teammates get it when they run the same link in their clone)
 This marks github.com/client/south-app as a CLIENT repo of agency: internal notes default to github.com/agency/notes client_south/,
 and the leak guards turn on for everyone in agency.
   link: project prj_05e99e22e9e86e96fe4daa7777994603 at github.com/client/south-app → github.com/agency/notes@main:client_south/ (default=false)
 ✓ github.com/client/south-app (prj_05e99e22e9e86e96fe4daa7777994603) linked to github.com/agency/notes client_south/ (committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written
 tomas (work/clients/south-app)$ lore task add --title 'set up the staging deploy'
-lore: committed locally to store agency; lore sync sends it
-lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency)
+lore: committed locally to store agency/client_south; lore sync sends it
+lore: wrote 4 row file(s) in ~/.lore/stores/agency/notes/client_south (store agency/client_south)
+lore: wrote ~/.lore/stores/agency/notes/client_south/_meta.json (store agency/client_south)
 ✓ tsk_c0f3c11a5724b0cfd74b256190d9b5b8 — set up the staging deploy [medium]
   filed: defaults.client_repos.task = agency (personal config) → the linked project client_south/
   created tasklist tlt_76bd560aff0771fab8457dbfa9823f10 "default" for tasks added without --tasklist

@@ -33,6 +33,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
 // AccessKey is config.yaml's key for this machine's access rules.
@@ -156,8 +158,8 @@ func CanonicalSSH(raw string, resolve AliasResolver) (Canonicalized, error) {
 			return Canonicalized{}, ErrNotAlias
 		}
 		host := u.Hostname()
-		al, ok := resolve(host)
-		if !ok || al.HostName == "" || strings.EqualFold(al.HostName, host) {
+		al, hostName, ok := sshHostName(resolve, host)
+		if !ok {
 			return Canonicalized{}, ErrNotAlias
 		}
 		user := u.User.Username()
@@ -168,13 +170,15 @@ func CanonicalSSH(raw string, resolve AliasResolver) (Canonicalized, error) {
 		if u.User != nil {
 			typedPrefix = "ssh://" + u.User.Username() + "@" + u.Host + "/"
 		}
-		canonHost := strings.ToLower(al.HostName)
-		if p := u.Port(); p != "" {
+		canonHost := hostName
+		// the port belongs to the route (443 on ssh.github.com), never to
+		// the provider host the canonical url names
+		if p := u.Port(); p != "" && hostName == strings.ToLower(al.HostName) {
 			canonHost += ":" + p
 		}
 		canonPrefix := "ssh://" + user + "@" + canonHost + "/"
 		canonURL := canonPrefix + strings.TrimPrefix(u.EscapedPath(), "/") + querySuffix(u)
-		return Canonicalized{URL: canonURL, Alias: host, HostName: strings.ToLower(al.HostName),
+		return Canonicalized{URL: canonURL, Alias: host, HostName: hostName,
 			Rule: OwnerScoped(Access{URL: canonPrefix, Via: typedPrefix}, canonURL)}, nil
 	}
 	if strings.HasPrefix(s, "/") || !strings.Contains(s, ":") {
@@ -188,15 +192,15 @@ func CanonicalSSH(raw string, resolve AliasResolver) (Canonicalized, error) {
 	if host == "" || len(host) == 1 { // a Windows drive letter is no host
 		return Canonicalized{}, ErrNotAlias
 	}
-	al, ok := resolve(host)
-	if !ok || al.HostName == "" || strings.EqualFold(al.HostName, host) {
+	al, hostName, ok := sshHostName(resolve, host)
+	if !ok {
 		return Canonicalized{}, ErrNotAlias
 	}
 	if user == "" {
 		user = orDefaultUser(al.User)
 	}
-	canonPrefix := user + "@" + strings.ToLower(al.HostName) + ":"
-	return Canonicalized{URL: canonPrefix + rest, Alias: host, HostName: strings.ToLower(al.HostName),
+	canonPrefix := user + "@" + hostName + ":"
+	return Canonicalized{URL: canonPrefix + rest, Alias: host, HostName: hostName,
 		Rule: OwnerScoped(Access{URL: canonPrefix, Via: userHost + ":"}, canonPrefix+rest)}, nil
 }
 
@@ -424,4 +428,21 @@ func AccessFailureNote(rule Access) string {
 		note += "; the rule maps every repo of that host, so a repo of another account goes through the alias too: narrow it to the owner the alias is for (url " + n.URL + " via " + n.Via + "), `lore doctor --fix` does it for the org stores"
 	}
 	return note
+}
+
+// sshHostName is the host an ssh url's host stands for: the HostName the
+// person's ssh config gives it, else the host itself, either one through
+// repourl.ProviderSSHHost (a provider's port-443 route is the provider:
+// devco D-629 for a HostName, D-630 for a url typed on the route host,
+// git@ssh.github.com:o/r.git). ok is false when that is host itself (no
+// alias, nothing to canonicalize); al is the config's answer (zero when
+// the config does not name host).
+func sshHostName(resolve AliasResolver, host string) (al SSHAlias, hostName string, ok bool) {
+	if a, found := resolve(host); found && a.HostName != "" {
+		al = a
+		hostName = repourl.ProviderSSHHost(a.HostName)
+	} else {
+		hostName = repourl.ProviderSSHHost(host)
+	}
+	return al, hostName, hostName != "" && !strings.EqualFold(hostName, host)
 }

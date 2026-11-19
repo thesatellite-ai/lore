@@ -37,6 +37,18 @@ func UnknownActor() ids.ID[ids.Actor] {
 // IsUnknown reports whether id is the reserved `unknown` actor.
 func IsUnknown(id ids.ID[ids.Actor]) bool { return id.String() == unknownActorText }
 
+// NameOf is how an actor id shows in human text when it is the reserved
+// `unknown` actor: UnknownName and true; "" and false for any other id.
+// Every namer asks it first, since no store holds a row for the reserved
+// id and a store lookup would print the raw act_ id (devco K-2: a 0.1.17
+// edit merged after the migration showed "updated … by act_0000…").
+func NameOf(actor string) (string, bool) {
+	if actor == unknownActorText {
+		return UnknownName, true
+	}
+	return "", false
+}
+
 // Defaults fills the missing audit actors of r (auditDefaults of
 // FORMAT_EVOLUTION section 3) and reports whether it changed anything. A
 // tombstone has no created_* and is returned unchanged. r.Fields is

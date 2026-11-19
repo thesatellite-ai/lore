@@ -88,7 +88,7 @@ lore: wrote ~/work/website/.lore/data/reminders/rmd_0aae…a61f.json
 | `6m` | the same day 6 months later |
 | `1y` | the same day next year |
 
-Done late, a recurring reminder moves to the first of its dates after now, never to a date that is already past: a `7d` reminder due 2026-10-01 and done on 2026-11-02 moves to 2026-11-05 and prints `skipped 4 past dates`, as a recurring task does. A month-end date keeps its day where the month has it (`1m` from Jan 31 gives Feb 28, then Mar 31).
+Done late, a recurring reminder moves to the first of its dates after now, never to a date that is already past: a `7d` reminder due 2026-10-01 and done on 2026-11-02 moves to 2026-11-05 and prints `skipped 4 past dates`, as a recurring task does. A month-end date keeps its day where the month has it (`1m` from Jan 31 gives Feb 28, then Mar 31). A reminder due at a clock time keeps that time on your wall clock (your `TZ`) across a daylight-saving change: a `7d` reminder at 09:00 in New York on 2027-03-13 is next due 2027-03-20 09:00 EDT (13:00Z), not 10:00.
 
 After `done`, the yearly reminder from Step 1 sits one year later, and the one-time reminder is on the done list:
 

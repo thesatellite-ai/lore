@@ -39,7 +39,7 @@ func (e *Engine) RelabelMeta(ctx context.Context, ref Ref, keyID ids.ID[ids.Meta
 	if err != nil {
 		return false, err
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return false, err
 	}

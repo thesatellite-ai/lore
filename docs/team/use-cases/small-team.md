@@ -4,7 +4,7 @@
 
 ## The situation
 
-Alice and Bob work in one repo, `github.com/agency/billing`, each on their own feature branch. When Bob gives Alice a task, Alice must see it now, not after Bob's branch merges.
+Alice and Bob work in one repo, `github.com/agency/billing`, each on their own feature branch. When Bob gives Alice a task, Alice must see it now, not after Bob's branch merges, so Bob gives it from `main` (or with `--no-layer` on his branch): a task added on a feature branch stays with that branch until it merges ([branch layers](../concepts.md#branch-layers-notes-that-follow-the-code-branch)).
 
 ## The config
 
@@ -19,14 +19,14 @@ Each developer registers once, then shares the registration with `lore sync` (lo
 # alice, in billing
 $ lore actor register
 lore: wrote actors/act_7a67…9504 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/actors/act_7a67…9504.json is unchanged)
-✓ act_7a67…9504 alice (@alice) already registered (refreshed) in this repo
+✓ act_7a67…9504 alice (@alice) already registered (refreshed) in the roster of this repo
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
 # bob, in billing
 $ lore actor register
 lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/billing/.git/config; hook blocks in ~/work/billing/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote actors/act_2ad3…f891 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/actors/act_2ad3…f891.json is unchanged)
-✓ act_2ad3…f891 bob (@bob) registered in this repo
+✓ act_2ad3…f891 bob (@bob) registered in the roster of this repo
 lore live: (live, kept here: `lore sync` or your next `git push` sends live writes; `lore config set --key live.autopush --value true` sends each write at once)
 
 # alice, in billing
@@ -39,7 +39,6 @@ $ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
 lore live: landed on main (05513aa); leaves live once main is fetched
 lore live: 1 row(s) left live (main holds them)
-lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 ```
 <!-- /example -->
 
@@ -48,16 +47,14 @@ Bob, on `feat/payments`, gives Alice a task and shares it with `lore sync`. Alic
 <!-- example: small-team#assign-across-branches -->
 ```console
 # bob, in billing
-$ git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice
+$ git pull -q && lore task add --title 'check the checkout page on a phone' --assign @alice
 lore: wrote task_lists/tlt_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/task_lists/tlt_162d…9666.json is unchanged)
 lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
 ✓ tsk_54fe…28f2 — check the checkout page on a phone [medium]
   created tasklist tlt_162d…9666 "default" for tasks added without --tasklist
-$ lore sync
-lore live: pushed waiting live writes commit cf563f3 to origin refs/lore/live
+$ lore sync && git switch -q -c feat/payments
+lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -80,23 +77,23 @@ lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, no
 ✓ tsk_54fe…28f2 started
 $ echo ok > checkout.txt && git add checkout.txt && git commit -qm 'fix the checkout page on phones' && lore task done --id tsk_54fe…28f2 --commit $(git rev-parse --short HEAD)
 lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_54fe…28f2.json is unchanged)
-✓ tsk_54fe…28f2 done (commit 6d00426, not linked to the task; link it with: lore link add --entity tsk_54fe…28f2 --commit 6d00426); waiting for merge
+✓ tsk_54fe…28f2 done (commit cf563f3, not linked to the task; link it with: lore link add --entity tsk_54fe…28f2 --commit cf563f339644); waiting for merge
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore sync
-lore live: pushed waiting live writes commit 34ee210 to origin refs/lore/live
-lore live: landed on main (7898daa); leaves live once main is fetched
+lore live: pushed waiting live writes commit 6d00426 to origin refs/lore/live
+lore live: landed on main (34ee210); leaves live once main is fetched
 lore live: landed on main; this checkout is on feat/login, so those rows show here after you merge main
 $ git fetch -q origin && git log --oneline origin/main && git show --stat --format=%s origin/main | tail -3
-7898daa lore: land 2 rows (_root)
+34ee210 lore: land 2 rows (_root)
 05513aa lore: land 1 row (_root)
 86dbae4 lore: land 1 row (_root)
-ccfb0bb lore: init
-9d655a5 init
+7898daa lore: init
+ccfb0bb init
  .../tlt_162d…9666.json      | 27 +++++++
  .../tsk_54fe…28f2.json      | 87 ++++++++++++++++++++++
  2 files changed, 114 insertions(+)
 $ git log --oneline -1 && git status --short
-6d00426 fix the checkout page on phones
+cf563f3 fix the checkout page on phones
 ```
 <!-- /example -->
 
@@ -118,15 +115,14 @@ Most teams protect `main` (only pull requests may change it). Then `lore sync` c
 <!-- example: small-team#protected-main -->
 ```console
 # bob, in billing
-$ lore task add --title 'ask the client for the new logo' --assign @alice
+$ lore task add --title 'ask the client for the new logo' --assign @alice --no-layer
 lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/billing/.lore/data/tasks/tsk_c0f3…b5b8.json is unchanged)
 ✓ tsk_c0f3…b5b8 — ask the client for the new logo [medium]
   on tasklist tlt_162d…9666 "default" (the default; --tasklist picks another)
 $ lore sync
-lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
+lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit 22efc3b to origin refs/lore/live
 
 # alice, in billing
 $ lore sync >/dev/null && lore task done --id tsk_c0f3…b5b8
@@ -134,25 +130,25 @@ lore: wrote tasks/tsk_c0f3…b5b8 on this clone's refs/lore/live (a live row, no
 ✓ tsk_c0f3…b5b8 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
 $ lore sync
-lore live: pushed waiting live writes commit 8c373dc to origin refs/lore/live
+lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain --id tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 8c373dc): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
+  live (local 51886a5): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)
   land: waits: main is protected; rides on your next push
 $ echo 'login ok' > login.txt && git add login.txt && git commit -m 'fix login timeout'
 lore: added "lore: land 1 row (_root)" to feat/login (tsk_c0f3…b5b8)
-[feat/login 6f11034] fix login timeout
+[feat/login 22efc3b] fix login timeout
  1 file changed, 1 insertion(+)
  create mode 100644 login.txt
 $ git log --oneline -3
-468e9a8 lore: land 1 row (_root)
-6f11034 fix login timeout
-6d00426 fix the checkout page on phones
+8c373dc lore: land 1 row (_root)
+22efc3b fix login timeout
+cf563f3 fix the checkout page on phones
 $ git push -q -u origin feat/login
 $ git status --short
 ```
@@ -176,6 +172,7 @@ $ git status --short
 - **Nothing pushes by itself.** A write stays on your machine until you run `lore sync` or `git push` (the pre-push hook sends the live list with it). `lore config set --key live.autopush --value true` sends each write at once; lore then says once how to turn it off.
 - **The 5-minute cache.** Lore fetches once per command; a read reuses that fetch for 5 minutes, a write for 60 seconds (`live.fetch_ttl`). If you need a teammate's new row right now, run `lore sync`.
 - **Register first, then branch from a fresh main.** `--assign @alice` fails with `E_NOT_FOUND: no person or team with handle @alice` until Alice has run `lore actor register` and your branch holds her roster entry. A roster entry lands on main on its person's `lore sync` and then leaves the live list, so a branch cut before it landed does not see it: `git pull` main before `git switch -c`, or `git merge origin/main` into an existing branch (the same rule as any row that left live, see `lore sync peek`).
+- **A task added on a feature branch stays there.** On an isolated branch a new task is written with the branch's files and reaches `main` when the branch merges, so the assignee does not see it until then. Give a teammate's task from `main`, or pass `--no-layer` (or `--live`) to share it at once.
 - **Rules, decisions and memories travel with the code.** That is on purpose: most rules belong with the change that needs them. Use `lore sync promote --ids <id> --to main` for the one that cannot wait.
 - **`git push --no-verify`** skips every local check lore runs at push: the ride-along (the rows simply wait and ride on a later push) and, in a client repo, the push leak check (see [Agency with a client repo](agency-client-repo.md)).
 - **Unprotected `main`** receives small `lore: land N rows` commits directly. They change only files under `.lore/data`.

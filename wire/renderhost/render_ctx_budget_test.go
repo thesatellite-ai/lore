@@ -48,7 +48,7 @@ func TestFitPrivate(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := fitPrivate(c.bodies, c.budget)
+			got := fitPrivate(c.bodies, c.budget, budgetFix{})
 			if got.shown != c.shown || got.leftOut != c.leftOut {
 				t.Fatalf("shown %d left out %d, want %d %d", got.shown, got.leftOut, c.shown, c.leftOut)
 			}
@@ -57,7 +57,7 @@ func TestFitPrivate(t *testing.T) {
 				if !strings.HasPrefix(txt, c.bodies[i].core) {
 					t.Fatalf("file %d lost its core: %q", i, txt)
 				}
-				ptr := strings.Contains(txt, "left out by context.budget.internal")
+				ptr := strings.Contains(txt, "left out") && strings.Contains(txt, "context.budget.internal")
 				if ptr != c.pointers[i] {
 					t.Fatalf("file %d pointer=%v, want %v: %q", i, ptr, c.pointers[i], txt)
 				}

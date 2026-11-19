@@ -68,6 +68,24 @@ func pushHoldOf(ctx context.Context) PushHoldFunc {
 	return h
 }
 
+// fetchedCloneKey carries the work tree of a clone this run already fetched.
+type fetchedCloneKey struct{}
+
+// WithFetchedClone returns ctx saying the clone at dir (Backend.Dir) was
+// fetched earlier in this run, so a sync of it under ctx merges and pushes
+// over the tracking ref it has, without a fetch of its own (devco
+// L-12-perf: one fetch per remote per `lore sync`). A push that loses the
+// race still fetches before it tries again.
+func WithFetchedClone(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, fetchedCloneKey{}, dir)
+}
+
+// fetchedClone is the clone work tree ctx says was fetched ("" = none).
+func fetchedClone(ctx context.Context) string {
+	d, _ := ctx.Value(fetchedCloneKey{}).(string)
+	return d
+}
+
 // PushHold is why and since when a clone's local commits must not be
 // pushed (PushHoldFunc).
 type PushHold struct {
@@ -612,7 +630,7 @@ func (b *Backend) replayOnto(ctx context.Context, remote, h, base string) (bool,
 	if err := b.resetTo(ctx, ours); err != nil {
 		return false, nil, err
 	}
-	_, refused, err := b.threeWayResolve(ctx, theirs, env)
+	_, refused, _, err := b.threeWayResolve(ctx, theirs, env)
 	if err != nil || len(refused) > 0 {
 		return false, refused, joinKeep(err, b.resetTo(ctx, h))
 	}
@@ -943,7 +961,7 @@ func (b *Backend) forcePush(ctx context.Context, tip, expect string) error {
 	case flag == flagUpToDate:
 		return nil
 	case flag == flagForced || flag == flagFastForward:
-		b.recordPush(tip, true, nil) // a compaction rewrites every folder: named by the store
+		b.recordPush(tip, true, pushStats{}) // a compaction rewrites every folder: named by the store
 		return nil
 	case strings.Contains(summary, leaseLost) || slices.ContainsFunc(lostRaceReasons, func(r string) bool { return strings.Contains(summary, r) }):
 		return errs.New(errs.Contended, "another clone pushed while the compaction ran; nothing was changed").

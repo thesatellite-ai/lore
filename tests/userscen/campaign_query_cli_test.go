@@ -97,7 +97,7 @@ func TestCampaignQuery_SearchMatrix(t *testing.T) {
 		{`"blue green"`, []string{s.deploy}},
 		{`"green blue"`, nil}, // a phrase keeps its order
 		{"blue-green", []string{s.deploy}},
-		{"deploy friday", []string{s.friday}}, // several words: all of them
+		{"deploy friday", []string{s.friday}}, // several words: the rows holding all of them (the rest are partial)
 		{"deploy AND friday", []string{s.friday}},
 		{"deploy NOT friday", []string{s.deploy}},
 		{"friday OR invoice", []string{s.friday, s.invoice}},
@@ -116,6 +116,11 @@ func TestCampaignQuery_SearchMatrix(t *testing.T) {
 		if want := cqSorted(cs.want...); !cqEqual(got, want) {
 			t.Errorf("search %q: got %v, want %v", cs.q, got, want)
 		}
+	}
+	// A question's rows holding only some words follow, marked partial
+	// (devco D-435): deploy holds "deploy" but not "friday".
+	if got, want := cqPartialIDs(cqSearch(t, c, "deploy friday")), cqSorted(s.deploy); !cqEqual(got, want) {
+		t.Errorf("search \"deploy friday\" partial hits: got %v, want %v", got, want)
 	}
 	// FTS punctuation, half a query and odd values: an answer, never a
 	// failure or an internal error (the query is retried quoted).
@@ -288,13 +293,19 @@ func TestCampaignQuery_SearchStatusRebuild(t *testing.T) {
 	if rep := srv.post(t, "/v1/search/rebuild", `{"kind":"nope"}`); rep.status != http.StatusBadRequest || rep.err == nil || rep.err.Code != "E_INVALID_INPUT" || rep.err.Hint == "" {
 		t.Errorf("REST rebuild bad kind: %d %s", rep.status, rep.body)
 	}
-	for _, q := range []string{"deploy", `"blue green"`, "مرحبا", `"`, "deploy NOT friday"} {
+	for _, q := range []string{"deploy", `"blue green"`, "مرحبا", "deploy NOT friday"} {
 		cli := c.MustLore("search", "run", q, "--json").Stdout
 		body, _ := json.Marshal(map[string]string{"query": q})
 		rep := srv.post(t, "/v1/search/run", string(body))
 		if rep.status != http.StatusOK || !restJSONEqual([]byte(rep.body), []byte(cli)) {
 			t.Errorf("REST search %q differs: %d %.300s\nCLI %.300s", q, rep.status, rep.body, cli)
 		}
+	}
+	// A lone quote is no query (D-475): the same refusal on both.
+	cliErr := restCLIErr(c.Lore("search", "run", `"`, "--json"))
+	rep := srv.post(t, "/v1/search/run", `{"query":"\""}`)
+	if cliErr == nil || rep.err == nil || rep.status != http.StatusBadRequest || cliErr.Code != "E_INVALID_INPUT" || cliErr.Message != rep.err.Message || cliErr.Hint != rep.err.Hint {
+		t.Errorf("search lone quote: CLI %+v / REST %d %+v", cliErr, rep.status, rep.err)
 	}
 }
 
@@ -442,9 +453,9 @@ func TestCampaignQuery_ShowLifecycle(t *testing.T) {
 	body := "first ‏עברית‏ 😀 \"quoted\" " + strings.Repeat("x", 2000)
 	id := cqAddID(t, c, "memory", "add", body)
 	type showOut struct {
-		ID     string            `json:"id"`
-		Table  string            `json:"table"`
-		Fields map[string]string `json:"fields"`
+		ID     string      `json:"id"`
+		Table  string      `json:"table"`
+		Fields shownFields `json:"fields"`
 		Origin *struct {
 			Cmd string `json:"cmd"`
 		} `json:"origin"`

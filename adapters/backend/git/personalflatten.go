@@ -37,7 +37,6 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/errs"
-	"github.com/thesatellite-ai/lore/store"
 )
 
 // PersonalFlattenSubject is the title of the commit FlattenPersonal makes.
@@ -191,7 +190,7 @@ func (b *Backend) FlattenPersonal(ctx context.Context) (PersonalFlattenResult, e
 		return res, nil
 	}
 	if b.readOnly {
-		return res, store.ErrReadOnly
+		return res, b.refusedWrite()
 	}
 	lock, err := b.root.Lock(ctx)
 	if err != nil {

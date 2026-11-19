@@ -2,6 +2,7 @@ package period
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -401,8 +402,15 @@ func TestOffboardRefusals(t *testing.T) {
 			}
 		})
 	}
-	// A policy that allows agents lets the agent caller through.
+	// devco:T-14: the before-the-stint refusal names the edit that moves
+	// the start back (named flags), not only the list.
 	w := newWorld(t)
+	_, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-01-11"})
+	if h := errs.EnvelopeOf(err).Error.Hint; !strings.Contains(h, "lore actor period edit --period ") || !strings.Contains(h, "--started-on 2026-01-11") {
+		t.Errorf("hint: %q", h)
+	}
+	// A policy that allows agents lets the agent caller through.
+	w = newWorld(t)
 	w.f.Agent, w.f.MayManagePeople = true, true
 	if _, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"}); err != nil {
 		t.Fatalf("agents.may_manage_people: %v", err)
@@ -900,4 +908,94 @@ func TestRejoinSameDayReopens(t *testing.T) {
 	if m := w.get(t, schema.TableActors, w.mira); text(m, schema.FieldActorStatus) != schema.ActorStatusActive {
 		t.Fatalf("actor: %v", m.Fields)
 	}
+}
+
+// TestOffboardPreviewHandsLedTasksOverInOneLine pins devco:N-11: tasks the
+// person leads are handed over by one `lore task reassign --from @handle`
+// line (named flags), not a task edit per task; a task they are only an
+// assignee of keeps its own line.
+func TestOffboardPreviewHandsLedTasksOverInOneLine(t *testing.T) {
+	w := newWorld(t)
+	w.tasks = []OpenTask{
+		{ID: "tsk_01aa", Title: "Rotate staging keys", Store: "repo", How: TaskOnLead},
+		{ID: "tsk_01bb", Title: "Fix login", Store: "repo", How: TaskOnLead},
+		{ID: "tsk_01cc", Title: "Review billing", Store: "repo", How: TaskOnAssignee},
+	}
+	_, err := w.ops().offboard(context.Background(), OffboardIn{Actor: "@mira", Reason: "moved abroad"})
+	wantCode(t, err, errs.NeedsConfirm)
+	q := err.(*errs.Error).Question
+	const line = "lore task reassign --from @mira --assign @<someone> --yes"
+	if strings.Count(q, line) != 1 || strings.Contains(q, "task edit --id tsk_01aa") || strings.Contains(q, "task edit --id tsk_01bb") ||
+		!strings.Contains(q, "reassign: lore task edit --id tsk_01cc --assign @<someone>") {
+		t.Fatalf("preview:\n%s", q)
+	}
+	out, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira"})
+	if err != nil || out.Handover != line {
+		t.Fatalf("handover %q, err %v", out.Handover, err)
+	}
+}
+
+// TestOffboardNeedsAnAdmin: devco R-6. A plain member could offboard any
+// teammate with the normal command; the roster now decides: a caller
+// without an open admin stint is refused E_REFUSED naming the admin's
+// line, and nothing is written. The same holds for rejoin and for
+// marking someone left with actor status.
+func TestOffboardNeedsAnAdmin(t *testing.T) {
+	t.Parallel()
+	w := newWorld(t)
+	boss := testID(t, ids.PrefixActor, 40)
+	stint := func(id int, actor ids.AnyID, role string) {
+		w.f.Put(row.Row{Table: schema.TableActorPeriods, ID: testID(t, ids.PrefixActorPeriod, id), Fields: map[string]value.Value{
+			schema.FieldPeriodActor: ref(t, actor), schema.FieldPeriodType: txt(t, schema.PeriodTypeEmployee),
+			schema.FieldPeriodStartedOn: date(t, "2026-01-01"), schema.FieldPeriodOrgRole: txt(t, role)}})
+	}
+	stint(41, boss, orgRoleAdmin)
+	stint(42, w.sam, "member")
+	before := w.snapshot()
+	_, err := w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"})
+	wantCode(t, err, errs.Refused)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "only an admin") || !strings.Contains(e.Hint, "lore member remove --who") {
+		t.Errorf("refusal = %v; want the cause and the admin's line", err)
+	}
+	if !reflect.DeepEqual(before, w.snapshot()) {
+		t.Error("a refused offboard wrote rows")
+	}
+	_, err = w.ops().status(yes(), ActorStatusIn{Actor: "@mira", To: schema.ActorStatusLeft})
+	wantCode(t, err, errs.Refused)
+	_, err = w.ops().rejoin(yes(), RejoinIn{Actor: "@mira", Type: schema.PeriodTypeEmployee})
+	wantCode(t, err, errs.Refused)
+	// Sam made admin: the offboard runs
+	stint(42, w.sam, orgRoleAdmin)
+	if _, err = w.ops().offboard(yes(), OffboardIn{Actor: "@mira", On: "2026-09-01"}); err != nil {
+		t.Fatalf("an admin's offboard: %v", err)
+	}
+}
+
+// TestPeriodAddReplacesOrgCreateStint (devco:D-327): `lore org create`
+// writes its creator an open admin stint from the actor's first day with
+// source migrated (a guess, like the stint read from the roster). The
+// person's real stint, starting earlier, takes that row over instead of
+// being refused as a second open stint; the org role admin stays.
+func TestPeriodAddReplacesOrgCreateStint(t *testing.T) {
+	ctx := context.Background()
+	w := newWorld(t)
+	guess := testID(t, ids.PrefixActorPeriod, 90)
+	w.f.Put(row.Row{Table: schema.TableActorPeriods, ID: guess, Fields: map[string]value.Value{
+		schema.FieldPeriodActor: ref(t, w.mira), schema.FieldPeriodType: txt(t, schema.PeriodTypeEmployee),
+		schema.FieldPeriodStartedOn: date(t, "2026-11-14"), schema.FieldPeriodOrgRole: txt(t, "admin"),
+		schema.FieldPeriodSource: txt(t, schema.PeriodSourceMigrated)}})
+	out, err := w.ops().periodAdd(ctx, PeriodAddIn{Actor: "@mira", Type: schema.PeriodTypeEmployee, StartedOn: "2026-01-12"})
+	if err != nil || !out.Replaced || out.Period.OrgRole != "admin" {
+		t.Fatalf("add over org create's stint: %+v %v", out, err)
+	}
+	ps := w.f.All(schema.TableActorPeriods)
+	if len(ps) != 1 || ps[0].ID != guess || text(ps[0], schema.FieldPeriodSource) != "" || text(ps[0], schema.FieldPeriodOrgRole) != "admin" ||
+		text(ps[0], schema.FieldPeriodStartedOn) != "2026-01-12" {
+		t.Fatalf("one real stint, org role kept: %v", ps)
+	}
+	// A hand-written open stint (no source) is no guess: a second open one
+	// is still refused.
+	_, err = w.ops().periodAdd(ctx, PeriodAddIn{Actor: "@mira", Type: schema.PeriodTypeContractor, StartedOn: "2025-06-01"})
+	wantCode(t, err, errs.PeriodOverlap)
 }

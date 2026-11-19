@@ -27,6 +27,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -38,6 +39,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
+	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 )
 
@@ -69,7 +72,7 @@ func (a *App) FixRepos(ctx context.Context, dirs []string) (opsfix.Found, error)
 	if err != nil {
 		return opsfix.Found{}, err
 	}
-	w := fixRepoWalk{loreHome: resolvedPath(a.opts.Home)}
+	w := fixRepoWalk{loreHome: fspath.Canonical(a.opts.Home)}
 	for _, k := range known {
 		w.known = append(w.known, k.Root)
 	}
@@ -147,7 +150,7 @@ func (a *App) fixNamedDirs(dirs []string) ([]string, error) {
 }
 
 // fixNoSetupFolders is --all's note when no setup has folders.
-const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; for repos elsewhere name their folders (lore fix --all ~/code ~/work) or add them to a setup (`lore setup`)"
+const fixNoSetupFolders = "no setup has folders yet, so lore fix --all took the repo you run it in, the repos lore has run in on this machine (its known repos and cache records) and the repos with .lore/ up to 4 folders below your home folder; for repos elsewhere name their folders (lore fix --all --dirs ~/code --dirs ~/work) or add them to a setup (`lore setup`)"
 
 // fixHomeDepth is how deep --all looks below the home folder when no
 // setup has folders (~/work/client/repo is three levels).
@@ -202,8 +205,9 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 	var out opsfix.Found
 	seen := map[string]bool{}
 	skipped := map[string]bool{}
+	var walked bool // the folder walk (not a known repo): repos with no lore data count
 	consider := func(p string) {
-		root := resolvedPath(p)
+		root := fspath.Canonical(p)
 		if seen[root] || skipped[root] {
 			return
 		}
@@ -218,6 +222,11 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 		case !isGitTop(root) && hasLoreDir(root) && !w.isLoreHome(root):
 			skipped[root] = true
 			out.Skipped = append(out.Skipped, opsfix.Skip{Path: root, Why: skipNotRepo})
+		case walked && isGitTop(root) && !w.inLoreStore(root):
+			// K-10: a repo in the folders with no lore data is counted and
+			// (with --verbose) named, so the person can tell it was seen
+			skipped[root] = true
+			out.NoLore = append(out.NoLore, root)
 		}
 	}
 	for _, k := range w.known {
@@ -225,17 +234,41 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 			consider(k)
 		}
 	}
+	walked = true
 	for _, base := range w.bases {
 		base = filepath.Clean(base)
 		err := filepath.WalkDir(base, func(p string, d fs.DirEntry, werr error) error {
 			if cerr := ctx.Err(); cerr != nil {
 				return cerr
 			}
-			if werr != nil || !d.IsDir() {
-				return nil // unreadable or a file
+			if werr != nil {
+				return nil // unreadable
 			}
 			if p != base && (strings.HasPrefix(d.Name(), ".") || fixWalkSkip[d.Name()]) {
-				return filepath.SkipDir
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if linkedDir(p, d) {
+				// O-1: a symlink to a repo in a setup folder is one of its
+				// repos (WalkDir reports the link as a non-folder, so it
+				// was dropped with no word); consider resolves it, so a
+				// repo reached twice counts once, and the link is never
+				// walked through (a link can loop)
+				consider(p)
+				if root := fspath.Canonical(p); root != p && seen[root] {
+					if out.Links == nil {
+						out.Links = map[string]string{}
+					}
+					if _, ok := out.Links[root]; !ok {
+						out.Links[root] = p
+					}
+				}
+				return nil
+			}
+			if !d.IsDir() {
+				return nil // a file
 			}
 			consider(p)
 			if isGitTop(p) || levels(base, p) >= depth {
@@ -248,16 +281,34 @@ func (w fixRepoWalk) run(ctx context.Context) (opsfix.Found, error) {
 		}
 	}
 	slices.Sort(out.Roots)
+	slices.Sort(out.NoLore)
 	slices.SortFunc(out.Skipped, func(x, y opsfix.Skip) int { return strings.Compare(x.Path, y.Path) })
 	return out, nil
 }
 
-// isLinked reports whether one of dir's remotes is named by a store link.
-// isLoreHome reports whether root's .lore folder is lore's own home.
-func (w fixRepoWalk) isLoreHome(root string) bool {
-	return w.loreHome != "" && resolvedPath(filepath.Join(root, rowfs.LoreDir)) == w.loreHome
+// linkedDir reports whether the walk entry d at p is a symlink whose
+// target is a folder (O-1: the repos a setup folder links to).
+func linkedDir(p string, d fs.DirEntry) bool {
+	if d.Type()&fs.ModeSymlink == 0 {
+		return false
+	}
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }
 
+// inLoreStore reports whether dir is a lore store's checkout (a store
+// clone a setup folder holds): a store, never a repo without lore data.
+func (w fixRepoWalk) inLoreStore(dir string) bool {
+	_, _, in := rowfs.StoreTop(dir)
+	return in
+}
+
+// isLoreHome reports whether root's .lore folder is lore's own home.
+func (w fixRepoWalk) isLoreHome(root string) bool {
+	return w.loreHome != "" && fspath.Canonical(filepath.Join(root, rowfs.LoreDir)) == w.loreHome
+}
+
+// isLinked reports whether one of dir's remotes is named by a store link.
 func (w fixRepoWalk) isLinked(ctx context.Context, dir string) bool {
 	if len(w.linked) == 0 || w.remotes == nil {
 		return false
@@ -279,4 +330,67 @@ func isGitTop(dir string) bool {
 // failing the whole --all) nor lists it as a folder with lore data.
 func hasLoreDir(dir string) bool {
 	return loreFolderAt(dir)
+}
+
+// DoctorFleet implements opsdoctor.FleetEnv (K-10): the repos of the
+// enabled setups' folders as lore fix --all finds them, each repo on the
+// lore 0.1.17 format with its next step, and the repos with no lore data.
+// With no setup folders it finds nothing (doctor --all looks only through
+// the setups' folders; lore fix --all's home walk is its own fallback).
+func (a *App) DoctorFleet(ctx context.Context) (opsdoctor.Fleet, error) {
+	cfg, err := ReadSetupsConfig(a.opts.Home)
+	if err != nil || !setupsHaveFolders(cfg) {
+		return opsdoctor.Fleet{}, nil // config.yaml's own problem is the doctor's config check
+	}
+	found, err := a.FixRepos(ctx, nil)
+	if err != nil {
+		return opsdoctor.Fleet{}, err
+	}
+	out := opsdoctor.Fleet{Repos: make([]opsdoctor.FleetRepo, 0, len(found.Roots)), NoLore: found.NoLore}
+	home := userHome(SetupQuery{})
+	for _, root := range found.Roots {
+		r := opsdoctor.FleetRepo{Path: root, Link: found.Links[root], Problem: originFault(ctx, root, net.DefaultResolver.LookupHost)}
+		switch old, ferr := projectFormatOld(root); {
+		case ferr == nil && old:
+			r.FormatOld, r.Next = true, formatOldMigrateHint(ctx, root)
+		case r.Link != "":
+			r.Next = linkedRepoNext(cfg, home, r.Link, root)
+		}
+		out.Repos = append(out.Repos, r)
+	}
+	return out, nil
+}
+
+// linkedRepoNext is the step of a repo a setup folder holds only as a
+// symlink (O-1) when the setup checks do not cover it: lore runs in the
+// repo at its real folder (git resolves the link), which no setup's
+// folders hold, so the line names the link, the real folder and the
+// command that adds that folder to the setup holding the link. "" when a
+// setup's folders hold the real folder (the checks cover it there).
+func linkedRepoNext(cfg onboard.Config, home, link, root string) string {
+	if onboard.MatchFolder(cfg.Enabled(), root, home, filepath.EvalSymlinks).Found {
+		return ""
+	}
+	why := "not checked: reached through the link " + link + "; the repo itself is at " + root + ", outside the setups' folders, so the setup checks above do not cover it (lore fix --all still fixes it)"
+	for _, e := range cfg.Enabled() {
+		for _, g := range e.Folders {
+			base := GlobBase(onboard.ExpandHome(g, home))
+			// the link itself is not resolved (its end is the repo outside the
+			// setup); the folder holding it is compared canonically (devco D-413)
+			if !fspath.Within(filepath.Dir(link), base) {
+				continue
+			}
+			cmd := "lore setup edit --name " + e.Name
+			for _, f := range e.Folders {
+				cmd += " --folder '" + f + "'"
+			}
+			return why + "; to check it with setup " + e.Name + ": " + cmd + " --folder '" + root + "'"
+		}
+	}
+	return why
+}
+
+// setupsHaveFolders reports whether an enabled setup names a folder.
+func setupsHaveFolders(cfg onboard.Config) bool {
+	return slices.ContainsFunc(cfg.Enabled(), func(e onboard.SetupEntry) bool { return len(e.Folders) > 0 })
 }

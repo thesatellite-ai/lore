@@ -13,10 +13,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -148,7 +151,7 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 		t.Run("trash-purge-is-fast", func(t *testing.T) {
 			start := time.Now()
 			ines.M.LoreIn(ines.C, "trash", "purge", "--older-than", "0d", "--confirm").OK(t)
-			if d := time.Since(start); d > 5*time.Second {
+			if d := time.Since(start); d > testtime.SpeedBar(5*time.Second) {
 				t.Errorf("trash purge took %s", d)
 			}
 		})
@@ -189,7 +192,7 @@ func TestStoryGMonthsOfUse(t *testing.T) {
 		dc.WriteFile("pages/onboarding.md", "# Onboarding\n\nAsk for a buddy on day one.\n")
 		start := time.Now()
 		dc.CommitAll("docs: onboarding")
-		if d := time.Since(start); d > 3*time.Second {
+		if d := time.Since(start); d > testtime.SpeedBar(3*time.Second) {
 			t.Errorf("a markdown-only commit took %s with lore's hooks", d)
 		}
 		if st := dc.Git("status", "--porcelain"); st != "" {
@@ -338,7 +341,7 @@ func TestStoryGManyAgents(t *testing.T) {
 			var next []*teamharness.Pending
 			for i := 0; i < agents; i++ {
 				c := ines.C.As(ines.M.Agent(fmt.Sprintf("agent-%d", i)))
-				next = append(next, c.Prepare("task", "next", "--push", "--yes", "--json"))
+				next = append(next, c.Prepare("task", "next", "--claim", "--push", "--yes", "--json"))
 			}
 			seen := map[string]bool{}
 			for _, r := range s.Simultaneously(next...) {
@@ -365,10 +368,130 @@ func TestStoryGManyAgents(t *testing.T) {
 			ines.M.LoreIn(ines.C, "sync").OK(t)
 		})
 		t.Run("every-command-under-five-seconds", func(t *testing.T) {
-			t.Skip("waiting for D-159")
+			gManyAgentsStayFast(t, ines)
 		})
 		t.Run("task-add-help-matches-what-agents-must-pass", func(t *testing.T) {
 			ines.M.LoreIn(ines.C, "task", "add", "--help").OK(t).Never(t, "defaults to accepted")
 		})
 	})
+}
+
+// gManyAgentsBusy is how many agent sessions share one clone in the timing
+// step, and gManyAgentsRounds how many next/comment/done rounds each runs.
+const (
+	gManyAgentsBusy   = 10
+	gManyAgentsRounds = 2
+)
+
+// gManyAgentsStayFast (D-159): ten agent sessions in one clone each run
+// task next --claim --push, comment add and task done back to back, all at once;
+// the 95th percentile of their command times stays under five seconds.
+// Every command of a clone takes the clone's live lock in turn, so on a
+// saturated loop each waits about the other nine commands: before the fix
+// a command held the lock ~0.8 s and waiters raced a 50 ms poll, so p50 was
+// 7 s and p95 30 s; now it holds it ~0.3 s and waiters queue in arrival
+// order (p95 4 s on a 48-core machine at load 18).
+//
+// The bound scales with the machine: a gate machine under its own load
+// runs every command slower, so the limit is the larger of 5 s and fifteen
+// times one command of a lone agent (ten queued commands plus room); the
+// old behaviour measured thirty to forty times a lone command.
+//
+// The lone command is measured just before AND just after the burst and the
+// slower one counts (devco:D-167): on a gate machine the load swings by a
+// factor of two within a minute, and a lone command timed at a quiet moment
+// before the burst (0.77 s) set a limit the burst, run at the next peak,
+// could not meet although the queue was fair (p50 10.3 s, p95 18.1 s). The
+// fairness the fix is about is checked on its own, independent of load: in
+// arrival order the slowest commands wait about as long as the median one,
+// while the old poll race left p95 at four times p50.
+func gManyAgentsStayFast(t *testing.T, ines gMember) {
+	t.Helper()
+	for i := 0; i < gManyAgentsBusy*gManyAgentsRounds+2; i++ {
+		ines.M.LoreIn(ines.C, "task", "add", "--title", fmt.Sprintf("sprint task %02d", i)).OK(t)
+	}
+	lone := ines.C.As(ines.M.Agent("sprinter-alone"))
+	before := gLoneCommand(t, lone, "warming up")
+	limit := max(5*time.Second, 15*before) // refined after the burst
+
+	type timed struct {
+		what string
+		took time.Duration
+		res  teamharness.Result
+	}
+	var (
+		mu  sync.Mutex
+		all []timed
+		wg  sync.WaitGroup
+	)
+	run := func(c *teamharness.Clone, what string, args ...string) teamharness.Result {
+		t0 := time.Now()
+		r := c.Lore(args...)
+		mu.Lock()
+		all = append(all, timed{what: what, took: time.Since(t0), res: r})
+		mu.Unlock()
+		return r
+	}
+	for i := 0; i < gManyAgentsBusy; i++ {
+		c := ines.C.As(ines.M.Agent(fmt.Sprintf("sprinter-%d", i)))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for round := 0; round < gManyAgentsRounds; round++ {
+				r := run(c, "task next", "task", "next", "--claim", "--push", "--yes", "--json")
+				id := fTaskID.FindString(r.Stdout)
+				if r.Code != 0 || id == "" {
+					continue // nothing left to hand out is an answer, not a slow command
+				}
+				run(c, "comment add", "comment", "add", "--on-table", "tasks", "--on-id", id, "--body", "on it")
+				run(c, "task done", "task", "done", "--id", id, "--no-lesson", "--yes")
+			}
+		}()
+	}
+	wg.Wait()
+	sort.Slice(all, func(i, j int) bool { return all[i].took < all[j].took })
+	for _, x := range all {
+		if x.what != "task next" && x.res.Code != 0 {
+			t.Errorf("%s failed under %d agents: %s", x.what, gManyAgentsBusy, x.res)
+		}
+	}
+	if len(all) == 0 {
+		t.Fatal("no command ran")
+	}
+	after := gLoneCommand(t, lone, "cooling down")
+	solo := max(before, after)
+	// D-417: the bar is as computed at factor 1 and stretched on a slower
+	// machine; the fairness check below is a ratio and needs no scaling.
+	limit = testtime.SpeedBar(max(limit, 15*solo))
+	p50 := all[len(all)/2]
+	p95 := all[min(len(all)-1, len(all)*95/100)]
+	slowest := all[len(all)-1]
+	t.Logf("%d commands by %d agents in one clone: p50 %v p95 %v max %v (%s); a lone agent's command %v before, %v after, limit %v",
+		len(all), gManyAgentsBusy, p50.took, p95.took, slowest.took, slowest.what, before, after, limit)
+	if p95.took > limit {
+		t.Errorf("p95 of agent commands %v is over %v (a lone agent's command took %v before, %v after)", p95.took, limit, before, after)
+	}
+	if p95.took > gManyAgentsFairness*p50.took {
+		t.Errorf("p95 of agent commands %v is over %d times p50 %v: commands do not take turns in arrival order", p95.took, gManyAgentsFairness, p50.took)
+	}
+}
+
+// gManyAgentsFairness bounds p95 / p50 of the agents' commands: with the
+// live lock handed out in arrival order it measured 1.3 to 1.8 (idle and at
+// load 80); the poll race it replaced measured over 4.
+const gManyAgentsFairness = 3
+
+// gLoneCommand runs task next, comment add and task done as one agent with
+// the clone to itself and returns the mean: what one command costs on this
+// machine right now.
+func gLoneCommand(t *testing.T, lone *teamharness.Clone, body string) time.Duration {
+	t.Helper()
+	start := time.Now()
+	id := fTaskID.FindString(lone.Lore("task", "next", "--claim", "--push", "--yes", "--json").OK(t).Stdout)
+	if id == "" {
+		t.Fatal("the lone agent got no task to time")
+	}
+	lone.Lore("comment", "add", "--on-table", "tasks", "--on-id", id, "--body", body).OK(t)
+	lone.Lore("task", "done", "--id", id, "--no-lesson", "--yes").OK(t)
+	return time.Since(start) / 3
 }

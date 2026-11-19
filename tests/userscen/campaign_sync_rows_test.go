@@ -119,6 +119,6 @@ func TestCampaignSync_ConflictResolve(t *testing.T) {
 	camSyncRefuses(t, a, camSyncRefusal{[]string{"sync", "resolve", "1", "--take", "bogus"}, "E_INVALID_INPUT", 20, "--take must be kept or other"})
 	a.MustLore("sync", "resolve", strconv.Itoa(n), "--take", "other").Says(t, "resolved", "took other")
 	a.MustLore("memory", "show", id).Says(t, "(bob)").Never(t, "(alice)")
-	camSyncRefuses(t, a, camSyncRefusal{[]string{"sync", "resolve", strconv.Itoa(n), "--take", "other"}, "E_NOT_FOUND", 27, "no open conflict"})
+	camSyncRefuses(t, a, camSyncRefusal{[]string{"sync", "resolve", strconv.Itoa(n), "--take", "other"}, "E_NOT_FOUND", 27, "is not open any more: it was settled"})
 	a.MustLore("sync", "conflicts").Says(t, "no conflicts")
 }

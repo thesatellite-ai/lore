@@ -25,8 +25,10 @@ const notAWorkTreeHint = "cd into a git checkout, or run git init here first"
 
 // notAWorkTreeHomeHint is notAWorkTreeHint in the home folder (or above
 // it): `git init` there would make every file of the person a repository,
-// so the hint names the store target a write can take instead (B-7).
-const notAWorkTreeHomeHint = "cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)"
+// so the hint names the store target a write can take instead (B-7), and
+// the setup a person can name from anywhere, as the read hint does
+// (devco D-510, D-520: a write from home named only --to).
+const notAWorkTreeHomeHint = "cd into a git checkout, or name the store from here with --to <org>/<folder> (or --store; --to me for your own) or a setup with --setup <setup>; lore store list and lore setup list show them"
 
 func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts ...Option) (*Backend, error) {
 	cfg := build(opts)
@@ -54,6 +56,38 @@ func OpenRepo(ctx context.Context, dir, folder string, o store.OpenOptions, opts
 // it right after the open, before the handle is shared: readOnly is read
 // without the lock, as the open set it.
 func (b *Backend) MarkReadOnly() { b.readOnly = true }
+
+// MarkReadOnlyBecause is MarkReadOnly whose refused writes answer err
+// instead of the bare store.ErrReadOnly ("store: attached read-only",
+// which names no store, no cause and no next step: devco N-8). err should
+// wrap store.ErrReadOnly so errors.Is still finds it; nil is MarkReadOnly.
+// Same calling rule as MarkReadOnly.
+func (b *Backend) MarkReadOnlyBecause(err error) {
+	b.readOnly, b.readOnlyErr = true, err
+}
+
+// Unwritable reports whether the clone was opened read-only because lore
+// may not write it (a read-only lore home, devco:U-4): a caller skips its
+// fetch and sync, which could only fail.
+func (b *Backend) Unwritable() bool { return b.unwritable }
+
+// WriteRefusal is the error a write to this handle would answer (nil when
+// it is writable), so a command can refuse before it asks its question
+// (devco D-603).
+func (b *Backend) WriteRefusal() error {
+	if !b.readOnly {
+		return nil
+	}
+	return b.refusedWrite()
+}
+
+// refusedWrite is the error a write to a read-only handle answers.
+func (b *Backend) refusedWrite() error {
+	if b.readOnlyErr != nil {
+		return b.readOnlyErr
+	}
+	return store.ErrReadOnly
+}
 
 // RepoRoot is the folder OpenRepo would make the repo store's root for dir
 // (projectRoot: the nearest folder holding .lore up to the work tree top,

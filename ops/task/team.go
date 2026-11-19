@@ -30,6 +30,7 @@ const (
 	fieldApprovedHash = "approved_hash"
 	fieldMergedAt     = "merged_at"
 	fieldTeamActive   = "active"
+	fieldTeamHandle   = "handle"
 	// teamActive is a bool field's String() when set.
 	teamActive = "true"
 )
@@ -149,6 +150,21 @@ func (o ops) teamList(ctx context.Context, in ListIn) (teamView, error) {
 	}}, nil
 }
 
+// teamHandle is the current @handle of team id (every attached store), ""
+// when no team row has the id (a team removed or not synced here).
+func (o ops) teamHandle(ctx context.Context, id string) string {
+	all, err := work.ListAll(ctx, o.env, schema.TableTeams, "")
+	if err != nil {
+		return ""
+	}
+	for _, s := range all {
+		if s.Row.ID.String() == id {
+			return work.Field(s.Row, fieldTeamHandle)
+		}
+	}
+	return ""
+}
+
 // teamsOf returns the ids of the active teams (every attached store) that
 // list actor as a member.
 func (o ops) teamsOf(ctx context.Context, actor string) (map[string]bool, error) {
@@ -251,7 +267,7 @@ func (o ops) refuseClientTeam(ctx context.Context, a work.Assignee, target store
 	if class != direction.Client {
 		return nil
 	}
-	return errs.New(errs.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)").
+	return errs.New(errs.InvalidInput, "a team cannot be assigned in a linked client repo: team names are internal").
 		WithHint("assign a person (--assign @handle), or keep the task internal with --to <org>")
 }
 

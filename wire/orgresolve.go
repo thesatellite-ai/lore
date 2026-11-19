@@ -22,12 +22,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -35,6 +39,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -75,14 +80,31 @@ type OrgResolution struct {
 	// heldSaid names the store clones whose held push (store.SyncReport.Held,
 	// F-9) this process already said, once per clone like waited.
 	heldSaid waitedClones
+	// fetched names the store clones this process (one CLI command, or one
+	// REST request) already fetched: a later sync of the same clone, from
+	// any of its folders, reuses that fetch (devco L-12-perf).
+	fetched waitedClones
 
 	// routed is the F14 rule of the routed create this process made, for
 	// the "filed: <rule>" line (Routed).
 	routed string
 
-	once sync.Once
+	// mu guards the gathered answer below. A plain mutex, not a sync.Once:
+	// a following resolution (FollowConfig) gathers again after the config
+	// changed, and a Once cannot be re-armed safely.
+	mu   sync.Mutex
+	done bool
 	sit  *orgcfg.Situation
 	err  error
+	// follow: gather again when config.yaml changed since the last gather
+	// (FollowConfig); stamp is that file's size and time at that gather.
+	follow bool
+	stamp  string
+	// setup is the --setup choice (op.SetupOf) the kept answer was
+	// gathered for: a call naming another gathers again (devco:D-683: a
+	// hook resolved the folder's org before the run put the only org
+	// setup in ctx, and task next from home then ranked no store).
+	setup string
 }
 
 // now is r.Now, or the wall clock.
@@ -119,14 +141,93 @@ func (r *OrgResolution) FetchLinksAlways() {
 	}
 }
 
+// FollowConfig makes this resolution gather again whenever
+// ~/.lore/config.yaml changed since its last gather, re-reading the org
+// entries the store links come from. A server that outlives the config
+// it started with calls it: the setup page saves a whole setup, its team
+// step creates the org, and the next call on that same page must resolve
+// that org and its person, not the empty answer read before the setup
+// (devco J-16: team.invite refused "this repo has no org" until the page
+// was restarted). A CLI command keeps its one answer for its whole run.
+func (r *OrgResolution) FollowConfig() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.follow = true
+}
+
 // Situation is the gathered inputs and F10's decision, computed once (it
-// may fetch the org stores).
+// may fetch the org stores); with FollowConfig, again after config.yaml
+// changed.
 func (r *OrgResolution) Situation(ctx context.Context) (*orgcfg.Situation, error) {
-	r.once.Do(func() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	stamp := ""
+	if r.follow {
+		stamp = configStamp(r.home)
+		if r.done && stamp != r.stamp {
+			r.done = false
+			r.reloadLinkConfig()
+		}
+	}
+	if r.done && op.SetupOf(ctx) != r.setup {
+		r.done = false // gathered for another --setup choice
+	}
+	if !r.done && uncachedSituation(ctx) {
+		sit, err := r.gatherWithSetup(ctx)
+		return sit, maskOrgErr(err)
+	}
+	if !r.done {
+		// the stamp is taken before the gather: a write made during it is
+		// seen as a change on the next call
 		r.sit, r.err = r.gatherWithSetup(ctx)
 		r.err = maskOrgErr(r.err)
-	})
+		r.done, r.stamp, r.setup = true, stamp, op.SetupOf(ctx)
+	}
 	return r.sit, r.err
+}
+
+// uncachedSituationKey marks a ctx whose Situation call keeps nothing.
+type uncachedSituationKey struct{}
+
+// withUncachedSituation marks ctx so a Situation not computed yet is
+// gathered for this call only and not kept. devco:D-388-init: lore init's
+// client-repo question (ConfirmClientRepoInit, T-1) runs before init sets
+// the project up; the situation it gathered then (the repo root's project,
+// in a monorepo package) stayed for init's own writes, whose leak check
+// refused the new project's repos row as "a row of another project".
+func withUncachedSituation(ctx context.Context) context.Context {
+	return context.WithValue(ctx, uncachedSituationKey{}, true)
+}
+
+// uncachedSituation reports whether ctx carries withUncachedSituation.
+func uncachedSituation(ctx context.Context) bool {
+	v, _ := ctx.Value(uncachedSituationKey{}).(bool)
+	return v
+}
+
+// configStamp is config.yaml's size and modification time under home
+// ("-" when it does not exist): a stat, no read.
+func configStamp(home string) string {
+	st, err := os.Stat(filepath.Join(home, ConfigFile))
+	if err != nil {
+		return "-"
+	}
+	return strconv.FormatInt(st.Size(), 10) + " " + strconv.FormatInt(st.ModTime().UnixNano(), 10)
+}
+
+// reloadLinkConfig gives the store link reader the config as it is now
+// (StandaloneOrgResolution loaded it once at start). A config that does
+// not read gives it none, as at start; Gather then reports the error.
+func (r *OrgResolution) reloadLinkConfig() {
+	g, ok := r.links.(*orgcfg.GitLinks)
+	if !ok {
+		return
+	}
+	cfg, _, err := orgcfg.LoadConfig(r.home)
+	if err != nil {
+		cfg = nil
+	}
+	g.Config = cfg
 }
 
 // maskOrgErr masks only the credentials in a lore error's message, hint
@@ -167,6 +268,9 @@ func (r *OrgResolution) Apply(o *Options) {
 	if o.RepoLinkedByRemote == nil {
 		o.RepoLinkedByRemote = r.LinkedByRemote
 	}
+	if o.RepoLinkTarget == nil {
+		o.RepoLinkTarget = r.LinkTarget
+	}
 	if o.ClientRepo == nil {
 		o.ClientRepo = r.ClientRepo
 	}
@@ -190,17 +294,23 @@ func (r *OrgResolution) Apply(o *Options) {
 // ClientRepo is Options.ClientRepo: the org this checkout is a client repo
 // of by a match (a client link, or the org's repos: pattern), and its
 // linked folder (the default link, else the first client link). Zero for a
-// plain folder, a repo with no hosted remote, a repo that is client only
-// by the fail-closed default (nothing lists it as own), an own repo, no
-// org, or an org that cannot be resolved.
+// plain folder, a repo with no hosted remote, an own repo, no org, or an
+// org that cannot be resolved. A repo that is client only by the
+// fail-closed default (nothing lists it as own) has Org "" and Unlisted
+// set (devco D-525).
 func (r *OrgResolution) ClientRepo(ctx context.Context) ClientRepo {
 	s, err := r.Situation(ctx)
 	if err != nil || s == nil || s.ResolveErr != nil || s.NotGitRepo || len(s.Remotes) == 0 {
 		return ClientRepo{}
 	}
 	res := s.Result
-	if res.Role != orgresolve.RoleClient || !orgresolve.ClientByMatch(res.Org, res.Links, s.Remotes) {
-		return ClientRepo{} // not a client by default alone (an own repo never listed under own:)
+	if res.Role != orgresolve.RoleClient {
+		return ClientRepo{}
+	}
+	if !orgresolve.ClientByMatch(res.Org, res.Links, s.Remotes) {
+		// client by the fail-closed default alone (an own repo never
+		// listed under own:): Org stays "", Unlisted names the way out
+		return UnlistedClientRepo(res.Org, res.Links, s.Remotes)
 	}
 	out := ClientRepo{Org: res.Org.Name}
 	for _, l := range res.Links {
@@ -214,6 +324,16 @@ func (r *OrgResolution) ClientRepo(ctx context.Context) ClientRepo {
 	return out
 }
 
+// storeAliases is the short name of org store sc (lore-org.yaml `name:`,
+// else its repo name) when it differs from the name it is attached under
+// (devco T-5: `--to <the store's name>` in a linked repo).
+func storeAliases(sc *orgconf.Store, attachedAs string) []store.Source {
+	if n := sc.ShortName(); n != "" && n != attachedAs {
+		return []store.Source{store.Source(n)}
+	}
+	return nil
+}
+
 // LinkedByRemote is Options.RepoLinkedByRemote: the remote a store link
 // names this repo by when it holds no project id of its own (orgcfg
 // Situation.LinkedByRemote); "" when it has one, or nothing links it.
@@ -223,6 +343,46 @@ func (r *OrgResolution) LinkedByRemote(ctx context.Context) string {
 		return ""
 	}
 	return s.LinkedByRemote
+}
+
+// LinkTarget is Options.RepoLinkTarget: "<store short name>/<folder>" of
+// the link that names this repo (the default link first, else the first;
+// the links of an old store copy, else the moved link, when no fresh one
+// decides), by the short name of the link's store in the org entry the
+// link belongs to ("" when the entry or the store is not in config.yaml,
+// or no link names the repo). The short name, not the entry name: the
+// entry name answers --to only while the entry's folder is attached, and
+// this is the --to for a repo whose linked folder is not (devco:D-670).
+func (r *OrgResolution) LinkTarget(ctx context.Context) string {
+	s, err := r.Situation(ctx)
+	if err != nil || s == nil || s.Config == nil {
+		return ""
+	}
+	links := s.Result.Links
+	if len(links) == 0 {
+		links = s.OldLinks
+	}
+	if len(links) == 0 && s.Result.MovedLink != nil {
+		links = []orgresolve.Link{*s.Result.MovedLink}
+	}
+	var pick *orgresolve.Link
+	for i := range links {
+		if pick == nil || (links[i].Default && !pick.Default) {
+			pick = &links[i]
+		}
+	}
+	if pick == nil || pick.Folder == "" {
+		return ""
+	}
+	org := s.Config.FindOrg(pick.Entry)
+	if org == nil {
+		return ""
+	}
+	sc := org.StoreFor(pick.StoreURL)
+	if sc == nil || sc.ShortName() == "" {
+		return ""
+	}
+	return sc.ShortName() + targetSep + strings.Trim(pick.Folder, "/")
 }
 
 // Org is Options.Org: the resolved entry's name and identity; nil when no
@@ -310,7 +470,7 @@ func (r *OrgResolution) OrgStores(ctx context.Context) ([]attach.Store, error) {
 	switch {
 	case linked != nil:
 		if sc := org.StoreFor(linked.StoreURL); sc != nil {
-			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder, Branch: attachBranch(sc)})
+			out = append(out, attach.Store{Name: store.Source(org.Name), URL: sc.URL, Folder: linked.Folder, Branch: attachBranch(sc), Aliases: storeAliases(sc, org.Name)})
 		}
 	case s.Result.MovedLink != nil && s.Result.MovedLink.Entry == org.Name && org.StoreFor(s.Result.MovedLink.StoreURL) != nil:
 		// The client repo moved: its old link's folder is attached so its
@@ -413,7 +573,9 @@ func (r *OrgResolution) OrgEntryStore(ctx context.Context, name, folder string) 
 
 // OrgSigners is Options.OrgSigners: every entry with an identity and
 // stores signs its stores' commits with that identity (Q-R2-1). The name
-// is the identity's name, else the entry's; the email is the key's.
+// is the identity's name, else the email's local part (never the org's
+// name: devco N-12 set a store clone's git user.name to "acme"); the
+// email is the key's.
 func (r *OrgResolution) OrgSigners(ctx context.Context) ([]OrgSigner, error) {
 	cfg, _, err := orgcfg.LoadConfig(r.home)
 	if err != nil || cfg == nil {
@@ -425,11 +587,12 @@ func (r *OrgResolution) OrgSigners(ctx context.Context) ([]OrgSigner, error) {
 		if strings.TrimSpace(org.Identity.Key) == "" || len(org.Stores) == 0 {
 			continue
 		}
-		name := org.Identity.Name
+		email := emailOfKey(org.Identity.Key)
+		name := strings.TrimSpace(org.Identity.Name)
 		if name == "" {
-			name = org.Name
+			name, _, _ = strings.Cut(email, "@")
 		}
-		s := OrgSigner{Name: name, Email: emailOfKey(org.Identity.Key)}
+		s := OrgSigner{Name: name, Email: email}
 		for _, st := range org.Stores {
 			s.StoreURLs = append(s.StoreURLs, st.URL)
 		}
@@ -565,7 +728,7 @@ func (r *OrgResolution) linkedFolderTarget(ctx context.Context, s *orgcfg.Situat
 		if l.Entry == s.Result.Org.Name && l.Folder != "" {
 			to := s.Result.Org.Name + "/" + l.Folder
 			return "", errs.New(errs.ReadOnly, "this repo holds no lore files and its store link by remote ("+s.LinkedByRemote+") names folder "+l.Folder+" of "+l.StoreURL+", which is not attached here, so a write has nowhere to go").
-				WithHint("name the folder: --to " + to + " (or add that store to the org entry in ~/.lore/config.yaml so writes go there by themselves)")
+				WithHint("name the folder: --to " + to + " (or add that store to the org entry in " + lorehome.Shown() + "/config.yaml so writes go there by themselves)")
 		}
 	}
 	return "", nil

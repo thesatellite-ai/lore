@@ -77,7 +77,7 @@ func TestSharedHookBlocksStartNoLoreOutsideLoreRepos(t *testing.T) {
 	runAll := func(work, rel string) string {
 		t.Helper()
 		_ = os.Remove(calls)
-		for name, b := range hookBlocksFor(rel, true) {
+		for name, b := range hookBlocksFor(rel, true, "") {
 			for _, l := range b.lines {
 				if !strings.HasPrefix(l, "if [ ") {
 					t.Fatalf("%s line not guarded: %s", name, l)
@@ -126,7 +126,7 @@ func TestSharedHookBlocksStartNoLoreOutsideLoreRepos(t *testing.T) {
 		t.Fatalf("a wired clone's shared hooks skipped the leak check:\n%s", got)
 	}
 	// the clone's own hooks folder keeps the old binary's lines byte for byte
-	if hookBlocksFor("", false)[hookPreCommit].lines[0] != hookBlocks("")[hookPreCommit].lines[0] {
+	if hookBlocksFor("", false, "")[hookPreCommit].lines[0] != hookBlocks("")[hookPreCommit].lines[0] {
 		t.Fatal("unshared hook lines changed")
 	}
 }

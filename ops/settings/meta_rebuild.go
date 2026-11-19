@@ -259,7 +259,7 @@ func (o ops) metaRebuild(ctx context.Context, in MetaRebuildIn) (MetaRebuildOut,
 	if in.DryRun {
 		return out, nil
 	}
-	if err = bulk.Ask(ctx, fmt.Sprintf("recreate %d metadata key rows in %s (ids kept)?", len(plans), place(src))); err != nil {
+	if err = bulk.Ask(ctx, fmt.Sprintf("recreate %d metadata key rows in %s (ids kept)?", len(plans), o.place(src))); err != nil {
 		return MetaRebuildOut{}, err
 	}
 	// Re-check right before writing: a sync or checkout since the
@@ -399,7 +399,7 @@ func (o ops) probeClean(ctx context.Context, pr KeyRowProber, src store.Source, 
 	if !p.Git {
 		// DECISION OV64-FOLDER: a plain folder store has no refs to search
 		// and no history, so "really lost" cannot be told; refuse.
-		return KeyRowProbe{}, errs.New(errs.Unsupported, place(src)+" is a plain folder store: lore cannot tell a lost key row from one out of reach").
+		return KeyRowProbe{}, errs.New(errs.Unsupported, o.place(src)+" is a plain folder store: lore cannot tell a lost key row from one out of reach").
 			WithHint("restore the meta_keys files from your backup; nothing written")
 	}
 	if (p.Shallow || p.Sparse) && !allowShallow {
@@ -407,7 +407,7 @@ func (o ops) probeClean(ctx context.Context, pr KeyRowProber, src store.Source, 
 		if p.Sparse {
 			what = "a sparse checkout that leaves meta_keys/ or meta_values/ out"
 		}
-		return KeyRowProbe{}, errs.New(errs.Refused, place(src)+" is "+what+"; the missing rows may only be out of reach").
+		return KeyRowProbe{}, errs.New(errs.Refused, o.place(src)+" is "+what+"; the missing rows may only be out of reach").
 			WithHint("fetch the full history or widen the checkout, or rerun with --allow-shallow; nothing written")
 	}
 	var found []string

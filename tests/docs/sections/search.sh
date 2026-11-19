@@ -41,5 +41,9 @@ on alice $W "lore search --query invoices"
 on alice $W "lore search --query 'invoi*'"
 on alice $W "lore search --query 'client Fridays'"
 
+note "a question"
+on alice $W "lore search --query 'where is the stripe test mode on'"
+on alice $W "lore search --query 'stripe invoices'"
+
 note "no results"
 on alice $W "lore search --query pineapple"

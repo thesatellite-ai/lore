@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -93,7 +94,7 @@ func (a *App) RowLocation(ctx context.Context, id ids.AnyID) (RowLocation, error
 	b := st.byName[src]
 	if b == nil {
 		if src == store.SourceMachine {
-			return loc, errs.New(errs.NotFound, id.String()+" is a machine-local row ("+string(r.Table)+"): it is kept in this machine's database (~/.lore/state/machine.db), not in a file").
+			return loc, errs.New(errs.NotFound, id.String()+" is a machine-local row ("+string(r.Table)+"): it is kept in this machine's database ("+lorehome.Shown()+"/state/machine.db), not in a file").
 				WithHint("print it with lore show --id " + id.String())
 		}
 		return loc, errs.New(errs.Internal, "path: store "+string(src)+" holds "+id.String()+" but has no backend open")

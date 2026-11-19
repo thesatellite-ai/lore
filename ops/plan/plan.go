@@ -295,6 +295,7 @@ func (o ops) add(ctx context.Context, in AddIn) (ShowOut, error) {
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return ShowOut{}, err
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.env); v != nil {
 		fields[work.FieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}

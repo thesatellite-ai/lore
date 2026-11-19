@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -62,7 +63,7 @@ type ClaimIn struct {
 	From       string   `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
 	// Push is the person's go-ahead to push the claim to the code repo's
 	// remote (D-15: nothing reaches a remote unasked).
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
 }
 
 // HeartbeatIn is the input of task.heartbeat.
@@ -85,20 +86,36 @@ type NextIn struct {
 	Role    string   `json:"role,omitempty" flag:"role" desc:"plan role (e.g. coordinator)"`
 	Owns    []string `json:"owns,omitempty" flag:"owns" desc:"paths the claim owns"`
 	Why     bool     `json:"why,omitempty" flag:"why" desc:"explain the urgency score term by term"`
-	DryRun  bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain without claiming (nothing written)"`
-	// Push: as ClaimIn.Push, for the claim task next takes.
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	// Claim makes task next take the task it shows (devco:D-426): without
+	// it task next only reads, so an agent or a script that runs it to look
+	// never claims and commits by accident. The claim is task claim's.
+	Claim bool `json:"claim,omitempty" flag:"claim" desc:"claim the task shown (resume the one you hold); without it task next only shows it and writes nothing"`
+	// DryRun is the ranking's old "write nothing" switch, kept so scripts
+	// that pass it keep working: it wins over --claim and prints the
+	// v0.1.17 ranking ("would claim …", "nothing written (--dry-run)").
+	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"rank and explain in the old form, never claiming even with --claim (nothing written)"`
+	// Push: as ClaimIn.Push, for the claim task next --claim takes.
+	Push bool `json:"push,omitempty" flag:"push" desc:"with --claim: push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)"`
+	// Store ranks the tasks of one org's store, <org> or <org>/<folder>,
+	// from anywhere (devco:D-666): from the home folder `task next
+	// --setup <setup>` ranks the setup's org store the same way.
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"rank the tasks of this org's store, <org> or <org>/<folder>, from any folder (each claim lands on its folder's store signals ref); from the home folder --setup <setup> ranks that setup's org store"`
 }
 
-// NextOut is the output of task.next. With --dry-run, Ready and Waiting are
-// the ranking (TASK 13.3, the v0.1.17 --dry-run --json shape); a claim
+// NextOut is the output of task.next. Without --claim (a read, or
+// --dry-run) Ready and Waiting are the ranking (TASK 13.3, the v0.1.17
+// --dry-run --json shape) and DryRun is true: nothing was written. A claim
 // fills Claimed. Lines is the human form either way.
 type NextOut struct {
 	Ready   []Ranked  `json:"ready"`
 	Waiting []Waiting `json:"waiting"`
-	DryRun  bool      `json:"dry_run"`
-	// Claimed is the task next claimed or resumed ("" with --dry-run).
-	Claimed string   `json:"claimed,omitempty"`
+	// DryRun is true when nothing was written: every run without --claim.
+	DryRun bool `json:"dry_run"`
+	// Claimed is the task next claimed or resumed (only with --claim).
+	Claimed string `json:"claimed,omitempty"`
+	// Holding is, on a read, the task this session already holds, which
+	// next --claim would resume rather than claim another.
+	Holding string   `json:"holding,omitempty"`
 	Lines   []string `json:"-"`
 }
 
@@ -141,6 +158,9 @@ type ReassignIn struct {
 	ID     string `json:"id,omitempty" arg:"0" desc:"the task id (tsk_…); leave out with --from"`
 	Assign string `json:"assign,omitempty" flag:"assign" desc:"the new assignee (@handle)"`
 	From   string `json:"from,omitempty" flag:"from" desc:"reassign every open task of this person"`
+	// Push: as ClaimIn.Push, for a reassign that drops a claim (or a
+	// revoke marker) on the code repo's signals ref (devco:S-17).
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the dropped claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
 }
 
 // ReassignTask is one task a `task reassign --from` batch changes.
@@ -180,6 +200,9 @@ type ReleaseIn struct {
 type RevokeIn struct {
 	ID   string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	From string `json:"from,omitempty" flag:"from" alias:"store" desc:"the source of the id: repo | <org> | <org>/<folder>"`
+	// Push: as ClaimIn.Push (devco:S-17): a revoke changes refs/lore/signals,
+	// so on a code repo's own remote it needs the same explicit go-ahead.
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the revoke now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)"`
 }
 
 // HoldClaimIn is the input of hold.claim.
@@ -188,12 +211,17 @@ type HoldClaimIn struct {
 	TTL  time.Duration `json:"ttl,omitempty" flag:"ttl" desc:"how long the hold lasts (default: lease.ttl)"`
 	On   string        `json:"on,omitempty" flag:"on" desc:"project (the project's signals ref, the default) or machine"`
 	// Push: as ClaimIn.Push, for a hold on the code repo's signals ref.
-	Push bool `json:"push,omitempty" flag:"push" desc:"push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"`
+	Push bool `json:"push,omitempty" flag:"push" desc:"push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)"`
+	// Store holds on an org store folder's signals ref from any folder
+	// (devco:D-672): a resource an org shares, held from the home folder.
+	Store string `json:"store,omitempty" flag:"store" desc:"hold it on this org store folder's signals ref, <org>/<folder> (or <org> when it has one folder), from any folder; without it the code repo's signals ref (outside a code repo: the store clone here, or the --setup's org store)"`
 }
 
 // HoldReleaseIn is the input of hold.release.
 type HoldReleaseIn struct {
 	Name string `json:"name" arg:"0" desc:"the resource to release"`
+	// Store: as HoldClaimIn.Store, the place the hold was taken.
+	Store string `json:"store,omitempty" flag:"store" desc:"release the hold taken on this org store folder, <org>/<folder> (or <org> when it has one folder), from any folder"`
 }
 
 // GateIn is the input of gate.request and gate.approve.
@@ -255,12 +283,7 @@ const (
 )
 
 // padRight pads s with spaces to width (fmt's %-Ns).
-func padRight(s string, width int) string {
-	if n := len([]rune(s)); n < width {
-		return s + strings.Repeat(" ", width-n)
-	}
-	return s
-}
+func padRight(s string, width int) string { return textwidth.PadRight(s, width) }
 
 // MissionStatusIn is the input of mission.status.
 type MissionStatusIn struct {

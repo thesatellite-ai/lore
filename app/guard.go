@@ -10,6 +10,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/wire"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
@@ -39,6 +41,25 @@ func refuseRoot() error {
 	}
 	return errs.New(errs.RootRefused, "lore refuses to run as root: files it writes would be owned by root").
 		WithHint("run lore as your own user (without sudo), or set " + envAllowRoot + "=" + envOn + " if you really mean it")
+}
+
+// readOnlyHomeHookName names the read-only-home hook.
+const readOnlyHomeHookName = "read-only-home"
+
+// readOnlyHomeHook refuses a writing operation up front when lore cannot
+// write its home (wire.RefuseWriteInReadOnlyHome, devco:U-4): reads go on
+// from the read-only home, a write says which folder and how to fix it
+// instead of storing a row and failing E_INTERNAL on its audit record.
+func readOnlyHomeHook(home string) hosthooks.Hook {
+	return hosthooks.Hook{
+		Name: readOnlyHomeHookName,
+		Before: func(_ context.Context, run *hosthooks.Run) error {
+			if run.Entry == nil || run.Entry.Spec().Access != op.AccessWrite {
+				return nil
+			}
+			return wire.RefuseWriteInReadOnlyHome(home)
+		},
+	}
 }
 
 // diskFullHookName names the disk-full hook (host.Replace keys on it).

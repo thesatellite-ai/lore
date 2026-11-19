@@ -91,12 +91,17 @@ func TestTaskSplitSecondCloneDefaultList(t *testing.T) {
 			if !strings.Contains(r.Out(), "inherited: tasklist "+list) {
 				t.Fatalf("the children must join the parent's list %s: %s", list, r)
 			}
-			kids := idPrefixed("tsk").FindAllString(r.Out(), -1)
+			// the children listed on stdout, each once (devco D-224: stderr
+			// now names every live write, tasks/<id> again, so counting ids
+			// in stdout and stderr together counted each child three times)
+			kids := idPrefixed("tsk").FindAllString(r.Stdout, -1)
 			n := 0
+			seen := map[string]bool{}
 			for _, k := range kids {
-				if k == parent {
+				if k == parent || seen[k] {
 					continue
 				}
+				seen[k] = true
 				n++
 				if show := c2.MustLore("task", "show", k, "--json"); !strings.Contains(show.Out(), list) {
 					t.Fatalf("child %s is not in the parent's list %s: %s", k, list, show)

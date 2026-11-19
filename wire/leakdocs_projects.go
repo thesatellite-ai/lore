@@ -23,6 +23,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // leakDataMark is the repo-relative marker of a project's row folder.
@@ -99,7 +100,7 @@ func (a *App) leakOwnFolder(ctx context.Context) (folder, top string, ok bool) {
 	if top == "" {
 		return "", "", false
 	}
-	rel, err := filepath.Rel(realPath(top), realPath(root))
+	rel, err := filepath.Rel(fspath.Canonical(top), fspath.Canonical(root))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", "", false
 	}
@@ -107,15 +108,6 @@ func (a *App) leakOwnFolder(ctx context.Context) (folder, top string, ok bool) {
 		rel = ""
 	}
 	return filepath.ToSlash(rel), top, true
-}
-
-// realPath is p with symlinks resolved (p itself when that fails), so the
-// git top and the project root compare on the same spelling (macOS /var).
-func realPath(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
 }
 
 // leakCheckByProject runs leakcheck.Check over items once per project

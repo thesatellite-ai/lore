@@ -170,10 +170,14 @@ var reads = []sweepStep{
 	// adapters/backend/git TestSyncRefusesAResetRemote).
 	{Cmd: "store push", Args: []string{"repo"}, In: inRepo},
 	{Cmd: "store push", Args: []string{"repo", "--restore", "--yes"}, In: inRepo},
+	// store trust: no committed .lore/stores.yaml attaches a store of that
+	// name, a documented refusal (E_NOT_FOUND) that names nothing as trusted
+	{Cmd: "store trust", Args: []string{"--name", "notes"}, In: inRepo},
 	{Cmd: "repo list", In: inBoth},
 	{Cmd: "project list", In: inBoth},
 	{Cmd: "project shared-list", In: inRepo},
 	{Cmd: "org use", In: inHome},
+	{Cmd: "org list", In: inHome}, // devco D-570: lists this machine's org entries; read only
 	{Cmd: "skill status", In: inBoth},
 	{Cmd: "skill install", Args: []string{"--all", "--dry-run"}, In: inBoth},
 	{Cmd: "migrate status", In: inBoth},
@@ -210,6 +214,10 @@ var reads = []sweepStep{
 	{Cmd: "batch list", In: inRepo},
 	{Cmd: "trash list", In: inBoth},
 	{Cmd: "trash stats", In: inRepo},
+	// D-392: the born-branch reads; a dry run writes nothing
+	{Cmd: "trash add", Args: []string{"--born-branch", "feat/sweep", "--dry-run"}, In: inRepo},
+	{Cmd: "trash list", Args: []string{"--born-branch", "feat/sweep"}, In: inRepo},
+	{Cmd: "memory list", Args: []string{"--born-branch", "feat/sweep"}, In: inRepo},
 	{Cmd: "sync trash list", In: inRepo},
 	{Cmd: "session list", In: inRepo},
 	{Cmd: "actor list", In: inRepo},
@@ -342,7 +350,7 @@ var rowChains = []sweepChain{
 	}},
 	{Name: "rule-any-row", Steps: []sweepStep{
 		r("tag add", "--name=sweep_tag"), r("tag edit", "sweep_tag", "--globs", "src/**"),
-		rs("rule add", "--body", sampleWord+" pinned rule"), r("pin set", varID, "--context", "full"), r("pin unset", varID),
+		rs("rule add", "--body", sampleWord+" pinned rule"), r("rule approve", "--id", varID), r("pin set", varID, "--context", "full"), r("pin unset", varID),
 		r("tag attach", "--on-table", "rules", "--on-id", varID, "--tag", "sweep_tag"),
 		r("tag detach", "--on-table", "rules", "--on-id", varID, "--tag", "sweep_tag"), r("tag list"),
 		r("explain run", varID), r("row show", varID), r("show", varID),
@@ -471,6 +479,8 @@ const (
 	whyStoreUse    = "points lore at a person's own git clone of a store, made with git clone first; wire TestStoreUse runs it"
 	whySyncFixture = "needs a conflict, a second branch or a live remote; the sync tests run it"
 	whySupport     = "writes a support bundle to send; the support-bundle tests run it"
+	whyBranchLayer = "needs a code repo linked to a store folder, on a feature branch with a layer (and a merge, a remote or a workflow file for land, adopt and install-action); the BL stories (tests/stories BL_*) run it"
+	whyOrgStoreRm  = "removes a store from an org made first with org create + org store add; the journey r7torg tests run it"
 	whySourceCopy  = "rewrites copies from their one source of truth (SOURCE_OF_TRUTH), which needs a stale copy, a leftover or an org store; the sot_* tests and the doctor fixes in the env, repos and foreign tests run it"
 )
 
@@ -492,7 +502,7 @@ var notUserRun = map[string]string{
 	"actor delete": whyTeam, "actor edit": whyTeam, "actor merge": whyTeam, "actor offboard": whyTeam, "actor period add": whyTeam, "actor period edit": whyTeam,
 	"actor period list": whyTeam, "actor register": whyTeam, "actor rejoin": whyTeam, "actor show": whyTeam, "actor status": whyTeam,
 	"contact-type add": whyTeam, "contact-type edit": whyTeam, "role add": whyTeam, "role edit": whyTeam,
-	"org create": whyTeam, "org link": whyTeam, "org unlink": whyTeam, "org rename": whyTeam, "org set": whyTeam, "org store add": whyTeam,
+	"org create": whyTeam, "org link": whyTeam, "org unlink": whyTeam, "org rename": whyTeam, "org set": whyTeam, "org store add": whyTeam, "org store audience": whyTeam, "org config get": whyTeam, "org config set": whyTeam,
 	"project member add": whyTeam, "project member edit": whyTeam, "project member list": whyTeam, "project member remove": whyTeam,
 	"project shared-init": whyTeam, "team invite list": whyTeam, "team invite resend": whyTeam, "team invite revoke": whyTeam,
 	"team add": whyTeam, "team list": whyTeam, "team show": whyTeam, "team remove": whyTeam, "team rename": whyTeam, "team member add": whyTeam, "team member remove": whyTeam,
@@ -532,4 +542,10 @@ var notUserRun = map[string]string{
 	"support-bundle run": whySupport,
 
 	"actor refresh": whySourceCopy, "identity migrate": whySourceCopy, "org refresh": whySourceCopy,
+
+	"branch adopt": whyBranchLayer, "branch drop": whyBranchLayer, "branch install-action": whyBranchLayer, "branch isolate": whyBranchLayer,
+	"branch land": whyBranchLayer, "branch list": whyBranchLayer, "branch mode": whyBranchLayer, "branch promote": whyBranchLayer,
+	"branch purge": whyBranchLayer, "branch rename": whyBranchLayer, "branch restore": whyBranchLayer, "branch share": whyBranchLayer,
+	"branch show":      whyBranchLayer,
+	"org store remove": whyOrgStoreRm,
 }

@@ -55,6 +55,11 @@ func (e fieldMarkersError) Unwrap() error { return e.err }
 // Error is the wrapped error's text.
 func (e fieldMarkersError) Error() string { return e.err.Error() }
 
+// fieldMarkersHint is the next step of a row with a conflict block in a
+// field or meta entry, in plain words: the notice and doctor print it as
+// the file's "next:" (devco D-281: the per-command line had lost it).
+const fieldMarkersHint = "keep the side you want and delete the marker lines in the file, or set the value with the row's edit command (lore sync resolve can pick a side); then commit it"
+
 // isFieldMarkers reports a fieldMarkersError in err's chain.
 func isFieldMarkers(err error) bool {
 	var m fieldMarkersError
@@ -82,13 +87,13 @@ func decodeImportable(rel string, doc []byte) (store.Row, error) {
 	}
 	for name, v := range full.Fields {
 		if hasMarkers(v) {
-			return store.Row{}, fieldMarkersError{errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+": field "+name+" holds unresolved conflict markers; resolve them in the file and commit")}
+			return store.Row{}, fieldMarkersError{errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+": field "+name+" holds unresolved conflict markers").WithHint(fieldMarkersHint)}
 		}
 	}
 	keys := slices.SortedFunc(maps.Keys(full.Meta), func(a, b ids.ID[ids.MetaKey]) int { return strings.Compare(a.String(), b.String()) })
 	for _, k := range keys { // by id: the same first entry named on every machine
 		if rawHasMarkers(full.Meta[k].Raw()) {
-			return store.Row{}, fieldMarkersError{errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+": meta entry "+k.String()+" holds unresolved conflict markers; resolve them in the file and commit")}
+			return store.Row{}, fieldMarkersError{errs.New(errs.InvalidInput, "rowfs: "+quote(rel)+": meta entry "+k.String()+" holds unresolved conflict markers").WithHint(fieldMarkersHint)}
 		}
 	}
 	return r, nil

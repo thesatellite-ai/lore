@@ -85,13 +85,8 @@ func (c *Cache) initRead(ctx context.Context) (state, bool, error) {
 		}
 		return state{}, false, err
 	}
-	if len(have) != len(st.plans) {
+	if !sameTables(have, st) {
 		return state{}, false, nil
-	}
-	for name, p := range st.plans {
-		if rec, ok := have[name.String()]; !ok || rec.fingerprint != p.fingerprint {
-			return state{}, false, nil
-		}
 	}
 	return st, true, nil
 }

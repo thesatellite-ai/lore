@@ -124,8 +124,8 @@ func InternalRows(ctx context.Context, app *wire.App, table, text string) ([]Int
 				return nil, lerr
 			}
 			for _, r := range list {
-				if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
-					continue
+				if r.Deleted || renderField(r, renderFieldArchivedAt) != "" || app.WasMasked(ctx, r.ID) {
+					continue // devco:R-14: a row holding a secret match stays out of agent context
 				}
 				if needle != "" && !rowMatches(r, needle) {
 					continue

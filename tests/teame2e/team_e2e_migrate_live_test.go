@@ -40,7 +40,11 @@ type liveLooper struct {
 	pool  []string        // the task only this agent claims (max_claims_per_agent 1; final claim state is its own)
 	held  map[string]bool // claim state after its last successful claim/release
 	wrote []liveWrite
-	rnd   *rand.ChaCha8 // fixed seed per looper: a failure replays
+	// waiting counts live writes that reported success while their push lost every race
+	// ("not pushed yet"): committed on this clone's live ref only, sent by
+	// the next live write or `lore sync`, never by a read (devco:D-498)
+	waiting int
+	rnd     *rand.ChaCha8 // fixed seed per looper: a failure replays
 }
 
 // round runs one random write on the looper's pool or the shared task and
@@ -80,6 +84,9 @@ func (l *liveLooper) round(t *testing.T, shared string, i int) {
 	switch r.Code {
 	case 0:
 		l.wrote = append(l.wrote, w)
+		if strings.Contains(r.Out(), "not pushed yet") {
+			l.waiting++
+		}
 		switch w.op {
 		case "claim":
 			l.held[task] = true
@@ -218,6 +225,12 @@ func TestMigrateRaceLiveWritesAndClaims(t *testing.T) {
 		t.Errorf("the long claim changed across the migration:\nbefore %+v\nafter  %+v", before, after)
 	}
 	for _, l := range loopers {
+		if l.waiting > 0 {
+			// devco:D-498: a write that lost every push race exits 0 and
+			// waits on this clone; `lore sync` sends it (a read never
+			// pushes), and only then must every reported write be there
+			l.c.MustLore("sync").Never(t, "not pushed")
+		}
 		l.c.MustLore("task", "list")
 		for _, task := range l.pool {
 			sig, held := cr.claim(t, task)
@@ -228,8 +241,9 @@ func TestMigrateRaceLiveWritesAndClaims(t *testing.T) {
 	}
 	show := cr.toolsC.MustLore("task", "show", shared).Out()
 	started := map[string]bool{}
-	writes := 0
+	writes, waited := 0, 0
 	for _, l := range loopers {
+		waited += l.waiting
 		for _, w := range l.wrote {
 			writes++
 			switch w.op {
@@ -253,5 +267,5 @@ func TestMigrateRaceLiveWritesAndClaims(t *testing.T) {
 			t.Errorf("live row %s is at _v %s, want 2", id, v)
 		}
 	}
-	t.Logf("%d successful loop writes; migrate run: exit %d", writes, res.Code)
+	t.Logf("%d successful loop writes (%d lost every push race and waited for lore sync); migrate run: exit %d", writes, waited, res.Code)
 }

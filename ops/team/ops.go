@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -99,7 +100,7 @@ func Ops(env Env) []op.Entry {
 		op.Define(op.Spec{Name: setup.OpTeamInviteResend, Summary: "Print a pending invite's line again (changes nothing)",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: resendErrs,
 			Examples: []op.Example{{Title: "resend by email", CLI: "lore team invite resend --ref tomas@agency.example", Want: "lore-invite:v1:"}}},
-			func(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteResendOut, error) {
+			func(ctx context.Context, in setup.TeamInviteResendIn) (setup.TeamInviteResendOut, error) {
 				return o.resend(ctx, in)
 			}),
 	}, o.staffOps(base, writeErrs)...)
@@ -121,8 +122,11 @@ func adminSetup(ctx context.Context, env Env) (onboard.SetupEntry, error) {
 		return onboard.SetupEntry{}, err
 	}
 	if act.Name == "" || act.Why == setup.WhyNone {
-		return onboard.SetupEntry{}, errs.New(errs.Refused, "team invites are written from an admin setup, and no setup is active here").
-			WithHint("lore setup list, then run with --setup <an admin setup>, or start a team with lore setup")
+		if e, ok := orgAdminHere(ctx, env); ok {
+			return e, nil
+		}
+		return onboard.SetupEntry{}, errs.New(errs.Refused, "people are added and invited from an admin setup, and no setup is active here (nor is this repo in an org you are an admin of)").
+			WithHint("run it in a repo of your org (lore whoami names the org), or with --setup <an admin setup> (lore setup list); no org yet: lore org create --org <name> --store <store> --yes")
 	}
 	cfg, err := st.Config(ctx)
 	if err != nil {
@@ -133,10 +137,86 @@ func adminSetup(ctx context.Context, env Env) (onboard.SetupEntry, error) {
 		return onboard.SetupEntry{}, errs.New(errs.SetupNotFound, "no setup named "+act.Name+"; lore setup list shows the setups on this machine")
 	}
 	if e.Kind != onboard.KindAdmin || e.Org == "" {
-		return onboard.SetupEntry{}, errs.New(errs.Refused, "setup "+e.Name+" is a "+string(e.Kind)+" setup; team invites are written from an admin setup of the org").
+		// a member or solo setup in a repo of an org the caller is the
+		// admin of (the setup came before org create): act as that admin.
+		// A setup named with --setup is the person's choice for this run
+		// and is kept: `--setup personal team invite` stays refused
+		// (devco:D-327); P-5's fallback is for a setup lore picked.
+		if a, ok := orgAdminHere(ctx, env); ok && act.Why != setup.WhyFlag && (e.Org == "" || e.Org == a.Org) {
+			return a, nil
+		}
+		return onboard.SetupEntry{}, errs.New(errs.Refused, "setup "+e.Name+" is a "+string(e.Kind)+" setup; people are added and invited from an admin setup of the org").
 			WithHint("run with --setup <an admin setup>, or ask the org admin to invite")
 	}
+	if err := demotedAdmin(ctx, env, e); err != nil {
+		return onboard.SetupEntry{}, err
+	}
 	return e, nil
+}
+
+// demotedAdmin refuses an admin setup whose person the org's roster (as
+// last synced) no longer names an admin. Why (devco T-18): the setup kind
+// is this machine's memory of the role; after an admin demoted someone,
+// their member add --role admin said "✓ added" and was only held back at
+// sync, with a reason about contacts. The roster is the truth: a caller
+// with an open stint of another org role is refused here with that role
+// and the date it started. A roster that cannot be read, or that does not
+// hold the caller yet (the org's first steps), keeps the setup's answer:
+// the store's own check still holds back what a non-admin pushes.
+func demotedAdmin(ctx context.Context, env Env, e onboard.SetupEntry) error {
+	r, done, err := env.Roster(ctx, false)
+	defer done()
+	if err != nil || r.Caller().IsZero() {
+		return nil
+	}
+	if org, _, _ := strings.Cut(string(r.Source()), orgconf.RefSep); org != e.Org {
+		return nil
+	}
+	rows, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return nil
+	}
+	caller := r.Caller().String()
+	for _, p := range rows {
+		if fieldText(p, schema.FieldPeriodActor) != caller || fieldText(p, schema.FieldPeriodEndedOn) != "" {
+			continue
+		}
+		role := fieldText(p, schema.FieldPeriodOrgRole)
+		if role == "" || role == OrgRoleAdmin {
+			return nil
+		}
+		since := fieldText(p, schema.FieldPeriodStartedOn)
+		if since != "" {
+			since = " since " + since
+		}
+		return errs.New(errs.Refused, "you are a "+role+" of "+e.Org+since+" (the org roster as last synced); only an admin adds or invites people, and setup "+e.Name+" still says admin only on this machine").
+			WithHint("ask an admin of " + e.Org + " to run it (lore member list --json names them); if you were made admin again, run `lore sync` first")
+	}
+	return nil
+}
+
+// orgAdminHere is the admin setup the team ops act for when no setup is
+// active: the org the current repo resolves to, when the caller holds an
+// open admin stint on its roster. `lore org create` makes its creator
+// that admin without writing a setups[] entry, and the creator's next
+// step is adding the first teammate (devco P-5); requiring a separate
+// `lore setup apply` run for an org that already exists dead-ended there.
+// ok is false for a repo with no org (the roster is the repo's own) or a
+// caller who is not the org's admin.
+func orgAdminHere(ctx context.Context, env Env) (onboard.SetupEntry, bool) {
+	r, done, err := env.Roster(ctx, false)
+	defer done()
+	if err != nil {
+		return onboard.SetupEntry{}, false
+	}
+	org, _, found := strings.Cut(string(r.Source()), orgconf.RefSep)
+	if !found || org == "" || r.Caller().IsZero() {
+		return onboard.SetupEntry{}, false
+	}
+	if role, err := openOrgRole(ctx, r, r.Caller().String()); err != nil || role != OrgRoleAdmin {
+		return onboard.SetupEntry{}, false
+	}
+	return onboard.SetupEntry{Name: org, Kind: onboard.KindAdmin, Org: org}, true
 }
 
 // Field values and limits of the invite ops.

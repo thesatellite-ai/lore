@@ -149,7 +149,7 @@ const keyRowGlob = ":(glob)**/" + string(schema.TableMetaKeys) + "/*.json"
 // and the command to use; err is a git failure. Files added or removed
 // are not loosenings (a new key, a tombstone commit).
 func KeyLoosenings(ctx context.Context, dir, base, target string) (found []error, err error) {
-	args := []string{"diff", "--name-only", "--diff-filter=M"}
+	args := []string{"-c", "core.quotePath=false", "diff", "--name-only", "--diff-filter=M"} // raw paths (devco Q-13)
 	if target == "" {
 		args = append(args, "--cached", base)
 	} else {

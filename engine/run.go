@@ -66,10 +66,16 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		return op.Result{}, err
 	}
 	cl := call{op: spec.Name, access: spec.Access, caller: c, target: e.target}
+	if spec.Access == op.AccessWrite && spec.Previews(in) {
+		// devco:D-682: a preview (--dry-run) writes nothing, so it runs as
+		// a read: no row made on first use (a store folder's project row,
+		// T-11) and no push. The writable check below still runs, as before.
+		cl.access = op.AccessRead
+	}
 	named := false
 	for _, tv := range in.Texts() {
 		if tv.Field == InputTarget && tv.Text != "" {
-			cl.target, named = store.Source(tv.Text), true
+			cl.target, named = e.StoreName(store.Source(tv.Text)), true
 		}
 	}
 	if _, err := e.attached(cl.target); err != nil {
@@ -79,9 +85,13 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		return op.Result{}, err
 	}
 	if spec.Access == op.AccessWrite {
-		if _, err := e.writable(cl.target); err != nil {
+		if _, err := e.writable(ctx, cl.target); err != nil {
 			return op.Result{}, err
 		}
+	}
+	// D-617: a row named by id lives in a store --store names (narrow.go)
+	if err := e.refuseNarrowedIDs(ctx, in.IDArgs()); err != nil {
+		return op.Result{}, err
 	}
 	if c.Agent != "" {
 		// POLICY (spec 9.2): agents.person_only names commands, so it is
@@ -124,6 +134,11 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 	res, ierr := entry.Invoke(store.WithCommitOp(context.WithValue(ctx, callKey{}, cl), spec.Name), in)
 	if ierr == nil {
 		ierr = metaUsed()
+	}
+	if ierr == nil && strings.HasSuffix(spec.Name, showSuffix) {
+		// every <noun> show names the store/folder of its row on its
+		// first line, as memory and rule show do (op.WithShowLabel, D-557)
+		res = res.WithShowLabel()
 	}
 	if ierr == nil && purge != nil {
 		confirm := purge.Confirmed
@@ -243,3 +258,6 @@ func (e *Engine) unknownTarget(err error) error {
 	// another repo's .lore/data, so say what --to names.
 	return ee.WithHint("give one of: " + strings.Join(places, ", ") + " (lore store list shows the attached stores); --to names a store, never another repo: a row cannot move into another repo's notes, add it there instead")
 }
+
+// showSuffix ends the name of every <noun> show operation.
+const showSuffix = ".show"

@@ -17,7 +17,7 @@ This page is for one person. Alice (an agency developer) keeps her to-do list fo
 
 ## Step 1 — Add tasks
 
-Give each task a short title that says what to do. Add `--priority` (`low`, `medium`, `high` or `urgent`; `medium` if you leave it out), `--due` for a date, and `--body` for the details.
+Give each task a short title that says what to do. Add `--priority` (`low`, `medium`, `high` or `urgent`; `medium` if you leave it out), `--due` for a date, and `--body` for the details. Where the task came from goes in `--source-ref` (a url, a ticket, a commit, `file:line`) and what kind of source it is in `--source` (`imported`, `agent-proposal`, …; empty if you leave it out), as on every other add; `lore task show --json` gives both back as `source_ref` and `source_kind`.
 
 <!-- example: tasks#add -->
 ```console
@@ -44,7 +44,7 @@ The line `lore live: (live, pushed)` means lore shared the task at once: it put 
 
 ## Step 2 — See your list
 
-`lore task list` shows the open tasks. The mark at the start of each line is the status: `○` todo, `▶` in progress, `✓` done, `✗` cancelled.
+`lore task list` shows the open tasks, oldest first: in the order they were made, whichever store holds them (a recurring task's next instance comes after the tasks made before it). `--sort` picks another order. The mark at the start of each line is the status: `○` todo, `▶` in progress, `✓` done, `✗` cancelled.
 
 <!-- example: tasks#list -->
 ```console
@@ -88,6 +88,8 @@ The Pro plan says 9 a month; it should say 19.
 created 2026-11-02T10:00:10Z by alice · updated 2026-11-02T10:00:25Z by alice
 ```
 <!-- /example -->
+
+Every task read names its store from any folder (a code repo, a store clone, the home folder) as `lore task list --store` does: `task show --store <org>` (also spelled `--from`), `task checklist list`, `task history`, `task recur show`, `task time show`, `task triage`, `task someday`, `task deferred`, `task export`, `task template list|show` and `task view list|show` all take `--store <org>` (every folder of the org) or `--store <org>/<folder>` (one folder); a name no store answers to is refused with `E_NOT_FOUND`, never ignored.
 
 ## Step 5 — Change a task
 
@@ -229,7 +231,7 @@ To see which tasks are ready and which are waiting, put them in a mission and ru
 
 ## Step 10 — Group tasks in a tasklist
 
-A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`, and every later add without `--tasklist` prints `on tasklist tlt_… "default" (the default; --tasklist picks another)`. Use `--tasklist` on `task add` or `task edit` to pick another; an empty `--tasklist=` (likewise `--mission=` and `--plan=`) is refused with `E_INVALID_INPUT`, never read as "use the default". Make a list with `lore tasklist add --title 'Launch week'`; the body is optional, with `--body`.
+A tasklist is a named list, like a page in a notebook: "Launch week", "Bugs from the demo". Every task belongs to one. If you do not pick one, lore uses the project's default list, which it creates the first time you add a task; that add prints one more line, `created tasklist tlt_… "default" for tasks added without --tasklist`, and every later add without `--tasklist` prints `on tasklist tlt_… "default" (the default; --tasklist picks another)`. A project has one default list: its id is derived from the project, so two people whose first adds came before either synced create the same list, and after `lore sync` there is still one. Use `--tasklist` on `task add` or `task edit` to pick another; an empty `--tasklist=` (likewise `--mission=` and `--plan=`) is refused with `E_INVALID_INPUT`, never read as "use the default". Make a list with `lore tasklist add --title 'Launch week'`; the body is optional, with `--body`.
 
 <!-- example: tasks#tasklist -->
 ```console
@@ -238,6 +240,7 @@ $ lore tasklist add --title 'Launch week' --body 'Everything that must happen be
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json
 ✓ tlt_b4f4…a5b0
 $ lore task add --title 'Check every link on the home page' --tasklist tlt_b4f4…a5b0
+lore: moved task_lists/tlt_b4f4…a5b0 to this clone's refs/lore/live with the live row that names it, so teammates can read it; ~/work/website/.lore/data/task_lists/tlt_b4f4…a5b0.json is no longer in your working folder (it lands with that row)
 lore: wrote tasks/tsk_28f8…03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8…03df.json is unchanged)
 ✓ tsk_28f8…03df — Check every link on the home page [medium]
 $ lore task edit --id tsk_76bd…3f10 --tasklist tlt_b4f4…a5b0
@@ -259,7 +262,7 @@ lore: wrote task_lists/tlt_b4f4…a5b0 on this clone's refs/lore/live (a live ro
 ## Step 11 — Save a filter under a name
 
 <!-- ds:block id=sync-syncedtables-fa4jung7 -->
-`lore task view add` stores a task filter under a name, such as `open_todo`, so you or a tool can reuse it. The filter uses the same `--where` grammar as `lore task list` (and `--sort`, `--group-by` if you like). `lore task list --view <name>` applies it. A saved view is a row in `.lore/data`, so it travels with git like your tasks.
+`lore task view add` stores a task filter under a name, such as `open_todo`, so you or a tool can reuse it. The filter uses the same `--where` grammar as `lore task list` (and `--sort`, `--group-by` if you like). `lore task list --view <name>` applies it. A date in any `--where` (tasks, resources, bulk archive and delete) may be relative to today: `today`, or a sign, a count and `d`, `w`, `m` or `y`, so `--where "due_at<+14d"` or `--where "renews_on<+90d"` keeps meaning "in the next two weeks" or "in the next 90 days" in a saved view, and `-30d` is thirty days ago. A saved view is a row in `.lore/data`, so it travels with git like your tasks.
 
 <!-- example: tasks#task-view -->
 ```console
@@ -310,7 +313,7 @@ tsk_77cb…76c4,Add a size guide,,high,accepted,,,tlt_7a67…9504,,,,default,,,t
 ```
 <!-- /example -->
 
-`lore task import --file <file>` (`--from csv|json`, otherwise read from the extension) adds the file's tasks; `--dry-run` lists what it would create, and it asks before writing (`--yes` in scripts). It reads the columns `status`, `estimate` (in the unit of the store it writes to) and `parent` (another record of the file, before or after it, or a task id the store already has; anything else is dropped with a warning), and `--map-status 'In Review=in_progress,Shipped=done'` renames another tool's status values. A file where a done or cancelled task still has an open sub-task, or where parents form a loop, is refused before anything is written. Bad records (no title, a priority, status, commitment, date or estimate lore does not know, a CSV line with the wrong number of cells) are all listed in one refusal, each by its line in a CSV (header = line 1) or its id in JSON, and a CSV that does not parse names the line and the reason (a quote never closed). `lore meta import` and `lore resource import` name a CSV parse error the same way.
+`lore task import --file <file>` (`--from csv|json`, otherwise read from the extension) adds the file's tasks; `--dry-run` lists what it would create, and it asks before writing (`--yes` in scripts). It reads the columns `status`, `estimate` (in the unit of the store it writes to) and `parent` (another record of the file, before or after it, or a task id the store already has; anything else is dropped with a warning), and `--map-status 'In Review=in_progress,Shipped=done'` renames another tool's status values. A file where a done or cancelled task still has an open sub-task, or where parents form a loop, is refused before anything is written. Bad records (no title, a priority, status, commitment, date or estimate lore does not know, a CSV line with the wrong number of cells) are all listed in one refusal, each by its line in a CSV (header = line 1) or its id in JSON, and a CSV that does not parse names the line and the reason (a quote never closed). `lore meta import` and `lore resource import` name a CSV parse error the same way. The records that are not part of a task tree (no `parent`, and no record names them as its parent) are written together as one batch, one commit on the live ref however many rows the file holds, so a record the write refuses (a secret in a body) leaves none of them written; a record of a tree is written on its own, after the batch of the records before it, so file order is kept.
 
 Importing the same file twice does not duplicate anything. Each record is matched by its source and external id; a record already imported adds nothing and is listed as "already imported as <id>", and fields whose value changed in the file since are listed as "differs, not written". Import never overwrites a task: change it with `lore task edit`.
 

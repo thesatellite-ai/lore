@@ -203,6 +203,12 @@ func short(s string) string {
 // that contains it (the merge commit of a --no-ff merge), or done_commit
 // itself when it sits on that line (fast-forward).
 func (c Checker) byAncestry(ctx context.Context, done, tip string) (Finding, bool, string, error) {
+	// devco:M-5: a done_commit that is not a commit id (a row an older
+	// task done stored as "HEAD" or a branch name) is never resolved: in
+	// the checking clone it names that clone's commit, not the finisher's.
+	if !hexCommitID(done) {
+		return Finding{}, false, "done_commit " + done + " is not a commit id (re-run lore task done --commit <sha>)", nil
+	}
 	oid, ok, err := c.Repo.ResolveCommit(ctx, done)
 	if err != nil {
 		return Finding{}, false, "", fmt.Errorf("mergewatch: resolve %s: %w", done, err)
@@ -588,4 +594,18 @@ func MergedUpdatedAt(old, merged time.Time) time.Time {
 		return merged.UTC()
 	}
 	return old.UTC()
+}
+
+// hexCommitID reports an abbreviated or full commit id: 4 to 64 hex
+// characters (sha-1 or sha-256), never a symbolic name such as HEAD.
+func hexCommitID(s string) bool {
+	if len(s) < 4 || len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
 }

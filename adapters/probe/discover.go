@@ -5,7 +5,7 @@ package probe
 // adapters/ghapi) and git's includeIf identities with their folders.
 //
 //	wire setupdiscover ─▶ GHToken(user)        gh auth token --hostname github.com --user X (stdout → ghapi.Token)
-//	                   ─▶ IncludeIdentities()  git config --global --get-regexp includeif.*.path
+//	                   ─▶ IncludeIdentities()  git config --global --includes --get-regexp includeif.*.path
 //	                                           ─▶ git config --file <each> user.name / user.email
 
 import (
@@ -107,12 +107,28 @@ func (p *Prober) IncludeIdentities(ctx context.Context) []IncludeIdentity {
 	if !ok {
 		return nil
 	}
-	r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--global", "--get-regexp", `^includeif\..*\.path$`))
+	// --show-origin names the file each line came from: git resolves a
+	// relative include path against the folder of the config file that
+	// holds it (GIT_CONFIG_GLOBAL or ~/.gitconfig), not against $HOME
+	// (devco D-530: a relative path read against the wrong folder found no
+	// file, so the person's includeIf identity went unseen).
+	// --includes follows [include] path= (and includeIf) inside the global
+	// file: git leaves includes off for --global unless asked, so a rule in a
+	// file the global config pulls in went unseen (devco D-594); its origin
+	// is then the included file, which is what a relative path is read against.
+	r := p.run(cctx, p.gitSpec(Route{}, "", "config", "--global", "--includes", "--show-origin", "--get-regexp", `^includeif\..*\.path$`))
 	if !r.ok() {
 		return nil
 	}
 	var out []IncludeIdentity
 	for l := range strings.SplitSeq(r.stdout, "\n") {
+		base := p.o.Home // relative to ~/.gitconfig's folder
+		if origin, rest, ok := strings.Cut(l, "\t"); ok {
+			if f, isFile := strings.CutPrefix(origin, "file:"); isFile && filepath.IsAbs(f) {
+				base = filepath.Dir(f)
+			}
+			l = rest
+		}
 		m := reIncludeIf.FindStringSubmatch(strings.TrimSpace(l))
 		if m == nil {
 			continue
@@ -125,7 +141,7 @@ func (p *Prober) IncludeIdentities(ctx context.Context) []IncludeIdentity {
 		}
 		file := expandHome(inc.Path, p.o.Home)
 		if !filepath.IsAbs(file) {
-			file = filepath.Join(p.o.Home, file) // relative to ~/.gitconfig's folder
+			file = filepath.Join(base, file)
 		}
 		ir := p.run(cctx, p.gitSpec(Route{}, "", "config", "--file", file, "--get-regexp", `^user\.(name|email)$`))
 		if !ir.ok() {

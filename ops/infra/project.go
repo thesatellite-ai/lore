@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
@@ -43,6 +44,12 @@ type Project struct {
 	OriginURL  string          `json:"origin_url,omitempty"`
 	ArchivedAt string          `json:"archived_at,omitempty"`
 	Store      store.SourceRef `json:"_source,omitempty,omitzero"`
+	// Rows counts the row files of a store folder's project (D-444: the
+	// list said "no rows yet" for folders holding dozens); counted is false
+	// for a project that is no store folder here (the repo's own), whose
+	// line has no count.
+	Rows    int `json:"rows,omitempty"`
+	counted bool
 	// line is the v0.1.17 human line of this project; label the [store]
 	// Text ends it with ("" for a repo row, whose line stays v0.1.17's).
 	line, label string
@@ -69,7 +76,7 @@ func (o ProjectListOut) Text() string {
 	}
 	var b strings.Builder
 	for _, p := range o.Data {
-		b.WriteString(withStoreLabel(p.line, p.label))
+		b.WriteString(withRows(withStoreLabel(p.line, p.label), p.Rows, p.counted))
 	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
@@ -94,6 +101,16 @@ type ProjectDetail struct {
 	CreatedAt  string      `json:"created_at"`
 	ArchivedAt string      `json:"archived_at,omitempty"`
 	Repos      []RepoBrief `json:"repos"`
+	// Store / Rows / Members (devco D-492): show said only name and
+	// created, while project list counts a store folder's rows and
+	// project member list names its people. Store is the [store/folder]
+	// the project lives in, Rows its row files (as project list counts
+	// them), Members its current members ("@handle role, role"; nil when
+	// the roster cannot be read here, so no "members: 0" line is shown).
+	Store   string   `json:"store,omitempty"`
+	Rows    int      `json:"rows,omitempty"`
+	Members []string `json:"members,omitempty"`
+	counted bool
 	// created is the human creation time.
 	created string
 	// UpdatedAt is the envelope's last write (INTEG-AUDIT-1).
@@ -128,6 +145,22 @@ func (o ProjectShowOut) mainText() string {
 		b.WriteString("  origin:  " + p.OriginURL + "\n")
 	}
 	b.WriteString("  created: " + p.created + "\n")
+	if p.Store != "" {
+		b.WriteString("  store:   " + p.Store + "\n")
+	}
+	if p.counted {
+		b.WriteString("  rows:    " + strconv.Itoa(p.Rows) + "\n")
+	}
+	b.WriteString("  repos:   " + strconv.Itoa(len(p.Repos)) + "\n")
+	if p.Members != nil {
+		b.WriteString("  members: " + strconv.Itoa(len(p.Members)) + "\n")
+	}
+	if len(p.Members) > 0 {
+		b.WriteString("\nMembers:\n")
+		for _, m := range p.Members {
+			b.WriteString("  " + m + "\n")
+		}
+	}
 	if len(p.Repos) > 0 {
 		b.WriteString("\nRepos:\n")
 		for _, r := range p.Repos {
@@ -192,11 +225,13 @@ type OrgFolderLister interface {
 	OrgFolderProjects(ctx context.Context) (folders []FolderProject, notes []string, err error)
 }
 
-// FolderProject is one folder of one of the org's stores.
+// FolderProject is one folder of one of the org's stores, with the
+// number of row files it holds.
 type FolderProject struct {
 	ID     string
 	Name   string
 	Source store.SourceRef
+	Rows   int
 }
 
 // appendFolderProjects adds the folders no listed row already names (a
@@ -210,16 +245,18 @@ func appendFolderProjects(data []Project, folders []FolderProject) []Project {
 	}
 	slices.SortFunc(folders, func(a, b FolderProject) int { return strings.Compare(a.Name, b.Name) })
 	for _, f := range folders {
+		rows := f.Rows
 		if i, ok := at[f.ID]; ok {
 			if data[i].Store.Store != "" { // a store row, not the repo's own
 				data[i].Store.Store = f.Source.Store
 				data[i].label = storeMark(f.Source.Store, f.Source.Folder)
+				data[i].Rows, data[i].counted = rows, true
 			}
 			continue
 		}
 		at[f.ID] = len(data)
-		data = append(data, Project{ID: f.ID, Name: f.Name, Store: f.Source,
-			line: f.ID + "  " + f.Name + folderOnlyMark + "\n", label: storeMark(f.Source.Store, f.Source.Folder)})
+		data = append(data, Project{ID: f.ID, Name: f.Name, Store: f.Source, Rows: rows, counted: true,
+			line: f.ID + "  " + f.Name + "\n", label: storeMark(f.Source.Store, f.Source.Folder)})
 	}
 	return data
 }
@@ -237,14 +274,23 @@ func withStoreLabel(line, label string) string {
 	return strings.TrimSuffix(line, "\n") + "  " + label + "\n"
 }
 
-// folderOnlyMark follows the name of a folder whose project row is not
-// written yet (store folder add made it; its first row writes the row).
-const folderOnlyMark = "  (folder, no rows yet)"
+// withRows ends a list line with the folder's row count ("1 row",
+// "39 rows"); a project with no count keeps its line.
+func withRows(line string, rows int, counted bool) string {
+	if !counted {
+		return line
+	}
+	unit := " rows"
+	if rows == 1 {
+		unit = " row"
+	}
+	return strings.TrimSuffix(line, "\n") + "  " + strconv.Itoa(rows) + unit + "\n"
+}
 
 // projectShow shows one project (a prj_ id or a name, work.ProjectRef)
 // with its repos.
-func (o ops) projectShow(ctx context.Context, in ProjectRefIn) (ProjectShowOut, error) {
-	pid, err := work.ProjectRef(ctx, o.env, NounProject, in.ID)
+func (o ops) projectShow(ctx context.Context, in ProjectShowIn) (ProjectShowOut, error) {
+	pid, err := o.showProject(ctx, in.ID)
 	if err != nil {
 		return ProjectShowOut{}, err
 	}
@@ -271,7 +317,43 @@ func (o ops) projectShow(ctx context.Context, in ProjectRefIn) (ProjectShowOut, 
 		d.Repos = append(d.Repos, RepoBrief{ID: rp.ID.String(), MountName: work.Field(rp, fieldMountName),
 			DisplayName: work.Field(rp, fieldDisplayName), OriginURL: work.Field(rp, fieldOrigin), ArchivedAt: work.TimeText(rp, fieldArchivedAt)})
 	}
+	if err = o.showCounts(ctx, &d); err != nil {
+		return ProjectShowOut{}, err
+	}
 	return ProjectShowOut{SchemaVersion: SchemaVersion, Kind: KindProjectShow, Data: d}, nil
+}
+
+// ProjectMemberLister is the optional Env upgrade (wire.App) that names a
+// project's current members as project member list does ("@handle role,
+// role"); the roster lives outside this Env (devco D-492).
+type ProjectMemberLister interface {
+	ProjectMembers(ctx context.Context, projectID string) ([]string, error)
+}
+
+// showCounts fills the store folder, row count and members of d: the
+// same numbers project list and project member list give. A build or
+// place without the upgrades leaves them out.
+func (o ops) showCounts(ctx context.Context, d *ProjectDetail) error {
+	if fl, ok := upgrade.As[OrgFolderLister](o.env); ok {
+		folders, _, err := fl.OrgFolderProjects(ctx)
+		if err != nil {
+			return err
+		}
+		for _, f := range folders {
+			if f.ID == d.ID {
+				d.Store, d.Rows, d.counted = storeMark(f.Source.Store, f.Source.Folder), f.Rows, true
+				break
+			}
+		}
+	}
+	if ml, ok := upgrade.As[ProjectMemberLister](o.env); ok {
+		ms, err := ml.ProjectMembers(ctx, d.ID)
+		if err != nil {
+			return err
+		}
+		d.Members = ms
+	}
+	return nil
 }
 
 // projectName is the label of a project in the write lines.
@@ -313,11 +395,45 @@ type DeletePreviewer interface {
 // (show, archive, unarchive): the json key stays "id" (v0.1.17's), the
 // value may be a name too (work.ProjectRef).
 type ProjectRefIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the project: a name or prj_ id"`
+}
+
+// ProjectShowIn is the input of project.show: the id may be left out to
+// show the project of the folder the command runs in (devco D-449: inside
+// a store folder or a linked repo `project show` needed --id).
+type ProjectShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
+	ID string `json:"id,omitempty" arg:"0" desc:"the project: a name or prj_ id (default the project of this folder)"`
+}
+
+// showProject is the project ref names, or with no ref the project the
+// current folder or repo belongs to.
+//
+// devco D-505: at a place with no project of its own (an org store's
+// root, which holds every folder's project) there is no default project
+// to show; the refusal names the way to pick one instead of the store's
+// missing project row.
+func (o ops) showProject(ctx context.Context, ref string) (ids.ID[ids.Project], error) {
+	if strings.TrimSpace(ref) == "" {
+		pid, err := work.Project(ctx, o.env, NounProject, "")
+		if engine.EveryProject(err) {
+			return ids.ID[ids.Project]{}, errs.New(errs.NotFound, "project show: this folder is the root of a store, which holds the projects of all its folders and is none of them").
+				WithHint("name one: lore project show --id <name> (lore project list names them), or run it in a folder of the store; lore <kind> list --store <store> reads a store's rows from anywhere, and lore setup check --setup <name> shows the folders of a setup")
+		}
+		return pid, err
+	}
+	return work.ProjectRef(ctx, o.env, NounProject, ref)
 }
 
 // ProjectDeleteIn is the input of project.delete.
 type ProjectDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID     string `json:"id" arg:"0" desc:"the project: a name or prj_ id"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).

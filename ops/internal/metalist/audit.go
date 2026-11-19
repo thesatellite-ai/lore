@@ -22,11 +22,25 @@ import (
 type Audit struct {
 	CreatedBy string `json:"created_by,omitempty" flag:"created-by" desc:"only rows this actor created (act_ id, or unknown for rows from before audit fields)"`
 	UpdatedBy string `json:"updated_by,omitempty" flag:"updated-by" desc:"only rows this actor changed last (act_ id, or unknown)"`
+	// Born rides along so every list that has the writer filters also
+	// has --born-branch, from this one definition (D-392).
+	Born
+}
+
+// Born is --born-branch (D-392): only rows created on that code branch,
+// read from the row's provenance (`_o.git.branch`, written once at
+// create). A land, an adopt or a revert copies the row whole, so the
+// filter finds a branch's rows on the branch and after they landed on
+// main. engine.BindListAuthors binds it at the one read path; Select and
+// Keep apply it too for lists that filter rows of their own.
+type Born struct {
+	BornBranch string `json:"born_branch,omitempty" flag:"born-branch" desc:"only rows created on this code branch (their origin's git branch; still found after the branch landed)"`
 }
 
 // auditMatcher is a parsed Audit; a zero id matches every row.
 type auditMatcher struct {
 	created, updated ids.ID[ids.Actor]
+	born             string
 }
 
 // matcher parses the flags (E_INVALID_ID for a value that is not an actor
@@ -37,7 +51,10 @@ func (a Audit) matcher() (auditMatcher, error) {
 	if m.created, err = auditfill.ParseActor("--created-by", a.CreatedBy); err != nil {
 		return m, err
 	}
-	m.updated, err = auditfill.ParseActor("--updated-by", a.UpdatedBy)
+	if m.updated, err = auditfill.ParseActor("--updated-by", a.UpdatedBy); err != nil {
+		return m, err
+	}
+	m.born, err = engine.ParseBornBranch(a.BornBranch)
 	return m, err
 }
 
@@ -47,6 +64,9 @@ func (a Audit) matcher() (auditMatcher, error) {
 // An actor merged into the one asked for (`lore actor merge`) counts as
 // it (engine.SameActor): history stamps keep the old id.
 func (m auditMatcher) keep(ctx context.Context, r row.Row) bool {
+	if m.born != "" && !engine.BornOn(r, m.born) {
+		return false // D-392 --born-branch
+	}
 	if m.created.IsZero() && m.updated.IsZero() {
 		return true
 	}

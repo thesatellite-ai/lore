@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
@@ -20,6 +21,15 @@ import (
 // binary without lore.db.
 func (a *App) DoctorHost(_ context.Context) (opsdoctor.Host, bool) {
 	return a.opts.Context.Doctor, a.opts.Context.Doctor != nil
+}
+
+// MovedLoreHome is the lore home when LORE_HOME set it, else "" (doctor
+// prints it then, so a person running two builds sees which home it read).
+func (a *App) MovedLoreHome() string {
+	if a.opts.HomeSource == lorehome.FromEnv {
+		return a.opts.Home
+	}
+	return ""
 }
 
 // BinaryVersion is Options.Version (opsdoctor.Env).
@@ -35,6 +45,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckTaskLead, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorTaskLeads(c, fix) }},
 		{DoctorCheckTriageOwner, a.DoctorTriageOwner},
 		{DoctorCheckStoreLock, a.DoctorStoreLocks},
+		{DoctorCheckClockSkew, a.DoctorClockSkew}, // doctor_clockskew.go (devco:U-3)
 		{DoctorCheckEditAfterPurge, a.DoctorEditsAfterPurge},
 		{DoctorCheckInternalOff, a.DoctorInternalOff},
 		{DoctorCheckResurrected, a.DoctorResurrected},
@@ -44,7 +55,9 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckRowBOM, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorRowBOM(c, fix) }},               // doctor_projectmeta.go (I-15)
 		{DoctorCheckRowFile, a.DoctorRowFiles},
 		{DoctorCheckUntrustedHost, a.DoctorUntrustedHost},
+		{DoctorCheckStoreTrust, a.DoctorStoreTrust}, // storetrust.go (devco R-2, R-7, R-9)
 		{DoctorCheckTrash, a.DoctorTrash},
+		{DoctorCheckBranchLayers, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorBranchLayers(c, fix) }}, // branchlayer_doctor.go (BRANCH_LAYERS 10, 12; devco:D-411 stray caches)
 		{DoctorCheckSharedMachine, a.DoctorSharedMachines},
 		{DoctorCheckTeamVersions, a.DoctorTeamVersions},
 		{DoctorCheckCombinedCache, a.DoctorCombinedCache},
@@ -53,7 +66,8 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckOldSettings, a.DoctorUnclassifiedSettings},
 		{DoctorCheckRepoClass, a.DoctorRepoClass},
 		{DoctorCheckSLA, a.DoctorSLA},
-		{DoctorCheckReminders, a.DoctorReminders},                                                                               // doctor_reminders.go (D-148)
+		{DoctorCheckReminders, a.DoctorReminders},
+		{DoctorCheckLostMerge, a.DoctorLostMerges},                                                                              // doctor_lostmerge.go (devco O-12)                                                                               // doctor_reminders.go (D-148)
 		{DoctorCheckProjects, a.DoctorProjects},                                                                                 // doctor_projects.go
 		{DoctorCheckDuplicateRepos, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorDuplicateRepos(c, fix) }}, // doctor_duprepos.go (B2-7)
 		{DoctorCheckKindRoute, a.DoctorKindRoutes},                                                                              // doctor_kindroutes.go (G-META-9)
@@ -69,6 +83,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		{DoctorCheckDuplicateActors, a.DoctorDuplicateActors},                                                                   // doctor_dupactors.go
 		{DoctorCheckSharedKeys, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorSharedKeys(c, fix) }},         // actor_merge.go
 		{DoctorCheckPendingInvites, a.DoctorPendingInvites},                                                                     // doctor_invites.go
+		{DoctorCheckHeldChanges, a.DoctorHeldChanges},                                                                           // rosterhold.go
 		{DoctorCheckOrgAdmin, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorOrgAdmin(c, fix) }},             // doctor_orgadmin.go
 		{DoctorCheckEmptyRef, func(c context.Context) ([]DoctorFinding, error) { return a.DoctorEmptyRefs(c, fix) }},            // doctor_emptyref.go
 		{DoctorCheckIdentitySource, a.DoctorIdentitySource},                                                                     // doctor_identitysource.go (SOURCE_OF_TRUTH row 1)
@@ -93,7 +108,7 @@ func (a *App) DoctorChecks(ctx context.Context, fix bool) []opsdoctor.CheckRun {
 		line, level := doctorNoProjectNote, opsdoctor.LevelNote
 		if top := gitTopLevel(ctx, a.projectDir()); top != "" {
 			var e *errs.Error
-			if be := beforeLoreErr(ctx, top, errs.NotAStore); be != nil && errors.As(be, &e) {
+			if be := beforeLoreErr(ctx, top); be != nil && errors.As(be, &e) {
 				line = e.Message + " (" + e.Hint + ")" // D-8/D-10: not "lore init"
 			} else if c := a.clientRepo(ctx); c.Org != "" {
 				line = doctorNoProjectPrefix + " (" + clientRepoHint(c) + ")" // I-13: not "lore init"

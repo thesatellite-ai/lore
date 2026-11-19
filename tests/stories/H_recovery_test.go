@@ -276,8 +276,9 @@ func TestStoryHRewrites(t *testing.T) {
 		la.CommitAll("pagination cursor work")
 		lead.LoreIn(la, "link", "add", "--entity", task, "--commit", "HEAD").OK(t)
 		la.CommitAll("link the work")
-		la.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)")
-		lead.LoreIn(la, "commit", "show", "--id", la.Git("rev-parse", "HEAD~1")).OK(t).Says(t, "tasks/"+task)
+		la.RewriteGit("rebase", "--force-rebase", "HEAD~2") // a later committer date: new ids even within one second (D-459).OK(t).Says(t, "moved 1 commit link(s)", "committed them as")
+		// devco:Q-5: lore's own commit on top carries the moved link
+		lead.LoreIn(la, "commit", "show", "--id", la.Git("rev-parse", "HEAD~2")).OK(t).Says(t, "tasks/"+task)
 		lead.LoreIn(la, "doctor").Never(t, "commit_links:")
 	})
 
@@ -428,7 +429,7 @@ func TestStoryHLostRemotes(t *testing.T) {
 			}
 		}
 		t.Run("stories:H-1", func(t *testing.T) {
-			t.Skip("waiting for stories:H-1: a write still appends lore's block to the team's own tracked .husky/pre-commit without asking")
+			// the team's own tracked pre-commit is left as committed too
 			if strings.Contains(st, ".husky/pre-commit") {
 				t.Errorf("a lore write changed the tracked .husky/pre-commit:\n%s", st)
 			}

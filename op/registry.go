@@ -15,6 +15,9 @@ import (
 type Registry struct {
 	byName map[string]Entry
 	names  []string
+	// top holds the output fields the composition root adds per operation
+	// (WithTopFields, topfield.go); nil when it adds none.
+	top map[string][]FieldInfo
 }
 
 // NewRegistry validates entries together and returns every problem at once:

@@ -40,8 +40,10 @@ package renderhost
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
@@ -57,6 +59,7 @@ import (
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -83,14 +86,18 @@ const (
 
 // renderDefaultTrust is v0.1.17's LifecycleMixin default for trust_score:
 // a row file without the field renders as ent read it back.
-const renderDefaultTrust = 0.5
+const renderDefaultTrust = trust.Default
 
 // pinnedRule is one rule as the render prints it.
 type pinnedRule struct {
 	ID         string
 	Severity   string
 	TrustScore float64
-	Body       string
+	// NeedsApproval: an agent wrote or rewrote the rule and no person
+	// approved it (trust below trust.Default); the rule is printed marked
+	// so (devco:S-15).
+	NeedsApproval bool
+	Body          string
 	// Budget inputs (CONTEXT_BUDGET 6.4, 6.6).
 	Summary    string
 	Activation string
@@ -150,6 +157,11 @@ type pinSkips struct {
 // renderSources are the stores whose rows may reach the committed render:
 // the repo store first, then every attached store marked shareable.
 func (h *Host) renderSources(ctx context.Context) ([]store.Source, error) {
+	if all, ok := h.app.SetupReadStores(ctx); ok {
+		// a read under a setup from a plain folder: no repo store, the
+		// setup's stores are the whole scope (devco D-632)
+		return all, nil
+	}
 	shared, err := h.app.ShareableStores(ctx)
 	if err != nil {
 		return nil, err
@@ -184,6 +196,12 @@ func (h *Host) renderLiveRows(ctx context.Context, table row.Table) ([]renderRow
 	if err != nil {
 		return nil, err
 	}
+	return h.liveRowsFrom(ctx, srcs, table)
+}
+
+// liveRowsFrom is renderLiveRows over the given sources (context reads
+// more of them than a committed render: contextSources).
+func (h *Host) liveRowsFrom(ctx context.Context, srcs []store.Source, table row.Table) ([]renderRow, error) {
 	var out []renderRow
 	for _, src := range srcs {
 		rows, err := h.app.List(ctx, src, table)
@@ -192,6 +210,12 @@ func (h *Host) renderLiveRows(ctx context.Context, table row.Table) ([]renderRow
 		}
 		for _, r := range rows {
 			if r.Deleted || renderField(r, renderFieldArchivedAt) != "" {
+				continue
+			}
+			// devco:R-14: a row whose stored text matches a secret rule
+			// (it reached the store without lore's write scan) is never
+			// written into a rendered file; Render names it.
+			if h.app.WasMasked(ctx, r.ID) {
 				continue
 			}
 			out = append(out, renderRow{source: src, Row: r})
@@ -207,10 +231,31 @@ func renderField(r row.Row, name string) string {
 	if !ok || v == nil {
 		return ""
 	}
+	text := v.String()
+	if name == renderFieldBody {
+		text = dropRowFileSources(text)
+	}
 	// I-16: a control character in a row (ESC[8m conceals text in a
 	// terminal) is written escaped into every rendered file; the row
 	// keeps its bytes.
-	return textnorm.EscapeControls(v.String())
+	return textnorm.EscapeControls(text)
+}
+
+// rowFileSourceLine is a body line that only points at a lore row file
+// ("Source: app/.lore/data/hotfixes/hfx_….json"), e.g. kept by rows
+// imported from a repo's .lore/data.
+var rowFileSourceLine = regexp.MustCompile(`(?m)^[ \t]*Source:[ \t]*\S*\.lore/data/\S+\.json[ \t]*\r?$\n?`)
+
+// dropRowFileSources removes rowFileSourceLine lines from a body for
+// display (devco D-430: 9 pinned hotfixes of a private render carried
+// "Source: <repo>/.lore/data/….json" lines naming a file of another repo
+// that no longer holds the row; the tag already names the row id). The
+// row keeps its bytes; only rendered and context text drops the line.
+func dropRowFileSources(body string) string {
+	if !strings.Contains(body, ".lore/data/") {
+		return body
+	}
+	return strings.TrimRight(rowFileSourceLine.ReplaceAllString(body, ""), "\n")
 }
 
 // renderTrust is trust_score as a float (the ent default when absent or
@@ -261,7 +306,7 @@ func (h *Host) loadPinnedRules(ctx context.Context, projectID string, skips *pin
 		}
 		out = append(out, pinnedRule{
 			ID: r.ID.String(), Severity: renderRuleSeverityMust,
-			TrustScore: renderTrust(r.Row), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
+			TrustScore: renderTrust(r.Row), NeedsApproval: !trust.Approved(renderTrust(r.Row)), Body: mk.withMetaLine(ctx, renderField(r.Row, renderFieldBody), r.Row, false),
 			Summary: renderField(r.Row, schema.FieldSummary), Activation: act,
 			Globs: renderField(r.Row, renderFieldGlobs), Updated: renderUpdated(r.Row),
 			TagIDs: renderTagIDs(r.Row), ScopeID: repoScope(r, schema.FieldScope), OverridesID: repoScope(r, schema.FieldOverrides),

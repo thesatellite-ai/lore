@@ -26,7 +26,7 @@ func TestOfflineErrorRacesLost(t *testing.T) {
 		racesLost bool
 	}{
 		{"every attempt lost (stale)", func(f *gitremote.FaultRemote, _ *Store) {
-			for i := 1; i <= 10; i++ {
+			for i := 1; i <= DefaultRetry.MaxAttempts; i++ { // more than the retry budget allows (devco:D-529)
 				f.RejectPush(i, gitremote.StatusStale)
 			}
 		}, true, true},

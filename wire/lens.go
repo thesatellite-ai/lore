@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/engine"
@@ -13,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/refs"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/tmpdir"
+	opssearch "github.com/thesatellite-ai/lore/ops/search"
 	opssql "github.com/thesatellite-ai/lore/ops/sql"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -56,6 +58,9 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, 
 	if deleted != "" {
 		srcs = append(srcs, sqlite.LensSource{Name: deletedLensName, Path: deleted, Deleted: true})
 	}
+	if o.Places == nil {
+		o.Places = a.lensPlaces(st)
+	}
 	if o.Expand == nil {
 		// lore_expand(text): var/res/row filled from the row files, never env,
 		// secrets or sensitive values (SQ4, SQ15); client repos see only their own (MQ6).
@@ -63,6 +68,41 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, 
 	}
 	l, err := sqlite.OpenLensWith(ctx, srcs, o)
 	return l, extra, err
+}
+
+// lensPlaces labels every attached store as search and the lists do
+// (devco D-568): the `place` column of the `<table>_all` views, so `lore
+// sql` shows "acme/web" where search prints "[acme/web]"; since D-685 the
+// `source` column carries the same label. Every store of the engine is
+// labelled, not only the lens's own sources, because a combined or
+// deleted-rows file holds rows of any of them under their own names; the
+// repo's own rows keep their source name (search gives them no label).
+func (a *App) lensPlaces(st *state) map[string]string {
+	out := map[string]string{}
+	for _, name := range st.eng.Stores() {
+		if name == store.SourceRepo {
+			continue
+		}
+		ref, _ := a.sourcePlace(name)
+		out[string(name)] = strings.Trim(opssearch.StoreLabel(ref), "[]")
+	}
+	return out
+}
+
+// placeLabels is names as the lens's source column prints them (the
+// lensPlaces labels, devco D-685), so the internal-stores note names the
+// same sources the rows carry.
+func (a *App) placeLabels(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		ref, _ := a.sourcePlace(store.Source(n))
+		if store.Source(n) == store.SourceRepo {
+			out = append(out, n)
+			continue
+		}
+		out = append(out, strings.Trim(opssearch.StoreLabel(ref), "[]"))
+	}
+	return out
 }
 
 // lensSources lists the cache files of st's lens, the repo first (the
@@ -78,6 +118,12 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 		Path: st.repoCacheOf(),
 	}
 	srcs := []sqlite.LensSource{repo}
+	if repo.Path == "" {
+		// a store-only open (a store clone, a read outside any repo) has
+		// no repo cache: its stores are the sources (devco D-454; it
+		// refused "a source needs a name and a path")
+		srcs = nil
+	}
 	client := st.eng.IsClient(store.SourceRepo)
 	shareable := map[store.Source]bool{}
 	if client {
@@ -91,15 +137,11 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 	}
 	var extra []string
 	st.caches.mu.Lock()
-	combined := st.caches.combined != nil
+	path := st.caches.combinedPath // the file the open applied every store into
 	st.caches.mu.Unlock()
-	if combined {
+	if path != "" {
 		if client && !internal {
 			return srcs, nil, nil // the combined file mixes internal stores in (fail closed)
-		}
-		path, err := combinedCachePath(a.opts.Home, st.repoTop)
-		if err != nil {
-			return nil, nil, err
 		}
 		if client {
 			for _, name := range st.eng.Stores() {
@@ -129,22 +171,47 @@ func (a *App) lensSources(ctx context.Context, st *state, internal bool) ([]sqli
 		}
 		srcs = append(srcs, sqlite.LensSource{Name: string(name), Path: path})
 	}
+	// a folder attached for this command (lensfolders.go, idfolder.go) is
+	// read through a cache file other opens fill under their own names, as
+	// is every store's: each keeps only its own name's rows (D-443, D-473)
 	markShared(srcs)
-	return srcs, extra, nil
+	return onePerPlace(srcs), extra, nil
 }
 
-// markShared sets Shared on every source whose cache file another source
-// of the lens also uses: two stores.yaml entries on one place (same url,
-// branch and folder) open one cache file, and `lore sql` keeps both names
-// as sources, each with that place's rows once (owner decision,
-// 2026-11-08; lists and search show them once, under the first name).
-func markShared(srcs []sqlite.LensSource) {
-	uses := map[string]int{}
+// onePerPlace keeps the first source of each cache file (devco D-443,
+// owner 2026-11-16, replacing the 2026-11-08 "both names" decision): two
+// names on one place (two stores.yaml entries, an org store and a link
+// over the same folder) made every `<table>_all` query see each row once
+// per name (78 rows for 39 rules). The kept source stays Shared, so its
+// views read only the rows applied under its own name.
+func onePerPlace(srcs []sqlite.LensSource) []sqlite.LensSource {
+	seen := map[string]bool{}
+	out := srcs[:0:0]
 	for _, s := range srcs {
-		uses[s.Path]++
+		if !s.Combined && !s.Deleted {
+			if seen[s.Path] {
+				continue
+			}
+			seen[s.Path] = true
+		}
+		out = append(out, s)
 	}
+	return out
+}
+
+// markShared sets Shared on every store's source (never the repo's own
+// cache, which no other open fills): a store's cache file is one per place
+// on the machine, and every open that reads the place applies its rows
+// under the name it gives it (a repo's `acme/org`, `--store acme`'s
+// `acme`, a store clone's `<org>/<folder>`), each once in _source. A
+// source's part of the `<table>_all` views keeps only the rows applied
+// under its own name, so a query sees each row once whichever opens
+// filled the file before (devco D-473: `sql --store acme` after reads
+// from a repo and a clone listed every rule three times). Two names on
+// one file in this lens are dropped to one by onePerPlace.
+func markShared(srcs []sqlite.LensSource) {
 	for i := range srcs {
-		srcs[i].Shared = uses[srcs[i].Path] > 1
+		srcs[i].Shared = srcs[i].Name != string(store.SourceRepo)
 	}
 }
 
@@ -255,6 +322,18 @@ const combinedLensName = "combined"
 // unless r.ShowSensitive), runs it under r.Timeout (E_SQL_TIMEOUT past it)
 // and closes the lens.
 func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) {
+	// D-443: every folder of a store attached whole joins this one query
+	var out opssql.Result
+	err := a.withExtra(a.lensFolders(ctx), func() error {
+		var qerr error
+		out, qerr = a.sqlOnce(ctx, r)
+		return qerr
+	})
+	return out, err
+}
+
+// sqlOnce is SQL over the stores attached now.
+func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, error) {
 	trashRows, err := a.lensTrash(ctx, !r.ShowSensitive) // DELETION 3.2: the cache keeps no trashed row
 	if err != nil {
 		return opssql.Result{}, err
@@ -275,7 +354,7 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 		return opssql.Result{}, err
 	}
 	clientKey, _ := pol.Text(policy.KeyTimeClientKey) // unset = the lens default
-	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey}, r.Internal, deleted)
+	l, extra, err := a.lensFor(ctx, sqlite.LensOptions{MaskSensitive: !r.ShowSensitive, Trash: trashRows, TimeClientKey: clientKey, Now: a.Now()}, r.Internal, deleted)
 	if err != nil {
 		return opssql.Result{}, err
 	}
@@ -286,5 +365,5 @@ func (a *App) SQL(ctx context.Context, r opssql.Request) (opssql.Result, error) 
 	if qerr != nil {
 		return opssql.Result{}, qerr
 	}
-	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: extra}, nil
+	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: a.placeLabels(extra)}, nil
 }

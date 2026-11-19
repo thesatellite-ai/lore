@@ -163,3 +163,12 @@ func (m *Machine) MoveClone(t testing.TB, c *teamharness.Clone, to string) {
 	m.MoveFolder(t, c.Dir, to)
 	c.Dir = to
 }
+
+// LoreStdinIn runs lore inside a clone of this machine with stdin fed to
+// it (an agent hook command reads the tool's JSON there).
+func (m *Machine) LoreStdinIn(c *teamharness.Clone, stdin string, args ...string) teamharness.Result {
+	m.w.T.Helper()
+	r := m.Actor.LoreStdin(c.Dir, stdin, args...)
+	m.results = append(m.results, r)
+	return r
+}

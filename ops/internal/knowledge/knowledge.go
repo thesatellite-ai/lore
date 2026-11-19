@@ -11,15 +11,16 @@
 package knowledge
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -62,8 +63,8 @@ const (
 // Defaults shared by every knowledge add (v0.1.17 flag defaults).
 const (
 	DefaultSource = "manual"
-	// DefaultTrust is LifecycleMixin's trust_score default.
-	DefaultTrust = 0.5
+	// DefaultTrust is LifecycleMixin's trust_score default (logic/trust).
+	DefaultTrust = trust.Default
 	// DefaultSearchLimit is v0.1.17's --limit default of `<noun> search`.
 	DefaultSearchLimit = 20
 	// MaxSearchLimit bounds one search (a REST caller cannot ask the cache
@@ -161,6 +162,14 @@ type Create struct {
 	// unless NoMeta (--no-meta, METADATA 3.19, CLI_REFERENCE 2.4).
 	Meta   engine.MetaFlags
 	NoMeta bool
+	// Trust is the new row's trust_score; 0 writes DefaultTrust. A rule an
+	// agent adds passes trust.Agent so it waits for a person (devco:S-15).
+	Trust float64
+	// Key is the add's --key (addkey, devco D-439): the row gets the key's
+	// natural id, and a retry with the same key writes nothing and returns
+	// the row the first run added (Existed is then set true).
+	Key     string
+	Existed *bool
 }
 
 // Add creates one row of noun n and returns the store that holds it and
@@ -173,6 +182,18 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 	project, err := ResolveProject(ctx, env, n, c.Project)
 	if err != nil {
 		return "", engine.Written{}, 0, err
+	}
+	keyID, err := addkey.ID(n.Prefix, n.Name, project.String(), c.Key)
+	if err != nil {
+		return "", engine.Written{}, 0, err
+	}
+	if !keyID.IsZero() {
+		if src, r, found, ferr := addkey.Existing(ctx, env, n.Name, n.Table, keyID); found || ferr != nil {
+			if found && c.Existed != nil {
+				*c.Existed = true
+			}
+			return src, engine.Written{Row: r}, 0, ferr
+		}
 	}
 	texts := maps.Clone(c.Texts)
 	if texts[FieldSourceKind] == "" {
@@ -194,6 +215,7 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 			return "", engine.Written{}, 0, err
 		}
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, env); v != nil {
 		fields[FieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}
@@ -206,14 +228,21 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 			return "", engine.Written{}, 0, err
 		}
 	}
-	trust, err := value.Float(DefaultTrust)
+	score := DefaultTrust
+	if c.Trust > 0 {
+		score = c.Trust
+	}
+	tv, err := value.Float(score)
 	if err != nil {
 		return "", engine.Written{}, 0, errs.Wrap(errs.Internal, n.Name+" add: trust score", err)
 	}
-	fields[FieldTrust] = trust
+	fields[FieldTrust] = tv
 	var old ids.AnyID
 	var oldSrc store.Source
 	var carry metalist.Carry
+	if err := metalist.NoMetaNeedsSupersedes(c.NoMeta, c.Supersedes); err != nil {
+		return "", engine.Written{}, 0, err
+	}
 	if c.Supersedes != "" {
 		var oldRow row.Row
 		if old, oldSrc, oldRow, err = checkSupersedes(ctx, env, n, project, c.Supersedes); err != nil {
@@ -223,7 +252,20 @@ func Add(ctx context.Context, env Env, n Noun, c Create) (store.Source, engine.W
 			return "", engine.Written{}, 0, err
 		}
 	}
-	w, err := env.Create(carry.Before(ctx), store.Source(c.To), n.Table, fields)
+	var w engine.Written
+	if keyID.IsZero() {
+		w, err = env.Create(carry.Before(ctx), store.Source(c.To), n.Table, fields)
+	} else {
+		var found bool
+		var ksrc store.Source
+		ksrc, w, found, err = addkey.Create(carry.Before(ctx), env, n.Name, store.Source(c.To), n.Table, keyID, fields)
+		if found && err == nil {
+			if c.Existed != nil {
+				*c.Existed = true // a concurrent run with this key added it first
+			}
+			return ksrc, w, 0, nil
+		}
+	}
 	if err != nil {
 		return "", engine.Written{}, 0, carry.Hint(err)
 	}
@@ -381,7 +423,7 @@ func List(ctx context.Context, env Env, n Noun, s Scope, withArchived bool, only
 		if err != nil {
 			return nil, Hidden{}, err
 		}
-		slices.SortFunc(rows, func(a, b row.Row) int { return cmp.Compare(a.ID.String(), b.ID.String()) })
+		slices.SortFunc(rows, row.ByCreation) // creation order, not id order (row.ByCreation)
 		for _, r := range rows {
 			if r.Deleted || (f.project != "" && Field(r, FieldProject) != f.project) || (keep != nil && !keep(r)) {
 				continue
@@ -439,6 +481,9 @@ type Edit struct {
 	Tags, Untags []string
 	// Hint names the flags for the "nothing to change" error.
 	Hint string
+	// Trust, when above 0, sets trust_score in the same write: a rule
+	// whose text an agent changes drops back to trust.Agent (devco:S-15).
+	Trust float64
 }
 
 // Apply patches the row whose id is raw with e (only given fields change).
@@ -474,6 +519,11 @@ func Apply(ctx context.Context, env Env, n Noun, raw string, e Edit) (store.Sour
 	}
 	if len(patch) == 0 && !engine.MetaBound(ctx) {
 		return "", engine.Written{}, errs.New(errs.InvalidInput, n.Name+" edit: nothing to change").WithHint(e.Hint)
+	}
+	if e.Trust > 0 {
+		if patch[FieldTrust], err = value.Float(e.Trust); err != nil {
+			return "", engine.Written{}, errs.Wrap(errs.Internal, n.Name+" edit: trust score", err)
+		}
 	}
 	w, err := env.Update(ctx, engine.Ref{Store: it.Source, Table: n.Table, ID: it.Row.ID}, patch)
 	return it.Source, w, err
@@ -572,4 +622,13 @@ func StoreOf(ctx context.Context, env Env, n Noun, id ids.AnyID, requested store
 		return ""
 	}
 	return src
+}
+
+// ExistingLine is the note of an add whose --key found the row a previous
+// run added ("" otherwise).
+func ExistingLine(existing bool) string {
+	if !existing {
+		return ""
+	}
+	return "  " + addkey.AlreadyLine + "\n"
 }

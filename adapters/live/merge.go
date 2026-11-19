@@ -37,6 +37,20 @@ type MergeNote struct {
 	// Trash names the soft-delete rule that settled a v2 row (deleted on
 	// one side, edited on the other: kept alive), "" when none applied.
 	Trash rowmerge.TrashOutcome
+	// Replaced lists the fields both sides changed where the newer edit
+	// (by HLC) was kept and the other one replaced, sorted by field. A
+	// live merge never writes conflict markers (L-19): the live ref is
+	// read by every clone, so markers there broke everyone's lists and
+	// failed the sync of people who never touched the row.
+	Replaced []ReplacedField
+}
+
+// ReplacedField is one field a live merge settled by keeping the newer
+// edit: Older is the replaced value as text (a string as itself, anything
+// else as compact JSON), so the sync line can show what was dropped.
+type ReplacedField struct {
+	Field string
+	Older string
 }
 
 // MergeTrees three-way merges two live trees (F4): base is their merge
@@ -45,7 +59,8 @@ type MergeNote struct {
 // Rules per path:
 //   - row files: merge3.MergeFile on the bodies (file level first: add,
 //     delete, modify-beats-delete; then field level with the hlc-newer side
-//     winning scalars and text clashes kept with markers); the `_live`
+//     winning every clash, text too, never markers (L-19); the older
+//     value is named in the note); the `_live`
 //     blocks combine (earliest live_since, highest hlc, latest
 //     last_copy_at);
 //   - _live/epoch: the higher number;
@@ -211,13 +226,14 @@ func mergeRow(p string, b []byte, inB bool, o []byte, inO bool, t []byte, inT bo
 		f = Tombstone(idOf(res.File.Doc), f.Block)
 	} else {
 		f.Block.Deleted = false
-		markNonTextConflicts(f.Body, res.Fields.Conflicts)
+		newerBody := tf.file.Body
+		if newer == merge3.SideOurs {
+			newerBody = of.file.Body
+		}
+		replaced := takeNewerOnClash(f.Body, res.Fields.Conflicts, newer, newerBody)
 		f.Block.Conflict = f.HasConflictMarkers()
-		if note != nil && res.Conflicted() {
-			note.Conflict = true
-			for _, c := range res.Fields.Conflicts {
-				note.ConflictKeys = append(note.ConflictKeys, c.Key)
-			}
+		if note != nil {
+			note.Replaced = replaced
 		}
 	}
 	out, err := f.Encode()
@@ -256,6 +272,7 @@ func mergeV2Row(p string, bf, of, tf side, reg *schema.Registry) ([]byte, *Merge
 			pol = rowmerge.PolicyFor(def)
 		}
 	}
+	pol.TextNewerWins = true // never markers on the shared live ref (L-19)
 	res, err := rowmerge.Rows(pol, br, or, tr)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("live: merge %s: %w", p, err)
@@ -272,10 +289,17 @@ func mergeV2Row(p string, bf, of, tf side, reg *schema.Registry) ([]byte, *Merge
 	f.Block.Deleted = false
 	f.Block.Conflict = f.HasConflictMarkers()
 	note := &MergeNote{Path: p, Decision: merge3.DecisionFieldMerge, OursHLC: of.block.HLC, TheirsHLC: tf.block.HLC, Trash: res.Trash}
+	for _, c := range res.Replaced {
+		older := "(none)"
+		if c.Older != nil {
+			older = c.Older.String()
+		}
+		note.Replaced = append(note.Replaced, ReplacedField{Field: c.Field, Older: older})
+	}
 	if !res.Clean() {
 		note.Conflict = true
 		for _, c := range res.Conflicts {
-			note.ConflictKeys = append(note.ConflictKeys, c.Field)
+			note.ConflictKeys = append(note.ConflictKeys, metaKeyName(f.Body, c.Field))
 		}
 	}
 	out, err := f.Encode()
@@ -367,16 +391,37 @@ func earliest(a, b time.Time) time.Time {
 
 func idOf(doc canonjson.Object) string { return doc.Str(idKey) }
 
-// markNonTextConflicts makes a clash on a non-string field visible as
-// marked text, exactly like the branch merge driver does, so a conflict can
-// never hide inside a valid-looking value.
-func markNonTextConflicts(body canonjson.Object, cs []merge3.Conflict) {
+// takeNewerOnClash settles every key merge3 left as a clash (text or not)
+// by the newer side (by the rows' HLC), and returns what it replaced. Why
+// not markers, as the branch merge driver writes: a live row is shared by
+// every clone through refs/lore/live, so markers there were pushed to
+// everyone and failed the sync of people who never touched the row (L-19).
+//
+// newerBody is the newer side's whole body: it says whether the key is
+// absent there (removed) or holds a JSON null, which a merge3.Conflict
+// cannot tell apart.
+func takeNewerOnClash(body canonjson.Object, cs []merge3.Conflict, newer merge3.Side, newerBody canonjson.Object) []ReplacedField {
+	var out []ReplacedField
 	for _, c := range cs {
-		if s, ok := body[c.Key].AsString(); ok && merge3.ContainsConflictMarkers(s) {
+		keep, older := c.Theirs, c.Ours
+		if newer == merge3.SideOurs {
+			keep, older = c.Ours, c.Theirs
+		}
+		if s, ok := keep.AsString(); ok && merge3.ContainsConflictMarkers(s) {
+			// the newer side already held markers (written before L-19):
+			// keep them as they are, the row stays a conflict to settle
+			body[c.Key] = keep
 			continue
 		}
-		body[c.Key] = canonjson.String(merge3.MarkConflict(compactOrNull(c.Ours), compactOrNull(c.Theirs)))
+		if v, ok := newerBody[c.Key]; ok {
+			body[c.Key] = v
+		} else {
+			delete(body, c.Key) // the newer side removed the key
+		}
+		out = append(out, ReplacedField{Field: c.Key, Older: compactOrNull(older)})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Field < out[j].Field })
+	return out
 }
 
 // compactOrNull renders one side of a clash for the conflict markers: a
@@ -453,8 +498,15 @@ func (n MergeNote) Describe() string {
 		if n.Trash != "" {
 			return fmt.Sprintf("%s: %s", id, n.Trash)
 		}
+		if n.Conflict && metaOnly(n.ConflictKeys) {
+			// D-220: a strict metadata key, not a text clash
+			return fmt.Sprintf("%s: %s was set to different values on two machines (a strict key); both values are kept in the entry and the row does not land until one is chosen, see `lore sync conflicts`", id, strings.Join(n.ConflictKeys, ", "))
+		}
 		if n.Conflict {
 			return fmt.Sprintf("%s: both sides edited %s; both kept with conflict markers, see `lore sync conflicts`", id, strings.Join(n.ConflictKeys, ", "))
+		}
+		if len(n.Replaced) > 0 {
+			return n.describeReplaced()
 		}
 		return fmt.Sprintf("%s: merged both edits (newer by hlc: %s)", id, MaxHLC(n.OursHLC, n.TheirsHLC))
 	case merge3.DecisionBothDeleted:
@@ -463,4 +515,56 @@ func (n MergeNote) Describe() string {
 		// no note is made for these (merge3Row); the fallback names them
 	}
 	return fmt.Sprintf("%s: %s", id, n.Decision)
+}
+
+// metaKeyName turns a merge conflict field "meta.<key id>" into
+// "meta.<key name>" (the name `lore meta set --pair` takes), read from the
+// merged body's entry; any other field, or an entry with no name, is
+// returned as it is.
+func metaKeyName(body canonjson.Object, field string) string {
+	id, ok := strings.CutPrefix(field, "meta.")
+	if !ok {
+		return field
+	}
+	entries, ok := body["meta"].AsObject()
+	if !ok {
+		return field
+	}
+	e, ok := entries[id].AsObject()
+	if !ok || e.Str("name") == "" {
+		return field
+	}
+	return "meta." + e.Str("name")
+}
+
+// metaOnly reports whether every key is a metadata key ("meta.…").
+func metaOnly(keys []string) bool {
+	for _, k := range keys {
+		if !strings.HasPrefix(k, "meta.") {
+			return false
+		}
+	}
+	return len(keys) > 0
+}
+
+// replacedShown is how many runes of a replaced value a sync line shows.
+const replacedShown = 60
+
+// describeReplaced is the line of a row both sides edited where the newer
+// edit was kept: which fields, whose edit stayed, and what was replaced
+// (so the person whose text lost sees it, and can put it back with
+// `lore task edit`).
+func (n MergeNote) describeReplaced() string {
+	fields := make([]string, 0, len(n.Replaced))
+	was := make([]string, 0, len(n.Replaced))
+	for _, r := range n.Replaced {
+		fields = append(fields, r.Field)
+		v := []rune(r.Older)
+		short := r.Older
+		if len(v) > replacedShown {
+			short = string(v[:replacedShown]) + "…"
+		}
+		was = append(was, fmt.Sprintf("%s was %q", r.Field, short))
+	}
+	return fmt.Sprintf("%s: both sides edited %s; kept the newer edit (hlc %s), replaced: %s", n.Key.ID, strings.Join(fields, ", "), MaxHLC(n.OursHLC, n.TheirsHLC), strings.Join(was, "; "))
 }

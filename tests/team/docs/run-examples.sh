@@ -214,9 +214,11 @@ s_small_team() {
   on bob work/billing "lore sync"
 
   note "assign across branches"
-  on bob work/billing "git pull -q && git switch -q -c feat/payments && lore task add --title 'check the checkout page on a phone' --assign @alice"
+  # branch layers: a task added on a feature branch stays with that branch until it merges, so a task
+  # for a teammate is given from the default branch (or with --no-layer, below); then bob starts his branch.
+  on bob work/billing "git pull -q && lore task add --title 'check the checkout page on a phone' --assign @alice"
   local t1; t1=$(id tsk)
-  on bob work/billing "lore sync"
+  on bob work/billing "lore sync && git switch -q -c feat/payments"
   on alice work/billing "git switch -q -c feat/login && lore task list --mine"
   on alice work/billing "lore sync && lore task list --mine"
   on alice work/billing "lore inbox"
@@ -242,7 +244,8 @@ s_small_team() {
 
   note "protected main"
   protect agency/billing
-  on bob work/billing "lore task add --title 'ask the client for the new logo' --assign @alice"
+  # on his feature branch: --no-layer gives the task to the shared notes at once
+  on bob work/billing "lore task add --title 'ask the client for the new logo' --assign @alice --no-layer"
   local t2; t2=$(id tsk)
   on bob work/billing "lore sync"
   on alice work/billing "lore sync >/dev/null && lore task done --id $t2"
@@ -293,11 +296,13 @@ s_agency() {
   on alice work/website "git add -A && git commit -qm 'lore: rule' && git push -q origin main"
 
   note "internal task"
-  on alice work/website "lore sync >/dev/null; git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync"
+  # branch layers: a task given on a feature branch stays with that branch until it merges, so the
+  # internal task is given (and done) on the default branch; bob starts his feature branch after.
+  on alice work/website "lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync"
   local t1; t1=$(id tsk)
-  on bob work/website "lore sync >/dev/null; git switch -q -c feat/login && lore task list"
+  on bob work/website "lore sync >/dev/null; lore task list"
   on bob work/website "lore inbox"
-  on bob work/website "lore task done --id $t1"
+  on bob work/website "lore task done --id $t1 && lore sync >/dev/null && git switch -q -c feat/login"
   on bob work/website "git status --short"
 
   note "render"
@@ -583,18 +588,24 @@ Y
   ag agent-coord work/api "lore mission apply --file invite.yaml"
   local mis; mis=$(id msn)
   ag agent-coord work/api "lore mission apply --file invite.yaml"
-  ag agent-coord work/api "lore task claim --id $mis"
+  ag agent-coord work/api "lore task claim --id $mis --push"
 
   note "workers start"
+  # branch layers: an agent's claim, note and done on its work branch would stay with that branch until
+  # it merges; the agents' work branches are shared, so the coordinator sees each change at once.
+  for b in agent-backend/invite agent-frontend/invite-route agent-frontend-2/invite-route; do
+    on alice work/api "lore branch share --branch $b --yes"
+  done
   for r in api app infra; do quiet alice work/agents "mkdir -p \$(echo $r) && cd $r && [ -d .git ] || git clone -q https://github.com/client2/$r ."; done
   start_agent agent-backend work/agents/api
   ag agent-backend work/agents/api "lore inbox"
   ag agent-backend work/agents/api "lore task next --mission $mis --repo api"
+  ag agent-backend work/agents/api "lore task next --claim --mission $mis --repo api --push"
   local tb; tb=$(id tsk)
   start_agent agent-frontend work/agents/app
-  ag! agent-frontend work/agents/app "lore task next --mission $mis --repo app"
+  ag! agent-frontend work/agents/app "lore task next --claim --mission $mis --repo app --push"
   start_agent agent-infra work/agents/infra
-  ag agent-infra work/agents/infra "lore task next --mission $mis --repo infra --owns nginx/sites/invite.conf"
+  ag agent-infra work/agents/infra "lore task next --claim --mission $mis --repo infra --owns nginx/sites/invite.conf --push"
   local tp; tp=$(id tsk)
 
   note "shared fact"
@@ -607,36 +618,36 @@ Y
   ag agent-backend work/agents/api "lore task note --id $tb --text 'the API sends the invite email and returns a link; the email text is in invite.html'"
   ag agent-backend work/agents/api "git switch -q -c agent-backend/invite && mkdir -p api && echo 'package api' > api/invite.go && git add api && git commit -qm 'send the invite email' && git push -q -u origin agent-backend/invite"
   ag agent-backend work/agents/api "lore task done --id $tb --commit \$(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'"
-  ag! agent-frontend work/agents/app "lore task next --mission $mis --repo app"
+  ag! agent-frontend work/agents/app "lore task next --claim --mission $mis --repo app --push"
   on alice work/api "git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main"
   on alice work/api "lore task list"
-  ag agent-frontend work/agents/app "lore task next --mission $mis --repo app"
+  ag agent-frontend work/agents/app "lore task next --claim --mission $mis --repo app --push"
   local tf; tf=$(id tsk)
 
   note "crash and reclaim"
-  ag agent-frontend work/agents/app "git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page'"
+  ag agent-frontend work/agents/app "git switch -q -c agent-frontend/invite-route && mkdir -p src/routes && echo 'export {}' > src/routes/invite.tsx && git add src && git commit -qm 'invite page' && git push -q -u origin agent-frontend/invite-route"
   ag agent-frontend work/agents/app "lore task note --id $tf --text 'route + loader done, form next'"
   CLOCK=$(date -u -d "$CLOCK + 25 minutes" +%Y-%m-%dT%H:%M:%SZ)
   ag agent-coord work/api "lore inbox"
   ag agent-coord work/api "lore mission status --id $mis"
   quiet alice work/agents "mkdir -p fe2 && cd fe2 && git clone -q https://github.com/client2/app"
   start_agent agent-frontend-2 work/agents/fe2/app
-  ag agent-frontend-2 work/agents/fe2/app "lore task next --mission $mis --repo app"
+  ag agent-frontend-2 work/agents/fe2/app "lore task next --claim --mission $mis --repo app --push"
   ag agent-frontend-2 work/agents/fe2/app "git fetch -q origin agent-frontend/invite-route && git log --oneline -1 FETCH_HEAD"
   ag! agent-frontend work/agents/app "lore task done --id $tf"
   ag agent-frontend-2 work/agents/fe2/app "git switch -q -c agent-frontend-2/invite-route FETCH_HEAD && echo form >> src/routes/invite.tsx && git commit -qam 'invite form' && git push -q -u origin agent-frontend-2/invite-route && lore task done --id $tf --commit \$(git rev-parse HEAD)"
   on alice work/app "git pull -q && git merge -q --no-ff --no-edit origin/agent-frontend-2/invite-route && git push -q origin main && lore task list >/dev/null"
 
   note "merged by hand"
-  ag! agent-coord work/api "lore task next --mission $mis --role coordinator"
+  ag! agent-coord work/api "lore task next --claim --mission $mis --role coordinator --push"
   on alice work/infra "lore task merged --id $tp"
 
   note "gate"
-  ag! agent-coord work/api "lore task next --mission $mis --role coordinator"
+  ag! agent-coord work/api "lore task next --claim --mission $mis --role coordinator --push"
   local tg; tg=$(grep -o 'tsk_[0-9a-f]\{32\}' <<<"$LAST_OUT" | head -1 || true)
   ag! agent-coord work/api "lore gate approve --id $tg"
   on alice work/api "lore gate approve --id $tg"
-  ag agent-coord work/api "lore task next --mission $mis --role coordinator"
+  ag agent-coord work/api "lore task next --claim --mission $mis --role coordinator --push"
 
   note "mission status"
   on alice work/infra "lore mission status --id $mis"
@@ -719,7 +730,7 @@ Y
   quiet alice work/website "lore task add --title 'rotate the API keys' --to agency"
   local t; t=$(grep -o 'tsk_[0-9a-f]\{32\}' "$WORLD/quiet.log" | head -1 || true)
   mv "$HOSTS/agency/notes.git" "$WORLD/lore.git.away"
-  on! alice work/website "lore task claim --id $t"
+  on! alice work/website "lore task claim --id $t --push"
   on alice work/website "lore memory add --body 'the API keys rotate every 90 days' --to agency || true"
   mv "$WORLD/lore.git.away" "$HOSTS/agency/notes.git"
   on alice work/website "lore sync"
@@ -781,7 +792,7 @@ s_internals() {
   on alice work/website "lore agent start --label agent-backend --owner @alice"
   local a s2
   a=$(grep -o 'LORE_ACTOR=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2); s2=$(grep -o 'LORE_SESSION=[^ ]*' <<<"$LAST_OUT" | head -1 | cut -d= -f2)
-  EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task claim --id $t"
+  EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task claim --id $t --push"
   on alice . "cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main"
   on alice . "cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:\$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)"
   EXTRA_ENV="LORE_ACTOR=$a LORE_SESSION=$s2" AS=agent-backend on alice work/website "lore task heartbeat --id $t"
@@ -831,21 +842,21 @@ s_team_ops() {
   note "release"
   on alice work/website "lore task add --title 'send the invoice reminder before Friday' --to agency && lore sync"
   local t1; t1=$(id tsk)
-  on bob work/website "lore task claim --id $t1"
+  on bob work/website "lore task claim --id $t1 --push"
   on bob work/website "lore task release --id $t1"
   on alice work/website "lore sync >/dev/null && lore task show --id $t1"
 
   note "revoke"
   start_agent agent-backend work/website
-  AS=agent-backend EXTRA_ENV="${AGENT_ENV[agent-backend]}" on alice work/website "lore task claim --id $t1"
-  on alice work/website "lore task revoke --id $t1"
+  AS=agent-backend EXTRA_ENV="${AGENT_ENV[agent-backend]}" on alice work/website "lore task claim --id $t1 --push"
+  on alice work/website "lore task revoke --id $t1 --push"
   AS=agent-backend EXTRA_ENV="${AGENT_ENV[agent-backend]}" on! alice work/website "lore task done --id $t1"
 
   note "reassign"
   on alice work/website "lore task add --title 'update the contact page' --to agency --assign @bob && lore sync"
   local t2; t2=$(id tsk)
-  on bob work/website "lore task claim --id $t2"
-  on alice work/website "lore task reassign --id $t2 --assign @alice"
+  on bob work/website "lore task claim --id $t2 --push"
+  on alice work/website "lore task reassign --id $t2 --assign @alice --push"
   on! bob work/website "lore task done --id $t2"
 }
 

@@ -109,7 +109,9 @@ func invoke(t *testing.T, f Manager, name, body string) (string, string, error) 
 			t.Fatal(err)
 		}
 		txt, _ := res.Text()
-		return string(b), txt, nil
+		// an output printed in full that then fails (op.Failer, store
+		// doctor since devco D-483): its text and its error both
+		return string(b), txt, res.Failure()
 	}
 	t.Fatalf("no op %s", name)
 	return "", "", nil
@@ -195,7 +197,7 @@ func TestOpsMatrix(t *testing.T) {
 		t.Fatalf("doctor with a problem: %v", err)
 	}
 	f.clones.Stores[0].Problems = nil
-	if _, txt, err = invoke(t, f, OpDoctor, `{}`); err != nil || !strings.Contains(txt, "\n✓ git@h:a/n  (entries agency, kit; branches main)\n") {
+	if _, txt, err = invoke(t, f, OpDoctor, `{}`); err != nil || !strings.Contains(txt, "\n✓ git@h:a/n  (entries agency, kit; branches main)\nsummary: 1 store(s) checked: 1 ok, 0 warn, 0 fail\n") {
 		t.Fatalf("doctor clean: %q %v", txt, err)
 	}
 	if _, _, err = invoke(t, &fakeEnv{}, OpShow, `{}`); err != nil {

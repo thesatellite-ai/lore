@@ -45,8 +45,9 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 internal   github.com/agency/notes client/
+reads      agency/client (this repo's link)
 links      known  1 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 
@@ -59,7 +60,7 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_54fe…28f2
 remotes    github.com/client3/api
-stores     git@github.com:client3/notes on branch main  (org folder org)
+stores     git@github.com:client3/notes on branch main  (org folder client3/org: roster, teams, company rules)
 links      known  0 link(s) for this repo (stores of 2 entries scanned)
 personal   me -> ~/.lore/personal
 
@@ -87,18 +88,18 @@ Personal notes follow the same split. A note written in an agency repo is filed 
 ```console
 # alice, in website
 $ lore memory add --body 'ask the client PM before touching the payment flow' --to me
-lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
-lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/memories/mem_76bd…3f10.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_d431…313a.json (store me/agency)
 ✓ mem_76bd…3f10 [me/agency]
   scope: [project]
 
 # alice, in client3-api
 $ lore memory add --body 'client3 deploys only on Tuesdays' --to me
 lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/client3-api/.git/config; hook blocks in ~/work/client3-api/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: wrote ~/.lore/personal/client3/actors/act_162d…9666.json (store me)
-lore: wrote ~/.lore/personal/client3/memories/mem_b4f4…a5b0.json (store me)
-lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me)
+lore: wrote ~/.lore/personal/client3/actors/act_162d…9666.json (store me/client3)
+lore: wrote ~/.lore/personal/client3/memories/mem_b4f4…a5b0.json (store me/client3)
+lore: wrote ~/.lore/personal/client3/machines/mch_d431…313a.json (store me/client3)
 ✓ mem_b4f4…a5b0 [me/client3]
   scope: [project]
 
@@ -129,6 +130,8 @@ lore memory list: git is not set up for lore's row files in this clone: `lore sy
 
 - **Never two orgs in one repo.** Two entries may match a repo at the same rule (say both list `github.com/client/*`). Then lore refuses org-scoped commands with `E_ORG_AMBIGUOUS` until you choose with `lore org use --entry <entry>`. It never guesses. See [Troubleshooting](../troubleshooting.md#e_org_ambiguous).
 - **Set a top-level `identity`** once you have orgs. Without it, lore falls back to the git email chain, but skips any value equal to an org identity. So a personal repo is never stamped with a company identity. Lore prints a hint to set one.
+- **Joining the second company.** If your git email is already your identity in the first company, the lines `lore setup join` prints for the second one never reuse it: the identity line says `<your email in <org>>` and a note under the lines says why; put in the address the second company's admin added you with. A join answered with the wrong address is refused, and the refusal names the identity step to answer again (`lore setup apply --setup <setup> --step identity --answers '{"email":"<that email>"}'`) before asking the admin to add you. The join step also sets the second company's store clone to commit as you in that company.
+- **Each company's sync stays its own.** `lore sync` in a repo of one company pushes only that company's stores; a note waiting in the other company's store goes out with a sync in one of its repos. No command in one company's repo calls the other company's store at all (no fetch, no `ls-remote`, no read of its clone): when the repo already names its company (the folder's setup, `LORE_ORG`, `lore org use`, a committed `.lore/org.yaml`), lore reads only that company's stores, plus a store of any company whose `own:` or `repos:` patterns match the repo's remote; the `links` line of `lore whoami` lists the others as `not read (another org's stores; this repo names its org)`.
 - **Two identities, two actors.** The same person in two orgs is two roster rows (two entries on two lists of people and agents), never linked automatically.
 - **Agents for two orgs** should run as different OS users or in different containers. Lore keeps orgs apart in what it loads. But an agent with plain file access could read another org's clone in `~/.lore/stores`.
 

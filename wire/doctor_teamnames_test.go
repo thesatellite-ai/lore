@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -58,7 +59,10 @@ func TestTeamActorNamerMatrix(t *testing.T) {
 	}
 	mk := func(kv map[string]string) string {
 		t.Helper()
-		id, ierr := ids.New[ids.Actor]()
+		// actor ids derive from the person's stable key (a hash), as a
+		// real roster's do; ids.New ones share a time prefix, which the
+		// agent key's owner short id would collide on
+		id, ierr := identity.ActorID("human:" + kv["display_name"] + "@example.test")
 		if ierr != nil {
 			t.Fatal(ierr)
 		}
@@ -73,13 +77,27 @@ func TestTeamActorNamerMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// D-652: an agent of a roster person whose own actors row never
+	// reached this store (and whose tool no sessions row here names) is
+	// named from its owner, as its id derives from owner and tool.
+	tid, err := ids.Parse[ids.Actor](tomas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := knownAgentTools()[len(knownAgentTools())-1]
+	agents, err := identity.DetectedAgentIDs(tid, tool)
+	if err != nil {
+		t.Fatal(err)
+	}
 	name := a.teamActorNamer(ctx)
 	for in, want := range map[string]string{
-		mira:              "mira",
-		tomas:             "Tomas Ek",
-		unknown.String():  unknown.String(),
-		"not-an-actor-id": "not-an-actor-id",
-		"":                unknownWriter,
+		mira:               "mira",
+		tomas:              "Tomas Ek",
+		agents[0].String(): "Tomas Ek via " + tool,
+		agents[1].String(): "Tomas Ek via " + tool,
+		unknown.String():   unnamedWriter + unknown.String(), // D-688: labelled, never bare
+		"not-an-actor-id":  unnamedWriter + "not-an-actor-id",
+		"":                 unknownWriter,
 	} {
 		if got := name(in); got != want {
 			t.Errorf("name(%q) = %q, want %q", in, got, want)

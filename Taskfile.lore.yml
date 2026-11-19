@@ -43,6 +43,10 @@ vars:
   LORE_BIN: "{{.BIN_DIR}}/lore"
   WORKSPACE_ROOT: "{{.ROOT_DIR}}"
   TESTS_DIR: "{{.ROOT_DIR}}/tests"
+  # Scales a test time limit on a whole run by the machine factor (LORE_TEST_TIME_SCALE, else
+  # computed from cores and OS; 1 on the 48-core gate server): every go test -timeout below goes
+  # through it, and internal/testtime guards that none is raw. docs/DEVELOPMENT.md "Test time limits".
+  TEST_TIME: "{{.ROOT_DIR}}/tests/lib/testtime.sh"
   # File inside .git where `task check` records the tree it passed for; the
   # pre-push hook (.githooks/pre-push) reads the same name.
   CHECK_STAMP: "lore-check-passed"
@@ -116,14 +120,18 @@ vars:
   GATE_STEPS: |
     userscen          13  test:scen PARALLEL=13
     setupe2e          11  test:setupe2e:run PARALLEL=10
-    stories           4   test:stories PARALLEL=8
+    stories-ww        3   test:stories:ww PARALLEL=6
+    stories           4   test:stories:rest PARALLEL=8
     journey-teamlead  3   test:journeys:teamlead PARALLEL=2
     journey-solo      2   test:journeys:solo PARALLEL=4
     machines          7   test:machines:core PARALLEL=8
     journey-agency    2   test:journeys:agency PARALLEL=2
     journey-joiner    2   test:journeys:joiner PARALLEL=2
     sweep-rest        7   test:machines:sweep:rest PARALLEL=8
-    teame2e           7   test:team:run PARALLEL=10
+    teame2e           5   test:team:core PARALLEL=8
+    teame2e-te        4   test:team:te PARALLEL=8
+    teame2e-rest      4   test:team:rest PARALLEL=8
+    teame2e-race      3   test:team:race:run
     race-wire         12  test:race:wire SHARDS=6
     life-teams        4   test:machines:life:teams PARALLEL=4
     test-all          6   test:all
@@ -251,7 +259,7 @@ tasks:
       # queue behind a full lore:check of another session. No -count=1 (the cache is the point:
       # go test reruns a package when its code, the env vars or the files it reads change) and the
       # same flags as lore:test:all, so the two share one test cache.
-      - go test {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}}
+      - go test -timeout $({{.TEST_TIME}} 10m) {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}}
       # The fast real-machine shapes (foreign files, env, links, shapes; ~45 s on a loaded 48-core server) run here too, so a
       # change that breaks a real home is seen between edits, not only at the gate. Skipped when
       # CLI_ARGS narrows the run to some packages.
@@ -269,7 +277,7 @@ tasks:
   test:race:rest:
     desc: "The race set without ./wire (lore:test:race:wire runs it in shards)"
     cmds:
-      - go test -p 8 -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m $(printf '%s\n' {{.RACE_PKGS}} | grep -vx './wire')
+      - go test -p 8 -race -gcflags='{{.RACE_GCFLAGS}}' -timeout $({{.TEST_TIME}} 40m) $(printf '%s\n' {{.RACE_PKGS}} | grep -vx './wire')
 
   test:race:wire:
     desc: "./wire under the race detector in SHARDS processes of one test binary (tests/lib/gotest-shards.sh): 123 of its 569 tests are serial (113 use t.Setenv), so one process took 200 s while the rest of the race set took 25 s"
@@ -279,7 +287,7 @@ tasks:
       # GOMAXPROCS=4 per shard: each shard's parallel tests run on at most four cores, so the
       # six shards stay near their share of the gate's load budget (run unbounded, the shards
       # took 13 cores on average and bursts far above).
-      - GOMAXPROCS=4 tests/lib/gotest-shards.sh {{.SHARDS}} ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m
+      - GOMAXPROCS=4 tests/lib/gotest-shards.sh {{.SHARDS}} ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout $({{.TEST_TIME}} 40m)
 
   test:race:changed:
     desc: "Race detector on the RACE_PKGS packages that hold a changed .go file (since the merge base with FAST_BASE, default origin/main; go.mod/go.sum changes select the whole set; tests/lib/fast-plan.sh race). Part of lore:check:fast"
@@ -298,10 +306,10 @@ tasks:
         rest=$(printf '%s\n' $pkgs | grep -vx './wire' || true)
         rc=0
         if printf '%s\n' $pkgs | grep -qx './wire'; then
-          GOMAXPROCS=4 tests/lib/gotest-shards.sh 6 ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m & wire=$!
+          GOMAXPROCS=4 tests/lib/gotest-shards.sh 6 ./wire -race -gcflags='{{.RACE_GCFLAGS}}' -timeout $({{.TEST_TIME}} 40m) & wire=$!
         fi
         if [ -n "$rest" ]; then
-          go test -p 8 -race -gcflags='{{.RACE_GCFLAGS}}' -timeout 40m $rest || rc=1
+          go test -p 8 -race -gcflags='{{.RACE_GCFLAGS}}' -timeout $({{.TEST_TIME}} 40m) $rest || rc=1
         fi
         if [ -n "${wire:-}" ]; then wait "$wire" || rc=1; fi
         exit $rc
@@ -312,7 +320,7 @@ tasks:
       # No -count=1: go test reruns a package when its code, the env vars or the files it reads change.
       # -p 8: at most eight package test binaries at once (each runs its parallel tests on every
       # core), the cap of one go test process in the gate's load budget.
-      - go test -p 8 ./...
+      - go test -p 8 -timeout $({{.TEST_TIME}} 10m) ./...
 
   check:tidy:
     desc: "Fail when `go mod tidy` would change go.mod or go.sum (go mod tidy -diff: never writes them)"
@@ -443,12 +451,12 @@ tasks:
   test:sync:
     desc: "Git-sync tests only: row merge (logic/merge, merge3, canonjson), the live ref, branch sync and the sync operations; the end-to-end sync tests are in lore:test:team"
     cmds:
-      - go test -race -gcflags='{{.RACE_GCFLAGS}}' ./logic/merge/... ./logic/merge3/... ./logic/canonjson/... ./adapters/live/... ./adapters/reposync/... ./ops/sync/...
+      - go test -race -gcflags='{{.RACE_GCFLAGS}}' -timeout $({{.TEST_TIME}} 10m) ./logic/merge/... ./logic/merge3/... ./logic/canonjson/... ./adapters/live/... ./adapters/reposync/... ./ops/sync/...
 
   test:scen:
     desc: "User-scenario suite (tests/userscen): every user-facing feature through the real binary, temp HOME, real git. Extra go test flags after --"
     cmds:
-      # -timeout 60m: the trash matrix alone takes ~8 min (26 kinds x 3 stores).
+      # -timeout 60m (times the machine factor, tests/lib/testtime.sh): the trash matrix alone takes ~8 min (26 kinds x 3 stores).
       # -count=1: TestMain builds cmd/lore in a subprocess (go build), and the test cache keys
       # only on the userscen package's own sources, the env vars it reads and the files the
       # test process opens, never on the lore sources that subprocess compiles. A cached pass
@@ -456,7 +464,7 @@ tasks:
       # task check, which calls it) always runs the binary built from the current tree.
       # -parallel: how many scenarios run at once (each drives lore processes one after another);
       # the gate passes its share of the load budget, a manual run uses 32.
-      - "CGO_ENABLED=0 go test -tags userscen -count=1 -parallel {{.PARALLEL | default 32}} -timeout 60m ./tests/userscen/... {{.CLI_ARGS}}"
+      - "CGO_ENABLED=0 go test -tags userscen -count=1 -parallel {{.PARALLEL | default 32}} -timeout $({{.TEST_TIME}} 60m) ./tests/userscen/... {{.CLI_ARGS}}"
 
   test:team:
     desc: "Team e2e suite (LORE_TEAM_SPEC.md): real binary, real git, many actors. Not built yet = PENDING (skip); LORE_TEAM_STRICT=1 fails pending tests, LORE_TEAM_FORCE=1 skips the capability probe. Extra go test flags after --"
@@ -464,9 +472,21 @@ tasks:
       - testlock task lore:test:team:run -- {{.CLI_ARGS}}
 
   test:team:run:
-    desc: "Body of lore:test:team WITHOUT the machine-wide test lock; call lore:test:team instead"
+    desc: "Body of lore:test:team WITHOUT the machine-wide test lock (every test of tests/teame2e); call lore:test:team instead"
+    cmds:
+      - task: test:team:part
+        vars: {PART: all, FILTER: "{{.CLI_ARGS}}"}
+
+  # The gate runs tests/teame2e as parallel parts, each with its own binary name, instead of one
+  # package run (devco D-223: the one gate step ran only the tests a -run prefix list named, so
+  # 138 of 331 tests, TestB11*, TestTeA..TeF*, TestMerged*, TestMigrate*, TestRoster* among them,
+  # ran nowhere and 39 broke unseen). core and te select by name; rest skips exactly what they
+  # run, so the three parts cover every test by construction, and tests/gatecover fails when a
+  # test of a tagged suite is selected by no gate step.
+  test:team:part:
+    desc: "One part of tests/teame2e with its own binary (PART names it, FILTER is the go test -run/-skip); test:team:run and the gate's teame2e-* steps call it"
     vars:
-      TEAM_BIN: "{{.BIN_DIR}}/lore-team"
+      TEAM_BIN: "{{.BIN_DIR}}/lore-team-{{.PART}}"
     cmds:
       - mkdir -p {{.BIN_DIR}}
       # loretest: the build tag under which the binary honours LORE_NOW (test clock).
@@ -475,15 +495,33 @@ tasks:
       # (pipefail so a build failure of the test binary is not swallowed by the pipe).
       # -count=1: the tests run the outside binary LORE_TEAM_BIN, which the test cache does not
       # track, so a cached pass could hide a rebuilt binary's failure.
-      # -timeout 40m: go test's default 10 min is a wall-clock limit on the whole
+      # -timeout 40m (times the machine factor, tests/lib/testtime.sh): go test's default 10 min is a wall-clock limit on the whole
       # package; beside the other e2e steps of lore:check (load above 70) the suite
       # took 630 s and the default killed a passing test mid-run.
       - |
         set -o pipefail
         # -parallel: how many team tests run at once (the gate passes its share of the load
         # budget; a manual run uses 24).
-        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout 40m -json -run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$)' ./tests/teame2e/ {{.CLI_ARGS}} \
+        LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -count=1 -parallel {{.PARALLEL | default 24}} -timeout $({{.TEST_TIME}} 40m) -json {{.FILTER}} ./tests/teame2e/ \
           | go run ./tests/teame2e/teamharness/matrix
+
+  test:team:core:
+    desc: "tests/teame2e, the spec scenarios: F*, E*, recipes, side effects, leaks, next, worked examples, API parity"
+    cmds:
+      - task: test:team:part
+        vars: {PART: core, FILTER: "-run '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$)'"}
+
+  test:team:te:
+    desc: "tests/teame2e, the later te-a..te-f groups and the B11 sync and CLI tests"
+    cmds:
+      - task: test:team:part
+        vars: {PART: te, FILTER: "-run '^Test(Te[A-F]_|B11)'"}
+
+  test:team:rest:
+    desc: "tests/teame2e minus the core and te parts: everything else (Fin*, Merged*, Migrate*, Roster*, Time*, Task*, Access*, ...)"
+    cmds:
+      - task: test:team:part
+        vars: {PART: rest, FILTER: "-skip '^Test(F[0-9]|E[0-9][0-9]_|Recipe|SideEffect|Leak|Next|Worked|APIParity|LockOrderRanks$|Task_AssignHandleAfterTeammateAssigned$|Te[A-F]_|B11)'"}
 
   test:setupe2e:
     desc: "Setup page e2e suite (tests/setupe2e, tag setupe2e): every valid machine shape (1764) through the real binary's HTTP API. Fails, never skips, when a world or the server cannot start. Narrow with SETUPE2E_ONLY=<text in the shape name>"
@@ -503,7 +541,7 @@ tasks:
       # 189 s at 32 vs 194 s at 48; each shape spawns lore processes, so more Go-level
       # parallelism only adds load.
       # PARALLEL: the gate passes its share of the load budget.
-      - "SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout 60m -run '^(TestAPIMatrix|TestBinaryServesDefaultUI|TestPairwiseCoversEveryPair|TestShapeValidate)$' ./tests/setupe2e/"
+      - "SETUPE2E_LORE={{.SETUPE2E_BIN}} go test -tags setupe2e -count=1 -parallel {{.PARALLEL | default 32}} -timeout $({{.TEST_TIME}} 60m) ./tests/setupe2e/"
 
   test:machines:
     desc: "Real-machine suite (tests/machines, tag machines): homes shaped like real users' (fresh, v0.1.17, migrated with *.migrated backups, several gh accounts and ssh aliases with a key without .pub, org member, setups disabled/trashed/purged) and every valid 4-step setup lifecycle sequence on them, checking after each step that nothing purged or trashed is offered, disabled never applies, config check knows every key, doctor --all reports, and repo files are 0644 / ~/.lore owner-only. MACHINES_FULL=1 runs every sequence on every shape"
@@ -518,7 +556,7 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       - CGO_ENABLED=0 go build -o {{.MACHINES_BIN}} ./cmd/lore
       # -count=1: the tests run the outside binary MACHINES_LORE, which the test cache does not track.
-      - MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel 32 -timeout 20m ./tests/machines/ {{.CLI_ARGS}}
+      - MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel 32 -timeout $({{.TEST_TIME}} 20m) ./tests/machines/ {{.CLI_ARGS}}
 
   # The gate runs tests/machines as parallel parts (each its own binary name, each under ~3 min on
   # an idle 48-core server) instead of one package run; test:machines:run stays the whole package for a
@@ -532,7 +570,7 @@ tasks:
       - mkdir -p {{.BIN_DIR}}
       - CGO_ENABLED=0 go build -o {{.MACHINES_BIN}} ./cmd/lore
       # PARALLEL: the gate passes each part's share of the load budget.
-      - "MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel {{.PARALLEL | default 32}} -timeout 20m {{.FILTER}} ./tests/machines/"
+      - "MACHINES_LORE={{.MACHINES_BIN}} go test -tags machines -count=1 -parallel {{.PARALLEL | default 32}} -timeout $({{.TEST_TIME}} 20m) {{.FILTER}} ./tests/machines/"
 
   test:machines:core:
     desc: "tests/machines minus the sweep, life and REST parts: the shapes (built-in, links_*, env_*, foreign_*, repos_*), the 4-step setup sequences and the setup campaign"
@@ -594,7 +632,7 @@ tasks:
       JOURNEYS_BIN: "{{.BIN_DIR}}/lore-journeys-{{.PART}}"
     cmds:
       - CGO_ENABLED=0 go build -tags loretest -o {{.JOURNEYS_BIN}} ./cmd/lore
-      - "JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel {{.PARALLEL | default 16}} -timeout 15m {{.FILTER}} ./tests/journeys/"
+      - "JOURNEYS_LORE={{.JOURNEYS_BIN}} go test -tags journeys -count=1 -parallel {{.PARALLEL | default 16}} -timeout $({{.TEST_TIME}} 15m) {{.FILTER}} ./tests/journeys/"
 
   test:stories:
     desc: "Replayable user stories (tests/stories, tags stories+journeys): every scenario track lore was tried against (bug hunt J1-J4, dev company A-I) replayed end to end on the real binary over generated repo shapes (5.5k-row 0.1.17 repo, monorepo, docs-only, Unicode/CRLF, worktrees, shallow clones, two machines), checking the owner's standing rules; tests/stories/REGRESSIONS.md maps every fixed finding to the test that guards it. Stories run in parallel (PARALLEL); full gate only, not check:fast. Extra go test flags after --"
@@ -602,7 +640,32 @@ tasks:
       STORIES_BIN: "{{.BIN_DIR}}/lore-stories"
     cmds:
       - CGO_ENABLED=0 go build -tags loretest -o {{.STORIES_BIN}} ./cmd/lore
-      - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout 15m {{.CLI_ARGS}} ./tests/stories/"
+      - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout $({{.TEST_TIME}} 15m) {{.CLI_ARGS}} ./tests/stories/"
+
+  # The gate runs the stories in two parts, each with its own binary and 15 m limit, like the
+  # journeys: story WW (the write matrix, twelve places of ~400 writes each) is the suite's long
+  # pole and alone took 7 of the 15 minutes once the gate's load rose (devco D-678); the rest
+  # part runs every other story (-skip of exactly the ww part), so a new story is in the gate
+  # the day it is added; internal/repoguard TestGateRunsEveryTaggedSuiteTest fails when a story is in neither.
+  test:stories:part:
+    desc: "One part of tests/stories with its own binary (PART names it, FILTER is the go test -run or -skip); the gate's stories steps call it"
+    vars:
+      STORIES_BIN: "{{.BIN_DIR}}/lore-stories-{{.PART}}"
+    cmds:
+      - CGO_ENABLED=0 go build -tags loretest -o {{.STORIES_BIN}} ./cmd/lore
+      - "STORIES_LORE={{.STORIES_BIN}} go test -tags 'stories journeys' -count=1 -parallel {{.PARALLEL | default 8}} -timeout $({{.TEST_TIME}} 15m) {{.FILTER}} ./tests/stories/"
+
+  test:stories:ww:
+    desc: "Story WW alone: every write of the registry from every place a person stands (the gate's long pole, its own step)"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: ww, FILTER: "-run '^TestStoryWW'", PARALLEL: "{{.PARALLEL}}"}
+
+  test:stories:rest:
+    desc: "Every story the ww part does not run (the catch-all of the gate's stories parts)"
+    cmds:
+      - task: test:stories:part
+        vars: {PART: rest, FILTER: "-skip '^TestStoryWW'", PARALLEL: "{{.PARALLEL}}"}
 
   test:journeys:frame:
     desc: "Journey harness self-tests: a walk through every harness action, every shared invariant bites, Pending records"
@@ -685,13 +748,15 @@ tasks:
       - testlock task lore:test:team:race:run -- {{.CLI_ARGS}}
 
   test:team:race:run:
-    desc: "Body of lore:test:team:race WITHOUT the machine-wide test lock; call lore:test:team:race instead"
+    desc: "Body of lore:test:team:race WITHOUT the machine-wide test lock; call lore:test:team:race instead (the gate's teame2e-race step)"
     vars:
-      TEAM_BIN: "{{.BIN_DIR}}/lore-team"
+      TEAM_BIN: "{{.BIN_DIR}}/lore-team-race"
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - CGO_ENABLED=0 go build -tags loretest -o {{.TEAM_BIN}} ./cmd/lore
-      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -run 'Race' -count=5 ./tests/teame2e/ {{.CLI_ARGS}}
+      # -timeout 40m (times the machine factor, tests/lib/testtime.sh): five rounds of every race test under -race outlast go test's 10-minute
+      # default beside the other gate steps (devco D-223 made this a gate step).
+      - LORE_TEAM_BIN={{.TEAM_BIN}} go test -tags teame2e -race -timeout $({{.TEST_TIME}} 40m) -run 'Race' -count=5 ./tests/teame2e/ {{.CLI_ARGS}}
 
   docs:examples:
     desc: "Run every docs/team example against the real binary (tests/team/docs/run-examples.sh), then refresh the pages from the transcripts (paste.py); fails when an example misbehaves or a page is stale. One section: task lore:docs:examples -- agents"
@@ -775,7 +840,7 @@ tasks:
     vars:
       ROWS: '{{.ROWS | default ""}}'
     cmds:
-      - LORE_BENCH_META=1 {{if .ROWS}}LORE_BENCH_META_ROWS={{.ROWS}} {{end}}go test ./adapters/cache/sqlite/ -run '^TestMetaBench$' -v -timeout 60m
+      - LORE_BENCH_META=1 {{if .ROWS}}LORE_BENCH_META_ROWS={{.ROWS}} {{end}}go test ./adapters/cache/sqlite/ -run '^TestMetaBench$' -v -timeout $({{.TEST_TIME}} 60m)
 
   test:cover:
     desc: "Coverage of the root module's tests; lists functions no test reaches"
@@ -783,7 +848,7 @@ tasks:
       - |
         set -e
         # -count=1 kept: the run must write a fresh coverage profile; a cache replay writes none.
-        go test -count=1 -coverpkg=./... -coverprofile=coverage.out ./... >/dev/null
+        go test -count=1 -timeout $({{.TEST_TIME}} 10m) -coverpkg=./... -coverprofile=coverage.out ./... >/dev/null
         go tool cover -func=coverage.out | tail -1
         echo "functions no test reaches:"
         go tool cover -func=coverage.out | awk '$NF == "0.0%"' || true

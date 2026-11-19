@@ -75,6 +75,20 @@ func TestHookIndexRestore(t *testing.T) {
 		t.Fatal("a second restore ran (the snapshot is used once)")
 	}
 
+	// D-224: the commit-msg block's one-process check leaves the index as
+	// the pre-commit staged it, so its separate check sees the same rows
+	// and refuses too; that second check restores.
+	stage()
+	if wire.HookIndexRestore(wire.KeepHookIndex(ctx), dir) {
+		t.Fatal("the one-process check restored the index")
+	}
+	if got := hiOut(t, dir, "diff", "--cached", "--name-only"); !strings.Contains(got, ".lore/data/memories/mem_x.json") {
+		t.Fatalf("index after the one-process check = %q, want the staged row kept", got)
+	}
+	if !wire.HookIndexRestore(ctx, dir) {
+		t.Fatal("the separate check did not restore")
+	}
+
 	stage()
 	hiWrite(t, dir, "later.md", "later\n")
 	allowGit(t, dir, "add", "later.md") // the person staged more since

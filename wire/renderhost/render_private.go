@@ -60,6 +60,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -73,9 +74,12 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
+	"github.com/thesatellite-ai/lore/wire"
 
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -115,6 +119,24 @@ const (
 const renderDirName = "render"
 
 var privateImportDir = "~/.lore/" + renderDirName + "/"
+
+// privateImportDirFor is the import prefix of the private renders of the
+// lore home home: <home>/render/, written ~-relative when the home is under
+// the person's home folder (~/.lore/render/ for the default home), else
+// absolute. devco D-535: every import named ~/.lore/render/ whatever the
+// home, so under LORE_HOME=~/.lore-dev the tool read a missing or stale
+// file of ~/.lore while the render was written under ~/.lore-dev.
+func privateImportDirFor(home string) string {
+	if user, err := os.UserHomeDir(); err == nil && home != "" {
+		if rel, err := filepath.Rel(filepath.Clean(user), filepath.Clean(home)); err == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "~/" + filepath.ToSlash(rel) + "/" + renderDirName + "/"
+		}
+	}
+	if home == "" {
+		return privateImportDir
+	}
+	return strings.TrimSuffix(filepath.ToSlash(filepath.Clean(home)), "/") + "/" + renderDirName + "/"
+}
 
 // privateStemUnsafe matches characters a store name may hold that a file
 // stem must not.
@@ -174,10 +196,28 @@ type privatePlan struct {
 	files     []privateFile  // store files, then index.md
 	locals    []privateLocal // one per profile private file to write or clean
 	rows      int            // rows shown in the store files
+	pinned    int            // pinned rules and hotfixes in the store files' cores (always shown)
 	leftOut   int            // "Other notes" rows the budget left out (P3-CTX-2)
 	budget    int            // context.budget.internal
 	coreBytes int            // the store files' cores (never cut)
+	pins      []privatePin   // the cores' rule and hotfix blocks, store files in order
+	fix       budgetFix      // where the raise goes and who may run each fix (devco D-636, D-637)
 }
+
+// privatePin is one pinned row of a private file's core: a must rule or a
+// critical/high hotfix, as the file prints it.
+type privatePin struct {
+	id   string
+	kind string       // privatePinRule or privatePinHotfix
+	text string       // the <rule>/<hotfix> block, byte for byte as in the file
+	src  store.Source // the store the row is kept in (a company place's row is an admin's to lower)
+}
+
+// Kinds of a privatePin (the tag the block uses).
+const (
+	privatePinRule   = "rule"
+	privatePinHotfix = "hotfix"
+)
 
 // privateLocal is one tool's private import file in the checkout.
 type privateLocal struct {
@@ -205,6 +245,13 @@ func (p *privatePlan) privateLocalsChanged() bool {
 // With no internal store attached it only drops stale lore lines from an
 // existing CLAUDE.local.md.
 func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root string, dryRun, quiet bool) error {
+	return h.renderPrivateIn(ctx, w, root, dryRun, quiet, true)
+}
+
+// renderPrivateIn is renderPrivate; with locals false it writes only the
+// files outside the checkout and no tool's import file (a client repo,
+// which holds nothing of lore's: devco D-481).
+func (h *Host) renderPrivateIn(ctx context.Context, w *strings.Builder, root string, dryRun, quiet, locals bool) error {
 	if h.app == nil {
 		return nil
 	}
@@ -212,7 +259,13 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 	if err != nil {
 		return err
 	}
+	if !locals {
+		p.locals = nil
+	}
 	if dryRun {
+		if p.budget > 0 && p.coreBytes > p.budget {
+			fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
+		}
 		for _, f := range p.files {
 			fmt.Fprintf(w, "\n==> %s (private, not written: --dry-run)\n%s", f.path, f.body)
 		}
@@ -236,13 +289,14 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 			return err
 		}
 	}
+	changed := privateFilesChanged(p.files)
 	if len(p.stores) > 0 {
 		if err := os.MkdirAll(p.dir, renderDirMode); err != nil {
 			return errs.FileIO("create the private render folder", p.dir, err)
 		}
 		for _, f := range p.files {
 			if err := atomicWriteFile(f.path, []byte(f.body), renderFileMode); err != nil {
-				return errs.Wrap(errs.Internal, "write the private render", err)
+				return errs.FileIOOr("write the private render", f.path, err) // the cause and its fix, not a bare E_INTERNAL
 			}
 		}
 	}
@@ -257,9 +311,17 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 		if l.out != "" && l.imports {
 			wrote = append(wrote, l.rel)
 		}
+		if l.in != l.out {
+			// devco D-535: a sync wrote these files with no word; one line
+			// each, even when quiet (a file in the person's checkout)
+			fmt.Fprintln(w, h.privateLocalLine(l))
+		}
 	}
 	if !quiet && len(p.stores) > 0 {
 		where := "no target tool has a private file: agents get it through `lore context` and the hooks"
+		if !locals {
+			where = privateNoImportWhere
+		}
 		if len(wrote) > 0 {
 			verb := " hold"
 			if len(wrote) == 1 {
@@ -270,16 +332,90 @@ func (h *Host) renderPrivate(ctx context.Context, w *strings.Builder, root strin
 		left := ""
 		if p.leftOut > 0 {
 			left = fmt.Sprintf(", %d more left out by %s %d", p.leftOut, policy.KeyContextBudgetInternal, p.budget)
+			if p.budget > 0 && p.coreBytes > p.budget {
+				left += fmt.Sprintf(" (the pinned rules and hotfixes alone are %d bytes, never cut)", p.coreBytes)
+			}
 		}
 		fmt.Fprintf(w, "%s private context → %s (%s, %s%s, outside the checkout); %s\n",
 			h.decor.check(), h.redact(p.dir), plural.Count(len(p.stores), "store"), plural.Count(p.rows, "row"), left, where)
 	}
-	if p.budget > 0 && p.coreBytes > p.budget {
-		fmt.Fprintln(os.Stderr, h.decor.warn(fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut: unpin some or raise the key",
-			p.coreBytes, policy.KeyContextBudgetInternal, p.budget)))
+	if changed && p.budget > 0 && p.coreBytes > p.budget {
+		fmt.Fprintln(os.Stderr, h.decor.warn(privateOverCoreWarn(p)))
 	}
 	return nil
 }
+
+// privateLocalLine is the line for a tool's local import file the
+// private render changed in the checkout: written (git-excluded, naming
+// the render under this lore home) or removed.
+func (h *Host) privateLocalLine(l privateLocal) string {
+	switch {
+	case l.out == "":
+		return h.decor.check() + " removed " + l.rel + " (it held only lore's import lines)"
+	case l.imports:
+		return h.decor.check() + " wrote " + l.rel + " (git-excluded): imports the private context under " + h.redact(h.opts.Home)
+	}
+	return h.decor.check() + " updated " + l.rel + ": dropped lore's stale import lines"
+}
+
+// privateNoImportWhere ends the private render's line where no import
+// file may be written (a client repo, devco D-481).
+const privateNoImportWhere = "no import file in a client repo: agents get it through `lore context` and the hooks"
+
+// privateFilesChanged reports whether a private file differs from what is
+// on disk (or is missing). The over-budget warning is printed only then
+// (devco D-573: every `lore sync` repeated it while nothing had changed
+// since the last render).
+func privateFilesChanged(files []privateFile) bool {
+	for _, f := range files {
+		if old, err := os.ReadFile(f.path); err != nil || string(old) != f.body {
+			return true
+		}
+	}
+	return false
+}
+
+// privateOverCoreWarn is the warning when the pinned part alone is over
+// context.budget.internal (a real render and, D-430, the dry run too).
+// Why the commands (devco D-573): "unpin some or raise the key" named no
+// command, and "unpin" is not what takes a row out of the pinned part: a
+// must rule or a critical/high hotfix is always written in full, so the
+// fix is a lower severity, or a larger budget.
+func privateOverCoreWarn(p *privatePlan) string {
+	return fmt.Sprintf("WARN: private context: the pinned rules and hotfixes of the internal stores are %d bytes, over %s %d; they are never cut.%s\n  fix: %s",
+		p.coreBytes, policy.KeyContextBudgetInternal, p.budget, largestPins(p.pins, largestPinsShown), overCoreFix(p.coreBytes, p.pins, p.fix))
+}
+
+// largestPinsShown is how many of the largest pinned rows the warning names.
+const largestPinsShown = 3
+
+// pinsBySize is pins, largest text first (a stable sort, so rows of one
+// size keep their order). The warning's list and its fix both read it, so
+// the fix names the rows the warning listed (devco D-602: the fix named
+// the first pinned rule found, a smaller row the list did not show).
+func pinsBySize(pins []privatePin) []privatePin {
+	ps := slices.Clone(pins)
+	slices.SortStableFunc(ps, func(a, b privatePin) int { return len(b.text) - len(a.text) })
+	return ps
+}
+
+// largestPins is " The largest: <id> (<n> bytes), …" for the n largest
+// pinned rows, "" when there are none.
+func largestPins(pins []privatePin, n int) string {
+	if len(pins) == 0 {
+		return ""
+	}
+	ps := pinsBySize(pins)
+	parts := make([]string, 0, n)
+	for _, pin := range ps[:min(n, len(ps))] {
+		parts = append(parts, fmt.Sprintf("%s (%d bytes)", pin.id, len(pin.text)))
+	}
+	return " The largest: " + strings.Join(parts, ", ") + "."
+}
+
+// budgetToFit is coreBytes rounded up to the next thousand, plus a
+// thousand for the other notes.
+func budgetToFit(coreBytes int) int { return (coreBytes/1000 + 2) * 1000 }
 
 // loadInternalBudget reads context.budget.internal (6.1).
 func (h *Host) loadInternalBudget(ctx context.Context) int {
@@ -322,6 +458,12 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		byKey[key] = len(internal)
 		internal = append(internal, privateStore{stem: stem, sources: []store.Source{si.Name}, url: urls[string(si.Name)]})
 	}
+	// K-12: the stores come in the engine's attach order, which differs
+	// between opens of one repo (lore fix --dry-run attached the org store
+	// before me, lore render after it), so the index and the import lines
+	// read stale on one run and current on the next; the files go in the
+	// order of their names, whatever the open
+	slices.SortFunc(internal, func(x, y privateStore) int { return strings.Compare(x.stem, y.stem) })
 
 	p := &privatePlan{stores: internal}
 	pid, err := h.app.Project(ctx)
@@ -358,13 +500,20 @@ func (h *Host) planPrivate(ctx context.Context, root string) (*privatePlan, erro
 		bodies = append(bodies, body)
 	}
 	p.budget = h.loadInternalBudget(ctx)
-	fit := fitPrivate(bodies, p.budget)
+	if core := coreSize(bodies); p.budget > 0 && core > p.budget {
+		p.fix = h.planBudgetFix(ctx, bodies)
+	}
+	fit := fitPrivate(bodies, p.budget, p.fix)
 	p.rows, p.leftOut, p.coreBytes = fit.shown, fit.leftOut, fit.coreBytes
+	for _, b := range bodies {
+		p.pinned += b.pinned
+		p.pins = append(p.pins, b.pins...)
+	}
 	for i, s := range internal {
 		// render_stamp.go: the file's rows and budget, stamped on line 2.
 		body := withPrivateStamp(fit.texts[i], bodies[i].origins, p.budget)
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, s.stem+privateFileExt), body: body})
-		imports = append(imports, privateImportDir+p.dirName+"/"+s.stem+privateFileExt)
+		imports = append(imports, privateImportDirFor(home)+p.dirName+"/"+s.stem+privateFileExt)
 	}
 	if len(internal) > 0 {
 		p.files = append(p.files, privateFile{path: filepath.Join(p.dir, privateIndexFile), body: buildPrivateIndex(repoName, p.repoKey, internal)})
@@ -410,7 +559,14 @@ func (h *Host) planPrivateLocals(ctx context.Context, root string, imports []str
 		if l.in == "" && len(lines) == 0 {
 			continue
 		}
-		l.out = prof.PrivateContent(l.in, privateImportDir, lines)
+		dir := privateImportDirFor(h.opts.Home)
+		in := l.in
+		if dir != privateImportDir {
+			// lines an older lore wrote naming ~/.lore/render/ whatever the
+			// home (D-535) are lore's too: replaced, never left beside the new ones
+			in = prof.PrivateContent(in, privateImportDir, nil)
+		}
+		l.out = prof.PrivateContent(in, dir, lines)
 		l.imports = len(lines) > 0
 		out = append(out, l)
 	}
@@ -444,8 +600,11 @@ type privateSection struct {
 // (header, pinned rules and hotfixes; never cut) and the "Other notes"
 // sections fitPrivate fills.
 type privateBody struct {
-	core     string
-	pinned   int // rows in core
+	core   string
+	pinned int // rows in core
+	// pins are the core's rule and hotfix blocks, in the core's order
+	// (the SessionStart hook serves them where no LORE.md is: devco D-494)
+	pins     []privatePin
 	sections []privateSection
 	// origins are the store, id and HLC of every row the file lists
 	// before the budget (render_stamp.go).
@@ -466,6 +625,15 @@ const (
 	privateEmpty     = "\n_No rows in this store yet._\n"
 )
 
+// coreSize is the bytes of every store file's core (never cut).
+func coreSize(bodies []privateBody) int {
+	n := 0
+	for _, b := range bodies {
+		n += len(b.core)
+	}
+	return n
+}
+
 // fitPrivate fits the store files into budget bytes together (6.1,
 // P3-CTX-2): every core is kept whole, then the bullets are added in file
 // order while the running total stays within budget; the first bullet
@@ -473,11 +641,8 @@ const (
 // shown never depends on line lengths further down. budget <= 0 keeps
 // everything. A file that loses bullets ends with one pointer line (not
 // counted against the budget: it replaces far more than it costs).
-func fitPrivate(bodies []privateBody, budget int) privateFit {
-	var out privateFit
-	for _, b := range bodies {
-		out.coreBytes += len(b.core)
-	}
+func fitPrivate(bodies []privateBody, budget int, fix budgetFix) privateFit {
+	out := privateFit{coreBytes: coreSize(bodies)}
 	used, full := out.coreBytes, false
 	for _, b := range bodies {
 		var t strings.Builder
@@ -513,7 +678,7 @@ func fitPrivate(bodies []privateBody, budget int) privateFit {
 		}
 		switch {
 		case left > 0:
-			fmt.Fprintf(&t, "\n_%s left out by %s %d bytes: run `lore search`._\n", plural.Of(left, "more note", "more notes"), policy.KeyContextBudgetInternal, budget)
+			fmt.Fprintf(&t, "\n_%s_\n", leftOutLine(left, budget, out.coreBytes, fix))
 		case shown == 0:
 			t.WriteString(privateEmpty)
 		}
@@ -524,11 +689,37 @@ func fitPrivate(bodies []privateBody, budget int) privateFit {
 	return out
 }
 
+// privateTrustAttr is a rule's ` trust="0.80"`, "" when its trust_score
+// is unset or the default (devco D-430: every rule of a store read
+// trust="0.50", which said nothing; a raised or lowered trust still shows,
+// and review="…" still marks an unapproved rule).
+func privateTrustAttr(r row.Row) string {
+	if tr := renderTrust(r); tr != renderDefaultTrust {
+		return fmt.Sprintf(" trust=\"%.2f\"", tr)
+	}
+	return ""
+}
+
+// leftOutLine is the private file's last line when notes were left out.
+// Why (devco D-430): "left out by context.budget.internal 8000 bytes" on
+// a 21 KB file read as a budget lore ignored; the budget holds for the
+// notes, while the pinned rules and hotfixes are never cut, so when they
+// alone are over it the line says so with both sizes.
+func leftOutLine(left, budget, coreBytes int, fix budgetFix) string {
+	notes := plural.Of(left, "more note", "more notes")
+	if budget > 0 && coreBytes > budget {
+		return fmt.Sprintf("%s left out: %s is %d bytes and the pinned rules and hotfixes above already take %d bytes (never cut; %s); run `lore search`.",
+			notes, policy.KeyContextBudgetInternal, budget, coreBytes, fix.raiseText(coreBytes))
+	}
+	return fmt.Sprintf("%s left out by %s %d bytes: run `lore search`.", notes, policy.KeyContextBudgetInternal, budget)
+}
+
 // buildPrivateStore renders one internal store's file before the budget:
 // the pinned rules and hotfixes in the committed render's format as the
 // core, then every other live row as one bullet per row, by table.
 func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoName, repoKey string, s privateStore) (privateBody, error) {
 	byTable := map[row.Table][]row.Row{}
+	srcOf := map[string]store.Source{} // row id ─▶ the store it is kept in (a pin's source)
 	var origins []string
 	for _, t := range privateTables {
 		for _, src := range s.sources {
@@ -550,6 +741,7 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 					return privateBody{}, err
 				}
 				byTable[t.table] = append(byTable[t.table], er)
+				srcOf[r.ID.String()] = src
 				origins = append(origins, renderRow{source: src, Row: r}.origin())
 			}
 		}
@@ -585,27 +777,30 @@ func (h *Host) buildPrivateStore(ctx context.Context, ex *privateExpander, repoN
 			pinned[r.ID.String()] = true
 		}
 	}
+	var pins []privatePin
 	if len(rules) > 0 {
 		b.WriteString("\n## Rules\n\n")
 		for _, r := range rules {
-			fmt.Fprintf(&b, "<rule id=\"%s\" severity=\"%s\" trust=\"%.2f\">\n", r.ID, renderRuleSeverityMust, renderTrust(r))
-			b.WriteString(mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true))
-			b.WriteString("\n</rule>\n")
+			block := fmt.Sprintf("<rule id=\"%s\" severity=\"%s\"%s%s>\n", r.ID, renderRuleSeverityMust, privateTrustAttr(r), reviewAttr(!trust.Approved(renderTrust(r)))) +
+				mk.withMetaLine(ctx, renderField(r, renderFieldBody), r, true) + "\n</rule>\n"
+			b.WriteString(block)
+			pins = append(pins, privatePin{id: r.ID.String(), kind: privatePinRule, text: block, src: srcOf[r.ID.String()]})
 		}
 		n += len(rules)
 	}
 	if len(hotfixes) > 0 {
 		b.WriteString("\n## Hotfixes (pinned, recurring warnings)\n\n")
 		for _, h := range hotfixes {
-			fmt.Fprintf(&b, "<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, renderField(h, renderFieldSeverity))
-			b.WriteString("**" + renderField(h, renderFieldTitle) + "**\n\n")
-			b.WriteString(mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true))
-			b.WriteString("\n</hotfix>\n")
+			block := fmt.Sprintf("<hotfix id=\"%s\" severity=\"%s\">\n", h.ID, renderField(h, renderFieldSeverity)) +
+				"**" + renderField(h, renderFieldTitle) + "**\n\n" +
+				mk.withMetaLine(ctx, renderField(h, renderFieldBody), h, true) + "\n</hotfix>\n"
+			b.WriteString(block)
+			pins = append(pins, privatePin{id: h.ID.String(), kind: privatePinHotfix, text: block, src: srcOf[h.ID.String()]})
 		}
 		n += len(hotfixes)
 	}
 
-	out := privateBody{core: b.String(), pinned: n, origins: origins}
+	out := privateBody{core: b.String(), pinned: n, pins: pins, origins: origins}
 	for _, t := range privateTables {
 		sec := privateSection{heading: t.heading}
 		for _, r := range byTable[t.table] {
@@ -729,7 +924,7 @@ func prunePrivate(p *privatePlan) error {
 	}
 	for _, e := range others {
 		name := e.Name()
-		if !e.IsDir() || name == p.dirName || (name != p.repoKey && !strings.HasSuffix(name, "-"+p.repoKey)) {
+		if !e.IsDir() || name == p.dirName || !p.ownsFolder(name) {
 			continue
 		}
 		if err := removeOwnFiles(filepath.Join(filepath.Dir(p.dir), name)); err != nil {
@@ -741,6 +936,44 @@ func prunePrivate(p *privatePlan) error {
 		return errs.Wrap(errs.Internal, "remove the v0.1.17 internal render", err)
 	}
 	return nil
+}
+
+// ownsFolder reports whether a folder of ~/.lore/render is this repo's
+// under another name: keyed by its repo id, or (K-16) by its prj_ project
+// id from before the repo id reached this checkout by git pull (the render
+// fell back to the project id until then, and the old folder stayed beside
+// the new one with stale files).
+func (p *privatePlan) ownsFolder(name string) bool {
+	for _, key := range []string{p.repoKey, p.projectID} {
+		if key != "" && (name == key || strings.HasSuffix(name, "-"+key)) {
+			return true
+		}
+	}
+	return false
+}
+
+// leftoverFolders are this repo's render folders under another name that
+// still hold lore's own files (prunePrivate removes them on the next
+// render): the doctor names them, so lore fix renders and they go even
+// when every current file is up to date (K-16).
+func (p *privatePlan) leftoverFolders() []string {
+	parent := filepath.Dir(p.dir)
+	others, err := os.ReadDir(parent)
+	if err != nil {
+		return nil // no render folder yet: nothing left over
+	}
+	var out []string
+	for _, e := range others {
+		name := e.Name()
+		if !e.IsDir() || name == p.dirName || !p.ownsFolder(name) {
+			continue
+		}
+		files, ferr := os.ReadDir(filepath.Join(parent, name))
+		if ferr == nil && slices.ContainsFunc(files, func(f os.DirEntry) bool { return !f.IsDir() && privateOwnFile(f.Name()) }) {
+			out = append(out, filepath.Join(parent, name))
+		}
+	}
+	return out
 }
 
 // privateName is "<readable>-<id>": the name says which repo or store the
@@ -787,19 +1020,38 @@ func removeOwnFiles(dir string) error {
 
 // rerenderPrivateQuiet refreshes the private per-store renders after a
 // sync (CONFIG_GUIDE: rebuilt after every sync), quietly and with the same
-// refusals as `lore render`. Only for a project that renders (LORE.md
-// exists) and when run from its root (render resolves the project from the
-// working directory); a failure is a warning, never a failed sync.
+// refusals as `lore render`. For a project that renders (LORE.md exists)
+// when run from its root (render resolves the project from the working
+// directory), and for a repo that never gets a repo file (noRepoFileOf: a
+// linked own repo or a client repo with no .lore folder), whose private
+// file is the only place its always-on rules are written (devco D-494: a
+// sync there left the file as the last explicit `lore render` wrote it).
+// A failure is a warning, never a failed sync.
+//
+// It runs as a read, as `lore render` does (ops/render: AccessRead), not
+// under sync's write access (devco D-495): resolving the project under a
+// write made the linked folder's project row (rosterProject), committed
+// after sync's push, so every sync in a linked repo left a commit waiting
+// and the next write's commit count was off by one.
 func (h *Host) rerenderPrivateQuiet(ctx context.Context, root string) {
-	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(LoreMDRel))); err != nil {
-		return
-	}
-	cwd, err := os.Getwd()
-	if err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
-		return
-	}
+	ctx = engine.WithAccess(ctx, op.AccessRead)
 	var lines strings.Builder
-	err = h.renderPrivate(ctx, &lines, root, false, true)
+	var err error
+	if _, serr := os.Stat(filepath.Join(root, filepath.FromSlash(LoreMDRel))); serr == nil {
+		cwd, werr := os.Getwd()
+		if werr != nil || filepath.Clean(cwd) != filepath.Clean(root) {
+			return
+		}
+		err = h.renderPrivate(ctx, &lines, root, false, true)
+	} else if n, ok := h.noRepoFileOf(ctx, root); ok {
+		if wire.RefuseWriteInReadOnlyHome(h.opts.Home) != nil {
+			return // a read-only home keeps what it has, as render --yes refuses there
+		}
+		// as render does here: a client repo gets no tool's import file
+		err = h.renderPrivateIn(ctx, &lines, n.top, false, true, !n.client)
+	} else {
+		return
+	}
 	fmt.Print(lines.String())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, h.decor.warn(syncLogPrefix+"re-render the private context: "+err.Error()))

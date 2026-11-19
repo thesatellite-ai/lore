@@ -18,11 +18,13 @@ package wire
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
@@ -41,7 +43,7 @@ const viaTool = " via "
 func (a *App) teamActorNamer(ctx context.Context) func(string) string {
 	st, err := a.state(ctx)
 	seen := map[string]string{}
-	var local map[string]string
+	var local, roster map[string]string
 	return func(actor string) string {
 		if actor == "" {
 			return unknownWriter
@@ -60,14 +62,25 @@ func (a *App) teamActorNamer(ctx context.Context) func(string) string {
 				}
 				n = local[actor]
 			}
+			if n == "" {
+				if roster == nil {
+					roster = rosterAgentNames(ctx, st)
+				}
+				n = roster[actor]
+			}
 		}
 		if n == "" {
-			n = actor
+			n = unnamedWriter + actor
 		}
 		seen[actor] = n
 		return n
 	}
 }
+
+// unnamedWriter labels an actor id that no store row, no identity of this
+// machine and no roster agent names (D-688: never a bare id in Team
+// versions; the id stays so `lore actor show --id` can chase it).
+const unnamedWriter = "unnamed writer "
 
 // namedActorRow is the name of id's live actors row in the first attached
 // store whose row names it (a store that holds only a nameless row, or
@@ -118,22 +131,72 @@ func (a *App) localActorNames(ctx context.Context, st *state) map[string]string 
 	if !st.actor.IsZero() && st.who.DisplayName != "" {
 		out[st.actor.String()] = st.who.DisplayName
 	}
-	sessions, err := a.Sessions(ctx, 0)
-	if err != nil {
-		return out
+	var tools []string
+	if sessions, err := a.Sessions(ctx, 0); err == nil {
+		for _, s := range sessions {
+			tools = append(tools, s.Tool)
+		}
 	}
-	for _, s := range sessions {
-		if s.Tool == "" {
+	addAgentNames(out, pid, pname, append(tools, knownAgentTools()...))
+	return out
+}
+
+// knownAgentTools are the tools lore detects (agentdetect.Builtin): a
+// detected agent's id derives from its owner and tool alone, so doctor can
+// name an agent whose only saves came from a tool this machine's sessions
+// rows no longer name (D-652: an agent of the admin in a tool used on
+// another day showed as a raw act_ id among named writers).
+func knownAgentTools() []string {
+	ds := agentdetect.Builtin()
+	out := make([]string, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, d.Tool)
+	}
+	return out
+}
+
+// addAgentNames adds (when absent) "<owner name> via <tool>" for each
+// detected-agent id of owner in each tool (both key widths, 6.1).
+func addAgentNames(out map[string]string, owner ids.ID[ids.Actor], ownerName string, tools []string) {
+	for _, tool := range tools {
+		if tool == "" {
 			continue
 		}
-		agents, aerr := identity.DetectedAgentIDs(pid, s.Tool)
-		if aerr != nil {
+		agents, err := identity.DetectedAgentIDs(owner, tool)
+		if err != nil {
 			continue
 		}
 		for _, id := range agents {
 			if _, ok := out[id.String()]; !ok {
-				out[id.String()] = pname + viaTool + s.Tool
+				out[id.String()] = ownerName + viaTool + tool
 			}
+		}
+	}
+}
+
+// rosterAgentNames names the detected agents of every named human actor
+// of every attached store, in every tool lore detects: a teammate's agent
+// saves rows before (or without) its own actors row reaching this machine,
+// and its id is derived from the person's id and the tool, so doctor names
+// it "<person> via <tool>" instead of printing the id (D-652, D-620 class).
+func rosterAgentNames(ctx context.Context, st *state) map[string]string {
+	out := map[string]string{}
+	tools := knownAgentTools()
+	for _, name := range st.eng.Stores() {
+		rows, err := st.eng.List(ctx, name, schema.TableActors)
+		if err != nil {
+			continue
+		}
+		for _, r := range rows {
+			if r.Deleted || fieldText(r, schema.FieldActorKind) != schema.ActorKindHuman {
+				continue
+			}
+			pname := actorDisplayName(r, "")
+			id, perr := ids.Parse[ids.Actor](r.ID.String())
+			if pname == "" || perr != nil {
+				continue
+			}
+			addAgentNames(out, id, pname, tools)
 		}
 	}
 	return out
@@ -150,27 +213,80 @@ const unscopedNote = ", outside any setup"
 // resolves outside any setup or org: the chain with no org entry and no
 // setup, run in the folder holding the lore home, named "<name> (<step>,
 // outside any setup)". A chain that does not resolve adds nothing.
+//
+// devco D-688 (owner use pass 4 weak 3): the chain is resolved in the
+// folder holding the lore home AND in the user's home folder (where
+// whoami and an agent session started in ~ resolve it; the two can
+// differ when the lore home lives elsewhere), and each resolved person's
+// detected agents are named too ("<name> via <tool>"): the home-folder
+// fallback agent saves machine-local rows only, no store holds its actors
+// row, and doctor printed its raw act_ id.
 func (a *App) addUnscopedActorName(ctx context.Context, out map[string]string) {
 	mc, err := readMachineConfig(a.opts.Home)
 	if err != nil {
 		return
 	}
-	r, err := identity.Resolve(ctx, identity.Inputs{Home: a.opts.Home, Config: mc.Config, Dir: filepath.Dir(a.opts.Home)})
-	if err != nil || r.StableKey == "" {
-		return
+	dirs := []string{filepath.Dir(a.opts.Home)}
+	if h, herr := os.UserHomeDir(); herr == nil && h != "" && h != dirs[0] {
+		dirs = append(dirs, h)
 	}
-	id, err := r.ActorID()
-	if err != nil {
-		return
+	for _, dir := range dirs {
+		r, rerr := identity.Resolve(ctx, identity.Inputs{Home: a.opts.Home, Config: mc.Config, Dir: dir})
+		if rerr != nil || r.StableKey == "" {
+			continue
+		}
+		id, ierr := r.ActorID()
+		if ierr != nil {
+			continue
+		}
+		if _, ok := out[id.String()]; !ok {
+			out[id.String()] = unscopedName(r)
+		}
+		addAgentNames(out, id, unscopedAgentOwner(r), knownAgentTools())
 	}
-	if _, ok := out[id.String()]; ok {
-		return
+}
+
+// unscopedAgentOwner is the owner part of an unscoped person's detected
+// agent name ("<owner> via <tool>"): the person's display name (else the
+// stable key) with the outside-any-setup note, or beforeIdentityName for a
+// machine-only identity, so the agent reads as the person's own.
+func unscopedAgentOwner(r identity.Resolved) string {
+	if machineFallbackStep(r.Step) {
+		return beforeIdentityName
 	}
 	name := r.DisplayName
 	if name == "" {
 		name = r.StableKey
 	}
-	out[id.String()] = name + " (" + string(r.Step) + unscopedNote + ")"
+	return name + " (" + unscopedNote[2:] + ")"
+}
+
+// unscopedName is how doctor names r, this machine's identity outside any
+// setup: "<name> (<step>, outside any setup)", or beforeIdentityName when
+// r names the machine, not a person (devco J-12: the OS login is how the
+// setup steps stamped their rows before the identity step; listed by that
+// name it read as a stranger on the team and put the OS account name in
+// a team-facing list).
+func unscopedName(r identity.Resolved) string {
+	if machineFallbackStep(r.Step) {
+		return beforeIdentityName
+	}
+	name := r.DisplayName
+	if name == "" {
+		name = r.StableKey
+	}
+	return name + " (" + string(r.Step) + unscopedNote + ")"
+}
+
+// beforeIdentityName is how doctor names this machine's own identity when
+// it resolves only from the machine (OS user, machine id, salt) outside
+// every setup: the stamp of the setup steps run before the identity step.
+const beforeIdentityName = "you on this machine, before the identity step"
+
+// machineFallbackStep reports an identity step that names the machine
+// rather than a person (the chain's last resorts).
+func machineFallbackStep(s identity.Step) bool {
+	return s == identity.StepOSUser || s == identity.StepMachine || s == identity.StepSalt
 }
 
 // teamMachineNamer returns the machine-name function of one doctor run:

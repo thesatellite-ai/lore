@@ -125,13 +125,24 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			}
 			// the rows init writes are named like any write's (wire/host
 			// writeloc.go: lore repo init runs through that hook)
+			// devco D-682: never in a store clone (wire/storeclone_setup.go)
+			if err := h.app.StoreCloneSetUpRefusal(wd, repoinit.OpRepoInit); err != nil {
+				return err
+			}
 			// I-13: in a client repo init asks first (clientrepo_hint.go)
 			if err := h.app.ConfirmClientRepoInit(cmd.Context(), yes); err != nil {
 				return err
 			}
-			ctx, written := wire.WithWriteLog(cmd.Context())
+			// D-281-initundo: a failed init leaves the clone's git set-up
+			// (.git/config keys, hooks, info/exclude, .gitattributes,
+			// .gitignore) as it found it, as `lore repo init` does through
+			// the Runner; RootAt's undo covers only .lore/
+			// S-11: its set-up line is said once it went through, as for
+			// `lore repo init`; refused, only the error is printed
+			ctx, done := hosthooks.GuardSetUpQuiet(cmd.Context(), wd)
+			ctx, written := wire.WithWriteLog(ctx)
 			out, err := repoinit.Run(ctx, ih, in)
-			if err != nil {
+			if err = done(err); err != nil {
 				return err
 			}
 			if os.Getenv(hosthooks.EnvSyncQuiet) != "1" {
@@ -293,12 +304,12 @@ func (i *initHost) Prime(ctx context.Context) {
 
 // WireToolFiles implements repoinit.Host (TOOL NEUTRAL,
 // renderhost.WireToolFiles): no render machinery, nothing to wire.
-func (i *initHost) WireToolFiles(ctx context.Context, targets []string) (string, error) {
+func (i *initHost) WireToolFiles(ctx context.Context, targets []string, fromSetup string) (string, error) {
 	if i.h.render == nil {
 		return "", nil
 	}
 	var lines strings.Builder
-	err := i.h.render.WireToolFiles(ctx, &lines, i.wd, targets)
+	err := i.h.render.WireToolFiles(ctx, &lines, i.wd, targets, fromSetup)
 	return lines.String(), err
 }
 

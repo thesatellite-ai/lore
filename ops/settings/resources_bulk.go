@@ -11,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/schema"
@@ -40,6 +41,10 @@ func (b BulkWhere) bulk() bool { return b.Kind != "" || len(b.Where) > 0 || b.Dr
 // ResCheckIn is the input of resource.check: one resource, or the bulk
 // form --kind --where.
 type ResCheckIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so a
+	// check runs from any folder as resource list reads; in a folder it
+	// keeps to that folder's resources.
+	op.StoreFlag
 	Name string `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Note string `json:"note,omitempty" flag:"note" desc:"what was checked (kept until the next check)"`
 	BulkWhere

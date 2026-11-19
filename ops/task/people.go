@@ -406,12 +406,15 @@ func (o ops) showMore(ctx context.Context, full *Full, src store.Source, r row.R
 	if len(p.assignees) > 0 {
 		full.PeopleLine = o.peopleLine(ctx, p)
 	}
+	if full.Team = work.Field(r, fieldTeam); full.Team != "" {
+		full.TeamHandle = o.teamHandle(ctx, full.Team)
+	}
 	full.Checklist = checklistOut(r.ID.String(), Checklist(r)).Data.Items
 	unit, err := o.estimateUnit(ctx, src)
 	if err != nil {
 		return err
 	}
-	f, err := o.forest(ctx, work.Field(r, work.FieldProject))
+	f, err := o.showTreeOf(ctx, r) // the subtree estimate: r's descendants only (showforest.go)
 	if err != nil {
 		return err
 	}

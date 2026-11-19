@@ -17,6 +17,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
@@ -25,6 +26,9 @@ import (
 
 // MetaRenameIn is the input of meta.rename.
 type MetaRenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Old         string `json:"id" arg:"0" desc:"the current name (or id)"`
 	New         string `json:"new_name" arg:"1" desc:"the new name"`
 	RewriteRows bool   `json:"rewrite_rows,omitempty" flag:"rewrite-rows" desc:"rewrite every row's label of the key now, in one batch (labels only; no updated_at or hlc change)"`

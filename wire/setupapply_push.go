@@ -19,6 +19,7 @@ import (
 	"strconv"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -126,7 +127,7 @@ func teamStoreAt(home, org, url string) (attach.Store, error) {
 	}
 	e := cfg.FindOrg(org)
 	if e == nil || len(e.Stores) == 0 {
-		return attach.Store{}, errs.New(errs.NotFound, "setup apply team: org "+org+" has no store in ~/.lore/"+ConfigFile+" to set push on").
+		return attach.Store{}, errs.New(errs.NotFound, "setup apply team: org "+org+" has no store in "+lorehome.Shown()+"/"+ConfigFile+" to set push on").
 			WithHint("run `lore store set --store <store> --settings push=…` once the team step is saved")
 	}
 	pick := -1

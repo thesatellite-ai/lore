@@ -9,9 +9,16 @@ import (
 	"context"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 )
+
+// CheckHint is the next step of a setup check given no setup or step: where
+// the setups and steps are listed, and the health check of every setup.
+const CheckHint = "lore setup list names the setups and lore setup plan --kind <kind> the steps (lore setup check --setup <setup> --step identity); to check a setup's health: lore setup repair --setup <setup>, or every repo: lore doctor --all"
 
 // Check is setup.check.
 //
@@ -19,6 +26,12 @@ import (
 //	          └▶ probe ─▶ failed | ready ─▶ Store.PutProgress (a draft row takes answers + results;
 //	                                      a saved/skipped row only refreshes results for its own answers)
 func (e engine) Check(ctx context.Context, in CheckIn) (CheckOut, error) {
+	if strings.TrimSpace(in.Step) == "" || (strings.TrimSpace(in.Setup) == "" && strings.TrimSpace(op.SetupOf(ctx)) == "") {
+		// devco:D-547: a bare `lore setup check` (the guess for a health
+		// check) said only "missing required field setup", then "step"
+		return CheckOut{}, errs.New(errs.InvalidInput, "setup check checks one step of one setup: give --setup and --step").
+			WithHint(CheckHint)
+	}
 	name := newSetupName(ctx, in.Setup, in.Step, in.Answers)
 	if err := requireName(name); err != nil {
 		return CheckOut{}, err
@@ -38,6 +51,16 @@ func (e engine) Check(ctx context.Context, in CheckIn) (CheckOut, error) {
 	answers := in.Answers
 	if answers == nil {
 		answers = s.progress[step.ID].Answers
+	}
+	if answers == nil && s.finished() {
+		// A finished setup keeps no progress (4.11): with no --answers the
+		// check is of what is saved, the same values setup list's health
+		// cell was made from, and its results replace that cell (devco
+		// D-595: `setup check --setup <s> --step identity` answered "Your
+		// name is required" while setup list showed a stored warning).
+		if cfg, cerr := st.Config(ctx); cerr == nil {
+			answers = planStep(step, s.kind, s.entry, s.exists, true, cfg, nil).Values
+		}
 	}
 	answers = e.withoutUnasked(s, step, answers)
 	step = e.askedStep(s, step, answers)

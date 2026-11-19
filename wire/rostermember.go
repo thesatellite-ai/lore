@@ -56,7 +56,9 @@ func parseMemberRef(raw string) (memberRef, bool) {
 // matches reports whether roster actor x is the member m names.
 func (m memberRef) matches(x RosterActor) bool {
 	if m.handle != "" {
-		return x.Handle == m.handle
+		// devco:S-14: an agent has a label, no handle; @<label> names it
+		// (`lore task reassign --from @agent-lead-2`).
+		return x.Handle == m.handle || agentLabelIs(x, m.handle)
 	}
 	_, email, _ := strings.Cut(x.StableKey, stableKeyKindSep)
 	return email != "" && strings.EqualFold(email, m.email)
@@ -120,7 +122,7 @@ func (a *App) RosterActorRef(ctx context.Context, raw string) (string, bool, err
 // (an email is never shown as "@email").
 func memberMissErr(r rosterAt, raw string) error {
 	m, _ := parseMemberRef(raw)
-	return errs.New(errs.NotFound, "no one is "+m.shown()+" on the roster in "+r.shown()+", now or before").
+	return errs.New(errs.NotFound, "no one is "+m.shown()+" on "+r.of()+", now or before").
 		WithHint("lore member list shows the roster; an actor id (act_…) works too")
 }
 

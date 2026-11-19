@@ -18,6 +18,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
 	"github.com/thesatellite-ai/lore/ops/internal/dateflag"
+	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"slices"
 	"strconv"
 	"strings"
@@ -124,10 +125,16 @@ const longestMonth = 31
 // long after its date lands in the future, never overdue again at once).
 // A reminder done before its date moves exactly one period (skipped 0).
 // ok is false for a pattern outside schema.ReminderRecurrences().
-func nextOccurrence(due time.Time, pattern string, now time.Time) (next time.Time, skipped int, ok bool) {
+// A due with a time of day steps on the wall clock in loc, so a 09:00
+// weekly reminder is 09:00 again after a DST change (devco:T-8: it added
+// 7×24 h in UTC and slid to 10:00); a date-only due steps UTC days.
+func nextOccurrence(due time.Time, pattern string, now time.Time, loc *time.Location) (next time.Time, skipped int, ok bool) {
 	s, ok := recurrenceShift[pattern]
 	if !ok {
 		return time.Time{}, 0, false
+	}
+	if loc != nil && !dates.IsDay(due) {
+		due = due.In(loc)
 	}
 	k := 1
 	// Start near the answer instead of stepping from due one period at a
@@ -140,12 +147,18 @@ func nextOccurrence(due time.Time, pattern string, now time.Time) (next time.Tim
 		}
 		k = max(1, int(elapsed/(time.Duration(stepDays)*24*time.Hour)))
 	}
+	// A DST change makes a step an hour longer or shorter than stepDays
+	// days, so k may land one past the answer: step back while the step
+	// before it is still in the future.
+	for k > 1 && shiftBy(due, s.y, s.m, s.d, k-1).After(now) {
+		k--
+	}
 	next = shiftBy(due, s.y, s.m, s.d, k)
 	for !next.After(now) {
 		k++
 		next = shiftBy(due, s.y, s.m, s.d, k)
 	}
-	return next, k - 1, true
+	return next.UTC(), k - 1, true
 }
 
 // AddIn is the input of reminder.add.
@@ -156,7 +169,7 @@ type AddIn struct {
 	Message    string `json:"message" arg:"0" rest:"true" desc:"the reminder text (several words are joined)"`
 	Due        string `json:"due" flag:"due" desc:"due date (YYYY-MM-DD, RFC3339 or a phrase: tomorrow, fri, next fri, in 3d, eom, nov 20, + HH:MM) (required)"`
 	Recurrence string `json:"recurrence,omitempty" flag:"recurrence" desc:"recurrence: 7d | 30d | 1m | 3m | 6m | 1y"`
-	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table"`
+	OnTable    string `json:"on_table,omitempty" flag:"on-table" desc:"optional target entity table (default: the table of the --on-id prefix)"`
 	OnID       string `json:"on_id,omitempty" flag:"on-id" desc:"optional target entity id"`
 	Repo       string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts; reminders have no repo scope"`
 	To         string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
@@ -320,6 +333,11 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 		return work.WriteOut{}, errs.New(errs.InvalidInput,
 			fmt.Sprintf("bad --recurrence %q (want %s)", in.Recurrence, strings.Join(schema.ReminderRecurrences(), " | ")))
 	}
+	// devco:J-8: --on-id alone names its table by its prefix; the row
+	// kept an empty target table.
+	if in.OnTable, err = lookup.OnTable("reminder add", in.OnTable, in.OnID); err != nil {
+		return work.WriteOut{}, err
+	}
 	fields, err := work.Texts(Noun, map[string]string{
 		schema.FieldReminderMessage:     msg,
 		schema.FieldReminderRecurrence:  in.Recurrence,
@@ -340,6 +358,7 @@ func (o ops) add(ctx context.Context, in AddIn) (work.WriteOut, error) {
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return work.WriteOut{}, err
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.env); v != nil {
 		fields[work.FieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}
@@ -410,7 +429,7 @@ func (o ops) done(ctx context.Context, in IDIn) (DoneOut, error) {
 		return DoneOut{}, err
 	}
 	if rec := work.Field(r, schema.FieldReminderRecurrence); rec != "" {
-		next, skipped, ok := nextOccurrence(work.Time(r, schema.FieldReminderDueAt), rec, opclock.Now(o.env))
+		next, skipped, ok := nextOccurrence(work.Time(r, schema.FieldReminderDueAt), rec, opclock.Now(o.env), time.Local)
 		if !ok {
 			return DoneOut{}, errs.New(errs.InvalidInput, "reminder "+id.String()+": unknown recurrence "+work.Quote(rec)).
 				WithHint("fix it with a recurrence of: " + strings.Join(schema.ReminderRecurrences(), " | "))

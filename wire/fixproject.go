@@ -88,6 +88,16 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		}
 	}
 	mig := a.fixMigrate(ctx, top, dry, true)
+	if mig.Changed && !mig.Failed && !dry {
+		a.stampMigratedIdentity(ctx)
+	}
+	hw := HostWiringOf(ctx)
+	if mig.Changed && !mig.Failed && !dry && hw != nil && hw.Rewire != nil {
+		// devco N-5: the hooks ran while the project was on the 0.1.17
+		// format and kept the rules local; lore fix is an install step, so
+		// the tracked lines come now, not with the next command
+		hw.Note(hw.Rewire(ctx, top)...)
+	}
 	scopes := a.fixScopes(ctx, top, dry, mig.Failed)
 	if !mig.Changed && !mig.Failed && !hasLoreProject(top) {
 		// B1-7, B1-8: a repo --all reached by a store link, or one whose
@@ -97,7 +107,7 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 		// hook in every session)
 		rend := opsdoctor.FixStep{Step: opsdoctor.StepRender, Where: filepath.Join(top, filepath.FromSlash(opsrender.DefaultOut)), Result: skippedNoLoreProject}
 		hooks := opsdoctor.FixStep{Step: opsdoctor.StepAgentHooks, Where: top, Result: skippedNoLoreProject}
-		return []opsdoctor.FixStep{mig, scopes, rend, hooks, a.fixOldClones(ctx, dry)}
+		return a.withOutsideClones(ctx, dry, []opsdoctor.FixStep{mig, scopes, rend, hooks, a.fixOldClones(ctx, dry)})
 	}
 	// E-6: a failed migrate never reaches fixRender, which writes LORE.md,
 	// LORE.full.md and the pointer file; replacing its result afterwards
@@ -106,13 +116,47 @@ func (a *App) FixSteps(ctx context.Context, dry bool) []opsdoctor.FixStep {
 	if !mig.Failed {
 		rend = a.fixRender(ctx, top, dry, mig.Changed)
 	}
-	steps := []opsdoctor.FixStep{mig, scopes, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)}
+	steps := a.withOutsideClones(ctx, dry, []opsdoctor.FixStep{mig, scopes, rend, a.fixAgentHooks(ctx, top, dry), a.fixOldClones(ctx, dry)})
 	if !mig.Failed && !(dry && mig.Changed) {
 		// B4-7: once migrate is current (a dry run that would migrate
 		// cannot tell yet), lore 0.1.17's database and backups go
 		steps = append(steps, a.fixOldFiles(ctx, top, dry))
 	}
+	if st, ok := gitWiringStep(top, hw.Wrote()); ok {
+		steps = append(steps, st)
+	}
 	return steps
+}
+
+// stampMigratedIdentity gives a project lore fix just migrated its repo id
+// in _meta.json (devco N-15): before, only a later lore sync stamped it, so
+// the render step that follows named the private render folder
+// ~/.lore/render/<repo>-prj_… after the project id, and every repo inited
+// by this lore (and a migrated one after its first sync) used the repo id
+// (<repo>-rep_…). The migration's files are uncommitted here, so its commit
+// carries the id too (I-7: no teammate clone writes its own copy). A client
+// repo never gets one (B-8); a failure leaves the project id, as before.
+func (a *App) stampMigratedIdentity(ctx context.Context) {
+	if client, err := a.ClientRepo(ctx); err != nil || client {
+		return
+	}
+	_, _, _ = a.EnsureRepoIdentity(ctx) // best effort, see above
+}
+
+// gitWiringCommitF is the git wiring step's Next: the files to commit.
+const gitWiringCommitF = "lore's lines in %s wait for your commit: git add %s && git commit -m \"lore: git wiring\""
+
+// gitWiringStep is the step naming the tracked wiring files this run wrote
+// (devco N-5); ok is false when it wrote none.
+func gitWiringStep(top string, wrote []string) (opsdoctor.FixStep, bool) {
+	if len(wrote) == 0 {
+		return opsdoctor.FixStep{}, false
+	}
+	return opsdoctor.FixStep{
+		Step: opsdoctor.StepGitWiring, Where: top, Changed: true,
+		Result: "wrote lore's lines to " + strings.Join(wrote, " and ") + " (the merge rules and lore's local files git must ignore)",
+		Next:   fmt.Sprintf(gitWiringCommitF, strings.Join(wrote, " and "), strings.Join(wrote, " ")),
+	}, true
 }
 
 // skippedNoLoreProject is the render and agent hooks steps' result in a
@@ -340,7 +384,8 @@ const renderSkippedNoProject = "skipped: nothing to render: "
 
 // noProjectToRender reports whether err is Project's "no lore project".
 func noProjectToRender(err error) bool {
-	return errs.Has(err, errs.NotFound) && strings.Contains(err.Error(), noLoreProject)
+	// checkoutNoLoreCode: a checkout without .lore/ here (devco:Q-4)
+	return (errs.Has(err, errs.NotFound) || errs.Has(err, checkoutNoLoreCode)) && strings.Contains(err.Error(), noLoreProject)
 }
 
 // dryNeedsStores reports a dry run's migrate step stopped only because a
@@ -446,6 +491,9 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 	}
 	if client {
 		st.Result = "skipped: a client repo (lore never changes its tracked files)"
+		if why := a.UnlistedOwnHere(ctx); why != "" {
+			st.Result = "skipped: treated as a client repo (lore never changes its tracked files): " + why
+		}
 		return st
 	}
 	h, err := a.SetupHost(ctx)
@@ -462,11 +510,24 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 	// were "4 settings file(s)", each listed twice): one detail line per
 	// file, naming the hook events it gets.
 	var change []opssetup.HookPlan
-	var files []string
+	var files, kept, fresh []string
 	events := map[string][]string{}
 	for _, p := range plans {
 		if !p.Change {
 			continue
+		}
+		// devco L-2: a settings file the repo commits is the team's; a
+		// fix in a fresh clone wrote lore's hooks into it, so every clone
+		// showed a modified tracked file under "HEALTHY". It is left as
+		// it is and named; `lore setup --agent-hooks` writes it on purpose.
+		if hookFileTracked(ctx, top, p.File) {
+			if !slices.Contains(kept, p.File) {
+				kept = append(kept, p.File)
+			}
+			continue
+		}
+		if hookFileNew(ctx, top, p.File) && !slices.Contains(fresh, p.File) {
+			fresh = append(fresh, p.File)
 		}
 		change = append(change, p)
 		key := p.Tool + ": " + p.File
@@ -477,7 +538,13 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 			events[key] = append(events[key], ev)
 		}
 	}
+	for _, f := range kept {
+		st.Detail = append(st.Detail, fmt.Sprintf(fixHookTrackedF, f))
+	}
 	if len(change) == 0 {
+		if len(kept) > 0 {
+			st.Result = fixHookTrackedResult
+		}
 		return st
 	}
 	for _, f := range files {
@@ -486,6 +553,11 @@ func (a *App) fixAgentHooks(ctx context.Context, top string, dry bool) opsdoctor
 			line += " (" + strings.Join(events[f], ", ") + ")"
 		}
 		st.Detail = append(st.Detail, line)
+	}
+	if len(fresh) > 0 && !dry {
+		// a new settings file git does not ignore shows in git status:
+		// said once, as the run's next step, so nobody is surprised by it
+		st.Next = fmt.Sprintf(fixHookNewNextF, strings.Join(fresh, ", "))
 	}
 	st.Changed = true
 	if dry {
@@ -745,7 +817,7 @@ func runFixIn(ctx context.Context, root string, c fixChild) opsfix.RepoResult {
 		// D15: a repo on an older format is listed with its command, never
 		// migrated by --all without --migrate and never a failure
 		res.FormatOld, res.Exit = true, 0
-		res.Text = "  " + line + "\n  " + formatOldMigrateHint(root) + "\n"
+		res.Text = "  " + line + "\n  " + formatOldMigrateHint(ctx, root) + "\n"
 		return res
 	}
 	if jerr := json.Unmarshal(raw, &out); jerr != nil || out.Repo == "" {
@@ -963,4 +1035,29 @@ func (a *App) oldRowsGate(ctx context.Context, e op.Entry) error {
 		a.opts.Notice(OldRowsReadLineAt(top))
 	}
 	return nil
+}
+
+// The agent hooks step's lines for a settings file the repo tracks (left
+// as it is) and for new settings files git does not ignore (devco L-2).
+const (
+	fixHookTrackedF      = "skipped: %s is tracked by the repo; lore fix never changes a committed file (to add lore's hooks for the whole team: lore setup --agent-hooks, then commit it)"
+	fixHookTrackedResult = "skipped: the settings file(s) are tracked by the repo"
+	fixHookNewNextF      = "lore's agent hooks are in new file(s) %s, which git status now lists: commit them to share the hooks with the team, or add them to .gitignore to keep them on this machine"
+)
+
+// hookFileTracked reports whether git tracks rel (a settings file, slash
+// separated, under the work tree top).
+func hookFileTracked(ctx context.Context, top, rel string) bool {
+	out, err := gitRun{dir: top, args: []string{"ls-files", "--", filepath.FromSlash(rel)}}.output(ctx)
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+// hookFileNew reports whether rel does not exist yet and git does not
+// ignore it: writing it adds an untracked file to git status.
+func hookFileNew(ctx context.Context, top, rel string) bool {
+	if _, err := os.Lstat(filepath.Join(top, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+		return false
+	}
+	_, err := gitRun{dir: top, args: []string{"check-ignore", "-q", "--", filepath.FromSlash(rel)}}.output(ctx)
+	return err != nil
 }

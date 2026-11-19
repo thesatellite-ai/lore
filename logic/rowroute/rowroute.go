@@ -77,6 +77,11 @@ type Request struct {
 	ChoiceTable string
 	// Defaults is live.defaults keyed by table name (tasks, rules, …).
 	Defaults map[string]bool
+	// Isolated: the checkout is on an isolated code branch (branch
+	// layers, code-repo mode: BRANCH_LAYERS 4): a new row of a live kind
+	// stays with the code on this branch instead of going live, and lands
+	// when the branch merges. --live and an already-live row are unchanged.
+	Isolated bool
 }
 
 // Decision is where one row goes, and why (printed by --trace and
@@ -91,10 +96,11 @@ const (
 	ReasonLiveWins     = "the row is live; live wins (rule 4)"
 	ReasonFlagLive     = "--live"
 	ReasonFlagNoLive   = "--no-live"
-	ReasonBranchRow    = "the row is in this branch's data; an edit stays with the code (F1)"
+	ReasonBranchRow    = "the row is in this branch's data; an edit stays with the code"
 	ReasonDefaultLive  = "live.defaults: live"
 	ReasonDefaultLocal = "live.defaults: with the code"
 	ReasonDeleteBranch = "a branch row's delete is a file delete on the branch"
+	ReasonIsolated     = "an isolated code branch keeps its new rows with the code (branch layers)"
 )
 
 // Decide places one written row. Order:
@@ -103,7 +109,8 @@ const (
 //  2. the command's own flag, for rows of the command's table;
 //  3. a row already in branch data stays there (F1: "edits the branch
 //     file; reaches main at merge");
-//  4. a new row follows live.defaults for its table.
+//  4. a new row follows live.defaults for its table, except on an
+//     isolated code branch (Request.Isolated), where it stays with the code.
 func Decide(req Request, row Row) Decision {
 	if row.InLive {
 		return Decision{Place: PlaceLive, Reason: ReasonLiveWins}
@@ -127,6 +134,9 @@ func Decide(req Request, row Row) Decision {
 		return Decision{Place: PlaceBranch, Reason: ReasonBranchRow}
 	}
 	if req.Defaults[row.Table] {
+		if req.Isolated {
+			return Decision{Place: PlaceBranch, Reason: ReasonIsolated}
+		}
 		return Decision{Place: PlaceLive, Reason: ReasonDefaultLive}
 	}
 	return Decision{Place: PlaceBranch, Reason: ReasonDefaultLocal}

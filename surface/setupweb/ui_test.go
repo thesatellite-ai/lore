@@ -157,6 +157,34 @@ func TestDefaultUI(t *testing.T) {
 	}
 }
 
+// TestDefaultUINamesTheBinary (devco D-419): the open-core page says which
+// lore answered, its version and its resolved path, so a user who ran a
+// stale or source build by mistake can tell; the template is filled, never
+// served raw, and the version is escaped.
+func TestDefaultUINamesTheBinary(t *testing.T) {
+	r := newRig(t)
+	r.page.opts.LoreVersion = "9.8.7-<b>"
+	body := r.do(http.MethodGet, PagePath, "", nil).Body.String()
+	exe := binaryPath()
+	for _, want := range []string{"9.8.7-&lt;b&gt;", exe, "a source build of the open core", "lore setup</code> with the released lore", "lore-dev setup", "install.sh"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("default page lacks %q:\n%s", want, body)
+		}
+	}
+	for _, bad := range []string{"{{", "9.8.7-<b>", "<script"} {
+		if strings.Contains(body, bad) {
+			t.Errorf("default page carries %q:\n%s", bad, body)
+		}
+	}
+	if exe == unknownValue {
+		t.Error("binaryPath could not read the test binary's path")
+	}
+	r.page.opts.LoreVersion = ""
+	if body := r.do(http.MethodGet, "/setup/team", "", nil).Body.String(); !strings.Contains(body, "<code>"+unknownValue+"</code>") {
+		t.Errorf("an empty version is not shown as %q:\n%s", unknownValue, body)
+	}
+}
+
 // TestCSPOnEveryUIResponse: the safety headers ride on assets, the
 // fallback, refusals and redirects alike.
 func TestCSPOnEveryUIResponse(t *testing.T) {

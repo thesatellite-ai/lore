@@ -39,7 +39,12 @@ func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 		return 0, err
 	}
 	n := 0
+	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		if st, err = c.current(ctx, tx); err != nil { // another handle may have changed the tables (devco:D-667)
+			return err
+		}
 		var targets []refTarget
 		for _, refID := range refIDs {
 			got, err := referrers(ctx, tx, refID)
@@ -49,7 +54,7 @@ func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 			targets = append(targets, got...)
 		}
 		for _, t := range targets {
-			p, ok := c.st.plans[t.table]
+			p, ok := st.plans[t.table]
 			if !ok {
 				continue
 			}
@@ -75,6 +80,7 @@ func (c *Cache) ReexpandIDs(ctx context.Context, refIDs []string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	c.st = st
 	return n, nil
 }
 
@@ -127,8 +133,13 @@ func (c *Cache) ReexpandMatching(ctx context.Context, needles []string) (int, er
 		return 0, err
 	}
 	n := 0
+	var st state
 	err := c.inTx(ctx, func(tx *sql.Tx) error {
-		for _, p := range c.st.plans {
+		var err error
+		if st, err = c.current(ctx, tx); err != nil { // another handle may have changed the tables (devco:D-667)
+			return err
+		}
+		for _, p := range st.plans {
 			tq, err := ident(p.def.Name.String())
 			if err != nil {
 				return err
@@ -153,6 +164,7 @@ func (c *Cache) ReexpandMatching(ctx context.Context, needles []string) (int, er
 	if err != nil {
 		return 0, err
 	}
+	c.st = st
 	return n, nil
 }
 

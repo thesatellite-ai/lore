@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -99,8 +101,38 @@ type call struct {
 	stdin []byte
 }
 
-// run runs git and returns stdout.
+// run runs git and returns stdout. A fetch, push or ls-remote whose
+// connection never opened (gitremote.NeverConnected) is tried once more
+// after gitremote.RetryPause (devco L-10 / L-12: one dropped ssh call on a
+// flaky link made the store "offline" for the whole sync), unless the first
+// try already took a connect timeout (gitremote.RetryAfter); the remote saw
+// nothing, so the retry cannot apply a push twice.
 func (r runner) run(ctx context.Context, c call) ([]byte, error) {
+	start := time.Now()
+	out, err := r.runOnce(ctx, c)
+	if err == nil || !retriedSubcommands[subcommand(c.args)] {
+		return out, err
+	}
+	var ge *gitError
+	if !errors.As(err, &ge) || ge.code == netRefusedExit || !gitremote.NeverConnected(ge.stderr) {
+		return out, err
+	}
+	if !gitremote.RetryAfter(time.Since(start)) {
+		return out, err // it already waited out a connect timeout (devco:U-6)
+	}
+	select {
+	case <-ctx.Done():
+		return out, err
+	case <-time.After(gitremote.RetryPause):
+	}
+	return r.runOnce(ctx, c)
+}
+
+// retriedSubcommands are the network calls run retries once.
+var retriedSubcommands = map[string]bool{"fetch": true, "push": true, "ls-remote": true}
+
+// runOnce is one try of run.
+func (r runner) runOnce(ctx context.Context, c call) ([]byte, error) {
 	args := c.args
 	if r.owned {
 		// core.autocrlf=false: row files are bytes lore hashes and
@@ -116,6 +148,16 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 	// run, and answers as git does when the remote is not there
 	if why, refused := gitenv.StoreNetRefused(os.Environ(), c.args); refused {
 		return nil, &gitError{cmd: gitenv.Subcommand(c.args), code: netRefusedExit, stderr: why}
+	}
+	// gitfast (devco:D-418): a read the process's Session answers from the
+	// clone's files starts no git
+	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
+		if rep, ok := gitfast.Try(ctx, c.dir, args, c.env, c.stdin); ok {
+			if rep.Code != 0 {
+				return rep.Out, &gitError{cmd: subcommand(c.args), code: rep.Code}
+			}
+			return rep.Out, nil
+		}
 	}
 	// The Cmd is built directly rather than through exec.CommandContext:
 	// r.bin is an absolute path resolved once by exec.LookPath (lookGit),
@@ -134,6 +176,14 @@ func (r runner) run(ctx context.Context, c call) ([]byte, error) {
 	err := runCancellable(ctx, cmd)
 	if trace := gitref.TracerFrom(ctx); trace != nil && tracedSubcommands[subcommand(c.args)] {
 		trace(gitref.TraceCall{Args: args, Remote: r.remote, Env: append(append([]string(nil), r.routeEnv...), c.env...), Took: time.Since(start), Err: err})
+	}
+	if len(r.routeArgs) == 0 && len(r.routeEnv) == 0 {
+		code, exited := 0, err == nil
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ctx.Err() == nil {
+			code, exited = ee.ExitCode(), true
+		}
+		gitfast.Note(ctx, c.dir, args, c.env, c.stdin, stdout.Bytes(), code, exited)
 	}
 	if err != nil {
 		var ee *exec.ExitError
@@ -183,9 +233,22 @@ func runCancellable(ctx context.Context, cmd *exec.Cmd) error {
 func lookGit(bin string) (string, error) {
 	p, err := exec.LookPath(bin)
 	if err != nil {
-		return "", errs.Wrap(errs.Internal, "git: the git program was not found", err).WithHint("install git or pass its path")
+		return "", GitMissingErr(err)
 	}
 	return p, nil
+}
+
+// GitMissingErr is the error of a git program that is not on PATH
+// (devco:U-5): E_GIT_MISSING naming the folders searched, with the two
+// fixes that exist. Before, it was E_INTERNAL "install git or pass its
+// path", and no flag or variable takes a path.
+func GitMissingErr(cause error) error {
+	where := os.Getenv("PATH")
+	if where == "" {
+		where = "an empty PATH"
+	}
+	return errs.Wrap(errs.GitMissing, "lore needs git, and there is no git program on PATH (searched: "+where+")", cause).
+		WithHint("install git, or put the folder that holds it on PATH, then run the command again")
 }
 
 // subcommand is the first non-option argument, for error messages.

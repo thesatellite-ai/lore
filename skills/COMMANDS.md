@@ -310,11 +310,13 @@ lore search --query "redis OR cache"
 lore search --query "auth NOT login" --json
 lore search --query "auth*" --tables memory,rule,decision --limit 10
 
-# Output shape
-# rule      rul_<id>  <body excerpt>  (score=0.017)
-# decision  dec_<id>  <title>  (score=0.016)
-# memory    mem_<id>  <body excerpt>  [me]  (score=0.016)
-# hotfix    hfx_<id>  <title>  (score=0.015)
+lore search --query "how do we deploy orbit"     # a plain question works
+
+# Output shape (best first across kinds)
+# decision  dec_<id>  <title> — <text around the match>  (score=0.967)
+# rule      rul_<id>  <text around the match>  (score=0.825)
+# resource  res_<id>  <name> (<kind>) — <matched values>  (score=0.650)
+# memory    mem_<id>  <text around the match>  [me]  (score=0.433)
 ```
 
 **Flags:**
@@ -325,7 +327,7 @@ lore search --query "auth*" --tables memory,rule,decision --limit 10
 - `--repo / --all-repos / --master-only` scope flags
 - `--json` envelope output
 
-**How it works:** runs FTS5 MATCH against every entity's per-table index in parallel, merges per-table rankings via Reciprocal Rank Fusion (RRF, k=60), returns the top-K by fused score. Each hit has `entity_table`, `id`, score, and snippet.
+**How it works:** plain words or a question ("how do we deploy orbit") are read as their topic words (how, do, we, the … skipped; deploy also finds deploying and deployment); a row needs only some of them. Every kind's index is searched, and all hits are ranked in one list by one score from 0 to 1: words held first, then words in the title, then the index's own rank. A hit holding only some words has `partial: true`, and the text says when no row holds every word. FTS5 syntax ("phrase", word*, AND/OR/NOT) is run as written. Each hit has `entity_table`, `id`, score, snippet, `title` (title or name), and `resource_kind` for a resource.
 
 **Per-entity search** (`lore <kind> search "X"`) still works when you want to scope to one type. Global is the cross-cutting hammer.
 
@@ -669,7 +671,8 @@ Agents (one actor per session; claims have a lease):
 ```bash
 lore agent start --label agent-backend --owner @alice        # prints LORE_ACTOR / LORE_SESSION to export
 lore inbox
-lore task next --mission mis_12                          # claims the best ready task (exit 10 = no work)
+lore task next --mission mis_12                          # shows the best ready task and why (writes nothing)
+lore task next --claim --mission mis_12                  # claims it (exit 10 = no work)
 lore task heartbeat                                      # keep the claim alive
 lore hold claim --name full-suite --ttl 30m                     # one heavy run at a time; after it: lore hold release --name full-suite
 lore task note --id tsk_30 --text "mutation done; tests next"

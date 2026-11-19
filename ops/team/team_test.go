@@ -57,13 +57,19 @@ type fakeSetups struct {
 	setup.Store
 	active string
 	cfg    onboard.Config
+	// why is how the active setup was picked; empty is --setup (WhyFlag).
+	why string
 }
 
 func (s fakeSetups) Active(context.Context, string) (setup.ActiveSetup, error) {
 	if s.active == "" {
 		return setup.ActiveSetup{Why: setup.WhyNone}, nil
 	}
-	return setup.ActiveSetup{Name: s.active, Why: setup.WhyFlag}, nil
+	why := s.why
+	if why == "" {
+		why = setup.WhyFlag
+	}
+	return setup.ActiveSetup{Name: s.active, Why: why}, nil
 }
 func (s fakeSetups) Config(context.Context) (onboard.Config, error) { return s.cfg, nil }
 
@@ -283,7 +289,7 @@ func TestInviteRowAndLine(t *testing.T) {
 	if x.e.Pushes != 1 {
 		t.Errorf("pushes = %d, want 1", x.e.Pushes)
 	}
-	again, err := x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: "tomas@agency.example"})
+	again, err := x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: "tomas@agency.example"})
 	if err != nil || again.Text != out.Line || again.ID != out.ID {
 		t.Errorf("resend = %+v %v, want the same text", again, err)
 	}
@@ -432,9 +438,9 @@ func TestRevokeListResend(t *testing.T) {
 	if err != nil || out.Status != schema.InviteStatusRevoked {
 		t.Fatalf("revoke = %+v %v", out, err)
 	}
-	_, err = x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: a.ID})
+	_, err = x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: a.ID})
 	wantCode(t, "resend revoked", err, errs.InviteRevoked)
-	_, err = x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: "inv_01890a5d8a2b7000a000000000000fff"})
+	_, err = x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: "inv_01890a5d8a2b7000a000000000000fff"})
 	wantCode(t, "resend unknown", err, errs.InviteNotFound)
 	// b expires: list shows it expired without a write.
 	x.e.Now = x.e.Now.AddDate(0, 0, 15)
@@ -442,7 +448,7 @@ func TestRevokeListResend(t *testing.T) {
 	if err != nil || len(l.Invites) != 1 || l.Invites[0].Email != "b@agency.example" {
 		t.Errorf("expired list = %+v %v", l, err)
 	}
-	_, err = x.ops().resend(x.ctx, setup.TeamInviteRefIn{Ref: "b@agency.example"})
+	_, err = x.ops().resend(x.ctx, setup.TeamInviteResendIn{Ref: "b@agency.example"})
 	wantCode(t, "resend expired", err, errs.InviteExpired)
 	// An expired invite no longer blocks a new one for the same person.
 	x.invite(setup.TeamInviteIn{Email: "b@agency.example"})
@@ -487,7 +493,7 @@ func TestJoinWritesRosterRows(t *testing.T) {
 	out := x.invite(setup.TeamInviteIn{Email: "tomas@agency.example", GitHub: "tomas-dev", Roles: []string{"dev"}, Projects: []string{"acme-hub", "northwind"}, Type: schema.PeriodTypeContractor})
 	delete(x.e.origins, "agency") // a fresh machine: no orgs[] entry yet
 	tomas := x.joiner()
-	res, err := x.join(out.Line, "tomas.home@mail.example", "Tomas@agency.example")
+	res, err := x.join(out.Line, "Tomas@agency.example", "tomas.home@mail.example") // J-9: the invite's address is the primary
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -841,8 +847,10 @@ func TestJoinMemberRefusedFirst(t *testing.T) {
 	_, err := ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"dan@agency.example"}, Name: "Dan", Handle: "dan"})
 	wantCode(t, "non-member join by url", err, errs.NotFound)
 	var e *errs.Error
-	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add --email dan@agency.example") {
-		t.Errorf("refusal = %v, want the cause and the admin's command", err)
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "is not a member of agency") || !strings.Contains(e.Hint, "lore member add --email dan@agency.example") ||
+		!strings.Contains(e.Hint, "--setup agency --step identity --answers") {
+		// devco N-4: the person's own next step (another address) comes first
+		t.Errorf("refusal = %v, want the cause, the identity step again and the admin's command", err)
 	}
 	if got := count(); got != rows || x.e.Pushes != pushes {
 		t.Errorf("a refused join wrote: rows %d -> %d, pushes %d -> %d", rows, got, pushes, x.e.Pushes)
@@ -1028,6 +1036,77 @@ func TestStaffAddRestoresSameDay(t *testing.T) {
 	for _, a := range x.e.All(schema.TableActors) {
 		if a.ID == ann.Any() && fieldText(a, schema.FieldActorStatus) != schema.ActorStatusActive {
 			t.Errorf("actor after restore: %v", a.Fields)
+		}
+	}
+}
+
+// TestJoinOfALeaverNamesLeft: devco R-18. A person removed from the org
+// who runs the member join line again was told "not a member … ask an
+// admin to run lore member add"; they are on the roster, marked as left,
+// so the refusal now says so and names the admin's rejoin line. Nothing
+// is written.
+func TestJoinOfALeaverNamesLeft(t *testing.T) {
+	x := newFixture(t)
+	delete(x.e.origins, "agency")
+	if _, err := x.ops().staffAdd(op.WithConfirmed(x.ctx, true), StaffAddIn{Email: "ann@agency.example", Name: "Ann", Handle: "ann"}); err != nil {
+		t.Fatal(err)
+	}
+	left, err := value.TextOf(schema.ActorStatusLeft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended, err := value.DateOf("2026-11-05")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range x.e.All(schema.TableActors) {
+		if fieldText(a, fieldStableKey) == humanKeyPrefix+"ann@agency.example" {
+			a.Fields[schema.FieldActorStatus] = left
+			a.Fields[schema.FieldActorLeftAt] = txt(t, "2026-11-05T10:00:00Z")
+			x.e.Put(a)
+		}
+	}
+	for _, p := range x.e.All(schema.TableActorPeriods) {
+		p.Fields[schema.FieldPeriodEndedOn] = ended
+		x.e.Put(p)
+	}
+	x.joiner()
+	_, err = ApplyJoinMember(context.Background(), x.joinDeps(), MemberJoinRequest{Org: "agency", Store: storeURL, Emails: []string{"ann@agency.example"}, Name: "Ann", Handle: "ann"})
+	wantCode(t, "join of a leaver", err, errs.Refused)
+	var e *errs.Error
+	if !errors.As(err, &e) || !strings.Contains(e.Message, "marked as left since 2026-11-05") || strings.Contains(e.Message, "not a member") ||
+		!strings.Contains(e.Hint, "lore actor rejoin --actor @ann --type employee") {
+		t.Errorf("refusal = %v; want the left cause and the admin's rejoin line", err)
+	}
+}
+
+// TestStaffAddStartedOn (devco:T-14): member add --started-on back-dates
+// the new stint, so a person added after they began can be offboarded on
+// an earlier day; a bad, future or file-wide --started-on is refused
+// naming the flag and writes nothing.
+func TestStaffAddStartedOn(t *testing.T) {
+	x := newFixture(t)
+	ctx := op.WithConfirmed(x.ctx, true)
+	out, err := x.ops().staffAdd(ctx, StaffAddIn{Email: "wen@agency.example", Name: "Wen Park", StartedOn: "2026-03-02"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wen, err := ids.Parse[ids.Actor](out.Added[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := x.rowsOf(schema.TableActorPeriods, wen)
+	if len(ps) != 1 || fieldText(ps[0], schema.FieldPeriodStartedOn) != "2026-03-02" {
+		t.Fatalf("stint start: %v", ps)
+	}
+	for _, c := range []struct{ in StaffAddIn }{
+		{StaffAddIn{Email: "kai@agency.example", StartedOn: "02/03/2026"}},
+		{StaffAddIn{Email: "kai@agency.example", StartedOn: "2027-01-04"}},
+		{StaffAddIn{From: "people.csv", StartedOn: "2026-03-02"}},
+	} {
+		_, err := x.ops().staffAdd(ctx, c.in)
+		if !errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "--started-on") {
+			t.Errorf("%+v: %v", c.in, err)
 		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -31,6 +32,8 @@ const dayLayout = "2006-01-02"
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
 
 	Title   string `json:"title" flag:"title" desc:"snapshot title (required)"`
 	Body    string `json:"body,omitempty" flag:"body" desc:"body" ui:"widget=markdown"`

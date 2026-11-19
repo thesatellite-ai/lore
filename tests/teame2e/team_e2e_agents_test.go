@@ -211,7 +211,7 @@ func TestE05_Race_FourAgentsRaceTaskNext(t *testing.T) {
 	for round := 0; round < 6; round++ {
 		var ps []*th.Pending
 		for _, w := range ws {
-			ps = append(ps, w.c.Prepare("task", "next"))
+			ps = append(ps, w.c.Prepare("task", "next", "--claim"))
 		}
 		for i, r := range cr.w.Simultaneously(ps...) {
 			if r.Code != th.ExitOK && r.Code != th.ExitNoWork && r.Code != th.ExitContended {
@@ -252,11 +252,11 @@ func TestE05_ZombieHolderLosesAfterLeaseAndGrace(t *testing.T) {
 	heir.SetNow(t0.Add(time.Minute))
 	hc.MustLore("task", "list")
 	heir.SetNow(t0.Add(leaseTTL + time.Minute)) // expired, but inside grace
-	if r := hc.Lore("task", "next"); r.Code == th.ExitOK {
+	if r := hc.Lore("task", "next", "--claim"); r.Code == th.ExitOK {
 		t.Fatalf("a lease inside its grace must not be reclaimed: %s", r)
 	}
 	heir.SetNow(t0.Add(leaseTTL + leaseGrace + time.Minute))
-	hc.MustLore("task", "next").Says(t, id, "reclaim")
+	hc.MustLore("task", "next", "--claim").Says(t, id, "reclaim")
 	sig, _ := cr.claim(t, id)
 	if sig.Session != heir.Env(th.EnvLoreSession) {
 		t.Fatalf("the heir holds the task now: %+v", sig)
@@ -364,7 +364,7 @@ func TestF07_PoisonTaskBlockedAfterMaxAttempts(t *testing.T) {
 	cr.alice.WriteConfig(cfg)
 	id := cr.task(t, "always crashes")
 	_, first := cr.agent(t, "crasher-1")
-	first.MustLore("task", "next").Says(t, id)
+	first.MustLore("task", "next", "--claim").Says(t, id)
 	at := t0
 	// Each crasher claims, never renews, and the next one reclaims after
 	// ttl + grace having watched the same renewed_seq (attempts 2 and 3).
@@ -374,13 +374,13 @@ func TestF07_PoisonTaskBlockedAfterMaxAttempts(t *testing.T) {
 		c.MustLore("task", "list")
 		at = at.Add(leaseTTL + leaseGrace + 2*time.Minute)
 		ag.SetNow(at)
-		c.MustLore("task", "next").Says(t, id, "reclaim")
+		c.MustLore("task", "next", "--claim").Says(t, id, "reclaim")
 	}
 	last, lc := cr.agent(t, "crasher-4")
 	last.SetNow(at.Add(time.Minute))
 	lc.MustLore("task", "list")
 	last.SetNow(at.Add(leaseTTL + leaseGrace + 2*time.Minute))
-	lc.Lore("task", "next").Fails(t, th.ExitNoWork, "E_NO_WORK")
+	lc.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "E_NO_WORK")
 	if r := cr.liveTask(t, id); r.Status != statusBlocked {
 		t.Fatalf("a poison task becomes blocked: %q", r.Status)
 	}
@@ -400,7 +400,7 @@ func TestF07_ClockSkewCannotStealALiveLease(t *testing.T) {
 	holder.SetNow(t0.Add(leaseRenew))
 	hc.MustLore("task", "heartbeat", id)
 	thief.SetNow(t0.Add(31 * time.Minute))
-	if r := tc.Lore("task", "next"); r.Code == th.ExitOK {
+	if r := tc.Lore("task", "next", "--claim"); r.Code == th.ExitOK {
 		t.Fatalf("a skewed reader stole a renewed lease: %s", r)
 	}
 	if sig, _ := cr.claim(t, id); sig.Session != holder.Env(th.EnvLoreSession) {
@@ -414,8 +414,8 @@ func TestF07_ResumeFirstAndWIPLimit(t *testing.T) {
 	cr := newCrew(t, th.Cmd("task", "next"))
 	t1, t2 := cr.task(t, "first job"), cr.task(t, "second job")
 	_, ac := cr.agent(t, "solo-agent")
-	first := mustID(t, ac.MustLore("task", "next"), "tsk")
-	ac.MustLore("task", "next").Says(t, first, "you hold")
+	first := mustID(t, ac.MustLore("task", "next", "--claim"), "tsk")
+	ac.MustLore("task", "next", "--claim").Says(t, first, "you hold")
 	other := t2
 	if first == t2 {
 		other = t1
@@ -466,10 +466,10 @@ func TestNext_DependencyOrderSameRepo(t *testing.T) {
 	second := cr.task(t, "then frontend", "--after", first)
 	_, ac := cr.agent(t, "a-1")
 	_, bc := cr.agent(t, "b-1")
-	ac.MustLore("task", "next").Says(t, first)
-	bc.Lore("task", "next").Fails(t, th.ExitNoWork, "E_NO_WORK", "waits for", first)
+	ac.MustLore("task", "next", "--claim").Says(t, first)
+	bc.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "E_NO_WORK", "waits for", first)
 	ac.MustLore("task", "done", first)
-	bc.MustLore("task", "next").Says(t, second)
+	bc.MustLore("task", "next", "--claim").Says(t, second)
 }
 
 // §7.2 dependencies: a cycle is refused at add and edit (E_CYCLE).
@@ -488,18 +488,18 @@ func TestNext_GateNeedsAHumanApproval(t *testing.T) {
 	id := cr.task(t, "deploy to staging")
 	cr.toolsC.MustLore("gate", "request", id)
 	ag, ac := cr.agent(t, "coord")
-	ac.Lore("task", "next").Fails(t, th.ExitNoWork, "gate")
+	ac.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "gate")
 	ac.Lore("gate", "approve", id).Refused(t)
 	impostor := ag.Session("s-impostor")
 	impostor.SetEnv(th.EnvLoreActor, aliceKey)
 	ac.As(impostor).Lore("gate", "approve", id)
-	ac.Lore("task", "next").Fails(t, th.ExitNoWork, "gate")
+	ac.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "gate")
 
 	cr.toolsC.MustLore("gate", "approve", id).Says(t, "approved", aliceName)
 	cr.toolsC.MustLore("task", "edit", id, "--title", "deploy to production")
-	ac.Lore("task", "next").Fails(t, th.ExitNoWork, "gate")
+	ac.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "gate")
 	cr.toolsC.MustLore("gate", "approve", id)
-	ac.MustLore("task", "next").Says(t, id)
+	ac.MustLore("task", "next", "--claim").Says(t, id)
 }
 
 // §7.3 step 4: a low-priority task blocking a high one is offered first.
@@ -509,7 +509,7 @@ func TestNext_EffectivePriorityFollowsWaiters(t *testing.T) {
 	cr.task(t, "urgent waiter", "--priority", "urgent", "--after", blocker)
 	cr.task(t, "medium other", "--priority", "medium")
 	_, ac := cr.agent(t, "picker")
-	ac.MustLore("task", "next").Says(t, blocker)
+	ac.MustLore("task", "next", "--claim").Says(t, blocker)
 }
 
 // §7.4 idempotent plans: applying a plan file twice creates every row once.
@@ -604,7 +604,7 @@ func newGlobexGroup(t *testing.T, caps ...th.Cap) *globexGroup {
 // Lore-Task trailer and nothing of the store id.
 func (g *globexGroup) backendWork(t *testing.T) string {
 	t.Helper()
-	g.beClone.MustLore("task", "next", "--mission", g.mission, "--repo", "backend").Says(t, g.t30)
+	g.beClone.MustLore("task", "next", "--claim", "--mission", g.mission, "--repo", "backend").Says(t, g.t30)
 	g.beClone.Git("checkout", "-q", "-b", "agent/backend-1/invite")
 	g.beClone.WriteFile("api/invite.go", "package api\n")
 	g.beClone.CommitAll("invite mutation")
@@ -673,9 +673,9 @@ func TestF09_SquashWithoutTrailerNeedsManualMark(t *testing.T) {
 	branch := g.backendWork(t)
 	g.squashMerge(t, branch)
 	g.aliceBE.MustLore("task", "list")
-	g.feClone.Lore("task", "next", "--mission", g.mission, "--repo", "frontend").Fails(t, th.ExitNoWork, "merged")
+	g.feClone.Lore("task", "next", "--claim", "--mission", g.mission, "--repo", "frontend").Fails(t, th.ExitNoWork, "merged")
 	g.aliceBE.MustLore("task", "merged", g.t30)
-	g.feClone.MustLore("task", "next", "--mission", g.mission, "--repo", "frontend").Says(t, g.t31)
+	g.feClone.MustLore("task", "next", "--claim", "--mission", g.mission, "--repo", "frontend").Says(t, g.t31)
 }
 
 // F9 check 1: --commit <sha> found by ancestry after a merge commit; the
@@ -742,11 +742,11 @@ tasks:
 	}
 
 	be := g.beClone
-	beTask := mustID(t, be.MustLore("task", "next", "--mission", m, "--repo", "backend").Says(t, "invite mutation"), "tsk")
-	g.feClone.Lore("task", "next", "--mission", m, "--repo", "frontend").Fails(t, th.ExitNoWork, "merged")
+	beTask := mustID(t, be.MustLore("task", "next", "--claim", "--mission", m, "--repo", "backend").Says(t, "invite mutation"), "tsk")
+	g.feClone.Lore("task", "next", "--claim", "--mission", m, "--repo", "frontend").Fails(t, th.ExitNoWork, "merged")
 	proxyAgent := startAgent(t, g.alice, pc, "proxy-1")
 	pa := proxyAgent.Clone(proxy, "proxy")
-	pa.MustLore("task", "next", "--mission", m, "--repo", "proxy", "--owns", "nginx/sites/invite.conf").Says(t, "allow /invite")
+	pa.MustLore("task", "next", "--claim", "--mission", m, "--repo", "proxy", "--owns", "nginx/sites/invite.conf").Says(t, "allow /invite")
 
 	// The finding is shared as a memory in the store folder the mission lives
 	// in (was `finding add --mission`, dropped in 0.1.18: p3/dropped.md), and
@@ -773,7 +773,7 @@ tasks:
 
 	fe := g.feClone
 	g.feAgent.SetNow(t0)
-	feTask := mustID(t, fe.MustLore("task", "next", "--mission", m, "--repo", "frontend").Says(t, "invite landing route"), "tsk")
+	feTask := mustID(t, fe.MustLore("task", "next", "--claim", "--mission", m, "--repo", "frontend").Says(t, "invite landing route"), "tsk")
 	fe.Git("checkout", "-q", "-b", "agent/frontend-1/invite-route")
 	fe.WriteFile("src/routes/invite.tsx", "export {}\n")
 	fe.CommitAll("route + loader")
@@ -786,9 +786,9 @@ tasks:
 	fe2 := startAgent(t, g.alice, g.aliceFE, "frontend-2")
 	fe2.SetNow(t0.Add(leaseTTL + leaseGrace + 5*time.Minute))
 	fe2c := fe2.Clone(g.frontend, "frontend")
-	fe2c.MustLore("task", "next", "--mission", m, "--repo", "frontend").Says(t, feTask, "reclaim")
+	fe2c.MustLore("task", "next", "--claim", "--mission", m, "--repo", "frontend").Says(t, feTask, "reclaim")
 
-	coordC.Lore("task", "next", "--mission", m, "--role", "coordinator").Fails(t, th.ExitNoWork, "E_NO_WORK")
+	coordC.Lore("task", "next", "--claim", "--mission", m, "--role", "coordinator").Fails(t, th.ExitNoWork, "E_NO_WORK")
 	g.aliceBE.MustLore("mission", "status", m).Says(t, "invite mutation", "claimed")
 }
 

@@ -299,18 +299,33 @@ func reletter(snip string, src []rune) string {
 // ids already in have. A match using FTS syntax (column filters, groups,
 // NEAR) gets no second-column hits: its meaning has no substring form.
 func (c *Cache) expandedHits(ctx context.Context, table row.Table, match string, limit int, have []SearchHit) ([]SearchHit, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	// every term must occur (lower() folds ASCII, as LIKE would); a
+	// search's any-word form (devco D-435: "(a OR b) NOT c") needs one of
+	// its words and none of its NOT words
+	all := `NOT EXISTS (SELECT 1 FROM json_each(?) t WHERE instr(lower(text), lower(t.value)) = 0)`
 	terms, ok := plainTerms(match)
-	if !ok || limit <= 0 {
+	var neg []string
+	if !ok {
+		terms, neg, ok = anyTerms(match)
+		all = `EXISTS (SELECT 1 FROM json_each(?) t WHERE instr(lower(text), lower(t.value)) > 0)`
+	}
+	if !ok {
 		return nil, nil
 	}
 	termsJSON, err := json.Marshal(terms)
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "sqlite cache: encode search terms", err)
 	}
-	// every term must occur (lower() folds ASCII, as LIKE would)
-	q := `SELECT entity_id, text FROM "` + tblExpanded + `" WHERE entity_table = ? AND NOT EXISTS ` +
-		`(SELECT 1 FROM json_each(?) t WHERE instr(lower(text), lower(t.value)) = 0) ORDER BY entity_id`
-	rs, err := c.db.QueryContext(ctx, q, table.String(), string(termsJSON))
+	negJSON, err := json.Marshal(append([]string{}, neg...))
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "sqlite cache: encode search terms", err)
+	}
+	q := `SELECT entity_id, text FROM "` + tblExpanded + `" WHERE entity_table = ? AND ` + all +
+		` AND NOT EXISTS (SELECT 1 FROM json_each(?) n WHERE instr(lower(text), lower(n.value)) > 0) ORDER BY entity_id`
+	rs, err := c.db.QueryContext(ctx, q, table.String(), string(termsJSON), string(negJSON))
 	if err != nil {
 		return nil, dbErr("search expanded text", err)
 	}
@@ -361,6 +376,37 @@ func plainTerms(match string) ([]string, bool) {
 		}
 	}
 	return out, len(out) > 0
+}
+
+// anyTerms reads a match made only of quoted words joined by OR, in
+// groups, with optional trailing NOT "word"s (the any-word form search
+// builds for a question, devco D-435): its words, its NOT words, and true;
+// false for anything else (column filters, NEAR, prefixes, bare words).
+func anyTerms(match string) (pos, neg []string, ok bool) {
+	if strings.ContainsAny(match, "{}:^*") || !strings.Contains(match, " OR ") {
+		return nil, nil, false
+	}
+	toks := strings.Fields(strings.NewReplacer("(", " ", ")", " ").Replace(match))
+	not := false
+	for _, w := range toks {
+		switch {
+		case w == "OR":
+			continue
+		case w == "NOT":
+			not = true
+			continue
+		case len(w) < 3 || w[0] != '"' || w[len(w)-1] != '"' || strings.Contains(w[1:len(w)-1], `"`):
+			return nil, nil, false
+		}
+		word := strings.ReplaceAll(w[1:len(w)-1], `""`, `"`)
+		if not {
+			neg = append(neg, word)
+			not = false
+		} else {
+			pos = append(pos, word)
+		}
+	}
+	return pos, neg, len(pos) > 0 && !not
 }
 
 // snippetOf is up to 40 bytes either side of the first match of term,

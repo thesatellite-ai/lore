@@ -105,6 +105,69 @@ type ClaimLogEntry struct {
 	Session     string     `json:"session,omitempty"`
 	PrevActorID string     `json:"prev_actor_id,omitempty"`
 	Epoch       int        `json:"epoch"`
+	// Before is the row's status and started_at as this claim found them
+	// (devco:D-427). A claim that starts a chain records it; a reclaim, or
+	// a claim after an expiry that left the task in_progress, continues the
+	// chain and records none. A release puts both back, so a claim given
+	// back leaves the task as it found it, the history kept here.
+	Before *ClaimBefore `json:"before,omitempty"`
+}
+
+// ClaimBefore is what a claim changed on the row (ClaimLogEntry.Before):
+// the status and started_at to restore on release. StartedAt is "" when
+// the row had none (the claim set it).
+type ClaimBefore struct {
+	Status    string `json:"status"`
+	StartedAt string `json:"started_at,omitempty"`
+	// StatusSet marks a claim during which someone set the status
+	// explicitly (task start, edit --status, done, cancel, reopen;
+	// devco:D-464). The ops layer's status writer sets it on the open
+	// chain's entry (ops/task claimmark.go); a release that finds it keeps
+	// the row's status and started_at and records the span: that change
+	// was work, not part of the claim.
+	StatusSet bool `json:"status_set,omitempty"`
+}
+
+// claimBefore is the pre-claim state a release restores: the newest claim
+// log entry carrying Before, looking back past reclaims, expiries, revokes
+// and approvals (a reclaim of an in_progress task records none, the first
+// claim of the chain did) but never past a release, which already put the
+// row back. ok is false when the log holds none (a row an older binary
+// claimed, or a chain longer than ClaimLogMax).
+func claimBefore(log []ClaimLogEntry) (ClaimBefore, bool) {
+	for i := len(log) - 1; i >= 0; i-- {
+		e := log[i]
+		if e.Event == ClaimEventRelease {
+			return ClaimBefore{}, false
+		}
+		if (e.Event == ClaimEventClaim || e.Event == ClaimEventReclaim) && e.Before != nil {
+			return *e.Before, true
+		}
+	}
+	return ClaimBefore{}, false
+}
+
+// restoreBefore puts the row back to its pre-claim status and started_at
+// (devco:D-427: a release left the task in_progress with nobody on it). It
+// touches only a row the claim left in_progress: a status someone set
+// since (blocked by poison, cancelled) stays, and so does any status set
+// explicitly during the claim (ClaimBefore.StatusSet, devco:D-464: a
+// `task start` on a claimed task stays started). Without a recorded Before
+// the task goes back to todo and keeps its started_at.
+func (d Doc) restoreBefore() {
+	if d.Status() != statusInProgress {
+		return
+	}
+	b, ok := claimBefore(d.ClaimLog())
+	if ok && b.StatusSet {
+		return
+	}
+	if !ok {
+		d.SetStr(keyStatus, statusTodo)
+		return
+	}
+	d.SetStr(keyStatus, b.Status)
+	d.SetStr(keyStartedAt, b.StartedAt)
 }
 
 // DependencyUntil says which state of an upstream task satisfies a

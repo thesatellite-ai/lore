@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -76,6 +77,12 @@ func gitTracks(ctx context.Context, root, path string) (bool, error) {
 // info/exclude (works in linked worktrees: git --git-path resolves it).
 // Outside a git checkout it does nothing.
 func excludeInGit(ctx context.Context, root, name string) error {
+	return excludeInGitAs(ctx, root, name, "# lore: internal context import (never commit)")
+}
+
+// excludeInGitAs is excludeInGit with the comment line written above the
+// pattern (it says why the line is there).
+func excludeInGitAs(ctx context.Context, root, name, comment string) error {
 	top, err := gitOutput(ctx, root, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil // not a git checkout: nothing can commit the file
@@ -87,9 +94,12 @@ func excludeInGit(ctx context.Context, root, name string) error {
 	if !filepath.IsAbs(excl) {
 		excl = filepath.Join(root, excl)
 	}
-	rel, err := filepath.Rel(top, filepath.Join(root, name))
-	if err != nil {
-		return errs.Wrap(errs.Internal, "locate "+name, err)
+	// canonical: git's top is the real folder while root may be spelled
+	// through a link (macOS /var); a plain Rel gave a ../ pattern that
+	// excluded nothing (devco D-413)
+	rel, inside := fspath.Rel(top, filepath.Join(root, name))
+	if !inside {
+		return errs.New(errs.Internal, "locate "+name+": not inside the checkout "+top)
 	}
 	pattern := "/" + filepath.ToSlash(rel)
 	cur, err := os.ReadFile(filepath.Clean(excl))
@@ -105,7 +115,7 @@ func excludeInGit(ctx context.Context, root, name string) error {
 	if len(cur) > 0 && !strings.HasSuffix(string(cur), "\n") {
 		add = "\n"
 	}
-	add += "# lore: internal context import (never commit)\n" + pattern + "\n"
+	add += comment + "\n" + pattern + "\n"
 	if mkdirErr := os.MkdirAll(filepath.Dir(excl), renderDirMode); mkdirErr != nil {
 		return errs.FileIO("create the git info folder", filepath.Dir(excl), mkdirErr)
 	}

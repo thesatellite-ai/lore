@@ -36,11 +36,14 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
+	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
+	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -81,9 +84,78 @@ type journalPlace struct {
 	// TipBefore / TipAfter are a clone's HEAD around the run.
 	TipBefore string `json:"tip_before,omitempty"`
 	TipAfter  string `json:"tip_after,omitempty"`
+	// RemoteBase is the remote commit a clone took in during the run (a
+	// pull of a teammate's push), "" when it took in none: the run's own
+	// store change is measured from it, so what came from the remote is
+	// never reported, pushed or rolled back as the run's (devco U-2).
+	RemoteBase string `json:"remote_base,omitempty"`
 	// CloneBackup is the backup ref inside the clone (keeps TipBefore).
 	CloneBackup string `json:"clone_backup,omitempty"`
 	Pushed      bool   `json:"pushed,omitempty"`
+}
+
+// ownBase is the commit a clone place's own store change starts from: the
+// remote commit it took in during the run, else its tip before the run.
+func (p journalPlace) ownBase() string {
+	if p.RemoteBase != "" {
+		return p.RemoteBase
+	}
+	return p.TipBefore
+}
+
+// ownTip reports whether the run made a store commit of its own in a
+// clone place (a pull alone moves the tip too, devco U-2).
+func (p journalPlace) ownTip() bool { return p.TipAfter != p.ownBase() }
+
+// remoteBase is the remote commit a clone place at tip took in since the
+// run began ("" when none): the merge base of tip and the clone's upstream
+// when that lies past TipBefore. Read it before the run's own push (after
+// it, the upstream holds the run's commit too).
+func remoteBase(ctx context.Context, snaps git.Snapshots, p journalPlace, tip string) string {
+	if !p.Clone || tip == "" || tip == p.TipBefore {
+		return ""
+	}
+	up := snaps.Upstream(ctx, p.Dir)
+	if up == "" {
+		return ""
+	}
+	base := snaps.MergeBase(ctx, p.Dir, up, tip)
+	if base == "" || base == p.TipBefore || (p.TipBefore != "" && !snaps.IsAncestor(ctx, p.Dir, p.TipBefore, base)) {
+		return ""
+	}
+	return base
+}
+
+// ownChanges keeps the paths of diff (the place's data folder before and
+// after the run) the run itself changed: a clone that took in a teammate's
+// push during the run has their files in diff too (devco U-2).
+func ownChanges(ctx context.Context, snaps git.Snapshots, p journalPlace, diff []git.TreeChange) ([]git.TreeChange, error) {
+	if p.RemoteBase == "" || len(diff) == 0 {
+		return diff, nil
+	}
+	own, err := snaps.DiffTrees(ctx, p.Dir, p.RemoteBase, p.TipAfter)
+	if err != nil {
+		return nil, err
+	}
+	prefix := strings.Trim(p.Data, "/")
+	mine := make(map[string]bool, len(own))
+	for _, c := range own {
+		rel := c.Path
+		if prefix != "" && prefix != "." {
+			if !strings.HasPrefix(rel, prefix+"/") {
+				continue
+			}
+			rel = strings.TrimPrefix(rel, prefix+"/")
+		}
+		mine[rel] = true
+	}
+	out := diff[:0:0]
+	for _, c := range diff {
+		if mine[c.Path] {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 // migrateJournal is .lore/state/migrate.json.
@@ -103,6 +175,12 @@ type migrateJournal struct {
 	// cannot be rolled back (BUGFIX-07): Rollback refuses it before it
 	// changes anything, Status and Finish say so instead of naming the undo.
 	ModeBPointer string `json:"mode_b_pointer,omitempty"`
+	// ModeBWriting is set just before the Mode B conversion writes its
+	// first row into the shared store (markModeBWriting): only from then on
+	// is there a conversion that stays when the run fails (devco P-3: a run
+	// refused before it, e.g. the shared lore.db not found, changed nothing
+	// and must leave no journal that makes the next run say "resuming").
+	ModeBWriting bool `json:"mode_b_writing,omitempty"`
 	// Previous is the finished journal this run replaced: a run that
 	// changes nothing puts it back (FA-FMT-3), so a no-op second run never
 	// takes away the rollback of the first.
@@ -293,7 +371,7 @@ func (a *App) RewriteRepoV1(ctx context.Context, table row.Table, dryRun bool) (
 }
 
 // Finish implements opsmigrate.Journal (rule 4 step 7).
-func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Finished, error) {
+func (a *App) Finish(ctx context.Context, push opsmigrate.PushChoice, count int) (opsmigrate.Finished, error) {
 	var none opsmigrate.Finished
 	top, path, err := a.journalPath(ctx)
 	if err != nil {
@@ -318,8 +396,12 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 		}
 		if p.Clone {
 			p.TipAfter = snaps.Head(ctx, p.Dir)
+			p.RemoteBase = remoteBase(ctx, snaps, *p, p.TipAfter) // before this run's push
 		}
 		diff, err := snaps.DiffTrees(ctx, top, p.TreeBefore, p.TreeAfter)
+		if err == nil {
+			diff, err = ownChanges(ctx, snaps, *p, diff)
+		}
 		if err != nil {
 			return none, err
 		}
@@ -340,7 +422,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 				}
 			}
 		}
-		if len(diff) == 0 && p.TipAfter == p.TipBefore {
+		if len(diff) == 0 && !p.ownTip() {
 			continue
 		}
 		changed = true
@@ -348,14 +430,29 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 			lines = append(lines, formatLine)
 		}
 		line := placeLabel(*p) + ": " + strconv.Itoa(len(diff)) + " files upgraded"
-		if n := metaFilesIn(diff); n > 0 {
+		n, actors := metaFilesIn(diff), newActorFiles(diff)
+		if n > 0 || len(actors) > 0 {
 			// B1-9: "Upgraded 16 rows" then "17 files upgraded" read as a
 			// row gone missing; the extra file is the format file
-			extra := rowfs.MetaFileName
-			if n > 1 {
-				extra += " and " + rowfs.SignpostFile
+			line += " (" + strconv.Itoa(len(diff)-n) + " row files"
+			if len(actors) > 0 {
+				// devco O-3/O-17: an actor row the run's own writes added
+				// (the engine registers its writer) is no upgraded row and
+				// no dry run can count it; named, the files add up
+				line += ", " + plural(len(actors), "new actor row") + " among them (" + strings.Join(actors, ", ") + ") that the run's own writes added"
 			}
-			line += " (" + strconv.Itoa(len(diff)-n) + " row files and " + extra + ")"
+			if n > 0 {
+				extra := rowfs.MetaFileName
+				if n > 1 {
+					extra += " and " + rowfs.SignpostFile
+				}
+				sep := " and "
+				if len(actors) > 0 {
+					sep = "; plus "
+				}
+				line += sep + extra
+			}
+			line += ")"
 		}
 		switch {
 		case p.Entry == repoEntry && !p.Clone:
@@ -367,7 +464,7 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 				lines = append(lines, line)
 				line = w // B1-14: named before the person commits, never the values
 			}
-		case p.Clone && p.TipAfter != p.TipBefore && push:
+		case p.Clone && p.ownTip() && a.migrationSends(ctx, push, p.Name):
 			if !pushed[p.Dir] {
 				if serr := a.syncPlace(ctx, p.Name); serr != nil {
 					line += "; push failed (" + serr.Error() + "): run `lore sync`"
@@ -377,20 +474,20 @@ func (a *App) Finish(ctx context.Context, push bool, count int) (opsmigrate.Fini
 			}
 			p.Pushed = true
 			line += ", store commit " + shortOID(p.TipAfter) + ", pushed"
-		case p.Clone && p.TipAfter != p.TipBefore:
-			line += ", store commit " + shortOID(p.TipAfter) + " (local, not pushed)"
+		case p.Clone && p.ownTip():
+			line += ", store commit " + shortOID(p.TipAfter) + " " + a.notPushedWhy(ctx, push, p.Name)
 		}
 		lines = append(lines, line)
 	}
 	if len(j.ConfigKeys) > 0 {
-		lines = append(lines, "~/.lore/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
+		lines = append(lines, lorehome.Shown()+"/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
 	}
 	// the stores this run upgraded get their layout commit now, not from
 	// the next command (FlattenAfterMigrate); a store whose only change
 	// was its marker (no row of it in this repo's places) counts too
 	var layout []string
-	if push {
-		layout = a.FlattenAfterMigrate(ctx)
+	if push != opsmigrate.PushNever {
+		layout = a.FlattenAfterMigrate(ctx, push == opsmigrate.PushNow)
 	}
 	if !changed && count == 0 && len(j.ConfigKeys) == 0 && len(layout) == 0 {
 		return none, a.dropBackup(ctx, snaps, top, path, j)
@@ -436,6 +533,43 @@ func (a *App) dropBackup(ctx context.Context, snaps git.Snapshots, top, path str
 		all = append(all, errs.Wrap(errs.Internal, "migrate: remove the journal", err))
 	}
 	return errors.Join(all...)
+}
+
+// migrationSends reports whether a migration run or rollback pushes the
+// commit it made in attached store name: always with --push, never with
+// --no-push/--offline, else only a store in push mode now (devco D-612:
+// the run pushed every store by default, past push mode manual).
+func (a *App) migrationSends(ctx context.Context, choice opsmigrate.PushChoice, name string) bool {
+	switch choice {
+	case opsmigrate.PushNow:
+		return true
+	case opsmigrate.PushNever:
+		return false
+	}
+	return a.placePushMode(ctx, name) == storepush.ModeNow
+}
+
+// placePushMode is the push mode of attached store name; the default
+// (manual) when it is not attached or not a pushing store.
+func (a *App) placePushMode(ctx context.Context, name string) storepush.Mode {
+	if st, err := a.state(ctx); err == nil {
+		if sp := storePushOf(st.byName[store.Source(name)]); sp != nil {
+			return sp.pushSettings().Push
+		}
+	}
+	return storepush.Default().Push
+}
+
+// notPushedWhy is the "(local, not pushed: …; push with: …)" tail of a
+// migration line whose store commit stayed local: why, and the exact
+// command that sends it (devco D-612: every output says whether it
+// pushed).
+func (a *App) notPushedWhy(ctx context.Context, choice opsmigrate.PushChoice, name string) string {
+	why := "--no-push"
+	if choice == opsmigrate.PushPerMode {
+		why = "store " + name + " is in push mode " + string(a.placePushMode(ctx, name))
+	}
+	return "(local, not pushed: " + why + "; push with: lore store push --store " + name + ")"
 }
 
 // syncPlace syncs (fetch, merge, push) the attached store name.
@@ -594,13 +728,17 @@ func (a *App) rollbackPlans(ctx context.Context, snaps git.Snapshots, top string
 			p.TreeAfter = after
 			if p.Clone {
 				p.TipAfter = snaps.Head(ctx, p.Dir)
+				p.RemoteBase = remoteBase(ctx, snaps, p, p.TipAfter)
 			}
 		}
 		diff, err := snaps.DiffTrees(ctx, top, p.TreeBefore, p.TreeAfter)
+		if err == nil {
+			diff, err = ownChanges(ctx, snaps, p, diff)
+		}
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(diff) == 0 && p.TipAfter == p.TipBefore {
+		if len(diff) == 0 && !p.ownTip() {
 			continue
 		}
 		now, err := snaps.Snapshot(ctx, top, p.Dir, p.Data)
@@ -630,7 +768,7 @@ func (a *App) rollbackPlans(ctx context.Context, snaps git.Snapshots, top string
 		if p.Clone {
 			up := snaps.Upstream(ctx, p.Dir)
 			unpushed := !p.Pushed && snaps.Head(ctx, p.Dir) == p.TipAfter && (up == "" || !snaps.IsAncestor(ctx, p.Dir, p.TipAfter, up))
-			pl.localUndo = unpushed && p.TipBefore != ""
+			pl.localUndo = unpushed && p.ownBase() != ""
 			pl.pushed = !unpushed
 		}
 		plans = append(plans, pl)
@@ -646,10 +784,12 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 			return "", nil
 		}
 		reset[p.Dir] = true
-		if err := snaps.ResetClone(ctx, p.Dir, p.TipBefore); err != nil {
+		// back to the remote commit the run took in, if any: a teammate's
+		// pulled push is no part of the run's undo (devco U-2)
+		if err := snaps.ResetClone(ctx, p.Dir, p.ownBase()); err != nil {
 			return "", err
 		}
-		return placeLabel(p) + ": local store ref back to " + shortOID(p.TipBefore) + " (" + p.CloneBackup + "); nothing was pushed", nil
+		return placeLabel(p) + ": local store ref back to " + shortOID(p.ownBase()) + " (" + p.CloneBackup + "); nothing was pushed", nil
 	}
 	paths, err := a.restoreFiles(ctx, snaps, top, p, pl.diff, pl.keepMeta)
 	if err != nil {
@@ -670,6 +810,12 @@ func (a *App) applyRollback(ctx context.Context, snaps git.Snapshots, top string
 	}
 	if !pl.pushed {
 		return line + ", store commit (local)", nil
+	}
+	if choice := opsmigrate.PushChoiceFrom(ctx); !a.migrationSends(ctx, choice, p.Name) {
+		// devco D-612: the migration reached the remote, so its undo must
+		// too, but only when the person asked (--push) or the store pushes
+		// every write (push mode now)
+		return line + ", store commit " + a.notPushedWhy(ctx, choice, p.Name), nil
 	}
 	if err := a.syncPlace(ctx, p.Name); err != nil {
 		return line + ", store commit; push failed (" + err.Error() + "): run `lore sync`", nil
@@ -809,12 +955,17 @@ func (a *App) statusPlaces(ctx context.Context, out *opsmigrate.StatusOut) error
 	for _, t := range slices.Sorted(maps.Keys(pending)) {
 		out.Pending = append(out.Pending, t.String()+": "+plural(pending[t], "row")+" at v1")
 	}
+	// devco P-9: the v1 rows of the attached stores' folders this repo
+	// does not attach count too, each folder its own place and line
+	if err := a.statusUnattached(ctx, st, out); err != nil {
+		out.Notes = append(out.Notes, err.Error())
+	}
 	for _, t := range slices.Sorted(maps.Keys(left)) {
 		out.Notes = append(out.Notes, t.String()+": "+plural(left[t], "row")+" at v1 that lore migrate run leaves as they are (it says why)")
 	}
 	// rows only the v0.1.17 live ref holds (MigrateLive brings them in):
 	// counted in their store's place and named
-	if live, lerr := pendingLiveRows(ctx, st, false); lerr == nil {
+	if live, lerr := pendingOldLiveRows(ctx, st); lerr == nil {
 		n := map[store.Source]int{}
 		for _, x := range live {
 			if x.live.row.SourceVersion < row.FormatVersion && !x.has {
@@ -994,6 +1145,19 @@ func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error
 
 // metaFilesIn counts the format files (_meta.json) among a migration's
 // changed paths.
+// newActorFiles lists the ids of the actor row files diff adds (no file
+// before the run): rows the run's writes registered for their writer,
+// not rows it upgraded.
+func newActorFiles(diff []git.TreeChange) []string {
+	var out []string
+	for _, d := range diff {
+		if d.OldBlob == "" && d.NewBlob != "" && path.Dir(d.Path) == string(schema.TableActors) {
+			out = append(out, strings.TrimSuffix(path.Base(d.Path), ".json"))
+		}
+	}
+	return out
+}
+
 func metaFilesIn(diff []git.TreeChange) int {
 	n := 0
 	for _, d := range diff {

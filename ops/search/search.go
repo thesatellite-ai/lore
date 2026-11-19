@@ -9,8 +9,9 @@
 // (Env); this package checks the input, holds the searched table list and
 // prints the v0.1.17 text and --json envelope.
 //
-//	query ─▶ Env.GlobalSearch (per table: meta conds | resource field conds | FTS5)
-//	      ─▶ RRF merge (score = 1/(60+rank)) ─▶ cut to --limit ─▶ trash tail (--include-deleted)
+//	query ─▶ Env.GlobalSearch (per table: meta conds | resource field conds | FTS5 over the topic words)
+//	      ─▶ one relevance score across kinds (words held, then title, then bm25 rank; D-435/D-436)
+//	      ─▶ cut to --limit ─▶ trash tail (--include-deleted)
 //	      ─▶ Text: "Found N hits for "q" across M entity types:" + one line per hit
 package search
 
@@ -22,9 +23,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/thesatellite-ai/lore/logic/metaquery"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/schema"
@@ -58,8 +61,6 @@ const (
 const (
 	DefaultLimit    = 20
 	DefaultPerTable = 10
-	// RRFK is the standard Reciprocal Rank Fusion constant.
-	RRFK = 60.0
 	// BodyMax is the label length of a body-labelled hit (truncBody).
 	BodyMax = 80
 	// lineMax caps one printed hit text (v0.1.17: 100, cut to 97 + "...").
@@ -82,7 +83,18 @@ type Target struct {
 	HasProject  bool
 	HasRepo     bool
 	HasArchived bool
+	// Roster marks the org's people and teams (devco D-489): they live in
+	// the org roster, not in a store's cache, so wire matches them by
+	// name, handle and email instead of full text, search status lists
+	// no index for them, and --store / --repo (cache scopes) leave them out.
+	Roster bool
 }
+
+// EntityMember / EntityTeam are the roster entries of Targets.
+const (
+	EntityMember = "member"
+	EntityTeam   = "team"
+)
 
 // EntityResource is the resources entry (field:value conditions, RES 3.12).
 const EntityResource = "resource"
@@ -100,6 +112,8 @@ func Targets() []Target {
 		{Entity: "hotfix", Table: schema.TableHotfixes, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
 		{Entity: "incident", Table: schema.TableIncidents, Label: Label{Field: "title"}, HasProject: true},
 		{Entity: "memory", Table: schema.TableMemories, HasProject: true, HasRepo: true, HasArchived: true},
+		// the org's people (name, handle, email) and teams (handle, name), D-489
+		{Entity: EntityMember, Table: schema.TableActors, Label: Label{Field: "display_name"}, Roster: true},
 		{Entity: "mission", Table: schema.TableMissions, Label: Label{Field: "title"}, HasProject: true},
 		{Entity: "pattern", Table: schema.TablePatterns, Label: Label{Field: "title"}, HasProject: true, HasRepo: true, HasArchived: true},
 		{Entity: "plan", Table: schema.TablePlans, Label: Label{Field: "title"}, HasProject: true},
@@ -113,6 +127,7 @@ func Targets() []Target {
 		{Entity: "task", Table: schema.TableTasks, Label: Label{Field: "title"}, HasProject: true, HasRepo: true},
 		{Entity: "tasklist", Table: schema.TableTasklists, Label: Label{Field: "title"}, HasProject: true},
 		{Entity: "tastepref", Table: schema.TableTastePrefs, Label: Label{Field: "body", Trunc: true}, HasProject: true},
+		{Entity: EntityTeam, Table: schema.TableTeams, Label: Label{Field: "display_name"}, Roster: true},
 		{Entity: "techdoc", Table: schema.TableTechDocs, Label: Label{Field: "name"}, HasProject: true},
 		{Entity: "workflow", Table: schema.TableWorkflows, Label: Label{Field: "name"}, HasProject: true},
 		{Entity: "workspace", Table: schema.TableWorkspaces, Label: Label{Field: "name"}, HasProject: true},
@@ -172,6 +187,9 @@ type Request struct {
 	// Store is --store (alias --to): only hits of that attached store; ""
 	// = every store. An unattached name is E_NOT_FOUND (wire).
 	Store string
+	// BornBranch is --born-branch (D-392): only rows created on that code
+	// branch (their `_o.git.branch`); "" = every row.
+	BornBranch string
 }
 
 // Hit is one cross-table match, the v0.1.17 globalSearchHit JSON shape.
@@ -183,6 +201,18 @@ type Hit struct {
 	Score       float64 `json:"score"`
 	Snippet     string  `json:"snippet,omitempty" desc:"the matched excerpt, matches in <b>…</b>"`
 	Body        string  `json:"body,omitempty" desc:"short label of the row (title, name or cut body)"`
+	// Title is the row's title or name (D-436), "" for a kind labelled by
+	// its body (rule, comment, handoff, tastepref) or by nothing (memory):
+	// the terminal shows it before the snippet, so a playbook found in its
+	// body still reads as its name.
+	Title string `json:"title,omitempty" desc:"the row's title or name; empty for a kind without one"`
+	// ResourceKind is a resource hit's kind name (D-436), so a hit on a
+	// field value says what it is.
+	ResourceKind string `json:"resource_kind,omitempty" desc:"a resource hit's kind name"`
+	// Partial marks a hit holding only some of the query's words (D-435):
+	// a natural-language query lists rows with every word first, then the
+	// rows with most of them.
+	Partial bool `json:"partial,omitempty" desc:"the row holds only some of the query's words"`
 	// Source is the `_source` of a hit from an attached store (FLAG1);
 	// zero for a repo hit, so repo hits' bytes stay v0.1.17's.
 	Source store.SourceRef `json:"_source,omitzero"`
@@ -232,7 +262,7 @@ type Env interface {
 
 // RunIn is the input of search.run.
 type RunIn struct {
-	Query           string   `json:"query" arg:"0" desc:"full-text query: words, \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"`
+	Query           string   `json:"query" arg:"0" rest:"true" desc:"full-text query (several words without quotes are one query): plain words or a question (\"how do we deploy orbit\": words like how, do, we are skipped, word forms match, rows holding most words first), or FTS5 syntax that every hit must match: \"exact phrase\", prefix*, AND / OR / NOT, -word leaves out rows holding word (a '-' inside a word like well-known is no negation); key:value matches metadata, field:value resource fields. Chinese, Japanese and Korean words are found inside a sentence (no spaces needed); emoji are found too (👍 also finds 👍🏽)"`
 	Tables          []string `json:"tables,omitempty" flag:"tables" desc:"restrict to these entity types (e.g. memory,rule,decision; repeatable)"`
 	Limit           int      `json:"limit,omitempty" flag:"limit" min:"1" desc:"max total hits after merge (default 20)"`
 	PerTable        int      `json:"per_table,omitempty" flag:"per-table" min:"1" desc:"per-entity top-K before merge (default 10)"`
@@ -243,6 +273,8 @@ type RunIn struct {
 	NoInherit       bool     `json:"no_inherit,omitempty" flag:"no-inherit" desc:"strict scope (reserved)"`
 	Repo            string   `json:"repo,omitempty" flag:"repo" desc:"scope to a specific repo (mount_name or rep_id)"`
 	Store           string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only hits from this store (a name from .lore/stores.yaml, me, or repo; default every attached store)"`
+	// Born is the --born-branch flag every list shares (D-392).
+	metalist.Born
 }
 
 // RunData is the data of the search.global envelope.
@@ -308,7 +340,7 @@ func Ops(env Env) []op.Entry {
 	}
 	return []op.Entry{
 		op.Define(op.Spec{
-			Name: OpRun, Summary: "Unified full-text search across all entities (fans out per entity + RRF-merges)",
+			Name: OpRun, Summary: "Search every kind at once: a plain question finds the rows holding its words, best first",
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun, Errors: readErrs,
 			Examples: []op.Example{
 				{Title: "search every kind", CLI: `lore search --query "invoice rounding"`, Want: "hit"},
@@ -356,6 +388,7 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 		Query: in.Query, Targets: targets, Limit: in.Limit, PerTable: in.PerTable,
 		IncludeArchived: in.IncludeArchived, IncludeDeleted: in.IncludeDeleted,
 		AllRepos: in.AllRepos, MasterOnly: in.MasterOnly, Repo: in.Repo, Store: in.Store,
+		BornBranch: in.BornBranch,
 	})
 	if err != nil {
 		return RunOut{}, err
@@ -382,10 +415,12 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 
 // Text is the terminal form: a header, then one line per hit, the type and
 // id in columns as wide as the widest of this result (no padding inside
-// brackets, which read as a broken label):
+// brackets, which read as a broken label), then the row's title (a
+// resource's name and kind) and a snippet cut around the first matched
+// word (D-436):
 //
-//	decision  dec_7a67…9504  We use Stripe for payments  (score=0.017)
-//	memory    mem_2ad3…f891  Old payments page is gone  (score=0.017)
+//	decision  dec_7a67…9504  We use Stripe for payments — …invoices go through Stripe since…  (score=0.983)
+//	resource  res_2ad3…f891  web-01 (server) — 10.0.0.4 hetzner…  (score=0.650)
 //
 // --json is unchanged.
 func (o RunOut) Text() string {
@@ -404,21 +439,19 @@ func (o RunOut) Text() string {
 	types := max(o.matched, len(seen))
 	fmt.Fprintf(&b, "Found %d %s for %q across %d %s:\n\n", n, plural(n, "hit", "hits"), o.Data.Query,
 		types, plural(types, "entity type", "entity types"))
+	if o.Data.Hits[0].Partial {
+		// D-435: hits are best first, so a partial first hit means no row
+		// holds every word
+		b.WriteString("No row holds every word; these hold some of them, most first.\n\n")
+	}
 	typeW, idW := 0, 0
 	for _, h := range o.Data.Hits {
-		typeW = max(typeW, utf8.RuneCountInString(h.Entity))
-		idW = max(idW, utf8.RuneCountInString(hitID(h)))
+		typeW = max(typeW, textwidth.Width(h.Entity))
+		idW = max(idW, textwidth.Width(hitID(h)))
 	}
 	for _, h := range o.Data.Hits {
 		pretty := hitID(h)
-		body := PlainSnippet(h.Snippet)
-		if body == "" {
-			body = h.Body
-		}
-		if body == "" {
-			body = h.Fallback
-		}
-		body = textcut.Cut(body, lineMax, lineMax-len(textcut.Ellipsis))
+		body := hitText(h)
 		if h.Source.Store != "" {
 			body += "  " + StoreLabel(h.Source)
 		}
@@ -430,6 +463,67 @@ func (o RunOut) Text() string {
 	return b.String()
 }
 
+// hitText is a hit's text on its line: the title (a resource's name and
+// kind), then the snippet cut so its first match shows (D-436); without a
+// title the snippet alone; without a snippet the label, else the start of
+// the body.
+func hitText(h Hit) string {
+	title := textcut.Cut(h.Title, titleMax, titleMax-len(textcut.Ellipsis))
+	if title != "" && h.ResourceKind != "" {
+		title += " (" + h.ResourceKind + ")"
+	}
+	snip := ""
+	if h.Snippet != "" && PlainSnippet(h.Snippet) != h.Title {
+		snip = SnippetAround(h.Snippet, lineMax-len(title))
+	}
+	switch {
+	case title != "" && snip != "":
+		return title + titleSep + snip
+	case title != "":
+		return title
+	case snip != "":
+		return snip
+	case h.Body != "":
+		return textcut.Cut(h.Body, lineMax, lineMax-len(textcut.Ellipsis))
+	}
+	return textcut.Cut(h.Fallback, lineMax, lineMax-len(textcut.Ellipsis))
+}
+
+// Title and snippet layout of a hit line.
+const (
+	titleMax = 60
+	titleSep = " — "
+	// snippetMin is the least room a snippet gets after a long title.
+	snippetMin = 40
+	// matchLead is how much text before the first match a cut snippet keeps.
+	matchLead = 24
+)
+
+// SnippetAround is snippet s (matches in <b>…</b>) as plain text of at
+// most maxLen bytes (never under snippetMin) that shows its first match:
+// when the match sits past the cut, the text before it is dropped to
+// matchLead bytes, from a word start, behind "...". Before D-436 the line
+// was cut from the start, so a match late in the snippet was cut away.
+func SnippetAround(s string, maxLen int) string {
+	maxLen = max(maxLen, snippetMin)
+	at := strings.Index(s, "<b>") // no mark precedes the first: its offset in the plain text too
+	plain := PlainSnippet(s)
+	if closeAt := strings.Index(s, "</b>"); at > 0 && closeAt > at {
+		end := closeAt - len("<b>") // the match's end in the plain text
+		if end > maxLen-len(textcut.Ellipsis) {
+			from := max(0, at-matchLead)
+			for from < at && !utf8.RuneStart(plain[from]) {
+				from++
+			}
+			if sp := strings.IndexByte(plain[from:at], ' '); sp >= 0 {
+				from += sp + 1
+			}
+			plain = textcut.Ellipsis + strings.TrimPrefix(plain[from:], textcut.Ellipsis)
+		}
+	}
+	return textcut.Cut(plain, maxLen, maxLen-len(textcut.Ellipsis))
+}
+
 // hitID is the id a hit shows: its short form, else the full id.
 func hitID(h Hit) string {
 	if h.Pretty != "" {
@@ -438,14 +532,9 @@ func hitID(h Hit) string {
 	return h.ID
 }
 
-// padRight pads s with spaces to w characters; the short ids hold "…", so
-// the width counts characters, not bytes.
-func padRight(s string, w int) string {
-	if n := utf8.RuneCountInString(s); n < w {
-		return s + strings.Repeat(" ", w-n)
-	}
-	return s
-}
+// padRight pads s with spaces to w terminal cells (the short ids hold "…";
+// devco:N-2: cells, not bytes or runes).
+func padRight(s string, w int) string { return textwidth.PadRight(s, w) }
 
 // StoreLabel is the bracketed store label of a store hit ("[agency]",
 // "[agency/acme-hub]").
@@ -483,7 +572,13 @@ func status(ctx context.Context, env Env, in StatusIn) (StatusOut, error) {
 	if err != nil {
 		return StatusOut{}, err
 	}
-	rows, err := env.SearchStatus(ctx, targets)
+	indexed := make([]Target, 0, len(targets))
+	for _, t := range targets {
+		if !t.Roster { // the roster has no full-text index (D-489)
+			indexed = append(indexed, t)
+		}
+	}
+	rows, err := env.SearchStatus(ctx, indexed)
 	if err != nil {
 		return StatusOut{}, err
 	}

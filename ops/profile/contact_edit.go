@@ -166,7 +166,7 @@ func (o ContactRemoveOut) Text() string { return o.text() + profilestore.Warning
 // text is Text without the warnings.
 func (o ContactRemoveOut) text() string {
 	c := o.Contact
-	return work.Success + " " + c.ID + " " + c.Type + " " + c.Value + " removed from " + c.ActorName + " in " + o.Where + " (restorable from the trash)\n"
+	return work.Success + " " + c.ID + " " + c.Type + " " + c.Value + " removed from " + c.ActorName + " in the roster of " + o.Where + " (restorable from the trash)\n"
 }
 
 // contactRemove moves the contact to the trash (DELETION_DESIGN); the
@@ -205,6 +205,8 @@ type ContactListIn struct {
 	Actor    string `json:"actor,omitempty" arg:"0" desc:"one person (@handle, act_ id, stable key); none = everyone"`
 	Type     string `json:"type,omitempty" flag:"type" desc:"only this contact type"`
 	Identity bool   `json:"identity,omitempty" flag:"identity" desc:"only identity contacts"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).

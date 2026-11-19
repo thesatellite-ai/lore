@@ -7,11 +7,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // parallelWait bounds how long the first secret scan waits for a second
 // one to start: a Check that scans items one at a time never starts it.
-const parallelWait = 5 * time.Second
+var parallelWait = testtime.Scale(5 * time.Second)
 
 // TestCheckScansItemsInParallel: C-9, `lore check leaks --as-client`
 // scanned 10 000 tracked files for secrets on one core (70 s on a big

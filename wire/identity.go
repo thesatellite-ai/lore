@@ -216,7 +216,9 @@ func (a *App) MachineTarget(ctx context.Context, to string) (store.Source, error
 	// is E_STORE_READ_ONLY) and takes the next own store.
 	for _, name := range st.eng.Stores() {
 		if name != store.SourceRepo && !st.eng.IsClient(name) && !st.eng.ReadOnly(name) {
-			return name, nil
+			// devco D-486: in a store clone the profile lives beside the
+			// person's actor row, not in each product folder.
+			return machineHome(ctx, st, name), nil
 		}
 	}
 	return refuse("no writable own store is attached")

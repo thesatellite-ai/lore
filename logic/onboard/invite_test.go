@@ -134,19 +134,22 @@ func TestDecideInvite(t *testing.T) {
 		code errs.Code
 		text string
 	}{
-		{"pending in date", pending, Acceptor{tomas, "tomas@agency.example"}, VerdictAccept, "", ""},
-		{"email case and space", pending, Acceptor{tomas, " Tomas@Agency.EXAMPLE "}, VerdictAccept, "", ""},
-		{"last day still accepts", at(pending, func(r *InviteRecord) { r.ExpiresOn = day("2026-11-06") }), Acceptor{tomas, "tomas@agency.example"}, VerdictAccept, "", ""},
-		{"expired yesterday", at(pending, func(r *InviteRecord) { r.ExpiresOn = day("2026-11-05") }), Acceptor{tomas, "tomas@agency.example"}, "", errs.InviteExpired, "expired on 2026-11-05; ask mira@agency.example for a new one"},
-		{"status expired", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusExpired }), Acceptor{tomas, "tomas@agency.example"}, "", errs.InviteExpired, "expired on 2026-11-20"},
-		{"revoked", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusRevoked }), Acceptor{tomas, "tomas@agency.example"}, "", errs.InviteRevoked, "was revoked; ask mira@agency.example"},
-		{"revoked and expired is revoked", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusRevoked; r.ExpiresOn = day("2026-01-01") }), Acceptor{tomas, "tomas@agency.example"}, "", errs.InviteRevoked, ""},
-		{"used by another actor", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted; r.AcceptedBy = tomas }), Acceptor{mira, "tomas@agency.example"}, "", errs.InviteUsed, "already used by act_tomas; ask mira@agency.example for a new one"},
-		{"accepted by me again", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted; r.AcceptedBy = tomas }), Acceptor{tomas, "tomas@agency.example"}, VerdictAlready, "", ""},
-		{"accepted with no accepted_by", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted }), Acceptor{"", "tomas@agency.example"}, "", errs.InviteUsed, ""},
-		{"wrong email", pending, Acceptor{tomas, "mira@agency.example"}, "", errs.InviteEmail, "is for tomas@agency.example; use that address or ask for a new invite"},
-		{"empty email", pending, Acceptor{tomas, ""}, "", errs.InviteEmail, ""},
-		{"unknown status", at(pending, func(r *InviteRecord) { r.Status = "frozen" }), Acceptor{tomas, "tomas@agency.example"}, "", errs.InviteInvalid, ""},
+		{"pending in date", pending, Acceptor{Actor: tomas, Email: "tomas@agency.example"}, VerdictAccept, "", ""},
+		{"email case and space", pending, Acceptor{Actor: tomas, Email: " Tomas@Agency.EXAMPLE "}, VerdictAccept, "", ""},
+		{"last day still accepts", at(pending, func(r *InviteRecord) { r.ExpiresOn = day("2026-11-06") }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, VerdictAccept, "", ""},
+		{"expired yesterday", at(pending, func(r *InviteRecord) { r.ExpiresOn = day("2026-11-05") }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, "", errs.InviteExpired, "expired on 2026-11-05; ask mira@agency.example for a new one"},
+		{"status expired", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusExpired }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, "", errs.InviteExpired, "expired on 2026-11-20"},
+		{"revoked", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusRevoked }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, "", errs.InviteRevoked, "was revoked; ask mira@agency.example"},
+		{"revoked and expired is revoked", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusRevoked; r.ExpiresOn = day("2026-01-01") }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, "", errs.InviteRevoked, ""},
+		{"used by another actor", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted; r.AcceptedBy = tomas }), Acceptor{Actor: mira, Email: "tomas@agency.example"}, "", errs.InviteUsed, "already used by act_tomas; ask mira@agency.example for a new one"},
+		{"accepted by me again", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted; r.AcceptedBy = tomas }), Acceptor{Actor: tomas, Email: "tomas@agency.example", Rerun: true}, VerdictAlready, "", ""},
+		// J-9: a fresh join resolves the actor by the invite's address, which a
+		// second person can type; an accepted invite is used then, never "already"
+		{"accepted, same actor, fresh join", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted; r.AcceptedBy = tomas }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, "", errs.InviteUsed, "already used by act_tomas"},
+		{"accepted with no accepted_by", at(pending, func(r *InviteRecord) { r.Status = schema.InviteStatusAccepted }), Acceptor{Actor: "", Email: "tomas@agency.example"}, "", errs.InviteUsed, ""},
+		{"wrong email", pending, Acceptor{Actor: tomas, Email: "mira@agency.example"}, "", errs.InviteEmail, "is for tomas@agency.example; use that address or ask for a new invite"},
+		{"empty email", pending, Acceptor{Actor: tomas, Email: ""}, "", errs.InviteEmail, ""},
+		{"unknown status", at(pending, func(r *InviteRecord) { r.Status = "frozen" }), Acceptor{Actor: tomas, Email: "tomas@agency.example"}, "", errs.InviteInvalid, ""},
 	}
 	for _, c := range cases {
 		got, err := DecideInvite(c.rec, "mira@agency.example", today, c.who)

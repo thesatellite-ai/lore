@@ -253,6 +253,16 @@ func (s Snapshots) IsAncestor(ctx context.Context, dir, a, b string) bool {
 	return err == nil
 }
 
+// MergeBase is the best common ancestor of commits a and b in dir ("" when
+// they share none or git cannot tell).
+func (s Snapshots) MergeBase(ctx context.Context, dir, a, b string) string {
+	out, err := s.g.run(ctx, call{dir: dir, args: []string{"merge-base", a, b}})
+	if err != nil {
+		return ""
+	}
+	return trimmed(out)
+}
+
 // Upstream is the commit of HEAD's upstream tracking ref ("" without one).
 func (s Snapshots) Upstream(ctx context.Context, dir string) string {
 	return s.Resolve(ctx, dir, "@{upstream}")

@@ -13,7 +13,9 @@ A row command reads its rows from the repository it runs in. It picks its projec
 | `LORE_DB` | refused on row commands with `E_UNSUPPORTED`, like `--db`: rows are files read from the repository, so run the command inside it |
 | `LORE_PROJECT_ID` | use this project id instead of looking it up |
 | `LORE_REPO` | work in this repo of a multi-repo project (its mount name or `rep_` id) instead of the whole project |
-| `LORE_HOME` | the value of `${LORE_HOME}` inside `db_path` of an old shared-database pointer (`.lore/lore.yaml`), read when `lore migrate run` converts it (default `~/.lore`). It does **not** move lore's own folder: config, identity and caches always stay in `~/.lore` |
+| `LORE_HOME` | moves lore's whole home folder (default `~/.lore`): `config.yaml` with your identity and setups, store clones (`stores/`), caches, state (`machine.db`), logs, locks, rendered files and `README.md` all live there instead. It must be an absolute folder: an empty value, a relative path or one starting with `~` is refused (`E_INVALID_INPUT`) with the fix. `HOME` is untouched, so git, ssh and gpg keep their own files. Use it to run two lore builds on one machine without them sharing state, for example a preview as `LORE_HOME=$HOME/.lore-dev lore-dev`. `lore where` names the home and where it came from, and `lore doctor` prints it when `LORE_HOME` set it. In an old shared-database pointer's `db_path`, `${LORE_HOME}` is this home |
+| `LORE_V017_HOME` | fills `${LORE_HOME}` in `db_path` of an old shared-database pointer (`.lore/lore.yaml`) during `lore migrate run`, without moving lore's home: lore 0.1.17's meaning of `LORE_HOME`, for shared databases kept in another folder |
+| `LORE_HOOK_BIN` | the absolute path of a wrapper script that starts lore (for example a `lore-dev` that sets `LORE_HOME` and runs a preview build): the git hooks the build sets up in a clone run that wrapper instead of the build itself. Unset, the hooks run the build that set them up, with the `LORE_HOME` it ran with, when it is not the `lore` first on PATH; a value that is not an executable file is ignored |
 | `LORE_ALLOW_DB_PATH_OUTSIDE` | `1` lets `lore migrate run` read an old pointer whose `db_path` has a `..` part (normally refused, so a pointer file cannot point somewhere unexpected) |
 
 <!-- example: reference#db-flag -->
@@ -24,8 +26,8 @@ ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row f
   hint: run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 $ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 $ cd work/website && lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
@@ -52,7 +54,7 @@ ERROR: [E_NOT_FOUND] rule: no project "prj_website"
 ```
 <!-- /example -->
 
-Older lore could point a repo at a shared database file with a pointer, `.lore/lore.yaml`; 0.1.18 converts such a repo with `lore migrate run` ([One store for several repos](../sync/shared-database-mode-b.md#step-4--convert-a-repo-that-used-a-shared-database)). The pointer below names `${LORE_HOME}`, so `LORE_HOME` decides which database file is converted, and the new store lands beside it. lore's own folder stays `~/.lore` either way:
+Older lore could point a repo at a shared database file with a pointer, `.lore/lore.yaml`; 0.1.18 converts such a repo with `lore migrate run` ([One store for several repos](../sync/shared-database-mode-b.md#step-4--convert-a-repo-that-used-a-shared-database)). The pointer below names `${LORE_HOME}`, which is lore's home (`~/.lore`, or `LORE_HOME`). When the shared databases sit in another folder, `LORE_V017_HOME` names that folder for `${LORE_HOME}` alone, and the new store lands beside the database; lore's own home does not move (setting `LORE_HOME` for this would move all of lore's files with it):
 
 <!-- example: environment#lore-home -->
 ```console
@@ -62,14 +64,15 @@ db_path: ${LORE_HOME}/client-docs.db
 project_id: prj_f147…5139
 $ lore migrate run --dry-run
 ERROR: [E_NOT_FOUND] migrate: the shared lore.db ~/.lore/client-docs.db named by ~/work/docs/.lore/lore.yaml is not there
+  hint: ${LORE_HOME} in db_path is the lore home; if the shared databases live in another folder, run it again with LORE_V017_HOME=<that folder> (it fills ${LORE_HOME} in db_path only), or write the absolute path into db_path
 (exit 27)
-$ LORE_HOME=~/shared-dbs lore migrate run
+$ LORE_V017_HOME=~/shared-dbs lore migrate run
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 Upgraded 1 row
   mode-b: rules/rul_2537…6bbb → store shared (~/shared-dbs/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/shared-dbs/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
@@ -104,7 +107,7 @@ Upgraded 1 row
   mode-b: rules/rul_2537…6bbb → store shared (~/work/stores/blog)
   mode-b: .lore/stores.yaml: add store shared file://~/work/stores/blog
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ lore rule list
@@ -139,7 +142,7 @@ A repo inside a folder a sync app owns (here `Dropbox`) is refused with `E_NETWO
 # alice, in Dropbox/website
 $ lore rule list
 lore rule list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/Dropbox/website/.git/config; hook blocks in ~/work/Dropbox/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
-ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
+ERROR: [E_NETWORK_FS] the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
 $ LORE_ALLOW_NETWORK_FS=1 lore rule list
@@ -154,7 +157,7 @@ lore copies your notes into `.lore/data`, the folder git commits, before and aft
 <!-- ds:block id=sync-env-pe9vvf3f -->
 | Variable | What it does |
 |---|---|
-| `LORE_SYNC` | `0` turns live rows off for this command or shell (like `LORE_LIVE=0`) and stops lore updating the version pin in `.github/workflows/lore-sync-merge.yml`. Rows are still written to `.lore/data`: since 0.1.18 the files are where lore keeps your notes |
+| `LORE_SYNC` | `0` turns live rows off for this command or shell (like `LORE_LIVE=0`) and stops lore updating the version pin in `.github/workflows/lore-sync-merge.yml`. Rows are still written to `.lore/data`: since 0.1.18 the files are where lore keeps your notes, and the clone is set up for git as with `LORE_LIVE=0` |
 | `LORE_SYNC_GIT` | `0` keeps syncing the files but stops lore from running git setup by itself: no hooks, no `.gitattributes`, no git config, no workflow pin update |
 | `LORE_SYNC_QUIET` | `1` hides sync's progress lines; errors still print |
 | `LORE_SYNC_ALLOW_SECRETS` | removed in 0.1.18 and ignored; `lore doctor` warns while it is still set. A row you confirmed with `--not-a-secret --reason "<why>" --yes` is already in `.lore/data`; lore's commit hook still refuses a file that holds a credential pattern |
@@ -166,12 +169,14 @@ A **live row** is a note everyone sees at once, before any commit. lore keeps li
 <!-- ds:block id=sync-env-pe9vvf3f -->
 | Variable | What it does |
 |---|---|
-| `LORE_LIVE` | `0` turns live rows off in this shell: every row waits for a commit, as before live rows existed |
-| `LORE_ALLOW_ROW_DROP` | `1` lets a forced `git push` take lore rows off the remote branch (the pre-push hook refuses it otherwise and lists the rows; see [Rewriting history](../sync/hooks-and-merge-driver.md#rewriting-history-rebase-amend-force-push)) |
+| `LORE_LAYER` | `off` (also `0` or `false`, in any case) writes to the shared notes and reads them alone on a code branch that keeps its own notes in a store (a branch layer), like `--no-layer` on an add or edit, for every command of this shell; `on`, `1`, `true` or unset leave branch layers on; any other value is refused (`E_INVALID_INPUT`) |
+| `LORE_LIVE` | `0` turns live rows off in this shell: every row waits for a commit, as before live rows existed. The clone is still set up for git as with live rows on (a write adds lore's merge drivers and hooks, a read only says what is missing), since every row is then a file that `git pull` merges; `LORE_SYNC_GIT=0` is the switch that leaves git alone |
+| `LORE_ALLOW_ROW_DROP` | `1` lets a forced `git push` take lore rows off the remote branch, a push carry a `git revert` that deletes lore rows, or a commit delete a row file removed by hand (the pre-commit hook refuses that otherwise) (the pre-push hook refuses it otherwise and lists the rows; see [Rewriting history](../sync/hooks-and-merge-driver.md#rewriting-history-rebase-amend-force-push)) |
 | `LORE_LIVE_AUTOPUSH` | `0` means lore never uses the network by itself (same as `live.autopush: false`): live writes and store writes wait on your machine until `lore sync` whatever the store's push mode ([How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote)), and writes that must reach the server at once, such as claiming a task, fail with `E_OFFLINE` |
-| `LORE_PUSH_CLAIMS` | `1` is your standing go-ahead to push claims and holds (`lore task claim`, `lore task next`, `lore hold claim`) to a code repo's remote at once, as `--push` gives it for one command (`live.autopush: true` in `config.yaml` gives it too); without any of them, a claim there is refused before anything is written. Set it in an agent's environment when the agent should claim work by itself |
+| `LORE_PUSH_CLAIMS` | `1` is your standing go-ahead to push claims and holds (`lore task claim`, `lore task next --claim`, `lore hold claim`) to a code repo's remote or a linked store's signals ref at once, as `--push` gives it for one command (`live.autopush: true` in `config.yaml` gives it too); without any of them, a claim there is refused before anything is written. It (or `live.autopush: true`) is also what lets `lore task note` and `lore task heartbeat --daemon` push the claim's work branch and `lore doctor` probe the remote's atomic push; without either they push nothing. Set it in an agent's environment when the agent should claim work by itself |
 | `LORE_LIVE_REMOTE` | the git remote that holds the live rows (default `origin`), for forks and tests |
 | `LORE_TRACE` | `1` prints every git command lore runs for live rows, with timing, like `--trace` |
+| `LORE_GIT_FAST` | `0` makes lore start the git program for every repository read. By default lore reads refs, objects and trees from the `.git` files itself and starts git only for what it cannot read exactly as git would (unusual layouts, the work tree, writes); an everyday command starts a handful of git processes instead of a hundred. Use it to rule lore's own reader out when something looks wrong |
 
 `LORE_LIVE=0` keeps a new task out of the live list: it is written to `.lore/data` and waits for a commit, while the next task without the switch goes live as usual:
 
@@ -188,6 +193,7 @@ $ git status --short
 ?? .lore/data/task_lists/
 ?? .lore/data/tasks/
 $ lore task add --title 'Check the contact form on a phone'
+lore: moved task_lists/tlt_7a67…9504 to this clone's refs/lore/live with the live row that names it, so teammates can read it; ~/work/website/.lore/data/task_lists/tlt_7a67…9504.json is no longer in your working folder (it lands with that row)
 lore: wrote tasks/tsk_162d…9666 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_162d…9666.json is unchanged)
 ✓ tsk_162d…9666 — Check the contact form on a phone [medium]
   on tasklist tlt_7a67…9504 "default" (the default; --tasklist picks another)
@@ -333,7 +339,7 @@ These are set by lore, or read only by lore's own tests. Never set them for real
 
 - `LORE_SYNC=0` also turns live rows off, so `LORE_LIVE=1` does nothing next to it.
 - `LORE_LIVE_AUTOPUSH=0` does not queue claims: a claim that cannot reach the server fails with `E_OFFLINE` instead of waiting.
-- `LORE_HOME` is easy to misread. Setting it does not move `~/.lore`; use a different `HOME` if you need a separate lore setup.
+- `LORE_HOME` moves all of lore's machine state, not only the `${LORE_HOME}` of an old pointer: a shell that sets it for one migration and keeps it set runs every later command against that folder (an empty setup there). For the old meaning use `LORE_V017_HOME`. lore 0.1.17 read `LORE_HOME` only for `db_path`, so a machine running both builds keeps 0.1.17 on `~/.lore` as long as it is not set for 0.1.17.
 - `LORE_HUMAN=1` changes who a write is made as, not whether lore sees the agent: `lore whoami` still names the agent, and `LORE_ACTOR` set in the same shell still wins.
 - `TRUE`, `yes` or `on` are not `1`: lore ignores them and the switch stays at its default.
 - An empty `NO_COLOR=` counts as not set.

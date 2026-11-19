@@ -268,7 +268,7 @@ A handoff is for someone on the repo's *roster* (the list of people and agents l
 # alice, in website
 $ lore actor register
 lore: wrote actors/act_3b62…e913 on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/actors/act_3b62…e913.json is unchanged)
-✓ act_3b62…e913 alice (@alice) already registered (refreshed) in this repo
+✓ act_3b62…e913 alice (@alice) already registered (refreshed) in the roster of this repo
 ```
 <!-- /example -->
 
@@ -344,14 +344,14 @@ ERROR: [E_INVALID_INPUT] plan: task b is after a, which is not an earlier task o
 ```
 <!-- /example -->
 
-**A handoff needs a roster.** `--for @someone` who has never run `lore actor register` in the repo fails:
+**A handoff needs a roster.** `--for @someone` this clone has no actor for fails. The usual cause for a new teammate or agent is a register (or `lore agent start`) still kept in their clone: they run `lore sync`, then you run `lore sync`, and the handoff works:
 
 <!-- example: missions#handoff-unknown -->
 ```console
 # alice, in website
 $ lore handoff add --for @dave --body 'The logo files are in the shared drive'
 ERROR: [E_NOT_FOUND] no actor "@dave"
-  hint: people join with `lore actor register` (run by that person in a repo of the team); or pass an act_ id
+  hint: if @dave was registered (or started with `lore agent start`) in another clone, they run `lore sync`, then you run `lore sync`; not registered yet: `lore actor register` (a person, run by them) or `lore agent start --label dave` (an agent, run by its owner); or pass an act_ id
 (exit 27)
 ```
 <!-- /example -->

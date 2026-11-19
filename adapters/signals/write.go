@@ -252,10 +252,16 @@ type Store struct {
 	Lease Lease
 	// Signature returns the commit author for a write at t.
 	Signature func(t time.Time) gitref.Signature
+	// Trailers are git trailer lines appended to every signals commit
+	// message (devco:D-581: an agent writing for its person is named in a
+	// Lore-Agent trailer, never in the author); nil = the bare message.
+	Trailers []string
 	// Autopush false makes every write fail closed without network.
 	Autopush bool
 	Tokens   Tokens
 	Jitter   Jitter
+	// Retry is the lost-race policy (zero fields = DefaultRetry).
+	Retry Retry
 	// Sleep waits between retries (nil = real sleep honouring ctx).
 	Sleep func(ctx context.Context, d time.Duration) error
 	// NoAtomic forces the ordered fallback (signals first, then the
@@ -283,6 +289,21 @@ type Result struct {
 	Attempts int
 	// Atomic tells whether the companions went in one atomic push.
 	Atomic bool
+}
+
+// message is the signals commit message: CommitMessage, then Trailers
+// (blank line between, as git trailers need) when there are any.
+func (s *Store) message() string {
+	var keep []string
+	for _, t := range s.Trailers {
+		if t = strings.TrimSpace(t); t != "" {
+			keep = append(keep, t)
+		}
+	}
+	if len(keep) == 0 {
+		return CommitMessage
+	}
+	return CommitMessage + "\n\n" + strings.Join(keep, "\n")
 }
 
 // trace sends one line to Trace when it is set.
@@ -391,40 +412,11 @@ func (s *Store) Local(ctx context.Context) (View, error) {
 	return v, nil
 }
 
-// retry backoff: base * 2^attempt, capped, times a jitter factor in
-// [0.5, 1.5) so racing agents spread out instead of colliding again.
-const (
-	backoffBase = 40 * time.Millisecond
-	backoffCap  = 800 * time.Millisecond
-	// backoffMaxShift bounds the doubling so the shift can never overflow;
-	// base<<5 is already past backoffCap, so the cap still decides.
-	backoffMaxShift = 5
-)
-
-func (s *Store) backoff(ctx context.Context, attempt int) error {
-	d := backoffBase << min(attempt, backoffMaxShift)
-	if d > backoffCap {
-		d = backoffCap
-	}
-	if s.Jitter != nil {
-		d = d/2 + time.Duration(s.Jitter.Int63n(int64(d)))
-	}
-	if s.Sleep != nil {
-		return s.Sleep(ctx, d)
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
-}
-
 // Write runs decide against a fresh view and pushes the outcome; on a lost
 // lease (another writer was first) it fetches again and re-runs decide —
-// never merging — up to Lease.PushRetries times (F7 contract, steps 1–4).
+// never merging — at least Lease.PushRetries times, then until the Retry
+// budget is spent (F7 contract, steps 1–4; devco:D-529), with jittered
+// exponential waits between attempts and none before the first.
 //
 // Errors from decide are returned unchanged. Offline, autopush off or
 // retries used up return an *OfflineError (fixed rule 11).
@@ -441,6 +433,7 @@ func (s *Store) Write(ctx context.Context, decide Decide) (Result, error) {
 	if retries <= 0 {
 		retries = 1
 	}
+	budget := s.NewBudget()
 	var last string
 	for attempt := 1; ; attempt++ {
 		res, again, err := s.attempt(ctx, decide)
@@ -449,11 +442,11 @@ func (s *Store) Write(ctx context.Context, decide Decide) (Result, error) {
 			return res, err
 		}
 		last = res.Old
-		if attempt > retries {
-			return res, &OfflineError{Reason: fmt.Sprintf("gave up after %d lost races on %s (last seen %s)", attempt, s.Ref, short(last)), RacesLost: true}
+		if budget.Spent(retries) {
+			return res, &OfflineError{Reason: fmt.Sprintf("gave up after %d lost races over %s on %s (last seen %s)", attempt, budget.Elapsed().Round(time.Millisecond), s.Ref, short(last)), RacesLost: true}
 		}
 		s.trace(fmt.Sprintf("signals: lost race on %s (attempt %d), re-deciding", s.Ref, attempt))
-		if err := s.backoff(ctx, attempt); err != nil {
+		if err := budget.Wait(ctx); err != nil {
 			return res, err
 		}
 	}
@@ -490,7 +483,7 @@ func (s *Store) attempt(ctx context.Context, decide Decide) (Result, bool, error
 	}
 	commit, err := s.Repo.MakeCommit(ctx, gitref.CommitRequest{
 		Base: old, History: gitref.HistoryReplace, Changes: changes,
-		Message: CommitMessage, Signature: s.Signature(s.Clock.Now()),
+		Message: s.message(), Signature: s.Signature(s.Clock.Now()),
 	})
 	if err != nil {
 		return Result{Old: old}, false, fmt.Errorf("signals: build commit: %w", err)

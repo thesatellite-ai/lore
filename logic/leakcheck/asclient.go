@@ -118,7 +118,7 @@ func AsClientResources(rows []ResRow, defs map[string]ResField, repoRes map[stri
 				continue
 			case bytes.Contains(e.Value, []byte(secretRefMarker)):
 				out = append(out, AsClientFinding{Row: r.ID, Name: r.Name, Field: name,
-					Why: "holds a secret reference; the client would read its full locator (BATCH 5)",
+					Why: "holds a secret reference; the client would read its full locator",
 					Fix: edit + name})
 				continue
 			case def.Type == resTypeRef:

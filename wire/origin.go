@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/machine"
 	"github.com/thesatellite-ai/lore/logic/origin"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 )
 
@@ -55,7 +56,7 @@ func (p *provenance) Place(ctx context.Context) origin.Facts {
 		// names the top with links resolved and the working folder may not
 		// be (macOS /var -> /private/var), and two spellings made every
 		// subfolder look outside the repo, so dir was dropped.
-		Dir: origin.RelDir(resolvedPath(p.repoTop), resolvedPath(p.workDir)),
+		Dir: origin.RelDir(fspath.Canonical(p.repoTop), fspath.Canonical(p.workDir)),
 		Git: p.git,
 	}
 	if id, ok := repoIDAt(ctx, p.repoTop); ok {

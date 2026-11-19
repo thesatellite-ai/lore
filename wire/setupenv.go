@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -76,7 +77,13 @@ func (a *App) onboardProbe(ctx context.Context) (*probe.Prober, error) {
 	}
 	// writableHome: a read-only lore home (a CI runner, F-6) puts the
 	// probe's temp repos in the scratch home, so the check still runs
-	tmp := filepath.Join(writableHome(a.opts.Home), probeTmpDir)
+	base := writableHome(a.opts.Home)
+	if NoCreate(ctx) && !isDirAt(a.opts.Home) {
+		// devco O-9: a read (lore doctor on a fresh CI runner) creates no
+		// ~/.lore just for the probe's scratch folder
+		base = scratchFor(a.opts.Home)
+	}
+	tmp := filepath.Join(base, probeTmpDir)
 	if err = os.MkdirAll(tmp, 0o700); err != nil {
 		return nil, errs.FileIO("create the setup probe folder", tmp, err)
 	}
@@ -123,10 +130,10 @@ func (a *App) TeamOrigin(_ context.Context, org string) (team.Origin, error) {
 		if len(o.Stores) > 0 {
 			return team.Origin{Store: o.Stores[0].URL}, nil
 		}
-		return team.Origin{}, errs.New(errs.NotFound, "org "+strconv.Quote(org)+" has no store in ~/.lore/"+ConfigFile).
+		return team.Origin{}, errs.New(errs.NotFound, "org "+strconv.Quote(org)+" has no store in "+lorehome.Shown()+"/"+ConfigFile).
 			WithHint("lore org import --url <store-url> adds it")
 	}
-	return team.Origin{}, errs.New(errs.NotFound, "no org named "+strconv.Quote(org)+" in ~/.lore/"+ConfigFile).
+	return team.Origin{}, errs.New(errs.NotFound, "no org named "+strconv.Quote(org)+" in "+lorehome.Shown()+"/"+ConfigFile).
 		WithHint("lore org import --url <store-url> --as " + org)
 }
 
@@ -147,6 +154,12 @@ func (a *App) DoctorCache(ctx context.Context) opsdoctor.Cache {
 	if a.machDoctor != nil {
 		return a.machDoctor
 	}
+	if NoCreate(ctx) && !machineStoreExists(a.opts.Home) {
+		// devco O-9: a read (lore doctor in CI, in a repo with no lore
+		// data) never creates machine.db just to cache its checks; the
+		// in-process cache serves this run, and the next call looks again
+		return a.doctorCache
+	}
 	c, err := openMachineDoctorCache(ctx, a.opts.Home, a.opts.Wall)
 	if err != nil {
 		return a.doctorCache
@@ -162,7 +175,7 @@ func (a *App) HomeWritable(context.Context) error {
 	if a.opts.Home == "" || homeWritable(a.opts.Home) {
 		return nil
 	}
-	return errs.New(errs.ReadOnlyFS, "the lore home "+a.opts.Home+" (~/.lore) is not writable: setups, store clones and this machine's state cannot be saved, and each command keeps its caches in a temp folder it removes when it ends").
+	return errs.New(errs.ReadOnlyFS, "the lore home "+a.opts.Home+" ("+lorehome.Shown()+") is not writable: setups, store clones and this machine's state cannot be saved, and each command keeps its caches in a temp folder it removes when it ends").
 		WithHint("make the lore home writable (chmod u+w on it and on its folders), or set " + modeBLoreHomeEnv + " to a folder you can write, then run lore doctor --all again")
 }
 
@@ -170,4 +183,21 @@ func (a *App) HomeWritable(context.Context) error {
 func (a *App) HasOrg(ctx context.Context, org string) bool {
 	_, err := a.TeamOrigin(ctx, org)
 	return err == nil
+}
+
+// machineStoreExists reports whether the machine store file of the lore
+// home home is on disk. Why: a read may use machine.db when it is there,
+// but must not create it (devco O-9).
+func machineStoreExists(home string) bool {
+	if home == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(home, filepath.FromSlash(MachineStoreFile)))
+	return err == nil
+}
+
+// isDirAt reports whether path is an existing folder.
+func isDirAt(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
 }

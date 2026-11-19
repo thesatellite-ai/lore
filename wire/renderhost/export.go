@@ -81,7 +81,7 @@ func (h *Host) Render(ctx context.Context, in opsrender.RunIn) (_ opsrender.Answ
 	if err = h.runRender(ctx, flagsOf(in, &text, false)); err != nil {
 		return opsrender.Answer{}, err
 	}
-	a := opsrender.Answer{Text: text.String()}
+	a := opsrender.Answer{Text: text.String() + h.app.MaskedReadLines(ctx)}
 	if in.Report || in.Trend {
 		// P3-MISC-7: the operation cannot know whether --json was asked,
 		// and a report writes nothing, so the JSON form is a second read.
@@ -106,7 +106,7 @@ func flagsOf(in opsrender.RunIn, w *strings.Builder, asJSON bool) *renderFlags {
 func (h *Host) Run(ctx context.Context, f Flags) (string, error) {
 	rf := &renderFlags{outPath: f.OutPath, noPointer: f.NoPointer, quiet: f.Quiet}
 	err := h.runRender(ctx, rf)
-	return rf.out().String(), err
+	return rf.out().String() + h.app.MaskedReadLines(ctx), err
 }
 
 // LastRender implements wire.RenderHistory: the newest render record of
@@ -137,9 +137,20 @@ func (h *Host) RerenderPrivateQuiet(ctx context.Context, root string) {
 }
 
 // RerenderStaleQuiet re-renders LORE.md after a sync when its stamp no
-// longer matches its rows (render_stamp.go).
-func (h *Host) RerenderStaleQuiet(ctx context.Context, root string, brought bool) {
-	h.rerenderStaleQuiet(ctx, root, brought)
+// longer matches its rows and a committed render may change
+// (render_stamp.go).
+func (h *Host) RerenderStaleQuiet(ctx context.Context, root string) {
+	h.rerenderStaleQuiet(ctx, root)
+}
+
+// HeldStaleNotice is the one line a sync prints when it left a committed
+// .lore/LORE.md behind its rows ("" when the render is current, not
+// held, or cannot be checked). Why (devco:D-231): the sync may not
+// rewrite it (K-8: a dirty tracked render stops the next git pull, even
+// one bringing the same rows), so it says where the render stands and
+// what brings it up to date instead of leaving it silently stale.
+func (h *Host) HeldStaleNotice(ctx context.Context, root string) string {
+	return h.heldStaleNotice(ctx, root)
 }
 
 // RenderedCopies implements opsrender.CopyChecker: the rendered files and

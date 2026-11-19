@@ -14,9 +14,15 @@ package wire
 //	                 (the `lore store push` path) ─▶ one more report line
 //
 // Only clones with waiting work are touched: an org store with nothing to
-// send costs no fetch.
+// send costs no fetch. Only the stores of the org this folder resolves to
+// are pushed (devco N-3): with two orgs on one machine, a sync in org A's
+// repo pushed org B's waiting commits and named org B's store in its
+// summary. A folder that resolves to no org (a `--to <org store>/<folder>`
+// write from a repo no org matches, plainfiles:4, D-224) still sends every
+// waiting clone: there is no other org to keep apart.
 
 import (
+	"cmp"
 	"context"
 	"path"
 	"slices"
@@ -30,7 +36,50 @@ import (
 // pushWaitingOrgStores pushes every configured org store clone that still
 // holds commits its remote has not got, after the attached stores synced.
 // A config that does not load is no report (`lore config check` names it).
-func (a *App) pushWaitingOrgStores(ctx context.Context) []opsstores.Report {
+//
+// done is the attached stores' reports of this sync. A clone whose store
+// url one of them already reported as unreachable (offline, or a problem
+// such as an address that holds no store now) is skipped: its push just
+// failed under its own name, and a second try would print the same store
+// again under its url's repo name ("store team-store: … (offline …)"
+// beside "store umbrella", devco K-7).
+func (a *App) pushWaitingOrgStores(ctx context.Context, done []opsstores.Report) []opsstores.Report {
+	if a.opts.Home == "" {
+		return nil
+	}
+	unreachable := map[string]bool{}
+	for _, r := range done {
+		if !r.Offline && len(r.Problems) == 0 {
+			continue
+		}
+		if norm, nerr := repourl.NormalizeStore(a.storeURLOf(ctx, r.Store)); nerr == nil && norm != "" {
+			unreachable[norm] = true
+		}
+	}
+	pushed := a.waitingOrgPushes(ctx, unreachable, a.syncOrg(ctx))
+	out := make([]opsstores.Report, 0, len(pushed))
+	for _, p := range pushed {
+		out = append(out, p.report)
+	}
+	return out
+}
+
+// orgPush is one waiting org store clone that a sync pushed: the push's
+// report and the store's url (the setup sync's line names it).
+type orgPush struct {
+	report opsstores.Report
+	url    string
+}
+
+// waitingOrgPushes pushes every configured org store clone that holds
+// commits its remote has not got, except the stores whose normalized url
+// skip names (a store this sync already reported) and, when org is not
+// empty, the stores no entry of that org lists (N-3: never another org's). It is shared by the
+// repo sync (pushWaitingOrgStores) and the sync outside a code repo
+// (SyncSetup): a write outside any setup (`lore store folder add` from ~)
+// said "lore sync sends it", and `lore sync` there must send it too
+// (devco D-224).
+func (a *App) waitingOrgPushes(ctx context.Context, skip map[string]bool, org string) []orgPush {
 	if a.opts.Home == "" {
 		return nil
 	}
@@ -40,11 +89,22 @@ func (a *App) pushWaitingOrgStores(ctx context.Context) []opsstores.Report {
 		return nil
 	}
 	cl := c.clonesFor()
-	var out []opsstores.Report
+	var out []orgPush
 	for _, cs := range list {
+		if skip[cs.norm] {
+			continue // this sync's own line already says it (K-7)
+		}
+		if org != "" && !slices.Contains(cs.entries, org) {
+			continue // another org's store: its own repos' sync sends it (N-3)
+		}
 		info := cl.Inspect(ctx, cs.norm)
-		if !info.Cloned || !slices.ContainsFunc(info.Unpushed, isBranchRef) {
-			continue // only a branch's commits wait for a push: refs/lore/backup/* stay local by design
+		if !info.Cloned || !slices.Contains(info.Unpushed, cloneHeadRef(ctx, info.Dir)) {
+			// only the store branch's commits wait for a push: refs/lore/backup/*
+			// stay local by design, and a branch someone made by hand in the
+			// clone is never pushed (D-561: a leftover test branch made a home
+			// sync say "pushed … local commit(s) with no note rows" over a push
+			// that sent nothing)
+			continue
 		}
 		// The branch whose clone folder is the one holding the work: an
 		// org entry names the effective branch ("main"), while the clone
@@ -59,17 +119,63 @@ func (a *App) pushWaitingOrgStores(ctx context.Context) []opsstores.Report {
 		if !found {
 			continue // a clone lore's own store layout does not name: `lore store doctor` reports it
 		}
-		r := opsstores.Report{Store: orgStoreShortName(cs.norm)}
-		res, perr := a.PushStoreNow(ctx, opsstores.PushIn{Store: cs.url, Branch: branch})
-		switch {
-		case perr != nil:
-			r.Problems = []string{perr.Error()}
-		default:
-			r.Sent, r.Offline = res.Sent, res.Offline
-		}
-		out = append(out, r)
+		// named as `lore store list` names it (the org's name for its main
+		// store), not by its clone folder (N-3)
+		res, moved, perr := a.pushStoreNow(ctx, opsstores.PushIn{Store: cs.url, Branch: branch}, a.pushNotes())
+		r := orgPushReport(cmp.Or(orgStoreLabel(a.opts.Home, cs.url), orgStoreShortName(cs.norm)), res, moved, perr)
+		out = append(out, orgPush{report: r, url: cs.url})
 	}
 	return out
+}
+
+// orgPushReport is the sync line's report of a waiting org store clone
+// that sync pushed. A clone pushed here held branch commits, so a push that
+// was not offline sent them, even with no note rows in them: the line says
+// "pushed", never a bare "sent 0" (N-3). Its "sent" counts row files like
+// every other store line of a sync: res.Sent is the push's commits since
+// D-517, and a store link commit read "sent 2" without the "no note rows"
+// note (D-527). Its "sent" and "received" print the commits git counted
+// (moved), as every store line does: the push merges a teammate's commits
+// first, and the line said "sent 4, received 0" (the rows sent, nothing
+// received) when 7 commits went out on top of 2 that arrived (devco
+// D-684, a client repo outside every setup's folders).
+func orgPushReport(name string, res opsstores.PushOut, moved storeNowPush, perr error) opsstores.Report {
+	r := opsstores.Report{Store: name}
+	if perr != nil {
+		r.Problems = []string{perr.Error()}
+		return r
+	}
+	// D-561: a push that sent no commit is no push, whatever the clone held
+	r.Sent, r.Offline, r.Pushed = res.Rows, res.Offline, !res.Offline && res.Sent > 0
+	r.SentCommits, r.Received, r.ReceivedCommits = moved.sentCommits, moved.received, moved.receivedCommits
+	return r
+}
+
+// cloneHeadRef is the branch the store clone at dir has checked out
+// (refs/heads/<branch>), the one branch a store push sends; "" when it
+// cannot be read (then no ref matches and nothing is pushed on a guess).
+func cloneHeadRef(ctx context.Context, dir string) string {
+	out, err := gitRun{dir: dir, args: []string{"symbolic-ref", "--quiet", "HEAD"}}.output(ctx)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// syncOrg is the org whose waiting store clones a sync here may push: the
+// org this folder resolves to (own:/repos: patterns, LORE_ORG, lore org
+// use, .lore/org.yaml), else the org of the active setup; "" when neither
+// names one (then every waiting clone is sent, as before N-3).
+func (a *App) syncOrg(ctx context.Context) string {
+	if a.opts.Org != nil {
+		if o, err := a.opts.Org(ctx); err == nil && o != nil && o.Name != "" {
+			return o.Name
+		}
+	}
+	if res, err := a.SetupResolution(ctx, ""); err == nil && res.Entry.Kind.HasOrg() {
+		return res.Entry.Org
+	}
+	return ""
 }
 
 // orgStoreShortName is the name a store of an org goes by when its
@@ -77,8 +183,3 @@ func (a *App) pushWaitingOrgStores(ctx context.Context) []opsstores.Report {
 func orgStoreShortName(norm string) string {
 	return strings.TrimSuffix(path.Base(repourl.Mask(norm)), ".git")
 }
-
-// isBranchRef reports a local branch (refs/heads/…): the refs a store push
-// sends. Inspect also lists lore's local refs (a compaction's backup),
-// which no push ever sends.
-func isBranchRef(ref string) bool { return strings.HasPrefix(ref, "refs/heads/") }

@@ -65,6 +65,55 @@ type ArgsDecoder struct {
 	// --title, U-4) reads it to give a flag typed after an item to that
 	// item; nil keeps every value on the outer input.
 	FlagSeq map[string][]int
+	// AfterSwitch maps a positional word to the switch typed right before
+	// it on the command line (`--json extra`: "extra" → "json"). Decode only
+	// reads it to word an error about a surplus positional (devco:L-4): the
+	// word belongs to the switch before it, not to the flag the positional
+	// slot would have filled. nil words the error without it.
+	AfterSwitch map[string]string
+}
+
+// stray is the error for a positional word no field takes. A word typed
+// right after a switch is named as such (devco:L-4: `--dry-run stray` was
+// blamed on --title, "given twice"); otherwise nil and the caller words it.
+func (d ArgsDecoder) stray(word string) error {
+	sw, ok := d.AfterSwitch[word]
+	if !ok {
+		return nil
+	}
+	return errs.New(errs.InvalidInput, "unexpected value "+strconv.Quote(word)+" after --"+sw+" (a switch takes no value)").
+		WithHint("give --" + sw + " alone; every value goes with its own flag; the command's --help lists its flags")
+}
+
+// strayHint is the hint for a value no positional or flag of the command
+// takes. It names the command's own flags that are still free (T-2, T-6:
+// a made-up --name sent people looking for a flag the command lacks), and
+// says to quote words that belong together when a positional took a word.
+func strayHint(fields []FieldInfo, given map[string][]string, filled int) string {
+	var parts []string
+	if filled > 0 {
+		parts = append(parts, "quote words that belong together as one value (\"two words\")")
+	}
+	var free []string
+	for _, f := range fields {
+		// a positional's flag is its quiet alias: the typed word already
+		// filled it, so it is not free
+		if f.Flag == "" || f.Type == TypeBool || f.Group || f.Arg != NoArg || f.ArgOf != "" {
+			continue
+		}
+		if _, ok := given[f.Flag]; ok {
+			continue
+		}
+		free = append(free, "--"+f.Flag+" \"value\"")
+		if len(free) == 3 {
+			break
+		}
+	}
+	if len(free) > 0 {
+		parts = append(parts, "give each other value with its flag ("+strings.Join(free, ", ")+")")
+	}
+	parts = append(parts, "the command's --help lists its flags")
+	return strings.Join(parts, "; ")
 }
 
 // Decode implements Decoder.
@@ -160,8 +209,11 @@ func (d ArgsDecoder) Decode(dst reflect.Value, fields []FieldInfo) error {
 		}
 	}
 	if !rest && len(d.Args) > slots {
+		if err := d.stray(d.Args[slots]); err != nil {
+			return err
+		}
 		return errs.New(errs.InvalidInput, "unexpected value "+strconv.Quote(d.Args[slots])).
-			WithHint("give every value with its flag (--name \"value\"); the command's --help lists its flags")
+			WithHint(strayHint(fields, flags, slots))
 	}
 	for name := range flags {
 		if !used[name] {
@@ -195,6 +247,9 @@ func (d ArgsDecoder) slots(fields []FieldInfo) (map[string]int, error) {
 		n++
 	}
 	if len(byFlag) > 0 && len(d.Args) > n && !restIn(args, out) {
+		if err := d.stray(d.Args[n]); err != nil {
+			return nil, err
+		}
 		f := byFlag[0]
 		return nil, errs.New(errs.InvalidInput, "--"+f.Flag+" is given twice: as --"+f.Flag+" and as the value "+strconv.Quote(d.Args[n])).
 			WithHint("give it once, as --" + f.Flag + " \"value\"")
@@ -280,8 +335,14 @@ func setField(fv reflect.Value, f FieldInfo, vals []string) error {
 		fv.SetString(s)
 	case TypeBool:
 		b, err := strconv.ParseBool(s)
-		if err != nil {
+		if err != nil && !strings.HasPrefix(label, "--") {
 			return bad("true or false")
+		}
+		if err != nil {
+			// devco:L-9: the same words as a pflag switch; "pass --x true"
+			// named the form U-4 refuses (a word after a switch).
+			return errs.New(errs.InvalidInput, label+" takes true or false, not "+strconv.Quote(s)).
+				WithHint("give " + label + " alone to turn it on, " + label + "=false to turn it off")
 		}
 		fv.SetBool(b)
 	case TypeInt:
@@ -314,6 +375,13 @@ func setField(fv reflect.Value, f FieldInfo, vals []string) error {
 		dur, err := time.ParseDuration(s)
 		if err != nil {
 			return bad("a duration like 45m or 1h30m")
+		}
+		// devco:L-7: no duration flag means anything at or below zero (a
+		// time box, a hold's ttl, a timeout, a look-back); a negative one
+		// was stored or silently replaced by the default.
+		if dur <= 0 {
+			return errs.New(errs.InvalidInput, label+" must be more than 0 (got "+strconv.Quote(s)+")").
+				WithHint("pass " + label + " with a positive duration like 45m or 1h30m, or leave it out")
 		}
 		fv.SetInt(int64(dur))
 	case TypeText:

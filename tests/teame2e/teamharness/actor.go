@@ -1,6 +1,7 @@
 package teamharness
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -236,6 +237,35 @@ func (a *Actor) Lore(dir string, args ...string) Result {
 	}
 	mustMkdir(a.w.T, dir)
 	return a.w.run(dir, a.environ(nil), a.w.Bin, args...)
+}
+
+// LoreFor runs a long-lived lore command (`task heartbeat --daemon`) in
+// dir for at most d, then stops it: stopped reports that it was still
+// running at d (what a daemon should be), the Result what it printed. A
+// command that exits before d returns as Lore's would.
+func (a *Actor) LoreFor(dir string, d time.Duration, args ...string) (r Result, stopped bool) {
+	a.w.T.Helper()
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(a.Home, dir)
+	}
+	mustMkdir(a.w.T, dir)
+	cmd := binCmd(a.w.Bin, args...)
+	cmd.Dir, cmd.Env = dir, a.environ(nil)
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	stopped, err := runWithDeadline(cmd, d)
+	return a.w.finish(a.w.Bin, args, err, out.String(), errb.String()), stopped
+}
+
+// LoreStdin is Lore with stdin fed to lore: an agent hook command
+// (`lore context --hook <tool> --hook-stdin`) reads the tool's JSON there.
+func (a *Actor) LoreStdin(dir, stdin string, args ...string) Result {
+	a.w.T.Helper()
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(a.Home, dir)
+	}
+	mustMkdir(a.w.T, dir)
+	return a.w.runStdin(dir, a.environ(nil), strings.NewReader(stdin), a.w.Bin, args...)
 }
 
 // Clone clones remote into <Root>/work/<actor>/<name> over its https URL. An

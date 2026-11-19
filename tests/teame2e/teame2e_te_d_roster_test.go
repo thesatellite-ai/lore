@@ -98,6 +98,7 @@ func TestTeD_OrgImportRegisterFailureAndRename(t *testing.T) {
 	app.MustLore("org", "create", "agency", "--store", "https://"+teDAgencyNotes, "--own", "github.com/agency/*",
 		"--key", "human:mira@agency.example", "--name", "Mira Moe", "--handle", "mira", "--yes")
 	app.MustLore("whoami").Says(t, "agency", "human:mira@agency.example")
+	app.MustLore("sync") // the store commit (org file, roster row) goes out on sync (U-2)
 
 	rosterFiles := func() int {
 		n := 0
@@ -138,6 +139,7 @@ func TestTeD_OrgImportRegisterFailureAndRename(t *testing.T) {
 	// joins the roster.
 	imp("--handle", "bob").Refused(t, "agency")
 	imp("--handle", "bob", "--as", "agency-2").OK(t)
+	bob.Lore(outside, "sync").OK(t) // bob's roster row goes out on sync, from outside any repo too
 	if n := rosterFiles(); n != 2 {
 		t.Fatalf("the second import registers bob: %d roster rows", n)
 	}
@@ -192,7 +194,9 @@ func TestTeD_RosterMissOnCachedFetchSyncsOnce(t *testing.T) {
 
 	dev2 := a.w.Human("dev2", "dev2@northwind.example")
 	dev2.WriteConfig(th.Config{Personal: &th.Personal{Store: th.PersonalLocal}, Orgs: []th.Org{northwindOrg("human:dev2@northwind.example", "Dev Two", "dev2")}, Live: th.FreshFetch()})
-	dev2.Clone(a.app, "app").MustLore("actor", "register")
+	dev2c := dev2.Clone(a.app, "app")
+	dev2c.MustLore("actor", "register")
+	dev2c.MustLore("sync") // dev2's roster row reaches the store on her sync (U-2)
 
 	n1 := storeFetches()
 	id := mustID(t, assign("new teammate", "dev2").OK(t), "tsk")

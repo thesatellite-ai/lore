@@ -30,13 +30,18 @@ import (
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/store"
 )
 
 // storeCheckout is the store a command runs inside.
 type storeCheckout struct {
-	// top is the store's top folder (lore-store.yaml there).
+	// top is the store's top folder (lore-store.yaml there), canonical:
+	// stored and compared that way (model/fspath, devco D-413).
 	top string
+	// shown is top in the spelling of the folder the command ran in (on
+	// macOS /var stays /var, never /private/var): what messages name.
+	shown string
 	// folder is the store folder the command runs in (rowfs.FolderRoot at
 	// the top or outside every folder).
 	folder string
@@ -50,7 +55,7 @@ func storeHere(dir string) (storeCheckout, bool) {
 	if !ok {
 		return storeCheckout{}, false
 	}
-	return storeCheckout{top: top, folder: rowfs.StoreFolderAt(top, dir), isGit: isGit}, true
+	return storeCheckout{top: top, shown: fspath.InTyped(dir, top), folder: rowfs.StoreFolderAt(top, dir), isGit: isGit}, true
 }
 
 // inStore reports whether dir is inside a store's checkout.
@@ -60,9 +65,12 @@ func inStore(dir string) bool {
 }
 
 // errInStore refuses a command that needs a code repo inside a store.
+// Its hint is the repo-only class (repoonly.go, devco D-523): cd into the
+// code repo, --store does not apply; before it said only "run it in a code
+// repo", and a move (memory move --to <org>/<folder>) tried --store next.
 func errInStore(sc storeCheckout) error {
-	return errs.New(errs.NotAStore, "wire: "+sc.top+" is a lore store ("+rowfs.MarkerFile+" at its top), not a code repo; this command needs a code repo").
-		WithHint("run it in a code repo; inside a store folder lore reads and writes that folder (`lore task list`, `lore task add …`)")
+	return errs.New(errs.NotAStore, "wire: "+sc.shown+" is a lore store ("+rowfs.MarkerFile+" at its top), not a code repo; this command works on a code repo's rows").
+		WithHint("cd into the code repo it is for and run it there; --store does not apply (a store clone is no code repo); inside a store folder lore reads and writes that folder (`lore task list`, `lore task add …`)")
 }
 
 // storeHereEntry is the attach entry of the store folder sc names: the
@@ -78,27 +86,27 @@ func storeHereEntry(home string, sc storeCheckout) (attach.Store, error) {
 	name := filepath.Base(sc.top)
 	if !sc.isGit {
 		one.URL = fileuri.URL(sc.top, "")
-		if p := personalFolderOf(home); p != "" && sameFolder(p, sc.top) {
+		if p := personalFolderOf(home); p != "" && fspath.Same(p, sc.top) {
 			name = attach.ReservedMe
 		}
 	} else {
 		origin := gitbackend.OriginAt(sc.top)
 		r, err := gitbackend.RemoteOfRaw(origin)
 		if err != nil {
-			return attach.Store{}, errs.New(errs.NotAStore, "wire: "+sc.top+" is a store clone whose origin is not a store url lore can read").
-				WithHint("point its origin at the store (`git -C " + sc.top + " remote set-url origin <store url>`), or run lore in a code repo")
+			return attach.Store{}, errs.New(errs.NotAStore, "wire: "+sc.shown+" is a store clone whose origin is not a store url lore can read").
+				WithHint("point its origin at the store (`git -C " + sc.shown + " remote set-url origin <store url>`), or run lore in a code repo")
 		}
 		one.URL = origin
 		used, _, err := gitbackend.CloneDirFor(home, r, "")
 		if err != nil {
 			return attach.Store{}, err
 		}
-		if !sameFolder(used, sc.top) {
+		if !fspath.Same(used, sc.top) {
 			branch := headBranch(sc.top)
 			pinned, _, perr := gitbackend.CloneDirFor(home, r, branch)
-			if perr != nil || branch == "" || !sameFolder(pinned, sc.top) {
-				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.top+" is a clone of store "+repourl.ShownStore(r.Norm)+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
-					WithHint("make lore use this clone: lore store use --path " + sc.top + " (or work in " + used + ")")
+			if perr != nil || branch == "" || !fspath.Same(pinned, sc.top) {
+				return attach.Store{}, errs.New(errs.Refused, "wire: "+sc.shown+" is a clone of store "+repourl.ShownStore(r.Norm)+" that lore does not use (lore's clone of it is "+used+"), so lore will not read or write it").
+					WithHint("make lore use this clone: lore store use --path " + sc.shown + " (or work in " + used + ")")
 			}
 			one.Branch = branch
 		}
@@ -129,21 +137,30 @@ func headBranch(dir string) string {
 	return br
 }
 
-// sameFolder reports whether a and b name one folder (symlinks resolved).
-func sameFolder(a, b string) bool {
-	ra, ea := filepath.EvalSymlinks(a)
-	rb, eb := filepath.EvalSymlinks(b)
-	if ea != nil || eb != nil {
-		return filepath.Clean(a) == filepath.Clean(b)
+// sameStoreURL reports whether two git urls name one store (host/path,
+// an ssh alias resolved or routed by insteadOf: sameStoreAs, D-627).
+func sameStoreURL(a, b string) bool {
+	if _, err := gitbackend.RemoteOfRaw(a); err != nil {
+		return false
 	}
-	return ra == rb
+	if _, err := gitbackend.RemoteOfRaw(b); err != nil {
+		return false
+	}
+	same := sameStoreAs(a)
+	return same != nil && same(b)
 }
 
-// sameStoreURL reports whether two git urls name one store (host/path).
-func sameStoreURL(a, b string) bool {
-	ra, ea := gitbackend.RemoteOfRaw(a)
-	rb, eb := gitbackend.RemoteOfRaw(b)
-	return ea == nil && eb == nil && ra.Norm == rb.Norm
+// storeIdentity is the one identity of a store url for comparing two
+// spellings of a store: a git url's host/path with an ssh alias host
+// resolved to its HostName (gitbackend.Remote.Norm, D-493), so
+// git@<alias>:org/repo.git, git@github.com:org/repo.git and
+// https://github.com/org/repo are one store; any other url falls back to
+// repourl.NormalizeStore.
+func storeIdentity(raw string) (string, error) {
+	if r, err := gitbackend.RemoteOfRaw(raw); err == nil {
+		return r.Norm, nil
+	}
+	return repourl.NormalizeStore(raw)
 }
 
 // personalURLOf is personal.store of the machine config ("" when unset).
@@ -162,4 +179,20 @@ func personalFolderOf(home string) string {
 		return ""
 	}
 	return fileuri.LocalPath(p)
+}
+
+// storeCloneOrg is the org whose store the store checkout around dir is
+// ("" outside a store checkout, or for a store of no org entry): the org a
+// command run in the clone belongs to, so setup resolution (step 5) picks
+// that org's setup and identity there as in the org's code repos (devco
+// D-693).
+func storeCloneOrg(home, dir string) string {
+	sc, ok := storeHere(dir)
+	if !ok {
+		return ""
+	}
+	if !sc.isGit {
+		return orgOfURL(home, fileuri.URL(sc.top, ""))
+	}
+	return orgOfURL(home, gitbackend.OriginAt(sc.top))
 }

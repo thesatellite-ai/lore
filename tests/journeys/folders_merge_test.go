@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -153,8 +154,8 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		if n := two.CommitCount(mainRef) - before; n != 1 {
 			t.Errorf("the merge made %d commits in the folder's store, want ONE for all %d rows", n, jMergeTasks)
 		}
-		if took > jMergeBudget {
-			t.Errorf("the merge of %d rows took %s, over %s", jMergeTasks, took, jMergeBudget)
+		if bar := testtime.SpeedBar(jMergeBudget); took > bar {
+			t.Errorf("the merge of %d rows took %s, over %s", jMergeTasks, took, bar)
 		}
 		if log := two.Log(mainRef); len(log) == 0 || !strings.Contains(log[0], "actor merge "+jMergeOldActor+" into "+into) {
 			t.Errorf("the merge commit is not titled by the merge: %v", log[:min(2, len(log))])
@@ -190,7 +191,7 @@ func TestJourneyFoldersMerge(t *testing.T) {
 		t.Logf("doctor --fix (%s, %d store commits):\n%s", took, two.CommitCount(mainRef)-before, grepLines(r.Out(), "empty_ref"))
 		// two repairs ran (task leads, empty refs): one store commit each
 		if n := two.CommitCount(mainRef) - before; n != 2 {
-			t.Errorf("doctor --fix made %d commits, want one per repair (2)", n)
+			t.Errorf("doctor --fix made %d commits, want one per repair (2): %q", n, two.Log(mainRef)[:n])
 		}
 		after := lee.LoreIn(hub, "doctor").Never(t, "empty_ref", "task_lead")
 		t.Logf("doctor after --fix:\n%s", after.Out())

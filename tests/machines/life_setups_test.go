@@ -306,8 +306,15 @@ func lsLife(t *testing.T, shape, kind string) {
 	lsClearOwnLeftovers(t, m, lm)
 	step("purge")
 
-	// re-add under the same name
-	lsCreate(t, m, lsRenamed, kind, email, []string{lsFolder}, false, tm, lsAlpha)
+	// re-add under the same name. A member is on the roster already and
+	// the purge freed the org entry: the join answers the org's store url,
+	// as docs/team/invites.md says; the used invite line is refused on
+	// every fresh join (J-9, devco:D-230).
+	again := tm
+	if kind == kindMember {
+		again.invite = tm.storeURL
+	}
+	lsCreate(t, m, lsRenamed, kind, email, []string{lsFolder}, false, again, lsAlpha)
 	lm.add(lsRenamed, lmSetup{Kind: kind, Folders: []string{lsFolder}, Email: email})
 	step("re-add")
 

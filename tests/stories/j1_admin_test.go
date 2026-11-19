@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/journeys"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
@@ -179,7 +180,7 @@ func TestStoryJ1AdminManyRepos(t *testing.T) {
 		n := j1Count(t, ada.LoreIn(c["hub"], "task", "list", "--all", "--json").OK(t))
 		took := time.Since(start)
 		t.Logf("task list on the 5.5k-row repo: %v", took.Round(time.Millisecond))
-		if took > 15*time.Second {
+		if took > testtime.SpeedBar(15*time.Second) {
 			t.Errorf("[J1] a read on the 5.5k-row repo took %v (B1-16: it took 42-56 s once; a read is a few seconds)", took)
 		}
 		if n != HubShape["tasks"] {

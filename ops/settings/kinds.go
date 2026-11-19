@@ -79,6 +79,9 @@ type KindAddIn struct {
 
 // KindEditIn is the input of resource.kind.edit.
 type KindEditIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind          string `json:"id" arg:"0" desc:"the kind (name or knd_ id)"`
 	Description   string `json:"description,omitempty" flag:"description" desc:"what the kind is"`
 	NameFormat    string `json:"name_format,omitempty" flag:"name-format" desc:"id | dns | ip | text"`
@@ -91,17 +94,24 @@ type KindEditIn struct {
 
 // KindRef names one kind.
 type KindRef struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Kind string `json:"id" arg:"0" desc:"the kind (name or knd_ id)"`
 }
 
 // RenameIn renames a settings row (old → new).
 type RenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Old string `json:"id" arg:"0" desc:"the current name (or id)"`
 	New string `json:"new_name" arg:"1" desc:"the new name"`
 }
 
 // KindsIn is the input of resource.kinds.
 type KindsIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	// Unreviewed lists only kinds an agent added that no person reviewed
 	// yet (CLI 3.2, mirrors meta keys --unreviewed, MQ7).
 	Unreviewed bool `json:"unreviewed,omitempty" flag:"unreviewed" desc:"only kinds an agent added that no person reviewed yet"`
@@ -149,6 +159,9 @@ type FieldEditIn struct {
 
 // FieldRenameIn is the input of resource.field.rename.
 type FieldRenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Old  string `json:"field" arg:"1" desc:"the current field name"`
 	New  string `json:"new_name" arg:"2" desc:"the new field name"`
@@ -161,6 +174,9 @@ type FieldRenameIn struct {
 
 // FieldRemoveIn is the input of resource.field.remove.
 type FieldRemoveIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind  string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Field string `json:"field" arg:"1" desc:"the field name"`
 	Drop  bool   `json:"drop,omitempty" flag:"drop" desc:"also remove the values rows hold (else refused while rows use it)"`
@@ -459,14 +475,14 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	if ks, lerr := liveRows(ctx, o.env, []store.Source{target}, schema.TableKinds); lerr != nil {
 		return RowOut{}, lerr
 	} else if len(ks) >= maxKindsPerPlace {
-		return RowOut{}, kindLimit(place(target)+" has "+strconv.Itoa(len(ks))+" kinds", maxKindsPerPlace)
+		return RowOut{}, kindLimit(o.place(target)+" has "+strconv.Itoa(len(ks))+" kinds", maxKindsPerPlace)
 	}
 	w, err := create(ctx, o.env, target, schema.TableKinds, map[string]string{kName: in.Kind}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("added kind %s %s in %s\n", short(w.Row.ID), in.Kind, place(target))}, nil
+		Human: fmt.Sprintf("added kind %s %s in %s\n", short(w.Row.ID), in.Kind, o.place(target))}, nil
 }
 
 func (o ops) kindEdit(ctx context.Context, in KindEditIn) (RowOut, error) {

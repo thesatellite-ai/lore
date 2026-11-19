@@ -132,6 +132,11 @@ func setLocalIdentity(ctx context.Context, r runner, dir string, s Signature) er
 	return nil
 }
 
+// RecordedIdentity is the user.email lore last wrote into the clone at
+// dir ("" when none is recorded): a repo-local user.email equal to it is
+// lore's to update, any other is the person's (wire's set-url carry asks).
+func RecordedIdentity(dir string) (string, error) { return recordedIdentity(dir) }
+
 // recordedIdentity is the user.email lore last wrote into the clone at
 // dir ("" when none is recorded).
 func recordedIdentity(dir string) (string, error) {

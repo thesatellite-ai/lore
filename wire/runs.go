@@ -67,19 +67,23 @@ type machineSessionHost struct{ app *App }
 var _ opssession.Host = machineSessionHost{}
 
 // ListSessions implements opssession.Host; with the chain sink (cmd/lore)
-// the WRITES and NEW KEYS counts come from the project's audit chain, as
-// the old binary's host counts them.
+// the WRITES and NEW KEYS counts come from the audit chains of this
+// machine store, every checkout's (devco S-19: counting only this
+// checkout's chain showed 0 for parallel sessions in its worktrees).
 func (h machineSessionHost) ListSessions(ctx context.Context, limit int) ([]opssession.Row, error) {
 	out, err := h.app.SessionOpRows(ctx, limit)
 	if err != nil || len(out) == 0 {
 		return out, err
 	}
 	if c, ok := h.app.opts.Audit.(*chainAudit); ok {
-		recs, rerr := c.records(ctx)
-		if rerr != nil {
-			return nil, rerr
+		counts, cerr := c.sessionWrites(ctx)
+		if cerr != nil {
+			return nil, cerr
 		}
-		SessionCounts(recs, out)
+		for i := range out {
+			n := counts[out[i].ID]
+			out[i].Writes, out[i].NewKeys = n.Writes, n.NewKeys
+		}
 	}
 	return out, nil
 }

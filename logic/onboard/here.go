@@ -16,12 +16,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // HereState is the closed set of answers about the current folder.
 type HereState string
 
-// The four states, in the order ResolveHere tests them.
+// The states, in the order ResolveHere tests them (HereStoreClone is
+// decided by wire before them: a store clone is a git repo too).
 const (
 	// HereNotGit: the folder is in no git repo (the page shows nothing).
 	HereNotGit HereState = "not_git"
@@ -34,6 +37,11 @@ const (
 	// HereNoMatch: the repo uses lore but no setup covers it; Proposal is
 	// the setup to create from what the repo uses.
 	HereNoMatch HereState = "no_match"
+	// HereStoreClone: the folder is inside a lore store's checkout (a store
+	// clone, a folder store's folder), never a code repo (devco D-682):
+	// Here.StoreName and Here.StoreFolder say which; no setup step and no
+	// `lore init` applies there.
+	HereStoreClone HereState = "store_clone"
 )
 
 // Why values ResolveHere reads (the ops/setup Why* words, ONB 3.3; the
@@ -143,6 +151,13 @@ type Here struct {
 	// link, never lore init, which writes lore's files into the client's
 	// repository (I-13).
 	ClientOrg string `json:"client_org,omitempty"`
+	// StoreName and StoreFolder are the store (its name on this machine:
+	// the org entry, me, else the clone folder's name) and the folder of it
+	// the command runs in ("" at the store's top), State store_clone only.
+	// Why (devco D-682): there setup list said "a git repo lore is not set
+	// up in (lore init sets it up)", and init wrote into the store.
+	StoreName   string `json:"store_name,omitempty"`
+	StoreFolder string `json:"store_folder,omitempty"`
 	// Note explains a no_match that is not simply "nothing covers it"
 	// (a refused resolution, a default setup of another org).
 	Note string `json:"note,omitempty"`
@@ -221,7 +236,7 @@ func folderGlob(root, home string) string {
 		return ""
 	}
 	if home != "" {
-		if rel, err := filepath.Rel(home, root); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if rel, inside := fspath.Rel(home, root); inside {
 			if rel == "." {
 				return "~/**"
 			}
@@ -281,6 +296,14 @@ func HereLine(h Here) string {
 	switch h.State {
 	case HereNotGit:
 		return HereLinePrefix + "not a git repo"
+	case HereStoreClone:
+		where := "the clone of store " + h.StoreName
+		if h.StoreFolder != "" {
+			where += " (folder " + h.StoreFolder + ")"
+		} else {
+			where += " (its top)"
+		}
+		return HereLinePrefix + where + ", a lore store, not a code repo: lore reads and writes the folder you stand in (lore task list); lore init and setups are for code repos"
 	case HereNotLore:
 		if h.ClientOrg != "" {
 			return HereLinePrefix + "a client repo of " + h.ClientOrg + " (lore keeps its notes in " + h.ClientOrg + "'s store: lore org link --org " + h.ClientOrg + " --project <folder>; not lore init, which writes into the client's repository)"
@@ -333,7 +356,9 @@ func writerOf(h Here) string {
 }
 
 // HereStates lists the four states in the order ResolveHere tests them.
-func HereStates() []HereState { return []HereState{HereNotGit, HereNotLore, HereMatch, HereNoMatch} }
+func HereStates() []HereState {
+	return []HereState{HereNotGit, HereNotLore, HereMatch, HereNoMatch, HereStoreClone}
+}
 
 // EnumValues lists every state (op.Enumerated).
 func (HereState) EnumValues() []string { return enumStrings(HereStates()) }

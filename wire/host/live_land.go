@@ -273,6 +273,14 @@ type landOutcome struct {
 	Detail     string
 	// Conflicts are named rows that cannot land (conflict markers).
 	Conflicts []string
+	// WaitPush counts finished rows the local Branch already holds in a
+	// commit not pushed yet (the pre-push hook's land commit, E_PUSH_AGAIN):
+	// they wait for the person's git push of WaitCommit instead of landing
+	// a second copy straight onto the remote (devco O-11).
+	WaitPush   int
+	WaitCommit string
+	// Remote is the remote WaitCommit's push goes to (landLines' hint).
+	Remote string
 }
 
 // liveNoteProtected records that the branch refused a direct landing.
@@ -317,7 +325,22 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		}
 	}
 	items = withoutLoneSupporting(items)
+	items, out.WaitPush, out.WaitCommit = s.heldByLocalBranch(ctx, out.Branch, items)
+	out.Remote = s.ref.RemoteName
 	exact := map[live.RowKey]live.File{}
+	// Rows the branch already holds leave live before the landing push, so
+	// a push that carries the live ref (landLive) takes their removal too.
+	if len(removeIf) > 0 {
+		res, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, RemoveIf: removeIf, BinaryVersion: s.h.cfg.Version})
+		if err != nil {
+			return out, err
+		}
+		for _, k := range res.Written {
+			if _, left := removeIf[k]; left {
+				out.Left++
+			}
+		}
+	}
 	if len(items) > 0 {
 		// F16: a landing commit never passes a git hook; check it here.
 		docs := make(map[live.RowKey]live.File, len(items))
@@ -327,7 +350,14 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 		if err := s.h.leakCheck(ctx, leakWhereLanding, folder, docs); err != nil {
 			return out, err
 		}
-		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: s.layout()})
+		var local string
+		if s.landLive {
+			if snap, err := s.ref.Snapshot(ctx); err == nil {
+				local = snap.Local
+			}
+		}
+		res, err := s.ref.Land(ctx, live.LandRequest{Branch: out.Branch, Items: items, Layout: s.layout(), Live: s.landLive})
+		s.reportCarried(local, res.Live)
 		if err != nil {
 			return out, err
 		}
@@ -353,18 +383,65 @@ func (s *liveSession) landPass(ctx context.Context, folder string, named landSel
 			// nothing landed: the rows stay live and the next pass retries
 		}
 	}
-	if len(removeIf)+len(exact) > 0 {
-		res, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, Exact: exact, RemoveIf: removeIf, BinaryVersion: s.h.cfg.Version})
-		if err != nil {
+	if len(exact) > 0 {
+		if _, err := s.ref.Write(ctx, live.WriteRequest{Folder: folder, Exact: exact, BinaryVersion: s.h.cfg.Version}); err != nil {
 			return out, err
-		}
-		for _, k := range res.Written {
-			if _, left := removeIf[k]; left {
-				out.Left++
-			}
 		}
 	}
 	return out, nil
+}
+
+// heldByLocalBranch splits off the items the local branch already holds
+// in commits its remote does not have yet: the land commit lore's pre-push
+// hook adds to the person's main before it stops the push (E_PUSH_AGAIN).
+// Landing them again would build a second land commit of the same rows on
+// the remote's tip, beside the person's unpushed one, and leave local main
+// diverged (devco O-11); they go with the person's git push instead. It
+// returns the items still to land, how many wait and the local tip they
+// wait in. Anything it cannot read lands as before.
+func (s *liveSession) heldByLocalBranch(ctx context.Context, branch string, items []live.LandItem) ([]live.LandItem, int, string) {
+	if len(items) == 0 || branch == "" || s.ref.RemoteName == "" {
+		return items, 0, ""
+	}
+	local, ok, err := s.repo.ResolveRef(ctx, "refs/heads/"+branch)
+	if err != nil || !ok {
+		return items, 0, ""
+	}
+	tracking, ok, err := s.repo.ResolveRef(ctx, "refs/remotes/"+s.ref.RemoteName+"/"+branch)
+	if err != nil || !ok || local == tracking {
+		return items, 0, ""
+	}
+	if pushed, aerr := s.repo.IsAncestor(ctx, local, tracking); aerr != nil || pushed {
+		return items, 0, "" // nothing of the local branch waits to be pushed
+	}
+	_, changed, err := live.BuildLanding(ctx, func(p string) ([]byte, bool, error) { return s.repo.ReadFile(ctx, local, p) }, items, s.layout())
+	if err != nil {
+		return items, 0, ""
+	}
+	if len(changed) == len(items) {
+		return items, 0, ""
+	}
+	return changed, len(items) - len(changed), local
+}
+
+// landsNext is the set of plan rows a landing pass (landPass) would take
+// now: the rows to land or copy, minus companion rows with no other row
+// to land beside (withoutLoneSupporting). Doctor and `lore sync status`
+// count "waiting to land" from it (devco N-14: a lone companion row was
+// reported as "1 row(s) waiting to land; the next live write or `lore
+// sync` lands them" right after a sync that, by design, did not land it).
+func landsNext(plan []landPlanRow, folder string) map[live.RowKey]bool {
+	var items []live.LandItem
+	for _, p := range plan {
+		if p.Decision.Action == live.LandFinal || p.Decision.Action == live.LandCopy {
+			items = append(items, live.LandItem{Folder: folder, Key: p.Key, File: p.File, Action: p.Decision.Action})
+		}
+	}
+	out := map[live.RowKey]bool{}
+	for _, it := range withoutLoneSupporting(items) {
+		out[it.Key] = true
+	}
+	return out
 }
 
 // withoutLoneSupporting drops companion rows when no other row lands with
@@ -377,6 +454,11 @@ func withoutLoneSupporting(items []live.LandItem) []live.LandItem {
 	}
 	return nil
 }
+
+// landWaitPushLine is landLines' line for rows that wait in a land commit
+// on the local default branch (landOutcome.WaitPush): prefix, count,
+// branch, short commit, remote, branch.
+const landWaitPushLine = "%s%d finished row(s) wait in your unpushed %s commit %s (lore's pre-push hook added it); not landed again: send it with `git push %s %s`"
 
 // shortSHALen is how much of a commit id output shows.
 const shortSHALen = 7
@@ -408,6 +490,13 @@ func landLines(out landOutcome) []string {
 	case live.LandRefused:
 		lines = append(lines, liveLogPrefix+branch+" refused the landing: "+out.Detail)
 	case live.LandNothing, live.LandNoRemote:
+	}
+	if out.WaitPush > 0 {
+		sha := out.WaitCommit
+		if len(sha) > shortSHALen {
+			sha = sha[:shortSHALen]
+		}
+		lines = append(lines, fmt.Sprintf(landWaitPushLine, liveLogPrefix, out.WaitPush, branch, sha, out.Remote, branch))
 	}
 	if out.Left > 0 {
 		lines = append(lines, fmt.Sprintf("%s%d row(s) left live (%s holds them)", liveLogPrefix, out.Left, branch))

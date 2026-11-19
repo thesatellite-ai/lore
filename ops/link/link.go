@@ -139,6 +139,8 @@ func (o AddOut) Text() string {
 
 // ListIn is the input of link.list.
 type ListIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Entity string `json:"entity,omitempty" flag:"entity" desc:"filter by entity (opaque id)"`
 	Commit string `json:"commit,omitempty" flag:"commit" desc:"filter by sha"`
 	// --created-by / --updated-by: the shared writer filters of every
@@ -197,6 +199,8 @@ type Record struct {
 
 // ShowIn is the input of commit.show (the sha is the path id in REST).
 type ShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the commit sha"`
 }
 
@@ -206,6 +210,11 @@ type ShowOut struct {
 	Kind          string   `json:"kind"`
 	Count         int      `json:"count,omitempty"`
 	Data          []Record `json:"data"`
+	// CommitMissing: links name the commit but this repository has no
+	// such commit (devco Q-9: git filter-repo or a gc after a rewrite
+	// dropped it, or it is not fetched yet), so the links point at
+	// nothing here until they are remapped.
+	CommitMissing bool `json:"commit_missing,omitempty"`
 	// SHA is the asked sha, for the human header.
 	SHA string `json:"-"`
 }
@@ -219,6 +228,9 @@ func (o ShowOut) Text() string {
 	fmt.Fprintf(&b, "Commit %s — %d linked entities:\n", o.SHA, len(o.Data))
 	for _, r := range o.Data {
 		fmt.Fprintf(&b, "  %s/%s\n", r.EntityTable, r.EntityID)
+	}
+	if o.CommitMissing {
+		fmt.Fprintf(&b, "note: commit %s does not exist in this repository (a history rewrite such as git filter-repo dropped it, or it is not fetched yet: git fetch); move its links to the rewritten commit: lore link remap --pair %s=<new-sha>, or remove one: lore link remove --id <cml_…> --yes\n", o.SHA, o.SHA)
 	}
 	return b.String()
 }
@@ -482,7 +494,21 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			rows = append(rows, r)
 		}
 	}
-	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows, SHA: sha}, nil
+	out := ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Count: len(rows), Data: rows, SHA: sha}
+	if len(rows) > 0 {
+		out.CommitMissing = o.commitMissing(ctx, sha)
+	}
+	return out, nil
+}
+
+// commitMissing reports whether sha names no commit of the git repository
+// here while there is one (outside a repository nothing can be said).
+func (o ops) commitMissing(ctx context.Context, sha string) bool {
+	if _, err := o.git.RevParse(ctx, "", "HEAD"); err != nil {
+		return false
+	}
+	_, _, _, err := o.git.Describe(ctx, "", sha)
+	return err != nil
 }
 
 // showSHA turns commit.show's argument into the one sha to list: a hex
@@ -521,10 +547,18 @@ func (o ops) showSHA(ctx context.Context, arg string, all []Record) (string, err
 
 // links lists the live links of the current project in every attached
 // store that keep says to keep, oldest first.
+//
+// devco D-505: at a place with no project of its own (an org store's
+// root) it keeps every project's links, as memory list does there.
 func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, error) {
-	project, err := o.env.Project(ctx)
-	if err != nil {
+	pid, err := o.env.Project(ctx)
+	every := engine.EveryProject(err)
+	if err != nil && !every {
 		return nil, err
+	}
+	project := pid.String()
+	if every {
+		project = ""
 	}
 	out := []Record{}
 	for _, src := range engine.ReadStoresOf(o.env) {
@@ -533,7 +567,7 @@ func (o ops) links(ctx context.Context, keep func(row.Row) bool) ([]Record, erro
 			return nil, err
 		}
 		for _, r := range rows {
-			if r.Deleted || field(r, fieldProject) != project.String() || !keep(r) {
+			if r.Deleted || (project != "" && field(r, fieldProject) != project) || !keep(r) {
 				continue
 			}
 			out = append(out, recordOf(opsmemory.LabelerOf(o.env), src, r))

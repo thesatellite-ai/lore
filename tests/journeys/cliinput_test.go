@@ -43,7 +43,8 @@ func TestJourneyCLIInputChecks(t *testing.T) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		lap.Lore(dir, "session", "list").Fails(t, 19, "[E_NOT_A_STORE] git: the folder is not inside a git work tree").Never(t, "E_INTERNAL", "list sessions:")
+		// repo-only read (owner 2026-11-17, devco D-509): says where sessions live
+		lap.Lore(dir, "session", "list").Fails(t, 23, "[E_UNSUPPORTED]", "in each code repo", "cd into the code repo").Never(t, "E_INTERNAL", "list sessions:")
 	})
 
 	w.Step("day1/closed-value-refusal-names-values-only", func() {

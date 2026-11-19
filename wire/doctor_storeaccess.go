@@ -34,6 +34,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
@@ -135,7 +136,7 @@ func (a *App) accessPersonalTargets() []accessTarget {
 	var out []accessTarget
 	if mc, err := readMachineConfig(a.opts.Home); err == nil {
 		if u := mc.personalURL(); u != "" {
-			out = append(out, accessTarget{Label: "personal", URL: u, Where: "~/.lore/config.yaml personal.store"})
+			out = append(out, accessTarget{Label: "personal", URL: u, Where: lorehome.Shown() + "/config.yaml personal.store"})
 		}
 	}
 	if sc, err := ReadSetupsConfig(a.opts.Home); err == nil {
@@ -143,7 +144,7 @@ func (a *App) accessPersonalTargets() []accessTarget {
 			switch p := strings.TrimSpace(st.PersonalStore); p {
 			case "", onboard.PersonalStoreNone, onboard.PersonalStoreInherit:
 			default:
-				out = append(out, accessTarget{Label: "personal (setup " + st.Name + ")", URL: p, Where: "~/.lore/config.yaml setup " + st.Name})
+				out = append(out, accessTarget{Label: "personal (setup " + st.Name + ")", URL: p, Where: lorehome.Shown() + "/config.yaml setup " + st.Name})
 			}
 		}
 	}
@@ -219,7 +220,7 @@ func hostWideFinding(r orgconf.Access, targets []accessTarget) (DoctorFinding, [
 			others = append(others, h.t.Label+" ("+h.t.URL+", owner "+h.owner+")")
 		}
 	}
-	msg := "~/.lore/config.yaml access: maps every repo of " + strings.TrimRight(r.URL, ":/") + " (url " + r.URL + " via " + r.Via + "), so a repo of any account on that host goes through " + r.Via
+	msg := lorehome.Shown() + "/config.yaml access: maps every repo of " + strings.TrimRight(r.URL, ":/") + " (url " + r.URL + " via " + r.Via + "), so a repo of any account on that host goes through " + r.Via
 	if len(others) > 0 {
 		msg += "; these stores are under another owner than the alias's (" + strings.Join(meant, ", ") + ") and go through it too: " + strings.Join(others, "; ")
 	}
@@ -230,10 +231,10 @@ func hostWideFinding(r orgconf.Access, targets []accessTarget) (DoctorFinding, [
 	var b strings.Builder
 	if len(narrow) == 0 {
 		n := orgconf.Narrowed(r, "<owner>")
-		b.WriteString("replace it in ~/.lore/config.yaml with one rule per owner the alias is for:\n" + orgconf.FixFor(n).YAML)
+		b.WriteString("replace it in " + lorehome.Shown() + "/config.yaml with one rule per owner the alias is for:\n" + orgconf.FixFor(n).YAML)
 		return DoctorFinding{Check: DoctorCheckStoreAccess, Level: DoctorWarning, Message: msg, Fix: b.String()}, nil
 	}
-	b.WriteString("replace it in ~/.lore/config.yaml with the owner-scoped rules (or lore doctor --fix, which writes exactly these):\n" + orgconf.AccessKey + ":")
+	b.WriteString("replace it in " + lorehome.Shown() + "/config.yaml with the owner-scoped rules (or lore doctor --fix, which writes exactly these):\n" + orgconf.AccessKey + ":")
 	for _, n := range narrow {
 		b.WriteString(strings.TrimPrefix(orgconf.FixFor(n).YAML, orgconf.AccessKey+":"))
 	}
@@ -276,7 +277,7 @@ func replaceAccessNode(root *yaml.Node, old orgconf.Access, with []orgconf.Acces
 			return nil
 		}
 	}
-	return errs.New(errs.NotFound, "~/.lore/config.yaml has no access: rule url "+old.URL+" via "+old.Via).
+	return errs.New(errs.NotFound, lorehome.Shown()+"/config.yaml has no access: rule url "+old.URL+" via "+old.Via).
 		WithHint("run lore doctor again: the file changed since it was read")
 }
 
@@ -286,7 +287,7 @@ func aliasInSharedFinding(t accessTarget, c orgconf.Canonicalized) DoctorFinding
 	fix := orgconf.FixFor(c.Rule)
 	return DoctorFinding{Check: DoctorCheckStoreAccess, Level: DoctorWarning,
 		Message: "store " + t.Label + " in " + t.Where + " is " + t.URL + ", spelled with your ssh alias " + c.Alias + " (HostName " + c.HostName + "), which teammates do not have; shared config should name the canonical url " + c.URL,
-		Fix:     "change the url in " + t.Where + " to " + c.URL + " (then `lore org refresh` on each machine), and add to ~/.lore/config.yaml so this machine keeps using the alias:\n" + fix.YAML + "\n(or once for every program: " + fix.GitCommand + ")"}
+		Fix:     "change the url in " + t.Where + " to " + c.URL + " (then `lore org refresh` on each machine), and add to " + lorehome.Shown() + "/config.yaml so this machine keeps using the alias:\n" + fix.YAML + "\n(or once for every program: " + fix.GitCommand + ")"}
 }
 
 // unreachableFinding probes a cloned store's remote; bad is false when it
@@ -332,7 +333,7 @@ func (a *App) unreachableFinding(ctx context.Context, t accessTarget) (DoctorFin
 // there is none), else for an https url the credential to check.
 func accessFixText(canon string, rules []orgconf.Access, aliases []string) string {
 	if r, ok := orgconf.AccessFor(rules, canon); ok {
-		msg := "~/.lore/config.yaml access: reaches " + r.URL + " via " + r.Via + "; check that this machine can reach " + r.Via + " (ssh -T, your key, the alias in ~/.ssh/config), or fix that rule's via"
+		msg := lorehome.Shown() + "/config.yaml access: reaches " + r.URL + " via " + r.Via + "; check that this machine can reach " + r.Via + " (ssh -T, your key, the alias in ~/.ssh/config), or fix that rule's via"
 		if orgconf.HostWide(r) {
 			msg += "; that rule maps every repo of the host (the store_access warning about it gives the owner-scoped lines)"
 		}
@@ -349,7 +350,7 @@ func accessFixText(canon string, rules []orgconf.Access, aliases []string) strin
 		aliases = []string{aliasPlaceholder}
 	}
 	var b strings.Builder
-	b.WriteString("if this machine reaches " + host + " through an ssh alias, map " + canon + "'s owner to it in ~/.lore/config.yaml (scoped to the owner, never the whole host):")
+	b.WriteString("if this machine reaches " + host + " through an ssh alias, map " + canon + "'s owner to it in " + lorehome.Shown() + "/config.yaml (scoped to the owner, never the whole host):")
 	for _, al := range aliases {
 		rule, ok := orgconf.RuleVia(canon, al)
 		if !ok {

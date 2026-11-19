@@ -68,7 +68,9 @@ func TestGlobalHitsCarryMetadata(t *testing.T) {
 		t.Fatalf("header of trash-only hits:\n%s", text)
 	}
 	h.Must("search.rebuild", `{}`)
-	_, text = hits(`{"query":"quokka with meta","include_deleted":true}`)
+	// D-435: "with" is a stop word and "meta" is in the decision's body
+	// too, so the one-row query leaves the decision out by its title
+	_, text = hits(`{"query":"quokka -plain","include_deleted":true}`)
 	if !strings.Contains(text, "across 1 entity type:") {
 		t.Fatalf("one trashed hit, header:\n%s", text)
 	}

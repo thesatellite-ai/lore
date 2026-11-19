@@ -18,7 +18,7 @@ import (
 // and in the personal store under one id (the actor row once per store). `actor show <own id>` is one actor, never
 // E_AMBIGUOUS_ID (whose hint named --to, a flag actor show has not got):
 // it shows the repo's copy; --store me shows the personal copy; --store of
-// a store without it is E_NOT_FOUND naming the store; an unknown id is
+// a store without it is E_NOT_FOUND naming the store and where the row is (D-617); an unknown id is
 // still E_NOT_FOUND.
 func TestActorShowOwnActorInTwoStores(t *testing.T) {
 	h := opstest.WithStores(t, []string{"me", "kb"})
@@ -54,7 +54,9 @@ func TestActorShowOwnActorInTwoStores(t *testing.T) {
 	if raw := h.JSON(h.Must(infra.OpActorShow, `{"id":"`+opstest.Actor+`","store":"me"}`)); !strings.Contains(raw, `"_source"`) || !strings.Contains(raw, `"me"`) {
 		t.Fatalf("--store me must show the personal copy: %s", raw)
 	}
-	if msg := h.Fails(infra.OpActorShow, `{"id":"`+opstest.Actor+`","store":"kb"}`, errs.NotFound); !strings.Contains(msg, `store "kb"`) {
+	// D-617: the copy is missing from the named store, so the refusal
+	// names the store and where the row is instead
+	if msg := h.Fails(infra.OpActorShow, `{"id":"`+opstest.Actor+`","store":"kb"}`, errs.NotFound); !strings.Contains(msg, "is not in kb; it is in ") || !strings.Contains(msg, "(use --store ") {
 		t.Fatalf("missing copy: %s", msg)
 	}
 	h.Fails(infra.OpActorShow, `{"id":"act_01a1a59b891c70b789144cd3e711fb92"}`, errs.NotFound)

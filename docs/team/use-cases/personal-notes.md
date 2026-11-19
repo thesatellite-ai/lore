@@ -8,7 +8,7 @@ Alice (an agency developer) keeps notes only she should see: "I always forget th
 
 ## The config
 
-`personal.store` in `~/.lore/config.yaml` names your personal store, the target of `--to me`. `lore store init --name me` writes it for you. It holds one of three things:
+`personal.store` in `~/.lore/config.yaml` names your personal store, the target of `--to me`. `lore store init --name me` writes it for you; it writes nothing into the repo you run it in (a repo with no lore data stays exactly as it was). It holds one of three things:
 
 - **a git URL of your own private repo** (`lore store init --name me --url git@github.com:alice/lore-me`): lore keeps a clone at `~/.lore/stores/alice/lore-me`, and every machine that attaches the same URL gets the same notes. A note is one file, `_store/<kind>/<id>.json` in that repo, labelled `[me]`, and it loads in every repo you open.
 - **a folder** (`lore store init --name me` with no URL makes `file://~/.lore/stores/_me`): the same layout (`_store/<kind>/<id>.json`, `[me]`), on this machine only.
@@ -29,17 +29,17 @@ With the 0.1.17 value `personal.store: local` (the first example), `--to me` fil
 ```console
 # alice, in website
 $ lore memory add --body 'I always forget the staging VPN profile' --to me
-lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me)
-lore: wrote ~/.lore/personal/agency/memories/mem_2ad3…f891.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_162d…9666.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_7a67…9504.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/memories/mem_2ad3…f891.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_162d…9666.json (store me/agency)
 ✓ mem_2ad3…f891 [me/agency]
   scope: [project]
 
 # alice, in scratch
 $ lore memory add --body 'I prefer tabs over spaces' --to me
-lore: wrote ~/.lore/personal/everywhere/actors/act_54fe…28f2.json (store me)
-lore: wrote ~/.lore/personal/everywhere/memories/mem_05e9…4603.json (store me)
-lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me)
+lore: wrote ~/.lore/personal/everywhere/actors/act_54fe…28f2.json (store me/everywhere)
+lore: wrote ~/.lore/personal/everywhere/memories/mem_05e9…4603.json (store me/everywhere)
+lore: wrote ~/.lore/personal/everywhere/machines/mch_162d…9666.json (store me/everywhere)
 ✓ mem_05e9…4603 [me/everywhere]
   scope: [project]
 
@@ -61,6 +61,8 @@ agency/memories/mem_2ad3…f891.json
 
 The `[me]` label marks personal rows (your own notes). In the agency repo Alice sees both notes. In her scratch repo she sees only the `everywhere/` one.
 
+A repo lore is not set up in (no `.lore/`, such as a docs or skills repo you publish as is) takes personal notes too: `lore rule add --to me …` there writes only to your personal store, and `lore rule list`, `lore memory list` and `lore search` there read your personal store alone, so nothing is ever written into the repo. A store's own clone is not such a repo: inside a folder of a store clone a plain read lists that folder's rows (and its org folder's), the same with or without a personal store, and `--to me` or `--store me` there writes or reads your personal store as from anywhere else. When you later start an org, `lore move --id <id> --to <org>/<folder>` shares such a note: it takes the folder's project.
+
 To sync between machines, make a new, empty private repo of your own into your personal store with `lore store init --name me --url <url>` (it becomes a lore-only notes repo and is recorded as `personal.store`). From then on a `--to me` note lands in that repo's `_store/` folder with the label `[me]`, not under a company folder, and loads in every repo. Below, a second machine (`alice-devbox`) that already has `personal.store` set to the same URL sees the laptop's note on its first command:
 
 <!-- example: personal#git-personal-store -->
@@ -68,7 +70,7 @@ To sync between machines, make a new, empty private repo of your own into your p
 # alice, in scratch
 $ lore store init --name me --url git@github.com:alice/lore-me --yes
 lore store init: store clone ~/.lore/stores/alice/lore-me: git user set to alice <alice@devbox> (your lore identity)
-✓ created store me (sto_c0f3…b5b8) at git@github.com:alice/lore-me; recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
+✓ created store me (sto_c0f3…b5b8) on git@github.com:alice/lore-me: pushed its first commit (the store marker); recorded in ~/.lore/config.yaml (personal.store, the target of --to me)
 
 # alice, in website
 $ lore memory add --body 'my invoice template lives in the shared drive' --to me
@@ -84,13 +86,14 @@ lore: wrote ~/.lore/stores/alice/lore-me/_store/machines/mch_162d…9666.json (s
 $ lore memory list
 lore memory list: git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push)
 lore memory list: store clone ~/.lore/stores/alice/lore-me: git user set to Alice Doe <alice@agency.example> (your lore identity)
+lore memory list: store clone ~/.lore/stores/alice/lore-me: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 (no memories)
 ```
 <!-- /example -->
 
 ## On your next machine
 
-This works when your personal store is a git repo. The `local` personal store (the one the `lore setup join` lines pick) is a folder on one machine, `~/.lore/stores/_me`, with no copy anywhere else: a lost or wiped laptop loses those notes. The join lines and the personal_store step say so, and `lore doctor --all` notes it on the `store me` line. To keep a copy, push that folder to a private git repo and run `lore store set-url --name me --url <private-repo-url>`, or answer the personal_store step with `{"personal_store":"existing","store_url":"<private-repo-url>"}` when you join.
+This works when your personal store is a git repo. The `local` personal store (the one the `lore setup join` lines pick) is a folder on one machine, `~/.lore/stores/_me`, with no copy anywhere else: a lost or wiped laptop loses those notes. The join lines and the personal_store step say so, and `lore doctor --all` notes it on the `store me` line. To keep a copy, make an empty private git repo and run `lore store set-url --name me --url <private-repo-url>`: it copies the folder into lore's clone of that repo and commits it (the folder's lock and state stay out), and from then on lore reads and writes that clone; then run `lore sync`, which pushes it (set-url itself pushes nothing). The folder is left as it was. A failed set-url leaves no clone behind, so running it again after fixing the cause works. Or answer the personal_store step with `{"personal_store":"existing","store_url":"<private-repo-url>"}` when you join, or answer the personal_store step with `{"personal_store":"existing","store_url":"<private-repo-url>"}` when you join.
 
 Install lore, then attach the personal store you already have. `lore store init --name me --url <url>` on an existing store attaches it (it never empties it) and records it as `personal.store`; your notes are there on the next command (lore also prints a line or two about the git settings it made in the store clone and in this repo, left out here):
 

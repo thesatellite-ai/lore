@@ -23,11 +23,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -75,6 +78,10 @@ func (r orgRegistrar) register(ctx context.Context, entry, orgFolder string, wal
 	}()
 	opts := StandaloneOptions(r.repoDir, r.home, r.workDir, r.version)
 	opts.Wall = wall // the binary's clock (LORE_NOW in a test build)
+	// devco D-424: creating an org is the person's own step; under a coding
+	// agent the roster row and its commits name the person, never a
+	// "<person> via <tool>" actor (creditPerson)
+	opts.PersonOnly = true
 	app, alone, err := StoreOnlyRoster(ctx, opts, store.Source(entry+orgconf.RefSep+orgFolder))
 	if err != nil {
 		return "", err
@@ -89,7 +96,21 @@ func (r orgRegistrar) register(ctx context.Context, entry, orgFolder string, wal
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimRight(out.Text(), "\n"), nil
+	line := strings.TrimRight(out.Text(), "\n")
+	if tool := detectedTool(ctx, StandaloneOptions(r.repoDir, r.home, r.workDir, r.version)); tool != "" {
+		line += "\norg create: run through " + tool + "; the roster row and store commits are credited to you, the person (no agent actor, no Lore-Agent trailer)"
+	}
+	// The creator is the org's admin (devco P-5): the open stint with org
+	// role admin the admin setup step writes, so `lore member add` works
+	// at once instead of refusing for want of an admin setup. Same write
+	// as `lore doctor --fix` org_admin_missing.
+	if f, ok := app.orgAdminFinding(ctx, orgRosterStore{a: app, org: entry}, true); ok {
+		if !f.Fixed {
+			return line, errs.New(errs.Internal, f.Message).WithHint(f.Fix)
+		}
+		line += "\n✓ you are " + entry + "'s admin (org role admin): lore member add --email <their-email> --name \"Their Name\" adds a teammate"
+	}
+	return line, nil
 }
 
 // orgEntryLines is the plan's entry block.
@@ -190,7 +211,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 		return opsorgcmd.Report{}, err
 	}
 	if cfg.FindOrg(in.Org) != nil {
-		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+in.Org+" already exists in ~/.lore/config.yaml").
+		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+in.Org+" already exists in "+lorehome.Shown()+"/config.yaml").
 			WithHint("pick another name, or link repos to the existing org with `lore org link`")
 	}
 	entry := orgconf.Org{Name: in.Org, Own: in.Own, Repos: in.Repos,
@@ -199,7 +220,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr
 	}
-	lines, err := orgEntryLines(fmt.Sprintf("This writes %s into the store (no identity) and adds to ~/.lore/config.yaml:", orgcfg.OrgFilePath(in.OrgFolder)), entry)
+	lines, err := orgEntryLines(fmt.Sprintf("This writes %s into the store (no identity) and adds to "+lorehome.Shown()+"/config.yaml:", orgcfg.OrgFilePath(in.OrgFolder)), entry)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
@@ -233,7 +254,7 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 			// as org import builds it for a member; not the one store and
 			// patterns typed here, which would make the org's own repos
 			// client repos on this machine only.
-			suggestedStores(&entry, sg, url)
+			suggestedStores(ctx, &entry, sg, url)
 			if _, verr := orgConfigWith(h.home, func(root *yaml.Node) error { return appendOrgNode(root, entry) }); verr != nil {
 				return opsorgcmd.Report{Lines: lines}, verr
 			}
@@ -265,8 +286,8 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 	} else if line != "" {
 		lines = append(lines, line)
 	}
-	lines = append(lines, "  teammates join with: lore org import --url "+url+" --key human:<their email> --name \"Their Name\"",
-		"  tie a client repo to it (written only into the store): lore org link --org "+in.Org+" --project <folder>")
+	lines = append(lines, "  teammates join with: lore setup join --invite "+url+" (after lore member add puts them on the roster)",
+		"  use the store in a repo with no lore data (written only into the store): lore org link --org "+in.Org+" --project <folder> (a repo matching the org's own: patterns and none of its repos: patterns links as an own repo, any other as a client repo)")
 	return opsorgcmd.Report{Lines: lines}, nil
 }
 
@@ -276,17 +297,75 @@ func (h *standaloneOrg) Create(ctx context.Context, in opsorgcmd.CreateIn, yes b
 // none) and the client-repo defaults. org create on a store that already
 // has the file uses it too (B2-19), so the admin who starts a team on an
 // existing org gets the same entry as a member who joins it.
-func suggestedStores(entry *orgconf.Org, sg orgcfg.Suggestion, url string) {
-	entry.Own, entry.Repos, entry.Stores = sg.Doc.Own, sg.Doc.Repos, nil
-	for _, s := range sg.Doc.Stores {
-		entry.Stores = append(entry.Stores, orgconf.Store{URL: s.URL, Name: s.Name, Branch: s.Branch, OrgFolder: s.OrgFolder})
-	}
+//
+// A store the file marks `audience: admins` is listed only when the
+// entry's person is an admin of the org (D-442): a member's entry never
+// names it, so their lore never tries to read it. entry.Identity must be
+// set first.
+func suggestedStores(ctx context.Context, entry *orgconf.Org, sg orgcfg.Suggestion, url string) {
+	sh, _ := sg.SharedFor(ctx, entry.Identity.Key)
+	entry.Own, entry.Repos, entry.Stores = sg.Doc.Own, sg.Doc.Repos, append([]orgconf.Store(nil), sh.Stores...)
 	if len(entry.Stores) == 0 {
 		entry.Stores = []orgconf.Store{{URL: url, OrgFolder: sg.Folder}}
+	}
+	// devco D-680: the store the person imported by keeps the spelling
+	// they gave (https, ssh://, an alias git reaches by insteadOf), not
+	// the one the shared file lists: that spelling is the one this machine
+	// reaches; the file's (often git@github.com:…) may need a key it lacks.
+	// An alias the ssh config resolves arrives here canonical, with the
+	// access rule that routes it (canonicalTyped, brief 3.7).
+	if same := sameStoreAs(url); same != nil {
+		file := ""
+		for i := range entry.Stores {
+			if same(entry.Stores[i].URL) {
+				file, entry.Stores[i].URL = entry.Stores[i].URL, url
+			}
+		}
+		// devco D-680: the org's other stores on the same host (an ops
+		// store) take the same spelling, so a person who reaches GitHub
+		// only over https (or an alias) syncs them too
+		if file != "" && file != url {
+			for i := range entry.Stores {
+				if s, ok := respellSibling(url, file, entry.Stores[i].URL); ok {
+					entry.Stores[i].URL = s
+				}
+			}
+		}
 	}
 	if len(sg.Doc.Defaults.ClientRepos) > 0 {
 		entry.Defaults.ClientRepos = sg.Doc.Defaults.ClientRepos
 	}
+}
+
+// respellSibling is sibling, a store the org file lists next to the one
+// imported by typed (listed there as file), in typed's spelling: typed with
+// its repository path replaced by sibling's. ok only when sibling is on
+// file's host, is not the imported store, and the new spelling is the same
+// store as sibling by lore's own same-store rule (sameStoreAs), so a store
+// on another host or one the spelling cannot reach keeps its own.
+func respellSibling(typed, file, sibling string) (string, bool) {
+	rt, et := git.RemoteOfRaw(typed)
+	rf, ef := git.RemoteOfRaw(file)
+	rs, es := git.RemoteOfRaw(sibling)
+	if et != nil || ef != nil || es != nil || localRemote(rt) || localRemote(rs) || rs.Norm == rf.Norm {
+		return "", false
+	}
+	hf, _, _ := strings.Cut(rf.Norm, "/")
+	hs, ps, _ := strings.Cut(rs.Norm, "/")
+	_, pt, _ := strings.Cut(rt.Norm, "/")
+	if hf != hs || pt == "" || ps == "" {
+		return "", false
+	}
+	at := strings.LastIndex(strings.ToLower(typed), strings.ToLower(pt))
+	from := strings.LastIndex(strings.ToLower(sibling), strings.ToLower(ps))
+	if at < 0 || from < 0 {
+		return "", false
+	}
+	out := typed[:at] + sibling[from:from+len(ps)] + typed[at+len(pt):]
+	if same := sameStoreAs(out); same == nil || !same(sibling) {
+		return "", false
+	}
+	return out, true
 }
 
 // Import implements opsorgcmd.Host.
@@ -309,16 +388,21 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if entry.Name == "" {
 		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "the store's lore-org.yaml names no org; pass --as <name>")
 	}
-	if cfg.FindOrg(entry.Name) != nil {
-		return opsorgcmd.Report{}, errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in ~/.lore/config.yaml").
-			WithHint("pass --as <another name>, or edit the existing entry")
+	if have := cfg.FindOrg(entry.Name); have != nil {
+		e := errs.New(errs.InvalidInput, "an org entry named "+entry.Name+" already exists in "+lorehome.Shown()+"/config.yaml")
+		if in.Admit != nil {
+			// devco:D-644: a setup join (Admit set) has no --as flag: the
+			// hint names the join answer that uses the existing entry
+			return opsorgcmd.Report{}, e.WithHint(existingEntryJoinHint(entry.Name, have))
+		}
+		return opsorgcmd.Report{}, e.WithHint("pass --as <another name>, or edit the existing entry")
 	}
-	suggestedStores(&entry, sg, in.URL)
 	entry.Identity = orgconf.OrgIdentity{Key: in.Key, Name: in.Name, Handle: in.Handle}
+	suggestedStores(ctx, &entry, sg, in.URL)
 	if ierr := needIdentity(entry); ierr != nil {
 		return opsorgcmd.Report{}, ierr
 	}
-	lines, err := orgEntryLines("This adds to ~/.lore/config.yaml:", entry)
+	lines, err := orgEntryLines("This adds to "+lorehome.Shown()+"/config.yaml:", entry)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
@@ -365,7 +449,7 @@ func (h *standaloneOrg) Import(ctx context.Context, in opsorgcmd.ImportIn, yes b
 	if rerr != nil {
 		// BUG-T3: a half-done import must not exit 0. The entry stays (it
 		// is valid on its own); the cause's code says what failed.
-		return opsorgcmd.Report{Lines: lines}, errs.Wrap(errs.CodeOf(rerr), "the org entry "+entry.Name+" is added to ~/.lore/config.yaml, but registering on its roster failed: "+rerr.Error(), rerr).
+		return opsorgcmd.Report{Lines: lines}, errs.Wrap(errs.CodeOf(rerr), "the org entry "+entry.Name+" is added to "+lorehome.Shown()+"/config.yaml, but registering on its roster failed: "+rerr.Error(), rerr).
 			WithHint("run `LORE_ORG=" + entry.Name + " lore actor register` in one of " + entry.Name + "'s repos or outside any repo (BUG-T3)")
 	}
 	if line != "" {
@@ -445,7 +529,16 @@ func orgRenameLines(o opsorgcmd.RenameOut) []string {
 	if o.Defaults > 0 {
 		lines = append(lines, fmt.Sprintf("  %d defaults.client_repos target(s) moved to %s", o.Defaults, o.To))
 	}
+	if len(o.Setups) > 0 {
+		lines = append(lines, fmt.Sprintf("  %d setup(s) now name org %s: %s", len(o.Setups), o.To, strings.Join(o.Setups, ", ")))
+		if slices.Contains(o.Setups, o.From) {
+			// T-21: a setup named after the org keeps its own name (a setup
+			// name is the person's label); one command gives it the new one
+			lines = append(lines, fmt.Sprintf("  setup %s keeps its name; rename it with `lore setup rename --name %s --to %s`", o.From, o.From, o.To))
+		}
+	}
 	return append(lines, "  rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there",
+		"  store clones under "+lorehome.Shown()+"/stores keep their folders: a clone's folder is its store url's path, not the org label",
 		"  written to "+o.Config)
 }
 
@@ -462,7 +555,7 @@ func renameOrgNode(root *yaml.Node, oldName, newName, id string, out *opsorgcmd.
 				continue
 			}
 			if n.Value == newName && newName != oldName {
-				return errs.New(errs.InvalidInput, fmt.Sprintf("~/.lore/config.yaml already has an org entry named %q", newName))
+				return errs.New(errs.InvalidInput, fmt.Sprintf(lorehome.Shown()+"/config.yaml already has an org entry named %q", newName))
 			}
 			if n.Value == oldName {
 				entry = item
@@ -495,6 +588,19 @@ func renameOrgNode(root *yaml.Node, oldName, newName, id string, out *opsorgcmd.
 					v.Value += orgconf.RefSep + folder
 				}
 				out.Defaults++
+			}
+		}
+	}
+	if seq := mapGet(root, configKeySetups); seq != nil && seq.Kind == yaml.SequenceNode {
+		// T-19: a setup's org: names the entry by label; left on the old
+		// label, the config no longer validates and every org write of
+		// the setup is refused
+		for _, item := range seq.Content {
+			if o := mapGet(item, orgKeyOrg); item.Kind == yaml.MappingNode && o != nil && o.Value == oldName {
+				o.Value = newName
+				if n := mapGet(item, configKeyName); n != nil {
+					out.Setups = append(out.Setups, n.Value)
+				}
 			}
 		}
 	}
@@ -584,7 +690,23 @@ func importError(err error, url string) error {
 		return errs.New(errs.Offline, strings.Replace(err.Error(), "store is offline", "the store answers that there is no repository", 1)).
 			WithHint(importMissingHint(url))
 	}
+	if errors.Is(err, orgcfg.ErrStoreEmpty) {
+		// devco:K-1: importing (or joining) a store with no commits is
+		// the same day-one case as a store with no lore-org.yaml: the
+		// admin made the org and has not sent it; "make it a lore store
+		// first" (hintEmptyStore) is the admin's step, not the joiner's.
+		return orgNotSentError(url)
+	}
 	return orgFileError(err, url)
+}
+
+// orgNotSentError is the refusal for a store that holds no org yet (no
+// lore-org.yaml, or no commits at all): the admin's lore org create / team
+// step writes the org on their machine and their first lore sync sends it,
+// so the way on is that sync, never a hand-made file (devco:K-1).
+func orgNotSentError(url string) error {
+	return errs.New(errs.InvalidInput, "the store holds no org yet: the admin who made the org has not sent it (it stays on their machine until their first lore sync)").
+		WithHint("ask the org's admin to run lore sync, then run this again")
 }
 
 // importMissingHint is the way on from importError's missing repository.
@@ -600,8 +722,7 @@ func orgFileError(err error, url string) error {
 		return errs.New(errs.InvalidInput, err.Error()).
 			WithHint("that store already suggests an org: adopt it with `lore org import --url " + url + "`")
 	case errors.Is(err, orgcfg.ErrNoOrgFile):
-		return errs.New(errs.InvalidInput, err.Error()).
-			WithHint("ask the team to commit <org_folder>/lore-org.yaml, or add the entry to ~/.lore/config.yaml by hand")
+		return orgNotSentError(url)
 	}
 	return linkError(err)
 }
@@ -618,7 +739,7 @@ func editMachineConfigBytes(home string, edit func(root *yaml.Node) error, use f
 	case b == nil:
 	default:
 		if err = yamlfmt.Decode(b, doc); err != nil {
-			return errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+			return errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not valid YAML", err)
 		}
 	}
 	if len(doc.Content) == 0 {
@@ -627,7 +748,7 @@ func editMachineConfigBytes(home string, edit func(root *yaml.Node) error, use f
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return errs.New(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not a mapping")
+		return errs.New(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not a mapping")
 	}
 	if err = edit(root); err != nil {
 		return err
@@ -639,4 +760,16 @@ func editMachineConfigBytes(home string, edit func(root *yaml.Node) error, use f
 		return errs.Wrap(errs.Internal, "wire: encode "+ConfigFile, err)
 	}
 	return use(out)
+}
+
+// existingEntryJoinHint is the next step of a setup join refused because
+// an org entry of the store's org name exists already: join through that
+// entry by name when it is this org's (setup apply has no --as flag, the
+// hint org import gives), else move the entry aside first.
+func existingEntryJoinHint(name string, have *orgconf.Org) string {
+	at := ""
+	if len(have.Stores) > 0 {
+		at = " (store " + have.Stores[0].URL + ")"
+	}
+	return "the entry " + name + at + " is this machine's; if it is this org, answer the join step with it: --answers '{\"invite\":\"" + name + "\"}'; if it is another org, rename or remove that entry in " + lorehome.Shown() + "/config.yaml first"
 }

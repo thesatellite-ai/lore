@@ -25,6 +25,8 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
@@ -66,6 +68,17 @@ func (a *App) runLocal(ctx context.Context, e op.Entry, d op.Decoder, c op.Calle
 	if e.Spec().OnlyReads() || e.Spec().Name == opsdoctor.OpRun { // doctor (read, PermWrite for --fix) is a health check: it reads
 		ctx = WithNoCreate(ctx) // doctor_nocreate.go: a read never sets a repo up
 	}
+	if e.Spec().OnlyReads() || e.Spec().Previews(in) {
+		// devco:D-682: a preview (--dry-run, render --check/--report/
+		// --trend) is a read too: render --dry-run in a store folder with
+		// no project row committed "lore: project add prj_…: <folder>".
+		// devco:D-503: a Local read skips engine.Run, which is what marks a
+		// call's access; unmarked, the engine it opens took it for a write.
+		// lore why-context show in a store clone made and committed the
+		// folder's project row (rosterProject), which the next lore sync
+		// pushed. Marked a read, it creates no row and never pushes (T-11).
+		ctx = engine.WithAccess(ctx, op.AccessRead)
+	}
 	if e.Spec().Name == opsfix.OpRun {
 		// FP-7: lore fix (dry or not) repairs a project and never sets one
 		// up: a repo with no .lore/ is left as it is (a dry run changes
@@ -73,6 +86,9 @@ func (a *App) runLocal(ctx context.Context, e op.Entry, d op.Decoder, c op.Calle
 		ctx = WithNoCreate(ctx)
 	}
 	// P3-MISC-2: a Local MayAsk operation reads the caller's yes itself.
+	// devco D-526: a Local op that may ask in a terminal (setup apply's
+	// own: offer) reads whether a person is there; an agent never is.
+	ctx = op.WithInteractive(ctx, c.Interactive && c.Agent == "")
 	return e.Invoke(op.WithConfirmed(ctx, c.Yes), in)
 }
 
@@ -204,7 +220,52 @@ func (a *App) DoctorClones(ctx context.Context) (opsstores.ClonesOut, error) {
 		if k, ok := storeKey(v.URL); !ok || !checked[k] {
 			continue
 		}
-		v.Problems = slices.DeleteFunc(v.Problems, func(p string) bool { return strings.HasPrefix(p, orgcfg.ProblemUnpushed) })
+		// devco D-483: only the refs CheckStores counts (the store's own
+		// branches and lore's refs); a side branch (a backup someone made
+		// in the clone) is reported nowhere else, so its warning stays.
+		v.Warnings = slices.DeleteFunc(v.Warnings, func(w string) bool {
+			ref, ok := orgcfg.UnpushedRef(w)
+			if !ok {
+				return false
+			}
+			if strings.HasPrefix(ref, "refs/lore/") {
+				return true
+			}
+			b, isHead := strings.CutPrefix(ref, "refs/heads/")
+			return isHead && (b == v.DefaultBranch || slices.Contains(v.Branches, b))
+		})
 	}
 	return out, nil
+}
+
+// noteOwnRepoOverlaps adds to the checked store holding an org's
+// lore-org.yaml one note per own: pattern that overlaps the org's repos:
+// entries, and which wins (devco D-585, orgresolve.OwnRepoOverlaps). The
+// lists are the store's lore-org.yaml (what org config get shows) when the
+// clone holds one, else the machine's org entry.
+func (a *App) noteOwnRepoOverlaps(ctx context.Context, checked []opsstores.StoreCheck) {
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return
+	}
+	done := map[string]bool{}
+	for i := range checked {
+		c := &checked[i]
+		org := cloneOrgEntry(a.opts.Home, c.URL)
+		if org == nil || done[org.Name] {
+			continue
+		}
+		sc := org.OrgFolderStore()
+		if sc == nil || !sameStoreURL(sc.URL, c.URL) {
+			continue
+		}
+		done[org.Name] = true
+		own, repos := org.Own, org.Repos
+		if sg, ok := orgSuggestionLocal(ctx, a.opts.Home, cfg, org); ok {
+			own, repos = sg.Doc.Own, sg.Doc.Repos
+		}
+		for _, l := range orgresolve.OwnRepoOverlaps(own, repos) {
+			c.Notes = append(c.Notes, "org "+org.Name+": "+l)
+		}
+	}
 }

@@ -44,6 +44,13 @@ type Error struct {
 	// secrets.on_detect ask is about (SECRETS 2.5); empty otherwise.
 	// Invariant: Masked is the masked preview, never the value.
 	Findings []Finding
+	// Written marks a failure that came AFTER the rows were durably
+	// written (the cache or the audit record failed behind them). A hook
+	// that recodes the error (the disk-full one) keeps Message and Hint:
+	// they say the row is stored and not to rerun, and a generic "nothing
+	// was changed" would make the retry store a duplicate (devco:U-7).
+	// Not part of the JSON shape.
+	Written bool
 }
 
 // Finding is one masked secret finding of an E_NEEDS_CONFIRM answer
@@ -200,6 +207,19 @@ func CodeOf(err error) Code {
 		return e.Code
 	}
 	return Internal
+}
+
+// WrittenOf returns the first *Error in err's chain marked Written (the
+// rows are stored, the failure came after them), or nil: a hook that
+// recodes an error keeps that one's Message and Hint (devco:U-7).
+func WrittenOf(err error) *Error {
+	for err != nil {
+		if e, ok := err.(*Error); ok && e.Written {
+			return e
+		}
+		err = errors.Unwrap(err)
+	}
+	return nil
 }
 
 // Has reports whether err's chain holds an *Error with code.

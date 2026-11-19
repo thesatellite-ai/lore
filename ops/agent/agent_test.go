@@ -26,7 +26,7 @@ type fakeEnv struct {
 func (e *fakeEnv) AgentHost(context.Context) (Host, error) { return e.h, nil }
 func (e *fakeEnv) ActorRegister(_ context.Context, in opsinfra.ActorRegisterIn) (opsinfra.ActorRegisterOut, error) {
 	e.reg = append(e.reg, in)
-	return opsinfra.ActorRegisterOut{ID: "act_9", Kind: in.Kind, Label: in.Label, Where: "agency org/"}, nil
+	return opsinfra.ActorRegisterOut{ID: "act_9", Kind: in.Kind, Label: in.Label, Where: "agency (agency/org)"}, nil
 }
 func (e *fakeEnv) ActorDeactivate(context.Context, string) (opsinfra.ActorDeactivateOut, error) {
 	return opsinfra.ActorDeactivateOut{}, nil
@@ -62,7 +62,7 @@ func TestStartLabel(t *testing.T) {
 			wantOwner = "@alice"
 		}
 		lines := strings.Split(strings.TrimSuffix(out.Text(), "\n"), "\n")
-		if len(lines) != 2 || !strings.Contains(lines[0], "act_9 agent agent-frontend (owner "+wantOwner+") registered in agency org/") {
+		if len(lines) != 2 || !strings.Contains(lines[0], "act_9 agent agent-frontend (owner "+wantOwner+") registered in the roster of agency (agency/org)") {
 			t.Fatalf("text: %q", out.Text())
 		}
 		if !regexp.MustCompile(`^export LORE_ACTOR=agent:agent-frontend LORE_SESSION=s-[0-9a-f]{8}$`).MatchString(lines[1]) {

@@ -75,6 +75,11 @@ const (
 	// them and what to do.
 	LineNoRepos     = "lore fix --all found no repo: it fixes the repo you run it in, the known repos (where lore ran before) and the repos with .lore/ in your setups' folders (`lore setup list`) and in the folders you name; name the folders holding your repos (lore fix --all --dirs ~/code --dirs ~/work), run `lore fix` inside each repo, or add the folder to a setup"
 	LineStepsFailed = "Not everything is current: these steps failed, see their lines above: "
+	// LineLeftForYou replaces LineCurrent when every step ran clean but
+	// errors remain that no step repairs (devco R-8: "Everything is
+	// current." followed by errors and Status: BROKEN read as two verdicts);
+	// each error line names its own next step.
+	LineLeftForYou = "Every step is done, but lore fix cannot repair the errors below; each names its next step."
 )
 
 // Env is what fix.run needs; *wire.App implements it.
@@ -124,6 +129,22 @@ type LoreGoneGate interface {
 }
 
 // noLoreDataErr is lore fix's answer in a repo with no lore data.
+// StoreCloneGate is the optional upgrade of Env that tells a lore store
+// clone (devco D-524): shown is the store checkout the command runs in, as
+// printed, ok false outside one. A store clone is a git repo but no code
+// repo, so lore fix there names what applies instead of "not inside a git
+// repo" (*wire.App implements it).
+type StoreCloneGate interface {
+	FixStoreCloneHere(ctx context.Context) (shown string, ok bool)
+}
+
+// storeCloneErr is lore fix's refusal in a store clone: it fixes one code
+// repo; a store clone is checked by lore store doctor and sent by lore sync.
+func storeCloneErr(shown string) error {
+	return errs.New(errs.NotAStore, "lore fix works on one code repo: "+shown+" is a lore store clone, not a code repo").
+		WithHint("cd into the code repo you want fixed and run lore fix there, or lore fix --all for every repo the setups know; --store does not apply (lore fix has no store to fix); `lore store doctor` checks this store's clone and `lore sync` sends its waiting commits")
+}
+
 func noLoreDataErr(top string) error {
 	return errs.New(errs.NotAStore, "lore fix: no lore data in "+top+" (no .lore folder), so there is nothing to fix and lore fix creates nothing there").
 		WithHint("lore init sets this repo up; lore fix --all lists such repos and leaves them as they are")
@@ -138,9 +159,24 @@ type Found struct {
 	// names that hold no lore data (FP-7): a note each, never a failure
 	// (owner item 26), never run in.
 	Skipped []Skip
+	// NoLore are the git repos the folder walk found with no lore data
+	// and no store link naming them (K-10): never run in, counted in the
+	// summary and named with --verbose, so the person can tell they were
+	// seen.
+	NoLore []string
 	// Note says how the repos were chosen when no setup has folders
 	// (B4-8: a machine upgraded from lore 0.1.17), "" otherwise.
 	Note string
+	// Links maps a root the folder walk reached through a symlink to the
+	// first link path (O-1): the root lies elsewhere, so lore doctor --all
+	// can say why the setup checks do not cover it.
+	Links map[string]string
+}
+
+// NoLoreLine is the --verbose line of a repo --all found with no lore
+// data (docs/operations/upgrade.md).
+func NoLoreLine(repo string) string {
+	return "skipped " + repo + ": no lore data (no .lore folder; lore fix --all creates nothing there, lore init sets it up)"
 }
 
 // Skip is one folder --all passed over, and why.
@@ -187,6 +223,15 @@ type RunIn struct {
 	// setup's folders: a lore 0.1.17 repo outside the home folder that no
 	// lore command ran in yet is found no other way.
 	Dirs []string `json:"dirs,omitempty" arg:"0" rest:"true" desc:"with --all: folders to look through for repos too, as deep as a setup's folders (lore fix --all --dirs ~/code --dirs ~/work)"`
+	// Verbose (K-10) names every repo --all found with no lore data; the
+	// summary always counts them.
+	Verbose bool `json:"verbose,omitempty" flag:"verbose" desc:"with --all: also list each repo found with no lore data (the summary always counts them)"`
+	// TrackedHooks (devco D-501) is the explicit yes to add lore's hook
+	// blocks to a hooks folder committed with the repo (core.hooksPath in
+	// the work tree, such as .githooks or .husky): without it no command
+	// writes there, init and doctor --fix included. A project whose .lore
+	// folder git ignores never gets them (D-500).
+	TrackedHooks bool `json:"tracked_hooks,omitempty" flag:"tracked-hooks" desc:"also add lore's hook blocks to a hooks folder committed with the repo (core.hooksPath in the work tree, such as .githooks); without it lore leaves such a folder alone"`
 }
 
 // RepoResult is one repo's block of --all.
@@ -322,6 +367,11 @@ type Out struct {
 	// Skipped are the folders --all passed over (not git repos, or no
 	// lore data), noted.
 	Skipped []Skip `json:"skipped,omitempty"`
+	// NoLore are the repos --all found with no lore data (K-10): counted
+	// in the summary, listed in the text with --verbose, always in JSON.
+	NoLore []string `json:"no_lore,omitempty"`
+	// Verbose: the text lists NoLore one line each.
+	Verbose bool `json:"-"`
 	// Note says how --all chose the repos when no setup has folders.
 	Note string `json:"note,omitempty"`
 	// Failed names the repos (--all) or steps that failed.
@@ -340,8 +390,9 @@ type Out struct {
 	Exit     int  `json:"exit_status"`
 }
 
-// ExitStatus implements op.ExitStatuser: one repo exits as doctor does
-// (0 healthy, 1 degraded, 2 broken); --all exits 1 when a repo failed.
+// ExitStatus implements op.ExitStatuser: one repo exits 0 when every step
+// ran and no error is left (healthy, or degraded by warnings only), 1 when
+// a step failed, 2 broken (doctor's); --all exits 1 when a repo failed.
 func (o Out) ExitStatus() int { return o.Exit }
 
 // Text implements op.Texter.
@@ -355,6 +406,11 @@ func (o Out) Text() string {
 		}
 		for _, sk := range o.Skipped {
 			b.WriteString(sk.Line() + "\n")
+		}
+		if o.Verbose {
+			for _, r := range o.NoLore {
+				b.WriteString(NoLoreLine(r) + "\n")
+			}
 		}
 		for _, e := range o.Errors {
 			b.WriteString("error: " + e + "\n")
@@ -373,6 +429,8 @@ func (o Out) Text() string {
 		}
 	case o.DryRun:
 		b.WriteString(LineDryRun + "\n")
+	case !doctor.Changed(o.Steps) && (len(o.Errors) > 0 || o.Status == doctor.StatusBroken):
+		b.WriteString(LineLeftForYou + "\n")
 	case !doctor.Changed(o.Steps):
 		b.WriteString(LineCurrent + "\n")
 	}
@@ -424,6 +482,12 @@ func (o Out) Summary() string {
 	}
 	if len(o.Skipped) > 0 {
 		fmt.Fprintf(&b, "; %d folder(s) skipped (see the skipped lines)", len(o.Skipped))
+	}
+	if len(o.NoLore) > 0 {
+		fmt.Fprintf(&b, "; %d repo(s) without lore data left as they are", len(o.NoLore))
+		if !o.Verbose {
+			b.WriteString(" (--verbose lists them)")
+		}
 	}
 	if len(o.Errors) > 0 {
 		fmt.Fprintf(&b, "; %d cache error(s)", len(o.Errors))
@@ -482,7 +546,7 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermWrite, Access: op.AccessRead, Local: true, RESTNoun: restNoun,
 			// a doctor repair may ask first (reversed --supersedes links)
 			Confirm: op.ConfirmRule{MayAsk: true},
-			Errors:  []errs.Code{errs.NotAStore, errs.InvalidInput, errs.FormatOld, errs.NeedsConfirm, errs.Internal},
+			Errors:  []errs.Code{errs.NotAStore, errs.Unsupported, errs.InvalidInput, errs.FormatOld, errs.NeedsConfirm, errs.Internal}, // Unsupported: outside a code repo or in a store clone (devco D-523)
 			Examples: []op.Example{
 				{Title: "fix this project", CLI: "lore fix", Want: "Status:"},
 				{Title: "see what it would do", CLI: "lore fix --dry-run", Want: ""},
@@ -504,7 +568,16 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	}
 	if len(in.Dirs) > 0 {
 		return Out{}, errs.New(errs.InvalidInput, "lore fix takes folders only with --all").
-			WithHint("lore fix --all --dirs " + strings.Join(in.Dirs, " "))
+			WithHint("lore fix --all --dirs " + strings.Join(in.Dirs, " --dirs "))
+	}
+	if in.Verbose {
+		return Out{}, errs.New(errs.InvalidInput, "lore fix takes --verbose only with --all").
+			WithHint("lore fix --all --verbose")
+	}
+	if g, ok := env.(StoreCloneGate); ok {
+		if shown, in := g.FixStoreCloneHere(ctx); in {
+			return Out{}, storeCloneErr(shown) // D-524: a git repo, but a store's
+		}
 	}
 	top, err := env.RepoTop(ctx)
 	if err != nil || top == "" {
@@ -543,7 +616,19 @@ func Run(ctx context.Context, env Env, in RunIn) (Out, error) {
 	if in.DryRun && dryOnlyWouldDo(out) {
 		out.Exit = 0 // B4-14: every finding is one the real run fixes
 	}
+	if warningsOnly(out) {
+		out.Exit = 0 // D-522: warnings are printed as warnings, never an exit with no error line
+	}
 	return out, nil
+}
+
+// warningsOnly reports a run that ended degraded by warnings alone: every
+// step ran, no error is left, the status is not broken. Its exit is 0 (as
+// --all already counts such a repo ok): a non-zero exit always comes with
+// the line that caused it (a failed step, an error), never after
+// "Everything is current." and warning lines only (devco D-522).
+func warningsOnly(o Out) bool {
+	return o.Exit == 1 && len(o.Failed) == 0 && len(o.Errors) == 0 && o.Status != doctor.StatusBroken
 }
 
 // dryRealRunChecks are the doctor checks whose findings a dry run leaves
@@ -580,7 +665,7 @@ func runAll(ctx context.Context, env Env, in RunIn) (Out, error) {
 	prep := env.FixPrepare(ctx, in.DryRun, jobs)
 	prep.Yes = op.Confirmed(ctx) // --yes reaches each repo's own run
 	prep.Migrate = in.Migrate    // D15: only --migrate migrates, in each repo
-	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped, Note: found.Note}
+	out := Out{DryRun: in.DryRun, Jobs: jobs, Prep: prep, Skipped: found.Skipped, NoLore: found.NoLore, Verbose: in.Verbose, Note: found.Note}
 	var emit func(RepoResult)
 	if w := env.FixProgress(); w != nil {
 		out.Streamed = true

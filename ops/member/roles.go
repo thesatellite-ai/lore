@@ -160,6 +160,8 @@ func checkRoles(roles []RoleOut, want, keep []string) error {
 // RoleListIn is the input of role.list.
 type RoleListIn struct {
 	Retired bool `json:"retired,omitempty" flag:"retired" desc:"include retired roles"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
@@ -228,12 +230,12 @@ type RoleWriteOut struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
-// Text is "✓ role designer_lead added in agency org/".
+// Text is "✓ role designer_lead added in the roster of agency (agency/org)".
 func (o RoleWriteOut) Text() string { return o.text() + profilestore.WarningText(o.Warnings) }
 
 // text is Text without the warnings.
 func (o RoleWriteOut) text() string {
-	return work.Success + " role " + o.Role.Name + " " + o.Verb + " in " + o.Where + "\n"
+	return work.Success + " role " + o.Role.Name + " " + o.Verb + " in the roster of " + o.Where + "\n"
 }
 
 // Role write verbs.

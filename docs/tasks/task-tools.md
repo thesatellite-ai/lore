@@ -153,7 +153,7 @@ $ lore task checklist list --id tsk_28f8…03df
 
 ## Step 3 — Split a task into sub-tasks
 
-`lore task split --id <id> --title <title> --title <title> --title …` adds one sub-task per title, in order, as one batch. A flag before the first title applies to every sub-task; a flag after a title applies to that one only (here `--priority high` after "Shoot the mugs"). What a sub-task does not set it takes from the parent, and the output says what it inherited. `--dry-run` shows the plan and writes nothing:
+`lore task split --id <id> --title <title> --title <title> --title …` adds one sub-task per title, in order, as one batch: one commit for all of them, and a sub-task lore refuses (a secret in its text, say) writes none of them. A flag before the first title applies to every sub-task; a flag after a title applies to that one only (here `--priority high` after "Shoot the mugs"). What a sub-task does not set it takes from the parent, and the output says what it inherited. `--dry-run` shows the plan and writes nothing:
 
 <!-- example: task-tools#split -->
 ```console
@@ -181,7 +181,7 @@ $ lore task list --parent tsk_162d…9666
 ```
 <!-- /example -->
 
-`--title` may be repeated, one sub-task each (a flag typed after a `--title` is that sub-task's), `--from <file>` reads one title per line (or a YAML list with priority, assignees and due dates), and `--key <key>` makes a rerun add nothing.
+`--title` may be repeated, one sub-task each (a flag typed after a `--title` is that sub-task's), `--from <file>` reads one title per line (or a YAML list with priority, assignees and due dates), and `--key <key>` makes a rerun add only the sub-tasks that are not there yet (nothing when all are).
 
 ## Step 4 — Check the sub-task tree
 
@@ -260,7 +260,7 @@ lore: wrote tasks/tsk_54fe…28f2 on this clone's refs/lore/live (a live row, no
 
 ## Step 7 — Read a task's history
 
-`lore task history --id <id>` lists each change with its time and who made it: status changes, field changes and claims. Older entries are folded; `--git` also reads earlier versions of the row from git history for the full detail.
+`lore task history --id <id>` lists each change with its time and who made it: status changes, field changes and claims. People are named, never by act_ id: a lead, assignee or watcher change reads `lead Ann Lee → Bo Kim`, and a revoked claim `(from Ann Lee)`; `--json` keeps the act_ ids. Older entries are folded; `--git` also reads earlier versions of the row from git history for the full detail.
 
 <!-- example: task-tools#history -->
 ```console
@@ -404,7 +404,7 @@ lore: wrote ~/work/website/.lore/data/task_templates/ttp_9a34…b418.json
 
 ## Step 9 — Make a task repeat
 
-`lore task add --recur '<rule>'` makes a task part of a series. Rules read like `every day`, `every weekday`, `every week`, `every month on 1`, `every mon,thu`, `every 3 months`, and `every! 14 days` (counted from when you finish, not from the due date); add `until <date>` or `for N` to end it. `lore task recur show` prints the rule and the next dates:
+`lore task add --recur '<rule>'` makes a task part of a series. Rules read like `every day`, `every weekday`, `every week`, `every month on 1`, `every mon,thu`, `every 3 months`, and `every! 14 days` (counted from when you finish, not from the due date); add `until <date>` or `for N` to end it. `lore task recur show` prints the rule and the next dates: A monthly rule never gives two instances in one month: `every month on last` from a first due of Jan 30 lists 2026-01-30, 2026-02-28, 2026-03-31 (`every month on 15` from Jan 3: Jan 3, Feb 15, Mar 15). A due with a clock time (`--due '2027-03-12 + 09:00'`) keeps it: `task show` and `task list` print `2027-03-12 09:00 EST`, `--json` carries `due_at` as RFC 3339 UTC (a date-only due stays `YYYY-MM-DD`), and each next instance is due at the same wall-clock time in your `TZ`, across a daylight-saving change too.
 
 <!-- example: task-tools#recur -->
 ```console

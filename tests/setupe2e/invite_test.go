@@ -49,12 +49,14 @@ func TestStartATeamOutsideARepo(t *testing.T) {
 	}
 }
 
-// TestReAddAdminAfterPurgeInARepo (coordinator decision, round 4): a team
-// started inside a git repo attaches its store to that repo's
-// .lore/stores.yaml under the team's name; purging the admin setup frees
-// the team but never touches the repo. Starting the same team again on the
-// same store in that repo reuses the attach (a no-op) and succeeds. Onto
-// another store, the stale entry is refused with the command that drops it.
+// TestReAddAdminAfterPurgeInARepo (coordinator decision, round 4; D-63):
+// a team started inside a git repo makes its store for this machine: the
+// org entry in ~/.lore/config.yaml points at it and the repo's
+// .lore/stores.yaml gets nothing (docs/team/guided-setup.md; before D-63
+// the step attached the internal team-store url to that repo). Purging
+// the admin setup frees the team, so starting the same team again on the
+// same store succeeds, and so does starting it onto another store: the
+// org entry then names the new store and the repo is still untouched.
 func TestReAddAdminAfterPurgeInARepo(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -69,6 +71,7 @@ func TestReAddAdminAfterPurgeInARepo(t *testing.T) {
 	defer w.Stop()
 	repo := w.StartDir()
 	const setup, org = "teamadmin", "crew"
+	login := w.Accounts[0].Login
 	purge := func() {
 		t.Helper()
 		for _, args := range [][]string{{"setup", "remove", setup}, {"setup", "trash", "purge", setup, "--confirm"}} {
@@ -77,25 +80,37 @@ func TestReAddAdminAfterPurgeInARepo(t *testing.T) {
 			}
 		}
 	}
+	// started checks what a person sees after a start onto store: the org
+	// entry names it (and no other team store), the repo attaches nothing.
+	started := func(store, other string) {
+		t.Helper()
+		cfg, err := os.ReadFile(filepath.Join(w.Home, ".lore", "config.yaml"))
+		if err != nil || !strings.Contains(string(cfg), "name: "+org) || !strings.Contains(string(cfg), TeamStoreURL(login, store)) {
+			t.Fatalf("config.yaml has no %s org on %s: %v\n%s", org, TeamStoreURL(login, store), err, cfg)
+		}
+		if other != "" && strings.Contains(string(cfg), TeamStoreURL(login, other)) {
+			t.Fatalf("config.yaml still names the purged team's store %s:\n%s", TeamStoreURL(login, other), cfg)
+		}
+		stores, err := os.ReadFile(filepath.Join(repo, ".lore", "stores.yaml"))
+		if err == nil && (strings.Contains(string(stores), "name: "+org) || strings.Contains(string(stores), login+"/crew-")) {
+			t.Fatalf("the team step attached its store to the repo it started in (D-63: it is the machine's store):\n%s", stores)
+		}
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+	}
 	if err := w.StartTeam(ctx, loreBin, repo, setup, org, "crew-store"); err != nil {
 		t.Fatalf("first start: %v", err)
 	}
-	stores, err := os.ReadFile(filepath.Join(repo, ".lore", "stores.yaml"))
-	if err != nil || !strings.Contains(string(stores), "name: "+org) {
-		t.Fatalf("the team store is not attached to the repo it started in: %v\n%s", err, stores)
-	}
+	started("crew-store", "")
 	purge()
 	if err := w.StartTeam(ctx, loreBin, repo, setup, org, "crew-store"); err != nil {
 		t.Fatalf("starting the same team on the same store again after purge: %v", err)
 	}
+	started("crew-store", "")
 	purge()
-	err = w.StartTeam(ctx, loreBin, repo, setup, org, "crew-other")
-	if err == nil {
-		t.Fatal("starting the team onto another store while the repo attaches the old one under its name was not refused")
+	if err := w.StartTeam(ctx, loreBin, repo, setup, org, "crew-other"); err != nil {
+		t.Fatalf("starting the team onto another store after purge (the repo attaches nothing): %v", err)
 	}
-	for _, want := range []string{".lore/stores.yaml", TeamStoreURL(w.Accounts[0].Login, "crew-store"), "lore store remove --name " + org} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the refusal does not name %q:\n%v", want, err)
-		}
-	}
+	started("crew-other", "crew-store")
 }

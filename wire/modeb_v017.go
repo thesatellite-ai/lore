@@ -7,7 +7,8 @@ package wire
 //
 //	ExportModeB(pointer)
 //	  parse .lore/lore.yaml (or the older lore.toml): db_path + project_id
-//	  expand ${HOME} ${LORE_HOME} ${PROJECT_ROOT}; a ".." part refused
+//	  expand ${HOME} ${LORE_HOME} (the lore home, or LORE_V017_HOME)
+//	      ${PROJECT_ROOT}; a ".." part refused
 //	      unless LORE_ALLOW_DB_PATH_OUTSIDE=1 (v0.1.17 R27 #21)
 //	  open the shared lore.db read-only (other repos may still use it)
 //	  pick the project's rows, every synced non-machine-local table:
@@ -41,6 +42,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -60,10 +62,13 @@ const (
 	modeBVarHome        = "${HOME}"
 	modeBVarLoreHome    = "${LORE_HOME}"
 	modeBVarProjectRoot = "${PROJECT_ROOT}"
-	// modeBLoreHomeEnv is the variable ${LORE_HOME} reads.
-	modeBLoreHomeEnv = "LORE_HOME"
-	// modeBLoreHomeDir is ${LORE_HOME}'s default under the home folder.
-	modeBLoreHomeDir = ".lore"
+	// modeBLoreHomeEnv moves the whole lore home (lorehome.EnvName);
+	// ${LORE_HOME} is that home.
+	modeBLoreHomeEnv = lorehome.EnvName
+	// modeBV017HomeEnv fills ${LORE_HOME} in db_path only, without moving
+	// the lore home: v0.1.17's LORE_HOME meaning, for a person whose
+	// shared databases sit in a folder they used to name with LORE_HOME.
+	modeBV017HomeEnv = "LORE_V017_HOME"
 	// modeBTOMLExt marks the older pointer form.
 	modeBTOMLExt = ".toml"
 	// v0.1.17 lore.db names the reader queries.
@@ -125,7 +130,14 @@ func (V017ModeB) ExportModeB(ctx context.Context, pointerPath string) (_ ModeBEx
 		dbPath = filepath.Join(root, dbPath)
 	}
 	if _, serr := os.Stat(dbPath); serr != nil {
-		return ModeBExport{}, errs.Wrap(errs.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there", serr)
+		e := errs.Wrap(errs.NotFound, "migrate: the shared lore.db "+dbPath+" named by "+pointerPath+" is not there", serr)
+		if strings.Contains(ptr.DBPath, modeBVarLoreHome) && os.Getenv(modeBV017HomeEnv) == "" {
+			// LORE_HOME now moves the whole lore home, so a person who set
+			// it only to point at the shared databases is told the variable
+			// that keeps the old meaning.
+			e = e.WithHint("${LORE_HOME} in db_path is the lore home; if the shared databases live in another folder, run it again with " + modeBV017HomeEnv + "=<that folder> (it fills ${LORE_HOME} in db_path only), or write the absolute path into db_path")
+		}
+		return ModeBExport{}, e
 	}
 	dsn := fileuri.URL(dbPath, sqlite.LegacyReadQuery(dbPath, false, ""))
 	db, err := sql.Open(sqliteDriver, dsn)
@@ -241,19 +253,29 @@ func tomlTailOK(rest string) bool {
 }
 
 // expandModeBPath is v0.1.17's projresolve.ExpandPath: ${HOME},
-// ${LORE_HOME} (default <home>/.lore) and ${PROJECT_ROOT}, then a ".."
-// segment is refused unless LORE_ALLOW_DB_PATH_OUTSIDE=1.
+// ${LORE_HOME} (LORE_V017_HOME when set, else the resolved lore home:
+// LORE_HOME or <home>/.lore) and ${PROJECT_ROOT}, then a ".." segment is
+// refused unless LORE_ALLOW_DB_PATH_OUTSIDE=1.
 func expandModeBPath(p, projectRoot string) (string, error) {
 	out := p
-	if strings.Contains(out, modeBVarHome) || (strings.Contains(out, modeBVarLoreHome) && os.Getenv(modeBLoreHomeEnv) == "") {
+	if strings.Contains(out, modeBVarHome) {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", errs.Wrap(errs.Internal, "migrate: expand "+p, err)
 		}
 		out = strings.ReplaceAll(out, modeBVarHome, home)
-		out = strings.ReplaceAll(out, modeBVarLoreHome, filepath.Join(home, modeBLoreHomeDir))
 	}
-	out = strings.ReplaceAll(out, modeBVarLoreHome, os.Getenv(modeBLoreHomeEnv))
+	if strings.Contains(out, modeBVarLoreHome) {
+		lh := os.Getenv(modeBV017HomeEnv)
+		if lh == "" {
+			h, err := lorehome.Resolve()
+			if err != nil {
+				return "", err
+			}
+			lh = h.Dir
+		}
+		out = strings.ReplaceAll(out, modeBVarLoreHome, lh)
+	}
 	out = strings.ReplaceAll(out, modeBVarProjectRoot, projectRoot)
 	if os.Getenv(modeBAllowOutsideEnv) != envOn && slices.Contains(strings.Split(filepath.ToSlash(out), "/"), "..") {
 		return "", errs.New(errs.BadPath, "migrate: db_path "+strconv.Quote(p)+" has a `..` part").
@@ -398,7 +420,7 @@ func v017DocQuery(def schema.TableDef, cols map[string]bool, where string) (stri
 	pairs := make([]string, 0, len(def.Fields)+len(v017EnvelopeColumns))
 	for _, c := range v017EnvelopeColumns {
 		if cols[c] {
-			pairs = append(pairs, "'"+c+`', "`+c+`"`)
+			pairs = append(pairs, "'"+c+"', "+v017CellText(c)) // devco N-5: BLOB cells read as text (M-1's helper)
 		}
 	}
 	for _, f := range def.Fields {
@@ -406,7 +428,7 @@ func v017DocQuery(def schema.TableDef, cols map[string]bool, where string) (stri
 			continue
 		}
 		fields = append(fields, f)
-		pairs = append(pairs, "'"+f.Name+`', "`+f.Name+`"`)
+		pairs = append(pairs, "'"+f.Name+"', "+v017CellText(f.Name))
 	}
 	return "SELECT json_object(" + strings.Join(pairs, ", ") + `) FROM "` + string(def.Name) + `" WHERE ` + where + " ORDER BY id", fields
 }

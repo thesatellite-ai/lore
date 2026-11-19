@@ -79,8 +79,8 @@ func PrepareClone(ctx context.Context, dir, remote string, own bool) error {
 		return err
 	}
 	if NoClone(ctx) && !exists(p.GitDir+string(os.PathSeparator)+headFileName) {
-		return errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (dry run)").
-			WithHint("a run that is not a dry run clones it to " + dir)
+		return errs.New(errs.StoreUnreachable, "git: the store "+remote+" has no clone on this machine yet, and this run makes none (a dry run or a CI read)").
+			WithHint("a run that is neither a dry run nor a CI read clones it to " + dir)
 	}
 	if err := os.MkdirAll(p.StateDir, cloneDirMode); err != nil {
 		return errs.FileIO("create the clone state folder", p.StateDir, err)

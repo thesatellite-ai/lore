@@ -8,6 +8,7 @@ package rule
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,6 +21,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
@@ -32,6 +34,9 @@ import (
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
+	opsscope "github.com/thesatellite-ai/lore/ops/scope"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -47,6 +52,9 @@ const (
 	OpUnarchive = "rule.unarchive"
 	OpDelete    = "rule.delete"
 	OpSearch    = "rule.search"
+	// OpApprove is a person's approval of a rule an agent wrote
+	// (devco:S-15): its trust_score goes from trust.Agent to trust.Default.
+	OpApprove = "rule.approve"
 )
 
 // Envelope kinds (v0.1.17 constants.KindRule*).
@@ -118,6 +126,11 @@ func Ops(env kn.Env) []op.Entry {
 			Examples:   []op.Example{{Title: "search as JSON", CLI: `lore rule search --query "retry" --json`, Want: `"data"`}},
 			Permission: op.PermRead, Access: op.AccessRead, Errors: kn.SearchErrors,
 		}, o.search),
+		op.Define(op.Spec{
+			Name: OpApprove, Summary: "Approve a rule an agent wrote (a person only): its trust goes from 0.25 to 0.50 and LORE.md stops marking it agent-written",
+			Examples:   []op.Example{{Title: "approve an agent's rule", CLI: "lore rule approve --id rul_<id>", Want: "approved"}},
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: kn.WriteErrors,
+		}, o.approve),
 	}
 }
 
@@ -125,6 +138,10 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
 
@@ -136,7 +153,6 @@ type AddIn struct {
 	Globs      string   `json:"globs,omitempty" flag:"globs" desc:"JSON array of glob patterns (when activation=glob)"`
 	AppliesTo  string   `json:"applies_to_description,omitempty" flag:"applies-to" desc:"when activation=semantic: words describing where the rule applies (lore context matches them)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
-	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance pointer"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"rule_id (rul_*) this entry replaces"`
 	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
@@ -158,13 +174,16 @@ type AddOut struct {
 	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
-	label string
+	// Existing is true when --key found the row a previous run added
+	// (nothing written).
+	Existing bool `json:"existing,omitempty"`
+	label    string
 }
 
 // Text prints v0.1.17's add lines: "✓ <id> <label>", the label left out
 // (no trailing space) for the repo, whose label is empty.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s\n  scope: [%s] severity: %s\n", strings.TrimSpace(o.ID+" "+o.label), o.Scope, o.Severity) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
+	return fmt.Sprintf("✓ %s\n  scope: [%s] severity: %s\n", strings.TrimSpace(o.ID+" "+o.label), o.Scope, o.Severity) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings) + kn.ExistingLine(o.Existing)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
@@ -244,6 +263,9 @@ func (o ListOut) rowsText() string {
 		if !r.ArchivedAt.IsZero() {
 			badge = " [archived]"
 		}
+		if r.NeedsApproval {
+			badge += " [" + trust.ReviewLabel + "]"
+		}
 		fmt.Fprintf(w, "%s [%s/%s] %s%s%s\n", r.ID, r.Severity, r.Activation, kn.Cut(textcut.OneLine(r.Body), kn.ListCut), badge, kn.LabelSuffix(r.Label))
 	}
 	return b.String() + ext.String()
@@ -286,6 +308,9 @@ type Record struct {
 	// auditrec), last so the v0.1.17 keys keep their order.
 	CreatedBy string `json:"created_by,omitempty"`
 	UpdatedBy string `json:"updated_by,omitempty"`
+	// NeedsApproval: an agent wrote or rewrote the rule and no person
+	// approved it yet (trust_score below trust.Default, devco:S-15).
+	NeedsApproval bool `json:"needs_approval,omitempty"`
 }
 
 // IDIn is the input of the operations that take one rule id.
@@ -332,7 +357,12 @@ type ShowOut struct {
 
 // Text prints v0.1.17's show block.
 func (o ShowOut) baseText() string {
-	return fmt.Sprintf("%s\n  severity:   %s\n  activation: %s\n\n%s\n", o.Data.ID, o.Data.Severity, o.Data.Activation, o.Data.Body)
+	review := ""
+	if o.Data.NeedsApproval {
+		review = fmt.Sprintf("  review:     %s (a person runs lore rule approve --id %s)\n", trust.ReviewLabel, o.Data.ID)
+	}
+	// the store label after the id: which store/folder holds the row (devco D-553)
+	return fmt.Sprintf("%s%s\n  severity:   %s\n  activation: %s\n%s\n%s\n", o.Data.ID, kn.LabelSuffix(o.Data.Label), o.Data.Severity, o.Data.Activation, review, o.Data.Body)
 }
 
 // EditIn is the input of rule.edit; an empty flag leaves its field.
@@ -444,7 +474,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	var existed bool
 	c := kn.Create{
+		Key: in.Key, Existed: &existed,
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
@@ -454,6 +486,12 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	// 6.2.3 / D10: --scope picks the store, repo and folder; --overrides
 	// names the wider rule this one replaces in its scope.
+	if err := opsscope.RefuseLive(in.Scope, in.Live, in.NoLive); err != nil {
+		return AddOut{}, err
+	}
+	if callerIsAgent(ctx) {
+		c.Trust = trust.Agent // devco:S-15: waits for a person's lore rule approve
+	}
 	scopeLabel, sw, err := knscope.ForAdd(ctx, o.env, noun, in.Scope, in.Overrides, &c)
 	if err != nil {
 		return AddOut{}, err
@@ -462,7 +500,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Scope: kn.Or(scopeLabel, kn.ScopeLabel(in.Repo)), Severity: sev, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{Existing: existed, ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Scope: kn.Or(scopeLabel, kn.ScopeLabel(in.Repo)), Severity: sev, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the rules in scope.
@@ -510,12 +548,22 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err != nil {
 		return WriteOut{}, err
 	}
+	if in.Severity != "" && in.Severity != schema.RuleSeverityMust {
+		if err = o.guardCompanyMust(ctx, in.ID, "lower the severity of a company must rule", "lore rule edit --id "+in.ID+" --severity "+in.Severity); err != nil {
+			return WriteOut{}, err
+		}
+	}
 	e := kn.Edit{
 		Texts: map[string]string{
 			kn.FieldBody: in.Body, fieldSeverity: in.Severity, fieldActivation: in.Activation, fieldGlobs: in.Globs, fieldApplies: in.AppliesTo, kn.FieldSourceRef: in.SourceRef, schema.FieldSummary: summary,
 		},
 		RebindRepo: in.RebindRepo, RebindMaster: in.RebindMaster, Tags: in.Tags, Untags: in.Untags,
 		Hint: "give at least one of --body, --severity, --activation, --globs, --applies-to, --source-ref, --summary, --scope, --overrides, --rebind-repo, --rebind-master, --tag, --untag",
+	}
+	if callerIsAgent(ctx) && in.changesMeaning() {
+		// devco:S-15: an agent that rewrites a rule (a person's too) puts it
+		// back in review; tags, source-ref and moves do not change what it says.
+		e.Trust = trust.Agent
 	}
 	plan, err := knscope.ForEdit(ctx, o.env, noun, in.ID, in.Scope, in.Overrides, &e)
 	if err != nil {
@@ -535,11 +583,14 @@ func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	if bulkForm {
-		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun, kn.Now(o.env))
+		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table, Guard: wheredel.CompanyGuard(o.env, noun.Name, "archive", in.Where, keepMember)}, in.Where, in.DryRun, kn.Now(o.env))
 		if werr != nil {
 			return WriteOut{}, werr
 		}
 		return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, bulk: res.Human}, nil
+	}
+	if err = o.guardCompanyMust(ctx, in.ID, "archive a company must rule", "lore rule archive --id "+in.ID); err != nil {
+		return WriteOut{}, err
 	}
 	return o.stamp(ctx, in.ID, kn.Now(o.env), "archived")
 }
@@ -566,7 +617,7 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	if bulkForm {
-		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun)
+		res, werr := wheredel.Run(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table, Guard: wheredel.CompanyGuard(o.env, noun.Name, "delete", in.Where, keepMember)}, in.Where, in.DryRun)
 		if werr != nil {
 			return WriteOut{}, werr
 		}
@@ -575,6 +626,9 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	// the one-row form asks as the engine did under Confirm Always (FA-DEL-1)
 	// a bad id is E_INVALID_ID and a missing row E_NOT_FOUND before any question
 	if _, err = kn.DeleteQuestion(ctx, o.env, noun, in.ID); err != nil {
+		return WriteOut{}, err
+	}
+	if err = o.guardCompanyMust(ctx, in.ID, "delete a company must rule", "lore rule delete --id "+in.ID+" --yes"); err != nil {
 		return WriteOut{}, err
 	}
 	id, err := noun.ID(in.ID)
@@ -589,6 +643,26 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	return WriteOut{ID: w.Row.ID.String(), Store: string(src), trashed: true}, nil
+}
+
+// keepMember is the --where term that leaves every must rule out of a
+// bulk form, the member's own way on when it matched company must rules
+// (devco D-659).
+const keepMember = fieldSeverity + ":" + schema.RuleSeverityShould + "," + schema.RuleSeverityMay
+
+// guardCompanyMust refuses a member's change that takes a must rule of
+// company ground (the org folder, a store root, every project folder of
+// the company store: profilestore.CompanyGround) out of what every repo
+// reading it is told: a lower severity, archive, delete (devco D-637,
+// D-681). Only an admin of the org makes it (profilestore.RequireAdminAt);
+// line is the command the admin runs. A should/may rule and a rewording
+// pass. A bad or missing id passes: the op answers it.
+func (o ops) guardCompanyMust(ctx context.Context, id, does, line string) error {
+	it, err := kn.Show(ctx, o.env, noun, id)
+	if err != nil || kn.Field(it.Row, fieldSeverity) != schema.RuleSeverityMust {
+		return nil
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, it.Source, does, line)
 }
 
 // search runs the full-text search.
@@ -622,7 +696,7 @@ func check(severity, activation string) error {
 
 // recordOf is the v0.1.17 --json form of a rule row.
 func recordOf(lab kn.Labeler, src store.Source, r row.Row) Record {
-	return Record{
+	return Record{NeedsApproval: !trust.Approved(scoreOf(r)),
 		ID: r.ID.String(), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy,
 		TrustScore: kn.Number(r, kn.FieldTrust), Confidence: kn.Number(r, kn.FieldConfidence),
 		LastValidatedAt: kn.Time(r, kn.FieldValidated), ArchivedAt: kn.Time(r, kn.FieldArchivedAt),
@@ -645,4 +719,79 @@ func checkSummary(s string) (string, error) {
 			WithHint("keep it to one short line; the full text stays in the body")
 	}
 	return s, nil
+}
+
+// callerIsAgent reports whether a coding agent runs the operation (the
+// engine's caller; false outside Run, so a direct call acts as a person).
+func callerIsAgent(ctx context.Context) bool {
+	c, ok := engine.CallerOf(ctx)
+	return ok && c.Agent != ""
+}
+
+// changesMeaning reports whether the edit changes what the rule says or
+// where it applies (the flags that put an agent's edit back in review).
+func (in EditIn) changesMeaning() bool {
+	return in.Body != "" || in.Severity != "" || in.Activation != "" || in.Globs != "" || in.AppliesTo != "" ||
+		in.Summary != "" || in.Scope != "" || in.Overrides != ""
+}
+
+// scoreOf is the row's trust_score; a row without the field reads as
+// trust.Default (every rule written before devco:S-15 stays approved).
+func scoreOf(r row.Row) float64 {
+	if _, ok := r.Fields[kn.FieldTrust]; !ok {
+		return trust.Default
+	}
+	return kn.Number(r, kn.FieldTrust)
+}
+
+// ApproveOut is the output of rule.approve.
+type ApproveOut struct {
+	ID    string `json:"id"`
+	Store string `json:"store,omitempty"`
+	// TrustBefore / TrustAfter are the rule's trust_score before and after.
+	TrustBefore float64 `json:"trust_before"`
+	TrustAfter  float64 `json:"trust_after"`
+	// Already: the rule needed no approval; nothing was written.
+	Already bool `json:"already,omitempty"`
+}
+
+// Text is the approval line, or why nothing changed.
+func (o ApproveOut) Text() string {
+	if o.Already {
+		return fmt.Sprintf("✓ %s needs no approval (trust %.2f; only a rule an agent wrote or rewrote waits for one)\n", o.ID, o.TrustBefore)
+	}
+	return fmt.Sprintf("✓ %s approved: trust %.2f → %.2f; LORE.md drops its review=%q mark at the next lore render (the commit hook runs it)\n", o.ID, o.TrustBefore, o.TrustAfter, trust.ReviewLabel)
+}
+
+// approve sets an agent-written rule's trust_score to trust.Default. Only
+// a person approves: an agent caller gets E_POLICY_DENIED that names who
+// runs it, so an agent can never vouch for its own (or another agent's)
+// rule.
+func (o ops) approve(ctx context.Context, in IDIn) (ApproveOut, error) {
+	if c, ok := engine.CallerOf(ctx); ok && c.Agent != "" {
+		e := errs.New(errs.PolicyDenied, "rule approve: only a person approves a rule; this looks like the agent "+fmt.Sprintf("%q", c.Agent)).
+			WithHint("ask a person to run lore rule approve --id " + strings.TrimSpace(in.ID) + " in their own terminal")
+		e.NeedsPerson = true
+		return ApproveOut{}, e
+	}
+	it, err := kn.Show(ctx, o.env, noun, in.ID)
+	if err != nil {
+		return ApproveOut{}, err
+	}
+	before := scoreOf(it.Row)
+	out := ApproveOut{ID: it.Row.ID.String(), Store: string(it.Source), TrustBefore: before, TrustAfter: before}
+	if trust.Approved(before) {
+		out.Already = true
+		return out, nil
+	}
+	v, err := value.Float(trust.Default)
+	if err != nil {
+		return ApproveOut{}, errs.Wrap(errs.Internal, "rule approve: trust score", err)
+	}
+	src, w, err := kn.Stamp(ctx, o.env, noun, in.ID, kn.FieldTrust, v)
+	if err != nil {
+		return ApproveOut{}, err
+	}
+	out.ID, out.Store, out.TrustAfter = w.Row.ID.String(), string(src), trust.Default
+	return out, nil
 }

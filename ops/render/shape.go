@@ -29,6 +29,7 @@ type Report struct {
 	MustFull           int        `json:"must_full,omitempty" desc:"--report: must rules written in full"`
 	MustLine           int        `json:"must_line,omitempty" desc:"--report: must rules written as one line"`
 	HighHotfixLines    int        `json:"high_hotfix_lines,omitempty"`
+	HighHotfixesOut    []string   `json:"high_hotfixes_left_out,omitempty" desc:"--report: the high hotfixes left out to fit the budget, by id"`
 	Topics             int        `json:"topics,omitempty"`
 	IndexCollapsed     bool       `json:"index_collapsed,omitempty" desc:"--report: the topic index was folded to one line"`
 	BudgetExceeded     bool       `json:"budget_exceeded,omitempty"`
@@ -42,10 +43,27 @@ type Report struct {
 	Dirs               []DirFile  `json:"dirs,omitempty" desc:"--report: the folder files"`
 	DirFilesOff        bool       `json:"dir_files_off,omitempty" desc:"--report: context.dir_files is off"`
 	TailsLeftOut       []string   `json:"tails_left_out,omitempty" desc:"--report: tail blocks left out for lack of room"`
+	// Private is the private render's share (devco D-429): a repo linked to
+	// an org store keeps notes outside the checkout, and --report counted 0.
+	Private PrivateReport `json:"private,omitzero" desc:"--report: the private render outside the checkout (the attached internal stores); in a linked repo with no .lore folder the only member"`
 	// --report --scopes --json
 	Files   []ScopeFile  `json:"files,omitempty" desc:"--report --scopes: one row per generated file per tool"`
 	Chains  []ScopeChain `json:"chains,omitempty" desc:"--report --scopes: the root-to-folder sums a tool loads"`
 	DirsOff bool         `json:"dirs_off,omitempty" desc:"--report --scopes: context.dir_files is off"`
+}
+
+// PrivateReport is --report's private render share: the files under the
+// lore home that the attached internal stores fill (render_private.go).
+type PrivateReport struct {
+	Dir      string `json:"dir" desc:"the folder of the private files"`
+	Stores   int    `json:"stores" desc:"internal stores rendered"`
+	Pinned   int    `json:"pinned" desc:"must rules and critical/high hotfixes, always in full"`
+	Rows     int    `json:"rows" desc:"rows shown in the private files"`
+	LeftOut  int    `json:"left_out" desc:"other notes the budget left out"`
+	Budget   int    `json:"budget" desc:"context.budget.internal in bytes"`
+	Bytes    int    `json:"bytes" desc:"the private files' size"`
+	Core     int    `json:"core" desc:"bytes of the pinned part (never cut)"`
+	OverCore bool   `json:"over_core" desc:"the pinned part alone is over the budget"`
 }
 
 // LineForm is one entry written as one line.

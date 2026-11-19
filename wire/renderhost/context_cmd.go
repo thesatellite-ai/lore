@@ -37,11 +37,13 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -49,6 +51,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	contextop "github.com/thesatellite-ai/lore/ops/context"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Caps (6.8): the default output cap, the hook cap when the policy cannot
@@ -198,6 +201,10 @@ type contextResult struct {
 	title string
 	picks []contextPick
 	more  string
+	// always is the bytes of the leading picks that are never cut (the
+	// SessionStart always-on rules, devco D-494); the hook adds it to its
+	// cap so they always go in full.
+	always int
 }
 
 // fit fits the picks under maxBytes, grouped under section headers, and
@@ -271,11 +278,15 @@ var contextKinds = []struct {
 }
 
 // loadKnowledge lists the live, not superseded rows of every context
-// table across the committed-render sources.
+// table across the context sources (contextSources).
 func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
+	srcs, err := h.contextSources(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []knowledgeRow
 	for _, k := range contextKinds {
-		rows, err := h.renderLiveRows(ctx, k.table)
+		rows, err := h.liveRowsFrom(ctx, srcs, k.table)
 		if err != nil {
 			return nil, err
 		}
@@ -287,6 +298,50 @@ func (h *Host) loadKnowledge(ctx context.Context) ([]knowledgeRow, error) {
 		}
 	}
 	return out, nil
+}
+
+// contextSources are the stores `lore context` picks from: the committed
+// render's (the repo store and the shareable stores) and every attached
+// internal org store (the linked store folder and the org folder, the
+// stores the private render reads). Why (devco D-429): an own repo linked
+// with `lore org link --own` keeps its notes in the store folder, not in
+// the repo, so --for-file and --for-prompt said "nothing in the store
+// applies here" while the private render held 29 rules. A client repo
+// too (devco D-481): its notes live only in its linked folder, and render
+// there names lore context and the agent hook as the way agents read
+// them, yet both answered "nothing in the store applies here". context
+// only prints to the agent, never into a file of the checkout, so
+// internal rows are safe here (a client repo's commit-msg guard refuses a
+// commit quoting them); personal stores stay out (they are not the
+// project's knowledge).
+func (h *Host) contextSources(ctx context.Context) ([]store.Source, error) {
+	srcs, err := h.renderSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	idents, err := h.app.StoreIdentities(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// devco D-479: in a store folder the repo store already is the folder
+	// (srcs starts with it); its own name would read every row twice
+	alias, err := h.app.RepoStandsFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	personal := map[string]bool{}
+	if list, lerr := h.app.ListStores(ctx); lerr == nil {
+		for _, e := range list {
+			personal[e.Name] = e.Personal
+		}
+	}
+	for _, si := range idents {
+		if si.Shareable || si.Name == alias || personal[string(si.Name)] || slices.Contains(srcs, si.Name) {
+			continue
+		}
+		srcs = append(srcs, si.Name)
+	}
+	return srcs, nil
 }
 
 // groupOf is the section a kind prints under.
@@ -339,7 +394,7 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 	}
 	rel := filepath.ToSlash(filepath.Clean(p))
 	dir := path.Dir(rel)
-	words := contextfit.Words(rel)
+	words := contextfit.PathWords(rel) // generic stems never match notes (D-599)
 	var picks, notes []contextPick
 	seen := map[string]bool{}
 	add := func(k knowledgeRow, why string) {
@@ -376,9 +431,9 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 		}
 		body := renderField(k.r.Row, renderFieldBody)
 		switch {
-		case strings.Contains(body, rel):
+		case mentionsPath(body, rel):
 			add(k, "mentions "+rel)
-		case dir != "." && strings.Contains(body, dir+"/"):
+		case dir != "." && mentionsPath(body, dir+"/"):
 			add(k, "mentions "+dir+"/")
 		}
 	}
@@ -596,7 +651,7 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 			if base == "" {
 				base, _ = os.Getwd()
 			}
-			if r, rerr := filepath.Rel(base, p); rerr == nil && !strings.HasPrefix(r, "..") {
+			if r, inside := fspath.Rel(base, p); inside {
 				p = r
 			}
 		}
@@ -624,7 +679,7 @@ func (h *Host) runContextHook(ctx context.Context, f *contextFlags, stdin io.Rea
 	switch {
 	case capB > 0:
 	case startEvent:
-		capB = contextSessionStartCap
+		capB = contextSessionStartCap + res.always
 	default:
 		capB = contextHookCapFall
 		if set, ok := h.policySet(ctx); ok {

@@ -130,7 +130,7 @@ dec_d431…313a [accepted] We use Stripe and bank transfer for payments
 ```
 <!-- /example -->
 
-The old decision now says `superseded`. lore refuses `--supersedes` with an id that is not a row of the same kind in this project (`E_NOT_FOUND`), or a row that was already replaced (`E_INVALID_INPUT`: supersede the newer row instead, so the chain stays one line); a refused command writes nothing.
+The old decision now says `superseded`. `lore decision list --status proposed` lists only the decisions still waiting (repeat `--status` for several). A team that numbers its decisions in the title (`D5: Which repos are client repos`) can name one by that number: `lore decision show --id D5` (also `edit`, `archive`, `unarchive`, `delete`) finds the one title that opens with it, in any case; `D5` never matches `D51`, and a number two titles open with is refused with both ids. lore refuses `--supersedes` with an id that is not a row of the same kind in this project (`E_NOT_FOUND`), or a row that was already replaced (`E_INVALID_INPUT`: supersede the newer row instead, so the chain stays one line); a refused command writes nothing.
 
 Rows linked by older versions point the wrong way; run `lore doctor --fix` once to repair them.
 
@@ -213,7 +213,7 @@ lore: wrote 3 row file(s) in ~/stores/agency/_store (store agency)
 lore: wrote 1 row file(s) in ~/work/website/.lore/data
 ✓ mem_54fe…28f2 moved to agency
 $ lore memory show --id mem_54fe…28f2
-mem_54fe…28f2
+mem_54fe…28f2 [agency]
   kind:   retrieved
   trust:  0.50
   source: manual
@@ -248,6 +248,21 @@ lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 ```
 <!-- /example -->
 
+## Rules an agent writes wait for a person
+
+Every rule, memory and decision carries a trust score from 0 to 1 (`trust` in `show`, `trust="…"` on each rule in LORE.md). A row a person writes gets 0.50. A rule a coding agent adds (a Claude Code, Codex or other detected session, or a labelled `lore agent start` session) gets 0.25, and so does a person's rule whose text an agent changes (`--body`, `--severity`, `--activation`, `--globs`, `--applies-to`, `--summary`, `--scope` or `--overrides`; a tag or `--source-ref` change keeps the score). A rule below 0.50 is "agent-written, not approved": LORE.md prints it with `review="agent-written, not approved"` (and those words before its line form), `lore rule list` adds `[agent-written, not approved]`, `lore rule show` adds a `review:` line and `--json` adds `"needs_approval": true`. Every session still reads the rule; the mark tells it, and the people reviewing, that nobody vouched for it yet.
+
+A person's `lore inbox` lists each such rule with who wrote it and the two ways out. The list is read from the rule rows, which travel in git, so a lead sees a teammate's agent's rule after `git pull` and `lore sync` (the audit log is per machine and never would).
+
+```console
+$ lore inbox
+-  review   bea via claude_code rul_3c7d…a1f0 must rule "Skip the integration tests on Fridays to ship faster": agent-written, not approved; lore rule approve --id rul_3c7d…a1f0, or lore rule delete --id rul_3c7d…a1f0
+$ lore rule approve --id rul_3c7d…a1f0 --yes
+✓ rul_3c7d…a1f0 approved: trust 0.25 → 0.50; LORE.md drops its review="agent-written, not approved" mark at the next lore render (the commit hook runs it)
+```
+
+`lore rule approve` sets the score to 0.50; only a person runs it (an agent gets `E_POLICY_DENIED` naming the command for its person). A rule you do not want goes with `lore rule delete --id <id> --yes` (to the trash, restorable). Commit `.lore/data` after either, so every clone sees the change. Rules written before this change have no lower score and stay approved. To keep agents from adding rules at all, list the command: `lore policy set --key agents.person_only --value rule.add`.
+
 ## Pitfalls
 
 - **Archived rows are hidden from lists.** `lore rule list` and `lore memory list` skip archived rows; pass `--archived` to see them with an `[archived]` mark.
@@ -257,7 +272,7 @@ lore: wrote ~/work/website/.lore/data/memories/mem_3b62…e913.json
 - **Shell quotes.** Wrap the body in single quotes so the shell does not touch `$` or `!` in your text. lore does not read the body from a pipe; for a long body or a file, use `--body "$(cat notes.md)"`.
 - **`--not-a-secret` does not put the secret in git.** It records that you looked and the text is not a secret; the commit hook still refuses a file that holds a credential pattern. Fix the row (`edit`) or delete it before you commit.
 - **What lore changes in your text.** Every text value is stored as you typed it except for this cleanup, on every add and edit alike: Windows line ends (CRLF, CR) become LF, the text is put in Unicode NFC form (an accent typed as a separate mark is joined to its letter), a leading byte order mark is dropped, and the invisible characters that make text look different from what it holds are removed: right-to-left overrides and other bidi controls, the zero width space (U+200B) and a byte order mark inside the text. A title, body, description or note is also trimmed of spaces and blank lines at its start and end. The zero width joiner and non-joiner (U+200D, U+200C) are kept: they belong to joined emoji like 👩‍💻 and to the spelling of Persian, Hindi and Malayalam words. Text with a NUL byte or invalid UTF-8 is refused. The `--json` reply of an add shows the stored text.
-- **Control characters print escaped.** A row may hold terminal control characters (an ESC colour code pasted from a log, for example). `show`, `list`, `search` and every other human-readable output print them as `\x1b` and the like, and `lore render` writes them escaped into LORE.md, so a row cannot recolour, clear or hide text in the reader's terminal; `--json` and the row file keep the exact characters.
+- **Control characters print escaped.** A row may hold terminal control characters (an ESC colour code pasted from a log, for example). `show`, `list`, `search` and every other human-readable output print them as `\x1b` and the like, and `lore render` writes them escaped into LORE.md, so a row cannot recolour, clear or hide text in the reader's terminal. The invisible characters the cleanup above removes on write (bidi controls such as the right-to-left override, the zero width space, a byte order mark inside the text) are printed and rendered escaped the same way (`\u202e`, `\u200b`) when a row holds them anyway, for example a row file a teammate wrote by hand and pushed with plain git: a rule cannot read differently on your terminal, in `lore tui` or in the rendered agent context than it is. `--json` and the row file keep the exact characters.
 - **Not committed yet.** A new or changed row is a file in `.lore/data`. It is safe on your machine, but nobody else sees it until you commit `.lore/data` (`git status` lists it).
 
 ## Related

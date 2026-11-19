@@ -13,6 +13,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/folder"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
@@ -154,7 +155,7 @@ func localPersonalStores(ctx context.Context, opts Options) ([]attach.Store, err
 		wall = time.Now
 	}
 	if err := ensureLocalMarker(dir, wall(), opts.rowfsOptions()...); err != nil {
-		return nil, errs.Prefix("wire: the v0.1.17 personal store ~/.lore/"+personalDirV017, err)
+		return nil, errs.Prefix("wire: the v0.1.17 personal store "+lorehome.Shown()+"/"+personalDirV017, err)
 	}
 	place := personalEverywhereV017
 	if opts.Org != nil {
@@ -180,7 +181,7 @@ func personalFoldersV017(dir string) ([]string, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "wire: read ~/.lore/"+personalDirV017, err)
+		return nil, errs.Wrap(errs.Internal, "wire: read "+lorehome.Shown()+"/"+personalDirV017, err)
 	}
 	var out []string
 	for _, e := range entries {
@@ -226,7 +227,7 @@ func (a *App) migrateLocalPersonal(ctx context.Context, dryRun bool) ([]string, 
 		return nil, 0, err
 	}
 	u := fileURL(dir)
-	steps := []string{StepPersonalStoreFlatten + ": ~/.lore/" + personalDirV017 + " (v0.1.17 local) becomes personal.store " + u +
+	steps := []string{StepPersonalStoreFlatten + ": " + lorehome.Shown() + "/" + personalDirV017 + " (v0.1.17 local) becomes personal.store " + u +
 		" (rows of " + strings.Join(folders, ", ") + " move to its root; " + ConfigFile + " kept as " + ConfigFile + migratedSuffix + ")"}
 	if dryRun {
 		total := 0

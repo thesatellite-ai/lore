@@ -38,6 +38,6 @@ alice (work/billing)$ lore task list
 
 ### trace
 alice (work/billing)$ lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'
-trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok)
-trace: git push --porcelain --no-verify -- origin 05513aa29b7881f12bc94eb06be8acf0d03eaed2:refs/lore/live (<time>, ok)
+trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok, remote github.com)
+trace: git push --porcelain --no-verify -- origin 05513aa29b7881f12bc94eb06be8acf0d03eaed2:refs/lore/live (<time>, ok, remote github.com)
 · already in sync

@@ -61,13 +61,19 @@ func TestF16_TaskDoneFailsClosedWithoutTheStore(t *testing.T) {
 // The team row is planted in the store as a v0.1.17 `lore team add` left
 // it (teams that version made still sit on org rosters; `lore team add`
 // makes the same row today, docs/team/teams.md).
+// team030Refusal is the TEAM-030 refusal as a person reads it. devco:D-388:
+// errors carry no internal spec ids since round 7, so the tests match the
+// client-wall reason itself (the check order is unchanged: a team handle
+// in a client repo is still refused for that reason first).
+const team030Refusal = "a team cannot be assigned in a linked client repo: team names are internal"
+
 func TestF14_TeamAssignInClientRepoRefused(t *testing.T) {
 	a := newAgency(t, th.Flag("assign", "task", "add"), th.Flag("to", "task", "add"))
 	a.plantRosterTeam(t, "backend")
 	a.aliceApp.MustLore("sync")
 	const title = "rounding fix for the team"
 	a.aliceApp.Lore("task", "add", title, "--to", "repo", "--tasklist", a.tl, "--assign", "@backend").
-		Refused(t, "E_INVALID_INPUT", "TEAM-030")
+		Refused(t, "E_INVALID_INPUT", team030Refusal)
 	a.aliceApp.Lore("sync")
 	if f := a.clientSees(t, title, "backend"); len(f) != 0 {
 		t.Fatalf("a refused team assignment must write nothing into the client repo: %v", f)

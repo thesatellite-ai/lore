@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	opstask "github.com/thesatellite-ai/lore/ops/task"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // TestAddNamesDefaultList (U-3): a task added without --tasklist says
@@ -67,5 +68,43 @@ func TestEmptyListFlagsRefused(t *testing.T) {
 	// Nothing was written by the refused adds: only the one task exists.
 	if got := strings.Count(opstest.Text(h.Must(opstask.OpList, ``)), "tsk_"); got != 1 {
 		t.Fatalf("%d tasks after refused adds, want 1", got)
+	}
+}
+
+// TestDefaultListIsOnePerProject (devco:M-2): the default list a first
+// task add creates has the project's natural id, so every clone that
+// creates it offline writes the same row and sync leaves one list; when
+// several "default" lists already exist (made by older builds, one per
+// person) every add picks the same one, the lowest id. Before the fix each
+// person's first add made a list with a fresh id: after sync the project
+// had one "default" list per person.
+func TestDefaultListIsOnePerProject(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	prj, err := ids.Parse[ids.Project](h.Project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := opstask.DefaultTasklistID(prj, "repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, r := get(h, schema.TableTasks, h.ID(h.Must(opstask.OpAdd, `{"title":"One"}`)))
+	if got := field(r, "tasklist_id"); got != want.String() {
+		t.Fatalf("first add's default list %s, want the natural id %s", got, want)
+	}
+
+	old := opstest.New(t)
+	a := old.ID(old.Must("tasklist.add", `{"title":"default"}`))
+	b := old.ID(old.Must("tasklist.add", `{"title":"default"}`))
+	low := min(a, b)
+	for _, title := range []string{"x", "y"} {
+		_, r := get(old, schema.TableTasks, old.ID(old.Must(opstask.OpAdd, `{"title":"`+title+`"}`)))
+		if got := field(r, "tasklist_id"); got != low {
+			t.Fatalf("add %s with two default lists joined %s, want the lowest id %s", title, got, low)
+		}
+	}
+	if n := strings.Count(opstest.Text(old.Must("tasklist.list", ``)), "tlt_"); n != 2 {
+		t.Fatalf("%d lists after the adds, want the 2 that existed", n)
 	}
 }

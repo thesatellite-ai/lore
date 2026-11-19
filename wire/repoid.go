@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -82,7 +84,8 @@ func (a *App) WriteRepoMeta(ctx context.Context, m rowfs.RepoMeta) error {
 const remoteURLKeys = `^remote\..*\.url$`
 
 // RepoRemotes implements opsinfra.RepoFiles: remote.<name>.url as written
-// in git config, in config order. Why not `git remote get-url`: it applies
+// in git config, in config order, an ssh host alias resolved (URL) with
+// the written form kept (Spelled, devco D-576). Why not `git remote get-url`: it applies
 // url.<base>.insteadOf, so a corporate mirror rewrite would replace the
 // address the repo is known by (the v0.1.17 rule of rawRemoteURLs). No
 // remote at all (git exits 1) is an empty list.
@@ -103,9 +106,76 @@ func (a *App) RepoRemotes(ctx context.Context) ([]opsinfra.Remote, error) {
 			continue
 		}
 		name := strings.TrimSuffix(strings.TrimPrefix(key, "remote."), ".url")
-		res = append(res, opsinfra.Remote{Name: name, URL: val})
+		r := opsinfra.Remote{Name: name, URL: resolveRemoteURL(ctx, top, val)}
+		if r.URL != val {
+			r.Spelled = val
+		}
+		res = append(res, r)
 	}
 	return res, nil
+}
+
+var _ opsinfra.RemoteResolver = (*App)(nil)
+
+// ResolveRemoteURL implements opsinfra.RemoteResolver (devco D-576): raw
+// with an ssh host alias resolved like every code repo remote (orgcfg
+// ResolveRemote: this repo's insteadOf rules, then the ssh config's
+// HostName), so `repo add --origin git@<alias>:o/r.git` records the
+// github.com spelling org matching, layer keys and org link use.
+func (a *App) ResolveRemoteURL(ctx context.Context, raw string) string {
+	top, err := a.knownRepoTop(ctx)
+	if err != nil {
+		top = "" // outside a repo: the person's global git config only
+	}
+	return resolveRemoteURL(ctx, top, raw)
+}
+
+// resolveRemoteURL is raw with its alias host replaced by the resolved
+// host (the url form, user and path kept), raw when it names no alias,
+// cannot be normalised, or the host cannot be found in it.
+//
+//	git@work-gh:acme/web.git ─▶ github.com/acme/web (resolved) ─▶ git@github.com:acme/web.git
+func resolveRemoteURL(ctx context.Context, dir, raw string) string {
+	if low := strings.ToLower(strings.TrimSpace(raw)); low == "" || repourl.IsLocalRemote(raw) ||
+		strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://") {
+		return raw // only an ssh url names a host alias (no git run on every https remote)
+	}
+	resolved, err := orgcfg.ResolveRemote(ctx, dir, raw)
+	if err != nil {
+		return raw
+	}
+	plain := orgcfg.PlainRemote(raw, resolved)
+	if plain == "" {
+		return raw
+	}
+	from, fromPath, _ := strings.Cut(plain, "/")
+	to, toPath, _ := strings.Cut(resolved, "/")
+	if fromPath != toPath || from == "" || to == "" {
+		return raw
+	}
+	return swapHost(raw, from, to)
+}
+
+// swapHost replaces the host from (as repourl.Normalize spells it, lower
+// case) in the ssh or scp-form url raw with to: the first match that
+// stands where a host stands (after "@" or "://", before ":" or "/").
+func swapHost(raw, from, to string) string {
+	low := strings.ToLower(raw)
+	for i := 0; i+len(from) <= len(low); {
+		j := strings.Index(low[i:], from)
+		if j < 0 {
+			break
+		}
+		at := i + j
+		end := at + len(from)
+		before := at == 0 || low[at-1] == '@' || strings.HasSuffix(low[:at], "://")
+		after := end < len(low) && (low[end] == ':' || low[end] == '/')
+		if before && after {
+			return raw[:at] + to + raw[end:]
+		}
+		i = at + 1
+	}
+	return raw
 }
 
 // RepoDirName implements opsinfra.RepoFiles.
@@ -154,6 +224,20 @@ func (a *App) RepoActor(ctx context.Context) string {
 func (a *App) EnsureRepoIdentity(ctx context.Context) (repoID string, minted bool, err error) {
 	id, minted, err := opsinfra.EnsureIdentity(ctx, a, a)
 	return id.Meta.RepoID, minted, err
+}
+
+// EnsureOwnRepoIdentity implements ops/scope.RepoIdentityEnsurer: a repo
+// or dir scope write in a checkout without a repo id mints it (the derived
+// id every clone agrees on) instead of refusing (devco:M-4). A client repo
+// is refused: minting there writes the client's tracked _meta.json and a
+// repos row into its checkout (B-8), and its rows live in a store folder.
+func (a *App) EnsureOwnRepoIdentity(ctx context.Context) (string, error) {
+	if client, cerr := a.ClientRepo(ctx); cerr == nil && client {
+		return "", errs.New(errs.InvalidInput, "this is a client repo: lore writes nothing into its checkout, so it has no repo identity for a repo or folder scope").
+			WithHint("give --scope project, or leave --scope out")
+	}
+	id, _, err := a.EnsureRepoIdentity(ctx)
+	return id, err
 }
 
 // CheckRepoAddresses is the sync pass of PROVENANCE_DESIGN 10.3 (PROV2,

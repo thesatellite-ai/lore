@@ -41,7 +41,7 @@ func (t standaloneTeam) ShowDetail(ctx context.Context, taskID string) (opstask.
 	if w.sit.Org != nil {
 		source = w.sit.Org.Name + "/" + w.folder
 	}
-	claim, err := storeClaimText(ctx, w.signalsStore(), w.folder, taskID)
+	claim, err := storeClaimText(ctx, w.signalsStore(ctx), w.folder, taskID)
 	if err != nil {
 		return opstask.ShowDetail{}, false, err
 	}

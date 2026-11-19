@@ -46,6 +46,7 @@ DELETE GET POST /v1/rules
 POST /v1/rules/archive
 POST /v1/rules/search
 DELETE GET PATCH /v1/rules/{id}
+POST /v1/rules/{id}/approve
 POST /v1/rules/{id}/archive
 POST /v1/rules/{id}/unarchive
 

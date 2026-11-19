@@ -65,6 +65,10 @@ type Ref struct {
 	// fetches too, and a read writes nothing in .git (C-8). markSeen
 	// writes it beside the seen marker it belongs to.
 	fetchedFrom string
+	// fetchedBranches are the branches this run's Fetch brought (in memory):
+	// Land's first attempt reuses that fetch instead of fetching the branch
+	// again (devco L-12-perf: one fetch per remote per `lore sync`).
+	fetchedBranches map[string]bool
 }
 
 // ErrRemoteRewritten means the remote live ref was deleted or replaced by

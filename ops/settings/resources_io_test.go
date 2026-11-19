@@ -121,3 +121,34 @@ func TestRESTDynamicKind(t *testing.T) {
 		t.Fatalf("GET kind filtered: %d %s", code, body)
 	}
 }
+
+// TestResourceUpsertMergesRequiredFields (devco D-452): `resource import
+// --upsert-by name` updating a row merges with its stored values, so a
+// record that leaves out a required field keeps the stored value; before,
+// every update had to repeat every required field. A new row still needs
+// them.
+func TestResourceUpsertMergesRequiredFields(t *testing.T) {
+	t.Parallel()
+	h := opstest.New(t)
+	h.MustYes(settings.OpKindAdd, `{"kind":"host"}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"provider","type":"text","required":true}`)
+	h.MustYes(settings.OpFieldAdd, `{"kind":"host","field":"region","type":"text"}`)
+	h.MustYes(settings.OpResAdd, `{"kind":"host","name":"h1","set":["provider=hetzner","region=eu"]}`)
+	p := filepath.Join(t.TempDir(), "up.json")
+	if err := os.WriteFile(p, []byte(`{"resources":[{"kind":"host","name":"h1","fields":{"region":"us"}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := opstest.Text(h.MustYes(settings.OpResImport, `{"file":`+opstest.Quote(p)+`,"upsert_by":"name"}`))
+	if !strings.Contains(got, "1 updated") {
+		t.Fatalf("upsert %q", got)
+	}
+	if s := opstest.Text(h.Must(settings.OpResShow, `{"id":"h1"}`)); !strings.Contains(s, "region = us") || !strings.Contains(s, "provider = hetzner") {
+		t.Fatalf("upsert did not merge: %q", s)
+	}
+	if err := os.WriteFile(p, []byte(`{"resources":[{"kind":"host","name":"h9","fields":{"region":"us"}}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.RunYes(settings.OpResImport, `{"file":`+opstest.Quote(p)+`,"upsert_by":"name"}`); !errs.Has(err, errs.ResourceBatch) || !strings.Contains(err.Error(), "provider") {
+		t.Fatalf("a new row without its required field: %v, want refused naming provider", err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/foldercase"
 	"github.com/thesatellite-ai/lore/internal/testenv"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -69,7 +70,7 @@ func TestGoneScopes(t *testing.T) {
 
 	ctx := context.Background()
 	rows := []row.Row{scopeRow(t, "src/booking", false), scopeRow(t, "src/keep", false), scopeRow(t, "old", false), scopeRow(t, "src/gone", true)}
-	got := goneScopes(ctx, dir, rows)
+	got := goneScopes(ctx, foldercase.New(foldercase.OS{}, dir), dir, rows)
 	if len(got) != 2 || got[0].Path != "src/booking" || got[0].RenamedTo != "src/bookings" || got[1].Path != "old" || got[1].RenamedTo != "" {
 		t.Fatalf("goneScopes = %+v", got)
 	}

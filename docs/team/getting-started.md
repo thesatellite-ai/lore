@@ -147,9 +147,10 @@ warning: ~/.lore/identity.yaml is from v0.1.17 and is read only while identity: 
 $ lore migrate run
 lore: wrote ~/work/notes-app/.lore/data/actors/act_162d…9666.json
 Upgraded 1 row
+  actors: 1 row (act_162d…9666)
   identity: ~/.lore/identity.yaml moved into ~/.lore/config.yaml; old file kept as ~/.lore/identity.yaml.migrated
   actor_copies: refreshed 1 actor copy from their source: Alice Doe (act_162d…9666)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 branch (.lore/data): 1 files upgraded, not committed (lore never commits a code repo)
 undo: lore migrate rollback
@@ -170,7 +171,7 @@ identity:
 ```
 <!-- /example -->
 
-The `actor_copies` line is the copy of Alice's actor row in this repo, written before the v0.1.17 identity file named her Alice Doe, brought up to date from her identity; commit `.lore/data` as the run says. In a repo outside any org, or a client repo, the run also trims every actor copy in `.lore/data` to {id, display name, kind} (an `actor_projection:` line names the keys it dropped, such as the `stable_key` lore 0.1.17 wrote), so the migrated files pass the client-repo commit check and `lore check leaks --ci`; an org's own repo keeps them.
+The `actor_copies` line is the copy of Alice's actor row in this repo, written before the v0.1.17 identity file named her Alice Doe, brought up to date from her identity; commit `.lore/data` as the run says. In a client repo the run also trims every actor copy in `.lore/data` to {id, display name, kind} (an `actor_projection:` line names the keys it dropped, such as the `stable_key` lore 0.1.17 wrote), so the migrated files pass the client-repo commit check and `lore check leaks --ci`. In a repo outside any org it trims the copies lore 0.1.17 wrote (`_v: 1`); a copy already in the new format keeps its keys (it loses only a stray `_o`), so a teammate whose machine knows no org never undoes the copies an org member's migration wrote. An org's own repo keeps them.
 
 An identity file from before v0.1.17 (`~/.lore/identity.toml`) is not read at all: set who you are with `lore identity set --identity <email>`, and `lore identity unset` removes the old file. A project's v0.1.17 shared-database pointer (`.lore/lore.yaml`, or the older `.lore/lore.toml`) is read only by `lore migrate run`, which converts the project to row files (see [Shared database (Mode B)](../sync/shared-database-mode-b.md)).
 
@@ -221,7 +222,7 @@ $ lore config check
 # alice, in tools
 $ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_d431…313a) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_d431…313a) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ lore whoami
 org        agency  (matched by: own pattern github.com/agency/* of agency)
 identity   Alice Doe <human:alice@agency.example>   act_b4f4…a5b0  @alice  (from: org entry (config.yaml orgs[agency].identity))
@@ -230,18 +231,21 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_c0f3…b5b8
 remotes    github.com/agency/tools
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_28f8…03df.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_b4f4…a5b0.json (store agency/org)
-✓ act_b4f4…a5b0 Alice Doe (@alice) registered in agency org/
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
+✓ act_b4f4…a5b0 Alice Doe (@alice) registered in the roster of agency (agency/org)
 ```
 <!-- /example -->
 
 `lore whoami` now names the org, the rule that chose it (`own pattern`), your identity there and the store. It prints the store URL the same way without a terminal or in CI; only a credential inside a URL is shown as `<redacted>` (see [Troubleshooting](troubleshooting.md#a-url-shows-redacted)). `lore actor register` put you on the org's roster. Now teammates can write `--assign @alice`.
+
+A remote that uses an ssh host alias (`git@<alias>:<owner>/<repo>.git`, where `~/.ssh/config` says `Host <alias>` / `HostName github.com`, a `url.<x>.insteadOf` rule maps it back, or a setup's `host_alias` names it, also where `~/.ssh/config` does not, in every command including `lore sync`) counts as `github.com/<owner>/<repo>` for org matching, `own:` and `repos:` patterns, the identity, store links (`lore org link --remote` takes either spelling), branch notes (`lore branch`, `branch land --repo`), the repo's own record (`lore init` and `lore sync` record `git@github.com:<owner>/<repo>.git`, and `lore repo add --origin` and `lore repo set-url --url` store an alias url in that spelling) and every remote lore prints, so a clone through an alias and one from github.com share them; lore never suggests an alias pattern for the shared org file. A repo linked by its remote alone, or given branch notes, by an older lore under the alias spelling keeps them: lore still finds a link row keyed by that spelling, still treats a repo address recorded in that spelling as this clone's (no unconfirmed-address notice), and keeps a repo's branch notes under the old key until each open branch of it is landed or dropped.
 
 Repos outside the org keep your fallback identity, never a company one:
 
@@ -286,6 +290,7 @@ $ lore task list
 - **Run `lore config check` after every config edit.** A wrong key is reported there, before any command uses it.
 - **A teammate's new row shows after your next fetch, once they have run `lore sync` or `git push`.** Run `lore sync` to fetch now. Nothing you write is pushed until you do the same.
 - **Every teammate needs the same or a newer lore.** A live ref records the lowest version allowed to write to it; an older binary can only read there and answers `E_OLD_LORE` to a write.
+- **A team rule set by a newer lore.** A policy key this lore does not know (a teammate on a newer release set it, such as `branches.isolated` before branch layers) is ignored with one note naming the key and `lore upgrade`, so reads and writes go on. A new key under `agents.`, `secrets.` or `delete.` may be a stricter rule, so it stops reads and writes (`E_CONFIG_INVALID`, with the upgrade hint) instead of being skipped.
 
 ## Related
 

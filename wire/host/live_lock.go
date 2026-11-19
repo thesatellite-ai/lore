@@ -43,13 +43,17 @@ func (l *liveLock) release() error {
 }
 
 // acquireLiveLock takes the lock in stateDir, waiting up to liveLockTimeout.
+// A process that finds it free and nobody queued takes it at once; one that
+// has to wait queues (live_queue.go) and takes it in arrival order, so ten
+// agent sessions of one clone each wait about nine commands, never a
+// minute behind a neighbour that keeps winning the next poll (D-159).
 func acquireLiveLock(ctx context.Context, stateDir string) (*liveLock, error) {
 	if err := os.MkdirAll(stateDir, liveStateMode); err != nil {
 		return nil, errs.FileIO("create the live state folder", stateDir, err)
 	}
 	path := filepath.Join(stateDir, liveLockFile)
-	deadline := time.Now().Add(liveLockTimeout)
-	for waited := false; ; waited = true {
+	q := liveQueue{dir: filepath.Join(stateDir, liveQueueDir)}
+	if q.empty() {
 		l, err := tryLiveLock(path)
 		if err == nil {
 			l.path = path
@@ -59,8 +63,27 @@ func acquireLiveLock(ctx context.Context, stateDir string) (*liveLock, error) {
 		if !errors.Is(err, errLiveLockBusy) {
 			return nil, errs.Wrap(errs.Internal, "live lock", err)
 		}
-		if !waited {
-			locktrace.Lock(locktrace.Busy, path)
+	}
+	locktrace.Lock(locktrace.Busy, path)
+	ticket, err := q.join(time.Now())
+	if err != nil {
+		return nil, errs.Wrap(errs.Internal, "live lock queue", err)
+	}
+	defer ticket.leave()
+	deadline := time.Now().Add(liveLockTimeout)
+	for {
+		poll := liveLockPoll
+		if q.first(ticket, time.Now()) {
+			l, err := tryLiveLock(path)
+			if err == nil {
+				l.path = path
+				locktrace.Lock(locktrace.Taken, path)
+				return l, nil
+			}
+			if !errors.Is(err, errLiveLockBusy) {
+				return nil, errs.Wrap(errs.Internal, "live lock", err)
+			}
+			poll = liveQueueHeadPoll // next in line: notice the release quickly
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err // a cancelled caller is told so, not "locked" (as rowfs acquireFile)
@@ -68,7 +91,7 @@ func acquireLiveLock(ctx context.Context, stateDir string) (*liveLock, error) {
 		if time.Now().After(deadline) {
 			return nil, errs.New(errs.StoreLocked, "live lock: another lore process kept "+path+" for "+liveLockTimeout.String())
 		}
-		t := time.NewTimer(liveLockPoll)
+		t := time.NewTimer(poll)
 		select {
 		case <-ctx.Done():
 			t.Stop()

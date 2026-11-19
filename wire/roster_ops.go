@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/storepush"
@@ -102,6 +103,14 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 			return opsinfra.ActorRegisterOut{}, oerr
 		}
 		sp = RosterActor{Kind: schema.ActorKindAgent, StableKey: agentStableKeyPrefix + in.Label, Name: in.Label, Label: in.Label, OwnerID: owner.ID}
+		if owner.StableKey == who.StableKey {
+			// J-15: a contractor's own agent (lore agent start) is part of
+			// their identity on the roster, like their own register; an
+			// agent for someone else stays refused
+			ctx = withOwnRosterRow(ctx)
+		}
+	} else {
+		ctx = withOwnRosterRow(ctx) // J-15: a contractor still registers themselves
 	}
 	return x.registerSpec(ctx, r, sp, in.Kind)
 }
@@ -111,6 +120,9 @@ func (a *App) ActorRegister(ctx context.Context, in opsinfra.ActorRegisterIn) (o
 // handle check, the row, the push. setup join reuses it (registerCaller).
 func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind string) (opsinfra.ActorRegisterOut, error) {
 	if kind != opsinfra.RegisterKindAgent {
+		if err := x.rosterFresh(ctx, r); err != nil {
+			return opsinfra.ActorRegisterOut{}, err
+		}
 		// TEAM_PROFILES 6.3 (TP-4): a key that is an identity contact of an
 		// existing actor is that person already; nothing is written, so a
 		// second email never becomes a second actor.
@@ -135,6 +147,31 @@ func (x *App) registerSpec(ctx context.Context, r rosterAt, sp RosterActor, kind
 	}
 	x.rosterPush(ctx, r)
 	return opsinfra.ActorRegisterOut{ID: id, Kind: kind, Name: sp.Name, Handle: sp.Handle, Label: sp.Label, Created: created, Where: r.shown()}, nil
+}
+
+// rosterFresh brings the local copy of r's org store up to the remote
+// before a person registers on it (devco D-277). The refusal of a person
+// who left (RosterRegister, INTEG-ORG-1) reads their row from the local
+// copy, and the fetch before a write is skipped or cut short whenever the
+// last fetch is recent, autopush is off, or a held store's bounded fetch
+// times out on a loaded machine: an offboard a teammate pushed a moment
+// ago was then not seen and the register put the person back. So the
+// register always fetches (merge only, nothing is pushed), and a remote it
+// cannot reach refuses instead of deciding on an old roster. A repo
+// roster has no store to fetch.
+func (x *App) rosterFresh(ctx context.Context, r rosterAt) error {
+	if r.src == store.SourceRepo {
+		return nil
+	}
+	rep, err := x.Sync(fetchOnly(ctx), r.src)
+	switch {
+	case err == nil && !rep.Offline:
+		return nil
+	case err != nil && !errs.Has(err, errs.Offline):
+		return fmt.Errorf("actor register: read the latest %s: %w", r.of(), err) // its own code (a refused merge, a bad store) stays
+	}
+	return errs.Wrap(errs.Offline, "cannot register on "+r.of()+": its store's remote could not be reached, and registering needs the latest roster (someone who left is refused)", err).
+		WithHint("run `lore actor register` again once the store's remote is reachable (`lore whoami` shows the store's status)")
 }
 
 // registerCaller registers the caller (a person, or the person an agent
@@ -168,7 +205,7 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 	}
 	act, err := x.rosterByHandle(ctx, r, handle)
 	if err != nil {
-		if gone := x.rosterInactive(ctx, r, handle); gone != nil && errs.Has(err, errs.InvalidInput) {
+		if gone := x.rosterInactive(ctx, r, handle); gone != nil && (errs.Has(err, errs.InvalidInput) || errs.Has(err, errs.NotFound)) {
 			return opsinfra.ActorDeactivateOut{}, gone
 		}
 		return opsinfra.ActorDeactivateOut{}, err
@@ -182,7 +219,7 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 		return opsinfra.ActorDeactivateOut{}, err
 	}
 	x.rosterPush(ctx, r)
-	return opsinfra.ActorDeactivateOut{ID: act.ID, Name: act.Name}, nil
+	return opsinfra.ActorDeactivateOut{ID: act.ID, Name: act.Name, Kind: act.Kind}, nil
 }
 
 // rosterInactive is the refusal of deactivating @handle when the roster
@@ -192,14 +229,21 @@ func (a *App) ActorDeactivate(ctx context.Context, handle string) (opsinfra.Acto
 // inactive actor has the handle (the caller's "no one is @h" stands).
 // A read error is nil too: the lookup's own error is the one to show.
 func (a *App) rosterInactive(ctx context.Context, r rosterAt, handle string) error {
-	h := strings.TrimPrefix(handle, rosterHandleMark)
+	ref := strings.TrimPrefix(strings.TrimSpace(handle), rosterHandleMark)
+	h := handleKey(ref)
 	actors, err := a.RosterActors(ctx, r.src)
 	if err != nil {
 		return nil
 	}
 	for _, x := range actors {
-		if x.Active || x.Handle != h {
+		if x.Active || (x.Handle != h && !agentLabelIs(x, h) && x.ID != ref) {
 			continue
+		}
+		if x.Kind == schema.ActorKindAgent {
+			// devco:S-14: a stopped agent comes back with its owner's
+			// `lore agent start --label`, not a person's register.
+			return errs.New(errs.StatusChange, "agent @"+x.Label+" ("+x.ID+") is already deactivated; nothing to deactivate").
+				WithHint("its owner starts it again with `lore agent start --label " + x.Label + " --yes`")
 		}
 		if x.Status == "" {
 			// v0.1.17 deactivate (active=false only): they come back by
@@ -221,7 +265,8 @@ func (a *App) rosterInactive(ctx context.Context, r rosterAt, handle string) err
 // P3-CMDLORE-5).
 type rosterAt struct {
 	src store.Source
-	// where names it in messages: "this repo", "northwind org/". An org
+	// where is the repo's own roster's name ("this repo"); an org roster
+	// is named by label from src, "northwind (northwind/org)". An org
 	// folder is no secret: it is printed as it is, in a pipe and in CI too.
 	where string
 	// org is the org's name for an org roster ("" for the repo's own): a
@@ -234,48 +279,87 @@ func newRosterAt(src store.Source, where string) rosterAt {
 	return rosterAt{src: src, where: where}
 }
 
-// shown is where for output, success lines and refusals alike.
-func (r rosterAt) shown() string { return r.where }
+// shown is the roster for output: the `where` of every op's JSON and the
+// place a success line names after "in the roster of" ("acme (acme/org)",
+// "this repo"). It is label: a line that named the folder ("registered in
+// acme org/") was a third shape beside "the roster of acme (acme/org)"
+// (devco D-668).
+func (r rosterAt) shown() string { return r.label() }
+
+// label names an org roster as the person knows it: the org entry, then
+// the store folder holding it ("acme (acme/org)"); the repo's own roster
+// keeps where ("this repo"). profilestore.Roster.Label is this, as the
+// ops print "the roster of <label>" (devco D-647: "no teams on acmeops
+// org/'s roster" glued a possessive onto a folder path).
+func (r rosterAt) label() string {
+	org, _, ok := strings.Cut(string(r.src), targetSep)
+	if r.src == store.SourceRepo || !ok || org == "" {
+		return r.where
+	}
+	return org + " (" + string(r.src) + ")"
+}
+
+// of is r in a sentence, "the roster of acme (acme/org)" or "the roster
+// of this repo": every refusal and step line names a roster this one way,
+// as team list does (devco D-663: "the roster in acme org/" was a second
+// shape beside D-647's "the roster of <entry> (<org>/org)").
+func (r rosterAt) of() string { return "the roster of " + r.label() }
 
 // handleTakenErr refuses a handle another actor or team holds on r.
 func (r rosterAt) handleTakenErr(handle, holder string) error {
-	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on the roster in %s", handle, holder, r.shown())).
-		WithHint("choose another handle (`lore identity set --org <org> --handle <h>`); handles are unique per roster")
+	org := r.org // devco:D-670: the roster's org is known; "<org>" only for a roster with none
+	if org == "" {
+		org = "<org>"
+	}
+	return errs.New(errs.InvalidInput, fmt.Sprintf("handle @%s is taken by %s on %s", handle, holder, r.of())).
+		WithHint("choose another handle (`lore identity set --org " + org + " --handle <h>`); handles are unique per roster")
 }
 
 // handleMissErr refuses a handle no active actor of r has.
 func (r rosterAt) handleMissErr(handle string) error {
-	return errs.New(errs.InvalidInput, "no one is @"+handle+" on the roster in "+r.shown()).WithHint(r.missHint())
+	return errs.New(errs.InvalidInput, "no one is @"+handle+" on "+r.of()).WithHint(r.missHint())
 }
 
 // goneErr refuses agents to a caller who left r (status left|archived).
 func (r rosterAt) goneErr(status, ref string) error {
-	return errs.New(errs.StatusChange, "you are "+status+" on the roster in "+r.shown()+", so you cannot start agents there").
+	return errs.New(errs.StatusChange, "you are "+status+" on "+r.of()+", so you cannot start agents there").
 		WithHint("ask an admin to run `lore actor rejoin --actor " + ref + " --type …`")
 }
 
 // unregisteredErr refuses agents to a caller with no row on r.
 func (r rosterAt) unregisteredErr() error {
-	return errs.New(errs.InvalidInput, "you are not on the roster in "+r.shown()+" yet").WithHint("run `lore actor register` first")
+	return errs.New(errs.InvalidInput, "you are not on "+r.of()+" yet").WithHint("run `lore actor register` first")
 }
 
 // deletedRowErr is a roster row of table found only as a tombstone.
 func (r rosterAt) deletedRowErr(table row.Table, id ids.AnyID) error {
-	return errs.New(errs.NotFound, "no "+string(table)+" row "+id.String()+" on the roster in "+r.shown()+" (deleted)")
+	return errs.New(errs.NotFound, "no "+string(table)+" row "+id.String()+" on "+r.of()+" (deleted)")
 }
 
 // actorMissErr is an actor reference no row of r matches.
 func (r rosterAt) actorMissErr(ref string) error {
-	return errs.New(errs.NotFound, "no actor "+ref+" on the roster in "+r.shown()).WithHint(r.missHint())
+	return errs.New(errs.NotFound, "no actor "+ref+" on "+r.of()).WithHint(r.missHint())
 }
 
 // missHint is the hint for a handle missing from the roster.
 func (r rosterAt) missHint() string {
 	if r.src == store.SourceRepo {
-		return "register first: `lore actor register` (as that person)"
+		return repoRosterMissHint
 	}
-	return "they run `lore actor register` in a repo of the org, then `lore sync` here"
+	// devco D-224: a register is committed in the teammate's store clone
+	// and reaches the store with their `lore sync` (owner rule U-2), so
+	// "lore sync here" alone left the handle missing. devco D-662: the
+	// teammate's commands name their setup, so each runs as printed from
+	// any folder (a bare `lore actor register` printed in the home folder
+	// was refused there, E_NOT_A_STORE).
+	return "they run `lore actor register --setup <setup>` and `lore sync --setup <setup>`, then `lore sync` here"
 }
+
+// repoRosterMissHint is the next step for a name the repo's own roster
+// lacks. devco:S-5: a register or `lore agent start` in a teammate's clone
+// is a live row kept in that clone until their `lore sync`, so the likely
+// cause of a fresh name is a sync on both sides, named before registering.
+const repoRosterMissHint = "if they registered (or started the agent) in another clone, they run `lore sync`, then you run `lore sync`; not registered yet: `lore actor register` (a person, run by them) or `lore agent start --label <label>` (an agent, run by its owner)"
 
 // rosterLookups bounds a handle lookup: the store copy, then once more
 // after syncing the roster's store.
@@ -322,6 +406,24 @@ func (a *App) rosterApp(ctx context.Context, r rosterAt) (*App, func(), error) {
 	if r.src == store.SourceRepo {
 		return a, noop, nil
 	}
+	if p, ok := pinnedRoster(ctx); ok && p.at.src == r.src {
+		// a read naming its org (--store <org>, D-499): that org's roster
+		// alone, whatever this folder's repo or org is
+		alone, err := storeOnlyApp(ctx, a.opts, p.one)
+		if err != nil {
+			return nil, noop, err
+		}
+		return alone, func() { _ = alone.Close() }, nil
+	}
+	if one, ok := a.cloneRosterStore(r.src); ok {
+		// a store clone's company folder (D-445): the setup's org stores
+		// do not name it, so StoreOnlyRoster would not find it
+		alone, err := storeOnlyApp(ctx, a.opts, one)
+		if err != nil {
+			return nil, noop, err
+		}
+		return alone, func() { _ = alone.Close() }, nil
+	}
 	alone, ok, err := StoreOnlyRoster(ctx, a.opts, r.src)
 	if err != nil {
 		return nil, noop, err
@@ -336,6 +438,9 @@ func (a *App) rosterApp(ctx context.Context, r rosterAt) (*App, func(), error) {
 // the roster is its org folder store when OrgStores attaches one; an org
 // without one is refused rather than written to the wrong place.
 func (a *App) repoRoster(ctx context.Context) (rosterAt, error) {
+	if p, ok := pinnedRoster(ctx); ok { // a read naming its org (rosterstore.go)
+		return p.at, nil
+	}
 	r := newRosterAt(store.SourceRepo, repoRosterWhere)
 	if a.opts.Org != nil {
 		org, err := a.opts.Org(ctx)
@@ -349,10 +454,14 @@ func (a *App) repoRoster(ctx context.Context) (rosterAt, error) {
 			}
 			if !ok {
 				return r, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
-					WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+					WithHint("set org_folder on one of the org's stores in " + lorehome.Shown() + "/config.yaml")
 			}
 			r = newRosterAt(src, org.Name+" "+folder+"/")
+			return r, nil
 		}
+	}
+	if c, ok := a.cloneRoster(); ok { // a store clone (scope.go)
+		return c, nil
 	}
 	return r, nil
 }
@@ -404,6 +513,9 @@ func (a *App) agentCaller(ctx context.Context, who identity.Resolved) bool {
 	if who.Kind == schema.ActorKindAgent || who.Agent != "" {
 		return true
 	}
+	if creditedAgent(ctx) != "" {
+		return true // a person-credited setup step run through an agent (D-424)
+	}
 	c, ok := ctx.Value(profileCallerKey{}).(op.Caller)
 	return ok && c.Agent != ""
 }
@@ -437,7 +549,7 @@ func (a *App) personBehind(ctx context.Context, r rosterAt, who identity.Resolve
 			return whoIs{StableKey: own.StableKey, DisplayName: own.Name, Handle: own.Handle, ID: id}, nil
 		}
 	}
-	e := errs.New(errs.InvalidInput, "the agent "+who.StableKey+" has no person behind it on "+r.shown()+", so it cannot "+what).
+	e := errs.New(errs.InvalidInput, "the agent "+who.StableKey+" has no person behind it on "+r.of()+", so it cannot "+what).
 		WithHint("its person runs it in their own terminal, or registers the agent with an owner: `lore agent start --label <l> --owner @<person>`")
 	e.NeedsPerson = true
 	return whoIs{}, e
@@ -536,17 +648,38 @@ func (a *App) rosterHandleFree(ctx context.Context, r rosterAt, handle, stableKe
 	return r.handleTakenErr(handle, holder)
 }
 
-// rosterByHandle finds the active actor @handle on the repo's roster.
+// rosterByHandle finds the active actor @handle on the repo's roster. An
+// act_ id names its actor, and an agent (which has a label, no handle) is
+// named by @<label> as a fallback when no person holds the handle
+// (devco:S-14: `lore actor deactivate --handle @agent-lead-2` and every
+// other roster verb resolve an agent the way `lore handoff add --for` does).
 func (a *App) rosterByHandle(ctx context.Context, r rosterAt, handle string) (RosterActor, error) {
+	if id, perr := ids.Parse[ids.Actor](strings.TrimPrefix(strings.TrimSpace(handle), rosterHandleMark)); perr == nil {
+		x, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.ID == id.String() })
+		if err != nil || ok {
+			return x, err
+		}
+		return RosterActor{}, r.actorMissErr(id.String())
+	}
 	h := handleKey(handle)
 	x, ok, err := a.rosterFind(ctx, r, func(x RosterActor) bool { return x.Handle == h })
 	if err != nil || ok {
 		return x, err
 	}
+	if x, ok, err = a.rosterFind(ctx, r, func(x RosterActor) bool { return agentLabelIs(x, h) }); err != nil || ok {
+		return x, err
+	}
 	if near, found := a.nearHandle(ctx, r, h); found {
-		return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on the roster in "+r.shown()).WithHint(nearHandleHint(near, h))
+		return RosterActor{}, errs.New(errs.InvalidInput, "no one is @"+h+" on "+r.of()).WithHint(nearHandleHint(near, h))
 	}
 	return RosterActor{}, r.handleMissErr(h)
+}
+
+// agentLabelIs reports whether x is an agent with no handle whose label is
+// h: an agent is registered by label (`lore agent start --label`), so
+// @<label> is how people name it.
+func agentLabelIs(x RosterActor, h string) bool {
+	return x.Kind == schema.ActorKindAgent && x.Handle == "" && x.Label != "" && x.Label == h
 }
 
 // handleKey is a typed @handle as roster handles are stored: without its

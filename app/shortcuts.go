@@ -19,6 +19,7 @@ package app
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -40,6 +41,7 @@ import (
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	opswhere "github.com/thesatellite-ai/lore/ops/where"
 	opswhoami "github.com/thesatellite-ai/lore/ops/whoami"
+	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
 
 // Verbs the shortcuts run.
@@ -211,6 +213,14 @@ func forward(target *cobra.Command) func(*cobra.Command, []string) error {
 		// (ONBOARDING_DESIGN 3.3 step 1).
 		if f := target.Flags().Lookup(flagSetup); f != nil && f.Changed {
 			target.SetContext(op.WithSetup(target.Context(), f.Value.String()))
+		}
+		// the same for --trace (devco N-3: `lore sync --trace` traced the
+		// live rows' git calls, read per call, but no store fetch or push)
+		if f := target.Flags().Lookup(hosthooks.FlagTrace); f != nil && f.Changed {
+			on, _ := strconv.ParseBool(f.Value.String())
+			if err := carryTrace(target, on); err != nil {
+				return err
+			}
 		}
 		rest := target.Flags().Args()
 		if err := target.ValidateArgs(rest); err != nil {

@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/textnorm"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -163,8 +164,12 @@ func (b *browser) read() (string, bool) {
 }
 
 // put writes s to out; a broken terminal ends the session at the next read.
+// Every screen goes through here, so row text is escaped once (I-16, R-3):
+// a teammate's row holding ESC sequences, a right-to-left override or a
+// zero-width space cannot drive the terminal or read differently than it
+// is. The browser adds no escape sequences of its own.
 func (b *browser) put(s string) {
-	_, _ = io.WriteString(b.out, s)
+	_, _ = io.WriteString(b.out, textnorm.EscapeControls(s))
 }
 
 // tables is the first screen.

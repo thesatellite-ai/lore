@@ -183,10 +183,10 @@ func trashErr(t *testing.T, c *th.Clone, wantCode string, wantExit int, args ...
 
 // trashShowOut is `lore show --id <id> --json`: the row's stored fields.
 type trashShowOut struct {
-	ID     string            `json:"id"`
-	Table  string            `json:"table"`
-	Store  string            `json:"store"`
-	Fields map[string]string `json:"fields"`
+	ID     string      `json:"id"`
+	Table  string      `json:"table"`
+	Store  string      `json:"store"`
+	Fields shownFields `json:"fields"`
 }
 
 // trashShow is `lore show --id <id> --json`.
@@ -277,4 +277,32 @@ func trashAssertPurgedShow(t *testing.T, c *th.Clone, id string) {
 	if !strings.Contains(e.Error.Message, id) {
 		t.Errorf("show of the purged %s names it: %+v", id, e.Error)
 	}
+}
+
+// shownFields is the "fields" object of `lore show` / `lore trash show`
+// --json: a list field is a JSON array (devco D-455), read here as its
+// items joined by ", " (the text form), every other field as its string.
+type shownFields map[string]string
+
+// UnmarshalJSON reads either form of each value.
+func (m *shownFields) UnmarshalJSON(b []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	out := shownFields{}
+	for k, v := range raw {
+		var items []string
+		if err := json.Unmarshal(v, &items); err == nil {
+			out[k] = strings.Join(items, ", ")
+			continue
+		}
+		var s string
+		if err := json.Unmarshal(v, &s); err != nil {
+			return err
+		}
+		out[k] = s
+	}
+	*m = out
+	return nil
 }

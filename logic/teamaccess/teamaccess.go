@@ -90,7 +90,7 @@ func RolesAt(ms []Membership, actor ids.ID[ids.Actor], project ids.ID[ids.Projec
 // Reasons DescribeOnly gives.
 const (
 	// ReasonDescribeOnly: 0.1.18 roles describe, they do not grant (TP-9).
-	ReasonDescribeOnly = "roles describe only; every action is allowed (TP-9)"
+	ReasonDescribeOnly = "roles describe only; every action is allowed"
 )
 
 // DescribeOnly is the 0.1.18 default: every question is allowed and

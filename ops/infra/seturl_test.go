@@ -1,6 +1,8 @@
 package infra_test
 
 import (
+	"github.com/thesatellite-ai/lore/internal/opstest"
+
 	"context"
 	"errors"
 	"slices"
@@ -22,10 +24,6 @@ func TestSetURLRefusesNonRepoAddress(t *testing.T) {
 	}
 	before := meta(t, h)
 	for _, url := range []string{
-		"file:///srv/git/acme.git",          // local remote, no host
-		"/srv/git/acme.git",                 // absolute path
-		"./acme",                            // relative path
-		"../acme",                           // relative path
 		"github.com",                        // no path
 		"https://github.com/",               // no path
 		"https://github.com",                // no path
@@ -53,6 +51,38 @@ func TestSetURLRefusesNonRepoAddress(t *testing.T) {
 
 	h.Fails(infra.OpRepoSetURL, `{"url":"github.com/agency/x","mirror":true,"remove":true}`, errs.InvalidInput)
 	h.Fails(infra.OpRepoSetURL, `{"url":"github.com/agency/x","from":"05/11/2026"}`, errs.InvalidInput)
+}
+
+// TestSetURLLocalRemoteRecordsNothing (devco:O-13): a remote that is a
+// path on this machine is no address lore records, yet lore's own "the
+// repo moved" hint names lore repo set-url for it; the command is accepted
+// (exit 0), records nothing (_meta.json unchanged) and says why, naming
+// the git step when no remote uses the path yet. Before, it was refused
+// E_REPO_URL "not a repo address".
+func TestSetURLLocalRemoteRecordsNothing(t *testing.T) {
+	const moved = "/srv/git/renamed-kit.git"
+	h := checkout(t, moved)
+	before := meta(t, h)
+	for _, tc := range []struct{ url, want string }{
+		{moved, "a git remote already uses it"},
+		{"file:///srv/git/other.git", "git remote set-url origin file:///srv/git/other.git"},
+		{"../sibling-kit", "git remote set-url origin ../sibling-kit"},
+	} {
+		t.Run(tc.url, func(t *testing.T) {
+			res := h.Must(infra.OpRepoSetURL, `{"url":"`+tc.url+`"}`)
+			text := opstest.Text(res)
+			if !strings.Contains(text, "not an address lore records") || !strings.Contains(text, tc.want) {
+				t.Fatalf("text %q, want %q", text, tc.want)
+			}
+			if !strings.Contains(h.JSON(res), `"changed":false`) {
+				t.Fatalf("changed: %s", h.JSON(res))
+			}
+		})
+	}
+	after := meta(t, h)
+	if after.RepoID != before.RepoID || !slices.Equal(after.URLs, before.URLs) {
+		t.Fatalf("set-url of a path changed _meta.json: %+v → %+v", before, after)
+	}
 }
 
 // TestSetURLAddressForms: every accepted spelling of one repo confirms the

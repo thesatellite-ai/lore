@@ -41,10 +41,12 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
@@ -54,7 +56,10 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/ops/member"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -82,7 +87,10 @@ type StaffAddIn struct {
 	ProjectRoles []string `json:"project_roles,omitempty" flag:"project-role" desc:"project role(s) on each --project (repeat, or comma-separate)"`
 	From         string   `json:"from,omitempty" flag:"from" desc:"a .csv or .json file of people (email,name,handle,github,role,type,teams,projects,project_roles); all of them in one store commit"`
 	FromInvites  bool     `json:"from_invites,omitempty" flag:"from-invites" desc:"every pending invite becomes a member (its teams and projects kept)"`
-	DryRun       bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"show who would be added; write nothing"`
+	// StartedOn back-dates the new stint (devco:T-14: a person added after
+	// they began could not be offboarded on a day before the add).
+	StartedOn string `json:"started_on,omitempty" flag:"started-on" desc:"first day of their stint, YYYY-MM-DD, today or earlier (default today)"`
+	DryRun    bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"show who would be added; write nothing"`
 }
 
 // StaffRow is one person as member ops show them.
@@ -106,7 +114,9 @@ type StaffAddOut struct {
 	Added   []StaffRow `json:"added"`
 	Already []StaffRow `json:"already,omitempty"`
 	Where   string     `json:"where"`
-	DryRun  bool       `json:"dry_run,omitempty"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label  string
+	DryRun bool `json:"dry_run,omitempty"`
 	// Rows is how many roster rows the add wrote (one store commit).
 	Rows     int      `json:"rows"`
 	Warnings []string `json:"warnings,omitempty"`
@@ -169,14 +179,14 @@ func (o StaffAddOut) Text() string {
 	}
 	switch {
 	case len(o.Added) == 0:
-		b.WriteString("nothing to add on " + o.Where + "'s roster\n")
+		b.WriteString("nothing to add on the roster of " + o.label + "\n")
 	case o.DryRun:
 		b.WriteString("nothing written (--dry-run)\n")
 	default:
 		join := cmp.Or(o.JoinWith, joinPlaceholder)
 		// C5: the roster commit waits for the admin's lore sync (unless the
 		// store is push=now), and a newcomer's join reads the remote roster
-		b.WriteString(fmt.Sprintf("  %d roster rows in %s, one store commit; once the roster is sent (`lore sync`), each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, join))
+		b.WriteString(fmt.Sprintf("  %d roster rows in the roster of %s, one store commit; once the roster is sent (`lore sync`), each person joins on their machine with: %s (matched by their email, no invite)\n", o.Rows, o.Where, join))
 	}
 	return b.String() + profilestore.WarningText(o.Warnings)
 }
@@ -184,6 +194,8 @@ func (o StaffAddOut) Text() string {
 // StaffListIn is the input of member.list.
 type StaffListIn struct {
 	All bool `json:"all,omitempty" flag:"all" desc:"people who left or are archived too"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
 	op.PageFlags
 }
@@ -192,39 +204,82 @@ type StaffListIn struct {
 type StaffListOut struct {
 	Members []StaffRow `json:"members"`
 	Where   string     `json:"where"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label string
 }
 
 // Text is a table of the members.
 func (o StaffListOut) Text() string {
 	if len(o.Members) == 0 {
-		return "no members on " + o.Where + "'s roster (lore member add --email <email>)\n"
+		return "no members on the roster of " + o.label + " (lore member add --email <email>)\n"
 	}
-	var b strings.Builder
-	for _, m := range o.Members {
-		line := fmt.Sprintf("%s  %-28s %-20s %-12s", m.ID, m.Email, m.Name, orDash(m.Role))
-		if m.Handle != "" {
-			line += " @" + m.Handle
-		}
+	// N-2: every column is as wide as its widest cell, counted in terminal
+	// cells (a CJK name takes two a character), never a fixed width a long
+	// name runs over.
+	rows := make([][]string, len(o.Members))
+	for i, m := range o.Members {
+		row := []string{m.ID, m.Email, m.Name, orDash(m.Role), atOrEmpty(m.Handle), "", ""}
 		if len(m.Teams) > 0 {
-			line += "  teams @" + strings.Join(m.Teams, ", @")
+			row[5] = "teams @" + strings.Join(m.Teams, ", @")
 		}
 		if m.Status != "" && m.Status != schema.ActorStatusActive {
-			line += "  [" + m.Status + "]"
+			row[6] = "[" + m.Status + "]"
 		}
-		b.WriteString(strings.TrimRight(line, " ") + "\n")
+		rows[i] = row
 	}
+	var b strings.Builder
+	writeColumns(&b, rows)
+	b.WriteString(plural.Count(len(o.Members), "member") + "\n") // devco D-572: a count like every list
 	return b.String()
 }
 
 // StaffRefIn names one member.
 type StaffRefIn struct {
-	Who string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 }
+
+// StaffShowIn is the input of member.show.
+type StaffShowIn struct {
+	Who string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
+	// History lists the person's commits in the org's store clones
+	// (devco R-18: no view showed what a person who left did, and when).
+	History bool `json:"history,omitempty" flag:"history" desc:"also list their commits in the org's stores, newest first, held-back ones marked"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
+}
+
+// HistoryEntry is one store commit a person authored (member show --history).
+type HistoryEntry struct {
+	Commit  string `json:"commit"`
+	At      string `json:"at"`
+	Store   string `json:"store"`
+	Subject string `json:"subject"`
+	Files   int    `json:"files"`
+	// Held: every reader holds this commit's changes back (a roster
+	// change by a non-admin, or a write after the person left).
+	Held bool `json:"held,omitempty"`
+}
+
+// MemberHistory is the upgrade that reads a person's commits in the
+// store clones this machine has (wire: the git history of each clone).
+type MemberHistory interface {
+	MemberHistory(ctx context.Context, emails []string) ([]HistoryEntry, error)
+}
+
+// historyNoReader is the note of a --history no store clone can answer.
+const historyNoReader = "no store history here: run it where the org's store is attached"
 
 // StaffShowOut is member.show's answer.
 type StaffShowOut struct {
 	Member StaffRow `json:"member"`
 	Where  string   `json:"where"`
+	// History is set by --history (nil otherwise; empty when none).
+	History     []HistoryEntry `json:"history,omitempty"`
+	HistoryNote string         `json:"history_note,omitempty"`
+	// ProjectNames are the names of Member.Projects, in the same order (an
+	// id whose project no attached store holds stays the id); the text
+	// form prints them (devco D-449: member show listed prj_ ids only).
+	ProjectNames []string `json:"project_names,omitempty"`
 }
 
 // Text is the person, one fact per line.
@@ -233,18 +288,40 @@ func (o StaffShowOut) Text() string {
 	var b strings.Builder
 	b.WriteString(m.ID + "  " + m.Name + "\n")
 	for _, kv := range [][2]string{{"email", m.Email}, {"handle", atOrEmpty(m.Handle)}, {"github", m.GitHub}, {"role", m.Role}, {"type", m.Type}, {"status", m.Status},
-		{"teams", joinAt(m.Teams)}, {"projects", strings.Join(m.Projects, ", ")}} {
+		{"teams", joinAt(m.Teams)}, {"projects", strings.Join(orIDs(o.ProjectNames, m.Projects), ", ")}} {
 		if kv[1] != "" {
 			b.WriteString(fmt.Sprintf("  %-9s %s\n", kv[0]+":", kv[1]))
 		}
 	}
 	b.WriteString("  roster:   " + o.Where + "\n")
+	if o.History != nil || o.HistoryNote != "" {
+		b.WriteString(fmt.Sprintf("  history:  %d commit(s) in the org's stores", len(o.History)))
+		if o.HistoryNote != "" {
+			b.WriteString(" (" + o.HistoryNote + ")")
+		}
+		b.WriteString("\n")
+		for _, h := range o.History {
+			line := fmt.Sprintf("    %s  %s  %s: %s (%d file(s))", h.At, shortSHA(h.Commit), h.Store, h.Subject, h.Files)
+			if h.Held {
+				line += "  [held back]"
+			}
+			b.WriteString(line + "\n")
+		}
+	}
 	return b.String()
+}
+
+// shortSHA is a commit id cut to seven hex digits.
+func shortSHA(c string) string {
+	if len(c) > 7 {
+		return c[:7]
+	}
+	return c
 }
 
 // StaffEditIn is the input of member.edit.
 type StaffEditIn struct {
-	Who    string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who    string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	Name   string `json:"name,omitempty" flag:"name" desc:"new display name"`
 	Handle string `json:"handle,omitempty" flag:"handle" desc:"new @handle"`
 	Role   string `json:"role,omitempty" flag:"role" desc:"new org-level role (on their open stint)"`
@@ -252,7 +329,7 @@ type StaffEditIn struct {
 
 // StaffRemoveIn is the input of member.remove.
 type StaffRemoveIn struct {
-	Who    string `json:"who" arg:"0" desc:"the person: email, @handle or act_ id"`
+	Who    string `json:"who" arg:"0" flag:"who" alias:"id,actor" desc:"the person: email, @handle or act_ id"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why they left"`
 }
 
@@ -261,7 +338,9 @@ type StaffWriteOut struct {
 	Member StaffRow `json:"member"`
 	Verb   string   `json:"verb"`
 	Where  string   `json:"where"`
-	Note   string   `json:"note,omitempty"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label string
+	Note  string `json:"note,omitempty"`
 	// Handover is member remove's hand-over of the leaver's open tasks
 	// (B-12): zero (no Command) on every other member write.
 	Handover Handover `json:"handover,omitzero"`
@@ -302,7 +381,7 @@ func handoverCommand(m StaffRow) string {
 // Text is one success line (and the note, when there is one), then member
 // remove's hand-over.
 func (o StaffWriteOut) Text() string {
-	t := work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on " + o.Where + "'s roster\n"
+	t := work.Success + " " + o.Member.Email + " (" + o.Member.ID + ") " + o.Verb + " on the roster of " + o.label + "\n"
 	if o.Note != "" {
 		t += "  note: " + o.Note + "\n"
 	}
@@ -372,7 +451,7 @@ func (o ops) staffOps(base, writeErrs []errs.Code) []op.Entry {
 		op.Define(op.Spec{Name: OpStaffShow, Summary: "Show one person on the org roster",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: base,
 			Examples: []op.Example{{Title: "by email", CLI: "lore member show --who mira@agency.example", Want: "email"}}},
-			func(ctx context.Context, in StaffRefIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
+			func(ctx context.Context, in StaffShowIn) (StaffShowOut, error) { return o.staffShow(ctx, in) }),
 		op.Define(op.Spec{Name: OpStaffEdit, Summary: "Change a person's name, @handle or org-level role",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
 			Examples: []op.Example{{Title: "a new org role", CLI: "lore member edit --who mira@agency.example --role pm", Want: "updated"}}},
@@ -395,13 +474,35 @@ type staffSpec struct {
 	Teams        []string
 	Projects     []string
 	ProjectRoles []string
-	invite       *inviteRow
+	// StartedOn is the stint's first day (member add --started-on); zero
+	// is today.
+	StartedOn time.Time
+	invite    *inviteRow
 	// at is where a --from file names this person ("line 8", "entry 3");
 	// empty for flags and invites.
 	at string
 	// bad is a line whose cells do not fit the header; planStaff lists it
 	// with the other bad lines.
 	bad *fromfile.Problem
+}
+
+// startedOnFlag reads member add --started-on: "" is the zero time
+// (today), else a YYYY-MM-DD day no later than today.
+func startedOnFlag(raw string, today time.Time) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(value.DateLayout, raw)
+	if err != nil {
+		return time.Time{}, errs.New(errs.InvalidInput, "member add: --started-on "+work.Quote(raw)+" is not a YYYY-MM-DD day").
+			WithHint("lore member add --email <email> --started-on 2026-03-02")
+	}
+	if t.After(teamprofile.Day(today)) {
+		return time.Time{}, errs.New(errs.InvalidInput, "member add: --started-on "+raw+" is after today ("+teamprofile.Day(today).Format(value.DateLayout)+")").
+			WithHint("add them on or after their first day, or give --started-on today or earlier")
+	}
+	return t, nil
 }
 
 // staffAdd is member.add.
@@ -420,8 +521,16 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: give one of <email>, --from <file> or --from-invites").
 			WithHint("lore member add --email mira@agency.example --team @web")
 	}
+	if in.StartedOn != "" && in.Email == "" {
+		return StaffAddOut{}, errs.New(errs.InvalidInput, "member add: --started-on goes with one <email>, not --from or --from-invites").
+			WithHint("lore member add --email <email> --started-on YYYY-MM-DD; for the others run lore actor period edit --period <apd_id> --started-on YYYY-MM-DD after the add")
+	}
 	r, done, err := o.env.Roster(ctx, !in.DryRun)
 	defer done()
+	if err != nil {
+		return StaffAddOut{}, err
+	}
+	startedOn, err := startedOnFlag(in.StartedOn, r.Today())
 	if err != nil {
 		return StaffAddOut{}, err
 	}
@@ -448,9 +557,9 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		}
 	default:
 		specs = []staffSpec{{Email: in.Email, Name: in.Name, Handle: in.Handle, GitHub: in.GitHub, Role: in.Role, Type: in.Type,
-			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles)}}
+			Teams: splitList(in.Teams), Projects: splitList(in.Projects), ProjectRoles: splitList(in.ProjectRoles), StartedOn: startedOn}}
 	}
-	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
+	out := StaffAddOut{Added: []StaffRow{}, Where: r.Where(), label: r.Label(), DryRun: in.DryRun, JoinWith: joinCommand(ctx, o.env, e.Org)}
 	plans, err := o.planStaff(ctx, r, specs, in.From, pending, &out)
 	if err != nil {
 		return StaffAddOut{}, err
@@ -459,7 +568,7 @@ func (o ops) staffAdd(ctx context.Context, in StaffAddIn) (StaffAddOut, error) {
 		return out, nil
 	}
 	if !op.Confirmed(ctx) && !engine.Confirmed(ctx) {
-		q := fmt.Sprintf("add %d people to %s's roster as members (%s)?", len(plans), r.Where(), staffEmails(plans))
+		q := fmt.Sprintf("add %d people to the roster of %s as members (%s)?", len(plans), r.Label(), staffEmails(plans))
 		return StaffAddOut{}, errs.New(errs.NeedsConfirm, "member add: "+q).WithQuestion(q).WithHint("ask the person, then rerun with --yes")
 	}
 	// every row of the run in ONE store commit (engine stage), one push
@@ -754,7 +863,7 @@ func (o ops) writeStaff(ctx context.Context, r profilestore.Roster, p staffPlan)
 			return 0, err
 		}
 	}
-	w := &writer{r: r, actor: actor, today: r.Today(), orgRole: s.Role}
+	w := &writer{r: r, actor: actor, today: r.Today(), orgRole: s.Role, startOn: s.StartedOn}
 	if p.existing != nil {
 		if _, err := w.reactivate(ctx); err != nil {
 			return 0, err
@@ -790,7 +899,7 @@ func addToTeams(ctx context.Context, r profilestore.Roster, adds map[string][]st
 			return n, err
 		}
 		if !ok {
-			return n, teamMissErr(h, r.Where())
+			return n, teamMissErr(h, r.Label())
 		}
 		list := value.ItemStrings(cur.Fields[schema.FieldTeamMembers])
 		changed := false
@@ -1000,7 +1109,7 @@ func (o ops) staffList(ctx context.Context, in StaffListIn) (StaffListOut, error
 	if rows == nil {
 		rows = []StaffRow{}
 	}
-	return StaffListOut{Members: rows, Where: r.Where()}, nil
+	return StaffListOut{Members: rows, Where: r.Where(), label: r.Label()}, nil
 }
 
 // staffFind resolves who on r (email, @handle, act_ id) to its StaffRow.
@@ -1018,10 +1127,47 @@ func staffFind(ctx context.Context, r profilestore.Roster, who string) (row.Row,
 			return a, m, nil
 		}
 	}
-	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on "+r.Where()+"'s roster").WithHint("lore member list")
+	return row.Row{}, StaffRow{}, errs.New(errs.NotFound, who+" is not a person on the roster of "+r.Label()).WithHint("lore member list")
 }
 
-func (o ops) staffShow(ctx context.Context, in StaffRefIn) (StaffShowOut, error) {
+// orIDs is names when set, else the ids (a show built without names).
+func orIDs(names, pids []string) []string {
+	if len(names) > 0 {
+		return names
+	}
+	return pids
+}
+
+// projectNames names each prj_ id: the project finder of the attached
+// stores first, then the roster's own project rows; an id neither knows
+// stays as it is, so the list never loses an entry.
+func projectNames(ctx context.Context, env Env, r profilestore.Roster, pids []string) []string {
+	if len(pids) == 0 {
+		return nil
+	}
+	known := map[string]string{}
+	if rows, err := r.List(ctx, schema.TableProjects); err == nil {
+		for _, x := range rows {
+			if n := fieldText(x, fieldProjectName); !x.Deleted && n != "" {
+				known[x.ID.String()] = n
+			}
+		}
+	}
+	f, hasFinder := upgrade.As[member.ProjectFinder](env)
+	out := make([]string, 0, len(pids))
+	for _, id := range pids {
+		name := known[id]
+		if hasFinder {
+			if p, err := f.FindProject(ctx, id); err == nil && p.Name != "" {
+				name = p.Name
+			}
+		}
+		out = append(out, cmp.Or(name, id))
+	}
+	return out
+}
+
+func (o ops) staffShow(ctx context.Context, in StaffShowIn) (StaffShowOut, error) {
 	r, done, err := o.env.Roster(ctx, false)
 	defer done()
 	if err != nil {
@@ -1031,7 +1177,22 @@ func (o ops) staffShow(ctx context.Context, in StaffRefIn) (StaffShowOut, error)
 	if err != nil {
 		return StaffShowOut{}, err
 	}
-	return StaffShowOut{Member: m, Where: r.Where()}, nil
+	out := StaffShowOut{Member: m, Where: r.Where(), ProjectNames: projectNames(ctx, o.env, r, m.Projects)}
+	if !in.History {
+		return out, nil
+	}
+	hr, ok := upgrade.As[MemberHistory](o.env)
+	if !ok || m.Email == "" {
+		out.HistoryNote = historyNoReader
+		return out, nil
+	}
+	if out.History, err = hr.MemberHistory(ctx, []string{m.Email}); err != nil {
+		return StaffShowOut{}, err
+	}
+	if out.History == nil {
+		out.History = []HistoryEntry{}
+	}
+	return out, nil
 }
 
 func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, error) {
@@ -1088,7 +1249,7 @@ func (o ops) staffEdit(ctx context.Context, in StaffEditIn) (StaffWriteOut, erro
 	if err != nil {
 		return StaffWriteOut{}, err
 	}
-	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where(), Note: note}, nil
+	return StaffWriteOut{Member: m, Verb: "updated", Where: r.Where(), label: r.Label(), Note: note}, nil
 }
 
 func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, error) {
@@ -1119,7 +1280,7 @@ func (o ops) staffRemove(ctx context.Context, in StaffRemoveIn) (StaffWriteOut, 
 		h.OpenTasks = []HandoverTask{}
 	}
 	h.Command = handoverCommand(m)
-	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where(), Handover: h}, nil
+	return StaffWriteOut{Member: m, Verb: "removed (left; the row stays for history)", Where: r.Where(), label: r.Label(), Handover: h}, nil
 }
 
 // personHandle is raw as a person's roster handle: without its @,

@@ -18,8 +18,8 @@ A row lives in exactly one place, so there is no copy: `lore move --id <id> --to
 ```console
 # alice, in website
 $ lore memory add --body 'checkout must support INR and USD'
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency/client)
 ✓ mem_f147…5139 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [project]
@@ -28,13 +28,12 @@ This becomes visible to everyone with access to repo (client):
   "checkout must support INR and USD" (mem_f147…5139, id kept), now in agency
   kept back: internal metadata, internal and sensitive resource fields, time entries and claim state (listed after the move)
 Move it? [y/N] y
-lore: committed locally to store agency; lore sync sends it
+lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/work/website/.lore/data/memories/mem_f147…5139.json
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency)
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147…5139.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_f147…5139 moved to store repo (same id; the old copy is tombstoned)
 $ git status --short
-?? .lore/LORE.full.md
-?? .lore/LORE.md
 ?? .lore/data/memories/
 ```
 <!-- /example -->

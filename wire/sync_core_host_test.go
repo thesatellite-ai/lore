@@ -316,7 +316,7 @@ func TestSyncRunCoreStoresLines(t *testing.T) {
 	c := openWith(t, repo, Options{Sync: coreStub{}, RepoIsClient: func(context.Context) (bool, error) { return false, nil }})
 	withProject(t, c)
 	if out, err = c.syncEnv().SyncRun(background(), opssync.RunIn{}); err != nil || len(out.Data.Stores) != 1 || out.Data.Stores[0].Store != "kb" ||
-		len(out.Lines) != 1 || !strings.HasPrefix(out.Lines[0], "store kb: sent ") {
+		len(out.Lines) != 1 || out.Lines[0] != "store kb: up to date" {
 		t.Fatalf("with a store = %+v %v", out, err)
 	}
 	// A host without CoreStores (the old binary's) keeps its own answer:

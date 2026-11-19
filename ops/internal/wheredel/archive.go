@@ -78,6 +78,11 @@ func Archive(ctx context.Context, env ArchiveEnv, sp Spec, where []string, dryRu
 		out.Human = "no live " + sp.Noun + " matches --where; nothing archived\n"
 		return out, nil
 	}
+	if sp.Guard != nil {
+		if err = sp.Guard(ctx, hits); err != nil {
+			return Result{}, err
+		}
+	}
 	if dryRun {
 		out.Human = "would archive " + describe(sp.Noun, hits, 0, 0, true) + " (nothing written, --dry-run)\n"
 		return out, nil

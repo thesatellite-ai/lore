@@ -130,10 +130,14 @@ func StandaloneOrgResolution(home, dir string) *OrgResolution {
 const repoMetaMode = 0o644
 
 // repoMetaSeed is the _meta.json `lore init` creates: the keys v0.1.17's
-// lsync writes (project_id, _v), so both binaries read the same checkout.
+// lsync writes (project_id, _v), so both binaries read the same checkout,
+// plus the project's format under the same key a migration records
+// (rowfs.MetaKeyFormat), so an inited and a migrated project say format 2
+// the same way (devco N-15: an inited one had only `_v: 2`).
 type repoMetaSeed struct {
 	ProjectID string `json:"project_id"`
 	Version   int    `json:"_v"`
+	Format    int    `json:"format"`
 }
 
 // SeedRepoMeta creates the checkout's .lore/data/_meta.json naming project
@@ -145,7 +149,7 @@ func (a *App) SeedRepoMeta(ctx context.Context, pid ids.ID[ids.Project]) error {
 	if err != nil {
 		return err
 	}
-	raw, err := json.Marshal(repoMetaSeed{ProjectID: pid.String(), Version: row.FormatVersion})
+	raw, err := json.Marshal(repoMetaSeed{ProjectID: pid.String(), Version: row.FormatVersion, Format: rowfs.ProjectFormatCurrent})
 	if err != nil {
 		return errs.Wrap(errs.Internal, "wire: encode "+rowfs.MetaFileName, err)
 	}
@@ -162,5 +166,9 @@ func (a *App) SeedRepoMeta(ctx context.Context, pid ids.ID[ids.Project]) error {
 		return errs.Wrap(errs.Internal, "wire: create "+rowfs.RepoMetaPath, err)
 	}
 	_, werr := f.Write(doc)
-	return errors.Join(werr, f.Close())
+	if err := errors.Join(werr, f.Close()); err != nil {
+		return err
+	}
+	markInitedHere(ctx, top) // N-7: this clone's commit brings the first render
+	return nil
 }

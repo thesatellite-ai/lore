@@ -187,7 +187,7 @@ func TestTeam030Matrix(t *testing.T) {
 func checkTeam030(t *testing.T, step string, err error, refused bool) {
 	t.Helper()
 	switch {
-	case refused && (!errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "a team cannot be assigned in a linked client repo: team names are internal (TEAM-030)") ||
+	case refused && (!errs.Has(err, errs.InvalidInput) || !strings.Contains(err.Error(), "a team cannot be assigned in a linked client repo: team names are internal") ||
 		!strings.Contains(hintOf(err), "--to <org>")):
 		t.Errorf("%s: %v, want the TEAM-030 refusal", step, err)
 	case !refused && err != nil:

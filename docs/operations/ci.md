@@ -44,7 +44,7 @@ Older lore versions printed "search index is out of date, run `lore setup`" afte
 
 ## Step 3 — Look at the fresh clone
 
-A CI clone has the `.lore/data` files but not the local cache, and not lore's git settings. The first lore command builds the cache from the files, even in read-only mode (the cache is only a local copy; no note changes). A read leaves git as it is: it says once that the clone is not set up for lore yet, and the next lore write, `lore sync` or `lore fix` sets up lore's merge helper and its hook blocks. A clone lore has not set up yet is not a problem, so `lore doctor` lists it under Notes and the clone reads HEALTHY. A shallow clone (GitHub Actions checks out with `fetch-depth: 1` by default) is a note too: reads, `lore render --check` and `lore doctor` work on it, and only landing and the merged checks need the default branch's full history (`git fetch --unshallow`, or `fetch-depth: 0`). A HOME the job cannot write is fine as well: lore then keeps its caches (and a copy of this machine's state) in a temp folder under `TMPDIR` that it removes when the command ends, so every read works, read-only mode or not, and nothing is written to HOME or the clone; in a project still on the lore 0.1.17 format a read does not create `.lore/lore.db-wal` or `-shm` either. `lore render --check` compares only the files the clone carries: the private render under `~/.lore/render` is never committed, so a clone without it gets a note, not a failure. There is no separate install step:
+A CI clone has the `.lore/data` files but not the local cache, and not lore's git settings. The first lore command builds the cache from the files, even in read-only mode (the cache is only a local copy; no note changes). A read leaves git as it is: it says once that the clone is not set up for lore yet, and the next lore write, `lore sync` or `lore fix` sets up lore's merge helper and its hook blocks. A clone lore has not set up yet is not a problem, so `lore doctor` lists it under Notes and the clone reads HEALTHY. A shallow clone (GitHub Actions checks out with `fetch-depth: 1` by default) is a note too: reads, `lore render --check` and `lore doctor` work on it, and only landing and the merged checks need the default branch's full history (`git fetch --unshallow`, or `fetch-depth: 0`). A HOME the job cannot write is fine as well: lore then keeps its caches (and a copy of this machine's state) in a temp folder under `TMPDIR` that it removes when the command ends, so every read works, read-only mode or not, and nothing is written to HOME or the clone; in a project still on the lore 0.1.17 format a read does not create `.lore/lore.db-wal` or `-shm` either. `lore render --check` compares only the files the clone carries: the private render under `~/.lore/render` is never committed, so a clone without it gets a note, not a failure; so does a `.lore/LORE.full.md` git does not track (a repo migrated from lore 0.1.17, or one that never committed it): the note names `lore render && git add .lore/LORE.full.md`, and `lore doctor` lists it under Notes. On a CI runner (any of `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD` or `BITBUCKET_BUILD_NUMBER` set) every read, and the CI checks `lore check leaks --ci` and `lore render --check` anywhere, read the checkout only: they fetch nothing (not even the live rows on the remote's `refs/lore/live`), clone no attached store (a store in `.lore/stores.yaml` with no clone on the runner is left out of the read, so the job needs no store credentials and a read-only HOME works), take no lock and write nothing in `.git` (`.git/lore` and the index included), so `.git` is byte-identical afterwards, and they skip the "git is not set up for lore's row files" note, since a CI job never runs `lore sync`. In a repo with no `.lore` folder `lore render --check` passes with one line saying the repo has no .lore folder, so it has no rendered files to check, as `lore check leaks --ci` and `lore doctor` do there, and none of the three creates anything in HOME (no `~/.lore`), so one CI template serves every repo. There is no separate install step:
 
 <!-- example: ops#ci only=1,2 keep=lore|rul_|Status|merge|exit -->
 ```console
@@ -115,6 +115,31 @@ $ lore context --internal
 <!-- /example -->
 
 `--table rules` limits it to one kind of row, `--search <text>` to rows that contain a word, and `--json` gives the same rows for scripts. Never paste this output into anything the client can read (the first line says so too); see [Lore for teams](../team/README.md).
+
+## Which commits `lore check leaks --ci` scans
+
+`lore check leaks --ci` is the backstop for a commit or push that skipped lore's hooks (`--no-verify`): it scans the files the pushed commits add or change, and their names, for secrets. It picks the commits in this order, so a push of several commits straight to the default branch is scanned in full, not only its last commit:
+
+1. `--since <commit>`: every commit after that one (give the last commit CI checked). A commit the clone does not have fails with E_INVALID_INPUT and names the fetch to run.
+2. The range the CI names: on GitHub Actions the event payload (`pull_request.base.sha`, `merge_group.base_sha`, else the push's `before`), on GitLab `CI_MERGE_REQUEST_DIFF_BASE_SHA`, else `CI_COMMIT_BEFORE_SHA`. A value the clone does not have (a shallow clone) or all zeros (a new branch) is skipped.
+3. On a branch, the commits since the default branch (`origin/HEAD`).
+4. Else the last 50 commits. A clone with less history (`fetch-depth: 1`, a young repo) has every tracked file scanned.
+
+In every case a value the same file already held before the first scanned commit is not new, as at commit and push. Steps 1 and 2 start from the merge-base of that commit and HEAD, so a force push is scanned in full too. Give the job the history the range needs: with the default `fetch-depth: 1` GitHub Actions has no earlier commit, so lore scans every tracked file and a key committed before lore was set up fails the job until it is removed or allowed (`lore secrets allow`). A GitHub Actions job that reads the push range from the event needs no flag:
+
+```yaml
+jobs:
+  lore-leaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the commits before this push, so lore can read the range
+      - run: curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
+      - run: lore check leaks --ci
+```
+
+On another CI, pass the last commit the job checked yourself, for example `lore check leaks --ci --since "$LAST_CHECKED_SHA"`. A run that fails must be fixed before the next push: the next run starts after the commits the failed run saw.
 
 ## Try it
 

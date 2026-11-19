@@ -32,7 +32,11 @@ type StoreAddIn struct {
 	URL    string `json:"url" flag:"url" desc:"the store to add: its git url (required)"`
 	Name   string `json:"name,omitempty" flag:"name" desc:"the store's short name (default: the repo name of --url)"`
 	Branch string `json:"branch,omitempty" flag:"branch" desc:"the store branch (default: the store's default branch)"`
-	Push   bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; the next write to that store sends it)"`
+	Push   bool   `json:"push,omitempty" flag:"push" desc:"push the lore-org.yaml commit to the org store now (default: commit in the store clone only; lore sync, or lore store push --store <org>, sends it)"`
+	// Audience is who in the org uses the store (D-442): "" or "everyone"
+	// every member, "admins" only the org's admins. Given for a store the
+	// file already lists, it changes that store's audience.
+	Audience string `json:"audience,omitempty" flag:"audience" desc:"who uses the store: everyone (default) or admins (servers, domains, accounts: members' lore never reads it)"`
 }
 
 // StoreAdder is the optional Host upgrade behind org.store.add (an
@@ -50,7 +54,8 @@ func StoreAddCommand(org, url string) string {
 func storeAddOp(o ops, spec func(name, summary string, errCodes []errs.Code, mayAsk bool, ex ...op.Example) op.Spec, codes []errs.Code) op.Entry {
 	return op.Define(spec(OpStoreAdd, "Add a store to an org: its lore-org.yaml (committed in the org store's clone; --push sends it) and this machine's org entry", codes, true,
 		op.Example{Title: "a store for one client's notes", CLI: "lore org store add --org agency --url git@github.com:agency/client-notes.git --yes", Want: "added store"},
-		op.Example{Title: "and push it to the team now", CLI: "lore org store add --org agency --url git@github.com:agency/client-notes.git --push --yes", Want: "pushed"}),
+		op.Example{Title: "and push it to the team now", CLI: "lore org store add --org agency --url git@github.com:agency/client-notes.git --push --yes", Want: "pushed"},
+		op.Example{Title: "a store only the org's admins use", CLI: "lore org store add --org agency --url git@github.com:agency/ops.git --audience admins --push --yes", Want: "admins"}),
 		func(ctx context.Context, in StoreAddIn) (Report, error) {
 			if strings.TrimSpace(in.URL) == "" {
 				return Report{}, errs.New(errs.InvalidInput, "name the store to add with --url <store url>").

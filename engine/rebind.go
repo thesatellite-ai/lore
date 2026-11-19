@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -64,11 +65,15 @@ func (e *Engine) Actor() ids.ID[ids.Actor] { return e.actor }
 //
 // Invariant: called only during open, before the engine is shared between
 // goroutines (the stores map is not locked).
-func (e *Engine) RefuseWrites(name store.Source, err error) {
+func (e *Engine) RefuseWrites(name store.Source, err error) { e.RefuseWritesUnless(name, err, nil) }
+
+// RefuseWritesUnless is RefuseWrites whose refusal lifted answers for a
+// write's ctx: true lets that write through (nil: never).
+func (e *Engine) RefuseWritesUnless(name store.Source, err error, lifted func(context.Context) bool) {
 	a, ok := e.stores[name]
 	if !ok || err == nil {
 		return
 	}
-	a.WriteRefused = err
+	a.WriteRefused, a.WriteRefusedLifted = err, lifted
 	e.stores[name] = a
 }

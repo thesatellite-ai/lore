@@ -44,7 +44,7 @@ func (e *Engine) Revert(ctx context.Context, ref Ref, want hlc.HLC, before row.R
 	if cur.HLC.Compare(want) != 0 {
 		return Written{}, errs.New(errs.Stale, cur.ID.String()+" changed after the batch")
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}

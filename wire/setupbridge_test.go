@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -82,7 +83,13 @@ func TestSetupStoreRoundTrip(t *testing.T) {
 	if err = st.TouchRepo(ctx, onboard.KnownRepo{RepoID: "rep_01", Root: root}); err != nil {
 		t.Fatal(err)
 	}
-	if kr, kerr := st.KnownRepos(ctx); kerr != nil || len(kr) != 1 || kr[0].RepoID != "rep_01" {
+	// the test's own repo is known too (devco:O-16: lore ran in it, so its
+	// cache use record lists it); only the touched row is checked here
+	known := func() ([]onboard.KnownRepo, error) {
+		kr, kerr := st.KnownRepos(ctx)
+		return slices.DeleteFunc(kr, func(r onboard.KnownRepo) bool { return r.RepoID != "rep_01" }), kerr
+	}
+	if kr, kerr := known(); kerr != nil || len(kr) != 1 || kr[0].RepoID != "rep_01" {
 		t.Fatalf("KnownRepos = %+v, %v", kr, kerr)
 	}
 	// A clone whose folder was renamed since is not listed (doctor --all
@@ -91,13 +98,13 @@ func TestSetupStoreRoundTrip(t *testing.T) {
 	if err = os.Rename(root, moved); err != nil {
 		t.Fatal(err)
 	}
-	if kr, kerr := st.KnownRepos(ctx); kerr != nil || len(kr) != 0 {
+	if kr, kerr := known(); kerr != nil || len(kr) != 0 {
 		t.Fatalf("KnownRepos after the folder moved = %+v, %v", kr, kerr)
 	}
 	if err = os.Rename(moved, root); err != nil {
 		t.Fatal(err)
 	}
-	if kr, kerr := st.KnownRepos(ctx); kerr != nil || len(kr) != 1 {
+	if kr, kerr := known(); kerr != nil || len(kr) != 1 {
 		t.Fatalf("KnownRepos with the folder back = %+v, %v", kr, kerr)
 	}
 

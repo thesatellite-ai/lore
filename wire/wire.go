@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -56,6 +57,7 @@ import (
 	opsaudit "github.com/thesatellite-ai/lore/ops/audit"
 	opsbatch "github.com/thesatellite-ai/lore/ops/batch"
 	opsbehaviour "github.com/thesatellite-ai/lore/ops/behaviour"
+	opsbranch "github.com/thesatellite-ai/lore/ops/branch"
 	opscache "github.com/thesatellite-ai/lore/ops/cache"
 	opscheck "github.com/thesatellite-ai/lore/ops/check"
 	opscomment "github.com/thesatellite-ai/lore/ops/comment"
@@ -133,9 +135,13 @@ type Options struct {
 	// RepoDir is any folder inside the code repository (usually the
 	// working directory). Required.
 	RepoDir string
-	// Home is the lore home (~/.lore): store clones, per-store caches.
-	// Required.
+	// Home is the lore home (lorehome.Resolve: LORE_HOME, else ~/.lore):
+	// config.yaml, store clones, per-store caches, state. Required. Every
+	// lore-home path is built from it, never from os.UserHomeDir.
 	Home string
+	// HomeSource is where Home came from (LORE_HOME or default), shown by
+	// `lore where` and doctor. "" reads as default.
+	HomeSource lorehome.Source
 	// Actor stamps every write. When zero, ResolveActor is called once at
 	// open, else the identity chain of adapters/identity runs (config.yaml
 	// identity, git email, …; CONFIG_GUIDE 5.1).
@@ -209,6 +215,14 @@ type Options struct {
 	// under ~/.lore, its repo store is read-only, and its git is never
 	// wired (no hooks, .gitignore or .gitattributes lines).
 	RepoLinkedByRemote func(ctx context.Context) string
+	// RepoLinkTarget is the --to that names the store folder this repo's
+	// link points at ("<store short name>/<folder>", which a write's --to
+	// resolves from config.yaml even when that folder is not attached
+	// here), "" when no link names the repo or its store is in no org
+	// entry of config.yaml. Why (devco:D-670): a write refused in a linked
+	// repo whose folder was not attached printed "write there with --to
+	// <store>/<folder>", a placeholder where the link names the value.
+	RepoLinkTarget func(ctx context.Context) string
 	// ClientRepo says whether this checkout is a client repo by a match
 	// (a hosted remote an org's repos: pattern or a client link claims):
 	// the org's name and the folder it is linked to, zero when it is not
@@ -423,6 +437,8 @@ type App struct {
 	machOpened bool
 	machErr    error
 	mach       *App
+	// repoBranch is RepoBranchIsolated's answer for this command (branchlayer_repo.go).
+	repoBranch repoBranchCache
 }
 
 // state is everything Open built; nil until the first use.
@@ -459,6 +475,11 @@ type state struct {
 	// here is the store folder a command run inside a store's checkout
 	// works on (storehere.go); "" in a code repo.
 	here store.Source
+	// storeOnly marks an open that chose its stores and folders itself
+	// (openStoreOnlyOn: --store <org>[/<folder>], a store clone, the
+	// setup's default store): the sql lens adds no folders beside it
+	// (lensFolders), else every folder it attached read twice (D-473).
+	storeOnly bool
 	// actorMu / actorDone: the actor row is written once per store.
 	actorMu   sync.Mutex
 	actorDone map[store.Source]bool
@@ -471,10 +492,18 @@ type state struct {
 	agentOwner ids.ID[ids.Actor]
 	// agentOwnerName is that person's roster display_name ("" unknown).
 	agentOwnerName string
+	// storeWho is, per attached org store, the person's identity in that
+	// org when it differs from who (orgstoreactor.go, C19): rows written
+	// there are stamped with it and its actor row is written there.
+	storeWho map[store.Source]storeWriter
 	// unreachable holds the org stores (Options.OrgStores) left out at open
 	// because they have no local copy and cannot be reached, with that
 	// error; nil when every store opened (openAttached, unreachableGuard).
 	unreachable map[store.Source]error
+	// untrusted holds the stores the repo's committed stores.yaml attaches
+	// that open left out until the person trusts them (storetrust.go,
+	// devco R-9); nil when none.
+	untrusted []untrustedStore
 	// repoClassNote says why the repo store is client-class without a
 	// positive answer (no RepoIsClient hook, or its error); empty when the
 	// hook answered.
@@ -510,6 +539,7 @@ func New(opts Options) (*App, error) {
 	}
 	closeLoreHome(opts.Home)                 // homemode.go: an older lore left it open
 	movePersonalFolder(opts.Home, os.Stderr) // personalfolder.go: stores/me → stores/_me, once
+	dropForeignClones(opts.Home, os.Stderr)  // cloneforeign.go: a copied home never reaches the old home's clones (D-534)
 	a := &App{opts: opts, probeLimiter: probe.NewLimiter(probe.DefaultConcurrency), doctorCache: opsdoctor.NewMemCache(0, opts.Wall), prefillCache: newPrefillCache(opts.Wall), aliasCache: newAliasCache(opts.Wall)}
 	if b, ok := opts.Audit.(appBinder); ok {
 		b.bindApp(a) // a sink that links sessions and stamps with the App's clock (wire/auditchain.go)
@@ -569,6 +599,7 @@ func Registry(a *App) (*op.Registry, error) {
 	entries = append(entries, opsselfupgrade.Ops(a)...)
 	// LORE_TEAM_SPEC §1, §6.6, F8: lore live show|diff|log|restore|compact|purge.
 	entries = append(entries, opslive.Ops(a)...)
+	entries = append(entries, opsbranch.Ops(a)...) // BRANCH_LAYERS 13: lore branch list|show|mode|land|drop|restore|purge|promote|isolate|share
 	entries = append(entries, opstasklist.Ops(a)...)
 	entries = append(entries, opsmission.Ops(a)...)
 	entries = append(entries, opsplan.Ops(a)...)
@@ -648,7 +679,13 @@ func Registry(a *App) (*op.Registry, error) {
 	// plain files sweep 3.2: lore where (alias lore files), every path lore keeps.
 	entries = append(entries, opswhere.Ops(a)...)
 	entries = append(entries, opsprojectshared.Ops()...)
-	return op.NewRegistry(entries...)
+	reg, err := op.NewRegistry(entries...)
+	if err != nil {
+		return nil, err
+	}
+	// devco D-623: a resource-routed read's --json names the folder it
+	// read (resourcefolder.go); the OpenAPI document promises the field.
+	return reg.WithTopFields(routedTopFields), nil
 }
 
 // Registry returns the operations every surface mounts.
@@ -693,11 +730,16 @@ func (a *App) Actor(ctx context.Context) (ids.ID[ids.Actor], error) {
 // detected agent (Options.PersonOnly), for a server whose callers are not
 // its own process. It must run before the App opens; called later it
 // reopens the state so the identity is resolved again.
-func (a *App) ServeAsPerson() {
+func (a *App) ServeAsPerson() { a.reopenAsPerson(true) }
+
+// reopenAsPerson sets Options.PersonOnly (and, for a server, watchPlaces)
+// and drops an opened state, so the next call resolves the person again
+// (ServeAsPerson, creditPerson).
+func (a *App) reopenAsPerson(watch bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.opts.PersonOnly = true
-	a.watchPlaces = true
+	a.watchPlaces = a.watchPlaces || watch
 	if a.opened && a.st != nil {
 		_ = a.st.close()
 	}
@@ -771,7 +813,7 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)
 			if !a.st.refreshPending {
-				a.rowFileNotices(a.st) // fail closed: name every row file the refresh left out (rowfile_notice.go)
+				a.rowFileNotices(ctx, a.st) // fail closed: name every row file the refresh left out (rowfile_notice.go)
 			}
 			if n := liveNote(ctx, a.st); n != "" {
 				a.opts.Notice(n)
@@ -857,7 +899,7 @@ func (a *App) finishRefresh(ctx context.Context, st *state) error {
 		}
 		a.mu.Unlock()
 		if st.refreshErr == nil {
-			a.rowFileNotices(st)
+			a.rowFileNotices(ctx, st)
 		}
 	})
 	return st.refreshErr
@@ -947,7 +989,17 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 	}
 	a.refreshMovedStores() // servestale.go: a serving App follows a store set-url made since it opened
+	// devco:D-683, D-692: task next and the roster ops where no org applies
+	// run on the only org setup of this machine (solesetup.go), decided
+	// before anything resolves the folder's org (that answer is kept)
+	ctx, err := a.routeSoleSetup(ctx, e, d)
+	if err != nil {
+		return op.Result{}, err
+	}
 	res, err := a.run(ctx, e, d, c)
+	err = fitHomeHint(ctx, e, err)        // hintflags.go (devco:D-539)
+	err = a.goneRowAnswer(ctx, e, d, err) // rowgone.go (devco:D-590)
+	err = purgedAsDeclared(e, err)        // rowgone.go: E_PURGED only where declared
 	if err != nil && top != "" {
 		removeEmptyDirs(filepath.Join(top, loreFolderName))
 	}
@@ -977,14 +1029,46 @@ func removeEmptyDirs(dir string) int {
 // run is Run without the refusal clean-up.
 func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (op.Result, error) {
 	ctx = a.TeamContext(ctx) // P3-COORD-3: --assign @h, --mine, STATE without a host Team (wire/coord_standalone.go)
+	if e.Spec().Name == opsmigrate.OpRun {
+		ctx = opsmigrate.WithCommand(ctx) // devco:D-521: its store reads fetch, never push what already waited
+	}
 	// P3-CFG-1: a Local operation opens nothing, not even the
 	// agent detection's repo state (wire/localops.go).
+	// devco D-682: init, a writing render and org link/unlink in a store clone
+	// refuse before anything opens (storeclone_setup.go): init there
+	// committed a policy into the store folder and wrote pointer files and
+	// hooks into the clone
+	if err := a.storeCloneSetUp(e, d); err != nil {
+		return op.Result{}, err
+	}
 	if e.Spec().Name == opsrepoinit.OpRepoInit {
 		if err := a.ConfirmClientRepoInit(ctx, c.Yes); err != nil { // I-13 (clientrepo_hint.go)
 			return op.Result{}, err
 		}
 	}
-	if e.Spec().Local {
+	// devco D-634: a malformed row id is refused as one before any store
+	// or git lookup (malformedid.go): from the home folder `show --id
+	// mem_bogus` said "not inside a git work tree"; inside a work tree the
+	// op refuses it in its own words and code (D-676)
+	if err := malformedIDErr(ctx, a.opts.RepoDir, e, d); err != nil {
+		return op.Result{}, err
+	}
+	// devco D-508, D-509: a read whose data lives in each code repo
+	// (mission status, inbox, migrate status, session list, why-context)
+	// refuses outside one with the one repo-only refusal (repoonly.go),
+	// before the Local and store-only paths answer in their own words
+	if !fleetFix(e, d) && !a.storeQueueRun(ctx, e, d) {
+		if err := repoOnlyRefusal(ctx, e.Spec().Name, a.opts.RepoDir); err != nil {
+			return op.Result{}, err
+		}
+	}
+	if e.Spec().Local && !storeRoutedLocal(e, d) && !contextOutsideRepo(ctx, a.opts.RepoDir, e) {
+		// context in an unlinked own repo a resource of its org names
+		// answers from that resource's folder (resourcefolder.go, D-556)
+		if f, ok := a.resourceRoutedRead(ctx, e, d); ok {
+			res, _, err := a.runResourceRouted(ctx, e, d, c, f)
+			return res, err
+		}
 		return a.runLocal(ctx, e, d, c)
 	}
 	// P3-AUDIT-4: audit reads and roster verbs run without the repo engine
@@ -996,6 +1080,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 			// TEAM_PROFILES 3.4: the profile ops read --yes (op.Confirmed)
 			// and the caller (TS-4) without the engine around them.
 			ctx = profileContext(ctx, c)
+			// devco D-499: a roster read names its org (--store <org>)
+			// from any folder; no org anywhere names both ways in
+			var err error
+			if ctx, err = a.prepareRoster(ctx, e, d); err != nil {
+				return op.Result{}, err
+			}
 		}
 		return runDirect(ctx, e, d)
 	}
@@ -1012,6 +1102,20 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if a.setupOnlyHere(ctx, e.Spec().Name) || a.setURLWithoutRepo(ctx, e.Spec().Name) {
 		return a.runSetupOnly(ctx, e, d, c)
 	}
+	// actor merge outside any repo (devco D-424): MergeActor finds the
+	// org store holding both actors (or the one --store names) and opens
+	// it alone; the repo open here would refuse with E_NOT_A_STORE
+	if e.Spec().Name == opsinfra.OpActorMerge && !insideWorkTree(ctx, a.opts.RepoDir) {
+		return runDirect(op.WithConfirmed(ctx, c.Yes), e, d)
+	}
+	// task next over an org store with no code repo (--store, or --setup
+	// from home) opens that store itself, per store (coord_store_queue.go,
+	// devco:D-666); the repo open here would refuse with E_NOT_A_STORE
+	// hold claim / release on an org store (--store, or no code repo here)
+	// opens that store itself too (coord_store_hold.go, devco:D-672)
+	if (!inCodeRepo(ctx, a.opts.RepoDir) && a.storeQueueRun(ctx, e, d)) || a.storeHeartbeatRun(ctx, e, d) || a.holdStoreRun(ctx, e, d) {
+		return runDirect(ctx, e, d)
+	}
 	// a write naming its store (--to acme/org) outside any repo runs on
 	// that store alone (targetoutside.go)
 	if res, handled, err := a.runOutsideRepo(ctx, e, d, c); handled {
@@ -1020,6 +1124,12 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	// actor list/show in a git repo with no lore project read the org's
 	// roster store alone, as the roster verbs do (rosterread_noproject.go)
 	if res, handled, err := a.runRosterReadNoProject(ctx, e, d, c); handled {
+		return res, err
+	}
+	// a knowledge read there, with a personal store, reads it alone: the
+	// `--to me` write works there, so its rows must be readable there
+	// (personalread_noproject.go, devco P-4)
+	if res, handled, err := a.runPersonalReadNoProject(ctx, e, d, c); handled {
 		return res, err
 	}
 	// `lore sync` with no code repo here syncs every store of the setup,
@@ -1104,20 +1214,39 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	if err = a.prepareSource(ctx, e, d); err != nil {
 		return op.Result{}, err
 	}
+	// D-616: a write whose --store names a store this repo does not attach
+	// is refused, never written elsewhere (writestore.go)
+	if err = a.refuseUnattachedWriteStore(ctx, e, d); err != nil {
+		return op.Result{}, err
+	}
+	// D-458: a read naming a store folder this repo does not attach reads
+	// it from the store's clone (readfolder.go)
+	if err = a.attachReadFolder(ctx, e, d); err != nil {
+		return op.Result{}, err
+	}
 	// B2-21: a row named by id in a folder of the org's stores this repo
 	// does not attach (idfolder.go)
 	search, err := a.attachFolderOfID(ctx, e, d)
 	if err != nil {
 		return op.Result{}, err
 	}
-	eng, err := a.Engine(ctx)
-	if err != nil {
-		return op.Result{}, err
-	}
-	if uerr := a.unreachableTarget(e, d); uerr != nil {
-		return op.Result{}, uerr
-	}
-	res, err := eng.Run(ctx, e, d, c)
+	// D-484: a list or search reads every folder of a store the repo
+	// attaches whole, as sql does (readscope.go); attached for this run only
+	var res op.Result
+	err = a.withExtra(a.readScopeFolders(ctx, e), func() error {
+		eng, eerr := a.Engine(ctx)
+		if eerr != nil {
+			return eerr
+		}
+		if uerr := a.unreachableTarget(e, d); uerr != nil {
+			return uerr
+		}
+		// D-617: --store naming stores the repo attaches keeps the
+		// command to them (writestore.go narrowToStore)
+		var rerr error
+		res, rerr = eng.Run(a.narrowToStore(ctx, e, d, eng), e, d, c)
+		return rerr
+	})
 	if err == nil {
 		a.ensureFolderProject(ctx) // the folder written to has its project row
 		a.afterWrite(ctx, e)       // OV3 MACH-AUTO: the profile goes with the next ordinary write
@@ -1188,9 +1317,17 @@ func (a *App) confirmClientStoresFile(ctx context.Context, e op.Entry, d op.Deco
 	}
 	if a.opts.RepoIsClient != nil {
 		if client, err := a.opts.RepoIsClient(ctx); err != nil || client {
+			// devco:D-670: the org this client repo belongs to is named when
+			// it is known; the folder stays the person's choice
+			org := "<org>"
+			if a.opts.ClientRepo != nil {
+				if c := a.opts.ClientRepo(ctx); c.Org != "" {
+					org = c.Org
+				}
+			}
 			return errs.New(errs.NeedsConfirm, "this is a client repo: the client can read .lore/stores.yaml and will see the store url").
 				WithQuestion("write the store url into this client repo's .lore/stores.yaml?").
-				WithHint("link the repo instead (`lore org link --org <org> --project <folder>`: the link is kept only in the store), or rerun with --yes")
+				WithHint("link the repo instead (`lore org link --org " + org + " --project <folder>`: the link is kept only in the store), or rerun with --yes")
 		}
 	}
 	if org, ok := a.orgStoreOf(ctx, rawURL); ok {
@@ -1218,13 +1355,9 @@ func (a *App) orgStoreOf(ctx context.Context, raw string) (org string, ok bool) 
 	if raw == "" {
 		return "", false
 	}
-	want, ok := storeKey(raw)
-	if !ok {
+	same := sameStoreAs(raw) // an ssh alias origin included (D-627)
+	if same == nil {
 		return "", false
-	}
-	same := func(u string) bool {
-		got, ok := storeKey(u)
-		return ok && got == want
 	}
 	for _, s := range rawOrgStores(ctx, a.opts) {
 		if same(s.URL) {
@@ -1342,7 +1475,10 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 	}
 	out, err := opsstores.SyncAll(ctx, a, only)
 	if err == nil && only == "" {
-		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx)...)
+		out.Stores = append(out.Stores, a.pushWaitingOrgStores(ctx, out.Stores)...)
+		if !syncWasOffline(out) {
+			out.Notes = append(out.Notes, a.sweepLayers(ctx)...) // BRANCH_LAYERS 9, 10 (branchlayer_sweep.go)
+		}
 	}
 	a.forgetStoreChecks(ctx, out.Stores)
 	return out, err
@@ -1352,4 +1488,17 @@ func (a *App) SyncStores(ctx context.Context, only string) (opsstores.SyncOut, e
 // tables (kinds join from the caches at run time).
 func builtinRegistry() (*schema.Registry, error) {
 	return schema.NewRegistry(schema.Builtin()...)
+}
+
+var _ opstask.CommitRefResolver = (*App)(nil)
+
+// ResolveCommitRef implements opstask.CommitRefResolver (devco:M-5): the
+// full sha --commit names in the folder the command runs in, peeled to a
+// commit, so task done records a sha and never HEAD or a branch name.
+func (a *App) ResolveCommitRef(ctx context.Context, ref string) (string, error) {
+	sha, err := gitcommit.Resolver{}.RevParse(ctx, a.projectDir(), ref+"^{commit}")
+	if err != nil {
+		return "", errs.Wrap(errs.InvalidInput, "resolve commit "+ref, err)
+	}
+	return sha, nil
 }

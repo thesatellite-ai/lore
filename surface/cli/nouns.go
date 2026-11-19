@@ -12,6 +12,8 @@ package cli
 // P3-NOUNHELP-1).
 
 // NounDoc is the help text of one noun group.
+import "github.com/thesatellite-ai/lore/adapters/lorehome"
+
 type NounDoc struct {
 	// Short is the one line shown in the parent's command list.
 	Short string
@@ -46,7 +48,7 @@ func nounDocs() map[string]NounDoc {
 		"member":           {Short: "The org's people: add your staff straight to the roster (role, teams, projects; one or a CSV), list, show, edit, remove; they join with lore setup join --invite <store-url>"},
 		"setup trash":      {Short: "Setups lore setup remove moved aside: list, restore (with their repo pins), purge for good (never a repo)"},
 		"machine path":     {Short: "Where lore keeps its own files on this machine: lore home, config.yaml, this repo's .lore"},
-		"setup leftovers":  {Short: "The identity or personal.store of ~/.lore/config.yaml no setup uses any more: clear one (lore setup list shows them)"},
+		"setup leftovers":  {Short: "The identity or personal.store of " + lorehome.Shown() + "/config.yaml no setup uses any more: clear one (lore setup list shows them)"},
 		"agent":            {Short: "Agent sessions (one actor per session label)"},
 		"architecturenote": {Short: "Manage architecture notes"},
 		"audit":            {Short: "Inspect and verify the hash-chained audit log of knowledge changes"},
@@ -55,11 +57,12 @@ func nounDocs() map[string]NounDoc {
 			Long:  "One noun for every bulk change: task bulk edits, metadata bulk set/unset and imports, bulk and group deletes, resource bulk edits and imports, lore secrets move. lore batch undo replaces every per-noun undo.",
 		},
 		"behaviour":       {Short: "Manage behaviours"},
-		"cache":           {Short: "Maintain lore's caches outside the checkout (~/.lore/cache, ~/.lore/render)"},
+		"cache":           {Short: "Maintain lore's caches outside the checkout (" + lorehome.Shown() + "/cache, " + lorehome.Shown() + "/render)"},
 		"check":           {Short: "Leak checks: internal or personal content must never reach the client"},
+		"branch":          {Short: "Notes a code branch keeps to itself until it merges (branch layers): list, land, drop, restore"},
 		"comment":         {Short: "Manage comments on entities"},
 		"commit":          {Short: "Show the entities linked to a git commit"},
-		"config":          {Short: "Get/set keys of ~/.lore/config.yaml"},
+		"config":          {Short: "Get/set keys of " + lorehome.Shown() + "/config.yaml"},
 		"cookbookrecipe":  {Short: "Manage cookbook recipes"},
 		"decision":        {Short: "Manage decisions (architectural records)"},
 		"directive":       {Short: "Install or show the lore agent-directive block in agent-loaded markdown"},
@@ -68,7 +71,7 @@ func nounDocs() map[string]NounDoc {
 		"handoff":         {Short: "Manage handoffs"},
 		"hold":            {Short: "Hold a shared resource (a test suite, a staging slot) with a lease"},
 		"hotfix":          {Short: "Manage hotfixes (loud recurring warnings)"},
-		"identity":        {Short: "Manage persisted identity (identity: in ~/.lore/config.yaml)"},
+		"identity":        {Short: "Manage persisted identity (identity: in " + lorehome.Shown() + "/config.yaml)"},
 		"incident":        {Short: "Manage incidents"},
 		"link":            {Short: "Link git commits to any entity (task / run / mission / decision / …)"},
 		"live":            {Short: "Inspect and maintain the live ref (refs/lore/live)"},
@@ -84,6 +87,7 @@ func nounDocs() map[string]NounDoc {
 		},
 		"mission":     {Short: "Manage missions (containers for tasks)"},
 		"org":         {Short: "Choose and inspect which org a repo belongs to"},
+		"org config":  {Short: "Read and edit the org file's own and repos patterns (get, set)"},
 		"org store":   {Short: "The stores of an org (add)"},
 		"pattern":     {Short: "Manage patterns"},
 		"pii-pattern": {Short: "Old spelling of lore secrets rule (custom secret detection patterns)"},

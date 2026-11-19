@@ -18,9 +18,12 @@ package doctor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -236,6 +239,9 @@ type RunIn struct {
 	// [setup] section): REST body only; the CLI passes the global --setup
 	// (op.SetupOf), never a per-op flag, which would clash with it.
 	Setup string `json:"setup,omitempty" desc:"the setup to check (default: every setup with --all, else the active one)"`
+	// Verbose (K-10) names every repo --all found, the checked ones and
+	// those with no lore data too; without it they are counted.
+	Verbose bool `json:"verbose,omitempty" flag:"verbose" desc:"with --all: list every repo found in the setups' folders, the ones checked and those with no lore data too (default: counted)"`
 }
 
 // Report is the output of doctor.run: v0.1.17's report keys, plus
@@ -252,6 +258,10 @@ type Report struct {
 	Notes         []string `json:"notes,omitempty"`
 	Errors        []string `json:"errors,omitempty"`
 	BinaryVersion string   `json:"binary_version"`
+	// LoreHome is the lore home when LORE_HOME moved it ("" for the default
+	// ~/.lore): two builds on one machine each keep their own home, and
+	// doctor says which one it checked.
+	LoreHome string `json:"lore_home,omitempty"`
 	// Sync is the [sync] section (absent outside a project).
 	Sync RawJSON `json:"sync,omitempty"`
 	// RepoAddresses is the "Repo addresses" check (PROV2, Q5).
@@ -292,6 +302,12 @@ type Report struct {
 	all bool
 	// disabled are --all's one-line notes about skipped disabled setups (alltext prints them).
 	disabled []string
+	// Found are the repos --all found in the setups' folders (K-10: it
+	// was silent about a 0.1.17-format repo and eight repos with no lore
+	// data beside the one repo it checked); zero without --all or setups.
+	Found Fleet `json:"repos_found,omitzero"`
+	// verbose: the text lists every found repo (RunIn.Verbose).
+	verbose bool
 	// unchecked are --all's info lines about known repos no setup applies
 	// to, whose stores were not checked (alltext prints them).
 	unchecked []string
@@ -338,6 +354,12 @@ func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
 		// re-check; the report shows the state now
 		r, err = fixProject(ctx, env, false)
 	} else {
+		// devco D-441: a plain doctor is a read. It runs outside the engine
+		// (a Local op), so nothing marked it one, and in a store clone's
+		// root a check that names the folder's project committed a
+		// nameless project row there. Marked a read, such a check finds no
+		// row and makes none (wire rosterProject, devco:T-11).
+		ctx = engine.WithAccess(ctx, op.AccessRead)
 		r, err = runRepo(ctx, env, false)
 	}
 	if err != nil {
@@ -346,10 +368,27 @@ func Run(ctx context.Context, env Env, in RunIn) (Report, error) {
 	if err := addSetups(ctx, env, in, &r); err != nil {
 		return Report{}, err
 	}
+	if lh, ok := env.(movedHome); ok {
+		r.LoreHome = lh.MovedLoreHome()
+	}
 	r.finalize()
 	r.OK = r.Status == StatusHealthy
 	r.Exit = exitOf(r.Status)
 	return r, nil
+}
+
+// movedHome is the optional Env method naming the lore home when LORE_HOME
+// set it ("" for the default home).
+type movedHome interface {
+	MovedLoreHome() string
+}
+
+// homeLine is the "Lore home:" line shown when LORE_HOME moved the home.
+func (r Report) homeLine() string {
+	if r.LoreHome == "" {
+		return ""
+	}
+	return "Lore home: " + r.LoreHome + " (from LORE_HOME)\n"
 }
 
 // runRepo is the report's repo part: this binary's base checks and the
@@ -431,9 +470,15 @@ func outsideRepo(ctx context.Context, env Env) bool {
 // (E_NOT_A_STORE) is skipped, not a warning: the skips become one note
 // and do not degrade.
 func addChecks(r *Report, runs []CheckRun, outside bool) {
+	var noGit []string // checks that could not run without git (devco:U-5)
+	var gitErr error
 	for _, c := range runs {
 		if c.Err != nil && outside && errs.Has(c.Err, errs.NotAStore) {
 			r.repoSkipped++
+			continue
+		}
+		if c.Err != nil && errs.Has(c.Err, errs.GitMissing) {
+			noGit, gitErr = append(noGit, c.Check), c.Err
 			continue
 		}
 		if c.Err != nil {
@@ -465,6 +510,29 @@ func addChecks(r *Report, runs []CheckRun, outside bool) {
 	if r.repoSkipped > 0 {
 		r.Notes = append(r.Notes, fmt.Sprintf(noteRepoSkipped, r.repoSkipped))
 	}
+	if len(noGit) > 0 {
+		// one error naming git and its fix, not a scatter of "could not
+		// run" warnings: nothing that needs git works, so it is broken
+		line := gitMissingLine(gitErr, noGit)
+		r.note(line, findingMeta{check: CheckError, broken: true})
+		r.Errors = append([]string{line}, r.Errors...)
+		r.Status = StatusBroken
+	}
+}
+
+// gitMissingLine is doctor's one line for a machine with no git on PATH
+// (devco:U-5): the error's own message and hint, and the checks it stopped.
+func gitMissingLine(err error, checks []string) string {
+	msg, hint := err.Error(), ""
+	var le *errs.Error
+	if errors.As(err, &le) {
+		msg, hint = le.Message, le.Hint
+	}
+	line := "git: " + msg + "; " + strconv.Itoa(len(checks)) + " check(s) could not run (" + strings.Join(checks, ", ") + ")"
+	if hint != "" {
+		line += "; " + hint
+	}
+	return line
 }
 
 // degrade lowers healthy to degraded (broken stays broken).
@@ -491,7 +559,7 @@ func (r Report) Text() string {
 		return r.allText()
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Status: %s\nBinary: %s\n\n", strings.ToUpper(string(r.Status)), r.BinaryVersion)
+	fmt.Fprintf(&b, "Status: %s\nBinary: %s\n%s\n", strings.ToUpper(string(r.Status)), r.BinaryVersion, r.homeLine())
 	if len(r.Steps) > 0 {
 		// the status stays the first line (scripts read it); the steps follow
 		b.WriteString(lineFixIsFix + "\n" + StepsText(r.Steps))

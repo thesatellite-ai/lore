@@ -51,10 +51,16 @@ func commitTree(t *testing.T, files []string) string {
 	return dir
 }
 
+// noMarker is files without the store marker: a repo that is not a store
+// (devco R-2: a repo with the marker stays a store whatever else it holds).
+func noMarker(files []string) []string {
+	return slices.DeleteFunc(slices.Clone(files), func(p string) bool { return p == storeMarkerFile })
+}
+
 // TestCheckStoreTreePlainLayout (owner Mac run 2, item 32): an org store
 // in the plain layout, including the lore-org.yaml.migrated copy that
-// `lore migrate` committed itself, is a lore store; the same tree with a
-// code file in it is still refused (F12).
+// `lore migrate` committed itself, is a lore store; a code repo (no
+// marker) with the same files is still refused (F12).
 func TestCheckStoreTreePlainLayout(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -62,7 +68,7 @@ func TestCheckStoreTreePlainLayout(t *testing.T) {
 	if err := checkStoreTree(ctx, dir, "HEAD", "example.com/acme/store", "main"); err != nil {
 		t.Fatalf("plain layout store refused: %v", err)
 	}
-	code := commitTree(t, append([]string{"src/app.go"}, plainStoreFiles...))
+	code := commitTree(t, append([]string{"src/app.go"}, noMarker(plainStoreFiles)...))
 	err := checkStoreTree(ctx, code, "HEAD", "example.com/acme/store", "main")
 	if codeOf(err) != errs.NotAStore {
 		t.Fatalf("a store holding src/app.go: %v, want E_NOT_A_STORE", err)
@@ -86,19 +92,58 @@ func TestStoreAllowedKeptOrgFile(t *testing.T) {
 	}
 }
 
+// TestCheckStoreTreeStrayFilesKeepTheStore (devco R-2): files a member
+// pushed by plain git into a store (a broken row-like file, a scratch
+// folder, a symlink) never make it "not a lore store": the check passes,
+// and StrayFiles names each one with the commit and author that added it.
+func TestCheckStoreTreeStrayFilesKeepTheStore(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := commitTree(t, plainStoreFiles)
+	writeFile(t, filepath.Join(dir, "scratch", "notes.txt"), "scratch\n")
+	writeFile(t, filepath.Join(dir, "org", "notes.txt"), "scratch\n")
+	for _, args := range [][]string{
+		{"add", "-A"},
+		{"-c", "user.name=Kim Stray", "-c", "user.email=kim@example.invalid", "commit", "-q", "--no-verify", "-m", "scratch"},
+	} {
+		if _, err := gitRun(ctx, append([]string{"-C", dir}, args...)...); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+	if err := checkStoreTree(ctx, dir, "HEAD", "example.com/acme/store", "main"); err != nil {
+		t.Fatalf("a store with stray files is refused: %v", err)
+	}
+	strays := StrayFiles(ctx, dir, "HEAD")
+	var got []string
+	for _, s := range strays {
+		got = append(got, s.String())
+	}
+	if len(strays) != 2 {
+		t.Fatalf("StrayFiles = %v, want org/notes.txt and scratch/notes.txt", got)
+	}
+	for _, s := range strays {
+		if s.Author != "Kim Stray" || s.Email != "kim@example.invalid" || s.Commit == "" {
+			t.Errorf("stray %v does not name the commit and its author", s)
+		}
+	}
+	if clean := StrayFiles(ctx, commitTree(t, plainStoreFiles), "HEAD"); len(clean) != 0 {
+		t.Errorf("StrayFiles of a clean store = %v, want none", clean)
+	}
+}
+
 // TestCheckStoreTreeNamesFullPaths (item 32b): the refusal names each
 // refused file by its full path, never only its folder ("org/" hid which
 // file lore refused), up to five, then counts the rest.
 func TestCheckStoreTreeNamesFullPaths(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	one := commitTree(t, append([]string{"org/notes.txt"}, plainStoreFiles...))
+	one := commitTree(t, append([]string{"org/notes.txt"}, noMarker(plainStoreFiles)...))
 	err := checkStoreTree(ctx, one, "HEAD", "example.com/acme/store", "main")
 	if codeOf(err) != errs.NotAStore || !strings.Contains(err.Error(), "org/notes.txt") {
 		t.Fatalf("one stray file: %v, want E_NOT_A_STORE naming org/notes.txt", err)
 	}
 	stray := []string{"org/a.txt", "org/b.txt", "org/c.txt", "org/d.txt", "org/e.txt", "org/f.txt", "src/main.go"}
-	many := commitTree(t, append(slices.Clone(stray), plainStoreFiles...))
+	many := commitTree(t, append(slices.Clone(stray), noMarker(plainStoreFiles)...))
 	err = checkStoreTree(ctx, many, "HEAD", "example.com/acme/store", "main")
 	msg := ""
 	if err != nil {

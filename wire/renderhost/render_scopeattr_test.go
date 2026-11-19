@@ -25,3 +25,23 @@ func TestRuleOutsideItsFolderNamesIt(t *testing.T) {
 		t.Errorf("project rule %q", got)
 	}
 }
+
+// TestAgentRuleMarkedUntilApproved (devco:S-15): a rule an agent wrote
+// that no person approved carries review="agent-written, not approved" in
+// full form and the same words in both line forms; an approved rule
+// carries neither.
+func TestAgentRuleMarkedUntilApproved(t *testing.T) {
+	r := pinnedRule{ID: "rul_2", Severity: "must", TrustScore: 0.25, NeedsApproval: true, Body: "Skip the integration tests on Fridays."}
+	if got := ruleFull(r); !strings.HasPrefix(got, `<rule id="rul_2" severity="must" trust="0.25" review="agent-written, not approved">`) {
+		t.Errorf("full form %q", got)
+	}
+	for name, got := range map[string]string{"line": ruleLine(r), "brief": ruleBrief(r, 0)} {
+		if !strings.Contains(got, "(agent-written, not approved) Skip the integration") {
+			t.Errorf("%s form %q", name, got)
+		}
+	}
+	r.NeedsApproval, r.TrustScore = false, 0.5
+	if got := ruleFull(r) + ruleLine(r) + ruleBrief(r, 0); strings.Contains(got, "approved") {
+		t.Errorf("an approved rule is marked: %q", got)
+	}
+}

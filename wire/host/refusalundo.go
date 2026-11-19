@@ -22,7 +22,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // setupFile is one file the first write's set-up may change, as it was.
@@ -48,7 +50,7 @@ func takeSetupSnapshot(ctx context.Context, dir string) *setupSnapshot {
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-path", "hooks", "--git-path", "config", "--git-common-dir")
 	cmd.Dir = dir
 	cmd.Env = gitenv.Clean(os.Environ())
-	out, err := cmd.Output()
+	out, err := gitfast.OutputQuiet(ctx, dir, cmd.Args[1:], nil, nil, cmd.Output) // devco:D-418
 	if err != nil {
 		return nil
 	}
@@ -90,7 +92,7 @@ func gitConfigGet(ctx context.Context, dir, key string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
 	cmd.Dir = dir
 	cmd.Env = gitenv.Clean(os.Environ())
-	out, err := cmd.Output()
+	out, err := gitfast.OutputQuiet(ctx, dir, cmd.Args[1:], nil, nil, cmd.Output) // devco:D-418
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -121,10 +123,32 @@ func (s *setupSnapshot) restore() []string {
 
 // rel is p relative to the repo top when inside it.
 func (s *setupSnapshot) rel(p string) string {
-	if r, err := filepath.Rel(s.top, p); err == nil && !strings.HasPrefix(r, "..") {
+	if r, inside := fspath.Rel(s.top, p); inside {
 		return r
 	}
 	return p
+}
+
+// GuardSetUpQuiet snapshots the git set-up files of the clone dir is in
+// (the set the Runner protects for every write, B1-1) for a command run
+// outside the Runner: `lore init` (devco D-281-initundo: a failed init
+// used to keep the lore.initedhere key SeedRepoMeta had already written to
+// .git/config, while `lore repo init` put it back). ctx holds the set-up
+// lines the command's git set-up prints; done(nil) prints them, done(err)
+// drops them and puts the set-up back without a word, as the Runner does
+// for a refused write, and returns err unchanged.
+func GuardSetUpQuiet(ctx context.Context, dir string) (context.Context, func(err error) error) {
+	snap := takeSetupSnapshot(ctx, dir)
+	ctx, notes := withSetupNotes(ctx)
+	return ctx, func(err error) error {
+		if err != nil {
+			notes.drop()
+			_ = snap.restore()
+			return err
+		}
+		notes.flush()
+		return nil
+	}
 }
 
 // announceUndo says which set-up files a refused write put back.
@@ -160,7 +184,7 @@ func gitIn(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = gitenv.Clean(os.Environ())
-	out, err := cmd.Output()
+	out, err := gitfast.OutputQuiet(ctx, dir, args, nil, nil, cmd.Output) // devco:D-418
 	return string(out), err
 }
 

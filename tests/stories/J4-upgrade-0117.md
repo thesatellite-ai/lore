@@ -17,6 +17,7 @@
 
 - Old-format projects stay old until a person runs `lore migrate run`: every read, refused write, hook, `lore fix --dry-run` and `lore fix --all` leaves every row file at `"_v": 1`; migrating one project never touches another.
 - Nothing pushes without push or sync: no remote ref of the three repos moves until Ola's `git push`.
+- A `lore migrate run` with nothing to migrate moves no store remote either: the org store's commits that waited (manual mode, or a `push=now` write made offline) stay waiting until `lore sync` (devco D-521): [migrate_storewait_test.go](../journeys/migrate_storewait_test.go), [migrateorg_fetchonly_test.go](../../wire/migrateorg_fetchonly_test.go).
 - A repo without lore data stays byte-identical (`brick` under `lore fix --all`).
 - Named flags in every hint (the refusal, fix --all, migrate run).
 - No row is lost: the task counts before and after the migration match.

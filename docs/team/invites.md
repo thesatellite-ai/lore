@@ -24,6 +24,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 ⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
+access: mira@agency.example needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone
 Send this to mira@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 $ lore team invite ana@agency.example --type contractor --expires 30d
@@ -31,6 +32,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_2ad3…f891.json (store agency/org)
 ✓ invite inv_2ad3…f891 written to store agency (expires 2026-12-02)
 ⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
+access: ana@agency.example needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone
 Send this to ana@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 ```
@@ -44,7 +46,7 @@ The line after "Send this to" is what the person pastes. Their join reads the in
 | `--role <r>` | a role name, applied on each `--project` (repeat it, or comma-separate) |
 | `--project <p>` | a project to join, by name or `prj_` id (repeat it); needs at least one `--role` |
 | `--team @t` | a team to join on accept (repeat it); the team must exist and be active |
-| `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact`: the kind of stint opened on join |
+| `--type <t>` | `employee` (default), `contractor`, `intern` or `client_contact`: the kind of stint opened on join. A `contractor` writes only to their projects' folders: writes to the org's own folder (company rules, teams, the roster) are refused with `E_REFUSED`, except `lore actor register` of themselves and `lore agent start` of their own agents |
 | `--expires <n>d` | lifetime in days, 1 to 90; default `14d` |
 | `--grant` | also give `--github` push access to the store on GitHub with `gh` (asks first) |
 | `--yes` | answer the confirmation without a terminal |
@@ -65,7 +67,7 @@ ERROR: [E_INVALID_INPUT] --role is applied on each --project, and no --project i
   hint: --project <project>
 (exit 20)
 $ lore --setup personal team invite bo@agency.example
-ERROR: [E_REFUSED] setup personal is a solo setup; team invites are written from an admin setup of the org
+ERROR: [E_REFUSED] setup personal is a solo setup; people are added and invited from an admin setup of the org
   hint: run with --setup <an admin setup>, or ask the org admin to invite
 (exit 23)
 ```
@@ -85,9 +87,9 @@ Send it in chat or email; the person runs `lore setup join --invite <line>` (see
 
 ## Single use, 14 days
 
-- An invite is **accepted once**. After that, the same line answers `E_INVITE_USED` for anyone else; running the join again as the same person is harmless.
+- An invite is **accepted once**. After that, the same line answers `E_INVITE_USED` on every fresh join, whoever runs it; only running the join again on the machine that already joined is harmless, also after you made another address your main email there (the invite's address still among your other addresses). Someone already on the roster who joins again (a new machine, a purged setup) answers the join step with the org's store url instead of the line. `lore setup check --step join` says so before the join is saved.
 - It **expires** after its last day (14 days by default, `--expires` up to 90). An expired invite answers `E_INVITE_EXPIRED`; send a new one.
-- The **email must match**: the person joining must give the invite's email (as their main address or one of their other addresses), or the join is refused with `E_INVITE_EMAIL`.
+- The **email must match**: the person joining must give the invite's email as their main identity email, or the join is refused with `E_INVITE_EMAIL`. Listing it only among "other addresses" is not enough, and any other address that already belongs to someone on the roster is refused with `E_CONTACT_TAKEN`, naming the address.
 - A **revoked** invite answers `E_INVITE_REVOKED`.
 
 ## Step 3 — List, resend and revoke
@@ -133,7 +135,7 @@ $ lore team invite list --status pending --json
 ```
 <!-- /example -->
 
-`--status pending|accepted|revoked|expired` filters the list; a pending invite past its last day shows as `expired`. `--json` prints the same rows as `{"invites":[…]}`, as above; projects are shown by `prj_` id.
+`--status pending|accepted|revoked|expired` filters the list; a pending invite past its last day shows as `expired`. `--json` prints the same rows as `{"invites":[…]}`, as above; projects are shown by `prj_` id. With no invites it prints `no invites` (`--json`: `{"invites":[]}`); any answer that is only empty lists says `no <list>` for each, never nothing.
 
 `resend` prints the same line again and changes nothing. It takes an `inv_` id or the invited email (with an email, the pending invite is picked). A used, revoked or expired invite answers its `E_INVITE_*` code, with a hint to write a new one.
 
@@ -170,7 +172,7 @@ invites:
 
 When Mira runs `lore setup join --invite <line>` and finishes the join step (see [Guided setup](guided-setup.md#step-6--join-a-team-from-an-invite)), lore, in her name:
 
-1. imports the org entry from the store (unless her machine already has one for that store; an entry of the same name for another store is refused with `E_SETUP_ORG_MISMATCH`);
+1. imports the org entry from the store (unless her machine already has one for that store, in any spelling of its url: `git@<alias>:<owner>/<repo>.git` through an ssh host alias of github.com is the same store as `git@github.com:<owner>/<repo>.git`, also when `~/.ssh/config` does not name the alias (dotted such as `github.com-work`, or not) and git reaches it through `url.<base>.insteadOf`: any spelling git rewrites to the same target is the same store, and the entry keeps the spelling it has; an entry the join imports names the store in the spelling the person gave (https, `ssh://`, the alias), not the store file's, and the org's other stores on the same host in that spelling too; an entry of the same name for another store is refused with `E_SETUP_ORG_MISMATCH` before anything is written, so `config.yaml`, the org entry and the setup stay as they were);
 2. records her email addresses and GitHub user as identity contacts on the roster;
 3. opens a stint of the invite's type, starting today;
 4. adds a membership with the invite's roles on each of its projects;
@@ -201,7 +203,7 @@ Run the same from a folder covered by your own admin setup, with `person@example
 
 - **Invites are written from an admin setup.** If `lore team invite` says no setup is active, add `--setup <your admin setup>`.
 - **The line is not access.** If the person cannot read the store, the join stops at the `store.read` check; grant access on GitHub (or with `--grant`) and they run the join again.
-- **Use the email the person will join with.** Their join is refused if neither their main address nor one of their other addresses is the invite's.
+- **Use the email the person will join with.** Their join is refused unless their main identity email is the invite's.
 
 ## Related
 

@@ -3,7 +3,8 @@ package host
 // The v0.1.17 gitsetup TestAdd (saas/pkg/aicoder/gitsetup gitsetup_test.go),
 // ported before phase E onto the pre-commit hook (precommit.go): new and
 // modified row files are staged, a DELETED row file is staged as a
-// deletion (never an error), and nothing outside .lore/data is staged.
+// deletion once LORE_ALLOW_ROW_DROP=1 says it is meant (devco S-8), and
+// nothing outside .lore/data is staged.
 
 import (
 	"context"
@@ -60,6 +61,10 @@ func TestPreCommitStagesNewModifiedAndDeletedRows(t *testing.T) {
 	write(b, `{"b":2}`+"\n")
 	write(mine, "2\n")
 	gitT(t, top, "add", mine)
+	// devco S-8: a row file deleted by hand is refused unless the person
+	// says so (handdelete.go, TestPreCommitRefusesARowFileDeletedByHand);
+	// said, it is staged as a deletion as before
+	t.Setenv(EnvAllowRowDrop, envAllowOn)
 	if err := f.s.h.preCommit(context.Background()); err != nil {
 		t.Fatalf("pre-commit, a deleted row: %v", err)
 	}

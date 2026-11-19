@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,4 +122,160 @@ func gitDirOut(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v: %v", args, err)
 	}
 	return string(out)
+}
+
+// TestRebaseRemapCommitsMovedLinks is devco:Q-5: after a rebase, the row
+// files the link remap changed (an old link trashed, a new one written)
+// go into lore's own commit, so the tree is clean and the next checkout
+// of another branch works; a row file the person had already changed
+// stays out of that commit, still changed.
+func TestRebaseRemapCommitsMovedLinks(t *testing.T) {
+	ctx := context.Background()
+	dir, repo := rwRepo(t)
+	for k, v := range map[string]string{"GIT_AUTHOR_NAME": "Rae Moss", "GIT_AUTHOR_EMAIL": "rae@example.test", "GIT_COMMITTER_NAME": "Rae Moss", "GIT_COMMITTER_EMAIL": "rae@example.test"} {
+		t.Setenv(k, v)
+	}
+	oldLink := ".lore/data/commit_links/cml_00000000000000000000000000000001.json"
+	commitFile(t, dir, oldLink, `{"sha":"aaa"}`+"\n", "link")
+	commitFile(t, dir, rwDecision, `{"title":"Pin Go"}`+"\n", "decision")
+	writeT(t, dir, rwDecision, `{"title":"Pin Go 1.25"}`+"\n") // the person's own edit
+	before := dirtyRowPaths(ctx, repo)
+	if !before[rwDecision] || len(before) != 1 {
+		t.Fatalf("dirty row files before the remap = %v, want only %s", before, rwDecision)
+	}
+	newLink := ".lore/data/commit_links/cml_00000000000000000000000000000002.json"
+	writeT(t, dir, oldLink, `{"sha":"aaa","_deleted":true}`+"\n")
+	writeT(t, dir, newLink, `{"sha":"bbb"}`+"\n")
+	line := commitRemappedLinks(ctx, repo, before, 1)
+	if !strings.Contains(line, "committed them as") {
+		t.Fatalf("post-rewrite line = %q, want the commit named", line)
+	}
+	st := strings.TrimSpace(gitDirOut(t, dir, "status", "--porcelain"))
+	if st != "M "+rwDecision && st != " M "+rwDecision {
+		t.Fatalf("after lore's commit, git status = %q, want only the person's own edit of %s", st, rwDecision)
+	}
+	files := strings.Fields(gitDirOut(t, dir, "show", "--name-only", "--format=", "HEAD"))
+	if len(files) != 2 || files[0] != oldLink || files[1] != newLink {
+		t.Fatalf("lore's commit carries %v, want exactly the two link files", files)
+	}
+	if subj := strings.TrimSpace(gitDirOut(t, dir, "log", "-1", "--format=%s")); !strings.HasPrefix(subj, "chore(lore): move 1 commit link") {
+		t.Fatalf("lore's commit subject = %q", subj)
+	}
+}
+
+// writeT writes rel (slash path) under dir.
+func writeT(t *testing.T, dir, rel, body string) {
+	t.Helper()
+	p := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestBranchRefusedLine is devco:Q-10: git hands pre-push no line for a
+// branch it refuses as non-fast-forward, and lore pushed refs/lore/live
+// anyway. With an empty input, a diverged branch names the refusal (the
+// live writes wait), an up-to-date branch and a branch never fetched say
+// nothing (the waiting live writes still go, as before).
+func TestBranchRefusedLine(t *testing.T) {
+	ctx := context.Background()
+	dir, repo := rwRepo(t)
+	if l := branchRefusedLine(ctx, repo, "origin"); l != "" {
+		t.Fatalf("no remote-tracking ref yet: %q, want none", l)
+	}
+	gitT(t, dir, "fetch", "-q", "origin")
+	if l := branchRefusedLine(ctx, repo, "origin"); l != "" {
+		t.Fatalf("up to date: %q, want none", l)
+	}
+	base := strings.TrimSpace(gitDirOut(t, dir, "rev-parse", "HEAD"))
+	commitFile(t, dir, "a.txt", "a\n", "theirs")
+	gitT(t, dir, "push", "-q", "--no-verify", "origin", "main")
+	gitT(t, dir, "reset", "-q", "--hard", base)
+	commitFile(t, dir, "b.txt", "b\n", "mine")
+	l := branchRefusedLine(ctx, repo, "origin")
+	if !strings.Contains(l, "non-fast-forward") || !strings.Contains(l, "main and origin/main have diverged") || !strings.Contains(l, "live rows not sent with this push") {
+		t.Fatalf("diverged branch: %q", l)
+	}
+}
+
+// TestRowFileHintDetachedHead is devco:Q-3: a row committed on a detached
+// HEAD in this clone is named as that (no force-push, no "author's clone"),
+// with `git branch` to keep it and `git cherry-pick`; a row a reset here
+// dropped says so without the author line; a row from a commit fetched
+// from elsewhere keeps the force-push wording.
+func TestRowFileHintDetachedHead(t *testing.T) {
+	ctx := context.Background()
+	dir, repo := rwRepo(t)
+	id := "dec_01a1d7fbb3657caeace7f01670d7e598"
+	gitT(t, dir, "checkout", "-q", "--detach")
+	detached := commitFile(t, dir, rwDecision, `{"title":"Pin Go"}`+"\n", "docs: detached note")
+	gitT(t, dir, "checkout", "-q", "main")
+	h := rowFileHint(ctx, repo, id, rwDecision)
+	for _, want := range []string{"made on a detached HEAD in this clone", "git branch detached-" + detached[:7] + " " + detached[:7], "git cherry-pick " + detached[:7]} {
+		if !strings.Contains(h, want) {
+			t.Fatalf("detached commit: hint lacks %q:\n%s", want, h)
+		}
+	}
+	for _, never := range []string{"force-push", "author's clone"} {
+		if strings.Contains(h, never) {
+			t.Fatalf("detached commit: hint says %q:\n%s", never, h)
+		}
+	}
+
+	dir2, repo2 := rwRepo(t)
+	dropped := commitFile(t, dir2, rwDecision, `{"title":"Pin Go"}`+"\n", "decision")
+	gitT(t, dir2, "reset", "-q", "--hard", dropped+"~1")
+	h = rowFileHint(ctx, repo2, id, rwDecision)
+	if !strings.Contains(h, "a rebase or a reset here dropped it") || strings.Contains(h, "author's clone") {
+		t.Fatalf("reset away in this clone: %q", h)
+	}
+
+	// fetched from elsewhere: a clone pulled the commit, then a force-push
+	// upstream rewound main and the clone followed it
+	gitT(t, dir2, "push", "-q", "--no-verify", "--force", "origin", dropped+":refs/heads/main")
+	other := t.TempDir()
+	gitT(t, other, "clone", "-q", strings.TrimSpace(gitDirOut(t, dir2, "remote", "get-url", "origin")), ".")
+	gitT(t, dir2, "push", "-q", "--no-verify", "--force", "origin", dropped+"~1:refs/heads/main")
+	gitT(t, other, "fetch", "-q", "origin")
+	gitT(t, other, "reset", "-q", "--hard", "origin/main")
+	repo3, err := gitref.Open(ctx, other, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h = rowFileHint(ctx, repo3, id, rwDecision); !strings.Contains(h, "force-push") {
+		t.Fatalf("a commit from elsewhere: %q", h)
+	}
+}
+
+// TestLiveDeferLine is the devco:Q-10 follow-up: git hands pre-push a line
+// for a push it then refuses as "fetch first" (a teammate pushed and this
+// clone has not fetched), so lore sent refs/lore/live with a refused
+// branch. The live ref goes with the person's push only when every
+// updated branch is a fast-forward as far as this clone can tell.
+func TestLiveDeferLine(t *testing.T) {
+	ctx := context.Background()
+	dir, repo := rwRepo(t)
+	zero := strings.Repeat("0", 40)
+	base := strings.TrimSpace(gitDirOut(t, dir, "rev-parse", "HEAD"))
+	mine := commitFile(t, dir, "b.txt", "b\n", "mine")
+	ff := []pushUpdate{{"refs/heads/main", mine, "refs/heads/main", base}}
+	if l := liveDeferLine(ctx, repo, ff); l != "" {
+		t.Fatalf("fast-forward: %q, want none", l)
+	}
+	if l := liveDeferLine(ctx, repo, []pushUpdate{{"refs/heads/new", mine, "refs/heads/new", zero}, {"(delete)", zero, "refs/heads/old", base}}); l != "" {
+		t.Fatalf("new branch and delete: %q, want none", l)
+	}
+	unknown := "1234567890abcdef1234567890abcdef12345678"
+	l := liveDeferLine(ctx, repo, []pushUpdate{{"refs/heads/main", mine, "refs/heads/main", unknown}})
+	if l != liveDeferFetchFirst || !strings.Contains(l, "the remote has commits you do not have") || !strings.Contains(l, "lore sync") {
+		t.Fatalf("remote tip unknown here (fetch first): %q", l)
+	}
+	gitT(t, dir, "reset", "-q", "--hard", base)
+	other := commitFile(t, dir, "c.txt", "c\n", "other")
+	if l := liveDeferLine(ctx, repo, []pushUpdate{{"refs/heads/main", other, "refs/heads/main", mine}}); l != liveDeferForced {
+		t.Fatalf("known remote tip, not an ancestor (forced): %q", l)
+	}
 }

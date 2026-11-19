@@ -9,7 +9,17 @@
 <body>
 <main>
 <h1>lore setup</h1>
-<p>The guided setup page comes with lore EE. This build of lore serves the setup API only, so every step is available from the command line instead:</p>
+<p>The guided setup page comes with lore EE. This lore is a build without it (a source build of the open core), so it serves the setup API only:</p>
+<dl class="build">
+<dt>version</dt>
+<dd><code>{{.Version}}</code></dd>
+<dt>binary</dt>
+<dd><code>{{.Path}}</code></dd>
+</dl>
+<h2>Open the guided page</h2>
+<p>Run <code>lore setup</code> with the released lore (a preview build: <code>lore-dev setup</code>). If the released lore is not installed, install it with Homebrew (<code>brew install thesatellite-ai/tap/lore</code>), the install script (<code>curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh</code>) or an archive from <a href="https://github.com/thesatellite-ai/lore/releases">the releases page</a>. If it is installed, check which <code>lore</code> comes first on your <code>PATH</code>: it may be this build.</p>
+<h2>Or set up from the command line</h2>
+<p>Every step is available from the command line with this build:</p>
 <dl>
 <dt><code>lore setup plan</code></dt>
 <dd>show the steps a setup needs and the values it will use</dd>

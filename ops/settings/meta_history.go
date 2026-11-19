@@ -46,6 +46,8 @@ const metaHistTime = "2006-01-02 15:04"
 
 // MetaHistoryIn is the input of meta.history.
 type MetaHistoryIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID  string `json:"id" arg:"0" desc:"the row (any id)"`
 	Key string `json:"key,omitempty" arg:"1" desc:"only this key (name or mky_ id)"`
 }

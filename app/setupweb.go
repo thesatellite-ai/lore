@@ -52,6 +52,9 @@ const (
 // pageEnv is what the page needs from the binary.
 type pageEnv struct {
 	app *wire.App
+	// org is the process's org resolution (the hooks app was built with);
+	// nil in tests that build none. serve makes it follow config.yaml.
+	org *wire.OrgResolution
 	// home is the lore home (~/.lore): setup.idle_minutes, setup.open_browser.
 	home string
 	// inner is the CLI's host runner (every hook); the page serves through it.
@@ -71,9 +74,9 @@ type pageRunner struct{ env pageEnv }
 var _ op.Runner = pageRunner{}
 
 // newPageRunner wraps inner for cli.Build. `lore api` keeps inner itself.
-func newPageRunner(app *wire.App, home string, inner op.Runner, args []string) pageRunner {
+func newPageRunner(app *wire.App, org *wire.OrgResolution, home string, inner op.Runner, args []string) pageRunner {
 	return pageRunner{env: pageEnv{
-		app: app, home: home, inner: inner, args: args,
+		app: app, org: org, home: home, inner: inner, args: args,
 		stdoutTTY: func() bool { return term.IsTerminal(int(os.Stdout.Fd())) },
 		out:       os.Stdout, errw: os.Stderr, open: setupweb.OpenBrowser,
 	}}
@@ -193,6 +196,7 @@ func (r pageRunner) serve(ctx context.Context, ln net.Listener, web opssetup.Web
 	// minutes, open the browser); lore doctor reports the config itself.
 	conf, _ := wire.ReadSetupsConfig(r.env.home)
 	cfg := conf.Settings
+	followConfig(r.env.app, r.env.org)
 	page, err := setupweb.New(ln, setupweb.Options{
 		Registry: r.env.app.Registry(), Runner: &apiRunner{inner: r.env.inner, join: opssetup.JoinOf(ctx)},
 		Actor: actor, LoreVersion: version,
@@ -295,4 +299,19 @@ func joinOf(res op.Result, web opssetup.WebStart) opssetup.JoinContext {
 		return opssetup.JoinContext{}
 	}
 	return opssetup.JoinContext{Setup: web.Setup, Org: out.Org}
+}
+
+// followConfig makes a server that outlives the config it started with
+// run each request on the config as it is now: app reopens its state after
+// a place file changed, and org resolves again after config.yaml changed.
+// The setup page saves whole setups, and `lore api` serves while the CLI
+// changes the config: without it the org and person stayed what they were
+// at start (devco J-16: right after the admin setup was saved, the page
+// answered org "" and team.invite refused "this repo has no org" until
+// the page was restarted).
+func followConfig(app *wire.App, org *wire.OrgResolution) {
+	app.FollowPlaces()
+	if org != nil {
+		org.FollowConfig()
+	}
 }

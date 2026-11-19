@@ -62,15 +62,15 @@ A profile is a handful of optional fields on the person's actor. Fill them in on
 $ lore actor edit --actor @mira --title 'Backend engineer' --timezone Europe/Istanbul --location 'Ankara, TR'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
-✓ act_7a67…9504 Mira Patel edited (title, timezone, location) in agency org/
+✓ act_7a67…9504 Mira Patel edited (title, timezone, location) in the roster of agency (agency/org)
 $ lore actor edit --actor @mira --bio 'Payments and billing.' --photo-url https://example.com/mira.png
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
-✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in agency org/
+✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in the roster of agency (agency/org)
 $ lore actor edit --actor @mira --clear photo_url,bio
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
-✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in agency org/
+✓ act_7a67…9504 Mira Patel edited (photo_url, bio) in the roster of agency (agency/org)
 $ lore actor edit --actor @mira --timezone 'Istanbul time'
 ERROR: [E_INVALID_INPUT] actor edit --timezone: "Istanbul time" is not an IANA zone name
   hint: give an IANA zone name such as Europe/Istanbul or America/New_York
@@ -99,25 +99,25 @@ Tomas adds Mira's two emails and two GitHub accounts as identity contacts, and h
 $ lore actor contact add --actor @mira --type email --value mira@agency.example --label work --primary --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_2ad3…f891.json (store agency/org)
-✓ acn_2ad3…f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in agency org/
+✓ acn_2ad3…f891 email mira@agency.example added for Mira Patel (@mira) [primary, identity] in the roster of agency (agency/org)
 $ lore actor contact add --actor @mira --type email --value mira.patel@example.com --label personal --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_162d…9666.json (store agency/org)
-✓ acn_162d…9666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in agency org/
+✓ acn_162d…9666 email mira.patel@example.com added for Mira Patel (@mira) [identity] in the roster of agency (agency/org)
 $ lore actor contact add --actor @mira --type github --value mira-agency --label work --primary --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_54fe…28f2.json (store agency/org)
-✓ acn_54fe…28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in agency org/
+✓ acn_54fe…28f2 github mira-agency added for Mira Patel (@mira) [primary, identity] in the roster of agency (agency/org)
 $ lore actor contact add --actor @mira --type github --value mirap --label personal --identity
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_05e9…4603.json (store agency/org)
-✓ acn_05e9…4603 github mirap added for Mira Patel (@mira) [identity] in agency org/
+✓ acn_05e9…4603 github mirap added for Mira Patel (@mira) [identity] in the roster of agency (agency/org)
 $ lore actor contact add --actor @mira --type phone --value '+90 532 000 0000' --label work --primary
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_c0f3…b5b8.json (store agency/org)
-✓ acn_c0f3…b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in agency org/
+✓ acn_c0f3…b5b8 phone +90 532 000 0000 added for Mira Patel (@mira) [primary] in the roster of agency (agency/org)
 $ lore actor contact add --actor @mira --type github --value mirap --label personal --identity
-· acn_05e9…4603 github mirap already there [identity] in agency org/
+· acn_05e9…4603 github mirap already there [identity] in the roster of agency (agency/org)
 $ lore actor contact list --type phone
 acn_c0f3…b5b8 Mira Patel (@mira)       phone     +90 532 000 0000             work       primary           tel:+905320000000
 ```
@@ -170,15 +170,16 @@ A contact is changed or removed by its `acn_` id. A removed contact goes to the 
 $ lore actor contact add --actor @mira --type linkedin --value mira-patel --label work
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
-✓ acn_76bd…3f10 linkedin mira-patel added for Mira Patel (@mira) [primary] in agency org/
+✓ acn_76bd…3f10 linkedin mira-patel added for Mira Patel (@mira) [primary] in the roster of agency (agency/org)
 $ lore actor contact edit --id acn_76bd…3f10 --note 'old profile, not updated'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
-✓ acn_76bd…3f10 linkedin mira-patel edited for Mira Patel (@mira) [primary] in agency org/
+✓ acn_76bd…3f10 linkedin mira-patel edited for Mira Patel (@mira) [primary] in the roster of agency (agency/org)
 $ lore actor contact remove --id acn_76bd…3f10 --reason 'account closed'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
-✓ acn_76bd…3f10 linkedin mira-patel removed from Mira Patel (@mira) in agency org/ (restorable from the trash)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
+✓ acn_76bd…3f10 linkedin mira-patel removed from Mira Patel (@mira) in the roster of agency (agency/org) (restorable from the trash)
 $ lore actor contact list --actor @mira --identity
 acn_2ad3…f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
 acn_162d…9666 Mira Patel (@mira)       email     mira.patel@example.com       personal   identity          mailto:mira.patel@example.com
@@ -219,11 +220,11 @@ Tomas adds Bitbucket as an identity type and relabels GitHub; the list marks eac
 $ lore contact-type add --name bitbucket --kind handle --identity --url-template 'https://bitbucket.org/{value}'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/contact_types/ctp_d431…313a.json (store agency/org)
-✓ contact type bitbucket added in agency org/
+✓ contact type bitbucket added in the roster of agency (agency/org)
 $ lore contact-type edit --name github --label GitHub
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/contact_types/ctp_b4f4…a5b0.json (store agency/org)
-✓ contact type github edited in agency org/
+✓ contact type github edited in the roster of agency (agency/org)
 $ lore contact-type list
 github       handle  identity  changed   GitHub       https://github.com/{value}
 gitlab       handle  identity  built-in  GitLab       https://gitlab.com/{value}
@@ -272,7 +273,7 @@ ERROR: [E_PERIOD_OVERLAP] period 2026-01-12 → now is still open while 2026-02-
 ```
 <!-- /example -->
 
-The first `period add` replaces the stint lore had read from the roster (see [Existing actors](#existing-actors)). Stints never overlap, a person has at most one open stint, and a stint never ends before it starts. A date that breaks one of these is `E_PERIOD_OVERLAP`.
+The first `period add` replaces the stint lore had read from the roster (see [Existing actors](#existing-actors)), and likewise the open admin stint `lore org create` writes for its creator from the day it ran (`source: migrated`, a guess at the start): record your real first day with `period add --started-on <day>` and it takes that stint's place, keeping org role admin. Stints never overlap, a person has at most one open stint, and a stint never ends before it starts. A date that breaks one of these is `E_PERIOD_OVERLAP`.
 
 ## Step 5 — Add people to projects, with roles
 
@@ -296,7 +297,7 @@ Tomas adds a `tech_writer` role, gives it a description, and retires `qa`, which
 $ lore role add --name tech_writer --label 'Technical writer'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_4c59…6c38.json (store agency/org)
-✓ role tech_writer added in agency org/
+✓ role tech_writer added in the roster of agency (agency/org)
 $ lore role list
 lead  Lead — leads the project
 dev  Developer — writes the code
@@ -313,11 +314,11 @@ ERROR: [E_ROLE_UNKNOWN] not a live role: wizard (unknown)
 $ lore role edit --name tech_writer --description 'writes the user docs'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_4c59…6c38.json (store agency/org)
-✓ role tech_writer updated in agency org/
+✓ role tech_writer updated in the roster of agency (agency/org)
 $ lore role edit --name qa --retire
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/roles/rol_3b62…e913.json (store agency/org)
-✓ role qa updated in agency org/
+✓ role qa updated in the roster of agency (agency/org)
 ```
 <!-- /example -->
 
@@ -330,7 +331,7 @@ A retired role (here `qa`) is out of `--role` from then on; memberships that hav
 | `lore project member add --project <project> --actor <actor> --role a,b [--on d] [--note t]` | add someone to a project (`--on` defaults to today); on a current member, the new roles are added: "already a member; roles now dev, reviewer" |
 | `lore project member edit --project <project> --actor <actor> --role a,b` | set the current membership's roles |
 | `lore project member remove --project <project> --actor <actor> [--on d] [--reason t]` | end the membership on a date (default today); it is kept, not deleted |
-| `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | current members; `--history` adds ended memberships |
+| `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | current members (of every project, or of the folder's project inside a store clone's project folder); `--history` adds ended memberships |
 
 `<project>` is a project name or a `prj_` id, looked up in the stores the repo you are in reads. Mira joins `acme-hub` on her first day and becomes lead of `northwind-app` on 2026-03-01 (run from inside `northwind-app`, where that project is known). `lore actor show` now prints the whole profile; a project whose row lives only in another repo (here `northwind-app`, shown from inside `acme-hub`) is shown by its `prj_` id:
 
@@ -409,7 +410,7 @@ $ lore project member list --project northwind-app --history
 
 Adding someone again on the day an ended membership began reopens that membership with the new roles instead of making a second one. Removing someone and adding them again later starts a new membership, so `--history` shows both stints. A stint's `ended_on` is its last day: a re-add starts the day after at the earliest (`E_PERIOD_OVERLAP` otherwise, naming that day); re-adding on the day the stint began reopens it. A new membership runs on with no end, so it may not share a day with any ended one, including one that starts later (added with a future `--on` and removed before it began): adding from a day before such a stint is `E_PERIOD_OVERLAP` too, and the hint names that stint and the day after it. Accepting an [invite](invites.md) is checked the same way: on the old stint's last day, or while an ended stint is still ahead, it is refused (`E_PERIOD_OVERLAP`, the hint names the day to accept it again), and nothing is written. A left or archived person cannot be added (`E_STATUS_CHANGE`, hint `lore actor rejoin`).
 
-Teams (`@frontend` and so on) are org-wide groups; adding someone to a project does not change any team. When a member of one of the org's teams has no membership on the project, `project member list` ends with a warning, and `project member remove` prints the same warning when the person stays in an org team:
+Teams (`@frontend` and so on) are org-wide groups; adding someone to a project does not change any team. When a member of a team the project uses has no membership on the project, `project member list --project <project>` ends with a warning, and `project member remove` prints the same warning when the person stays in an org team. A team the project uses is one tied to the project, one with at least one member of the project, or one whose handle is the project's name (`@sync` for `sync`); the other teams of the org (a client's team, say) say nothing. Inside a store clone's project folder, `project member list` with no `--project` lists that folder's project:
 
 ```text
 W_TEAM_NOT_MEMBER @frontend: @carol is in the org team but not a member of acme-hub (lore project member add acme-hub @carol --role dev)
@@ -476,10 +477,10 @@ A leave that has passed its end date does not end on its own: `actor show` and `
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'move the invoice export to the new API' --to agency --assign @mira
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/actors/act_4f89…b64b.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency)
+lore: committed locally to store agency/acme-hub; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/_meta.json (store agency/acme-hub)
 ✓ tsk_b4d3…11aa — move the invoice export to the new API [medium] → [agency/acme-hub]
   created tasklist tlt_d191…45c2 "default" for tasks added without --tasklist
 $ lore actor offboard --actor @mira --reason 'moved abroad'
@@ -487,7 +488,8 @@ ERROR: [E_NEEDS_CONFIRM] offboard Mira Patel (@mira) (act_7a67…9504) on 2026-0
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aae…a61f (lead) ends 2026-09-30
-  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3…11aa --assign @<someone>
+  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead
+             hand the tasks they lead over (in each repo that holds them): lore task reassign --from @mira --assign @<someone> --yes
   agents     (none)
   status     active → left
   hint: ask the person, then rerun with --yes
@@ -499,15 +501,16 @@ offboard Mira Patel (@mira) (act_7a67…9504) on 2026-09-30:
   period     2026-01-12 → 2026-09-30  employee  Senior engineer  reason: moved abroad
   projects   acme-hub (dev, reviewer) ends 2026-09-30
              prj_0aae…a61f (lead) ends 2026-09-30
-  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead  reassign: lore task edit --id tsk_b4d3…11aa --assign @<someone>
+  open tasks tsk_b4d3…11aa  "move the invoice export to the new API"  agency  lead
+             hand the tasks they lead over (in each repo that holds them): lore task reassign --from @mira --assign @<someone> --yes
   agents     (none)
   status     active → left
 ✓ act_7a67…9504 Mira Patel (@mira) offboarded on 2026-09-30 (2 memberships ended, 0 agents inactive, 1 open tasks listed above)
 $ lore actor list
-act_4f89…b64b [human] Tomas Weber         agency, agency/org
+act_4f89…b64b [human] Tomas Weber         agency/org
 act_7a67…9504 [human] Mira Patel  (left)  agency/org
 act_77cb…76c4 [human] carol               repo
-3 actors across 3 stores
+3 actors across 2 stores
 $ lore task add --title 'review the refund flow' --to agency --assign @mira
 ERROR: [E_STATUS_CHANGE] Mira Patel (@mira) left agency on 2026-09-30; --assign takes only people still in the org
   hint: lore member list shows who is in the org; lore task reassign --from @mira --assign @<someone> --yes hands their tasks over
@@ -517,10 +520,10 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_7a67…9504.json (store agency/org)
 ✓ act_7a67…9504 Mira Patel (@mira): left → archived
 $ lore actor list --archived
-act_4f89…b64b [human] Tomas Weber             agency, agency/org
+act_4f89…b64b [human] Tomas Weber             agency/org
 act_7a67…9504 [human] Mira Patel  (archived)  agency/org
 act_77cb…76c4 [human] carol                   repo
-3 actors across 3 stores
+3 actors across 2 stores
 ```
 <!-- /example -->
 
@@ -581,19 +584,21 @@ The actor id never changes, so the person's old commits, tasks and time entries 
 
 ## Step 9 — Create or rename an org
 
-Profiles live in an org's store, so a team without an org starts with `lore org create`. It needs a lore store to hold the org folder (`lore store init`), writes the org's suggested entry into that store, adds the entry to your `~/.lore/config.yaml` with your identity, and puts you on the roster. `lore org rename` changes only the entry's name on this machine: the org's id and every row stay.
+Profiles live in an org's store, so a team without an org starts with `lore org create`. It needs a lore store to hold the org folder (`lore store init`), writes the org's suggested entry into that store, adds the entry to your `~/.lore/config.yaml` with your identity, and puts you on the roster. `lore org rename` changes only the entry's name on this machine: the org's id and every row stay. Everything on this machine that names the entry follows it: `lore org use` choices, `defaults.client_repos` targets and every setup's `org:` (a setup named after the org keeps its own name; `lore setup rename --name <old> --to <new>` changes it). Store clone folders under `~/.lore/stores` keep their names, because a clone's folder is its store url's path, not the org label.
 
 <!-- example: profiles#org-create-and-rename -->
 ```console
 # ana, in handbook
 $ lore store init --name acme --url git@github.com:acme/lore-notes --yes
 lore store init: store clone ~/.lore/stores/acme/lore-notes: git user set to ana <ana@acme.example> (your lore identity)
-✓ created store acme (sto_376c…8e1a) at git@github.com:acme/lore-notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store acme (sto_376c…8e1a) on git@github.com:acme/lore-notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ lore org create --org acme --store acme --own 'github.com/acme/*' --key human:ana@acme.example --name 'Ana Lima' --handle ana --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
 lore: committed locally to store acme/org; lore sync sends it
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e2…291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567…366f.json (store acme/org)
+lore: wrote ~/.lore/stores/acme/lore-notes/org/actor_periods/apd_71f0…c07d.json (store acme/org)
+lore: wrote ~/.lore/stores/acme/lore-notes/org/_meta.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:
     name: acme
     identity:
@@ -607,13 +612,15 @@ This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/c
         - github.com/acme/*
 ✓ wrote org/lore-org.yaml (committed in the local clone; `lore sync` pushes it)
 ✓ added org entry acme
-✓ act_8567…366f Ana Lima (@ana) registered in acme org/
-  teammates join with: lore org import --url git@github.com:acme/lore-notes --key human:<their email> --name "Their Name"
-  tie a client repo to it (written only into the store): lore org link --org acme --project <folder>
+✓ act_8567…366f Ana Lima (@ana) registered in the roster of acme (acme/org)
+✓ you are acme's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
+  teammates join with: lore setup join --invite git@github.com:acme/lore-notes (after lore member add puts them on the roster)
+  use the store in a repo with no lore data (written only into the store): lore org link --org acme --project <folder> (a repo matching the org's own: patterns and none of its repos: patterns links as an own repo, any other as a client repo)
 $ lore org rename --old acme --new acme-studio
 ✓ org entry acme is now acme-studio (this machine)
   id prj_67e2…291e recorded (the org folder's project id; it never changes)
   rows are unchanged; store rows that name the old label (routing.client_repos) and other machines keep it until edited there
+  store clones under ~/.lore/stores keep their folders: a clone's folder is its store url's path, not the org label
   written to ~/.lore/config.yaml
 $ lore whoami
 org        acme-studio  (matched by: own pattern github.com/acme/* of acme-studio)
@@ -623,7 +630,7 @@ machine    mch_017941fe
 agent      none  (no coding agent detected)
 project    (no .lore/data/_meta.json here)
 remotes    github.com/acme/handbook
-stores     git@github.com:acme/lore-notes on branch main  (org folder org)
+stores     git@github.com:acme/lore-notes on branch main  (org folder acme-studio/org: roster, teams, company rules)
 links      known  no project id here yet, so no store link can name this repo
 personal   not set
 ```
@@ -639,8 +646,8 @@ Every machine that writes to a store keeps a small machine profile there (OS, ar
 ```console
 # tomas, in acme-hub
 $ lore machine label --label 'office desktop'
-lore: wrote ~/.lore/personal/agency/actors/act_4f89…b64b.json (store me)
-lore: wrote ~/.lore/personal/agency/machines/mch_71f0…c07d.json (store me)
+lore: wrote ~/.lore/personal/agency/actors/act_4f89…b64b.json (store me/agency)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me/agency)
 ✓ machine mch_017941fe labelled "office desktop"
 $ lore machine list | cut -c1-38
 ID            LABEL           HOST    
@@ -652,7 +659,7 @@ mch_017941fe53b8eca065d80ff150a20e9fa70f8cec380c9b853a906dd8c07a7eff
   runtime:   bare
   last_write: 2026-11-02T10:00:00.000000001Z
 $ lore machine label --label ''
-lore: wrote ~/.lore/personal/agency/machines/mch_71f0…c07d.json (store me)
+lore: wrote ~/.lore/personal/agency/machines/mch_ada3…c018.json (store me/agency)
 ✓ machine mch_017941fe label cleared
 ```
 <!-- /example -->

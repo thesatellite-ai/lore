@@ -76,7 +76,7 @@ steps:
       ID      LABEL                    HELP         
       name    Your name                             
       email   Email                    The invite na
-      emails  Other addresses you use  Optional. Eac
+      emails  Other addresses you use  Optional. You
       handle  Handle                   Optional shor
     checks: identity.email_format, identity.invite_e
     apply: identity
@@ -176,15 +176,15 @@ steps:
 | Step id | Title | Kinds | What it saves |
 |---|---|---|---|
 | `kind` | What kind of setup is this? | all | the setup's kind and name; for `solo`, whether it is the default |
-| `identity` | Who are you? | all | your name, email, other addresses and handle (a `member` setup is prefilled with the invite's email) |
+| `identity` | Who are you? | all | your name, email, other addresses and handle (a `member` setup is prefilled with the invite's email; `lore setup join` by org name or store url prefills, of the emails your git config names (the global one and each `includeIf` file's), the one the org's roster has; the join lines take your name, and the github step's account, from your roster entry when the admin gave them, else the name from `git config --global user.name` and the account from this machine's gh login, and say where each came from) |
 | `github` | Which GitHub account? | all, optional | the GitHub user you pick, and the route lore found for it: `route: ssh` with the host alias (`github.com` or a `Host` block of yours) and the key's fingerprint (plus the key path when a `.pub` sits beside it or you gave one), or `route: https` (the account's gh login). Skip it (`lore setup apply --setup <setup> --step github --answers '{}'`, or Skip on the page) when your stores are not on GitHub (another git host, a local path) or the machine has no gh login or GitHub key: git then reaches each store as it is configured, and no GitHub check runs for the setup (`lore doctor --all` shows them as skip, `lore setup repair` never lists the step) |
-| `personal_store` | Where do your own notes go? | all | your personal store (`--to me`): create a new private repo, use an existing one (a git url, or the path of a bare git repository on this machine), a local folder (`file://~/.lore/stores/_me`), the same as your other setups (also when their `personal.store` is v0.1.17's `local`), or none; the repo url is only read for create and existing |
-| `join` | Join your team | member | the invite you were sent; joins the org and its roster |
-| `team` | Start or attach your team store | admin | the team name, a new or empty private repo for its store, the team's own repo patterns and client repo patterns (each `host/owner/repo` with `*` or `**` as a whole segment and never for the host, like `github.com/agency/*`: `lore setup check` reports any other shape as a field error, and `apply` refuses it before anything is cloned or written); or your team's existing store, on a new machine of an admin: lore attaches it, builds the org entry from its `lore-org.yaml` (every store, `own` and `repos`, as a member's join does) and adds you to its roster as an admin when you are not on it yet. Only a repo that holds files and is not a lore store is refused (`org.free`) |
+| `personal_store` | Where do your own notes go? | all | your personal store (`--to me`): create a new private repo, use an existing one (a git url, or the path of a bare git repository on this machine), a local folder (`file://~/.lore/stores/_me`, under the lore home in use: with `LORE_HOME=~/.lore-dev` the page names `file://~/.lore-dev/stores/_me`), the same as your other setups (also when their `personal.store` is v0.1.17's `local`), or none; the repo url is only read for create and existing |
+| `join` | Join your team | member | the invite you were sent; joins the org and its roster. When the roster already names you an admin of the org (your second machine), the setup is saved as an admin setup and the step says so: the roster role decides it, not the kind step |
+| `team` | Start or attach your team store | admin | the team name (lowercase letters, digits and `-`, starting with a letter, like `acme` or `acme-ops`: the same as a setup name, without `_`), a new or empty private repo for its store, the team's own repo patterns and client repo patterns (each `host/owner/repo` with `**` as a whole segment and `*` as a whole segment or inside one, never for the host, like `github.com/agency/*` or `github.com/agency/client-*`: `lore setup check` reports any other shape as a field error, and `apply` refuses it before anything is cloned or written); or your team's existing store, on a new machine of an admin: lore attaches it, builds the org entry from its `lore-org.yaml` (every store, `own` and `repos`, as a member's join does) and adds you to its roster as an admin when you are not on it yet. Only a repo that holds files and is not a lore store is refused (`org.free`) |
 | `tools` | Which coding tools do you use? | all, optional | the tool profiles (`claude_code`, `codex`, …); saving records them and checks each tool has the current lore skill: a missing or old one shows as a warning with its fix, `lore skill install --tool <tool>` ([skill install](../knowledge/skill-install.md)) |
 | `secrets` | Where do you keep secrets? | all, optional | the default secret manager for new secret references (lore only asks it for its version) |
 | `folders` | Which folders is this setup for? | all, optional | folder globs and whether this is the default setup |
-| `this_folder` | This folder | all, optional | nothing; shown only when you started inside a git repo: which setup this repo uses and whether lore is set up in it |
+| `this_folder` | This folder | all, optional | nothing; shown only when you started inside a git repo: which setup this repo uses and whether lore is set up in it. For an admin setup it may offer an own: pattern (below) |
 | `summary` | Summary | all | nothing; every step and every warning with its fix |
 
 Steps that do not apply to a kind are skipped. A re-check reuses the results of a check of the same answers from the last 2 minutes and runs only the checks that are missing, failed or older. Every check and its fix is listed in [Checking every setup](../operations/doctor-all.md#every-check).
@@ -247,7 +247,7 @@ route:
 ```console
 # tomas, in agency/site
 $ lore setup list | tail -1
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
 
 # tomas, in lab
 $ lore setup list | tail -2
@@ -258,6 +258,8 @@ This folder: no org, no attached store, written as Tomas Weber <tomas@agency.exa
 
 Outside a git repo the line is `This folder: not a git repo`, and in a git repo without `.lore/` it says that `lore init` sets it up. In a client repo of an org (a hosted remote the org claims) it names the org link instead (`lore org link --org <org> --project <folder>`, kept only in the org's store), never `lore init`, which would write into the client's repository; the This folder step's `repo.init` check is skipped there with that step. Nothing in the repo is changed by these lines.
 
+**The own: offer (admins only).** When an admin saves the team or This folder step inside a repo whose hosted remote (host/owner/repo) no own: pattern of the org matches, lore would treat it as a client repo (fail closed, guards on). So the step offers the remote's owner as an own: pattern, for example `github.com/acme-co/*`: at a terminal it asks `Add own: pattern github.com/acme-co/* to acme? [Y/n]` (Enter adds it); `--yes` (REST `"yes": true`) adds it without asking; with no terminal and no `--yes` nothing is written and the step's warning names the command, `lore org config set --org acme --key own --add github.com/acme-co/* --yes`. The pattern is written the way `lore org config set` writes it (committed in the org store's clone, then the org entry copies it), and afterwards `lore whoami` there says `own repo`. `setup apply --json` reports it as `own_offer` (`org`, `remote`, `pattern`, `added`, `command`). A member is never offered it, and neither is a repo the org already names: a repos: pattern or client link (an explicit client listing always wins), an own: pattern or own link, or a remote that is not host/owner/repo.
+
 For every command, lore picks the active setup with the first rule that answers:
 
 | # | Rule | Set with |
@@ -266,7 +268,7 @@ For every command, lore picks the active setup with the first rule that answers:
 | 2 | `LORE_SETUP=<name>` | this shell; `lore setup use --name <name>` prints the line to paste |
 | 3 | this repo's pin | `lore setup use --name <name> --here`, stored for this machine only |
 | 4 | folder match | the git top folder (else the current folder) against every setup's `folders`; the most specific glob wins |
-| 5 | org match | the org this repo resolves to, when exactly one setup has that org |
+| 5 | org match | the org this repo resolves to, when exactly one setup has that org; inside a clone of an org's store (`~/.lore/stores/<owner>/<store>`, its top or a folder) the org whose store it is, so the org's identity writes there and an admin of the org passes its admin checks |
 | 6 | the default setup | `default: true` (one setup at most) |
 | 7 | none | lore behaves as it did before setups existed |
 
@@ -316,17 +318,19 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 ```console
 # tomas, in agency/site
 $ lore --setup personal memory add --to me --body 'Renew the domain in March.'
-ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit --name personal --personal-store <url>
-  hint: --to repo, --to <org store>, or lore setup edit --name personal --personal-store <url>
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write here with --to repo instead, or set up a personal store
+  hint: --to repo, or lore setup edit --name personal --personal-store <url>
 (exit 20)
 ```
 <!-- /example -->
+
+The hint offers only the places a write works from where you are, best first: in a lore project `--to repo`, then the store folder linked to it; in a repo linked to a store folder (no `.lore/` of its own) only that folder, as `--to <org>/<folder>`, since `--to repo` is refused there; anywhere else `--to <org>/<folder>` with `lore setup list` to find the folders.
 
 - **GitHub:** lore's own git calls to stores use the setup's route ([Step 3](#step-3--let-lore-find-how-you-reach-github)), so each setup reaches GitHub with its own key or login.
 
 ## Step 6 — Join a team from an invite
 
-If an admin added you ([Adding your staff](members.md)), run `lore setup join --invite "<the org's store url>"` (the command `lore member add` printed for them; the org's name works only once this machine has the org, else `E_JOIN_ORG_UNKNOWN`): lore finds you on the roster by your email and needs no line. When that roster row is the org's admin (your own second laptop), the join makes an admin setup of the org, so `lore member add` and the other admin commands work there too; everyone else gets a member setup. Otherwise an admin sends you one line ([Team invites](invites.md)). `lore setup join --invite <line>` (or the store url) first prints the `lore setup apply --setup <name> --step …` lines that make the same member setup (named after the org, or the store url's owner: `acme` for `git@github.com:acme/team-store.git`; email from the invite, else `git config user.email`), then, on a terminal, opens the page on the join flow, with the kind set to "Join a team", the email prefilled and the folder's proposal the member setup being joined. With no terminal (ssh without a tty, a script, a coding agent) it prints only those lines and exits, so nothing waits for a page; `--web` opens the page anyway (an ssh session with the port forwarded), `--no-open` prints the address instead of starting a browser, and `--json` prints the decoded invite, the step plan and the lines (`commands`) without opening anything. Mira joins with the line Tomas sent (kept in `$INVITE` here):
+If an admin added you ([Adding your staff](members.md)), run `lore setup join --invite "<the org's store url>"` (the command `lore member add` printed for them; the org's name works only once this machine has the org, else `E_JOIN_ORG_UNKNOWN`): lore finds you on the roster by your email and needs no line. The store url may be spelled through your ssh alias for the org's account (`git@work-gh:acme-co/team-store.git`), over https or as `ssh://`: every spelling of the org's store is that store, also an alias your `~/.ssh/config` does not name, dotted (`github.com-work`) or not, that git reaches through a `url.<base>.insteadOf` rule (any spelling git itself rewrites to the same target is the same store), and the join finishes in one run; the org entry it makes names the store in the spelling you gave, and the org's other stores on the same host (an ops store) in that spelling too, so this machine reaches them the way you do (an alias your ssh config resolves is saved as the canonical url plus the `access:` rule that routes it through the alias); a join the roster refuses, or one that fails, leaves `~/.lore` as it was (no org entry, no store clone, no `access:` rule), and when an org entry of that name is already on this machine the refusal names the join answer that uses it (`--answers '{"invite":"acme"}'`). When that roster row is the org's admin (your own second laptop), the join makes an admin setup of the org, so `lore member add` and the other admin commands work there too; everyone else gets a member setup. Otherwise an admin sends you one line ([Team invites](invites.md)). `lore setup join --invite <line>` (or the store url) first prints the `lore setup apply --setup <name> --step …` lines that make the same member setup (named after the org: the invite's org, or for a store url the org name the store's `lore-org.yaml` gives, also when the url's owner is another name (`acme` for `git@github.com:acme-co/team-store.git` of org `acme`, and the `Prefilled:` line says `setup name acme from the org's name in its store, not the store url's owner (acme-co)`); when the store cannot be read, the store url's owner: `acme` for `git@github.com:acme/team-store.git`; for a deeper self-hosted path the repo name: `team` for `ssh://git.example.com/srv/git/team.git`; email from the invite, else `git config user.email`; your name and GitHub account from your entry on the org's roster, matched by that email, else from `git config --global user.name` and this machine's gh login, and a `Prefilled:` line (`prefill_note` in `--json`) says which; the roster is read without keeping anything: a plan that is never applied leaves `~/.lore` byte for byte as it was, no org entry and no store clone), then, on a terminal, opens the page on the join flow, with the kind set to "Join a team", the email prefilled and the folder's proposal the member setup being joined. With no terminal (ssh without a tty, a script, a coding agent) it prints only those lines and exits, so nothing waits for a page; `--web` opens the page anyway (an ssh session with the port forwarded), `--no-open` prints the address instead of starting a browser, and `--json` prints the decoded invite, the step plan and the lines (`commands`) without opening anything. Mira joins with the line Tomas sent (kept in `$INVITE` here):
 
 <!-- example: guided-setup#invite-and-join -->
 ```console
@@ -336,6 +340,7 @@ lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/invites/inv_7a67…9504.json (store agency/org)
 ✓ invite inv_7a67…9504 written to store agency (expires 2026-11-16)
 ⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)
+access: mira@agency.example needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone
 Send this to mira@agency.example (it holds no secret):
   lore setup join --invite lore-invite:v1:eyJ2IjoxLCJpZCI6Imludl8w…
 
@@ -461,7 +466,7 @@ The page listens on `127.0.0.1` only, on a random port, and the address carries 
 
 ## A build without the setup page
 
-The guided page is one of the proprietary components of the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts); the Apache-2.0 source in this repository builds without it. In such a build `lore setup` still opens a local page with the same safety rules, but it is a plain page that says the guided page is not in this build and lists the commands that do the same work: `lore setup plan`, `lore setup check`, `lore setup apply` and `lore doctor --all`. Every step on this page can be done with those commands ([Manage setups from the command line](#manage-setups-from-the-command-line)).
+The guided page is one of the proprietary components of the prebuilt lore binaries (GitHub Releases, Homebrew, the install scripts); the Apache-2.0 source in this repository builds without it. In such a build `lore setup` still opens a local page with the same safety rules, but it is a plain page that says the guided page is not in this build, shows the version and the path of the lore that serves it (so you can tell when an old or source-built lore came first on your `PATH`), says how to open the guided page with the released lore (`lore setup`; with a preview build, `lore-dev setup`) and where to install it, and lists the commands that do the same work: `lore setup plan`, `lore setup check`, `lore setup apply` and `lore doctor --all`. Every step on this page can be done with those commands ([Manage setups from the command line](#manage-setups-from-the-command-line)).
 
 ## Try it
 
@@ -485,6 +490,7 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 - **The default setup answers last, wherever you are.** In a repo no glob covers, the default is active (`active: agency (default: …)`) even when it belongs to another org, and the This folder line says "no setup matches". Give such repos their own setup (the line offers one) or a glob, so their notes are not written as the default's identity.
 - **`lore setup use --here` needs a lore project id.** Run `lore init` in the repo first.
 - **`personal_store: none` is strict.** Every `--to me` write fails in that setup; that is the point of choosing it.
+- **A setup saved on the page is used at once.** The page re-reads `~/.lore/config.yaml` before each call after it changed, so right after an admin setup's team step `whoami` on the same page shows the new org and its person, and an invite can be sent without restarting `lore setup`.
 - **A script's `lore setup` opens nothing.** Without a terminal (and without `--web`) it only updates the database schema and exits 0.
 
 ## Related

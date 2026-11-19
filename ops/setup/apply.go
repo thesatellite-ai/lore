@@ -85,8 +85,11 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		for _, f := range fe {
 			msgs = append(msgs, f.Question+": "+f.Message)
 		}
-		return ApplyOut{}, errs.New(errs.InvalidInput, "step "+string(step.ID)+" has "+itoa(len(fe))+" invalid answer(s): "+strings.Join(msgs, "; ")).
-			WithNext("lore", "setup", "check", "--setup", name, "--step", string(step.ID))
+		refusal := errs.New(errs.InvalidInput, "step "+string(step.ID)+" has "+itoa(len(fe))+" invalid answer(s): "+strings.Join(msgs, "; "))
+		if hasSecretAnswer(fe) {
+			refusal = refusal.WithHint(secretHint(name, step.ID))
+		}
+		return ApplyOut{}, refusal.WithNext("lore", "setup", "check", "--setup", name, "--step", string(step.ID))
 	}
 	// The save gate reuses what a check (or a fix's re-check) found for
 	// these same answers in the last onboard.CheckFreshTTL; only missing,
@@ -126,6 +129,9 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		// results would be lost with it.
 		s.prior, _ = hs.SetupHealth(ctx, name)
 	}
+	// Judged before the write: the applier hands back the entry it would
+	// save (res.Setup) even while the setup's own entry step is pending.
+	out.Warnings = append(out.Warnings, pendingEntryWarnings(s, step)...)
 	if step.Apply != onboard.ApplyNone {
 		ap, err := e.env.SetupApplier(ctx)
 		if err != nil {
@@ -139,10 +145,15 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		if res.Wrote != nil {
 			out.Wrote = res.Wrote
 		}
+		out.Pushed = res.Pushed
 		if res.Setup.Name != "" {
 			s.entry, s.exists = res.Setup, true
-			if err := e.keepJoinedKind(ctx, st, s, step); err != nil {
+			upgraded, err := e.keepJoinedKind(ctx, st, s, step)
+			if err != nil {
 				return ApplyOut{}, err
+			}
+			if upgraded {
+				out.Warnings = append(out.Warnings, kindUpgradedWarning(s.entry.Org))
 			}
 		}
 		// 2.3: "step status done; re-run its checks once" — what the
@@ -163,7 +174,15 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 		s.done = false
 	}
 	out.Status, out.Checks = onboard.StepDone, checks
-	return out, e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: answers, Checks: checks, Status: onboard.StepDone})
+	if err := e.saveDone(ctx, st, s, step, onboard.Progress{Setup: name, Step: step.ID, Answers: answers, Checks: checks, Status: onboard.StepDone}); err != nil {
+		return ApplyOut{}, err
+	}
+	// devco D-526: an admin saving the team or this_folder step in an org
+	// repo no own: pattern names is offered its owner as one (ownoffer.go).
+	var lines []string
+	out.OwnOffer, lines = e.offerOwn(ctx, s.entry, step.ID)
+	out.Warnings = append(out.Warnings, lines...)
+	return out, nil
 }
 
 // keepJoinedKind records the kind a join step gave the setup in the saved
@@ -172,13 +191,17 @@ func (e engine) Apply(ctx context.Context, in ApplyIn) (ApplyOut, error) {
 // read before the join), and the join makes the setup an admin setup; the
 // saved kind step wins over the entry on every later step (loadState), so
 // the next step (folders) made it a member setup again.
-func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step onboard.Step) error {
+//
+// upgraded reports that the kind step had asked for another kind: the
+// step then says so (devco D-447: a "member" join showed KIND admin in
+// setup list with no word why).
+func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step onboard.Step) (upgraded bool, err error) {
 	if step.ID != onboard.StepJoin || s.entry.Kind != onboard.KindAdmin {
-		return nil
+		return false, nil
 	}
 	row, ok := s.progress[onboard.StepKind]
 	if !ok || answerKind(row.Answers) == onboard.KindAdmin {
-		return nil
+		return false, nil
 	}
 	ans := maps.Clone(row.Answers)
 	if ans == nil {
@@ -186,7 +209,14 @@ func (e engine) keepJoinedKind(ctx context.Context, st Store, s stepState, step 
 	}
 	ans[kindAnswer] = onboard.Answer{Text: string(onboard.KindAdmin)}
 	row.Answers = ans
-	return st.PutProgress(ctx, row)
+	return true, st.PutProgress(ctx, row)
+}
+
+// kindUpgradedWarning is the join step's notice that a setup asked for as
+// member was saved as admin, because the roster already names this person
+// an admin of org (I-17: their second machine).
+func kindUpgradedWarning(org string) string {
+	return "saved as an admin setup, not member: your roster role in " + quote(org) + " is admin, and the roster role decides it, not the kind step (lore member add and lore team invite work here)"
 }
 
 // withKindDefault fills a kind-step answer set that leaves out default
@@ -531,4 +561,29 @@ func folderRepeatWarnings(repeated []string) []string {
 		out = append(out, "folder "+quote(f)+" was given more than once; it is saved once")
 	}
 	return out
+}
+
+// pendingEntryWarnings says that a step saved on an org setup whose
+// config entry is not written yet (the member's join step, the admin's
+// team step writes it) only takes effect with that step: before
+// (devco:K-1) the folders step after a refused join printed status done
+// and nothing else, and lore whoami then found no org at all.
+func pendingEntryWarnings(s stepState, step onboard.Step) []string {
+	if s.exists {
+		return nil
+	}
+	var entryStep onboard.StepID
+	switch s.kind {
+	case onboard.KindMember:
+		entryStep = onboard.StepJoin
+	case onboard.KindAdmin:
+		entryStep = onboard.StepTeam
+	default:
+		return nil
+	}
+	if step.ID == entryStep || step.ID == onboard.StepKind {
+		return nil
+	}
+	return []string{"saved for later: setup " + quote(s.name) + " takes effect once its " + string(entryStep) +
+		" step is done (lore setup apply --setup " + s.name + " --step " + string(entryStep) + ")"}
 }

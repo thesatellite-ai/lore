@@ -55,8 +55,11 @@ func (d defaultUI) FS() fs.FS { return d.root }
 func (defaultUI) Version() string { return openCoreVersion }
 
 // DefaultUI is the UI an open-core build serves when Options.UI is nil: a
-// plain page saying the setup page comes with lore EE and listing
-// `lore setup plan|check|apply` and `lore doctor --all`.
+// plain page saying the setup page comes with lore EE, naming this
+// binary's version and path (filled in at serve time, opencore_page.go),
+// how to open the guided page with the released lore, and listing
+// `lore setup plan|check|apply` and `lore doctor --all`. Its index.html is
+// a template: only the server's open-core path renders it.
 func DefaultUI() UI {
 	root, err := fs.Sub(openCore, openCoreDir)
 	if err != nil {

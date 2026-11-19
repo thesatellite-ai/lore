@@ -518,7 +518,9 @@ func TestJourneyJoiner(t *testing.T) {
 
 	rejoin := func() {
 		t.Helper()
-		for _, a := range jJoinerSteps(invite, foldersA) {
+		// J-9: the invite was accepted on day 1 and is never accepted
+		// again; a person already on the roster joins by the org's store url
+		for _, a := range jJoinerSteps(teamRemote.SSHURL(), foldersA) {
 			jJoinerApply(t, m, app.Dir, jJoinerSetupA, a)
 		}
 	}
@@ -529,7 +531,7 @@ func TestJourneyJoiner(t *testing.T) {
 		if c := readCfg(); strings.Contains(c, jJoinerWorkEmail) {
 			t.Errorf("after the purge config.yaml still names job A's address:\n%s", c)
 		}
-		// Regret: Pat joins again with the same invite line.
+		// Regret: Pat joins again, by the org's store url (the line is used).
 		rejoin()
 		which(app.Dir, jJoinerSetupA, "folder", "human:"+jJoinerWorkEmail)
 		if l := m.LoreIn(app, "memory", "list").Stdout; !strings.Contains(l, jJoinerTeamNote) || !strings.Contains(l, jJoinerANote) {

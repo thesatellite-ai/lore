@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/e2eenv"
 )
 
@@ -509,7 +510,7 @@ func (w *World) env(loreDir, apiURL string) []string {
 }
 
 func (w *World) runLore(ctx context.Context, lore, cwd string, args ...string) (string, error) {
-	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	cctx, cancel := context.WithTimeout(ctx, testtime.Scale(time.Minute))
 	defer cancel()
 	c := exec.CommandContext(cctx, lore, args...)
 	c.Dir = cwd
@@ -582,9 +583,9 @@ func (w *World) Start(ctx context.Context, port int, lore string) error {
 	case err := <-exited:
 		api.Close()
 		return fmt.Errorf("lore setup web exited before printing its link (%v):\n%s", err, w.output.String())
-	case <-time.After(60 * time.Second):
+	case <-time.After(testtime.Scale(60 * time.Second)):
 		w.Stop()
-		return fmt.Errorf("lore setup web printed no link in 60s:\n%s", w.output.String())
+		return fmt.Errorf("lore setup web printed no link in %s:\n%s", testtime.Scale(60*time.Second), w.output.String())
 	case <-ctx.Done():
 		w.Stop()
 		return ctx.Err()
@@ -599,7 +600,7 @@ func (w *World) RunLore(ctx context.Context, args ...string) (string, error) {
 	if w.lore == "" {
 		return "", fmt.Errorf("world not started: no lore binary to run")
 	}
-	cctx, cancel := context.WithTimeout(ctx, time.Minute)
+	cctx, cancel := context.WithTimeout(ctx, testtime.Scale(time.Minute))
 	defer cancel()
 	c := exec.CommandContext(cctx, w.lore, args...)
 	c.Dir = w.Home

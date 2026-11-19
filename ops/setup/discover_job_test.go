@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/probe"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // gatedProber is a discoverProber whose facts wait for open (a slow
@@ -87,7 +88,7 @@ func newCacheEngine(t *testing.T) (engine, cacheEnv, *time.Time) {
 // pollDone polls async discovery until it is done (or fails the test).
 func pollDone(t *testing.T, e engine) DiscoverOut {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(testtime.Scale(5 * time.Second))
 	for time.Now().Before(deadline) {
 		out, err := e.Discover(bg, DiscoverIn{Async: true})
 		if err != nil {
@@ -223,7 +224,7 @@ func TestDiscoverJobCallsReachTheSink(t *testing.T) {
 		if r.Name != DiscoverJobName || r.Err != "" || len(r.Calls) != 1 || r.Calls[0].Command != "GET https://api.github.com/user" {
 			t.Fatalf("job record %+v", r)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(testtime.Scale(5 * time.Second)):
 		t.Fatal("the job never reported its calls")
 	}
 	if n := len(reqTrace.Calls()); n != 0 {

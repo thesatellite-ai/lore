@@ -37,7 +37,8 @@ func rowField(t *testing.T, c *th.Clone, table, id, field string) string {
 
 // TestB11Sync_FixProjectsRepointsCoreRows (TestE2E_FixProjectsRepointsCoreRows):
 // alice and bob bootstrap lore in parallel; bob's merge keeps alice's
-// _meta.json; `sync fix-projects` keeps that project, re-points bob's rule
+// _meta.json and is refused while two projects are in it; `sync
+// fix-projects` keeps that project, re-points bob's rule
 // to it and puts bob's project row in the trash ("merged into <keep>");
 // a second run has nothing to fix.
 func TestB11Sync_FixProjectsRepointsCoreRows(t *testing.T) {
@@ -53,10 +54,16 @@ func TestB11Sync_FixProjectsRepointsCoreRows(t *testing.T) {
 	bobRule := addSyncRule(t, bob, "bob rule")
 	bob.CommitAll("bob lore")
 	// cmd/lore's merge driver may settle _meta.json itself; a clash is
-	// settled as the old test did, keeping alice's file.
-	if r := bob.TryGit("pull", "-q", "--no-rebase", "origin", "main"); r.Code != 0 {
-		bob.Git("checkout", "-q", "--theirs", dataDir+"/"+metaFile)
-		bob.CommitAll("merge")
+	// settled as the old test did, keeping alice's file. Either way the
+	// merge commit is refused while the repo holds two projects, naming
+	// fix-projects (docs/sync/conflicts-and-duplicates.md, step 5).
+	if r := bob.TryGit("pull", "-q", "--no-rebase", "origin", "main"); r.Code == 0 {
+		t.Fatalf("a merge holding two projects is refused: %s", r)
+	}
+	bob.TryGit("checkout", "-q", "--theirs", dataDir+"/"+metaFile)
+	bob.Git("add", "-A")
+	if r := bob.TryGit("commit", "-q", "--no-edit"); r.Code == 0 || !strings.Contains(r.Out(), "row of another project") || !strings.Contains(r.Out(), "lore sync fix-projects") {
+		t.Fatalf("the merge commit is refused, naming lore sync fix-projects: %s", r)
 	}
 	keep := rowField(t, alice, "rules", aliceRule, "project_id")
 	folded := rowField(t, bob, "rules", bobRule, "project_id")
@@ -68,6 +75,7 @@ func TestB11Sync_FixProjectsRepointsCoreRows(t *testing.T) {
 		t.Fatalf("a dry run re-pointed the rule to %s", got)
 	}
 	bob.MustLore("sync", "fix-projects").Says(t, "kept "+keep, folded)
+	bob.CommitAll("lore: one project") // the merge commits once one project is left
 	for _, id := range []string{aliceRule, bobRule} {
 		if got := rowField(t, bob, "rules", id, "project_id"); got != keep {
 			t.Fatalf("rule %s names project %s, want the kept %s", id, got, keep)
@@ -111,7 +119,8 @@ func TestB11Sync_MergeRowsFoldsDuplicateTag(t *testing.T) {
 // TestB11Sync_SyncTrashPointsAtTrashLocal (TestE2E_RevertTrashRestore,
 // the sync trash half; DELETION 3.10, OV31-a): `lore sync trash list`
 // prints the pointer at `lore trash --local` on stderr and the same empty
-// listing; `sync trash restore <n>` points at `trash restore --local <n>`
+// listing; `sync trash restore <n>` points at `trash restore --local
+// --target <n>` (named flags)
 // and gets its answer.
 func TestB11Sync_SyncTrashPointsAtTrashLocal(t *testing.T) {
 	c := newSyncSolo(t).c
@@ -120,5 +129,5 @@ func TestB11Sync_SyncTrashPointsAtTrashLocal(t *testing.T) {
 		t.Fatalf("no pointer line on stderr: %s", r)
 	}
 	r.Says(t, "trash is empty")
-	c.Lore("sync", "trash", "restore", "1").Refused(t, "lore trash restore --local 1", "no local copy #1")
+	c.Lore("sync", "trash", "restore", "1").Refused(t, "lore trash restore --local --target 1", "no local copy #1")
 }

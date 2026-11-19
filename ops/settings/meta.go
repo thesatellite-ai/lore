@@ -81,6 +81,9 @@ type MetaAddIn struct {
 
 // MetaEditIn is the input of meta.edit.
 type MetaEditIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Key         string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
 	Strict      bool   `json:"strict,omitempty" flag:"strict" desc:"turn mismatches into refusals"`
 	NoStrict    bool   `json:"no_strict,omitempty" flag:"no-strict" desc:"turn mismatches back into warnings"`
@@ -123,6 +126,9 @@ type MetaEditIn struct {
 
 // MetaDescribeIn is the input of meta.describe.
 type MetaDescribeIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Key  string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
 	Text string `json:"text" arg:"1" desc:"the description (at most 300 characters)"`
 }
@@ -134,6 +140,8 @@ type MetaKeyRef struct {
 
 // MetaKeysIn is the input of meta.keys.
 type MetaKeysIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Keys []string `json:"keys,omitempty" flag:"key" desc:"only these keys (repeatable)"`
 	IDs  bool     `json:"ids,omitempty" flag:"ids" desc:"show key ids"`
 	// Unreviewed lists only keys an agent registered that nobody has
@@ -148,6 +156,9 @@ type MetaKeysIn struct {
 
 // MetaValueAddIn is the input of meta.value.add.
 type MetaValueAddIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Key   string `json:"key" arg:"0" desc:"the key (name or mky_ id)"`
 	Value string `json:"value" arg:"1" desc:"the new value (snake_case)"`
 	Label string `json:"label,omitempty" flag:"label" desc:"display label"`
@@ -155,6 +166,9 @@ type MetaValueAddIn struct {
 
 // MetaValueRenameIn is the input of meta.value.rename.
 type MetaValueRenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Key string `json:"key" arg:"0" desc:"the key (name or mky_ id)"`
 	Old string `json:"value" arg:"1" desc:"the current value"`
 	New string `json:"new_value" arg:"2" desc:"the new value (snake_case)"`
@@ -362,7 +376,7 @@ func (o ops) metaAdd(ctx context.Context, in MetaAddIn) (RowOut, error) {
 	if internal {
 		vis = "internal"
 	}
-	human := fmt.Sprintf("added %s %s (%s) to %s (%s)\n", short(w.Row.ID), in.Name, strings.Join(extra, ", "), place(target), vis)
+	human := fmt.Sprintf("added %s %s (%s) to %s (%s)\n", short(w.Row.ID), in.Name, strings.Join(extra, ", "), o.place(target), vis)
 	if meta.TagLike(in.Name) {
 		human += tagLikeNote(in.Name)
 	}
@@ -457,6 +471,9 @@ func (o ops) metaKeys(ctx context.Context, in MetaKeysIn) (MetaKeysOut, error) {
 
 // MetaDeleteIn is the input of meta.delete.
 type MetaDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Key    string `json:"id" arg:"0" desc:"the key (name or mky_ id)"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why (deleted_reason on the key row, shown by lore trash)"`
 	// PurgeFlags: --purge / --confirm (engine binds them, P3-DEL-1).
@@ -533,7 +550,8 @@ func (o ops) metaValueRename(ctx context.Context, in MetaValueRenameIn) (RowOut,
 			Human: fmt.Sprintf("%s: renamed value %s %s → %s; row labels refresh on each row's next write; no values changed\n",
 				text(k.Row, mName), short(v.Row.ID), in.Old, in.New)}, nil
 	}
-	return RowOut{}, errs.New(errs.NotFound, text(k.Row, mName)+" has no value "+quote(in.Old))
+	return RowOut{}, errs.New(errs.NotFound, text(k.Row, mName)+" has no value "+quote(in.Old)).
+		WithHint("run `lore meta keys` to see each key's allowed values")
 }
 
 // metaWriteErrors are the codes of meta set / unset (METADATA 6).
@@ -585,6 +603,9 @@ func isUnreviewed(r row.Row) bool {
 // MetaSetIn is the input of meta.set. Its own field names keep it out of
 // Run's generic --meta binding: the op binds the change to the row it names.
 type MetaSetIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID   string `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, a key=value pair"`
 	Pair string `json:"pair,omitempty" arg:"1" desc:"key=value, key:type=value, project:key=value"`
 	// Where and DryRun are the bulk form (3.19): every row the filter
@@ -599,6 +620,9 @@ type MetaSetIn struct {
 
 // MetaUnsetIn is the input of meta.unset.
 type MetaUnsetIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID   string   `json:"id,omitempty" arg:"0" desc:"the row (any id); with --where, the key to remove"`
 	Key  string   `json:"key,omitempty" arg:"1" argof:"key" desc:"the key to remove (deploy removes deploy.env too)"`
 	More []string `json:"keys,omitempty" flag:"key" desc:"a key to remove (repeatable; deploy removes deploy.env too)"`
@@ -610,6 +634,8 @@ type MetaUnsetIn struct {
 
 // MetaGetIn is the input of meta.get.
 type MetaGetIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID  string `json:"id" arg:"0" desc:"the row (any id)"`
 	Key string `json:"key,omitempty" arg:"1" desc:"only this key"`
 	IDs bool   `json:"ids,omitempty" flag:"ids" desc:"show key ids"`

@@ -16,6 +16,7 @@ package row
 import (
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -130,4 +131,23 @@ func quote(s string) string {
 		r = r[:maxQuoted]
 	}
 	return strconv.Quote(string(r))
+}
+
+// ByCreation orders rows the way a person expects a plain list: oldest
+// first by created_at, ties (and rows with no created_at) by id.
+//
+// Why not by id alone: a fresh id is a UUIDv7 stamped by the machine's real
+// clock, but a natural id (a recurring task's next instance, a default
+// tasklist) is a hash. Ordered by id, a hash lands before or after every
+// fresh id depending on its digits and on today's date, so the same rows
+// listed twice, or under a fixed test clock (LORE_NOW) on two real days,
+// came out in different orders. created_at is stamped by the app clock on
+// every create, so the order follows when rows were made and is the same
+// on every run. The comparison is total, so sorting with it is
+// deterministic.
+func ByCreation(a, b Row) int {
+	if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+		return c
+	}
+	return strings.Compare(a.ID.String(), b.ID.String())
 }

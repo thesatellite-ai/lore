@@ -34,9 +34,9 @@ Alice (an agency developer) creates the staging branch once (from her `stores` f
 # alice, in stores
 $ lore store init --name agency_stag --url 'git@github.com:agency/notes?branch=staging' --yes
 lore: added .lore/lore.db, .lore/lore.db-shm, .lore/lore.db-wal, .lore/lore.db.broken.*, .lore/state/, .lore/backups/, .lore/lock to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; this repo holds no lore data, so lore changes none of its tracked files (`lore where` lists everything lore keeps here)
-lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore store init: store clone ~/.lore/stores/agency/notes@staging: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency_stag (sto_7a67…9504) at git@github.com:agency/notes?branch=staging; recorded in .lore/stores.yaml; commit it to share
+lore store init: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/stores/.git/config; hook blocks in ~/work/stores/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
+✓ created store agency_stag (sto_7a67…9504) on git@github.com:agency/notes?branch=staging: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 
 # alice, in website
 $ lore org use --entry agency-stag
@@ -45,12 +45,12 @@ $ lore org use --entry agency-stag
 $ lore whoami
 org        agency-stag  (matched by: lore org use (this machine))
 identity   Alice Doe <human:alice@agency.example>   act_162d…9666  @alice  (from: org entry (config.yaml orgs[agency-stag].identity))
-repo       client repo  (guards on)
+repo       treated as a client repo  (guards on: no own: pattern of agency-stag matches github.com/client/website, so lore treats it as a client repo (fail closed); if it is agency-stag's own repo: lore org config set --org agency-stag --key own --add github.com/client/website --yes)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_2ad3…f891
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch staging  (org folder org)
+stores     git@github.com:agency/notes on branch staging  (org folder agency-stag/org: roster, teams, company rules)
 links      known  0 link(s) for this repo on agency-stag's store branch staging (links are per store branch)
 personal   me -> ~/.lore/personal
 $ lore org link --org agency-stag --project client --yes
@@ -58,12 +58,13 @@ This marks github.com/client/website as a CLIENT repo of agency-stag: internal n
 and the leak guards turn on for everyone in agency-stag.
   link: project prj_2ad3…f891 at github.com/client/website → github.com/agency/notes@staging:client/ (default=false)
 ✓ github.com/client/website (prj_2ad3…f891) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 $ lore task add --title 'seed staging with demo data' --to agency-stag
-lore: committed locally to store agency-stag; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag)
-lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag)
-lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag)
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag/client)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag/client)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag/client)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/_meta.json (store agency-stag/client)
 ✓ tsk_05e9…4603 — seed staging with demo data [medium] → [agency-stag/client]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 $ lore task list

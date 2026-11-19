@@ -93,7 +93,7 @@ func (l migrateTeamLock) open(ctx context.Context) (*coordWorld, *signals.Store,
 	if w.spot.remote == nil {
 		return w, nil, false, nil
 	}
-	return w, w.signalsStore(), true, nil
+	return w, w.signalsStore(ctx), true, nil
 }
 
 // lockPlace names where the team lock lives, for the run's lines: the

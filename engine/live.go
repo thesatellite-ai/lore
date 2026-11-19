@@ -17,12 +17,16 @@ import (
 type LiveFlags struct {
 	Live   bool `json:"live,omitempty" flag:"live" desc:"share this row with everyone at once on the live ref (refs/lore/live)"`
 	NoLive bool `json:"no_live,omitempty" flag:"no-live" desc:"keep this row with the code (this branch's .lore/data)"`
+	// --no-layer moved to MetaFlags (devco:V-5): every add and edit takes
+	// it, not only task|rule|memory; bindInputLive still reads it.
 }
 
 // Input field names of LiveFlags.
 const (
 	inputLive   = "live"
 	inputNoLive = "no_live"
+	// inputNoLayer is MetaFlags.NoLayer's input name.
+	inputNoLayer = "no_layer"
 )
 
 // bindInputLive is Run's step: an input's --live / --no-live becomes the
@@ -30,9 +34,13 @@ const (
 func bindInputLive(ctx context.Context, in op.Input) (context.Context, error) {
 	on, _ := in.Bool(inputLive)
 	off, _ := in.Bool(inputNoLive)
+	if noLayer, _ := in.Bool(inputNoLayer); noLayer {
+		ctx = store.WithNoLayer(ctx)
+	}
 	switch {
 	case on && off:
-		return nil, errs.New(errs.InvalidInput, "--live and --no-live cannot be used together")
+		return nil, errs.New(errs.InvalidInput, "--live and --no-live cannot be used together").
+			WithHint("give --live to keep the row on the live ref, or --no-live to keep it with the code, not both")
 	case on:
 		return store.WithLiveChoice(ctx, store.LiveChoice{Mode: store.LiveOn, Table: opTable(in.Op())}), nil
 	case off:

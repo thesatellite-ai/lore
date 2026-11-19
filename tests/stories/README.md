@@ -2,7 +2,7 @@
 
 ## Every scenario and every bug is a replayable regression
 
-A story is one scenario lore was tried against, written down so it can run again: who the people are, what they do in plain words, and what must hold afterwards (`tests/stories/<id>-<name>.md`), plus a hermetic Go test that replays it end to end with the real binary. Every finding ever fixed has a row in `REGRESSIONS.md` naming the test that guards it, and a guard test fails when a row names a test that does not exist or a finding has no test. The stories run in the full gate (`task check` and `task check:after-land`, step `stories`), not in `task check:fast`.
+A story is one scenario lore was tried against, written down so it can run again: who the people are, what they do in plain words, and what must hold afterwards (`tests/stories/<id>-<name>.md`), plus a hermetic Go test that replays it end to end with the real binary. Every finding ever fixed has a row in `REGRESSIONS.md` naming the test that guards it, and a guard test fails when a row names a test that does not exist or a finding has no test. The stories run in the full gate (`task check` and `task check:after-land`, in two steps: `stories-ww` runs story WW, the write matrix and the suite's longest test, and `stories` every other story), not in `task check:fast`.
 
 Every new scenario, bug fix or feature lands with its story, its test and its REGRESSIONS.md row in the same commit, or it does not land.
 
@@ -19,6 +19,7 @@ A story is a [journeys](../journeys/README.md) World (`New(t, "<id>")`): the fak
 | `story.go` | `Story`, `New`, `Person`, `Seed` (fill a remote's first commit from a generator) |
 | `rules.go` | the standing-rule checks |
 | `fixtures.go` | the repo shape generators: `V017Repo` with `HubShape` (the 5.5k-row 0.1.17 repo) or `SmallShape`, `Monorepo`, `DocsOnly`, `Unicode` (Unicode names and text, CRLF), `PlainRepo` (no lore data), `Worktree`, `ShallowClone`; two machines are `Persona.NewLaptop` |
+| `ownershape.go` | the owner-shaped machine every store or setup story can use (`OwnerShaped`): two git identities by folder (includeIf), the org account behind an ssh host alias with url.insteadOf and git carried over it, a GitHub org move (`MoveRemote`), `GitignoredLore`, `ClaudeLinkOut` (story O) |
 | `harness_test.go` | the harness's own tests: every rule check bites, the generators build their shapes, one short replay |
 | `<id>-<name>.md` + `<id>_<name>_test.go` | one story |
 

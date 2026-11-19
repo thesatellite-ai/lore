@@ -45,16 +45,20 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/merge3"
@@ -124,29 +128,47 @@ func fetchDeferred(ctx context.Context) bool {
 // pre-commit block. The block runs this binary (the bare name when `lore`
 // on PATH is this file) and fails the commit when no lore can check it.
 //
-// Only a lore binary sets it up (lore, lore.exe, lore-<suffix>): a Go
-// test binary (wire.test) running the wiring would write itself in as the
-// hook and the driver, and git would then start a test run on every hand
-// commit.
+// Every lore build sets it up, whatever its file is called (lore,
+// lore-dev, a scratch name: devco D-333, a build named bin-lt left its
+// clones unguarded); only a Go test binary (wire.test) does not, since it
+// would write itself in as the hook and the driver and git would then start
+// a test run on every hand commit.
 //
 // say gets the line a write prints when it sets an unwired clone up
 // (owner bug 6: a read never does), prefixed with the running command.
 func handGitOption(say func(string)) gitbackend.Option {
 	exe, err := os.Executable()
-	name := strings.TrimSuffix(filepath.Base(exe), ".exe")
-	if err != nil || strings.HasSuffix(name, ".test") || (name != reposync.BinaryName && !strings.HasPrefix(name, reposync.BinaryName+"-")) {
+	if err != nil {
 		return gitbackend.Join()
 	}
-	bin := reposync.RunningDriverBinary()
+	bin, ok := handGitBinary(exe, testing.Testing(), exec.LookPath)
+	if !ok {
+		return gitbackend.Join()
+	}
+	prog := storeHookProg(bin, os.Getenv(envHookBin))
 	return gitbackend.WithHandGit(gitbackend.HandGit{
-		Driver: bin + " merge-driver %O %A %B %P",
-		Hook:   storeHookLines(bin),
+		Driver: storeDriverLine(prog),
+		HookFor: func(dir string) []string {
+			return storeHookLines(prog, storeHookHomeFor(dir))
+		},
 		Say: func(ctx context.Context, dir string, set []string) {
 			if say != nil {
 				say(handGitSetUpLine(ctx, dir, set))
 			}
 		},
 	})
+}
+
+// handGitBinary is the program a store clone's merge driver and pre-commit
+// block run for the executable exe, and false when the wiring must not be
+// written: only for a Go test binary (testBinary, testing.Testing), never
+// because of exe's file name (devco D-333: a build's behaviour must not
+// depend on what its file is called).
+func handGitBinary(exe string, testBinary bool, lookPath func(string) (string, error)) (string, bool) {
+	if testBinary {
+		return "", false
+	}
+	return reposync.DriverBinary(exe, lookPath), true
 }
 
 // handGitSetUpLine is the one short line said when lore wrote a store
@@ -183,17 +205,100 @@ func handGitParts(set []string) string {
 // storeHookLines is the pre-commit block of a store clone: lore's check of
 // the staged row files (valid JSON and rows, no conflict markers), then
 // its secret scan; no lore that can run refuses the commit.
-func storeHookLines(bin string) []string {
-	return []string{
-		EnvGitHook + "=pre-commit; export " + EnvGitHook,
-		"if command -v " + bin + " >/dev/null 2>&1; then",
-		"  " + bin + " sync hook pre-commit || exit $?",
-		"  " + bin + " check leaks --staged || exit $?",
+//
+// prog is the build that wrote the block ("" for bare `lore`): the block
+// runs it only while that file is there and otherwise the first `lore` on
+// PATH (devco D-534, weak 10: a block that named one worktree build failed
+// every hand commit once that build was gone). home says which LORE_HOME
+// the block exports (storeHookHome): for a clone under the lore home, the
+// home found from where the clone sits, so a copied or moved home checks
+// against itself (devco D-423 for the home, D-534 for the copy).
+func storeHookLines(prog string, home storeHookHome) []string {
+	lines := home.lines()
+	lines = append(lines, EnvGitHook+"=pre-commit; export "+EnvGitHook, "lore_bin="+reposync.BinaryName)
+	if prog != "" {
+		lines = append(lines, "if [ -x "+prog+" ]; then lore_bin="+prog+"; fi")
+	}
+	return append(lines,
+		`if command -v "$lore_bin" >/dev/null 2>&1; then`,
+		`  "$lore_bin" sync hook pre-commit || exit $?`,
+		`  "$lore_bin" check leaks --staged || exit $?`,
 		"else",
 		`  echo "lore: this is a lore store clone and no lore on PATH can check this commit (rows and secrets); install lore, then commit again" >&2`,
 		"  exit 1",
 		"fi",
+	)
+}
+
+// storeHookProg is the quoted program a store clone's block and merge
+// driver prefer, "" for bare `lore`: LORE_HOOK_BIN when it names an
+// executable (a wrapper's own path, as the code repo hooks pin it), else
+// bin (handGitBinary: the running build unless it is the lore on PATH).
+func storeHookProg(bin, hookBin string) string {
+	if hookBin != "" && filepath.IsAbs(hookBin) && !strings.Contains(hookBin, "'") {
+		if st, err := os.Stat(hookBin); err == nil && st.Mode().IsRegular() && st.Mode().Perm()&0o111 != 0 {
+			return "'" + filepath.ToSlash(filepath.Clean(hookBin)) + "'"
+		}
 	}
+	if bin == reposync.BinaryName {
+		return ""
+	}
+	return bin
+}
+
+// storeDriverLine is a store clone's merge.lore.driver: prog while that
+// file is there, else the first `lore` on PATH (git runs the driver
+// through the shell).
+func storeDriverLine(prog string) string {
+	const args = " merge-driver %O %A %B %P"
+	if prog == "" {
+		return reposync.BinaryName + args
+	}
+	return "if [ -x " + prog + " ]; then " + prog + args + "; else " + reposync.BinaryName + args + "; fi"
+}
+
+// storeHookHome is the LORE_HOME a store clone's block exports: up folders
+// above the clone (the hook runs in the clone's top folder) when up > 0,
+// else the absolute abs ("" exports nothing: the default home).
+type storeHookHome struct {
+	up  int
+	abs string
+}
+
+// lines are the block's LORE_HOME lines.
+func (h storeHookHome) lines() []string {
+	switch {
+	case h.up > 0:
+		return []string{lorehome.EnvName + `="$(cd ` + strings.TrimSuffix(strings.Repeat("../", h.up), "/") + ` && pwd -P)"; export ` + lorehome.EnvName}
+	case h.abs != "":
+		return []string{lorehome.EnvName + "='" + h.abs + "'; export " + lorehome.EnvName}
+	}
+	return nil
+}
+
+// storeHookHomeFor is the home spec of the clone at dir: found from its
+// place when dir is inside the running lore home (stores/<owner>/<repo>,
+// any depth), else the pinned hookHome (a person's own clone elsewhere,
+// `lore store use`).
+func storeHookHomeFor(dir string) storeHookHome {
+	if h, err := lorehome.Resolve(); err == nil {
+		if rel, err := filepath.Rel(filepath.Clean(h.Dir), filepath.Clean(dir)); err == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return storeHookHome{up: len(strings.Split(filepath.ToSlash(rel), "/"))}
+		}
+	}
+	return storeHookHome{abs: hookHome()}
+}
+
+// hookHome is the home a hook lore writes must carry: the resolved
+// LORE_HOME when the person set one, "" for the default home (whose hooks
+// stay as they were, so default users see no rewrite) and when the folder
+// holds a single quote the hook text cannot hold.
+func hookHome() string {
+	h, err := lorehome.Resolve()
+	if err != nil || h.Source != lorehome.FromEnv || strings.Contains(h.Dir, "'") {
+		return ""
+	}
+	return filepath.ToSlash(h.Dir)
 }
 
 // pickUpThenSync ends an open: the pick-up of hand edits, then the store
@@ -304,6 +409,26 @@ func (st *state) pickUpCheckout(ctx context.Context, co *handCheckout, say func(
 	}
 	if len(rep.Rows) == 0 {
 		return
+	}
+	// devco D-437: the changed files may be another lore process's write
+	// between its `git add` and its commit (it holds the store lock). The
+	// unstage below would empty that writer's index, so its commit landed
+	// empty while it printed "wrote" and its rows stayed untracked. The
+	// pick-up looks again and unstages only under the store lock; the
+	// unlocked look above keeps the common no-edit read lock-free.
+	held, release, err := co.gb.Hold(ctx)
+	if err != nil {
+		say(handLinePrefix + "hand edits in " + co.dir + " wait for the next lore command: " + err.Error())
+		return
+	}
+	defer func() { _ = release() }()
+	ctx = held
+	if rep, err = co.gb.HandChanges(ctx); err != nil {
+		say(handLinePrefix + "could not look for hand edits in " + co.dir + ": " + err.Error())
+		return
+	}
+	if len(rep.Rows) == 0 {
+		return // they were a writer's files, committed while this waited
 	}
 	if err := co.gb.Unstage(ctx); err != nil {
 		say(handLinePrefix + "could not pick up the hand edits in " + co.dir + ": " + err.Error())
@@ -560,14 +685,32 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 		say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
 		return
 	}
-	// The files are read, decoded and compared in parallel (B1-16: with a
-	// migration not committed yet every row file is modified, ~5,400
-	// decodes of the file and of its committed copy on each command); the
-	// engine part runs after, one file at a time in git's order, so the
-	// lines and writes are the same as a sequential loop.
-	cands := make([]repoEditCandidate, len(rep.Rows))
+	if len(rep.Rows) == 0 {
+		return
+	}
 	reg := st.eng.Registry()
-	parallelEach(len(rep.Rows), func(i int) { cands[i] = repoEditCandidateOf(reg, rep.Rows[i]) })
+	cands := repoEditCandidates(reg, rep.Rows)
+	if slices.ContainsFunc(cands, func(c repoEditCandidate) bool { return len(c.fields) > 0 }) {
+		// devco D-437: a changed file may be another lore process's write
+		// in progress (it holds the repo's .lore/lock): look again under
+		// the lock. devco D-465: only when there is a hand edit to pick up.
+		// New files (a repo whose rows are not committed yet) and lore's
+		// own writes are no hand edit, and taking the lock on every
+		// command for them rewrote .lore/lock's holder line on reads,
+		// dry runs and refusals, and made parallel reads queue on writes.
+		held, release, herr := gb.Hold(ctx)
+		if herr != nil {
+			say(handLinePrefix + "hand edits in " + gb.Dir() + " wait for the next lore command: " + herr.Error())
+			return
+		}
+		defer func() { _ = release() }()
+		ctx = held
+		if rep, err = gb.HandChanges(ctx); err != nil {
+			say(handLinePrefix + "could not look for hand edits in " + gb.Dir() + ": " + err.Error())
+			return
+		}
+		cands = repoEditCandidates(reg, rep.Rows)
+	}
 	for i, c := range rep.Rows {
 		cand := cands[i]
 		if cand.refused != nil {
@@ -587,6 +730,18 @@ func (st *state) pickUpRepoEdits(ctx context.Context, gb *gitbackend.Backend, sa
 		}
 		say(handLinePrefix + "picked up a hand edit of " + rowName(c) + " (" + strings.Join(cand.fields, ", ") + "): checked and stamped with your name and the time in " + c.Abs + "; commit it with your code")
 	}
+}
+
+// repoEditCandidates reads and compares every changed file of a code
+// repo. The files are read, decoded and compared in parallel (B1-16: with
+// a migration not committed yet every row file is modified, ~5,400
+// decodes of the file and of its committed copy on each command); the
+// engine part runs after, one file at a time in git's order, so the lines
+// and writes are the same as a sequential loop.
+func repoEditCandidates(reg *schema.Registry, rows []gitbackend.HandChange) []repoEditCandidate {
+	cands := make([]repoEditCandidate, len(rows))
+	parallelEach(len(rows), func(i int) { cands[i] = repoEditCandidateOf(reg, rows[i]) })
+	return cands
 }
 
 // repoEditCandidate is what one modified row file of a code repo holds
@@ -799,3 +954,8 @@ func jsonKeys(b []byte) []string {
 		}
 	}
 }
+
+// envHookBin is the variable a wrapper sets to the program lore's git
+// hooks should run (the same name as host.EnvHookBin, which wire cannot
+// import).
+const envHookBin = "LORE_HOOK_BIN"

@@ -34,7 +34,8 @@ var hostPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$`)
 // Remote is a parsed store url.
 //
 // Invariant: URL never holds a password or token (D24). Norm is
-// `host/owner/repo` (lower-case host, no port, user or .git) and keys the
+// `host/owner/repo` (lower-case host, no port, user or .git; an ssh host
+// that the person's ssh config renames is its HostName, identityHost) and keys the
 // clone (CloneDirFor), so every form of one url shares one clone; the
 // folder itself is named by the path alone (CloneBase). URL is the
 // canonical (ssh:// for the scp-like form) credential-free url; the clone's
@@ -119,6 +120,9 @@ func RemoteOf(u *url.URL) (Remote, error) {
 	clean := url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}
 	if u.Scheme == SchemeSSH && u.User != nil && u.User.Username() != "" {
 		clean.User = url.User(u.User.Username())
+	}
+	if u.Scheme == SchemeSSH {
+		host = identityHost(host)
 	}
 	return Remote{URL: clean.String(), Norm: host + "/" + path}, nil
 }

@@ -33,7 +33,10 @@ const (
 // row, else toolprofile.Resolve), prints the chosen targets to w and records
 // them as the repo's context.targets row. Init never asks which tools to
 // wire (Q-R2-4): it prints what it chose and why, and --target overrides it.
-func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root string, values []string) error {
+// fromSetup names the setup whose tools values are ("" when values are
+// --target), so the printed reason names the setup, not a flag nobody
+// typed (devco J-2).
+func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root string, values []string, fromSetup string) error {
 	pick, err := h.resolveTargets(ctx, root, values, func(ctx context.Context) ([]string, bool, error) {
 		return h.contextTargetsOf(ctx, h.app)
 	})
@@ -41,7 +44,10 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 		return err
 	}
 	reason := initTargetReason(len(values) > 0, pick.sel.Reason)
-	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetup {
+	switch {
+	case len(values) > 0 && fromSetup != "":
+		reason = setupReason(fromSetup)
+	case len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetup:
 		reason = setupReason(pick.setup)
 	}
 	fmt.Fprintf(w, "%s context targets: %s (%s)\n", h.decor.muted("·"), describeTargets(pick.targets), reason)
@@ -49,8 +55,14 @@ func (h *Host) WireToolFiles(ctx context.Context, w *strings.Builder, root strin
 		fmt.Fprintf(w, "%s %s\n", h.decor.muted("·"), v.Note())
 	}
 	out := filepath.Join(root, filepath.FromSlash(toolprofile.CanonicalOutput))
-	if err := h.stitchPointers(w, root, pick.targets, out); err != nil {
+	if err := h.stitchRepoPointers(ctx, w, root, pick.targets, out); err != nil { // D-500
 		return err
+	}
+	h.ignoredPointerLines(ctx, w, root, pick.targets) // devco:S-2
+	// devco:S-1: say now, not after the first render, that the committed
+	// LORE.md came from rows this repo does not have.
+	if line := h.OrphanRenderLine(ctx, root); line != "" {
+		fmt.Fprintf(w, "%s %s\n", h.decor.warn("!"), line)
 	}
 	if len(values) == 0 && pick.sel.Reason == toolprofile.ReasonSetting {
 		return nil // the row already says it (a re-init over shared data)

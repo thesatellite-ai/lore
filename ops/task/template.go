@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
+	"github.com/thesatellite-ai/lore/ops/internal/fromfile"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -100,12 +101,17 @@ type TemplateFile struct {
 
 // TemplateNameIn names one template (name or ttp_ id).
 type TemplateNameIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Name string `json:"name" arg:"0" desc:"the template name (or its ttp_ id)"`
 }
 
 // TemplateDeleteIn is the input of task.template.delete: the template and
 // the delete reason every trash move takes (INTEG-TRASH-3, DELETION 2.1).
 type TemplateDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name   string `json:"name" arg:"0" desc:"the template name (or its ttp_ id)"`
 	Reason string `json:"reason,omitempty" flag:"reason" desc:"why it is deleted (stored as deleted_reason; required when policy delete.require_reason is true)"`
 }
@@ -120,6 +126,9 @@ type TemplateAddIn struct {
 
 // TemplateRenameIn is the input of task.template.rename.
 type TemplateRenameIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name    string `json:"name" arg:"0" desc:"the template name (or its ttp_ id)"`
 	NewName string `json:"new_name" arg:"1" desc:"the new name (snake_case); the id stays"`
 }
@@ -189,6 +198,8 @@ func (o TemplateOut) Text() string { return o.Human }
 
 // TemplateListIn is the (empty) input of task.template.list.
 type TemplateListIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
@@ -249,7 +260,8 @@ const tplNameHint = "a template name is snake_case: a-z, 0-9 and _, starting wit
 func readTemplateFile(path string) (TemplateFile, error) {
 	raw, err := os.ReadFile(filepath.Clean(path)) // a path the caller names (like split --from)
 	if err != nil {
-		return TemplateFile{}, errs.Wrap(errs.InvalidInput, "task template: read "+path, err)
+		return TemplateFile{}, fromfile.Unreadable("task template", path, err).
+			WithHint("check the path of --from-file, then re-run the same command with --from-file <template.yaml>")
 	}
 	// Strict: a template's keys are all lore's, so a typo is refused with
 	// its line and key path (yamlerr), never yaml's Go type names.
@@ -269,7 +281,7 @@ func readTemplateFile(path string) (TemplateFile, error) {
 // known arg types, every ${arg:…} declared, positions, depth.
 func checkTemplate(f TemplateFile, maxDepth int) error {
 	if !row.ValidName(f.Name) {
-		return tplErr(strconv.Quote(f.Name) + " is not a snake_case name (MQ10)").WithHint(tplNameHint)
+		return tplErr(strconv.Quote(f.Name) + " is not a snake_case name").WithHint(tplNameHint)
 	}
 	for name, a := range f.Args {
 		if !row.ValidName(name) {
@@ -663,7 +675,7 @@ func (o ops) templateRename(ctx context.Context, in TemplateRenameIn) (TemplateO
 	}
 	name := strings.TrimSpace(in.NewName)
 	if !row.ValidName(name) {
-		return TemplateOut{}, tplErr(strconv.Quote(name) + " is not a snake_case name (MQ10)").WithHint(tplNameHint)
+		return TemplateOut{}, tplErr(strconv.Quote(name) + " is not a snake_case name").WithHint(tplNameHint)
 	}
 	if _, _, ferr := o.findTemplate(ctx, name); ferr == nil || errs.Has(ferr, errs.AmbiguousID) {
 		return TemplateOut{}, tplErr(strconv.Quote(name) + " already exists").WithHint("pick another name, or see it with `lore task template show --name " + name + "`")

@@ -3,6 +3,8 @@ package wire
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // InRepo reports whether p (relative to root, or absolute) lands inside the
@@ -17,7 +19,9 @@ func InRepo(root, p string) bool {
 		abs = filepath.Join(root, filepath.FromSlash(p))
 	}
 	abs = filepath.Clean(abs)
-	at := filepath.Join(resolvedPath(filepath.Dir(abs)), filepath.Base(abs))
-	rel, err := filepath.Rel(resolvedPath(root), at)
+	// the last name is kept as written: p may be a link pointing out of
+	// the repository, which is still a file inside it
+	at := filepath.Join(fspath.Canonical(filepath.Dir(abs)), filepath.Base(abs))
+	rel, err := filepath.Rel(fspath.Canonical(root), at)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }

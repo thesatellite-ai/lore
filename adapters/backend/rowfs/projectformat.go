@@ -25,6 +25,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/row"
 )
 
 // Keys of the project format (file format: they must not change).
@@ -91,6 +92,27 @@ func ReadProjectFormat(top string) (ProjectFormat, error) {
 	if err != nil || !exists {
 		return ProjectFormat{}, err
 	}
+	return projectFormatOf(d, doc)
+}
+
+// ParseProjectFormat is ReadProjectFormat over the bytes of a _meta.json
+// read from somewhere other than the work tree: the copy a fetched branch
+// holds (`git show origin/main:.lore/data/_meta.json`), so a stale
+// checkout can tell that its team already migrated (K-11).
+func ParseProjectFormat(doc []byte) (ProjectFormat, error) {
+	o, err := decodeObject(doc)
+	if err != nil {
+		return ProjectFormat{}, unreadableDoc(RepoMetaPath, doc)
+	}
+	d, err := decodeFormat(o, RepoMetaPath)
+	if err != nil {
+		return ProjectFormat{}, err
+	}
+	return projectFormatOf(d, doc)
+}
+
+// projectFormatOf reads the format keys of a decoded _meta.json.
+func projectFormatOf(d formatgate.Declared, doc []byte) (ProjectFormat, error) {
 	o, err := decodeObject(doc)
 	if err != nil {
 		return ProjectFormat{}, err
@@ -144,6 +166,13 @@ func WriteProjectFormat(top string, f int, m ProjectMigration) (string, error) {
 		return "", unreadableDoc(RepoMetaPath, doc)
 	}
 	o[MetaKeyFormat] = json.RawMessage(strconv.Itoa(f))
+	if f == ProjectFormatCurrent {
+		// devco N-15: the file's own "_v" follows the format too, so a
+		// migrated project reads `_v: 2, format: 2` like an inited one, and a
+		// reader of "_v" alone (0.1.17 tooling, a script) never sees it as
+		// format 1. Readers still accept both shapes.
+		o[metaKeyVersion] = json.RawMessage(strconv.Itoa(row.FormatVersion))
+	}
 	for key, v := range map[string]string{MetaKeyMigratedBy: m.By, MetaKeyMigratedVia: m.Via, MetaKeyMigratedAt: m.At} {
 		if v == "" {
 			delete(o, key)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsmigrate "github.com/thesatellite-ai/lore/ops/migrate"
 	"github.com/thesatellite-ai/lore/schema"
@@ -60,7 +61,7 @@ func TestMigrateCopyLeavesMachineStore(t *testing.T) {
 		t.Fatalf("copy: %d rows, %v; want none copied", n, err)
 	}
 	if !slices.ContainsFunc(steps, func(s string) bool {
-		return strings.Contains(s, "skipped 1 render_histories rows of "+v017LoreDB) && strings.Contains(s, "this checkout is a copy: "+resolvedPath(original)) &&
+		return strings.Contains(s, "skipped 1 render_histories rows of "+v017LoreDB) && strings.Contains(s, "this checkout is a copy: "+fspath.Canonical(original)) &&
 			strings.Contains(s, "lore migrate run --machine-local")
 	}) {
 		t.Fatalf("the copy's run does not name what it skipped and why: %q", steps)

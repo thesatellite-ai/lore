@@ -150,7 +150,7 @@ func (e engine) Fix(ctx context.Context, in FixIn) (FixOut, error) {
 	id := onboard.CheckID(strings.TrimSpace(in.Check))
 	if !slices.Contains(onboard.CheckIDs(), id) {
 		return FixOut{}, errs.New(errs.InvalidInput, "check "+quote(in.Check)+" is not a known check id").
-			WithHint("lore setup check lists the checks of each step")
+			WithHint("the known check ids: " + checkIDList())
 	}
 	st, err := e.env.SetupStore(ctx)
 	if err != nil {
@@ -324,3 +324,15 @@ func quote(s string) string { return strconv.Quote(s) }
 
 // itoa is strconv.Itoa.
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// checkIDList is every check id, comma separated: the hint of a setup fix
+// naming an unknown check. It named `lore setup check` as the lister, which
+// lists nothing and refuses without --setup and --step (devco:D-549).
+func checkIDList() string {
+	ids := onboard.CheckIDs()
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = string(id)
+	}
+	return strings.Join(out, ", ")
+}

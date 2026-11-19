@@ -67,6 +67,10 @@ func (p *Page) serveIndex(w http.ResponseWriter, r *http.Request) {
 		rest.WriteError(w, errs.New(errs.NotFound, "no route "+r.Method+" "+r.URL.Path))
 		return
 	}
+	if _, open := p.ui().(defaultUI); open {
+		p.writeOpenCoreIndex(w) // opencore_page.go: names this binary
+		return
+	}
 	p.writeFile(w, fileIndex, mediaHTML)
 }
 

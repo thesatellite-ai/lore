@@ -535,7 +535,8 @@ func placeRank(f forest, parent, self string, in EditIn) (string, error) {
 		return "", nil
 	}
 	if n > 1 {
-		return "", errs.New(errs.InvalidInput, "task edit: give one of --before, --after-sibling, --first, --last")
+		return "", errs.New(errs.InvalidInput, "task edit: --before, --after-sibling, --first and --last each place the task; give only one").
+			WithHint("keep one: --first, --last, --before <tsk_id> or --after-sibling <tsk_id>")
 	}
 	sibs := f.tree.Roots()
 	if parent != "" {
@@ -987,7 +988,8 @@ func treeFilter(f forest, in ListIn) (func(string) bool, error) {
 			return err
 		}
 		if !f.tree.Has(id.String()) {
-			return errs.New(errs.NotFound, "--"+flag+" "+work.Quote(raw)+": no such task")
+			return errs.New(errs.NotFound, "--"+flag+" "+work.Quote(raw)+": no such task").
+				WithHint("run `lore task list` to see the task ids")
 		}
 		next := map[string]bool{}
 		for _, x := range of(id.String()) {
@@ -1035,7 +1037,7 @@ func decorate(f forest, b *Brief, r row.Row) {
 // that involve the task, and with --tree the subtree.
 func (o ops) showTree(ctx context.Context, full *Full, r row.Row, withTree bool) error {
 	full.Rank, full.CloseReason = work.Field(r, fieldRank), work.Field(r, fieldCloseReason)
-	f, err := o.forest(ctx, work.Field(r, work.FieldProject))
+	f, err := o.showTreeOf(ctx, r) // showforest.go: not every task for one
 	if err != nil {
 		return err
 	}

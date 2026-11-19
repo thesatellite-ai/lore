@@ -7,9 +7,11 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	rowexpand "github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
+	"github.com/thesatellite-ai/lore/model/checklist"
 	"github.com/thesatellite-ai/lore/model/timeentry"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -34,6 +36,11 @@ type AddIn struct {
 	engine.MetaFlags
 	// LiveFlags: --live / --no-live (engine binds them, PENDING-60).
 	engine.LiveFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425,
+	// D-488: task add had neither it nor --source).
+	sourceref.Flag
+	// Source is the task's source_kind (D-488), free-form like rule add's.
+	Source string `json:"source,omitempty" flag:"source" desc:"source_kind: where the task came from (manual, agent-proposal, imported, …; empty by default)"`
 	// Title is v0.1.17's positional <title> (quote a title of several
 	// words: an op argument is one value).
 	Title      string `json:"title,omitempty" arg:"0" rest:"true" desc:"the task title (several words are joined; omitted with --template)"`
@@ -79,6 +86,21 @@ type AddIn struct {
 	Template string   `json:"template,omitempty" flag:"template" desc:"apply this task template (its name or ttp_ id); the title comes from the template"`
 	Args     []string `json:"args,omitempty" flag:"arg" desc:"a template argument name=value (repeatable)"`
 	DryRun   bool     `json:"dry_run,omitempty" flag:"dry-run" desc:"with --template: show the tasks that would be added, write nothing"`
+	// rank is the sub-task's rank when the caller computed it (task split,
+	// run:plat:split-perf): the split's children are staged in ONE batch,
+	// and a staged row is not visible to reads, so the parent's "last
+	// child" seen from the store is the same for every child and only the
+	// caller knows the chain. Empty: after the parent's last child. Never
+	// a flag or a JSON field.
+	rank string
+	// status and checklist are a task import's own values for a task that
+	// joins its ONE staged batch (D-214): a staged row is not visible to
+	// reads, so the import cannot set them afterwards with task edit /
+	// checklist add (both read the task back); add writes them into the
+	// create instead, through the same status transition. Never a flag
+	// or a JSON field.
+	status    string
+	checklist []checklist.Item
 }
 
 // Inherited is what a new sub-task copied from its parent (6.5: the output
@@ -185,6 +207,9 @@ type Full struct {
 	PlanID        string `json:"plan_id,omitempty"`
 	ProjectID     string `json:"project_id"`
 	RepoID        string `json:"repo_id,omitempty"`
+	// SourceKind and SourceRef are where the task came from (D-488).
+	SourceKind string `json:"source_kind,omitempty"`
+	SourceRef  string `json:"source_ref,omitempty"`
 	// Tree fields (6.2, 8.3) and the derived rollup (6.6).
 	ParentID    string          `json:"parent_id,omitempty"`
 	Rank        string          `json:"rank,omitempty"`
@@ -203,6 +228,11 @@ type Full struct {
 	Lead      string   `json:"lead,omitempty"`
 	Assignees []string `json:"assignees,omitempty"`
 	Watchers  []string `json:"watchers,omitempty"`
+	// Team is the team the task is assigned to (tem_…, --assign @team) and
+	// TeamHandle its current @handle (devco:J-13: show printed neither, so
+	// nobody could see who owns a team task).
+	Team       string `json:"assigned_team,omitempty"`
+	TeamHandle string `json:"assigned_team_handle,omitempty"`
 	// Checklist is the live checklist (7.3).
 	Checklist []ChecklistItemOut `json:"checklist,omitempty"`
 	// SLA is ok | at_risk | breached when the priority has an SLA (18.4);
@@ -325,6 +355,8 @@ type ListIn struct {
 
 // ViewIn is the input of the triage, someday and deferred views.
 type ViewIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Project string `json:"project,omitempty" flag:"project" desc:"only tasks of this project (prj_ id or name)"`
 	Repo    string `json:"repo,omitempty" flag:"repo" desc:"accepted for v0.1.17 scripts"`
 }
@@ -374,6 +406,13 @@ type ShowIn struct {
 	Signals bool `json:"signals,omitempty" flag:"signals" desc:"show the claim as seen now (holder, token prefix, expires, renewed_seq)"`
 	rowexpand.Flag
 }
+
+// RoutedStore implements the op package's StoreRouter (devco D-507):
+// --from/--store naming a store other than repo routes the show to that
+// store alone (wire routedStoreRead), so it reads from a plain folder or
+// the home folder as `task list --store <org>` does, and a name no store
+// answers to is refused there.
+func (in ShowIn) RoutedStore() string { return in.From }
 
 // ShowOut is the output of task.show.
 type ShowOut struct {

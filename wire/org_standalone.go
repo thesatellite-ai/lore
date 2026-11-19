@@ -28,10 +28,12 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/yamlfmt"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -55,7 +57,7 @@ const (
 	orgYAMLMode = 0o644 // committed: world-readable like every repo file
 	loreDirName = ".lore"
 	// hintNotAStore is v0.1.17's storeHintInit.
-	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in ~/.lore/config.yaml"
+	hintNotAStore = "make it a store with `lore store init --name <name> --url <url>`, or fix the url in <config>"
 	// hintEmptyStore: org create (and import) read the org entry a store
 	// suggests; a brand-new repo has none until it is a lore store.
 	hintEmptyStore = "the repo is empty: make it a lore store first with `lore store init --name <name> --url <url>`, then run this again"
@@ -210,11 +212,30 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if err != nil {
 		return opsorgcmd.Report{}, err
 	}
+	// D-532: a typed --remote in the alias spelling (git@<alias>:<owner>/<repo>.git)
+	// names the same repo as s.Remotes, which Remotes resolved; a remote that
+	// does not parse goes on as typed so PlanLink's refusal names it.
+	remote := in.Remote
+	if remote != "" {
+		if n, rerr := orgcfg.ResolveRemote(ctx, s.Dir, remote); rerr == nil {
+			remote = n
+		}
+	}
+	// devco D-626: --store in the alias spelling (git@<alias>:<owner>/<repo>.git)
+	// is the org's store of the github.com spelling; it was refused as "not
+	// one of <org>'s stores".
+	store := in.Store
+	if store != "" {
+		store = resolveRemoteURL(ctx, s.Dir, store)
+	}
 	plan, err := orgresolve.PlanLink(s.Config, orgresolve.LinkRequest{Entry: in.Org, ProjectID: s.ProjectID, Remotes: s.Remotes,
-		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: in.Store, Remote: in.Remote})
+		Folder: in.Project, Own: in.Own, Default: in.Default, StoreURL: store, Remote: remote})
 	if err != nil {
 		return opsorgcmd.Report{}, planLinkError(err)
 	}
+	org := s.Config.FindOrg(plan.Entry)
+	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
+	plan = followFolderStore(ctx, g, org, plan)
 	lines := linkPlanLines(plan)
 	if in.DryRun {
 		return opsorgcmd.Report{Lines: append(lines, "  --dry-run: nothing written")}, nil
@@ -222,8 +243,6 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if !yes {
 		return opsorgcmd.Report{Lines: lines, Ask: "Continue?"}, nil
 	}
-	org := s.Config.FindOrg(plan.Entry)
-	g := &orgcfg.GitLinks{Held: orgStoreHeld, Home: h.home, Config: s.Config, Now: h.wall(), Route: h.router()}
 	res, err := g.WriteLink(ctx, orgcfg.LinkWrite{Plan: plan, Signature: storeSignature(org), FolderProjectID: storeFolderProjectID,
 		NewMarker: func() ([]byte, error) {
 			m, merr := rowfs.NewMarker(h.wall()())
@@ -248,8 +267,30 @@ func (h *standaloneOrg) Link(ctx context.Context, in opsorgcmd.LinkIn, yes bool)
 	if res.CreatedFolder {
 		created = "created; "
 	}
-	lines = append(lines, linkDoneLine(plan, res.StoreURL, created+state), "  nothing was written to this repo")
+	lines = append(lines, linkDoneLine(plan, res.StoreURL, created+state), repoUntouchedLine(ctx, s.Dir))
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// followFolderStore points a plan made without --store at the store that
+// already holds its folder, as the write does (pickLinkStore), so every
+// line names the store the link goes to (devco:N-9: a client repo linked
+// to the client store read "internal notes default to <org store>").
+// When the stores cannot be read the plan stays; the write then says.
+func followFolderStore(ctx context.Context, g *orgcfg.GitLinks, org *orgconf.Org, plan orgresolve.LinkPlan) orgresolve.LinkPlan {
+	if plan.StoreExplicit || org == nil {
+		return plan
+	}
+	holder, err := g.LinkStore(ctx, plan)
+	if err != nil || holder == plan.StoreURL {
+		return plan
+	}
+	for _, sc := range org.Stores {
+		if n, nerr := repourl.NormalizeStore(sc.URL); nerr == nil && n == holder {
+			plan.StoreURL, plan.Branch = holder, sc.EffectiveBranch()
+			return plan
+		}
+	}
+	return plan
 }
 
 // linkPlanLines are the plan lines `lore org link` prints before it asks
@@ -262,6 +303,9 @@ func linkPlanLines(plan orgresolve.LinkPlan) []string {
 	var lines []string
 	if plan.Own {
 		lines = []string{fmt.Sprintf("This marks %s as one of %s's OWN repos: %s.", plan.Remote, plan.Entry, notes)}
+		if plan.OwnByPattern {
+			lines = append(lines, fmt.Sprintf("  (it matches %s's own: patterns, so the client leak guards stay off)", plan.Entry))
+		}
 	} else {
 		lines = []string{fmt.Sprintf("This marks %s as a CLIENT repo of %s: %s,", plan.Remote, plan.Entry, notes),
 			fmt.Sprintf("and the leak guards turn on for everyone in %s.", plan.Entry)}
@@ -308,7 +352,7 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 		if names := s.Config.OrgNames(); len(names) > 0 {
 			hint = "name one of the org entries: " + strings.Join(names, ", ")
 		}
-		return opsorgcmd.Report{}, errs.New(errs.NotFound, fmt.Sprintf("no org entry named %q in ~/.lore/config.yaml", in.Org)).WithHint(hint)
+		return opsorgcmd.Report{}, errs.New(errs.NotFound, fmt.Sprintf("no org entry named %q in "+lorehome.Shown()+"/config.yaml", in.Org)).WithHint(hint)
 	}
 	if s.ProjectID == "" {
 		return opsorgcmd.Report{}, errs.New(errs.NotProjectRoot, "no store links this repo: it has no project id (.lore/data/_meta.json) and no link names its remote").
@@ -355,8 +399,21 @@ func (h *standaloneOrg) Unlink(ctx context.Context, in opsorgcmd.UnlinkIn, yes b
 		state = "committed in the local clone; `lore sync` sends it"
 	}
 	lines = append(lines, fmt.Sprintf("✓ unlinked %s from %s (%d link(s) removed; %s)", s.ProjectID, org.Name, res.Removed, state),
-		"  nothing was written to this repo")
+		repoUntouchedLine(ctx, s.Dir))
 	return opsorgcmd.Report{Lines: lines}, nil
+}
+
+// repoUntouchedLine closes org link / unlink: the link lives in the store,
+// and no tracked file of the repo at dir changed. A client repo's link
+// installs lore's leak guard hook in the clone before the link runs, so
+// "nothing was written to this repo" right after the line saying so read
+// as a contradiction (devco D-597): the line names the hook when the clone
+// has it.
+func repoUntouchedLine(ctx context.Context, dir string) string {
+	if dir != "" && commitGuardInstalled(ctx, dir) {
+		return "  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks"
+	}
+	return "  no tracked file of this repo was written"
 }
 
 // storeSignature is the author of a store commit: the entry's identity
@@ -390,7 +447,7 @@ func storeFolderProjectID(store, branch, folder string) (string, error) {
 func linkError(err error) error {
 	switch {
 	case errors.Is(err, orgcfg.ErrNotAStore):
-		return errs.New(errs.NotAStore, err.Error()).WithHint(hintNotAStore)
+		return errs.New(errs.NotAStore, err.Error()).WithHint(strings.Replace(hintNotAStore, "<config>", lorehome.Shown()+"/config.yaml", 1))
 	case errors.Is(err, orgcfg.ErrStoreEmpty):
 		return errs.New(errs.NotAStore, err.Error()).WithHint(hintEmptyStore)
 	case errors.Is(err, orgcfg.ErrNoStoreBranch):
@@ -407,6 +464,9 @@ func linkError(err error) error {
 		// the refusal named both but no way on.
 		return errs.New(errs.InvalidInput, err.Error()).
 			WithHint("drop --store to link into the store that holds the folder, or pick another --project folder for this store")
+	case errors.Is(err, orgcfg.ErrAdminsOnlyLink):
+		return errs.New(errs.Refused, err.Error()).
+			WithHint("link the repo to a store every member uses (lore store list names the org's stores), or open the store to members first: lore org store audience --org <org> --url <url> --audience everyone --push --yes")
 	case errors.Is(err, orgcfg.ErrStoreRefused):
 		// The store answered and said no (a hook, branch protection): the
 		// git backend's remote refusal code (adapters/backend/git sync).

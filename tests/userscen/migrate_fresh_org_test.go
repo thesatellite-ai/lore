@@ -10,7 +10,8 @@ import (
 // TestMigrateFreshOrgNeedsNoPeriodStep (#22d): in a repo of an org that
 // 0.1.18 created (`lore org create`), `lore migrate run` has no
 // actor_periods step for the roster row org create wrote, and the
-// person's company period still reads from the roster.
+// person's company period is the open admin stint org create wrote
+// (devco P-5, D-327).
 func TestMigrateFreshOrgNeedsNoPeriodStep(t *testing.T) {
 	o := newOrgScen(t)
 	for _, args := range [][]string{{"migrate", "run", "--dry-run"}, {"migrate", "run", "--no-push"}} {
@@ -19,5 +20,5 @@ func TestMigrateFreshOrgNeedsNoPeriodStep(t *testing.T) {
 			t.Fatalf("lore %s in a fresh 0.1.18 org reports a period step:\n%s", strings.Join(args, " "), out)
 		}
 	}
-	o.app.MustLore("actor", "period", "list", "@mira").Says(t, "employee", "(from the roster: active/left_at)")
+	o.app.MustLore("actor", "period", "list", "@mira").Says(t, "apd_", "→ now", "employee", "admin")
 }

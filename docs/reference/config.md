@@ -165,7 +165,7 @@ This marks github.com/client/website as a CLIENT repo of agency: internal notes 
 and the leak guards turn on for everyone in agency.
   link: project prj_d431…313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
 ✓ github.com/client/website (prj_d431…313a) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 ```
 <!-- /example -->
 
@@ -268,7 +268,7 @@ The keys of one `setups:` entry:
 | `agent_details` | `internal` | where agent work notes go in a client repo: `internal` keeps them in the agency's store, `client` writes them to the client repo |
 | `live`, `lease`, `agents`, `merge_check` | the top-level values | the same blocks as at the top level, for this org only |
 
-**Repo patterns.** A pattern is a repo address with `*` for exactly one part of the path and `**` for any number of parts. `github.com/client/*` matches `github.com/client/website` but not `github.com/client/web/site`; `github.com/client2/**` matches every repo under `client2`. The host (`github.com`) may not be a wildcard, `**` may appear once, and a part is either plain text or a whole wildcard (`web*` is refused). You can also paste a full remote URL as an exact pattern.
+**Repo patterns.** A pattern is a repo address with `*` for exactly one part of the path and `**` for any number of parts. `github.com/client/*` matches `github.com/client/website` but not `github.com/client/web/site`; `github.com/client2/**` matches every repo under `client2`. Inside a part `*` is any run of characters that stays in that part: `github.com/client/web-*` matches `web-shop` and `web-api`, `github.com/client/*-api` matches `shop-api`. The host (`github.com`) may not hold a wildcard, `**` may appear once and only as a whole part (`web**` is refused), and when a client pattern and an own pattern both match a repo, the client pattern wins. You can also paste a full remote URL as an exact pattern.
 
 ### Reaching stores through your own ssh alias (`access:`)
 
@@ -321,7 +321,7 @@ A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 | Key | Default | What it means |
 |---|---|---|
 | `live.max_age` | `7d` | an open live row is copied to `main` once it is this old, and again every 7 days while it still differs |
-| `live.fetch_ttl` | `5m` | lore fetches once per command, cached 5 minutes for a read and at most 60 seconds for a write (the repo and every store, the org stores at the same time): a command skips the fetch when the last one is younger than this. `lore sync` always fetches |
+| `live.fetch_ttl` | `5m` | lore fetches once per command, cached 5 minutes for a read and at most 60 seconds for a write (the repo and every store, the org stores at the same time): a command skips the fetch when the last one is younger than this. `lore sync` always fetches, once per remote |
 | `live.autopush` | `false` | unset or `false`: live writes stay on your machine until you run `lore sync` or your own `git push` (which sends them), and lore fetches only then; lore says so once per repo. `true`: push each live write at once (lore says once per repo how to turn it off). Claims, releases and holds always reach the remote at once unless this is set to `false`. Either way, finished rows land on `main` only on `lore sync`, `lore land` or your own `git push` |
 | `live.compact_after` | `1000` | how many commits the live list may collect before lore squeezes it into one |
 | `live.remote` | `origin` | the git remote that holds the live rows |
@@ -329,8 +329,8 @@ A bad entry is `E_CONFIG_INVALID` naming `context.profiles`.
 | `lease.ttl` | `20m` | how long a claim lasts without a renewal (a heartbeat) |
 | `lease.renew_every` | `5m` | how often an agent renews its claim; must be shorter than `ttl` |
 | `lease.grace` | `2m` | extra time after a claim runs out before others may take the task |
-| `lease.push_retries` | `5` | how many times lore retries a push the remote turned down |
-| `agents.max_claims_per_agent` | `1` | how many tasks one agent may hold at once |
+| `lease.push_retries` | `5` | the fewest times lore retries a coordination push (claim, hold, release) that lost the race to another writer; past that it keeps retrying, with random exponential waits, for about 15 seconds in all, so a burst of many agents on one queue gets through |
+| `agents.max_claims_per_agent` | `1` | how many tasks one agent session may hold at once; for a person it counts per worktree, so a worktree per task holds one claim each. The cap is the team policy of the same name (`lore policy set --key agents.max_claims_per_agent --value 3`, default 1); this setting may only lower it, and a value above the team's cap is ignored |
 | `agents.max_attempts` | `3` | how many agents may try a task before it is marked `blocked` |
 | `merge_check.adapter` | `none` | `none` learns about merges from commits only; `github` also asks the `gh` tool about merged pull requests |
 | `link_index.max_age` | `1h` | how old the saved list of linked client repos may be when the store cannot be reached; past it lore still attaches the folders the saved list names, so reads show the rows fetched last, but a write that needs to know whether this is a client repo is refused until a sync |
@@ -351,7 +351,7 @@ Kinds that are live by default (the keys are table names, as in `live.defaults.m
 ```console
 # alice, in website
 $ lore config check
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029); orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org>; orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
   hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 ```
@@ -474,7 +474,7 @@ The marker at the top of a store repo. Its presence is what makes a repo a store
 # alice, in website
 $ LORE_ORG=agency lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_c0f3…b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_c0f3…b5b8) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ cat .lore/stores.yaml
 stores:
     - name: agency
@@ -486,7 +486,7 @@ stores:
 
 ## `<org_folder>/lore-org.yaml`
 
-The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh --org <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file.
+The org entry a team suggests to its members, kept in the store's org folder. It never holds a person's identity. `lore org import` copies it into your `~/.lore/config.yaml` and adds your identity; `lore org refresh --org <org>` copies `stores`, `own`, `repos` and `defaults` again when the team changed the file (a key the file no longer has is removed from your entry). lore also reads `defaults.client_repos` from it every time, and the team's value wins over a looser one in your own file. An admin changes the patterns with a command instead of editing the file: `lore org config get --org <org>` prints `own`, `repos` and `stores`, plus a note for each `own` pattern that also matches `repos` entries (`own github.com/acme/* overlaps 65 repos entries (…); repos entries win (client), whether exact or a pattern`; `lore store doctor` prints the same note under the org's store), and `lore org config set --org <org> --key repos --add 'github.com/acme/client-*' --yes` (or `--key own`; `--remove <pattern>`, or `--value` repeated for the whole list) commits the change in the org store's clone (`--push` sends it now; without it the line names `lore store push --store <store-url>`, which sends it later from any folder) and copies it into this machine's entry at once; teammates get it at their next `lore org refresh`. Stores have their own commands (`lore org store add`, `remove`, `audience`).
 
 | Key | What it means |
 |---|---|
@@ -501,7 +501,7 @@ v0.1.17 could point a project at a database somewhere else, shared by several pr
 
 | Key | Default | What it means |
 |---|---|---|
-| `db_path` | required | where the shared database is. You may write `${HOME}`, `${LORE_HOME}` (the value of `LORE_HOME`, else `~/.lore`) and `${PROJECT_ROOT}` (this project's folder). A `..` part is refused unless `LORE_ALLOW_DB_PATH_OUTSIDE=1` |
+| `db_path` | required | where the shared database is. You may write `${HOME}`, `${LORE_HOME}` (lore's home: `LORE_HOME`, else `~/.lore`; `LORE_V017_HOME` overrides it here only) and `${PROJECT_ROOT}` (this project's folder). A `..` part is refused unless `LORE_ALLOW_DB_PATH_OUTSIDE=1` |
 | `project_id` | required | which project inside that database this folder is |
 
 ## Your settings (`lore config`)
@@ -532,7 +532,7 @@ not set
 - `1d12h` is refused; write `36h`.
 - `personal.push`, `push_every`, `compact` and `compact_after` apply to your personal store only. An org store keeps its own in its `lore-store.yaml`, set by the org admin with `lore store set`.
 - An ssh alias of yours in lore-org.yaml or `.lore/stores.yaml` works on your machine only: teammates cannot reach the store. Put the canonical url there and the alias in your own `access:`; `lore doctor` names every such url.
-- `LORE_HOME` does not move `~/.lore`: lore always keeps its config (your identity included) and caches under `~/.lore` in your home folder. `LORE_HOME` only fills in `${LORE_HOME}` in `db_path`.
+- `LORE_HOME` moves lore's whole home (`~/.lore`): config (your identity included), store clones, caches and state all go there, and `${LORE_HOME}` in `db_path` is that folder. To point `${LORE_HOME}` in `db_path` at another folder without moving the home, set `LORE_V017_HOME` for the `lore migrate run`.
 
 ## Related
 

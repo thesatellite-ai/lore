@@ -183,6 +183,18 @@ const (
 	// project still on an older format (decision D13: only lore migrate
 	// run raises a project's format).
 	FormatOld Code = "E_FORMAT_OLD"
+	// Detached refuses a write meant for a branch layer while the code
+	// repo's HEAD is detached (CI, bisect): there is no code branch to file
+	// it under (BRANCH_LAYERS 5, step 0).
+	Detached Code = "E_DETACHED"
+	// LandConflict stops `lore branch land` (or a layer merge) when the
+	// branch and the store branch changed the same free text of one row:
+	// nothing is committed, the layer is untouched (BRANCH_LAYERS 9).
+	LandConflict Code = "E_LAND_CONFLICT"
+	// LayerStale refuses a write on a code branch whose open layer belongs
+	// to an older branch of the same name (its split commit is not in this
+	// branch): the old layer is landed or dropped first (BRANCH_LAYERS 7).
+	LayerStale Code = "E_LAYER_STALE"
 	// PushAgain stops a `git push` once because lore's pre-push hook added
 	// a commit to the pushed branch (rows that finished in live land with
 	// the person's push): nothing is wrong with the input, the same push
@@ -276,10 +288,6 @@ const (
 	InviteUsed Code = "E_INVITE_USED"
 	// InviteEmail: the identity email is not the invite's email.
 	InviteEmail Code = "E_INVITE_EMAIL"
-	// StoreNoAccess: the read probe was refused (auth or not found), not a network failure.
-	StoreNoAccess Code = "E_STORE_NO_ACCESS"
-	// StoreNoWrite: the dry-run push was refused (ONB 4.4).
-	StoreNoWrite Code = "E_STORE_NO_WRITE"
 	// FixRefused: a fix argv failed re-validation before it would run (ONB 5.3).
 	FixRefused Code = "E_FIX_REFUSED"
 	// SkillLinked: lore skill install found the tool's skill folder (or a
@@ -287,6 +295,11 @@ const (
 	// binary's skill; lore never writes through a link into a folder it does
 	// not own unless told how (--link replace|update).
 	SkillLinked Code = "E_SKILL_LINKED"
+	// GitMissing: no git program on PATH. Every store and live row goes
+	// through git, so the fix is the person's (install it, or put its
+	// folder on PATH), never a bug report (devco:U-5: it was E_INTERNAL
+	// with a hint naming a way to "pass its path" that does not exist).
+	GitMissing Code = "E_GIT_MISSING"
 )
 
 // Def is the registry entry of one code: everything a surface needs to print
@@ -384,7 +397,7 @@ var table = map[Code]entry{
 	Date:                  {class: ClassBadInput, desc: "a date phrase lore does not understand or that is ambiguous; give e.g. 2026-11-13, tomorrow, next mon, in 3 days"},
 	Recur:                 {class: ClassBadInput, desc: "a recurrence rule lore does not understand; give e.g. every week, every month on last, every! 3 days, … until 2027-03-31"},
 	Template:              {class: ClassRefused, desc: "a task template is invalid or its arguments are missing or unknown"},
-	OpenItems:             {class: ClassRefused, desc: "done of a task with unticked checklist items without --tick-all or --force (TSQ14)"},
+	OpenItems:             {class: ClassRefused, desc: "done of a task with unticked checklist items without --tick-all or --force"},
 	DurationBad:           {class: ClassBadInput, desc: "a duration lore does not accept (0, negative, a day unit); give e.g. 45m, 1h30m, 1.5h"},
 	TimeTooLong:           {class: ClassBadInput, desc: "a manual time entry over time.max_entry (default 24h); split it into one entry per day"},
 	UpgradePermission:     {class: ClassUpgrade, desc: "the folder of the lore binary is not writable; run `sudo lore upgrade`"},
@@ -401,10 +414,10 @@ var table = map[Code]entry{
 	StoreLocked:           {class: ClassRefused, desc: "the store lock stayed held past store.lock_timeout"},
 	Unauthorized:          {class: ClassUnauthorized, desc: "the request has no valid token"},
 	ResourceInvalid:       {class: ClassBadInput, desc: "a value or field does not fit the kind"},
-	ResourcePlace:         {class: ClassRefused, desc: "the place is not allowed by resources.allowed_in, or --to me (RQ2)"},
-	ResourceName:          {class: ClassBadInput, desc: "a kind, field or resource name breaks its format, is reserved, or looks like a credential (RES 3.1)"},
-	ResourceType:          {class: ClassBadInput, desc: "field retype found values that do not fit the new type (RES 3.14)"},
-	ResourceKindMismatch:  {class: ClassBadInput, desc: "merge across resource kinds (RES 3.6)"},
+	ResourcePlace:         {class: ClassRefused, desc: "the place is not allowed by resources.allowed_in, or --to me"},
+	ResourceName:          {class: ClassBadInput, desc: "a kind, field or resource name breaks its format, is reserved, or looks like a credential"},
+	ResourceType:          {class: ClassBadInput, desc: "field retype found values that do not fit the new type"},
+	ResourceKindMismatch:  {class: ClassBadInput, desc: "merge across resource kinds"},
 	ResourceAmbiguous:     {class: ClassAmbiguous, desc: "a bare resource name matches rows at two levels or in two kinds"},
 	ResourceTaken:         {class: ClassRefused, desc: "that resource name is already used at this level (archived and trashed rows included)"},
 	ResourceArchived:      {class: ClassRefused, desc: "a new ref to an archived resource; ref its replaced_by or another resource (archive is one way)"},
@@ -439,6 +452,9 @@ var table = map[Code]entry{
 	MigrateLocked:         {class: ClassMigrate, desc: "the team migration lock is held elsewhere"},
 	PortInUse:             {class: ClassRefused, desc: "the --port is held by another program (or another lore api / setup page); pick another --port, or --port 0 for a free one"},
 	PushAgain:             {class: ClassRefused, desc: "lore's pre-push hook added a commit of finished live rows to the branch being pushed, so this push stopped once; run the same git push again (it sends that commit too)"},
+	Detached:              {class: ClassRefused, desc: "the code repo's HEAD is detached, so a write meant for a branch layer has no code branch; check out a branch, or run the command with LORE_LAYER=off in front to write to the shared notes (an add or edit also takes --no-layer)"},
+	LandConflict:          {class: ClassRefused, desc: "the branch and the store branch changed the same text of a row; nothing was landed; settle the rows named, then land again"},
+	LayerStale:            {class: ClassRefused, desc: "an open branch layer of that name belongs to an older branch (a reused name); land or drop it first (lore branch land|drop --branch <b>)"},
 	FormatOld:             {class: ClassMigrate, desc: "the project is on an older lore format; only lore migrate run upgrades it, and this lore writes nothing there until then"},
 	MigrateRollbackLoses:  {class: ClassMigrate, desc: "rolling back the migration would lose changes made after it; nothing was changed"},
 	URLUserinfo:           {class: ClassBadInput, desc: "a URL value holds credentials"},
@@ -476,9 +492,8 @@ var table = map[Code]entry{
 	InviteRevoked:         {class: ClassRefused, desc: "the invite was revoked; ask the inviter"},
 	InviteUsed:            {class: ClassRefused, desc: "the invite was already used by another person; ask the inviter for a new one"},
 	InviteEmail:           {class: ClassBadInput, desc: "the invite is for another email; use that address or ask for a new invite"},
-	StoreNoAccess:         {class: ClassRefused, desc: "the store refused this GitHub account or key; ask the owner for access, or check the key (lore doctor --setup <name>)"},
-	StoreNoWrite:          {class: ClassRefused, desc: "the store can be read but not written with this account; ask for push access or attach it --read-only"},
 	FixRefused:            {class: ClassBadInput, desc: "a fix command failed re-validation and was not run"},
+	GitMissing:            {class: ClassRefused, desc: "no git program on PATH; install git, or put the folder that holds it on PATH"},
 	SkillLinked:           {class: ClassRefused, desc: "the tool's skill folder is a symbolic link to a folder that does not hold this lore's skill; choose --link replace (lore's own copy replaces the link) or --link update (write into the link's target)"},
 }
 

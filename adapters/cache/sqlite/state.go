@@ -373,3 +373,48 @@ func quarFingerprint(base string, quar map[string]resquar.Field) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+// current is the state the file holds now, read inside tx, for a write
+// that uses the typed tables (devco:D-667).
+//
+// Why: c.st is the table set this handle last built or checked, and
+// another handle on the same file can change that set since: a second
+// source opened at the same place in this process (a repo linked with
+// `--project org` names the org folder twice), or another lore process
+// (two agents at once). A kind row that came or went through that handle
+// creates or drops a res_<kind> table this handle still names, and its
+// next write failed E_INTERNAL "no such table". When the recorded tables
+// differ from c.st, the state is built again from `_rows` and the file
+// brought in line (the same work an open does); the caller stores the
+// result in c.st once its transaction commits.
+func (c *Cache) current(ctx context.Context, tx *sql.Tx) (state, error) {
+	have, err := readRecorded(ctx, tx)
+	if err != nil {
+		return state{}, err
+	}
+	if sameTables(have, c.st) {
+		return c.st, nil
+	}
+	st, err := c.loadState(ctx, tx)
+	if err != nil {
+		return state{}, err
+	}
+	if err := c.syncTables(ctx, tx, st); err != nil {
+		return state{}, err
+	}
+	return st, nil
+}
+
+// sameTables reports whether the recorded tables are exactly st's plans,
+// each with its fingerprint (initRead's check of a current file).
+func sameTables(have map[string]recorded, st state) bool {
+	if len(have) != len(st.plans) {
+		return false
+	}
+	for name, p := range st.plans {
+		if rec, ok := have[name.String()]; !ok || rec.fingerprint != p.fingerprint {
+			return false
+		}
+	}
+	return true
+}

@@ -11,12 +11,13 @@ import "testing"
 func TestCompileRefusesV017Matrix(t *testing.T) {
 	for _, b := range []string{
 		"",
-		"github.com",         // no path
-		"*/acme/app",         // wildcard host matches every company
-		"**/app",             // same
-		"github.com/acme*/x", // partial wildcard
-		"github.com/**/a/**", // two **
-		"github.com//app",    // empty segment
+		"github.com",          // no path
+		"*/acme/app",          // wildcard host matches every company
+		"**/app",              // same
+		"github.com/acme**/x", // ** inside a segment
+		"git*b.com/acme/x",    // a wildcard in the host
+		"github.com/**/a/**",  // two **
+		"github.com//app",     // empty segment
 	} {
 		if _, err := Compile(b); err == nil {
 			t.Errorf("Compile(%q) accepted, want error", b)

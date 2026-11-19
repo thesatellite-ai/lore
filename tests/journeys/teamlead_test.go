@@ -260,13 +260,23 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		// (owner decision 7: one clone pushes every folder at once). The
 		// code repo attaches the org's folders only (D-6: the team step
 		// writes no .lore/stores.yaml entry), so here the project folder is
-		// the org's name, printed with its own name first (B-9).
-		holder := tlOrg + "/" + tlProject + " (here: " + tlOrg + ")"
+		// the org's name, printed by its own name only (B-9, D-567).
+		holder := tlOrg + "/" + tlProject
 		heldLine := "held: waiting on " + tlOrg + "'s conflict (" + ruleID + ")"
 		if n := strings.Count(r.Out(), "refused 1"); n != 1 {
 			t.Errorf("sync reports the conflict %d times, want once under %s:\n%s", n, holder, r)
 		}
-		r.Says(t, "store "+holder+": sent 0, received 0, merged 0, refused 1", "store "+tlOrg+"/org: "+heldLine)
+		// The rows that did not clash go out while the clashing one waits
+		// (devco O-5): Ann's first edit in the project folder also writes
+		// her actor row there, so when she is the one refused her line
+		// says that row was pushed; Lee's actor row is already on the
+		// remote, so his line says only the refusal (devco D-281).
+		refusedOnly := "store " + holder + ": refused (sent 0, received 0, merged 0, refused 1)"
+		sentActor := "store " + holder + ": pushed (sent 1, received 0, merged 0, refused 1)"
+		if !strings.Contains(r.Out(), refusedOnly) && !strings.Contains(r.Out(), sentActor) {
+			t.Errorf("sync names the conflict's store as neither %q nor %q:\n%s", refusedOnly, sentActor, r)
+		}
+		r.Says(t, "store "+tlOrg+"/org: "+heldLine)
 		st := tt.lore(loser, "sync", "status").OK(t).Says(t, ruleID, "edit the row here so both agree")
 		st.Never(t, "push rule", "store "+tlOrg+"/org: E_STALE")
 		st.Says(t, "refused pushes:   1", "store "+holder+": E_STALE", "held pushes:      1",
@@ -341,6 +351,11 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 		tlApply(t, ann, dir, tlTeamSetup, "kind", map[string]any{"kind": "admin", "name": tlTeamSetup})
 		tlApply(t, ann, dir, tlTeamSetup, "team", map[string]any{"org": tlOrg, "store_url": tt.store.SSHURL()})
 		tt.lore(tlAnn, "setup", "list").OK(t).Says(t, tlTeamSetup, "admin", tlOrg)
+		// R-6: the roster says who is admin, not a local setup: Lee (the
+		// admin) gives Ann the admin role before he hands over
+		tt.lore(tlLee, "actor", "period", "edit", "@ann", "--org-role", "admin", "--yes").OK(t)
+		tt.lore(tlLee, "sync").OK(t)
+		tt.lore(tlAnn, "sync").OK(t)
 		// Lee hands over and leaves the team.
 		tt.lore(tlAnn, "actor", "offboard", "@lee", "--reason", "moved to another team", "--yes").OK(t).Says(t, "left")
 		tt.lore(tlAnn, "sync").OK(t) // C5: the offboard reaches the team with Ann's sync

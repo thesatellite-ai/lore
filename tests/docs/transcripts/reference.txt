@@ -1,8 +1,8 @@
 
 ### an error
 alice (work)$ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 
 ### errors with json
@@ -10,8 +10,8 @@ alice (work)$ lore rule list --json
 {
   "error": {
     "code": "E_NOT_A_STORE",
-    "message": "git: the folder is not inside a git work tree",
-    "hint": "cd into a git checkout, or run git init here first",
+    "message": "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read",
+    "hint": "name the store with --store \u003corg\u003e[/\u003cfolder\u003e] or a setup with --setup \u003csetup\u003e; lore store list and lore setup list show them, or cd into a repo",
     "exit": 19,
     "class": "guard",
     "retryable": false,
@@ -127,7 +127,7 @@ lease:
 merge_check:
   adapter: gitlab
 alice (work/website)$ lore config check
-ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org> (TEAM-029); orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
+ERROR: [E_CONFIG_INVALID] ~/.lore/config.yaml is not valid: lease: renew_every: must be shorter than ttl, or every claim expires before it is renewed; merge_check: adapter "gitlab": must be "none" or "github"; orgs[0] "Agency": name: use lowercase letters, digits, '.' or '-', starting with a letter or digit; orgs[0] "Agency": identity.key "alice@agency.example": must be human:<your email in that org>; orgs[0] "Agency": stores[0].branch "team/staging": a store branch may not contain "/" (refs/lore/live/<branch> must never clash with another branch)
   hint: fix the problems listed; nothing else in lore reads an invalid config
 (exit 20)
 
@@ -153,8 +153,8 @@ ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row f
   hint: run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 alice$ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 alice$ cd work/website && lore rule list
 rul_54fe984c9b495744c0217776765a28f2 [must/always] Run the tests before you push
@@ -184,7 +184,7 @@ alice (work/website)$ git fetch -q origin && git log --oneline origin/develop -2
 601d285 lore: init
 
 ### no work
-alice (work/landing)$ lore task next --push
+alice (work/landing)$ lore task next --claim --push
 ERROR: [E_NO_WORK] nothing ready: no open task matches
   hint: lore task add makes a task; lore task list shows the open ones
 (exit 10)
@@ -204,10 +204,10 @@ orgs:
     repos: [github.com/client/*]
 alice (work/website)$ LORE_ORG=agency lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_c0f3c11a5724b0cfd74b256190d9b5b8) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ LORE_ORG=freelance lore store init --name freelance --url git@github.com:other/notes --yes
 lore store init: store clone ~/.lore/stores/other/notes: git user set to Alice <alice@example.com> (your identity in org freelance)
-✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) at git@github.com:other/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store freelance (sto_76bd560aff0771fab8457dbfa9823f10) on git@github.com:other/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 alice (work/website)$ cat .lore/stores.yaml
 stores:
     - name: agency
@@ -242,7 +242,7 @@ This marks github.com/client/website as a CLIENT repo of agency: internal notes 
 and the leak guards turn on for everyone in agency.
   link: project prj_d4314eba822f1bf5908b2b8ded5f313a at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
 ✓ github.com/client/website (prj_d4314eba822f1bf5908b2b8ded5f313a) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 
 ### force org
 alice (work/website)$ LORE_ORG=freelance lore memory add --body 'The client pays invoices in 30 days'
@@ -370,9 +370,9 @@ ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 alice (work/website)$ lore memory add --to me --body 'I write short commit messages'
-lore: wrote ~/.lore/stores/_me/_store/actors/act_b4f4765e593d51fd1352985e8af3a5b0.json (store me)
-lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537f9b2f7de77bfe5ca958860216bbb.json (store me)
-✓ mem_2537f9b2f7de77bfe5ca958860216bbb [me]
+lore: wrote ~/.lore/stores/_me/_store/actors/act_2537f9b2f7de77bfe5ca958860216bbb.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/memories/mem_b69e8368dd4986838455061d5d9e5ed7.json (store me)
+✓ mem_b69e8368dd4986838455061d5d9e5ed7 [me]
   scope: [project]
 alice (work/landing)$ lore memory list
-mem_2537f9b2f7de77bfe5ca958860216bbb [retrieved] I write short commit messages [me]
+mem_b69e8368dd4986838455061d5d9e5ed7 [retrieved] I write short commit messages [me]

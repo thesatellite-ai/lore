@@ -64,7 +64,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if target, err = e.routeTable(target, def); err != nil { // P3-LOCAL-1
 		return Written{}, err
 	}
-	st, err := e.writable(target)
+	st, err := e.writable(ctx, target)
 	if err != nil {
 		return Written{}, err
 	}
@@ -80,6 +80,7 @@ func (e *Engine) create(ctx context.Context, target store.Source, table row.Tabl
 	if err = e.checkRefs(ctx, target, def, typed, names); err != nil {
 		return Written{}, err
 	}
+	e.fillCreator(ctx, target, def, typed, e.actorOf(cl))
 	if pin.IsZero() { // FB-RES-1: an id pinned on ctx (WithCreateID)
 		if p, ok := createIDOf(ctx, def.Prefix); ok {
 			pin = p
@@ -273,7 +274,7 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 // as the last commit holds it.
 func (e *Engine) updateFrom(ctx context.Context, src store.Source, cur row.Row, patch map[string]value.Value) (Written, error) {
 	cl := e.callOf(ctx)
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}
@@ -556,7 +557,7 @@ func (e *Engine) Delete(ctx context.Context, ref Ref) (Written, error) {
 	if err = refuseActorDelete(cur); err != nil {
 		return Written{}, err
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}
@@ -631,7 +632,7 @@ func (e *Engine) writeRemove(ctx context.Context, roots []ids.AnyID, plan delete
 		isRoot[r] = true
 	}
 	for name := range plan.byStore {
-		st, err := e.writable(name) // check every store before writing any
+		st, err := e.writable(ctx, name) // check every store before writing any
 		if err != nil {
 			return Written{}, err
 		}
@@ -646,7 +647,7 @@ func (e *Engine) writeRemove(ctx context.Context, roots []ids.AnyID, plan delete
 		if len(steps) == 0 {
 			continue
 		}
-		st, err := e.writable(name)
+		st, err := e.writable(ctx, name)
 		if err != nil {
 			return Written{}, err
 		}
@@ -916,11 +917,36 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 	}
 	names := e.lookupStores(table) // P3-LOCAL-1: a machine-local table is looked up in the machine store only
 	if ref.Store != "" && !e.IsMachineLocal(table) {
-		if _, err := e.attached(ref.Store); err != nil {
+		at, err := e.attached(ref.Store)
+		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		names = []store.Source{ref.Store}
+		// the attached name, not ref.Store: `repo` resolves to the store
+		// answering for it (WithRepoAlias), which e.stores holds by its own
+		// name (a store-only open outside a repo, devco D-422)
+		names = []store.Source{at.Name}
+	} else if n := narrowOf(ctx); n != nil && !e.IsMachineLocal(table) {
+		// D-617: under --store the named stores are searched first, so a
+		// row with a copy there (the caller's actor is in every store) is
+		// that copy; only a row they lack is looked for elsewhere, which
+		// the narrowing then refuses naming where it is (narrow.go); a
+		// tombstone there (a moved row) is no copy either
+		if named := slices.DeleteFunc(slices.Clone(names), func(s store.Source) bool { return !slices.Contains(n.Sources, s) }); len(named) > 0 {
+			src, r, hidden, err := e.locateIn(ctx, named, table, ref.ID)
+			if err == nil && !r.Deleted {
+				return src, r, hidden, nil
+			}
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
+				return "", row.Row{}, false, err
+			}
+		}
 	}
+	return e.locateIn(ctx, names, table, ref.ID)
+}
+
+// locateIn is locateRaw's search of the stores names, in order.
+func (e *Engine) locateIn(ctx context.Context, names []store.Source, table row.Table, id ids.AnyID) (store.Source, row.Row, bool, error) {
+	ref := Ref{Table: table, ID: id}
 	var found []copyHit
 	seen := map[string]bool{} // Locations already looked in: one place counts once
 	for _, name := range names {
@@ -941,7 +967,7 @@ func (e *Engine) locateRaw(ctx context.Context, ref Ref) (store.Source, row.Row,
 		if err != nil {
 			return "", row.Row{}, false, err
 		}
-		found = append(found, copyHit{src: name, row: e.readRow(ctx, got), hidden: res})
+		found = append(found, copyHit{src: name, row: e.readRow(ctx, name, got), hidden: res})
 	}
 	if len(found) == 0 {
 		return "", row.Row{}, false, errs.Wrap(errs.NotFound, "no row "+ref.ID.String(), store.ErrNotFound)
@@ -988,13 +1014,30 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	for i, h := range live {
 		parts[i] = string(h.src)
 	}
+	return copyHit{}, AmbiguousIDErr(id.String(), parts)
+}
+
+// AmbiguousIDErr is the E_AMBIGUOUS_ID refusal of an id held live in two
+// or more places (in precedence order, at least two): every place by name,
+// a `lore show --id … --store <place>` read for each, and the row move
+// that settles copies of one row. One wording for every lookup by id: the
+// engine's (pickCopy) and the outside-a-repo folder scan (wire), which
+// before devco D-689 answered the first folder holding the id.
+func AmbiguousIDErr(id string, places []string) error {
 	// B1-5: the old hint ("name the store with --to") named a flag show,
 	// edit and migrate run do not take. row move does, and settles it: a
 	// move into a store that already holds the row only leaves a tombstone
 	// where the other copy was (Move, interrupted-move rule).
-	keep := parts[len(parts)-1]
-	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")+": two live copies of one row").
-		WithHint("keep one copy: `lore row move --id " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+	keep := places[len(places)-1]
+	// devco D-689: an id that repeats across folders (a natural id an older
+	// lore derived without the folder) is two rows, not two copies; the
+	// hint first says how to read each one, by its place
+	reads := make([]string, len(places))
+	for i, p := range places {
+		reads[i] = "`lore show --id " + id + " --store " + p + "`"
+	}
+	return errs.New(errs.AmbiguousID, id+" is in "+strings.Join(places, " and ")+": two live rows with one id").
+		WithHint("read each with " + strings.Join(reads, " or ") + "; if they are copies of one row, `lore row move --id " + id + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
 }
 
 // newestCopy is the copy an unqualified actor ref means when several
@@ -1040,7 +1083,7 @@ func (e *Engine) put(ctx context.Context, st Attached, r row.Row, expect hlc.HLC
 	if err != nil {
 		return stored{}, err
 	}
-	changes := []store.Change{{Row: sr, Expect: expect}}
+	changes := []store.Change{{Row: sr, Expect: expect, Upkeep: store.SupportingRefreshFrom(ctx)}}
 	out := stored{row: r, doc: sr}
 	for _, x := range extra {
 		if err := e.refuseNeverClient(st, x.Table); err != nil {
@@ -1167,10 +1210,10 @@ func (e *Engine) finishW(ctx context.Context, source store.Source, rows []store.
 	e.openMu.Unlock()
 	cur, err := e.cache.Cursor(ctx, source)
 	if err != nil {
-		return nil, err
+		return nil, cacheFailed(rows, err)
 	}
 	if err := e.cache.Apply(ctx, source, rows, cur); err != nil {
-		return nil, err
+		return nil, cacheFailed(rows, err)
 	}
 	j, _ := e.stores[source].Backend.(store.AuditJournal)
 	mine := make(map[store.Key]hlc.HLC, len(rows))
@@ -1267,8 +1310,34 @@ func (e *Engine) auditView(ctx context.Context, source store.Source, ev Event) E
 // (cl-wire: the cause was hidden, also under --json).
 func auditFailed(id ids.AnyID, cause error) error {
 	code := errs.CodeOf(cause)
-	return errs.Wrap(code, "the row "+id.String()+" is stored but its audit record failed: "+cause.Error(), cause).
+	e := errs.Wrap(code, "the row "+id.String()+" is stored but its audit record failed: "+cause.Error(), cause).
 		WithHint("do not rerun the write (it would store the row again); fix the cause, then check `lore audit verify`")
+	e.Written = true // devco:U-7: a recoding hook keeps this text
+	return e
+}
+
+// cacheFailed is the error of rows stored whose cache update failed (a
+// full disk under the cache, devco:U-7): the row files and their audit
+// journal are written, so the message says so and the hint says not to
+// rerun; the next command reads the rows from their files into the cache
+// (the cursor is behind them). Before, the bare cache error became
+// E_DISK_FULL "nothing was changed" and the retry it asked for stored a
+// duplicate row.
+func cacheFailed(rows []store.Row, cause error) error {
+	what := "the rows of this write are"
+	if len(rows) == 1 {
+		what = "the row " + rows[0].ID.String() + " is"
+	}
+	reason := cause.Error()
+	var le *errs.Error
+	if errors.As(cause, &le) && le.Message != "" {
+		reason = le.Message // the reason without its "[E_…]" prefix
+	}
+	code := errs.CodeOf(cause) // the reason is in the message above, not hidden
+	e := errs.Wrap(code, what+" written, but the cache could not be updated ("+reason+")", cause).
+		WithHint("do not rerun the command (it would store the row again); fix the cause (a full disk: free some space, df -h, df -i) and the next lore command catches the cache up")
+	e.Written = true
+	return e
 }
 
 // writePurge is WritePurge plus, when the backend can
@@ -1276,6 +1345,9 @@ func auditFailed(id ids.AnyID, cause error) error {
 // the tombstones and the purged ids (later 542): all land or none does.
 // Other backends get WritePurge and finishW records the audit after it.
 func (e *Engine) writePurge(ctx context.Context, st Attached, p Purger, changes []store.Change, purged []ids.AnyID, evs []Event) error {
+	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
+		return err // D-617: the run's first write lands where --store names (narrow.go)
+	}
 	dropSnapshot(ctx, st)
 	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write
 	pj, ok := st.Backend.(store.PurgeAuditJournal)
@@ -1308,6 +1380,9 @@ func (e *Engine) journalRecords(ctx context.Context, st Attached, evs []Event) (
 // (CLEANUP Qs). Other backends get a plain Write and finish records the
 // audit after it, as before.
 func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.Change, evs []Event) error {
+	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
+		return err // D-617: the run's first write lands where --store names (narrow.go)
+	}
 	ctx = withBatchTrailer(ctx) // XQ1: the commit names its bulk action
 	dropSnapshot(ctx, st)
 	defer dropSnapshot(ctx, st) // readsnap.go: the next read sees this write
@@ -1400,4 +1475,54 @@ func refuseActorDelete(r row.Row) error {
 	}
 	return errs.New(errs.Refused, "actor "+r.ID.String()+" cannot be deleted: actors are never deleted, every *_by field points at them").
 		WithHint(actorDeactivateHint)
+}
+
+// creatorField is the v0.1.17 column naming a row's creator (INTEG-AUDIT-1:
+// never caller-set; ops/internal/creator fills it when it can).
+const creatorField = "created_by_actor_id"
+
+// creatorColumnKey marks a ctx whose create keeps created_by_actor_id.
+type creatorColumnKey struct{}
+
+// WithCreatorColumn is ctx of an add op that keeps created_by_actor_id
+// (ops/internal/creator.Want): its creates fill the column (fillCreator).
+// Other writes leave it as v0.1.17 did; readers fall back to the
+// envelope's created_by.
+func WithCreatorColumn(ctx context.Context) context.Context {
+	return context.WithValue(ctx, creatorColumnKey{}, true)
+}
+
+// creatorWanted reports WithCreatorColumn.
+func creatorWanted(ctx context.Context) bool {
+	v, _ := ctx.Value(creatorColumnKey{}).(bool)
+	return v
+}
+
+// fillCreator sets created_by_actor_id to the writing actor, the same id
+// the envelope's created_by gets, on a create of an op that keeps the
+// column (WithCreatorColumn) and left it unset. devco D-439: the ops fill it only when the
+// actor row is already in this process's cache, so a first write into a
+// store or folder (its actor row staged in the same batch) or one racing
+// another process left it null (rule rows of a store built by an agent).
+// The ref is checked like any written ref: when no attached store holds
+// the actor's row (no identity, a store that keeps no actors) the column
+// stays unset rather than dangling.
+func (e *Engine) fillCreator(ctx context.Context, target store.Source, def schema.TableDef, typed map[string]value.Value, actor ids.ID[ids.Actor]) {
+	if actor.IsZero() || !creatorWanted(ctx) {
+		return
+	}
+	if _, set := typed[creatorField]; set {
+		return
+	}
+	if _, has := def.Field(creatorField); !has {
+		return
+	}
+	v, err := value.RefOf(actor.Any())
+	if err != nil {
+		return
+	}
+	typed[creatorField] = v
+	if e.checkRefs(ctx, target, def, typed, []string{creatorField}) != nil {
+		delete(typed, creatorField)
+	}
 }

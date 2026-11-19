@@ -57,6 +57,9 @@ type Purger interface {
 
 // MetaForgetIn is the input of meta.forget.
 type MetaForgetIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Keys    string `json:"keys" arg:"0" rest:"true" flag:"key" desc:"the unused keys to remove (names or mky_ ids, space separated)"`
 	Confirm bool   `json:"confirm,omitempty" flag:"confirm" desc:"required: forget removes the key rows for good"`
 	// Reason is the deleted_reason of the key rows: required while
@@ -269,7 +272,7 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 		return MetaLintOut{}, err
 	}
 	for _, r := range over {
-		add(MetaFinding{Key: "(registry " + place(store.Source(r.Store)) + ")",
+		add(MetaFinding{Key: "(registry " + o.place(store.Source(r.Store)) + ")",
 			Problem: fmt.Sprintf("%d key rows, past meta.max_keys_per_registry %d; new keys are refused there", r.Keys, r.Cap), Fix: registryCapHint})
 	}
 	slices.SortStableFunc(out.Data, func(a, b MetaFinding) int { return strings.Compare(a.Key+a.Row, b.Key+b.Row) })

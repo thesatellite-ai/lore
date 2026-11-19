@@ -106,7 +106,7 @@ func (a *App) migrateActorPeriods(ctx context.Context, dryRun bool) ([]string, i
 	if dryRun {
 		verb = "would write"
 	}
-	return []string{StepActorPeriods + ": " + verb + " " + strconv.Itoa(n) + " company period(s) from active/left_at in " + r.shown()}, n, nil
+	return []string{StepActorPeriods + ": " + verb + " " + strconv.Itoa(n) + " company period(s) from active/left_at in " + r.of()}, n, nil
 }
 
 // writeMigratedPeriod creates the period row of actor x in src.

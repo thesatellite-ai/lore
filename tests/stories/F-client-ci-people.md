@@ -56,3 +56,10 @@ Dev-company round 2, track F (plus the client-repo findings of track D). Replaye
 | D-96 | r2 D-17 | doctor DEGRADED forever after agent start | `TestStoryFPeople` step 6 |
 | D-98 | r2 F-15 | `--to <org>/<folder>` in a no-lore repo refused | `TestStoryFPeople` step 9; `TestJourneyTeamHandover` |
 | D-99 | r2 F-16 | second org's first commit has the first org's email | `TestStoryFPeople` step 10 |
+| D-428 | store test LF-5 | org link without --own makes a client-listed repo OWN, guards off | `TestJourneyLinkNeverWeakensGuards`; `TestLinkNeverWeakensGuards` |
+| D-429 | store test LF-4 | linked own repo: context empty, render refused, report 0 | `TestJourneyLinkedOwnRepoGetsItsNotes`; `TestContextReadsInternalStoresInOwnRepo` |
+| D-453 | store test bullet 15 | no command edits lore-org.yaml; `repos:` patterns take `*` only as a whole segment, so client repos are listed one by one | `TestJourneyOrgConfig` (`org config set --key repos --add '…/client-*'`, then a `client-*` repo is a client repo while an own `…/*` matches it too); `TestPatternStarInsideASegment`; `TestPartialPatternNeverTurnsClientOwn` |
+| D-430 | store test LF-16 | private render over its stated budget, trust and Source noise | `TestPrivateBudgetLineStatesTheRealLimit`; `TestPrivateRenderDropsNoise`; `TestJourneyLinkedOwnRepoGetsItsNotes` |
+| D-481 | store test 2 problem 3 | client repo: render --report showed a LORE.md row and --dry-run a LORE.md body that --yes never writes; lore context gave agents nothing of the linked folder | `TestJourneyRenderNoRepoFileAgrees` step 2; `TestContextReadsInternalStoresInOwnRepo`; `TestJourneyClientRepoStaysQuiet` |
+| D-482 | store test 2 item 4 | linked own repo with no .lore: render named only lore init, nothing said how a tool gets the private notes | `TestJourneyRenderNoRepoFileAgrees` step 3 |
+| D-494 | store test 2 item 4 (D-482 left) | repo with no .lore (own or client): pinned rules reached an agent only through the private file read by hand; sync left that file stale | `TestJourneySessionStartServesPinnedWithoutLoreMD` |

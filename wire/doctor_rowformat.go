@@ -6,6 +6,9 @@ package wire
 //	no v1 row of a migrated table           ──▶ nothing
 //	v1 rows, repo not migrated (no floor)   ──▶ note: run the migration once
 //	                                            everyone runs 0.1.18
+//	journal in its running phase (killed,   ──▶ warning (DEGRADED): the
+//	crashed, or running now), v1 rows or not    migration did not finish;
+//	                                            lore migrate run (or rollback)
 //	v1 rows, min_lore_version set, this     ──▶ note: the migration did not
 //	checkout's migration journal holds one      finish; run lore fix
 //	that did not finish (interrupted, rolled
@@ -15,6 +18,10 @@ package wire
 //	migrated
 //	format 1 (_meta.json) but _v: 2 files    ──▶ warning: a reverted migration
 //	or the signpost (E-7)                        (formats disagree); lore migrate run
+//	v1 rows, repo migrated, every v1 file    ──▶ note: they came from a branch
+//	last updated before _meta.json's            made before the migration
+//	migrated_at                                 (rebase, merge, cherry-pick);
+//	                                            lore fix --migrate
 //	v1 rows, repo migrated (min_lore_version ──▶ warning: a lore older than
 //	set; finished here, or no journal: a        0.1.18 still writes here
 //	teammate's checkout)
@@ -31,6 +38,14 @@ package wire
 // cause and the wrong fix; a migration this checkout knows did not finish
 // is named as such.
 //
+// devco K-3: a branch made before the migration and rebased, merged or
+// cherry-picked onto it brings its v1 files with it, written before the
+// migration by a lore that has since been upgraded; blaming "a lore older
+// than 0.1.18" sent the person to upgrade a machine that already runs the
+// new lore. Such files are told apart by time: each was last updated
+// before the migration (_meta.json migrated_at), while a lore 0.1.17 still
+// writing here stamps rows after it.
+//
 // Why: after a migration a _v: 1 file can only come from a machine still on
 // 0.1.17 (it commits past its hook, or from before the pull). That machine
 // cannot read the migrated files and cannot commit beside them, and the
@@ -40,11 +55,13 @@ package wire
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -61,7 +78,11 @@ const (
 	rowFormatAfterWarn  = "row files at _v: 1 after this repo's migration (min_lore_version %s): a lore older than 0.1.18 still writes here, cannot read the migrated rows and cannot commit beside them (%s)"
 	rowFormatAfterFix   = "upgrade lore on the machine that wrote them (lore upgrade), then run lore fix --migrate"
 	rowFormatLeftBefore = "row files an earlier lore migrate run left at _v: 1 (%s): this lore's migration rewrites them too"
+	rowFormatFromBranch = "row files at _v: 1 (%s) were last written before this repo's migration (%s), so they came from a branch made before it (a rebase, merge or cherry-pick of that branch), not from an older lore"
+	rowFormatBranchFix  = "lore fix --migrate" // upgrades exactly those files; commit them after
 	rowFormatUnfinished = "row files written by lore 0.1.17 (_v: 1) are not migrated yet (%s); the last migration of this repo did not finish or was rolled back (min_lore_version %s)"
+	// rowFormatInterrupted: the journal's line, what is left, the lock (O-2).
+	rowFormatInterrupted = "the migration of this repo did not finish: %s (%s; migration lock: %s)"
 )
 
 // rowFormatMixedOld is the warning of a repo on the lore 0.1.17 format
@@ -81,9 +102,72 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 	if err != nil {
 		return nil, err
 	}
+	// first: a run killed before it wrote _meta.json also looks like E-7
+	if f, ok := a.interruptedMigration(ctx, st); ok {
+		return []DoctorFinding{f}, nil
+	}
 	if f, ok := a.mixedOldFormat(ctx, st); ok {
 		return []DoctorFinding{f}, nil
 	}
+	// devco P-9: v1 rows in folders of an attached store that this repo
+	// does not attach are leftovers a migrate run converts, never "a lore
+	// older than 0.1.18"; named apart, with their own next step
+	var found []DoctorFinding
+	own, folders := splitUnattached(st.Pending)
+	if len(folders) > 0 {
+		found = append(found, DoctorFinding{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+			Message: fmt.Sprintf(rowFormatUnattached, strings.Join(folders, "; ")), Fix: rowFormatBeforeFix})
+	}
+	st.Pending = own
+	st.Places = slices.DeleteFunc(slices.Clone(st.Places), func(p opsmigrate.PlaceStatus) bool {
+		return slices.ContainsFunc(folders, func(l string) bool { return strings.HasPrefix(l, p.Place+" (") })
+	})
+	more, err := a.rowFormatOwn(ctx, st)
+	return append(more, found...), err
+}
+
+// rowFormatUnattached is the warning of v1 rows left in folders of an
+// attached store that no entry of this repo attaches.
+const rowFormatUnattached = "row files at _v: 1 in store folders this repo does not attach, left by a migration that converted only the attached folders: %s"
+
+// rowFormatStoreLeft is the warning of v1 rows of a migrated repo that sit
+// only in its attached stores (none in the repo's own files): rows of a
+// store an earlier run did not convert (attached after it, or skipped),
+// which lore migrate run rewrites; an older lore writing here would show
+// in the repo's files too.
+const rowFormatStoreLeft = "row files at _v: 1 (%s) in attached stores (%s), none in this repo's own files: a migration has not converted them yet"
+
+// v1StorePlaces names the places holding v1 rows when the repo's own place
+// holds none (nil when the repo has a v1 row, or no place has one).
+func v1StorePlaces(places []opsmigrate.PlaceStatus) []string {
+	var out []string
+	for _, p := range places {
+		if p.V1 == 0 {
+			continue
+		}
+		if p.Place == string(store.SourceRepo) {
+			return nil
+		}
+		out = append(out, p.Place+" "+plural(p.V1, "row"))
+	}
+	return out
+}
+
+// splitUnattached splits pending lines into the repo's attached places'
+// and the unattached folders' (statusUnattached).
+func splitUnattached(pending []string) (own, folders []string) {
+	for _, p := range pending {
+		if strings.Contains(p, unattachedTag) {
+			folders = append(folders, p)
+			continue
+		}
+		own = append(own, p)
+	}
+	return own, folders
+}
+
+// rowFormatOwn is the row_format finding of the attached places' v1 rows.
+func (a *App) rowFormatOwn(ctx context.Context, st opsmigrate.StatusOut) ([]DoctorFinding, error) {
 	if len(st.Pending) == 0 {
 		return nil, nil
 	}
@@ -100,8 +184,105 @@ func (a *App) DoctorRowFormat(ctx context.Context) ([]DoctorFinding, error) {
 		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorNote,
 			Message: fmt.Sprintf(rowFormatLeftBefore, pending), Fix: rowFormatBeforeFix}}, nil
 	}
+	if places := v1StorePlaces(st.Places); len(places) > 0 {
+		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+			Message: fmt.Sprintf(rowFormatStoreLeft, pending, strings.Join(places, ", ")), Fix: rowFormatBeforeFix}}, nil
+	}
+	if at, ok := a.v1BeforeMigration(ctx); ok {
+		return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+			Message: fmt.Sprintf(rowFormatFromBranch, pending, at), Fix: rowFormatBranchFix}}, nil
+	}
 	return []DoctorFinding{{Check: DoctorCheckRowFormat, Level: DoctorWarning,
 		Message: fmt.Sprintf(rowFormatAfterWarn, st.MinLoreVersion, pending), Fix: rowFormatAfterFix}}, nil
+}
+
+// interruptedMigration is the devco O-2 finding: this checkout's journal
+// holds a migration still in its running phase (killed, crashed, or
+// running right now). Its _meta.json may already say format 2 and lock
+// lore 0.1.17 teammates out while most rows are still _v: 1, so doctor is
+// DEGRADED (a warning), not HEALTHY with a note: a CI or fleet run gating
+// on the exit code must not pass such a repo. The message carries the
+// journal's own line (finish with lore migrate run, or undo with lore
+// migrate rollback; a shared-database conversion cannot be undone) and the
+// lock's state, so the reader knows the next run takes a stale lock over.
+func (a *App) interruptedMigration(ctx context.Context, st opsmigrate.StatusOut) (DoctorFinding, bool) {
+	_, path, err := a.journalPath(ctx)
+	if err != nil {
+		return DoctorFinding{}, false
+	}
+	j, ok, err := readJournal(path)
+	if err != nil || !ok || j.Phase != phaseRunning {
+		return DoctorFinding{}, false
+	}
+	left := "no row file left at _v: 1"
+	if len(st.Pending) > 0 {
+		left = "row files still at _v: 1: " + strings.Join(st.Pending, ", ")
+	}
+	return DoctorFinding{Check: DoctorCheckRowFormat, Level: DoctorWarning,
+		Message: fmt.Sprintf(rowFormatInterrupted, st.Journal, left, st.Lock), Fix: rowFormatBeforeFix}, true
+}
+
+// v1BeforeMigration reports whether every `_v: 1` row file in the repo's
+// .lore/data was last updated (updated_at, else created_at) no later than
+// the migration recorded in _meta.json (migrated_at), and returns that
+// time. False when the time is not recorded, when no v1 file is found, or
+// when any v1 file is newer or carries no time: then a lore older than
+// 0.1.18 may still write here and the warning says so.
+func (a *App) v1BeforeMigration(ctx context.Context) (string, bool) {
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return "", false
+	}
+	pf, err := ProjectFormatAt(top)
+	if err != nil || pf.MigratedAt == "" {
+		return "", false
+	}
+	migrated, err := time.Parse(time.RFC3339Nano, pf.MigratedAt)
+	if err != nil {
+		return "", false
+	}
+	data := filepath.Join(top, rowfs.LoreDir, rowfs.DataDir)
+	tables, err := os.ReadDir(data)
+	if err != nil {
+		return "", false
+	}
+	found := 0
+	for _, t := range tables {
+		if !t.IsDir() || strings.HasPrefix(t.Name(), ".") {
+			continue
+		}
+		files, rerr := os.ReadDir(filepath.Join(data, t.Name()))
+		if rerr != nil {
+			return "", false
+		}
+		for _, f := range files {
+			if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
+				continue
+			}
+			b, rerr := os.ReadFile(filepath.Join(data, t.Name(), f.Name()))
+			if rerr != nil {
+				return "", false
+			}
+			var stamp struct {
+				V         int    `json:"_v"`
+				CreatedAt string `json:"created_at"`
+				UpdatedAt string `json:"updated_at"`
+			}
+			if json.Unmarshal(b, &stamp) != nil || stamp.V != 1 {
+				continue // not a v1 row file: not this check's
+			}
+			at := stamp.UpdatedAt
+			if at == "" {
+				at = stamp.CreatedAt
+			}
+			when, perr := time.Parse(time.RFC3339Nano, at)
+			if perr != nil || when.After(migrated) {
+				return "", false
+			}
+			found++
+		}
+	}
+	return pf.MigratedAt, found > 0
 }
 
 // onlyLeftBefore reports whether every pending line names a table that a

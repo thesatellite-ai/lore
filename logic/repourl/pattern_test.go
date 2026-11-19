@@ -36,9 +36,38 @@ func TestPatternMatch(t *testing.T) {
 // TestCompileRefuses: a wildcard host, two `**`, a partial wildcard and an
 // empty pattern are refused (a wildcard host would match every company).
 func TestCompileRefuses(t *testing.T) {
-	for _, raw := range []string{"", "*/acme/web", "**/web", "github.com/**/x/**", "github.com/ac*/web"} {
+	for _, raw := range []string{"", "*/acme/web", "**/web", "github.com/**/x/**", "github.com/ac**/web", "git*.com/acme/web"} {
 		if _, err := Compile(raw); err == nil {
 			t.Errorf("Compile(%q) accepted", raw)
+		}
+	}
+}
+
+// TestPatternStarInsideASegment: `*` may sit inside a segment (prefix-*,
+// *-suffix, a-*-b) and never crosses a "/" (devco D-453).
+func TestPatternStarInsideASegment(t *testing.T) {
+	cases := []struct {
+		pat, val string
+		want     bool
+	}{
+		{"github.com/acme/client-*", "github.com/acme/client-shop", true},
+		{"github.com/acme/client-*", "github.com/acme/client-", true},
+		{"github.com/acme/client-*", "github.com/acme/clients", false},
+		{"github.com/acme/client-*", "github.com/acme/client-a/b", false},
+		{"github.com/acme/*-api", "github.com/acme/shop-api", true},
+		{"github.com/acme/*-api", "github.com/acme/shop-api-old", false},
+		{"github.com/acme/a-*-b", "github.com/acme/a-x-b", true},
+		{"github.com/acme/a-*-b", "github.com/acme/a-b", false},
+		{"github.com/team-*/app", "github.com/team-red/app", true},
+		{"github.com/team-*/**", "github.com/team-red/x/y", true},
+	}
+	for _, c := range cases {
+		p, err := Compile(c.pat)
+		if err != nil {
+			t.Fatalf("Compile(%q): %v", c.pat, err)
+		}
+		if got := p.Match(c.val); got != c.want {
+			t.Errorf("%s matches %s = %v, want %v", c.pat, c.val, got, c.want)
 		}
 	}
 }

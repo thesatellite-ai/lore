@@ -23,7 +23,9 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
+	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -68,8 +70,12 @@ type Mover interface {
 
 // ShowIn is the input of row.show.
 type ShowIn struct {
-	ID     string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
-	Origin bool   `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves"`
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
+	ID string `json:"id" arg:"0" desc:"any row id (mem_…, tsk_…, res_…, var_…)"`
+	// Origin adds the origin blocks to the text form; --json always
+	// carries them (D-455), so it is accepted there and changes nothing.
+	Origin bool `json:"origin,omitempty" flag:"origin" desc:"also print where the row came from: _o, the audit fields, the _w stamp and its moves (--json always has them)"`
 	// ShowSensitive: META 3.20 / RQ1 (asks first; --yes without a
 	// terminal, XQ3; agents may run it too, OQ25).
 	ShowSensitive bool `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field and metadata values (asks first)"`
@@ -100,11 +106,40 @@ type Named struct {
 	URL  string `json:"url,omitempty"`
 }
 
-// Git is `_o.git`.
+// Git is `_o.git`, with Reason: the state in words, so "none" says why
+// no branch or commit was recorded (D-456; read-time, never stored).
 type Git struct {
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
 	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// The `_o.git.state` values (logic/origin.GitState) show explains.
+const (
+	gitStateDetached = string(origin.GitDetached)
+	gitStateUnborn   = string(origin.GitUnborn)
+	gitStateNone     = string(origin.GitNone)
+)
+
+// gitReason is the state of g in words. "none" has two causes, told
+// apart by what else `_o` holds: a create with no code repo open (a store
+// folder, a folder outside any repo: no repo id, no dir) records no git
+// facts at all; a create in a lore place that is no git repository (or
+// with git missing) has its repo id.
+func gitReason(g Git, repo string) string {
+	switch g.State {
+	case gitStateDetached:
+		return "HEAD pointed at a commit, not a branch (a CI checkout, a bisect or a rebase)"
+	case gitStateUnborn:
+		return "the repo had no commit yet"
+	case gitStateNone:
+		if repo == "" {
+			return "written from a store folder or a folder outside any code repo, not a code repo: there was no branch or commit to record"
+		}
+		return "the folder was not a git repository, or git could not run, when the row was written"
+	}
+	return ""
 }
 
 // Import is `_o.import`.
@@ -123,17 +158,46 @@ type Move struct {
 }
 
 // OriginBlock is `_o` as show prints it; Recorded is false for a row
-// written before 0.1.18 (never guessed, PROV 9.1).
+// written before 0.1.18 (never guessed, PROV 9.1). Store names the store
+// like Folder names the folder (D-456: the sto_ id alone told a reader
+// nothing); Version and Machine are the `_w` stamp of the row's last
+// write, repeated here so one block says where and with what the row was
+// written (the `write` block keeps them too).
 type OriginBlock struct {
 	Recorded bool   `json:"recorded"`
 	Cmd      string `json:"cmd,omitempty"`
-	Store    string `json:"store,omitempty"`
+	Store    Named  `json:"store,omitzero"`
 	Folder   Named  `json:"folder,omitzero"`
 	Repo     Named  `json:"repo,omitzero"`
 	Project  Named  `json:"project,omitzero"`
 	Dir      string `json:"dir,omitempty"`
 	Git      Git    `json:"git,omitzero"`
 	Import   Import `json:"import,omitzero"`
+	Version  string `json:"version,omitempty"`
+	Machine  Named  `json:"machine,omitzero"`
+}
+
+// Referrer is a live row whose fields name the shown row: its relations
+// seen from the other side (a comment, a link, a sub-task, a tag use).
+type Referrer struct {
+	Store  string   `json:"store"`
+	Table  string   `json:"table"`
+	ID     string   `json:"id"`
+	Fields []string `json:"fields"`
+}
+
+// StoreNamer is the Env upgrade naming a store by its sto_ id
+// (`<org>/<store>`, the clone's place); wire.App implements it. Without
+// it the origin store carries its id only.
+type StoreNamer interface {
+	StoreName(ctx context.Context, id string) (string, bool)
+}
+
+// Referrers is the Env upgrade listing the rows whose fields name id
+// (engine.Referrers); wire.App implements it. Without it show lists no
+// referrers.
+type Referrers interface {
+	Referrers(ctx context.Context, id ids.AnyID) ([]engine.Referrer, error)
 }
 
 // Audit is the row's audit fields.
@@ -174,22 +238,33 @@ type Origin struct {
 
 // ShowOut is the output of row.show.
 type ShowOut struct {
-	ID     string            `json:"id"`
-	Table  string            `json:"table"`
-	Store  string            `json:"store"`
-	Fields map[string]string `json:"fields"`
+	ID    string `json:"id"`
+	Table string `json:"table"`
+	Store string `json:"store"`
+	// Place is Store as the header line prints it: "<store>/<folder>" for
+	// a store attached at a folder (placeLabel). Text only; --json keeps
+	// Store, the name --store takes.
+	Place string `json:"-"`
+	// Fields are the row's fields; a list field (watchers, assignees,
+	// tag_ids) stays a JSON array (D-455).
+	Fields showfield.Map     `json:"fields"`
 	Meta   map[string]string `json:"meta,omitempty"`
 	// MetaMasked names the metadata keys and the sensitive fields printed
 	// masked (META 3.14/3.20 meta_masked); empty with --show-sensitive.
 	MetaMasked []string `json:"meta_masked,omitempty"`
-	// The --origin blocks (PROV 9.1's JSON keys), nil without --origin.
-	// (The session block lives only on the writing machine's sessions
-	// table, AID 6.6, so show never carries it.)
+	// The origin blocks (PROV 9.1's JSON keys), always filled (D-455:
+	// --json prints everything the row has; the text form prints them
+	// with --origin). (The session block lives only on the writing
+	// machine's sessions table, AID 6.6, so show never carries it.)
 	Origin  OriginBlock `json:"origin,omitzero"`
 	Audit   Audit       `json:"audit,omitzero"`
 	Write   Write       `json:"write,omitzero"`
 	Lineage Lineage     `json:"lineage,omitzero"`
 	Legacy  Legacy      `json:"legacy,omitzero"`
+	// Tags are the row's tag_ids with their names; ReferencedBy the live
+	// rows whose fields name this row (D-455).
+	Tags         []Named    `json:"tags,omitempty"`
+	ReferencedBy []Referrer `json:"referenced_by,omitempty"`
 	// Expanded is each text field that --expand changed, filled in
 	// (SECRETS 12: "--json adds expanded and refs"); Refs lists every
 	// reference met, with its value or why it stayed as written.
@@ -293,20 +368,20 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if r.Deleted { // DELETION 3.2 / INTEG-TRASH-4: a deleted row is never shown as an empty live one
 		return ShowOut{}, o.gone(ctx, engine.Ref{Store: src, Table: r.Table, ID: id})
 	}
-	out := ShowOut{ID: r.ID.String(), Table: string(r.Table), Store: string(src), Fields: map[string]string{},
+	out := ShowOut{ID: r.ID.String(), Table: string(r.Table), Store: string(src), Place: o.placeLabel(src), Fields: showfield.Map{},
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy}
 	def, _ := o.env.TableSchema(ctx, r.Table)
 	for k, v := range r.Fields {
 		if f, ok := def.Field(k); ok && f.Sensitive && !in.ShowSensitive {
-			out.Fields[k] = hidden
+			out.Fields[k] = showfield.Text(hidden)
 			out.MetaMasked = append(out.MetaMasked, k)
 			continue
 		}
-		out.Fields[k] = v.String()
+		out.Fields[k] = showfield.Of(v)
 	}
 	if !in.ShowSensitive { // a resource kind's own sensitive fields (RQ1)
 		if m, names, ok := resmask.Fields(ctx, o.env, r, hidden); ok {
-			out.Fields[resmask.FieldsField] = m
+			out.Fields[resmask.FieldsField] = showfield.Text(m)
 			out.MetaMasked = append(out.MetaMasked, names...)
 		}
 	}
@@ -350,12 +425,50 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 			return ShowOut{}, err
 		}
 	}
+	og, oerr := o.origin(ctx, r)
+	if oerr != nil {
+		return ShowOut{}, oerr
+	}
+	out.Origin, out.Audit, out.Write, out.Lineage, out.Legacy = og.Origin, og.Audit, og.Write, og.Lineage, og.Legacy
 	if in.Origin {
-		og, oerr := o.origin(ctx, r)
-		if oerr != nil {
-			return ShowOut{}, oerr
-		}
-		out.Origin, out.Audit, out.Write, out.Lineage, out.Legacy, out.prov = og.Origin, og.Audit, og.Write, og.Lineage, og.Legacy, &og
+		out.prov = &og
+	}
+	out.Tags = o.tags(ctx, r)
+	if out.ReferencedBy, err = o.referrers(ctx, r.ID); err != nil {
+		return ShowOut{}, err
+	}
+	return out, nil
+}
+
+// tags names the row's tag_ids (an id whose tag row is not here keeps its
+// id only).
+func (o ops) tags(ctx context.Context, r row.Row) []Named {
+	tids := value.ItemStrings(r.Fields[schema.FieldTagIDs])
+	if len(tids) == 0 {
+		return nil
+	}
+	out := make([]Named, 0, len(tids))
+	for _, t := range tids {
+		n := o.named(ctx, t, fName)
+		n.URL = ""
+		out = append(out, n)
+	}
+	return out
+}
+
+// referrers lists the live rows naming id (nil without the upgrade).
+func (o ops) referrers(ctx context.Context, id ids.AnyID) ([]Referrer, error) {
+	rf, ok := upgrade.As[Referrers](o.env)
+	if !ok {
+		return nil, nil
+	}
+	refs, err := rf.Referrers(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var out []Referrer
+	for _, x := range refs {
+		out = append(out, Referrer{Store: string(x.Store), Table: string(x.Table), ID: x.ID.String(), Fields: x.Fields})
 	}
 	return out, nil
 }
@@ -408,7 +521,8 @@ func (o ops) origin(ctx context.Context, r row.Row) (Origin, error) {
 		if err := json.Unmarshal(r.Origin.Raw(), &ro); err != nil {
 			return Origin{}, errs.Wrap(errs.Internal, "show: "+r.ID.String()+" has an unreadable _o", err)
 		}
-		out.Origin = OriginBlock{Recorded: true, Cmd: ro.Cmd, Store: ro.Store, Dir: ro.Dir, Git: ro.Git, Import: ro.Import}
+		out.Origin = OriginBlock{Recorded: true, Cmd: ro.Cmd, Store: o.storeNamed(ctx, ro.Store), Dir: ro.Dir, Git: ro.Git, Import: ro.Import}
+		out.Origin.Git.Reason = gitReason(ro.Git, ro.Repo)
 		if ro.Repo != "" {
 			out.Origin.Repo = o.named(ctx, ro.Repo, fMountName, fDisplayName)
 		}
@@ -434,6 +548,9 @@ func (o ops) origin(ctx context.Context, r row.Row) (Origin, error) {
 			}
 		}
 	}
+	if out.Origin.Recorded {
+		out.Origin.Version, out.Origin.Machine = out.Write.Version, out.Write.Machine
+	}
 	if !out.Origin.Recorded {
 		sk, sr := text(r, fSourceKind), text(r, fSourceRef)
 		if sk != "" || sr != "" {
@@ -441,6 +558,42 @@ func (o ops) origin(ctx context.Context, r row.Row) (Origin, error) {
 		}
 	}
 	return out, nil
+}
+
+// storeNamed is `_o.store` with its name: a sto_ id named by the Env's
+// StoreNamer; an older attached name (repo, a v0.1.17 store) is already a
+// name and stays the id alone.
+func (o ops) storeNamed(ctx context.Context, s string) Named {
+	n := Named{ID: s}
+	if s == "" {
+		return Named{}
+	}
+	if !strings.HasPrefix(s, string(ids.PrefixStore)+"_") {
+		return n // the attached name itself (repo, a v0.1.17 store)
+	}
+	if sn, ok := upgrade.As[StoreNamer](o.env); ok {
+		if name, found := sn.StoreName(ctx, s); found {
+			n.Name = name
+		}
+	}
+	return n
+}
+
+// placeLabel is src as the other read lines name it (search, lists, the
+// sql source column): "<store>/<folder>" for a store attached at a folder,
+// else src. devco D-685: in an org-linked repo the org store is attached
+// under the bare org name, and show's header said "policies  acme" where
+// every list said acme/web.
+func (o ops) placeLabel(src store.Source) string {
+	d, ok := upgrade.As[store.SourceDescriber](o.env)
+	if !ok || src == store.SourceRepo {
+		return string(src)
+	}
+	ref := d.DescribeSource(src)
+	if ref.Folder != "" && !strings.Contains(ref.Store, "/") {
+		return ref.Store + "/" + ref.Folder
+	}
+	return string(src)
 }
 
 // named looks id up now and labels it with the first non-empty field
@@ -496,17 +649,21 @@ func stamp(t time.Time) string {
 // Text is the human form of show (PROV 2's layout).
 func (o ShowOut) Text() string {
 	var b strings.Builder
-	title := o.Fields["title"]
+	title := o.Fields["title"].String()
 	if title == "" {
-		title = o.Fields["name"]
+		title = o.Fields["name"].String()
 	}
-	b.WriteString(o.ID + "  " + o.Table + "  " + o.Store)
+	place := o.Place
+	if place == "" {
+		place = o.Store
+	}
+	b.WriteString(o.ID + "  " + o.Table + "  " + place)
 	if title != "" {
 		b.WriteString("  \"" + title + "\"")
 	}
 	b.WriteString("\n")
 	for _, k := range slices.Sorted(maps.Keys(o.Fields)) {
-		v := o.Fields[k]
+		v := o.Fields[k].String()
 		if e, ok := o.Expanded[k]; ok {
 			v = e
 		}
@@ -550,7 +707,9 @@ func (g Origin) text() string {
 		}
 	} else {
 		b.WriteString("origin (written once)\n")
-		line("store", g.Origin.Store)
+		if st := g.Origin.Store; st.ID != "" {
+			line("store", label(st))
+		}
 		if f := g.Origin.Folder; f.ID != "" {
 			line("folder", label(f))
 		}
@@ -569,6 +728,9 @@ func (g Origin) text() string {
 			if gt.Commit != "" {
 				s += " at " + gt.Commit[:min(len(gt.Commit), shortID)]
 			}
+			if gt.Reason != "" {
+				s += ": " + gt.Reason
+			}
 			line("git", s)
 		}
 		if g.Origin.Cmd != "" {
@@ -577,11 +739,15 @@ func (g Origin) text() string {
 		if im := g.Origin.Import; im != (Import{}) {
 			line("import", strings.TrimSpace(im.Source+" "+im.ExtID))
 		}
+		line("lore", g.Origin.Version)
+		if m := g.Origin.Machine; m.ID != "" {
+			line("machine", label(Named{ID: m.ID[:min(len(m.ID), shortID)], Name: m.Name}))
+		}
 	}
 	b.WriteString("\nwho and when\n")
 	line("created", g.Audit.CreatedAt+"   "+actorText(g.Audit.CreatedBy))
 	line("updated", g.Audit.UpdatedAt+"   "+actorText(g.Audit.UpdatedBy))
-	if w := g.Write; w != (Write{}) {
+	if w := g.Write; w != (Write{}) && !g.Origin.Recorded {
 		b.WriteString("\nlast write\n")
 		line("lore", w.Version)
 		if m := w.Machine; m.ID != "" {
@@ -664,6 +830,15 @@ func (o ops) move(ctx context.Context, in MoveIn) (MoveOut, error) {
 		} else if src == store.Source(to) {
 			return MoveOut{}, errs.New(errs.InvalidInput, "move: "+id.String()+" is already in store "+to+"; nothing to move").
 				WithHint("name another attached store with --to (`lore store list` shows them); lore row show --id " + id.String() + " --origin shows where it lives")
+		}
+	}
+	// moving a company must rule / critical or high hotfix out of its
+	// place takes it from every repo of the org: an admin's change, as
+	// its delete is (devco D-659)
+	if src, r, gerr := o.env.Get(ctx, engine.Ref{ID: id}); gerr == nil && !r.Deleted {
+		if err = profilestore.RequireAdminForRows(ctx, o.env, []profilestore.Placed{{Source: src, Row: r}},
+			"move", "lore row move --id "+id.String()+" --to "+to, ""); err != nil {
+			return MoveOut{}, err
 		}
 	}
 	w, err := mv.MoveWith(ctx, engine.Ref{ID: id}, store.Source(to), engine.MoveOptions{DropInternal: in.DropInternal, WithTime: wt, WithChildren: in.WithChildren})

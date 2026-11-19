@@ -133,16 +133,42 @@ func (f *Folder) tableView(ctx context.Context, table row.Table) (IndexView, boo
 // file: <table>/<valid id>.json directly under a table folder, not OS junk
 // and not one of lore's own temporary files.
 func rowFileRel(rel string) bool {
+	_, _, ok := ParseRowPath(rel)
+	return ok && inTableFolder(rel)
+}
+
+// inTableFolder reports whether rel is an entry directly under a table
+// folder that a scan looks at: not OS junk, not lore's temporary file.
+func inTableFolder(rel string) bool {
 	table, name, ok := strings.Cut(rel, "/")
 	if !ok || strings.Contains(name, "/") || IsOSJunk(name) || strings.HasPrefix(name, tmpPrefix) {
 		return false
 	}
-	if _, err := row.ParseTable(table); err != nil {
-		return false
-	}
-	_, _, ok = ParseRowPath(rel)
-	return ok
+	_, err := row.ParseTable(table)
+	return err == nil
 }
+
+// misnamedProblem is the Problem a scan records for a file in a table
+// folder whose name is no row id (scanTable): an indexed read records it
+// too, so a misnamed row (a case-only rename, MEM_… for mem_…) is named
+// on every read instead of vanishing (devco Q-12).
+func misnamedProblem(rel string) Problem {
+	p := Problem{Path: rel, Reason: misnamedReason}
+	if lower := strings.ToLower(rel); lower != rel {
+		if _, _, ok := ParseRowPath(lower); ok {
+			// a case-insensitive checkout or a Windows tool changed only
+			// the case: the id is the lowercase name
+			p.Reason = misnamedReason + " (row file names are lowercase ids)"
+			_, name, _ := strings.Cut(lower, "/")
+			p.Hint = "rename the file back to its lowercase id " + name + " in the same folder (git mv <file> <folder>/" + name + ")"
+		}
+	}
+	return p
+}
+
+// misnamedReason is the reason of a file in a table folder whose name is
+// no row id.
+const misnamedReason = "file name is not <valid id>.json"
 
 // indexedFile is one row file of an indexed read: blob is its index blob id
 // when git reports it clean ("" for a file lore checks itself).
@@ -153,17 +179,28 @@ type indexedFile struct {
 
 // indexedFiles lists the row files of view, sorted by path. A file to
 // check that is gone or is not a regular file is left out, as a scan
-// leaves it out; its stat is returned for check.
-func (f *Folder) indexedFiles(view IndexView) ([]indexedFile, map[string]entry, error) {
-	stats := map[string]entry{}
+// leaves it out; its stat is returned for check. misnamed are the files
+// in a table folder whose name is no row id, as a scan reports them.
+func (f *Folder) indexedFiles(view IndexView) (files []indexedFile, stats map[string]entry, misnamed []Problem, err error) {
+	stats = map[string]entry{}
 	byRel := map[string]string{}
+	misnamedAt := map[string]bool{}
 	for rel, blob := range view.Clean {
 		if rowFileRel(rel) {
 			byRel[rel] = blob
+		} else if inTableFolder(rel) {
+			misnamedAt[rel] = true
 		}
 	}
 	for _, rel := range view.Check {
 		if !rowFileRel(rel) {
+			if inTableFolder(rel) {
+				if info, lerr := os.Lstat(filepath.Join(f.dataDir, filepath.FromSlash(rel))); lerr == nil && info.Mode().IsRegular() {
+					misnamedAt[rel] = true
+				} else {
+					delete(misnamedAt, rel) // gone from the work tree: nothing to name
+				}
+			}
 			continue
 		}
 		delete(byRel, rel)
@@ -172,7 +209,7 @@ func (f *Folder) indexedFiles(view IndexView) ([]indexedFile, map[string]entry, 
 			continue
 		}
 		if err != nil {
-			return nil, nil, errs.Wrap(errs.Internal, "rowfs: stat a row file", err)
+			return nil, nil, nil, errs.Wrap(errs.Internal, "rowfs: stat a row file", err)
 		}
 		if !info.Mode().IsRegular() {
 			continue // a link or a folder: a full scan reports it (Problems)
@@ -180,11 +217,14 @@ func (f *Folder) indexedFiles(view IndexView) ([]indexedFile, map[string]entry, 
 		stats[rel] = entry{size: info.Size(), mtime: nanos(info.ModTime())}
 		byRel[rel] = ""
 	}
-	out := make([]indexedFile, 0, len(byRel))
+	files = make([]indexedFile, 0, len(byRel))
 	for _, rel := range slices.Sorted(maps.Keys(byRel)) {
-		out = append(out, indexedFile{rel: rel, blob: byRel[rel]})
+		files = append(files, indexedFile{rel: rel, blob: byRel[rel]})
 	}
-	return out, stats, nil
+	for _, rel := range slices.Sorted(maps.Keys(misnamedAt)) {
+		misnamed = append(misnamed, misnamedProblem(rel))
+	}
+	return files, stats, misnamed, nil
 }
 
 // readIndexed is Read under an IndexView: a file git reports clean whose
@@ -192,7 +232,7 @@ func (f *Folder) indexedFiles(view IndexView) ([]indexedFile, map[string]entry, 
 // access; every other file is checked as a scan checks it. ok is false
 // when the view cannot be used for this cursor and the caller must walk.
 func (f *Folder) readIndexed(ctx context.Context, cursor store.Cursor, prev StatCursor, view IndexView, at int64) ([]store.Row, store.Cursor, error) {
-	files, stats, err := f.indexedFiles(view)
+	files, stats, misnamed, err := f.indexedFiles(view)
 	if err != nil {
 		return nil, "", err
 	}
@@ -236,11 +276,11 @@ func (f *Folder) readIndexed(ctx context.Context, cursor store.Cursor, prev Stat
 	}
 	next := StatCursor{At: at, Files: make([]FileStat, 0, len(files))}
 	var out []store.Row
-	var bad []Problem
+	bad := misnamed
 	changed := false
 	for i, c := range results {
 		if c.bad != nil {
-			bad = append(bad, Problem{Path: files[i].rel, Reason: c.bad.Error(), Code: errs.CodeOf(c.bad), FieldMarkers: isFieldMarkers(c.bad)})
+			bad = append(bad, f.problem(files[i].rel, c.bad)) // keeps Cause and Hint: the notice's next step
 		}
 		if !c.ok {
 			continue
@@ -274,7 +314,7 @@ func (f *Folder) readIndexed(ctx context.Context, cursor store.Cursor, prev Stat
 // missingIndexed is Missing under an IndexView: the cursor's files that are
 // neither clean in git nor present on disk.
 func (f *Folder) missingIndexed(prev StatCursor, view IndexView) ([]string, error) {
-	files, _, err := f.indexedFiles(view)
+	files, _, _, err := f.indexedFiles(view)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +366,7 @@ func (f *Folder) readMirrored(ctx context.Context, view IndexView, table row.Tab
 	if err := checkChain(f.root.dir, f.rel); err != nil {
 		return nil, "", err
 	}
-	files, stats, err := f.indexedFiles(view)
+	files, stats, misnamed, err := f.indexedFiles(view)
 	if err != nil {
 		return nil, "", err
 	}
@@ -375,11 +415,11 @@ func (f *Folder) readMirrored(ctx context.Context, view IndexView, table row.Tab
 	}
 	var out []store.Row
 	var keep []store.MirrorEntry
-	var bad []Problem
+	bad := misnamed
 	next := StatCursor{At: at, Files: make([]FileStat, 0, len(files))}
 	for i, c := range results {
 		if c.bad != nil {
-			bad = append(bad, Problem{Path: files[i].rel, Reason: c.bad.Error(), Code: errs.CodeOf(c.bad), FieldMarkers: isFieldMarkers(c.bad)})
+			bad = append(bad, f.problem(files[i].rel, c.bad)) // keeps Cause and Hint: the notice's next step
 		}
 		if !c.ok || c.row == nil {
 			continue

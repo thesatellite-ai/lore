@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // TestWriteThroughLink: a write to a tool file lands at the end of its
@@ -73,6 +74,18 @@ func TestWriteThroughLink(t *testing.T) {
 			lwLink(t, filepath.Join(outside, "nope.md"), filepath.Join(root, "hop.md"))
 			return lwLink(t, "hop.md", filepath.Join(root, "CLAUDE.md")), ""
 		}, errs.Refused},
+		// D-502: a folder of the repository linked out of it (.githooks
+		// linked to a shared hooks folder, .claude to another repository's)
+		// is refused for the files in it too, existing or new.
+		{"file in a folder linked out of the repo", func(t *testing.T, root string) (string, string) {
+			lwWrite(t, filepath.Join(outside, "hooks", "pre-push"))
+			lwLink(t, filepath.Join(outside, "hooks"), filepath.Join(root, ".githooks"))
+			return filepath.Join(root, ".githooks", "pre-push"), ""
+		}, errs.Refused},
+		{"new file in a folder linked out of the repo", func(t *testing.T, root string) (string, string) {
+			lwLink(t, outside, filepath.Join(root, "agentdocs"))
+			return filepath.Join(root, "agentdocs", "new", "CLAUDE.md"), ""
+		}, errs.Refused},
 		{"loop", func(t *testing.T, root string) (string, string) {
 			lwLink(t, "CLAUDE.md", filepath.Join(root, "hop.md"))
 			return lwLink(t, "hop.md", filepath.Join(root, "CLAUDE.md")), ""
@@ -83,7 +96,7 @@ func TestWriteThroughLink(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root := resolvedPath(t.TempDir())
+			root := fspath.Canonical(t.TempDir())
 			path, want := c.setup(t, root)
 			if want == "" {
 				want = path
@@ -98,7 +111,7 @@ func TestWriteThroughLink(t *testing.T) {
 			if err != nil {
 				t.Fatalf("want allowed, got %v", err)
 			}
-			if resolvedPath(filepath.Dir(got)) != resolvedPath(filepath.Dir(want)) || filepath.Base(got) != filepath.Base(want) {
+			if fspath.Canonical(filepath.Dir(got)) != fspath.Canonical(filepath.Dir(want)) || filepath.Base(got) != filepath.Base(want) {
 				t.Fatalf("write lands on %s, want %s", got, want)
 			}
 		})
@@ -108,8 +121,8 @@ func TestWriteThroughLink(t *testing.T) {
 // TestWriteThroughLinkNamesLinkAndEnd: the refusal names the link and the
 // end of its chain (not its first hop) and says how to fix it.
 func TestWriteThroughLinkNamesLinkAndEnd(t *testing.T) {
-	root := resolvedPath(t.TempDir())
-	end := filepath.Join(resolvedPath(t.TempDir()), "end.md")
+	root := fspath.Canonical(t.TempDir())
+	end := filepath.Join(fspath.Canonical(t.TempDir()), "end.md")
 	lwLink(t, end, filepath.Join(root, "hop.md"))
 	at := lwLink(t, "hop.md", filepath.Join(root, "CLAUDE.md"))
 	_, err := WriteThroughLink(root, at)
@@ -117,8 +130,8 @@ func TestWriteThroughLinkNamesLinkAndEnd(t *testing.T) {
 	if !errors.As(err, &e) {
 		t.Fatalf("want *errs.Error, got %v", err)
 	}
-	want := "refusing to write " + at + ": it is a symbolic link to " + end + ", outside the repository"
-	if e.Message != want || e.Hint == "" {
+	want := "refusing to write " + at + ": it is a symbolic link to " + end + ", outside the repository; lore does not write there"
+	if e.Message != want || !strings.Contains(e.Hint, "lore context") {
 		t.Fatalf("got %q (hint %q), want %q with a hint", e.Message, e.Hint, want)
 	}
 }
@@ -126,7 +139,7 @@ func TestWriteThroughLinkNamesLinkAndEnd(t *testing.T) {
 // TestLinkEndLongChain: a chain of maxLinkHops links is followed; one more
 // is a loop.
 func TestLinkEndLongChain(t *testing.T) {
-	dir := resolvedPath(t.TempDir())
+	dir := fspath.Canonical(t.TempDir())
 	end := lwWrite(t, filepath.Join(dir, "end.md"))
 	prev := "end.md"
 	for i := range maxLinkHops {
@@ -205,7 +218,7 @@ func TestEditRepoFileThroughLinks(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			root, outside := resolvedPath(t.TempDir()), resolvedPath(t.TempDir())
+			root, outside := fspath.Canonical(t.TempDir()), fspath.Canonical(t.TempDir())
 			end := c.setup(t, root, outside)
 			a := &App{opts: Options{RepoDir: root}}
 			_, err := a.EditRepoFile(t.Context(), "AGENTS.md", func(string, bool) (string, bool) { return "placeholder directive", true })

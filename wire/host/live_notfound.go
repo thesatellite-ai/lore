@@ -10,6 +10,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +31,22 @@ const missingPersonalStore = "no store named " + orgconf.TargetMe + " is attache
 
 // personalStoreHint is what a person runs before `--to me` works.
 const personalStoreHint = "your personal store is not set up: run `lore store init --name me` (a local folder) or `lore store init --name me --url <url>`, then run the command again"
+
+// personalNotAttachedHint is the hint when the active setup does configure
+// a personal store but the command did not attach it where it ran
+// (devco:D-654): store init would make a second one, so it says how to
+// reach the one there is.
+const personalNotAttachedHint = "your personal store is set up (`lore whoami` shows it on its personal line) but this command did not attach it here: read it with --store me and write to it with --to me from your home folder or a code repo, where it is attached"
+
+// personalHint is the hint of an engine "no store named me is attached":
+// personalNotAttachedHint when the active setup configures a personal
+// store, personalStoreHint when it does not (or nobody can tell).
+func (h *liveHost) personalHint(ctx context.Context) string {
+	if h.cfg.PersonalStore != nil && h.cfg.PersonalStore(ctx) != "" {
+		return personalNotAttachedHint
+	}
+	return personalStoreHint
+}
 
 // firstArg is the operation's first positional argument as the caller gave
 // it: on the CLI the decoded value of that field (by its flag, `--id
@@ -156,7 +175,7 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 	// It replaces the engine's generic list of attached places: setting the
 	// personal store up is the way out, not another --to.
 	if strings.Contains(err.Error(), missingPersonalStore) {
-		return e.WithHint(personalStoreHint) // the TARGET is missing, not the row
+		return e.WithHint(h.personalHint(ctx)) // the TARGET is missing, not the row
 	}
 	if e.Hint != "" {
 		return err
@@ -181,6 +200,12 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		return err // no built-in table to name in the hint (a dynamic kind): say nothing rather than guess
 	case !idKnown:
 		table = nounTable
+	}
+	if hint, none := noBranchHint(h.cfg.WorkDir); none {
+		// devco:D-590: no code branch here (the home folder, a plain
+		// folder, a store's clone): "it may have landed on main while
+		// this branch is older" has no meaning, only the sync does
+		return e.WithHint(hint)
 	}
 	remote, branch := defaultLiveRemote, defaultBranchFallback
 	upToDate := false
@@ -212,10 +237,39 @@ func (h *liveHost) explainNotFound(ctx context.Context, run *Run, err error) err
 		// branch as last fetched, so "while this branch is older" is
 		// wrong; the usual cause is a row of another repo, and a row
 		// pushed since that fetch is the other (peek fetches).
-		return e.WithHint("this branch has everything on " + branch + " as last fetched: the row may belong to another repo (a row lives in one repo's notes: run the command there), or be newer than that fetch: `" + peek + "`")
+		return e.WithHint("this branch has everything on " + branch + " as last fetched: the row may belong to another repo (a row lives in one repo's notes: run the command there), or be newer than that fetch: `" + peek + "`" + storeRowNotYetHint)
 	}
-	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`")
+	return e.WithHint("it may have landed on " + branch + " while this branch is older: `" + peek + "`" + storeRowNotYetHint)
 }
+
+// noBranchHint is the not-found hint of a folder with no code branch to
+// peek (devco:D-590): outside every git checkout, or in a store's clone
+// (whose branch is the store's, synced by lore sync). none is false in a
+// code repo, which keeps the branch hint.
+func noBranchHint(dir string) (hint string, none bool) {
+	if _, _, inStore := rowfs.StoreTop(dir); inStore {
+		return "a row a teammate wrote to this store arrives once they push it and you run `lore sync` here", true
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	for d := abs; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			return "", false
+		}
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+	return "a row a teammate wrote to a store arrives once they push it and you run `lore sync --setup <setup>` (`lore setup list` names your setups)", true
+}
+
+// storeRowNotYetHint ends a not-found hint (devco D-221): a row a teammate
+// wrote to a store stays committed on their machine until their `lore
+// sync`, and reaches this one with this machine's `lore sync`; the hint
+// named only the code branch, so a store row looked lost.
+const storeRowNotYetHint = "; a row a teammate wrote to a store arrives once they and you run `lore sync`"
 
 // holdsBranch reports whether HEAD already contains remote/branch as
 // last fetched (that tip is an ancestor of HEAD, or HEAD itself). False
@@ -260,7 +314,7 @@ func (s *liveSession) whyMissingCode(ctx context.Context, folder, id string) (er
 			return errs.NotFound, id + ": the live purge list could not be read (" + perr.Error() + ")"
 		}
 		if purged[id] {
-			return errs.Purged, id + " was purged: deleted on purpose (`lore trash purge` or `lore live purge`); purged rows never come back (DQ4)"
+			return errs.Purged, id + " was purged: deleted on purpose (`lore trash purge` or `lore live purge`); purged rows never come back"
 		}
 		rows, _ := tree.Rows(folder) // undecodable files say nothing about id
 		for k, f := range rows {
@@ -279,7 +333,7 @@ func (s *liveSession) whyMissingCode(ctx context.Context, folder, id string) (er
 	}
 	b, found, err := s.repo.ReadFile(ctx, trk, mainDataPath(folder, purgedFileName))
 	if err == nil && found && strings.Contains(string(b), `"`+id+`"`) {
-		return errs.Purged, id + " was purged: deleted on purpose (listed in main's _purged.json); purged rows never come back (DQ4)"
+		return errs.Purged, id + " was purged: deleted on purpose (listed in main's _purged.json); purged rows never come back"
 	}
 	return errs.NotFound, ""
 }

@@ -218,6 +218,14 @@ func TestStoryEMixedFormats(t *testing.T) {
 
 	s.Step("week3/two-branches-migrate-and-merge", func() {
 		d2.Git("switch", "-q", "-c", "mig-a", preMigration)
+		// devco K-11: origin/main is already migrated, so a migration here
+		// is refused with "git pull first"
+		dev2.LoreIn(d2, "migrate", "run").Refused(t, "git pull first")
+		// two branches that migrate before the team's migration was fetched:
+		// this clone forgets origin's default branch for the step, so
+		// nothing upstream is migrated yet as far as the check can see
+		d2.Git("remote", "set-head", "origin", "-d")
+		defer d2.Git("remote", "set-head", "origin", "main")
 		d2.Git("switch", "-q", "-c", "mig-b", preMigration)
 		count := len(eRowIDs(t, d2.Dir))
 		// mig-a migrates with migrate run, mig-b with fix --migrate, whose
@@ -253,7 +261,9 @@ func TestStoryEMixedFormats(t *testing.T) {
 		// doctor must see it and name the next step.
 		d2.Git("switch", "-q", "-c", "drop-row", preMigration)
 		d2.Git("rm", "-q", ".lore/data/decisions/"+prj.Rows["decisions"][0]+".json")
-		d2.Git("commit", "-q", "-m", "drop an old decision")
+		// the commit hook refuses a hand-deleted row (a35784ad): this
+		// deletion is the conflict under test, so it is confirmed
+		d2.With("LORE_ALLOW_ROW_DROP=1").Git("commit", "-q", "-m", "drop an old decision")
 		d2.Git("switch", "-q", "mig-a")
 		r = d2.TryGit("merge", "--no-edit", "drop-row")
 		if r.Code != 0 {

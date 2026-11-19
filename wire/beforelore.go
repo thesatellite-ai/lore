@@ -58,18 +58,26 @@ func loreInOtherCommit(ctx context.Context, top string) (beforeLore, bool) {
 	return b, b.Branch != "" || b.LiveRef != ""
 }
 
+// checkoutNoLoreCode is the one code of every refusal for a checkout of a
+// lore repo without .lore/ here (left out by a sparse cone, deleted, or a
+// commit from before lore): devco:Q-4, a read said E_NOT_A_STORE and a
+// write E_NOT_FOUND for the same cause, so a script branching on the exit
+// code saw two answers. Every caller now gets this one.
+const checkoutNoLoreCode = errs.NotAStore
+
 // beforeLoreErr is the refusal for a checkout of a lore repo at a commit
-// without .lore/ (code: the refusal it replaces), nil when the repo at top
+// without .lore/ (code checkoutNoLoreCode), nil when the repo at top
 // is no lore project in any other commit either.
-func beforeLoreErr(ctx context.Context, top string, code errs.Code) error {
-	if e := loreGoneErr(ctx, top, code); e != nil {
+func beforeLoreErr(ctx context.Context, top string) error {
+	code := checkoutNoLoreCode
+	if e := loreGoneErr(ctx, top); e != nil {
 		return e
 	}
 	b, ok := loreInOtherCommit(ctx, top)
 	if !ok {
 		return nil
 	}
-	if e := loreDeletedErr(ctx, top, code); e != nil {
+	if e := loreDeletedErr(ctx, top); e != nil {
 		return e // asked only of a repo with lore elsewhere: it walks the history
 	}
 	where := "its live rows are in " + b.LiveRef
@@ -87,7 +95,8 @@ func beforeLoreErr(ctx context.Context, top string, code errs.Code) error {
 // sparse cone (D-10), or deleted from the work tree (H-1: every command
 // blamed a sparse checkout that was not there and hinted git
 // sparse-checkout add, the wrong fix).
-func loreGoneErr(ctx context.Context, top string, code errs.Code) error {
+func loreGoneErr(ctx context.Context, top string) error {
+	code := checkoutNoLoreCode
 	if loreFolderAt(top) {
 		return nil
 	}
@@ -110,7 +119,8 @@ func loreGoneErr(ctx context.Context, top string, code errs.Code) error {
 // loreDeletedErr is the refusal for a branch where a commit deleted the
 // project's .lore/ (H-6: lore fix then offered lore init, a second
 // project), nil when no commit on HEAD's history did.
-func loreDeletedErr(ctx context.Context, top string, code errs.Code) error {
+func loreDeletedErr(ctx context.Context, top string) error {
+	code := checkoutNoLoreCode
 	out, err := (gitRun{dir: top, args: []string{"log", "-1", "--format=%h", "--diff-filter=D", "HEAD", "--", loreFolderName + "/data/_meta.json"}}).output(ctx)
 	sha := strings.TrimSpace(string(out))
 	if err != nil || sha == "" {
@@ -133,7 +143,7 @@ func loreDeletedHere(ctx context.Context, top string) bool {
 	if _, ok := loreInOtherCommit(ctx, top); !ok {
 		return false
 	}
-	return loreDeletedErr(ctx, top, errs.NotAStore) != nil
+	return loreDeletedErr(ctx, top) != nil
 }
 
 // sparseCheckoutOn reports whether the checkout at top is sparse
@@ -144,8 +154,8 @@ func sparseCheckoutOn(ctx context.Context, top string) bool {
 }
 
 // orBeforeLore is beforeLoreErr for top when it applies, else err.
-func orBeforeLore(ctx context.Context, top string, code errs.Code, err error) error {
-	if e := beforeLoreErr(ctx, top, code); e != nil {
+func orBeforeLore(ctx context.Context, top string, err error) error {
+	if e := beforeLoreErr(ctx, top); e != nil {
 		return e
 	}
 	return err
@@ -161,8 +171,8 @@ func (a *App) checkoutWithoutLoreErr(ctx context.Context) error {
 		return nil
 	}
 	var e *errs.Error
-	if be := beforeLoreErr(ctx, top, errs.NotFound); be != nil && errors.As(be, &e) {
-		return errs.New(errs.NotFound, "wire: "+noLoreProject+" in this checkout: "+e.Message).WithHint(e.Hint)
+	if be := beforeLoreErr(ctx, top); be != nil && errors.As(be, &e) {
+		return errs.New(checkoutNoLoreCode, "wire: "+noLoreProject+" in this checkout: "+e.Message).WithHint(e.Hint)
 	}
 	return nil
 }

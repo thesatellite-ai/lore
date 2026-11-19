@@ -1,13 +1,13 @@
 # Teams
 
-**In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add --handle @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add --title … --assign @web`. The team commands run inside a repo of the org, in a clone with no lore project yet (a read there reads the org store; nothing is created in the clone), or outside any repo (the active setup's org store).
+**In short:** a team is an `@handle` on the org's roster that names a group of people. `lore team add --handle @web --members @tomas,@mira` makes one; from then on `@web` works wherever a person's handle does, such as `lore task add --title … --assign @web`. The team commands run inside a repo of the org, in a clone with no lore project yet (a read there reads the org store; nothing is created in the clone), or outside any repo (the active setup's org store). From a folder no org applies to (the home folder, a folder outside every setup), name the org: `lore team list --store <org>`, `lore team show --handle @web --store <org>`; every read of the roster takes `--store <org>` (`member list`, `member show`, `team invite list`, `actor list` …). With no flag there, the read is refused with `E_NOT_A_STORE`, and the hint names `--store <org>` and `--setup <setup>` with the orgs and setups this machine has.
 
 You want this page when you assign work to a group rather than a person, or keep track of who is on which team. Every output below is a real run (`tests/team/docs/run-examples.sh teams`).
 
 ## Before you start
 
 - The org's store holds its roster (the `org` folder by default), and the people you add are on it: an admin added them with [`lore member add`](members.md) (which can put them on teams at once), they ran `lore actor register` in a repo of the org, or they joined from an [invite](invites.md). `lore actor list` shows them.
-- Anyone on the roster may change the teams. A coding agent runs the team commands as its person, like every other roster command (`agents.may_manage_people`, see [Agents](agents.md)).
+- Anyone on the roster may change the teams, except a contractor: a person whose open stint is a `contractor` one writes only to their projects' folders, so their team commands (and company rules, `--to <org>/org`) are refused with one `E_REFUSED` line naming the stint. A coding agent runs the team commands as its person, like every other roster command (`agents.may_manage_people`, see [Agents](agents.md)).
 
 ## Step 1 — Make a team
 
@@ -19,14 +19,15 @@ Tomas makes `@web` from his plain `work` folder (no repo there), lists the teams
 $ lore team add --handle @web --name 'Web' --members @tomas,@mira
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web (2 member(s)) added in agency org/
+✓ tem_7a67…9504 @web (2 member(s)) added on the roster of agency (agency/org)
 $ lore team list
-@web              Web                      2 member(s)
+@web  Web  2 member(s)
+1 team
 
 # tomas, in acme-hub
 $ lore team show --handle @web
 tem_7a67…9504  @web  Web
-roster: agency org/
+roster: agency (agency/org)
 members (2):
   act_2ad3…f891  @tomas  Tomas Weber
   act_162d…9666  @mira  Mira Patel
@@ -43,16 +44,16 @@ members (2):
 ```console
 # tomas, in acme-hub
 $ lore task add --title 'ship the checkout page' --to agency --assign @web
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/actors/act_2ad3…f891.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_54fe…28f2.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e9…4603.json (store agency)
+lore: committed locally to store agency/acme-hub; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_54fe…28f2.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_05e9…4603.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/_meta.json (store agency/acme-hub)
 ✓ tsk_05e9…4603 — ship the checkout page [medium] → [agency/acme-hub]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 ```
 <!-- /example -->
 
-Every member of `@web` then finds the task in `lore task list --mine` and in `lore inbox` under assignments, marked `(team @web)`, until someone claims it.
+Every member of `@web` then finds the task in `lore task list --mine` and in `lore inbox` under assignments, marked `(team @web)`, until someone claims it. `lore task show --id <task>` prints a `team:     @web` line, and its `--json` carries `assigned_team` (the `tem_` id) and `assigned_team_handle`.
 
 A team's name is internal to the org, so a task written into a client's own repo cannot be assigned to a team; write it to the org's store (`--to agency`) as above.
 
@@ -74,7 +75,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store ag
 $ lore team add --handle @web --name 'Web platform'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
+✓ tem_7a67…9504 @web (2 member(s)) updated on the roster of agency (agency/org)
 $ lore team list --json
 {
   "teams": [
@@ -99,12 +100,12 @@ $ lore team list --json
       "updated_by": "act_2ad3…f891"
     }
   ],
-  "where": "agency org/"
+  "where": "agency (agency/org)"
 }
 ```
 <!-- /example -->
 
-To change the handle itself, `lore team rename --handle @web --to @frontend` keeps the team (same `tem_` id and members): tasks assigned to it show `@frontend` from then on, and a pending invite that named `@web` names `@frontend`. The new handle may not be a person's or another team's, removed ones included.
+To change the handle itself, `lore team rename --handle @web --to @frontend` keeps the team (same `tem_` id and members): tasks assigned to it show `@frontend` from then on, and a pending invite that named `@web` names `@frontend`. The new handle may not be a person's or another team's, removed ones included. The old handle names nobody afterwards: `--assign @web` is refused, and the hint lists the teams there are now, so the new handle is in it.
 
 ## What lore refuses
 
@@ -114,16 +115,16 @@ A team cannot take a person's handle (an `@mention` would mean two things), only
 ```console
 # tomas, in ~
 $ lore team add --handle @mira
-ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster in agency org/; a team and a person cannot share one
+ERROR: [E_INVALID_INPUT] handle @mira is taken by Mira Patel on the roster of agency (agency/org); a team and a person cannot share one
   hint: choose another team handle (lore team add --handle @mira-team …)
 (exit 20)
 $ lore team add --handle @ops --members @nobody
-ERROR: [E_NOT_FOUND] no one is @nobody on the roster in agency org/
+ERROR: [E_NOT_FOUND] no one is @nobody on the roster of agency (agency/org)
   hint: check the handle with lore actor list; a new person runs lore actor register (or joins from an invite) first
 (exit 27)
 $ lore team show --handle @ops
-ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
-  hint: lore team list shows the teams; lore team add --handle @ops --members <people> makes it
+ERROR: [E_NOT_FOUND] no team @ops on your copy of the roster of agency (agency/org)
+  hint: a teammate may have made it since your last sync: lore sync fetches the roster, then run this again; lore team list shows the teams you have
 (exit 27)
 ```
 <!-- /example -->
@@ -138,13 +139,14 @@ ERROR: [E_NOT_FOUND] no team @ops on the roster in agency org/
 $ lore team remove --handle @web
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web removed from the roster in agency org/ (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
+✓ tem_7a67…9504 @web removed from the roster of agency (agency/org) (kept for history: tasks that named it still read; lore team add --handle @web brings it back)
 $ lore team list --all
-@web              Web platform             2 member(s)  [removed]
+@web  Web platform  2 member(s)  [removed]
+1 team
 $ lore team add --handle @web
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/teams/tem_7a67…9504.json (store agency/org)
-✓ tem_7a67…9504 @web (2 member(s)) updated in agency org/
+✓ tem_7a67…9504 @web (2 member(s)) updated on the roster of agency (agency/org)
 ```
 <!-- /example -->
 

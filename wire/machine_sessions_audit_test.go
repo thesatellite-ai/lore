@@ -8,6 +8,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -51,6 +52,7 @@ func (s *sessionSink) ToolSessionIDs(ctx context.Context) ([]string, error) {
 // d: a deadlock shows as this failure, not as a hung suite.
 func writeWithin(t *testing.T, d time.Duration, what string, fn func()) {
 	t.Helper()
+	d = testtime.Scale(d) // a hang guard: a slower machine waits longer before calling it a deadlock
 	done := make(chan struct{})
 	go func() { defer close(done); fn() }()
 	select {

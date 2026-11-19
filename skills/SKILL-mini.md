@@ -527,7 +527,7 @@ lore check pr-body --file body.md                            # before posting a 
 lore move --id mem_01 --to repo                            # deliberate move into the client repo
 lore agent start --label agent-backend --owner @alice     # export what it prints
 lore inbox
-lore task next --mission mis_12                       # exit 10 = no ready work
+lore task next --claim --mission mis_12               # claims the next task; exit 10 = no ready work (without --claim: only shows it)
 lore task heartbeat
 lore hold claim --name full-suite --ttl 30m                  # one heavy run at a time; hold release after
 lore context --internal                               # internal notes as text; never paste where the client reads

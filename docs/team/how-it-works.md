@@ -36,7 +36,7 @@ Sometimes lore cannot tell whether the repo is a client repo: the store cannot b
 
 In a client repo, `lore sync` and reads write nothing into the checkout: the repo gets no repo id in `.lore/data/_meta.json` and no repos row file (they would carry the client's remote into the client's history), and a committed `.lore/LORE.md` is not rendered again behind your back. Your private context goes to `~/.lore/render`, imported through the ignored `CLAUDE.local.md`; `lore render` still writes `.lore/LORE.md` when you ask for it.
 
-In your own repo, reads never write into `.lore/data`, and neither does a `lore sync` while `.lore/data` has nothing waiting for your commit: a repo without a repo id yet (one upgraded from lore 0.1.17) gets it, with its repos row and your actor row, from the first sync that finds rows of yours waiting for a commit, and that commit carries them. So a teammate committing the repo id never makes `git pull` in your clone stop over copies lore left there.
+In your own repo, reads never write into `.lore/data`, and neither does a `lore sync` while `.lore/data` has nothing waiting for your commit: a repo without a repo id yet (one upgraded from lore 0.1.17) gets it, with its repos row and your actor row, from the first sync that finds rows of yours waiting for a commit, or from your first `--scope repo` or `--scope dir:<path>` write (the id is derived from the project and the remote, so every clone that writes it writes the same one), and that commit carries them. So a teammate committing the repo id never makes `git pull` in your clone stop over copies lore left there.
 
 ## Lookup: which copy of a row wins
 
@@ -62,7 +62,7 @@ Live always wins over branch data. So you see a teammate's edit on live, whateve
 $ lore explain --id tsk_54fe…28f2
 tsk_54fe…28f2 in ~/work/billing (folder _root)
   fetched 35s ago
-  live (local 34ee210): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
+  live (local 6d00426): row, live since 2026-11-02T10:00:25Z, hlc 2026-11-02T10:00:55.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -93,16 +93,16 @@ $ git config --get-all remote.origin.fetch
 
 The remote's hidden lists arrive in **tracking copies** under `refs/lore-remote/`. A tracking copy is your clone's note of what the remote holds. Lore then merges it into your own `refs/lore/live`. It never overwrites your copy, so a live write you made offline is kept until it can be pushed.
 
-Each lore command fetches once: one `git fetch` gets live, signals and `main` together. A read skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old, a write if it is less than 60 seconds old. `lore sync` always fetches. So a teammate's change shows up within a minute, or at once after `lore sync`:
+Each lore command fetches once: one `git fetch` gets live, signals and `main` together. A read skips the fetch if the last one is less than `live.fetch_ttl` (5 minutes) old, a write if it is less than 60 seconds old (a write's refusals, such as a teammate's claim or gate, need the remote's rows). `lore sync` always fetches, once per remote, and pushes once per remote. So a teammate's change shows up within a minute, or at once after `lore sync`:
+
+Commands in one clone take turns on its live list: each waits for the one before it to finish, in the order they started (a command that waited longer always goes first), and gives up with `E_STORE_LOCKED` after 30 seconds. Ten agent sessions working in one clone at the same time each wait for about the other nine commands, a few seconds; agents that each have their own clone or worktree of the repo do not wait for each other at all.
 
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
 # bob, in billing
-$ lore sync
-lore live: pushed waiting live writes commit cf563f3 to origin refs/lore/live
+$ lore sync && git switch -q -c feat/payments
+lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -126,7 +126,7 @@ Offline, reads use the last fetched state. A **hook** is a small script git runs
 
 Step 2 uses a **private index**: a scratch staging area of lore's own, so your `git add` work is not touched. Step 5 is a **compare-and-swap**: lore moves the list only if it still points where lore last saw it, like saving a document only if nobody saved over it meanwhile.
 
-Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. By default a live write is not pushed by itself: `live.autopush` is off, so lore keeps the write here, says so once per repo (`lore live: (live, kept here: …)`), and sends it on your next `lore sync` or `git push` (the pre-push hook pushes the live list with it). With `live.autopush: true` each write is pushed at once, and lore says once per repo that `lore config set --key live.autopush --value false` turns that off. Sometimes the push cannot happen: you are offline, `LORE_LIVE_AUTOPUSH=0` is set, or the host refuses `refs/lore/*`. Then the write stays on your local live list and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. The next command pushes it. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
+Your branch, your staged files and your working folder are never touched. Lore builds commits with git's low-level commands, outside any checkout. The one exception is a row a live write names that only your working folder holds (a plan you added and have not committed, then `lore mission add --plan`): it moves to the live list with that write, so teammates can read it, and lore says so in one line (`lore: moved plans/pln_… to this clone's refs/lore/live with the live row that names it, so teammates can read it; <file> is no longer in your working folder (it lands with that row)`); a table folder the move leaves empty is removed. Lore's own upkeep of your actor row (its origin stamp, a name that follows its source) rides the live list with the write too, so the committed actor file is not rewritten. By default a live write is not pushed by itself: `live.autopush` is off, so lore keeps the write here, says so once per repo (`lore live: (live, kept here: …)`), and sends it on your next `lore sync` or `git push` (the pre-push hook pushes the live list with it). With `live.autopush: true` each write is pushed at once, and lore says once per repo that `lore config set --key live.autopush --value false` turns that off. Sometimes the push cannot happen: you are offline, `LORE_LIVE_AUTOPUSH=0` is set, the host refuses `refs/lore/*`, or teammates' pushes won every retry (`lease.push_retries`). Then the write stays on your local live list, the command still succeeds, and lore says `(live, not pushed yet: N waiting; …)` with why and what happens next, once: not again on every read or git hook until the count or the reason changes. Your next live write or `lore sync` pushes it; a read never pushes, so after a lost race the line says ``lost N races to teammates' pushes: your next live write or `lore sync` sends them``. When the remote is not there at all (a mistyped or deleted `origin`, a path with no repository) or refuses your credentials, or is a local folder you may not read (it then says `cannot read <path> (permission denied)` and that the address is right), the line says so and names the remote instead of "offline", `lore sync` gives the same reason, and `lore doctor` warns until a push goes through. `lore live diff` shows what is waiting:
 
 <!-- example: errors#refs-refused-by-the-host only=1,2 -->
 ```console
@@ -173,7 +173,7 @@ pending   2 write(s) not confirmed by the remote
               → remove it from live (only if the live copy did not change meanwhile)
 ```
 
-Landing never moves the remote `main` behind your back: a write records the row on the live list only, and the landing runs when you run `lore sync` or `lore land`, or folds into your own `git push` of `main` (the pre-push hook commits the finished rows onto your `main` as `lore: land N rows`, stops that push and asks you to run `git push` again, so the push carries them). Landing twice writes the same file and commits nothing. A row reopened after it landed differs from `main`, so it stays live and lands again later. A deleted row lands as a file delete plus an entry in `.lore/data/_purged.json`, so an old branch copy cannot bring it back. For a store project the same steps run on lore's own clone of the store (a plain git clone under `~/.lore/stores/<owner>/<repo>`) and the store branch. A store branch must accept direct pushes (`lore store doctor` checks). Your personal store and an org store may push in batches instead of at once, and their old history may be folded into one commit: see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote).
+Landing never moves the remote `main` behind your back: a write records the row on the live list only, and the landing runs when you run `lore sync` or `lore land`, or folds into your own `git push` of `main` (the pre-push hook commits the finished rows onto your `main` as `lore: land N rows`, stops that push and asks you to run `git push` again, so the push carries them). In `lore sync` the landing commit and your waiting live writes go to the remote in one push (`git push --atomic`), so a slow remote is reached once; a host without atomic pushes, or one that refuses either ref, gets the live list first on its own, and nothing is called landed unless `main` took the commit. Landing twice writes the same file and commits nothing. A row reopened after it landed differs from `main`, so it stays live and lands again later. A deleted row lands as a file delete plus an entry in `.lore/data/_purged.json`, so an old branch copy cannot bring it back. For a store project the same steps run on lore's own clone of the store (a plain git clone under `~/.lore/stores/<owner>/<repo>`) and the store branch. A store branch must accept direct pushes (`lore store doctor` checks). Your personal store and an org store may push in batches instead of at once, and their old history may be folded into one commit: see [How writes reach the remote](identity-and-stores.md#how-writes-reach-the-remote).
 
 **On a feature branch.** Between "landed on main" and your next pull, lore reads a landed row from `origin/main` only while this checkout is on the default branch (the "found nowhere, on main" step above). On any other branch, a row that landed and left live drops out of your lists and `lore show` until you merge main into the branch. The sync that lands it says so on stderr:
 
@@ -202,19 +202,18 @@ A **protected branch** is one GitHub only lets you change through a pull request
 ```console
 # bob, in billing
 $ lore sync
-lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
+lore live: pushed waiting live writes commit 2fc021b to origin refs/lore/live
 lore live: 2 row(s) left live (main holds them)
 lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit 22efc3b to origin refs/lore/live
 
 # alice, in billing
 $ lore sync
-lore live: pushed waiting live writes commit 8c373dc to origin refs/lore/live
+lore live: pushed waiting live writes commit 51886a5 to origin refs/lore/live
 lore live: main is protected: the rows ride on your next push (lore: land N rows)
 $ lore explain --id tsk_c0f3…b5b8
 tsk_c0f3…b5b8 in ~/work/billing (folder _root)
   fetched 5s ago
-  live (local 8c373dc): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
+  live (local 51886a5): row, live since 2026-11-02T10:01:40Z, hlc 2026-11-02T10:01:50.000Z/0000/act_7a67…9504
   this branch (HEAD): not present
   origin/main: not present
   wins: the live copy (rule 4: if a row id is in live, live wins)
@@ -234,11 +233,15 @@ Two people can edit the same live row at the same time. A branch can also merge 
  field level:  status, priority, dates, numbers → the newer edit (by hybrid logical clock)
                one-value text (done_by, done_commit, work_branch, approved_by, role)
                                                 → the newer edit, never conflict markers
-               text fields                      → both edits kept, with conflict markers
+               text fields, live row (refs/lore/live)
+                                                → the newer edit, never conflict markers;
+                                                  the sync names the text it replaced
+               text fields, git merge of a row file
+                                                → both edits kept, with conflict markers
                sets (labels, links)             → union
 ```
 
-The order of edits comes from a **hybrid logical clock** (HLC, `hlc` in the live file): a timestamp that also counts edits, so two edits made in the same second still have an order. It holds the wall time, a counter and the writer, so a laptop with a wrong clock does not win by accident. A row with conflict markers stays visible and is never landed. `lore sync conflicts` lists it until `lore sync resolve` settles it.
+The order of edits comes from a **hybrid logical clock** (HLC, `hlc` in the live file): a timestamp that also counts edits, so two edits made in the same second still have an order. It holds the wall time, a counter and the writer, so a laptop with a wrong clock does not win by accident. A live row never gets conflict markers: the live list is read by every clone, so markers there would reach everyone and stop the sync of people who never touched the row. A row file with conflict markers (from a git merge, or a live row an older lore merged) stays visible and is never landed. `lore sync conflicts` lists it until `lore sync resolve` settles it.
 
 ## Compaction and the epoch
 
@@ -287,20 +290,19 @@ Unlike live, the signals list keeps no history. Each write is a new commit with 
 <!-- example: internals#signals only=2,3,4,5,6 -->
 ```console
 # agent-backend, in website
-$ lore task claim --id tsk_b4f4…a5b0
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_f147…5139.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
-✓ claimed tsk_b4f4…a5b0 renew the client SSL certificate (lease 20m, token ct_a5f6f…) on refs/lore/signals/main
+$ lore task claim --id tsk_d431…313a --push
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_d431…313a.json (store agency/client)
+✓ claimed tsk_d431…313a renew the client SSL certificate (lease 20m, token ct_a5f6f…) on the signals ref refs/lore/signals/main of store agency/client (pushed to the store's remote now: teammates see it on their next fetch)
 
 # alice, in ~
 $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git ls-tree -r --name-only refs/lore-remote/origin/signals/main && git log --oneline refs/lore-remote/origin/signals/main
-client/claims/tsk_b4f4…a5b0.json
+client/claims/tsk_d431…313a.json
 9b40ce7 lore: signals
 $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/signals/main:$(git ls-tree -r --name-only refs/lore-remote/origin/signals/main | head -1)
 {
   "kind": "claim",
-  "task": "tsk_b4f4…a5b0",
+  "task": "tsk_d431…313a",
   "project": "client",
   "holder": "act_f147…5139",
   "holder_label": "agent:agent-backend",
@@ -315,8 +317,8 @@ $ cd ~/.lore/stores/agency/notes && git cat-file -p refs/lore-remote/origin/sign
 }
 
 # agent-backend, in website
-$ lore task heartbeat --id tsk_b4f4…a5b0
-✓ tsk_b4f4…a5b0 renewed until 2026-11-02T10:21:25Z (seq 1)
+$ lore task heartbeat --id tsk_d431…313a
+✓ tsk_d431…313a renewed until 2026-11-02T10:21:25Z (seq 1)
 
 # alice, in ~
 $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-remote/origin/*' && git log --oneline refs/lore-remote/origin/signals/main
@@ -324,13 +326,13 @@ $ cd ~/.lore/stores/agency/notes && git fetch -q origin '+refs/lore/*:refs/lore-
 ```
 <!-- /example -->
 
-A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` naming `--push`, and `lore task start --id <id>` works on a task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag. A claim on a linked store's signals ref (the example above: a client repo's task) needs no flag and never touches the client's remote.
+A claim on a code repo's own `refs/lore/signals` is pushed to that repo's remote only when you ask: `lore task claim`, `lore task next --claim` and `lore hold claim` take `--push` (or `LORE_PUSH_CLAIMS=1` in the shell or agent's environment, see [Environment](../reference/environment.md), or `live.autopush: true` in `config.yaml`, which pushes every write at once); without it they are refused before anything is written, with `E_REFUSED` and a hint that prints your own command again with `--push` added (the real task id or hold name and every flag you gave), which runs as printed; for a claim of one task the hint also names `lore task start --id` with that task's id, which starts the task without a claim. A claim cannot wait for `lore sync`: it is a lease two people race for, decided by the push. Renewing, releasing and finishing a claim you pushed push again without a new flag: `lore task heartbeat`, `lore task release` and `lore hold release` are the named exemptions to `--push` (their `--help` says so), because each touches only what your pushed claim or hold published, on the same remote; a claim never pushed is on no remote, so releasing it pushes nothing. A claim on a linked store's signals ref (the example above: a client repo's task, or any task of a repo linked to a store folder) follows the same rule: it is pushed to the store's remote only with `--push` (or the same standing go-ahead), is refused without it (as are `lore task revoke` and `lore task reassign` of a claimed task there), and never touches the client's remote. Its commit is signed with the store's identity (your identity in the org for an org store); an agent that claims for you is named in a `Lore-Agent` trailer, never as the author. `lore task release` takes the claim off the same ref and says where it went. A task that lives in an org store's folder needs no code repo to be claimed: `lore task claim --id <id> --push`, `lore task release --id <id>` and the other commands that name one task by `--id` also run from the home folder (or any folder outside a repo) and inside the store clone, on that store's signals ref, as your identity in the org, with the same `--push` rule. `lore task next --setup <setup>` from the home folder (or `--store <org>` / `--store <org>/<folder>` from any folder, or plain `lore task next` inside the store clone) ranks the tasks of that org's store across its folders, the company folder and the org's other stores included; plain `lore task next` from the home folder does the same for the only org setup of this machine (it says `setup <name> (the only org setup on this machine)` first), and with two or more org setups it is refused with a hint naming `lore task next --store <org>` and `lore task next --setup <setup>` with this machine's orgs and setups; `--claim --push` takes the first, and its claim lands under the task's own folder on its store's signals ref, the place a later `lore task release --id <id>` finds it; each printed next step carries the same `--setup` or `--store`. `lore task heartbeat` with no `--id` renews every claim you hold on the org stores of this machine (their held record is the store clone's) from the home folder, inside the store clone and in a code repo, after the code repo's own claims; within `lease.renew_every` of the last renewal it names the claim as held instead. `lore task heartbeat --daemon`, `lore inbox` and `lore mission status` still run in a code repo.
 
 | Operation | What is checked | What is written (claims on a task push signals and the task row together, atomically) |
 |---|---|---|
-| **claim** (`task claim`, `task next`) | task ready, no unexpired claim, you hold fewer than `agents.max_claims_per_agent` | a claim with a fresh `claim_token` and `expires = now + lease.ttl` (20m); the task row's `claim_epoch` goes up by one, status `in_progress`, `attempts` counted |
+| **claim** (`task claim`, `task next --claim`) | task ready, no unexpired claim, you hold fewer than `agents.max_claims_per_agent` | a claim with a fresh `claim_token` and `expires = now + lease.ttl` (20m); the task row's `claim_epoch` goes up by one, status `in_progress`, `attempts` counted |
 | **renew** (`task heartbeat`) | your token is on the ref and not expired | a later `expires`, `renewed_seq + 1`; the task row is not touched |
-| **release** | your token is on the ref | the claim is removed |
+| **release** | your token is on the ref | the claim is removed; the task row gets back the status and `started_at` it had before the claim, one `release` claim-log entry, and the holder's time span only when the claim saw work (a heartbeat, or held a minute or more, or a status set during the claim: `lore task start` or `lore task edit --status`, which the release keeps) |
 | **done, note, gate request by the holder** | your token is on the ref **and** the row's `claim_epoch` matches your claim | the row change and the claim change, in one atomic push |
 | **revoke, cancel, reassign by a person** | a human identity | the claim is removed and `claim_epoch` goes up |
 | **expire** | `now > expires + lease.grace` **and** the same `renewed_seq` was seen for at least `lease.renew_every` | nothing: readers treat it as absent; the next writer drops it |
@@ -339,13 +341,13 @@ The `claim_token` is a ticket number for one claim. The row's `claim_epoch` coun
 
 **Fencing** means lore refuses a write from an agent whose claim already ran out. Its token is gone from the list, or the row's `claim_epoch` has moved on. So its `done` fails with `E_LOST_CLAIM` (exit 12), `E_CANCELLED` (13) or `E_REASSIGNED` (14). Expiry needs both the time check and an unchanged `renewed_seq`. So a reader with a fast clock cannot steal a lease that is still being renewed.
 
-**Reclaim:** an expired claim is free. The next `task next` takes the task, counts up `attempts` and names the previous holder. Past `agents.max_attempts` (3) the task becomes `blocked` ("failed 3 times") and goes to its owner's inbox.
+**Reclaim:** an expired claim is free. The next `task next --claim` takes the task, counts up `attempts` and names the previous holder. Past `agents.max_attempts` (3) the task becomes `blocked` ("failed 3 times") and goes to its owner's inbox.
 
 Claims for tasks of a linked client repo sit on the **store's** signals list, never on the client's. How the agency runs its agents is internal.
 
 ## Done, then merged
 
-A task is finished once. The holder's `lore task done` drops its claim and, in the same push, leaves a done marker on the signals ref (`<folder>/done/<task>.json`, kept 7 days): a clone whose copy of the row still says todo (not synced yet) cannot claim the task again, `task next` skips it and moves on, and a second `lore task done` on a finished task changes nothing and prints who finished it (`· <id> was already done by <who> at <time>; nothing changed`, `already_done` and `done_by` in `--json`). A task reopened after the done (its row edited later) is claimable again. `lore sync resolve --take kept|other` keeps the same side of nested conflict blocks at every level.
+A task is finished once. The holder's `lore task done` drops its claim and, in the same push, leaves a done marker on the signals ref (`<folder>/done/<task>.json`, kept 7 days): a clone whose copy of the row still says todo (not synced yet) cannot claim the task again, `task next` skips it and moves on, and a second `lore task done` on a finished task changes nothing and prints who finished it (`· <id> was already done by <who> at <time>; nothing changed`, `already_done` and `done_by` in `--json`). A claim of a finished task is refused with one message whether the done reached the signals ref, the row or both (`E_REFUSED <id> was already done by <who> at <time>`, hint `lore task next`). A task reopened after the done (its row edited later) is claimable again. `lore sync resolve --take kept|other` keeps the same side of nested conflict blocks at every level.
 
 `lore task done` records that the work is finished. Whether the code reached `main` is checked later and separately. Any later `task next`, `task list`, `mission status` or `inbox` in a checkout of the task's repo does the check:
 
@@ -370,14 +372,14 @@ While you hold a claim, lore's `commit-msg` hook adds a `Lore-Task: <id>` traile
 ```console
 # agent-backend, in agents/api
 $ lore task done --id tsk_162d…9666 --commit $(git rev-parse HEAD) --lesson 'invite links stop working after 48 hours; the README says so'
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_3b62…e913.json (store agency)
+lore: committed locally to store agency/client2; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_162d…9666.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/memories/mem_f147…5139.json (store agency/client2)
 ✓ tsk_162d…9666 done (commit 86dbae4, not linked to the task; link it with: lore link add --entity tsk_162d…9666 --commit 86dbae41af28); waiting for merge
-  lesson → mem_3b62…e913
+  lesson → mem_f147…5139
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
 ERROR: [E_NO_WORK] nothing ready:
   tsk_54fe…28f2 build the invite page: waits for tsk_162d…9666 to be merged (done, 86dbae4 not on the default branch yet)
   hint: lore task board shows what each task waits on
@@ -387,17 +389,16 @@ ERROR: [E_NO_WORK] nothing ready:
 $ git pull -q && git merge -q --no-ff --no-edit origin/agent-backend/invite && git push -q origin main
 lore: set lore.clientrepo=true in ~/work/api/.git/config: this is a client repo, so its commit hook refuses a commit no lore can check for internal notes (`lore where` lists it; `git config --unset lore.clientrepo` removes it)
 $ lore task list
-lore: committed locally to store agency; lore sync sends it
-✓ tsk_162d…9666 merged 10:23 (found by: ancestry, 05513aa)
+lore: committed locally to store agency/client2; lore sync sends it
+✓ tsk_162d…9666 merged 10:28 (found by: ancestry, 05513aa)
 ○ tsk_54fe…28f2 build the invite page [medium]  [agency/client2]
 ○ tsk_c0f3…b5b8 deploy to staging [medium]  ⏸ gate: needs approval  [agency/client2]
 
 # agent-frontend, in agents/app
-$ lore task next --mission msn_2ad3…f891 --repo app
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_d431…313a.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency)
-✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on refs/lore/signals/main
+$ lore task next --claim --mission msn_2ad3…f891 --repo app --push
+lore: committed locally to store agency/client2; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_54fe…28f2.json (store agency/client2)
+✓ claimed tsk_54fe…28f2 build the invite page (lease 20m, token ct_dfebf…) on the signals ref refs/lore/signals/main of store agency/client2 (pushed to the store's remote now: teammates see it on their next fetch)
   read its notes: lore task show --id tsk_54fe…28f2
 ```
 <!-- /example -->
@@ -488,13 +489,13 @@ A **leak** is internal or personal content reaching anything the client can read
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
 <!-- /example -->
 
-The pre-push check refuses a push whose new commits carry internal ids, internal sentences or secrets, and refuses when the store cannot be read. `git commit --no-verify` and `git push --no-verify` skip every local check, so the client's own CI should run `lore check leaks --ci` as the backstop. It needs no store and prints no internal name: it checks ids and structure only, so it does not see pasted sentences.
+The pre-push check refuses a push whose new commits carry internal ids, internal sentences or secrets, and refuses when the store cannot be read. `git commit --no-verify` and `git push --no-verify` skip every local check, so the client's own CI should run `lore check leaks --ci` as the backstop. It needs no store and prints no internal name: it scans the files the pushed commits add or change, and their names, with the secret rules (the built-in rules, the repo's `.gitleaks.toml` and the committed `.lore/data/secret_allows` entries; the team's own rules live in the store, so they do not apply there). The commits are those after `--since <commit>` (the last commit CI checked) when given, else the push or pull request range the CI names (GitHub Actions' event payload, GitLab's `CI_MERGE_REQUEST_DIFF_BASE_SHA` or `CI_COMMIT_BEFORE_SHA`), else those since the default branch (`origin/HEAD`) on a branch, else the last 50 commits, so every commit of a push straight to the default branch is scanned, not only its last one (see [CI checks](../operations/ci.md#which-commits-lore-check-leaks---ci-scans)); a value the same file already held before them is not new, as at commit and push, and a clone with less history than that (`fetch-depth: 1`, a young repo) has every tracked file scanned, and it checks the ids and structure of `.lore/data`, so a key pushed with `--no-verify` fails the job, named by file, line, rule and hash with its `lore secrets allow --file` line, never the value; it does not see pasted sentences. In an org's own repo it accepts the full actor copies lore writes there (a person's key and handle, stamped with the org as origin); it cannot read the org config, so the stamp is what it goes by, and a hand-written stamp would pass it too, so the commit and push hooks stay the real guard for a client repo.
 
 What hooks cannot stop, honestly:
 
@@ -521,18 +522,17 @@ The guards catch copy-paste mistakes; they are not a wall. See [Cleaning up afte
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3052 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
+lore render: .lore/LORE.md and .lore/LORE.full.md not committed in this repo yet; added to this clone's .git/info/exclude so a git pull of a teammate's commit that adds them works (to commit them from this clone: git add -f .lore/LORE.md .lore/LORE.full.md)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/app-rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
 <!-- generated by lore; private: never quote this content in committed files, client files, commits, PRs or chat -->
 repo app (rep_28f8…03df)
-- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 - agency-sto_7a67…9504.md  store agency, agency/org  -  internal
+- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 $ git status --short
-?? .lore/LORE.full.md
-?? .lore/LORE.md
 ```
 <!-- /example -->
 

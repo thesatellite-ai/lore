@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // TestSIGTERMEndsLikeCtrlC: lore treats SIGTERM like Ctrl-C (owner item
@@ -56,7 +58,7 @@ func TestSIGTERMEndsLikeCtrlC(t *testing.T) {
 			_ = cmd.Wait()
 			t.Fatalf("lore api ended before listening: %s", line)
 		}
-	case <-time.After(2 * time.Minute):
+	case <-time.After(testtime.Scale(2 * time.Minute)):
 		t.Fatal("lore api did not start listening")
 	}
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
@@ -66,8 +68,8 @@ func TestSIGTERMEndsLikeCtrlC(t *testing.T) {
 	go func() { done <- cmd.Wait() }()
 	select {
 	case <-done:
-	case <-time.After(30 * time.Second):
-		t.Fatal("lore api still runs 30s after SIGTERM")
+	case <-time.After(testtime.Scale(30 * time.Second)):
+		t.Fatalf("lore api still runs %s after SIGTERM", testtime.Scale(30*time.Second))
 	}
 	ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	if !ok {

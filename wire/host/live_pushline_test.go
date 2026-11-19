@@ -96,3 +96,22 @@ func gitOutT(t testing.TB, dir string, args ...string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// TestRacesLostLineNamesWhatSends (devco:D-498): a live write whose push
+// lost every race exits 0 with its row only on this clone's live ref. Its
+// line must name what sends it (a live write or `lore sync`): a read never
+// pushes, so "the next command retries" left the row unsent for good when
+// every later command was a read or a claim on the signals ref.
+func TestRacesLostLineNamesWhatSends(t *testing.T) {
+	f := newLiveFixtureWith(t, "", clock.NewFake(ltBase))
+	var out strings.Builder
+	f.s.h.cfg.Stderr = &out
+	f.s.reportPush(live.PushOutcome{Status: live.PushRetriesOut, Attempts: 6})
+	got := out.String()
+	if !strings.Contains(got, "not pushed yet") || !strings.Contains(got, "lost 6 races") {
+		t.Fatalf("the line does not say the write waits after 6 lost races:\n%s", got)
+	}
+	if !strings.Contains(got, "`lore sync`") || strings.Contains(got, "the next command retries") {
+		t.Fatalf("the line must name `lore sync` (a read never pushes), not \"the next command\":\n%s", got)
+	}
+}

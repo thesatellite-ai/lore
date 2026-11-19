@@ -288,7 +288,7 @@ func (f *Folder) scanTable(table string, files map[string]entry, stat bool) ([]P
 			continue
 		}
 		if _, _, ok := ParseRowPath(rel); !ok {
-			problems = append(problems, Problem{Path: rel, Reason: "file name is not <valid id>.json"})
+			problems = append(problems, misnamedProblem(rel))
 			continue
 		}
 		if !stat {

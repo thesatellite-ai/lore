@@ -51,9 +51,11 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "personal"; this machine has no setups
 
 ```console
 $ lore memory add --body 'x' --to me
-ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit personal --personal-store <url>
-  hint: --to repo, --to <org store>, or lore setup edit personal --personal-store <url>
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write here with --to repo instead, or set up a personal store
+  hint: --to repo, or lore setup edit --name personal --personal-store <url>
 ```
+
+Outside a repo (the home folder with `--setup <name>`, or a store clone folder, whose setup is the one of the store's org) the same refusal gives the placeholder form: `--to <org>/<folder> (lore setup list names the folders)`.
 
 **Fix:** write to the repo or the org store instead, or give the setup a personal store: `lore setup edit --name personal --personal-store git@github.com:tomas/lore-me.git` (or `inherit` for the top-level `personal.store`).
 
@@ -141,27 +143,17 @@ ERROR: [E_INVITE_REVOKED] invite inv_01a1b195c0f47163971b269b3863583a was revoke
 
 ### `E_INVITE_EMAIL` (exit 20)
 
-**Cause:** the invite is for another email than the one you gave in the identity step (neither your main address nor one of your other addresses is the invite's).
+**Cause:** the invite is for another email than the one you gave in the identity step (your main identity email is not the invite's; other addresses do not count, except when you run the join again on the machine that already joined with this invite).
 
-**Fix:** add the invite's address to the identity step (main email, or "other addresses you use"), or ask the inviter for an invite to the address you use.
+**Fix:** if the invite is yours, make its address your main email in the identity step; otherwise ask the inviter for an invite to the address you use. An invite is for one person: never type someone else's address.
 
 ## Stores
 
-### `E_STORE_NO_ACCESS` (exit 23)
+A store that refuses this setup's GitHub account or key (you are not a collaborator, the repo does not exist, or the ssh key logs in as another account) shows as the failing `store.read` check of the step; a store you can read but not push to shows as the failing `store.write` check. A network failure is `E_STORE_UNREACHABLE` (exit 15). lore has no separate error code for either refusal.
 
-**Cause:** GitHub (or the git host) refused this setup's account or key for the store: you are not a collaborator, the repo does not exist, or the ssh key logs in as another account. A network failure is a different code (`E_STORE_UNREACHABLE`, exit 15).
+**Fix for `store.read`:** ask the store's owner for access (for a team store, the admin can run `lore team invite --email … --grant`), accept the GitHub invitation at github.com/notifications, or check the key with `lore doctor --all --setup <name>` (`github.ssh_auth`, `github.ssh_user`).
 
-**Fix:** ask the store's owner for access (for a team store, the admin can run `lore team invite --email … --grant`), accept the GitHub invitation at github.com/notifications, or check the key with `lore doctor --all --setup <name>` (`github.ssh_auth`, `github.ssh_user`).
-
-In this build the code is registered but the setup steps report the problem as the failing `store.read` check (with the same fixes) rather than as this error.
-
-### `E_STORE_NO_WRITE` (exit 23)
-
-**Cause:** you can read the store but not push to it with this account.
-
-**Fix:** ask for push (write) access, or attach the store `--read-only` if reading is all you need.
-
-In this build the code is registered but the setup steps report the problem as the failing `store.write` check rather than as this error.
+**Fix for `store.write`:** ask for push (write) access, or attach the store `--read-only` if reading is all you need.
 
 ## Fixes
 

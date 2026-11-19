@@ -61,8 +61,9 @@ func TestMigrateEndsWithCommitLine(t *testing.T) {
 // TestRowFormatUnfinishedMigrationIsANote (owner item C2): v1 row files
 // beside a raised min_lore_version are "an older lore still writes here"
 // (warning) only when this checkout's migration finished; while its
-// journal holds one that did not (interrupted, rolled back) they are the
-// migration's own leftovers: a note naming lore fix.
+// journal holds one that was rolled back they are the migration's own
+// leftovers: a note naming lore migrate run. An interrupted one is a
+// warning of its own (TestRowFormatInterruptedMigrationDegrades).
 func TestRowFormatUnfinishedMigrationIsANote(t *testing.T) {
 	t.Parallel()
 	repo := gitRepo(t)
@@ -79,16 +80,53 @@ func TestRowFormatUnfinishedMigrationIsANote(t *testing.T) {
 	if err := os.WriteFile(meta, []byte(`{"_v": 1, "features": ["hlc"], "min_lore_version": "0.1.18"}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	setJournalPhase(t, repo, phaseRunning)
+	setJournalPhase(t, repo, phaseRolledBack)
 	got, err := a.DoctorRowFormat(background())
 	if err != nil || len(got) != 1 || got[0].Level != DoctorNote || !strings.Contains(got[0].Message, "did not finish") || got[0].Fix != rowFormatBeforeFix {
-		t.Fatalf("interrupted migration: %+v %v", got, err)
+		t.Fatalf("rolled-back migration: %+v %v", got, err)
 	}
 	setJournalPhase(t, repo, phaseDone)
 	got, err = a.DoctorRowFormat(background())
 	if err != nil || len(got) != 1 || got[0].Level != DoctorWarning {
 		t.Fatalf("finished migration, then a v1 file: %+v %v", got, err)
 	}
+}
+
+// TestRowFormatInterruptedMigrationDegrades (devco O-2): a migration
+// killed part way leaves its journal in the running phase, _meta.json
+// already on the new format and most rows at _v: 1. doctor was HEALTHY
+// (exit 0) with only a note, so a CI or fleet run gating on the exit code
+// passed a repo that already locks lore 0.1.17 teammates out. Now it is a
+// warning (DEGRADED) naming the interruption, both ways out (lore migrate
+// run, lore migrate rollback) and the migration lock, with or without v1
+// rows left.
+func TestRowFormatInterruptedMigrationDegrades(t *testing.T) {
+	t.Parallel()
+	repo := gitRepo(t)
+	a := newTestApp(t, repo)
+	withProject(t, a)
+	v1Row(t, repo, schema.TableMemories, commitLineMemA, `"project_id":"`+projectID(t, a)+`","body":"one"`)
+	if _, err := run(t, a, opsmigrate.OpRun, `{}`, false); err != nil {
+		t.Fatal(err)
+	}
+	setJournalPhase(t, repo, phaseRunning) // killed after the last row: nothing left at _v: 1
+	check := func(when, left string) {
+		t.Helper()
+		got, err := a.DoctorRowFormat(background())
+		if err != nil || len(got) != 1 || got[0].Level != DoctorWarning || got[0].Fix != rowFormatBeforeFix {
+			t.Fatalf("%s: %+v %v", when, got, err)
+		}
+		m := got[0].Message
+		for _, want := range []string{"did not finish", "lore migrate run", "lore migrate rollback", "migration lock: free", left} {
+			if !strings.Contains(m, want) {
+				t.Fatalf("%s: message lacks %q: %s", when, want, m)
+			}
+		}
+	}
+	check("no v1 row left", "no row file left at _v: 1")
+	v1Row(t, repo, schema.TableMemories, commitLineMemB, `"project_id":"`+projectID(t, a)+`","body":"two"`)
+	a.wrote(nil) // the file was written behind the engine
+	check("a v1 row left", "row files still at _v: 1: memories")
 }
 
 // setJournalPhase rewrites the phase of repo's migration journal.

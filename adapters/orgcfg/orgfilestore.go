@@ -8,24 +8,39 @@ package orgcfg
 //	AddOrgFileStore ─▶ clone + fetch ─▶ commitStore: read lore-org.yaml at
 //	                   tip (none: ErrNoOrgFile) ─▶ url already listed:
 //	                   Existed (an unpushed earlier add is pushed when
-//	                   Push) ─▶ else append {url, name, branch} ─▶ commit
-//	                   as the caller's org identity ─▶ push when Push
+//	                   Push; SetAudience on a listed store changes its
+//	                   audience: key, D-442) ─▶ else append {url, name,
+//	                   branch, audience} ─▶ commit as the caller's org
+//	                   identity ─▶ push when Push
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 )
 
 // orgFileStoreMessage is the commit subject of AddOrgFileStore.
 const orgFileStoreMessage = "lore: org %s: add store %s"
 
-// orgFileStoresKey is lore-org.yaml's list of stores.
-const orgFileStoresKey = "stores"
+// orgFileStoreAudienceMessage is the commit subject of an audience change.
+const orgFileStoreAudienceMessage = "lore: org %s: store %s audience %s"
+
+// orgFileStoresKey is lore-org.yaml's list of stores; orgFileAudienceKey
+// a store's audience.
+const (
+	orgFileStoresKey   = "stores"
+	orgFileAudienceKey = "audience"
+)
+
+// ErrOrgFolderAudience refuses an admins-only audience on the org folder's
+// store: it holds the roster and company rules every member reads.
+var ErrOrgFolderAudience = errors.New("orgcfg: the org folder's store is used by every member; it cannot be admins-only")
 
 // OrgFileStoreAdd is one store to add to an org's lore-org.yaml.
 type OrgFileStoreAdd struct {
@@ -37,8 +52,13 @@ type OrgFileStoreAdd struct {
 	// Store is the entry to add.
 	Store OrgFileStore
 	// Push sends the commit to the org store now; without it the commit
-	// stays in the clone and the next write to that store sends it.
+	// stays in the clone until `lore sync` or `lore store push` sends it
+	// (under push auto, the next write to that store does too).
 	Push bool
+	// SetAudience makes Store.Audience the audience of a store the file
+	// already lists (`lore org store audience`, `org store add
+	// --audience`); without it a listed store is left as it is.
+	SetAudience bool
 	// Signature is the commit author (the caller's org identity).
 	Signature gitref.Signature
 }
@@ -61,8 +81,12 @@ func (g *GitLinks) AddOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (OrgF
 	}
 	res := OrgFileResult{StoreURL: norm, Branch: branch, NoPush: !a.Push}
 	path := orgFilePath(a.OrgFolder)
+	msg := fmt.Sprintf(orgFileStoreMessage, a.Org, want)
+	if a.SetAudience {
+		msg = fmt.Sprintf(orgFileStoreAudienceMessage, a.Org, want, orgconf.Audience(a.Store.Audience))
+	}
 	cr, err := commitStore(ctx, storeCommit{Dir: dir, Store: norm, Branch: branch, NoPush: !a.Push, PushPending: a.Push, Route: g.Route,
-		Message: fmt.Sprintf(orgFileStoreMessage, a.Org, want), Signature: a.Signature,
+		Message: msg, Signature: a.Signature,
 		Change: func(ctx context.Context, repo *gitref.Repo, tip string) (map[string][]byte, error) {
 			raw, found, rerr := repo.ReadFile(ctx, tip, path)
 			if rerr != nil {
@@ -71,9 +95,14 @@ func (g *GitLinks) AddOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (OrgF
 			if !found {
 				return nil, fmt.Errorf("%w: %s has no %s", ErrNoOrgFile, norm, path)
 			}
-			body, existed, aerr := appendOrgFileStore(raw, want, a.Store)
+			raw = acceptedOrgRaw(ctx, dir, tip, a.OrgFolder, raw)
+			body, existed, aerr := appendOrgFileStore(raw, want, a.Store, a.SetAudience)
 			if aerr != nil {
 				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, aerr)
+			}
+			if existed && body != nil {
+				res.Existed, res.AudienceChanged = true, true
+				return map[string][]byte{path: body}, nil
 			}
 			if existed {
 				res.Existed = true
@@ -87,7 +116,13 @@ func (g *GitLinks) AddOrgFileStore(ctx context.Context, a OrgFileStoreAdd) (OrgF
 
 // appendOrgFileStore is raw (a lore-org.yaml) with s appended under
 // stores:, or existed when a store of the normalised url want is listed.
-func appendOrgFileStore(raw []byte, want string, s OrgFileStore) (out []byte, existed bool, err error) {
+// With setAudience a listed store whose audience differs from s's gets
+// s's (out is then the changed file, existed true); an admins-only
+// audience on the org folder's store is ErrOrgFolderAudience.
+func appendOrgFileStore(raw []byte, want string, s OrgFileStore, setAudience bool) (out []byte, existed bool, err error) {
+	if setAudience && s.OrgFolder != "" && !orgconf.Audience(s.Audience).ForMembers() {
+		return nil, false, ErrOrgFolderAudience
+	}
 	var doc yaml.Node
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil, false, err
@@ -115,7 +150,15 @@ func appendOrgFileStore(raw []byte, want string, s OrgFileStore) (out []byte, ex
 			return nil, false, derr
 		}
 		if n, nerr := repourl.NormalizeStore(cur.URL); nerr == nil && n == want {
-			return nil, true, nil
+			if !setAudience || cur.Audience == s.Audience {
+				return nil, true, nil
+			}
+			if cur.OrgFolder != "" && !orgconf.Audience(s.Audience).ForMembers() {
+				return nil, true, ErrOrgFolderAudience
+			}
+			setMapKey(item, orgFileAudienceKey, s.Audience)
+			out, err = yaml.Marshal(&doc)
+			return out, true, err
 		}
 	}
 	item := &yaml.Node{}
@@ -125,4 +168,23 @@ func appendOrgFileStore(raw []byte, want string, s OrgFileStore) (out []byte, ex
 	stores.Content = append(stores.Content, item)
 	out, err = yaml.Marshal(&doc)
 	return out, false, err
+}
+
+// setMapKey sets key of mapping node m to the string v, removing the key
+// when v is empty (a store's audience: everyone is no key at all).
+func setMapKey(m *yaml.Node, key, v string) {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value != key {
+			continue
+		}
+		if v == "" {
+			m.Content = append(m.Content[:i], m.Content[i+2:]...)
+			return
+		}
+		m.Content[i+1] = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v}
+		return
+	}
+	if v != "" {
+		m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v})
+	}
 }

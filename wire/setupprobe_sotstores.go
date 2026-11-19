@@ -94,15 +94,17 @@ func (sp setupProber) orgSourceProbe(ctx context.Context, r opssetup.ProbeReques
 		return skip(detailNoOrgCopy)
 	}
 	vars := map[string]string{onboard.VarOrg: o.Name}
+	mine, skipped := mineOf(ctx, cfg, o, sg)
+	now := detailOrgSourceNow + skippedStoresNote(o.Name, skipped)
 	switch orgconf.StateOf(o, sg.StoreID, sg.Version) {
 	case orgconf.SourceCurrent:
-		return result(onboard.StatusOK, detailOrgSourceNow, nil)
+		return result(onboard.StatusOK, now, nil)
 	case orgconf.SourceStale:
 		return result(onboard.StatusFail, orgFileShown(sg)+" is at version "+short(sg.Version)+", the entry copied "+short(o.Source.Version), vars)
 	case orgconf.SourceUnstamped, orgconf.SourceOtherStore:
 	}
-	if orgconf.SharedOf(o).Equal(sg.Shared()) {
-		return result(onboard.StatusOK, detailOrgSourceNow, nil)
+	if orgconf.SharedOf(o).Equal(mine) {
+		return result(onboard.StatusOK, now, nil)
 	}
 	return result(onboard.StatusFail, "the entry differs from "+orgFileShown(sg)+" and records no source version", vars)
 }

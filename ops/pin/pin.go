@@ -10,6 +10,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -42,7 +43,7 @@ var nouns = []kn.Noun{
 }
 
 var writeErrors = []errs.Code{
-	errs.InvalidInput, errs.NotFound, errs.PolicyDenied, errs.Stale,
+	errs.InvalidInput, errs.NotFound, errs.PolicyDenied, errs.Refused, errs.Stale,
 	errs.StoreReadOnly, errs.StoreLocked, errs.StoreUnreachable, errs.OldLore, errs.Internal,
 }
 
@@ -117,6 +118,16 @@ func (o ops) write(ctx context.Context, raw string, pinV, atV value.Value, form 
 	if form != "" && !inCore(n, it) {
 		return Out{}, errs.New(errs.InvalidInput, "pin: only must rules and critical/high hotfixes are in LORE.md, so only they take a pin").
 			WithHint("raise its severity first, or fetch it with lore context / lore search")
+	}
+	// a pin reshapes how every repo of the org is told a company must rule
+	// or critical/high hotfix (`--context line` cuts it to one line): an
+	// admin's change, through the one company-row check (devco D-664)
+	line := "lore pin unset --id " + it.Row.ID.String()
+	if form != "" {
+		line = "lore pin set --id " + it.Row.ID.String() + " --context " + form
+	}
+	if err = profilestore.RequireAdminForRows(ctx, o.env, []profilestore.Placed{{Source: it.Source, Row: it.Row}}, "change how LORE.md shows", line, ""); err != nil {
+		return Out{}, err
 	}
 	w, err := o.env.Update(ctx, engine.Ref{Store: it.Source, Table: n.Table, ID: it.Row.ID},
 		map[string]value.Value{FieldPin: pinV, FieldPinnedAt: atV})

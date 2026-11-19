@@ -8,7 +8,8 @@ package journeys
 // as an unknown org (E_JOIN_ORG_UNKNOWN, pointing at the store url), and
 // the printed store url is accepted. Run with no terminal (B-10), the
 // printed join line answers with the `lore setup apply` lines of a member
-// setup named after the store's owner, never a page that waits 30 idle
+// setup named after the org (the name the store's lore-org.yaml gives,
+// devco D-645; it was the store url's owner), never a page that waits 30 idle
 // minutes nor a "solo setup personal"; running those lines joins.
 
 import (
@@ -44,11 +45,13 @@ func TestJourneyStaffJoinLine(t *testing.T) {
 	w.Step("day1/ann-joins-without-a-terminal", func() {
 		ann := tt.m[tlAnn.Email]
 		dir := tt.repo[tlAnn.Email].Dir
-		const setup = "acme-co" // the store url's owner (github.com/acme-co/lore-team)
+		// devco:D-645: the org's name, never the store url's owner (acme-co
+		// for github.com/acme-co/lore-team), and the join says so
+		const setup = tlOrg
 		ann.Lore(dir, "setup", "join", "--invite", url).OK(t).
 			Says(t, "lore setup apply --setup "+setup+" --step kind --answers '{\"kind\":\"member\",\"name\":\""+setup+"\"}'",
-				"--step join --answers '{\"invite\":\""+url+"\"}'").
-			Never(t, "lore setup is open at", "idle minutes", "solo setup")
+				"--step join --answers '{\"invite\":\""+url+"\"}'", "setup name "+setup+" from the org's name in its store").
+			Never(t, "lore setup is open at", "idle minutes", "solo setup", "--setup acme-co")
 		var out struct {
 			Commands []string `json:"commands"`
 		}

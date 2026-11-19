@@ -12,6 +12,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/dirscope"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -144,8 +145,10 @@ type pinned struct {
 
 // loadPinned reads the live, not archived must rules and critical/high
 // hotfixes of the repo store with their places; rules carries every rule
-// (any severity) for the glob level.
-func (o ops) loadPinned(ctx context.Context, paths map[string]string) ([]pinned, error) {
+// (any severity) for the glob level. everySeverity keeps every live rule
+// and hotfix: scope list counts what a folder holds (devco:Q-14: a
+// should-only folder read 0 rules), not only what its file pins.
+func (o ops) loadPinned(ctx context.Context, paths map[string]string, everySeverity bool) ([]pinned, error) {
 	var out []pinned
 	for _, t := range []row.Table{schema.TableRules, schema.TableHotfixes} {
 		rows, err := o.env.List(ctx, store.SourceRepo, t)
@@ -157,7 +160,7 @@ func (o ops) loadPinned(ctx context.Context, paths map[string]string) ([]pinned,
 				continue
 			}
 			sev := text(r, fieldSeverity)
-			if (t == schema.TableRules && sev != sevMust) || (t == schema.TableHotfixes && sev != sevCritical && sev != sevHigh) {
+			if !everySeverity && ((t == schema.TableRules && sev != sevMust) || (t == schema.TableHotfixes && sev != sevCritical && sev != sevHigh)) {
 				continue
 			}
 			p := dirscope.Place{Repo: text(r, fieldRepo)}
@@ -199,7 +202,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 		return ShowOut{}, err
 	}
 	paths := scopePaths(srows)
-	all, err := o.loadPinned(ctx, paths)
+	all, err := o.loadPinned(ctx, paths, false)
 	if err != nil {
 		return ShowOut{}, err
 	}
@@ -306,6 +309,13 @@ type ListRow struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 }
 
+// listScopeCells and listFileCells are the scope list's scope and file
+// column widths in terminal cells.
+const (
+	listScopeCells = 32
+	listFileCells  = 36
+)
+
 // ListOut is every folder scope, by path.
 type ListOut struct {
 	Data []ListRow `json:"data"`
@@ -317,13 +327,15 @@ func (o ListOut) Text() string {
 		return "(no folder scopes: lore rule add … --scope dir:<path>)\n"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%-32s %5s %8s %5s  %-36s %6s\n", "scope", "rules", "hotfixes", "notes", "file", "bytes")
+	fmt.Fprintf(&b, "%s %5s %8s %5s  %s %6s\n", textwidth.PadRight("scope", listScopeCells), "rules", "hotfixes", "notes", textwidth.PadRight("file", listFileCells), "bytes")
 	for _, r := range o.Data {
 		file := r.File
 		if r.Missing {
 			file = "(folder missing: lore scope move)"
 		}
-		fmt.Fprintf(&b, "%-32s %5d %8d %5d  %-36s %6d\n", "dir:"+r.Path, r.Rules, r.Hotfixes, r.Notes, file, r.Bytes)
+		// Padded in terminal cells (devco:Q-14): a CJK folder name
+		// shifted every later column when padded by bytes.
+		fmt.Fprintf(&b, "%s %5d %8d %5d  %s %6d\n", textwidth.PadRight("dir:"+r.Path, listScopeCells), r.Rules, r.Hotfixes, r.Notes, textwidth.PadRight(file, listFileCells), r.Bytes)
 	}
 	return b.String()
 }
@@ -340,7 +352,7 @@ func (o ops) list(ctx context.Context, _ ListIn) (ListOut, error) {
 		return ListOut{}, err
 	}
 	paths := scopePaths(srows)
-	all, err := o.loadPinned(ctx, paths)
+	all, err := o.loadPinned(ctx, paths, true)
 	if err != nil {
 		return ListOut{}, err
 	}

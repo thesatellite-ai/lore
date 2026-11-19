@@ -36,8 +36,10 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -109,7 +111,7 @@ func TeamOps(env profilestore.Store) []op.Entry {
 		op.Define(op.Spec{Name: OpTeamShow, Summary: "Show a team and its members",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: readErrs,
 			Examples: []op.Example{{Title: "one team", CLI: "lore team show --handle @web", Want: "members"}}},
-			func(ctx context.Context, in TeamRefIn) (TeamShowOut, error) { return teamShow(ctx, env, in) }),
+			func(ctx context.Context, in TeamShowIn) (TeamShowOut, error) { return teamShow(ctx, env, in) }),
 		op.Define(op.Spec{Name: OpTeamRemove, Summary: "Remove a team (its row is kept, so tasks that named it still read; team add brings it back)",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: writeErrs,
 			Examples: []op.Example{{Title: "the team is disbanded", CLI: "lore team remove --handle @web", Want: "removed"}}},
@@ -135,7 +137,7 @@ func TeamOps(env profilestore.Store) []op.Entry {
 
 // TeamAddIn is the input of team.add.
 type TeamAddIn struct {
-	Handle  string   `json:"handle" arg:"0" desc:"the team's @handle"`
+	Handle  string   `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle"`
 	Name    string   `json:"name,omitempty" flag:"name" desc:"the display name"`
 	Members []string `json:"members,omitempty" flag:"members" desc:"the people: @handle, act_ id or email, comma-separated or repeated (replaces the members of an existing team)"`
 }
@@ -143,6 +145,8 @@ type TeamAddIn struct {
 // TeamListIn is the input of team.list.
 type TeamListIn struct {
 	All bool `json:"all,omitempty" flag:"all" desc:"also list removed teams"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; bound by the direct runner, applied by the
 	// roster's engine).
@@ -153,18 +157,27 @@ type TeamListIn struct {
 
 // TeamRefIn names one team.
 type TeamRefIn struct {
-	Handle string `json:"handle" arg:"0" desc:"the team's @handle (or its tem_ id)"`
+	// --id is the lookup flag every show takes (devco D-449).
+	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle (or its tem_ id)"`
+}
+
+// TeamShowIn is the input of team.show: the team, and the org whose
+// roster holds it (--store <org>, devco D-499; team remove keeps
+// TeamRefIn, a write names no store).
+type TeamShowIn struct {
+	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle (or its tem_ id)"`
+	metalist.RosterStore
 }
 
 // TeamRenameIn is the input of team.rename.
 type TeamRenameIn struct {
-	Handle string `json:"handle" arg:"0" desc:"the team's @handle now (or its tem_ id)"`
+	Handle string `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle now (or its tem_ id)"`
 	To     string `json:"to" flag:"to" desc:"the new @handle"`
 }
 
 // TeamMembersIn is the input of team.member.add|remove.
 type TeamMembersIn struct {
-	Handle  string   `json:"handle" arg:"0" desc:"the team's @handle"`
+	Handle  string   `json:"handle" arg:"0" flag:"handle" alias:"id" desc:"the team's @handle"`
 	Members []string `json:"members" arg:"1" rest:"true" desc:"the people: @handle, act_ id or email (several, or comma-separated)"`
 }
 
@@ -231,6 +244,9 @@ type TeamWriteOut struct {
 	From     string   `json:"from,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
 	Where    string   `json:"where"`
+	// label is Roster.Label, for "the roster of …" in the text line
+	// (devco D-663: "removed from the roster in agency org/").
+	label string
 }
 
 // Text is one success line (v0.1.17's for add: "✓ <id> @h (n member(s))
@@ -240,10 +256,10 @@ func (o TeamWriteOut) Text() string {
 	var line string
 	switch o.Verb {
 	case verbTeamRemoved:
-		line = work.Success + " " + t.ID + " @" + t.Handle + " removed from the roster in " + o.Where +
+		line = work.Success + " " + t.ID + " @" + t.Handle + " removed from the roster of " + o.label +
 			" (kept for history: tasks that named it still read; lore team add --handle @" + t.Handle + " brings it back)"
 	case verbTeamRenamed:
-		line = work.Success + " " + t.ID + " @" + o.From + " is now @" + t.Handle + " in " + o.Where +
+		line = work.Success + " " + t.ID + " @" + o.From + " is now @" + t.Handle + " on the roster of " + o.label +
 			" (" + memberWord(len(t.Members)) + "; tasks assigned to it follow"
 		if len(o.Pending) > 0 {
 			line += "; pending invites renamed: " + strings.Join(o.Pending, ", ")
@@ -269,7 +285,7 @@ func (o TeamWriteOut) Text() string {
 			line += "; " + strings.Join(o.Unchanged, ", ") + " " + was
 		}
 	default: // added, updated
-		line = work.Success + " " + t.ID + " @" + t.Handle + " (" + memberWord(len(t.Members)) + ") " + o.Verb + " in " + o.Where
+		line = work.Success + " " + t.ID + " @" + t.Handle + " (" + memberWord(len(t.Members)) + ") " + o.Verb + " on the roster of " + o.label
 	}
 	return line + "\n" + profilestore.WarningText(o.Warnings)
 }
@@ -281,26 +297,49 @@ func memberWord(n int) string { return fmt.Sprintf("%d member(s)", n) }
 type TeamListOut struct {
 	Teams []Team `json:"teams"`
 	Where string `json:"where"`
+	// label is Roster.Label, for "the roster of …" (devco D-647).
+	label string
 }
 
 // Text is v0.1.17's list: "@<handle> <name> <n> member(s)", a removed
-// team marked, or "no teams on <where>'s roster".
+// team marked, or "no teams on the roster of <where>".
 func (o TeamListOut) Text() string {
 	if len(o.Teams) == 0 {
-		return "no teams on " + o.Where + "'s roster\n"
+		return "no teams on the roster of " + o.label + "\n"
 	}
-	var b strings.Builder
-	for _, t := range o.Teams {
-		line := fmt.Sprintf("@%-16s %-24s %s", t.Handle, t.Name, memberWord(len(t.Members)))
+	// devco D-572: columns as wide as their widest cell (a name longer than
+	// the old fixed 24 ran into the member count), and a count line.
+	rows := make([][]string, len(o.Teams))
+	for i, t := range o.Teams {
+		count := memberWord(len(t.Members))
 		if len(t.Pending) > 0 {
-			line += fmt.Sprintf(", %d pending (invited)", len(t.Pending))
+			count += fmt.Sprintf(", %d pending (invited)", len(t.Pending))
 		}
 		if !t.Active {
-			line += removedMark
+			count += removedMark
 		}
-		b.WriteString(strings.TrimRight(line, " ") + "\n")
+		rows[i] = []string{"@" + t.Handle, t.Name, count}
 	}
+	var b strings.Builder
+	writeColumns(&b, rows)
+	b.WriteString(plural.Count(len(o.Teams), "team") + "\n")
 	return b.String()
+}
+
+// writeColumns writes rows as columns two spaces apart, each as wide as
+// its widest cell in terminal cells (N-2), trailing spaces trimmed.
+func writeColumns(b *strings.Builder, rows [][]string) {
+	ws := textwidth.Columns(rows)
+	for _, row := range rows {
+		var line strings.Builder
+		for i, c := range row {
+			if i > 0 {
+				line.WriteString("  ")
+			}
+			line.WriteString(textwidth.PadRight(c, ws[i]))
+		}
+		b.WriteString(strings.TrimRight(line.String(), " ") + "\n")
+	}
 }
 
 // removedMark ends the list line of a removed team (--all).
@@ -439,13 +478,16 @@ func findTeam(ctx context.Context, r profilestore.Roster, h string) (row.Row, bo
 func isTeamID(ref string) bool { return strings.HasPrefix(ref, string(ids.PrefixTeam)+"_") }
 
 // teamMissErr is the answer for a handle (or tem_ id) no team has.
-func teamMissErr(h, where string) error {
+func teamMissErr(h, label string) error {
 	if isTeamID(h) {
-		return errs.New(errs.NotFound, "no team "+h+" on the roster in "+where).
+		return errs.New(errs.NotFound, "no team "+h+" on the roster of "+label).
 			WithHint("lore team list shows the teams (lore team list --all also the removed ones)")
 	}
-	return errs.New(errs.NotFound, "no team @"+h+" on the roster in "+where).
-		WithHint("lore team list shows the teams; lore team add --handle @" + h + " --members <people> makes it")
+	// devco:T-6: the likely cause is a team a teammate made after this
+	// clone's last sync; sending the person to team add would make a
+	// second @h, so the hint names lore sync first.
+	return errs.New(errs.NotFound, "no team @"+h+" on your copy of the roster of "+label).
+		WithHint("a teammate may have made it since your last sync: lore sync fetches the roster, then run this again; lore team list shows the teams you have")
 }
 
 // resolveMembers turns references into actor ids, in order, each once. A
@@ -458,7 +500,7 @@ func resolveMembers(ctx context.Context, r profilestore.Roster, refs []string) (
 		a, err := r.ResolveActor(ctx, ref)
 		if err != nil {
 			if errs.Has(err, errs.NotFound) {
-				return nil, nil, errs.New(errs.NotFound, "no one is "+ref+" on the roster in "+r.Where()).
+				return nil, nil, errs.New(errs.NotFound, "no one is "+ref+" on the roster of "+r.Label()).
 					WithHint("check the handle with lore actor list; a new person runs lore actor register (or joins from an invite) first")
 			}
 			return nil, nil, err
@@ -526,7 +568,7 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 		return TeamWriteOut{}, err
 	}
 	if who := handleHolder(actors, h); who != "" {
-		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+h+" is taken by "+who+" on the roster in "+r.Where()+"; a team and a person cannot share one").
+		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+h+" is taken by "+who+" on the roster of "+r.Label()+"; a team and a person cannot share one").
 			WithHint("choose another team handle (lore team add --handle @" + h + "-team …)")
 	}
 	members, found, err := resolveMembers(ctx, r, in.Members)
@@ -567,7 +609,7 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 	} else {
 		fp, ok := r.(profilestore.FolderProjecter)
 		if !ok {
-			return TeamWriteOut{}, errs.New(errs.Unsupported, "this lore build cannot write teams to the roster in "+r.Where()).WithHint("upgrade lore")
+			return TeamWriteOut{}, errs.New(errs.Unsupported, "this lore build cannot write teams to the roster of "+r.Label()).WithHint("upgrade lore")
 		}
 		pid, perr := fp.FolderProject(ctx)
 		if perr != nil {
@@ -588,7 +630,7 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 		return TeamWriteOut{}, err
 	}
 	r.Push(ctx)
-	return TeamWriteOut{Team: teamOf(w, actors), Verb: verb, Warnings: r.Warnings(), Where: r.Where()}, nil
+	return TeamWriteOut{Team: teamOf(w, actors), Verb: verb, Warnings: r.Warnings(), Where: r.Where(), label: r.Label()}, nil
 }
 
 func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamListOut, error) {
@@ -609,7 +651,7 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	if err != nil {
 		return TeamListOut{}, err
 	}
-	out := TeamListOut{Teams: []Team{}, Where: r.Where()}
+	out := TeamListOut{Teams: []Team{}, Where: r.Where(), label: r.Label()}
 	for _, x := range rows {
 		t := teamOf(x, actors)
 		t.Pending = pending[t.Handle]
@@ -621,7 +663,7 @@ func teamList(ctx context.Context, env profilestore.Store, in TeamListIn) (TeamL
 	return out, nil
 }
 
-func teamShow(ctx context.Context, env profilestore.Store, in TeamRefIn) (TeamShowOut, error) {
+func teamShow(ctx context.Context, env profilestore.Store, in TeamShowIn) (TeamShowOut, error) {
 	h, err := teamHandle(in.Handle)
 	if err != nil {
 		return TeamShowOut{}, err
@@ -636,7 +678,7 @@ func teamShow(ctx context.Context, env profilestore.Store, in TeamRefIn) (TeamSh
 		return TeamShowOut{}, err
 	}
 	if !ok {
-		return TeamShowOut{}, teamMissErr(h, r.Where())
+		return TeamShowOut{}, teamMissErr(h, r.Label())
 	}
 	actors, err := rosterActors(ctx, r)
 	if err != nil {
@@ -666,7 +708,7 @@ func teamRemove(ctx context.Context, env profilestore.Store, in TeamRefIn) (Team
 		return TeamWriteOut{}, err
 	}
 	if !ok {
-		return TeamWriteOut{}, teamMissErr(h, r.Where())
+		return TeamWriteOut{}, teamMissErr(h, r.Label())
 	}
 	actors, err := rosterActors(ctx, r)
 	if err != nil {
@@ -681,7 +723,7 @@ func teamRemove(ctx context.Context, env profilestore.Store, in TeamRefIn) (Team
 		return TeamWriteOut{}, err
 	}
 	r.Push(ctx)
-	return TeamWriteOut{Team: teamOf(w, actors), Verb: verbTeamRemoved, Warnings: r.Warnings(), Where: r.Where()}, nil
+	return TeamWriteOut{Team: teamOf(w, actors), Verb: verbTeamRemoved, Warnings: r.Warnings(), Where: r.Where(), label: r.Label()}, nil
 }
 
 // teamRename changes a team's handle (G-15: a team could only be
@@ -710,7 +752,7 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 		return TeamWriteOut{}, err
 	}
 	if !ok {
-		return TeamWriteOut{}, teamMissErr(h, r.Where())
+		return TeamWriteOut{}, teamMissErr(h, r.Label())
 	}
 	from := fieldText(cur, teamFieldHandle)
 	actors, err := rosterActors(ctx, r)
@@ -721,7 +763,7 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 		return TeamWriteOut{}, errs.New(errs.InvalidInput, "team "+cur.ID.String()+" is already @"+to).WithHint("lore team list shows the teams")
 	}
 	if who := handleHolder(actors, to); who != "" {
-		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+to+" is taken by "+who+" on the roster in "+r.Where()+"; a team and a person cannot share one").
+		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+to+" is taken by "+who+" on the roster of "+r.Label()+"; a team and a person cannot share one").
 			WithHint("choose another team handle (lore team rename --handle @" + from + " --to @" + to + "-team)")
 	}
 	if other, taken, ferr := findTeam(ctx, r, to); ferr != nil {
@@ -731,7 +773,7 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 		if fieldText(other, teamFieldActive) == boolFalse {
 			state = " (removed)"
 		}
-		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+to+" is taken by team "+other.ID.String()+state+" on the roster in "+r.Where()).
+		return TeamWriteOut{}, errs.New(errs.InvalidInput, "handle @"+to+" is taken by team "+other.ID.String()+state+" on the roster of "+r.Label()).
 			WithHint("lore team list --all shows every team; choose another handle")
 	}
 	hv, err := textValue("--to", to)
@@ -742,7 +784,7 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 	if err != nil {
 		return TeamWriteOut{}, err
 	}
-	out := TeamWriteOut{Verb: verbTeamRenamed, From: from, Where: r.Where()}
+	out := TeamWriteOut{Verb: verbTeamRenamed, From: from, Where: r.Where(), label: r.Label()}
 	invs, err := readInvites(ctx, r)
 	if err != nil {
 		return TeamWriteOut{}, err
@@ -798,7 +840,7 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 		return TeamWriteOut{}, err
 	}
 	if !ok {
-		return TeamWriteOut{}, teamMissErr(h, r.Where())
+		return TeamWriteOut{}, teamMissErr(h, r.Label())
 	}
 	if fieldText(cur, teamFieldActive) == boolFalse {
 		return TeamWriteOut{}, errs.New(errs.StatusChange, "team @"+h+" is removed; its members do not change").
@@ -840,7 +882,7 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 		actors[id] = a
 	}
 	list := value.ItemStrings(cur.Fields[schema.FieldTeamMembers])
-	out := TeamWriteOut{Verb: verbTeamMembersAdded, Where: r.Where()}
+	out := TeamWriteOut{Verb: verbTeamMembersAdded, Where: r.Where(), label: r.Label()}
 	if !add {
 		out.Verb = verbTeamMembersRemove
 	}

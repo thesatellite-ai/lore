@@ -377,7 +377,7 @@ func areaLine(a string, rs []onboard.CheckResult, s SetupReport) string {
 // localPersonalNote follows the store me line of a setup whose personal
 // store is a folder on this machine (H-17): nothing else holds a copy, so
 // a lost machine loses the notes; the way to keep one elsewhere.
-const localPersonalNote = "· a folder on this machine only, with no copy anywhere else (to keep one: push the folder to a private git repo, then lore store set-url --name me --url <private-repo-url>)"
+const localPersonalNote = "· a folder on this machine only, with no copy anywhere else (to keep one: make an empty private git repo; lore store set-url --name me --url <private-repo-url> copies the folder into its clone, then lore sync pushes it)"
 
 // repoCount is "1 repo" / "<n> repos".
 func repoCount(n int) string {
@@ -447,6 +447,9 @@ func plural(n int, word string) string {
 func (r Report) allText() string {
 	var b strings.Builder
 	var ok, warns, errors, couldNot int
+	if l := r.homeLine(); l != "" {
+		b.WriteString(l + "\n")
+	}
 	tally := func(rs []onboard.CheckResult) {
 		for _, c := range rs {
 			switch {
@@ -474,6 +477,9 @@ func (r Report) allText() string {
 	}
 	for _, n := range r.unchecked {
 		b.WriteString("\n" + n + "\n")
+	}
+	if t := fleetText(r.Found, r.verbose); t != "" {
+		b.WriteString("\n" + t)
 	}
 	if ps := problems(r.Machine.Checks); len(ps) > 0 {
 		b.WriteString("\nmachine\n")

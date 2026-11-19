@@ -27,6 +27,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/internal/untouchedwalk"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/wire"
@@ -34,7 +35,7 @@ import (
 
 // untouchedDeadline bounds one command of the walk: a one-shot command in
 // a scratch repo answers in seconds, so a run past this is a hang.
-const untouchedDeadline = 90 * time.Second
+var untouchedDeadline = testtime.Scale(90 * time.Second)
 
 // untouchedMinCommands keeps the walk from passing by finding nothing.
 const untouchedMinCommands = 300

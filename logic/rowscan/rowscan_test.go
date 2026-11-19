@@ -178,3 +178,18 @@ func TestScanOnceForEachDistinctText(t *testing.T) {
 		t.Fatalf("%d scans, want 4 (one per distinct field text)", n)
 	}
 }
+
+// TestScanFindsATokenInOrigin is devco:R-10: `_o` records a name a person
+// chose (a git branch), so the every-row scan reads it too and names the
+// finding under the field "_o".
+func TestScanFindsATokenInOrigin(t *testing.T) {
+	o, err := value.JSONOf([]byte(`{"git":{"branch":"feat/SECRETWORD","state":"branch"},"store":"repo"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := row.Row{Table: schema.TableMemories, ID: mustID(t, memID), Origin: o, Fields: map[string]value.Value{"body": text(t, "clean")}}
+	hits := rowscan.Scan(wordScanner{word: "SECRETWORD"}, map[row.Table][]rowscan.Row{schema.TableMemories: {{Source: "repo", Row: r}}})
+	if len(hits) != 1 || hits[0].Finding.Field != row.KeyOrigin {
+		t.Fatalf("hits = %+v", hits)
+	}
+}

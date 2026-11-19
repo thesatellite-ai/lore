@@ -51,6 +51,8 @@ func (o AdoptOut) Text() string { return o.Human }
 
 // RehomeIn is the input of resource.rehome.
 type RehomeIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	In string `json:"in,omitempty" flag:"in" desc:"the place whose resources are checked (default repo)"`
 }
 
@@ -157,9 +159,10 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 				"; writes of a conflicted kind are refused until it is resolved; nothing moved").
 				WithHint("resolve the conflict in the row file, then run lore sync")
 		}
-		return AdoptOut{}, errs.New(errs.NotFound, "no kind or field rows in "+string(from))
+		return AdoptOut{}, errs.New(errs.NotFound, "no kind or field rows in "+string(from)).
+			WithHint("run `lore resource kinds` to see which place defines each kind")
 	}
-	if err = bulk.Ask(ctx, fmt.Sprintf("move %s (%s) and %s from %s into %s?", plural.Count(len(kinds), "kind"), strings.Join(names, ", "), plural.Count(len(fields), "field row"), from, place(to))); err != nil {
+	if err = bulk.Ask(ctx, fmt.Sprintf("move %s (%s) and %s from %s into %s?", plural.Count(len(kinds), "kind"), strings.Join(names, ", "), plural.Count(len(fields), "field row"), from, o.place(to))); err != nil {
 		return AdoptOut{}, err
 	}
 	for _, l := range append(kinds, fields...) {
@@ -167,7 +170,7 @@ func (o ops) adopt(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 			return AdoptOut{}, err
 		}
 	}
-	human := fmt.Sprintf("✓ adopted %s (%s) and %s from %s into %s; ids unchanged\n", plural.Count(len(kinds), "kind"), strings.Join(names, ", "), plural.Count(len(fields), "field row"), from, place(to))
+	human := fmt.Sprintf("✓ adopted %s (%s) and %s from %s into %s; ids unchanged\n", plural.Count(len(kinds), "kind"), strings.Join(names, ", "), plural.Count(len(fields), "field row"), from, o.place(to))
 	for _, sk := range skipped {
 		human += "warning: skipped " + sk + "; resolve it, then adopt again\n"
 	}
@@ -239,7 +242,7 @@ func (o ops) rehome(ctx context.Context, in RehomeIn) (RehomeOut, error) {
 		if _, lerr := o.lookupKind(ctx, name); errs.Has(lerr, errs.KindConflict) {
 			var where []string
 			for _, k := range ks {
-				where = append(where, k.Row.ID.String()+" in "+place(k.Src))
+				where = append(where, k.Row.ID.String()+" in "+o.place(k.Src))
 			}
 			out.Clashes = append(out.Clashes, name+": "+strings.Join(where, ", "))
 		}

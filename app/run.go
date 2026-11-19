@@ -21,6 +21,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -31,10 +32,11 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	"github.com/thesatellite-ai/lore/surface/cli"
 	"github.com/thesatellite-ai/lore/surface/setupweb"
@@ -56,7 +58,7 @@ var setupUI setupweb.UI
 // unresolvedHome is the lore home used when the user's home cannot be read
 // (a container with no HOME): a temp folder, so nothing is written into the
 // working directory by accident.
-const unresolvedHome = "lore-home-unresolved"
+const unresolvedHome = lorehome.UnresolvedDir
 
 // Option composes the binary: what the importing main hands in (its
 // version, an optional setup page UI). Options are applied in order; a
@@ -121,10 +123,22 @@ func Run(ctx context.Context, args []string, opts ...Option) int {
 // run builds the app and the command tree, executes args and returns the
 // process exit status (never 0 for a failure).
 func run(ctx context.Context, args []string) int {
+	// One gitfast Session per process (devco:D-418): every git runner asks
+	// it first, so repeated repository reads start no git process.
+	fast := gitfast.New()
+	defer fast.Close()
+	if home, herr := lorehome.Resolve(); herr == nil {
+		fast.SetCacheDir(filepath.Join(home.Dir, "cache")) // kept answers live in the lore home, never in a repo
+	}
+	ctx = gitfast.With(ctx, fast)
+	defer gitfast.Install(fast)()        // callers that start from context.Background()
 	if err := refuseRoot(); err != nil { // guard.go: E_ROOT_REFUSED unless LORE_ALLOW_ROOT=1
 		return printHostError(err)
 	}
 	if err := refuseRelativeHome(); err != nil { // home.go: E_INVALID_INPUT for a relative HOME (E-GAPS-1 S2)
+		return printHostError(err)
+	}
+	if _, err := lorehome.Resolve(); err != nil { // E_INVALID_INPUT for an empty, relative or ~ LORE_HOME
 		return printHostError(err)
 	}
 	defer offlineFixDryRun(args)() // fixoffline.go: lore fix --dry-run reaches no remote (owner bug 14) and writes nothing
@@ -139,12 +153,16 @@ func run(ctx context.Context, args []string) int {
 	}
 	wd, home := dirs()
 	base, org := wire.StandaloneOptionsOrg(wd, home, wd, version)
+	base.HomeSource = homeSource()
 	if isInitRun(args) {
 		initScope(&base) // init.go: init opens no org store (TestE8, TestE10)
 	}
 	// `lore sync` refreshes the org stores' link index now (F11): every
-	// other command reads it within live.fetch_ttl.
-	if commandName(args) == syncCommand {
+	// other command reads it within live.fetch_ttl. The git hook blocks
+	// (`lore sync hook <name>`) are not `lore sync`: a commit is local, and
+	// each hook fetching every org store whatever the stamp said cost every
+	// plain commit a store fetch and an ls-remote (devco:D-420).
+	if refreshesLinkIndex(args) {
 		org.FetchLinksAlways()
 	}
 	// One clock for row stamps and live decisions: the wall clock, or
@@ -182,10 +200,19 @@ func run(ctx context.Context, args []string) int {
 		HoldFinishLines: true, // the run's push/landing lines follow the result (flushed after Execute)
 		RepoAddresses:   func(ctx context.Context) { app.SyncRepoAddresses(ctx, os.Stderr, os.Stdin, wire.StdinIsTerminal()) },
 		// FLAG4: live commits fall back to the lore identity, as store commits do.
-		Signer:     func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
-		MetaStatus: func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
+		Signer: func(ctx context.Context) (string, string, bool) { return app.LoreSignature(ctx) },
+		// devco:D-654: "not set up" only when no personal store is configured.
+		PersonalStore: func(ctx context.Context) string { return app.PersonalStoreURL(ctx) },
+		// BRANCH_LAYERS 4: code-repo mode, new live-kind rows on an isolated branch stay with the code.
+		BranchIsolated: func(ctx context.Context) bool { return app.RepoBranchIsolated(ctx) },
+		MetaStatus:     func(ctx context.Context) ([]string, []string) { return app.MetaStatusLines(ctx) },
 		// F-9: a removed person's later writes stay local, as in the store clones.
 		PushHold: func(ctx context.Context) (time.Time, string, bool) { return app.LivePushHold(ctx) },
+		// J-11: a link of a client repo with no .lore/ installs the leak guard there.
+		ClientRepo: func(ctx context.Context) bool {
+			sit, err := org.Situation(ctx)
+			return err == nil && sit != nil && sit.ResolveErr == nil && sit.Result.Role == orgresolve.RoleClient
+		},
 		// P3-MODEB-2: the resolved org entry's live: block overrides the top level.
 		OrgLive: func(ctx context.Context) *orgconf.Live {
 			if sit, err := org.Situation(ctx); err == nil && sit != nil && sit.Result.Org != nil {
@@ -194,6 +221,7 @@ func run(ctx context.Context, args []string) int {
 			return nil
 		}})
 	hooks = append(hooks, liveRows.Hook(), diskFullHook()) // guard.go: SQLITE_FULL / ENOSPC -> E_DISK_FULL
+	hooks = append(hooks, readOnlyHomeHook(home))          // guard.go: a write in a read-only lore home is refused up front
 	// E-FATES-5: after an upgrade, a writing command or `lore sync` moves an
 	// auto-pinned lore-sync-merge workflow to this release (v0.1.17 notice).
 	hooks = append(hooks, hosthooks.PinRefreshHook(wd, version, os.Stderr))
@@ -237,12 +265,12 @@ func run(ctx context.Context, args []string) int {
 	defer func() { _ = app.Close() }() // a close error after the command finished has no one to report to
 	runner := hosthooks.NewRunner(app, hooks)
 	// setupweb.go: setup.run / join / repair returning a WebStart open the page (ONB 5.1).
-	root := cli.Build(app.Registry(), newPageRunner(app, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer))
+	root := cli.Build(app.Registry(), newPageRunner(app, org, home, runner, args), cli.WithInteractive(wire.StdinIsTerminal), cli.WithColor(flags.palette), cli.WithArgs(args), cli.WithActorNamer(app.ActorNamer))
 	root.Version = version
 	addRootFlags(root, flags)
 	hosthooks.Install(root, runner)
 	withMigrateContext(root, app) // migratehooks.go: team lock; crash/pause points in test builds only
-	h := &host{app: app, home: home, live: liveRows, render: rend.h, runner: runner}
+	h := &host{app: app, org: org, home: home, live: liveRows, render: rend.h, runner: runner}
 	repoInit.ih = h.initHost(wd, hasLocalState(home, wd))
 	h.markPrinted(root)
 	mountShortcuts(root)
@@ -321,17 +349,29 @@ func (h *host) markPrinted(c *cobra.Command) {
 }
 
 // dirs is the working directory ("." when unreadable) and the lore home
-// (<user home>/.lore; a temp fallback when the user home is unknown).
+// (lorehome.Resolve: LORE_HOME, else <user home>/.lore; a temp fallback
+// when the user home is unknown). run refuses a bad LORE_HOME before it
+// gets here; a caller that skipped that check gets the temp fallback,
+// never a folder lore did not mean.
 func dirs() (wd, home string) {
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = "."
 	}
-	uh, err := os.UserHomeDir()
+	h, err := lorehome.Resolve()
 	if err != nil {
 		return wd, filepath.Join(os.TempDir(), unresolvedHome)
 	}
-	return wd, filepath.Join(uh, rowfs.LoreDir)
+	return wd, h.Dir
+}
+
+// homeSource is where dirs' lore home came from (`lore where`, doctor).
+func homeSource() lorehome.Source {
+	h, err := lorehome.Resolve()
+	if err != nil {
+		return lorehome.FromFallback
+	}
+	return h.Source
 }
 
 // syncCommand is the first word of `lore sync`.
@@ -356,7 +396,7 @@ func runsOldLayoutMove(args []string) bool {
 		return false
 	}
 	for i := 0; i+1 < len(args); i++ {
-		if args[i] == opssync.Noun && args[i+1] == "hook" {
+		if args[i] == opssync.Noun && args[i+1] == syncHookWord {
 			return false
 		}
 	}
@@ -394,6 +434,25 @@ func isDryRun(args []string) bool {
 	}
 	return false
 }
+
+// refreshesLinkIndex reports whether args run `lore sync` itself, the one
+// command that fetches every org store whatever live.fetch_ttl says; its
+// hidden `sync hook` entry point for the git hooks reads within the TTL
+// like any other command (devco:D-420).
+func refreshesLinkIndex(args []string) bool {
+	if commandName(args) != syncCommand {
+		return false
+	}
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == opssync.Noun && args[i+1] == syncHookWord {
+			return false
+		}
+	}
+	return true
+}
+
+// syncHookWord is the second word of the git hooks' `lore sync hook <name>`.
+const syncHookWord = "hook"
 
 // isGitPushHook reports whether args run one of the repo git hooks that
 // push a waiting batch (`lore sync hook post-commit|pre-push`).

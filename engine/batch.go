@@ -503,3 +503,10 @@ func createIDOf(ctx context.Context, p ids.Prefix) (ids.AnyID, bool) {
 	}
 	return id, true
 }
+
+// Unstaged is unstaged for the wire: a write lore makes for the caller in
+// another store than the open stage's (devco D-486: an agent's actor row
+// written once into the roster folder of a store clone while the task
+// edit it rides with is staged for a product folder) goes straight to its
+// own store instead of making the batch span two stores.
+func Unstaged(ctx context.Context) context.Context { return unstaged(ctx) }

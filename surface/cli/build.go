@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/surface/errmask"
 )
 
 // Reserved flags every generated command may carry. An operation field may
@@ -351,7 +354,13 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 		if err := straySwitchWord(cmd, cfg.args, args); err != nil {
 			return printUsage(cmd, cfg, err)
 		}
+		if err := flagAsValue(cmd, cfg.args, values); err != nil {
+			return printUsage(cmd, cfg, err)
+		}
 		if err := contradictingSwitch(cmd, negs, aliases); err != nil {
+			return printUsage(cmd, cfg, err)
+		}
+		if err := clearAndSet(fields, values, aliases, cmd); err != nil {
 			return printUsage(cmd, cfg, err)
 		}
 		flags := map[string][]string{}
@@ -364,7 +373,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 				seq[name] = rf.seq
 			}
 		}
-		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos, FlagSeq: seq}, *yes, sf.choice(cmd))
+		res, err := run(cmd, e, runner, cfg, op.ArgsDecoder{Args: args, Flags: flags, FlagPos: pos, FlagSeq: seq, AfterSwitch: switchWords(cmd, cfg.args, args)}, *yes, sf.choice(cmd))
 		out := cmd.OutOrStdout()
 		if err != nil {
 			return &exitError{code: cfg.printNamedError(cmd, err, *asJSON), cause: err}
@@ -373,7 +382,7 @@ func command(e op.Entry, verb string, runner op.Runner, cfg config) *cobra.Comma
 			err = printJSON(out, res)
 		} else {
 			var hb strings.Builder
-			if err = printHuman(&hb, res, cfg.color(StreamOut), cmd.CommandPath()); err == nil {
+			if err = printHuman(&hb, res, cfg.color(StreamOut), cmd.CommandPath(), e.Spec().OnlyReads()); err == nil {
 				_, err = io.WriteString(out, cfg.nameActors(cmd.Context(), hb.String()))
 			}
 		}
@@ -430,7 +439,7 @@ func run(cmd *cobra.Command, e op.Entry, runner op.Runner, cfg config, d op.Deco
 		if !errs.Has(err, errs.NeedsConfirm) || !caller.Interactive {
 			return res, err
 		}
-		body := errs.EnvelopeOf(err).Error
+		body := errmask.Of(err).Error
 		switch {
 		case len(body.Findings) > 0 && !caller.Secret.Any():
 			// SECRETS 2.1 / FB-SEC-2: the finding needs a choice, never a
@@ -633,6 +642,61 @@ func contradictingSwitch(cmd *cobra.Command, negs map[string]*negFlag, aliases m
 	return nil
 }
 
+// clearPrefixes are the flag-name prefixes of an op's switch that empties
+// or turns off the field its base flag sets (`--clear-due` / `--due`,
+// `--no-parent` / `--parent`, `--no-internal` / `--internal`).
+var clearPrefixes = []string{"clear-", "no-"}
+
+// notClearPairs are switches whose name looks like a clearing pair but
+// that act on something else: --no-meta stops the copy of a --supersedes
+// row's metadata, so it goes with --meta (the add's own keys); without
+// --supersedes it is refused by the add (metalist.NoMetaNeedsSupersedes).
+var notClearPairs = []string{"no-meta"}
+
+// clearAndSet refuses an op's clearing switch typed together with the flag
+// that sets the same field, naming both (devco:L-6: `task edit --clear-due
+// --due 2026-12-01` dropped --due silently). A switch given as =false
+// clears nothing and passes; a bool base given as =false sets nothing.
+func clearAndSet(fields []op.FieldInfo, values map[string]*rawFlag, aliases map[string][]string, cmd *cobra.Command) *errs.Error {
+	on := func(name string, typ op.FieldType) bool {
+		rf, ok := values[name]
+		if !ok || !changed(cmd, name, aliases[name]) {
+			return false
+		}
+		if typ != op.TypeBool {
+			return true
+		}
+		last := ""
+		if len(rf.vals) > 0 {
+			last = rf.vals[len(rf.vals)-1]
+		}
+		b, err := strconv.ParseBool(last)
+		return err == nil && b
+	}
+	for _, f := range fields {
+		if f.Flag == "" || f.Type != op.TypeBool || slices.Contains(notClearPairs, f.Flag) {
+			continue
+		}
+		for _, p := range clearPrefixes {
+			base, ok := strings.CutPrefix(f.Flag, p)
+			if !ok {
+				continue
+			}
+			i := slices.IndexFunc(fields, func(b op.FieldInfo) bool { return b.Flag == base })
+			if i < 0 || !on(f.Flag, f.Type) || !on(base, fields[i].Type) {
+				continue
+			}
+			keep := "give --" + base + " \"value\" to set it"
+			if fields[i].Type == op.TypeBool {
+				keep = "give --" + base + " to turn it on"
+			}
+			return errs.New(UsageCode, "--"+f.Flag+" and --"+base+" cannot be used together").
+				WithHint(keep + ", or --" + f.Flag + " alone, not both")
+		}
+	}
+	return nil
+}
+
 // changed reports whether the flag was given under its name or an alias.
 func changed(cmd *cobra.Command, name string, aliases []string) bool {
 	if cmd.Flags().Changed(name) {
@@ -660,7 +724,73 @@ func (cfg config) flagError(cmd *cobra.Command, err error, fields []op.FieldInfo
 	if h := flagHint(cmd.CommandPath(), unknownFlag(err), fields); h != "" {
 		hint = h
 	}
+	if e := badFlagValue(cmd, err); e != nil {
+		return printUsage(cmd, cfg, e)
+	}
 	return printUsage(cmd, cfg, errs.Wrap(UsageCode, err.Error(), err).WithHint(hint))
+}
+
+// badFlagValueRe matches pflag's message for a value its own parser
+// refused: `invalid argument "maybe" for "--json" flag: strconv.ParseBool:
+// parsing "maybe": invalid syntax` (also `-j, --json`).
+var badFlagValueRe = regexp.MustCompile(`^invalid argument "(.*)" for "(?:-\w, )?--([\w-]+)" flag: `)
+
+// badFlagTagRe is the "[E_CODE] " tag an errs error's text starts with.
+var badFlagTagRe = regexp.MustCompile(`^\[E_[A-Z_]+\] `)
+
+// pflagPkg is the package of pflag's built-in flag value types, whose
+// refusals are Go parser text.
+const pflagPkg = "github.com/spf13/pflag"
+
+// badFlagValue words a value pflag's own parser refused in plain words,
+// by the flag's type, with no Go parser text (devco:L-9: --json=maybe
+// printed strconv.ParseBool). nil when err is not such a refusal.
+func badFlagValue(cmd *cobra.Command, err error) *errs.Error {
+	m := badFlagValueRe.FindStringSubmatch(err.Error())
+	if m == nil {
+		return nil
+	}
+	val, name := m[1], m[2]
+	form := "--" + name + " <value>"
+	// A flag value type lore defines (--color's ColorFlag, …) refuses in
+	// lore's own words, naming the accepted values; that cause is the
+	// message (after-land 29e8d071: --color=purple lost "must be auto,
+	// always or never"). Only pflag's built-in types speak Go parser text.
+	msg := strings.TrimSpace(err.Error()[len(m[0]):])
+	want := ""
+	fl := cmd.Flags().Lookup(name)
+	if fl == nil || reflect.Indirect(reflect.ValueOf(fl.Value)).Type().PkgPath() == pflagPkg {
+		msg = "" // pflag's own types (or a flag not found): Go parser text, worded below
+	}
+	if fl != nil {
+		switch t := fl.Value.Type(); {
+		case t == "bool":
+			want, form = "true or false", "--"+name+" alone to turn it on, --"+name+"=false to turn it off"
+		case strings.HasPrefix(t, "int") || strings.HasPrefix(t, "uint"):
+			want, form = "a whole number", "--"+name+" 10"
+		case t == "duration":
+			want, form = "a duration like 45m or 1h30m", "--"+name+" 45m"
+		case t == "float32" || t == "float64":
+			want, form = "a number", "--"+name+" 1.5"
+		}
+	}
+	if msg != "" {
+		msg = badFlagTagRe.ReplaceAllString(msg, "") // the cause's own [E_…] tag: errs.New adds one
+		if !strings.HasPrefix(msg, "--"+name) {
+			msg = "--" + name + " " + msg
+		}
+		if !strings.Contains(msg, strconv.Quote(val)) {
+			msg += ", not " + strconv.Quote(val)
+		}
+	}
+	if want != "" || msg == "" {
+		if want == "" {
+			want = "a valid value"
+		}
+		msg = "--" + name + " takes " + want + ", not " + strconv.Quote(val)
+	}
+	return errs.New(UsageCode, msg).
+		WithHint("give " + form + "; " + cmd.CommandPath() + " --help lists its flags")
 }
 
 // unknownFlagPrefix is pflag's message for a long flag it does not know.
@@ -752,6 +882,35 @@ func straySwitchWord(cmd *cobra.Command, raw, args []string) *errs.Error {
 			WithHint("to turn it on give --" + name + " alone; to turn it off " + off)
 	}
 	return nil
+}
+
+// switchWords maps each positional word typed right after a long switch in
+// the raw arguments (`--json extra`) to that switch's name, for the
+// decoder's surplus-positional error (op.ArgsDecoder.AfterSwitch,
+// devco:L-4). A word the parser did not keep as a positional is left out.
+func switchWords(cmd *cobra.Command, raw, args []string) map[string]string {
+	var out map[string]string
+	for i := 0; i+1 < len(raw); i++ {
+		if raw[i] == "--" {
+			break
+		}
+		name, ok := strings.CutPrefix(raw[i], "--")
+		if !ok || strings.Contains(name, "=") {
+			continue
+		}
+		fl := cmd.Flags().Lookup(name)
+		word := raw[i+1]
+		if fl == nil || fl.NoOptDefVal == "" || strings.HasPrefix(word, "-") || !slices.Contains(args, word) {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		if _, seen := out[word]; !seen {
+			out[word] = name
+		}
+	}
+	return out
 }
 
 // AnnotationArgFlags is the cobra annotation of a generated command that

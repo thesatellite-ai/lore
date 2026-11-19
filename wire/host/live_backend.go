@@ -22,12 +22,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
@@ -71,6 +73,17 @@ var companionTables = map[row.Table]bool{
 	schema.TableActors: true, schema.TableMetaKeys: true, schema.TableMetaValues: true,
 	schema.TableTasklists: true, schema.TableScopes: true,
 }
+
+// refreshRidesLive are companion tables whose UPDATE of a row already in
+// the branch's .lore/data is held like a new row when it is lore's own
+// refresh (store.Change.Upkeep; devco:K-6). The writer's
+// own actor copy is refreshed on its first write to a store (its origin
+// stamp, a name that follows the source: wire/actor_source.go); on a live
+// write that refresh rode to the branch and left ` M .lore/data/actors/…`
+// after `lore task add`, which is documented to leave the working folder
+// alone. Held, it rides live with the content row (landing with it later)
+// or, when the run writes nothing live, goes to the branch as before.
+var refreshRidesLive = map[row.Table]bool{schema.TableActors: true}
 
 // liveBackend wraps the repo store's backend.
 type liveBackend struct {
@@ -156,6 +169,11 @@ func liveRequest(ctx context.Context, s *liveSession) rowroute.Request {
 		req.Choice, req.ChoiceTable = rowroute.ChoiceNoLive, string(c.Table)
 	case store.LiveDefault:
 	}
+	// BRANCH_LAYERS 4 (code-repo mode): on an isolated code branch a new
+	// row of a live kind stays with the code; --no-layer keeps today's.
+	if f := s.h.cfg.BranchIsolated; f != nil && !store.NoLayer(ctx) {
+		req.Isolated = f(ctx)
+	}
 	return req
 }
 
@@ -200,6 +218,35 @@ type liveDecoded struct {
 	mu      sync.Mutex
 	oid     string
 	folders map[string]map[live.RowKey]live.File
+	// stored holds each live file of oid already turned into its backend
+	// row (liveStoreRow: clone, encode, decode, encode again). One command
+	// reads the live rows several times (the cache refresh, the policy and
+	// actor lookups, the write's checks), all while it holds the live lock;
+	// converting every live row on every read made ten agent sessions in
+	// one clone queue for seconds behind each other (D-159). Same lifetime
+	// as folders: a new commit drops it.
+	stored map[live.RowKey]store.Row
+	// purgedAt / purged are the purged-id list of commit purgedAt (D-217):
+	// engine.Get asks for it on every row read, and each ask read every
+	// blob of the live tree again (task search on 2,400 live tasks: 3 s of
+	// a 3.4 s run). A commit names fixed content, so it never goes stale.
+	purgedAt string
+	purged   map[string]bool
+}
+
+// purgedOf returns commit oid's purged ids, when held. The map is shared
+// and read-only.
+func (d *liveDecoded) purgedOf(oid string) (map[string]bool, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.purged, d.purgedAt == oid && d.purged != nil
+}
+
+// putPurged records commit oid's purged ids, dropping another commit's.
+func (d *liveDecoded) putPurged(oid string, set map[string]bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.purgedAt, d.purged = oid, set
 }
 
 // get returns folder's rows decoded from commit oid, when held.
@@ -218,9 +265,51 @@ func (d *liveDecoded) put(oid, folder string, rows map[live.RowKey]live.File) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.oid != oid || d.folders == nil {
-		d.oid, d.folders = oid, map[string]map[live.RowKey]live.File{}
+		d.oid, d.folders, d.stored = oid, map[string]map[live.RowKey]live.File{}, nil
 	}
 	d.folders[folder] = rows
+}
+
+// storeRow is liveStoreRow(k, f) for the file k of commit oid, converted
+// once per commit. A row handed out is shared: callers read its Doc and
+// never change it (as the decoded files above). Another commit's file is
+// converted and not kept.
+func (d *liveDecoded) storeRow(oid string, k live.RowKey, f live.File) (store.Row, error) {
+	d.mu.Lock()
+	if d.oid == oid {
+		if r, ok := d.stored[k]; ok {
+			d.mu.Unlock()
+			return r, nil
+		}
+	}
+	d.mu.Unlock()
+	r, err := liveStoreRow(k, f)
+	if err != nil {
+		return store.Row{}, err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.oid == oid {
+		if d.stored == nil {
+			d.stored = map[live.RowKey]store.Row{}
+		}
+		d.stored[k] = r
+	}
+	return r, nil
+}
+
+// keepStored records r as live file k's backend row of commit oid (a row
+// the row mirror held, live_mirror.go), so Get reuses it.
+func (d *liveDecoded) keepStored(oid string, k live.RowKey, r store.Row) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.oid != oid {
+		return
+	}
+	if d.stored == nil {
+		d.stored = map[live.RowKey]store.Row{}
+	}
+	d.stored[k] = r
 }
 
 // liveStoreRow is the backend row of a live file: its `_v: 2` body, with the
@@ -284,7 +373,7 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 	if s == nil || !readsLive(s, table) {
 		return b.inner.Get(ctx, table, id)
 	}
-	_, files, err := b.liveFiles(ctx, s)
+	oid, files, err := b.liveFiles(ctx, s)
 	if err != nil {
 		return store.Row{}, err
 	}
@@ -299,7 +388,10 @@ func (b *liveBackend) Get(ctx context.Context, table row.Table, id ids.AnyID) (s
 		}
 		return branchRow, berr
 	}
-	lr, err := liveStoreRow(k, f)
+	// D-217: converted once per live commit (a doctor or fix that reads
+	// every row by id converted each again: ~0.8 s of lore fix on 2,400
+	// live tasks).
+	lr, err := s.decoded.storeRow(oid, k, f)
 	if err != nil {
 		return store.Row{}, err
 	}
@@ -318,7 +410,10 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 	if s == nil {
 		return b.readNoSession(ctx, cursor)
 	}
-	oid, files, err := b.liveFiles(ctx, s)
+	// The commit alone decides whether the cache is current: decoding every
+	// live row first made a read with nothing new (the cache current) cost
+	// as much as a full one, 0.4 s per command at 5,000 open tasks (T-20).
+	oid, _, err := s.ref.Repo.ResolveRef(ctx, s.ref.Name)
 	if err != nil {
 		return nil, "", err
 	}
@@ -331,19 +426,50 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 			innerCur = store.Cursor(ic)
 		}
 	}
+	if innerCur != "" {
+		// D-215/D-217: neither the live ref nor the fetched default branch
+		// moved since the cache's last read, so the cache already holds
+		// every live row: only the branch rows changed since then are read,
+		// each with its own live copy. Converting every live row again here
+		// was the floor of every command on a big repo (2,400 live tasks:
+		// most of a `lore memory add`, ~4 s under load).
+		return b.readSince(ctx, s, innerCur, seenNow)
+	}
+	if prev, ic, ok := movedLiveOnly(cursor, oid, s.landedCursorPart(ctx)); ok {
+		if rows, next, ok, err := b.readMoved(ctx, s, prev, ic, seenNow); err != nil || ok {
+			return rows, next, err
+		}
+	}
+	oid, files, err := b.liveFiles(ctx, s)
+	if err != nil {
+		return nil, "", err
+	}
+	seenNow = oid + s.landedCursorPart(ctx)
+	// A one-table read (store.WithTables, a full read only) converts and
+	// returns only the live rows of those tables: the policy and actor
+	// lookups of every command asked for a handful of rows and paid for
+	// every live task and comment (D-159). As the rowfs backend does, a
+	// hinted read is never a complete picture, so its cursor is empty.
+	hint := store.TablesOf(ctx)
+	hinted := cursor == "" && len(hint) > 0
+	wanted := func(t row.Table) bool { return !hinted || slices.Contains(hint, t) }
 	rows, next, err := b.inner.Read(ctx, innerCur)
 	if err != nil {
 		return nil, "", err
 	}
 	lives := map[store.Key]store.Row{}
-	for k, f := range files {
-		if !readsLive(s, row.Table(k.Table)) {
-			continue
+	var keys []live.RowKey
+	for k := range files {
+		t := row.Table(k.Table)
+		if wanted(t) && readsLive(s, t) {
+			keys = append(keys, k)
 		}
-		lr, err := liveStoreRow(k, f)
-		if err != nil {
-			return nil, "", err
-		}
+	}
+	conv, err := b.liveConverted(ctx, s, oid, files, keys) // live_mirror.go: kept by blob on disk
+	if err != nil {
+		return nil, "", err
+	}
+	for _, lr := range conv {
 		lives[lr.Key()] = lr
 	}
 	out := make([]store.Row, 0, len(rows)+len(lives))
@@ -382,9 +508,138 @@ func (b *liveBackend) Read(ctx context.Context, cursor store.Cursor) ([]store.Ro
 		for _, k := range keys {
 			out = append(out, lives[k])
 		}
-		out = append(out, b.landedRows(ctx, s, have)...)
+		out = append(out, b.landedRows(ctx, s, have, wanted)...)
+	}
+	if hinted {
+		return out, "", nil
 	}
 	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
+}
+
+// readSince is Read for a cursor whose live part is current (the live ref
+// and the landed read-through unchanged): the wrapped backend's rows
+// changed since innerCur, each shown with its live copy when it has one
+// (as a full read shows it); the live rows themselves are not returned
+// again, the cache holds them from the read that wrote the cursor. The
+// live tree is decoded only when a changed branch row may have a live copy.
+func (b *liveBackend) readSince(ctx context.Context, s *liveSession, innerCur store.Cursor, seenNow string) ([]store.Row, store.Cursor, error) {
+	rows, next, err := b.inner.Read(ctx, innerCur)
+	if err != nil {
+		return nil, "", err
+	}
+	var (
+		oid   string
+		files map[live.RowKey]live.File
+	)
+	if slices.ContainsFunc(rows, func(r store.Row) bool { return readsLive(s, r.Table) }) {
+		if oid, files, err = b.liveFiles(ctx, s); err != nil {
+			return nil, "", err
+		}
+	}
+	out := make([]store.Row, 0, len(rows))
+	for _, r := range rows {
+		f, ok := files[keyOf(r)]
+		if !ok || !readsLive(s, r.Table) {
+			out = append(out, r)
+			continue
+		}
+		lr, err := s.decoded.storeRow(oid, keyOf(r), f)
+		if err != nil {
+			return nil, "", err
+		}
+		out = append(out, newer(lr, r))
+	}
+	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), nil
+}
+
+// movedLiveOnly reports whether cursor was written by a full read of live
+// commit prev (not oid) with the same landed read-through part: only the
+// live ref moved since, so readMoved can read what changed on it. ic is
+// the cursor's inner part.
+func movedLiveOnly(cursor store.Cursor, oid, landed string) (prev string, ic store.Cursor, ok bool) {
+	rest, ok := strings.CutPrefix(string(cursor), liveCursorPrefix)
+	if !ok || oid == "" {
+		return "", "", false
+	}
+	seen, inner, ok := strings.Cut(rest, liveCursorSep)
+	if !ok || inner == "" {
+		return "", "", false
+	}
+	prev, ok = strings.CutSuffix(seen, landed)
+	if !ok || prev == "" || prev == oid || strings.Trim(prev, "0123456789abcdef") != "" {
+		return "", "", false
+	}
+	return prev, store.Cursor(inner), true
+}
+
+// readMoved is Read for a cursor whose live commit prev is an ancestor
+// state of the current one (movedLiveOnly): the wrapped backend's rows
+// changed since ic (with their live copies, as readSince), plus each row
+// whose live file changed between prev and now (its live copy, or the
+// branch copy when it left the live ref). Every write moves the live ref,
+// and re-reading and re-applying every live row into the cache after each
+// one made a command cost ~2-12 s at 5,000 open tasks (T-12). ok is false
+// when the diff cannot be read (prev gone): the caller does a full read.
+func (b *liveBackend) readMoved(ctx context.Context, s *liveSession, prev string, ic store.Cursor, seenNow string) ([]store.Row, store.Cursor, bool, error) {
+	oid, files, err := b.liveFiles(ctx, s)
+	if err != nil {
+		return nil, "", false, err
+	}
+	diff, derr := s.ref.Repo.Run(ctx, gitref.Invocation{Args: []string{"diff-tree", "-r", "-z", "--no-renames", "--name-only", prev, oid}})
+	if derr != nil {
+		return nil, "", false, nil
+	}
+	rows, next, err := b.inner.Read(ctx, ic)
+	if err != nil {
+		return nil, "", false, err
+	}
+	out := make([]store.Row, 0, len(rows))
+	seen := map[live.RowKey]bool{}
+	for _, r := range rows {
+		k := keyOf(r)
+		seen[k] = true
+		f, ok := files[k]
+		if !ok || !readsLive(s, r.Table) {
+			out = append(out, r)
+			continue
+		}
+		lr, err := s.decoded.storeRow(oid, k, f)
+		if err != nil {
+			return nil, "", false, err
+		}
+		out = append(out, newer(lr, r))
+	}
+	for _, p := range strings.Split(string(diff), "\x00") {
+		folder, k, ok := live.ParseRowPath(p)
+		if !ok || folder != b.folder || seen[k] || !readsLive(s, row.Table(k.Table)) {
+			continue
+		}
+		seen[k] = true
+		id, perr := ids.ParseAny(k.ID)
+		if perr != nil {
+			continue
+		}
+		branchRow, berr := b.inner.Get(ctx, row.Table(k.Table), id)
+		if berr != nil && !errors.Is(berr, store.ErrNotFound) {
+			return nil, "", false, berr
+		}
+		f, ok := files[k]
+		if !ok { // the row left the live ref: its branch copy, if any
+			if berr == nil {
+				out = append(out, branchRow)
+			}
+			continue
+		}
+		lr, err := s.decoded.storeRow(oid, k, f)
+		if err != nil {
+			return nil, "", false, err
+		}
+		if berr == nil {
+			lr = newer(lr, branchRow)
+		}
+		out = append(out, lr)
+	}
+	return out, store.Cursor(liveCursorPrefix + seenNow + liveCursorSep + string(next)), true, nil
 }
 
 // readNoSession is Read in a run with no live session (a git hook, live
@@ -599,8 +854,9 @@ func envelopeOnly(doc canonjson.Object) canonjson.Object {
 
 // ---------------------------------------------------------------- companions (FLAG6)
 
-// holdCompanions takes every NEW row of a companion table out of changes and
-// holds it on the session until the run's next content write carries it
+// holdCompanions takes every NEW row of a companion table (and lore's own
+// refresh of a refreshRidesLive row) out of changes and holds it on the
+// session until the run's next content write carries it
 // (the same live commit, or the same branch write); finish writes what no
 // content row took. An explicitly live supporting row is written on its own.
 func (b *liveBackend) holdCompanions(ctx context.Context, s *liveSession, files map[live.RowKey]live.File, changes []store.Change) ([]store.Change, error) {
@@ -621,8 +877,10 @@ func (b *liveBackend) holdCompanions(ctx context.Context, s *liveSession, files 
 			continue
 		}
 		if _, err := b.inner.Get(ctx, ch.Row.Table, ch.Row.ID); err == nil {
-			kept = append(kept, ch)
-			continue
+			if !refreshRidesLive[ch.Row.Table] || !ch.Upkeep {
+				kept = append(kept, ch)
+				continue
+			}
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return nil, err
 		}
@@ -899,13 +1157,16 @@ func (b *liveBackend) Purged(ctx context.Context) (map[string]bool, error) {
 	if err != nil || !ok {
 		return out, err
 	}
-	tree, err := s.ref.ReadTree(ctx, oid)
-	if err != nil {
-		return nil, err
-	}
-	set, err := tree.Purged()
-	if err != nil {
-		return nil, err
+	set, hit := s.decoded.purgedOf(oid)
+	if !hit {
+		tree, err := s.ref.ReadTree(ctx, oid)
+		if err != nil {
+			return nil, err
+		}
+		if set, err = tree.Purged(); err != nil {
+			return nil, err
+		}
+		s.decoded.putPurged(oid, set)
 	}
 	for id := range set {
 		out[id] = true

@@ -14,6 +14,8 @@ package wire
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,13 +31,17 @@ import (
 const commitMsgFileMode = 0o600
 
 // coordSession is the signals session of who: an agent's LORE_SESSION when
-// set, else the person's stable key and this host (one session per person
-// per machine). coordWorld.session calls it: the claim side and the hook
-// share this one rule.
+// set, else a detected agent's tool session (toolSession), else the
+// stable key and this host (one session per person per machine).
+// coordWorld.session calls it: the claim side and the hook share this one
+// rule.
 func coordSession(who identity.Resolved) string {
 	if who.Kind == identity.KindAgent {
 		if v := strings.TrimSpace(os.Getenv(identity.EnvSession)); v != "" {
 			return v
+		}
+		if d := who.Detection; d != nil && d.SessionID != "" {
+			return toolSession(who.StableKey, d.SessionID)
 		}
 	}
 	host, _ := os.Hostname() // no host name: the key alone still names the person
@@ -92,4 +98,20 @@ func (a *App) CommitMsgTrailers(ctx context.Context, file string) error {
 		return nil
 	}
 	return root.WriteFile(name, out, commitMsgFileMode)
+}
+
+// toolSessionHashHex is how many hex characters of the tool session id's
+// sha256 the signals session keeps.
+const toolSessionHashHex = 12
+
+// toolSession is the signals session of a detected coding agent whose tool
+// gave a session id (devco:M-8): two Claude Code or Codex windows of one
+// person share the agent's actor but are two sessions, so each holds its
+// own claims (max_claims_per_agent counts per session) and neither
+// resumes, nor releases, the other's claim. The tool's id is internal
+// (sessionmask): only a short hash of it is written to the shared
+// signals ref.
+func toolSession(key, toolSessionID string) string {
+	sum := sha256.Sum256([]byte(toolSessionID))
+	return key + "#" + hex.EncodeToString(sum[:])[:toolSessionHashHex]
 }

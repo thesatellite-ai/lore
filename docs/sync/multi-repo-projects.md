@@ -17,7 +17,7 @@ If the client's product is several separate git repositories that should share o
 
 ## Step 1 — See the project
 
-`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos (`--json` adds the full list):
+`lore project list` shows every project in the database; `lore project show --id <name-or-id>` shows one, with its repos and its current members (for a store folder also the store and its row count, the same count `project list` gives; `--json` adds the full list); with no `--id` it shows the project of the folder you are in (a linked repo, or a folder of a store clone):
 
 <!-- example: projects#project-list -->
 ```console
@@ -29,6 +29,8 @@ Project: prj_7a67…9504
   name:    website
   origin:  https://github.com/client/website
   created: 2026-11-02 10:00:00Z
+  repos:   1
+  members: 0
 Repos:
   rep_2ad3…f891  website
 created 2026-11-02T10:00:00Z by alice · updated 2026-11-02T10:00:00Z by alice
@@ -81,7 +83,7 @@ $ lore rule list --repo shop
 rul_05e9…4603 [must/always] Run the tests before you push.
 rul_c0f3…b5b8 [must/always] Buttons are blue.
 $ lore rule list --repo blog
-ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+ERROR: [E_NOT_FOUND] no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
 (exit 27)
 ```
@@ -118,7 +120,7 @@ $ git add -A && git commit -qm 'lore: repos' && git push -q origin main
 
 ## Step 5 — The repo moved: record its new address
 
-When the repo's address stops answering (`lore live: no git repository at origin (…)`), the line adds the way to follow a move: `git remote set-url origin <new-url>`, then `lore repo set-url --url <new-url>`. Every repo row keeps the address it was confirmed at, and lore uses it to recognise the repo in any clone. When the client renames the repo (or moves it to another host), update your remote as usual and then tell lore with `lore repo set-url --url <url>`: the new address becomes the primary, the old one is kept as history ("until today"), and the repo keeps its id, so every note stays attached. `--mirror` adds a second address (a copy on another host) without changing the primary; `--remove` drops a mirror again; `--repo <mount>` updates another repo of the project instead of this checkout's. The change is written to `.lore/data/_meta.json`; commit it. A teammate whose `lore sync` saw the new remote before pulling your commit has it recorded as an unconfirmed address; when the two meet in a merge, your confirmed address wins, so the repo keeps its primary:
+When the repo's address stops answering (`lore live: no git repository at origin (…)`), the line adds the way to follow a move: `git remote set-url origin <new-url>`, then `lore repo set-url --url <new-url>`. For a remote that is a path on this machine (`/srv/git/website.git`) it says `git remote set-url origin <new-path>, then lore sync`: a path is no address lore records, so git's step is the whole move, and `lore repo set-url --url <path>` is accepted but records nothing (`… is a folder on this machine, not an address lore records …, so nothing was recorded`), naming the git step when no remote uses the path yet. Every repo row keeps the address it was confirmed at, and lore uses it to recognise the repo in any clone. When the client renames the repo (or moves it to another host), update your remote as usual and then tell lore with `lore repo set-url --url <url>`: the new address becomes the primary, the old one is kept as history ("until today"), and the repo keeps its id, so every note stays attached. `--mirror` adds a second address (a copy on another host) without changing the primary; `--remove` drops a mirror again; `--repo <mount>` updates another repo of the project instead of this checkout's. The change is written to `.lore/data/_meta.json`; commit it. A teammate whose `lore sync` saw the new remote before pulling your commit has it recorded as an unconfirmed address; when the two meet in a merge, your confirmed address wins, so the repo keeps its primary:
 
 <!-- example: projects#repo-moved -->
 ```console
@@ -156,8 +158,6 @@ $ git clone -q https://github.com/alice/website website-fork
 
 # alice, in website-fork
 $ git remote add upstream https://github.com/client/website-v2 && git remote set-url origin https://github.com/client/website-v2 && lore repo fork
-lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] this clone's remote github.com/client/website-v2 is a confirmed address of rep_2ad3…f891, so it is that repo, not a fork
   hint: change the remote to the fork's address first (git remote set-url origin <fork url>)
 (exit 20)

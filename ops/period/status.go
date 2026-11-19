@@ -190,6 +190,14 @@ func (o ops) status(ctx context.Context, in ActorStatusIn) (ActorStatusOut, erro
 		return ActorStatusOut{}, err
 	}
 	from := teamprofile.StatusOf(a.Fields)
+	// R-6: only an admin marks someone left or archived (or back), or
+	// changes another person's status; a person may set their own leave
+	own := a.ID.String() == r.Caller().String() || text(a, schema.FieldActorOwner) == r.Caller().String()
+	if !own || gone(from) || gone(to) {
+		if err = requireAdmin(ctx, r, actStatus); err != nil {
+			return ActorStatusOut{}, err
+		}
+	}
 	out := ActorStatusOut{ID: a.ID.String(), Name: nameOf(a), From: from, To: to, Where: r.Where()}
 	if to != schema.ActorStatusActive {
 		out.Note = text(a, schema.FieldActorStatusNote)
@@ -251,4 +259,9 @@ func (o ops) status(ctx context.Context, in ActorStatusIn) (ActorStatusOut, erro
 	out.Changed = true
 	out.Warnings = r.Warnings()
 	return out, nil
+}
+
+// gone reports a status only an admin sets or lifts.
+func gone(status string) bool {
+	return status == schema.ActorStatusLeft || status == schema.ActorStatusArchived
 }

@@ -7,7 +7,7 @@
 Coding tools read a fixed file when a session starts: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` and similar names. You could type your rules into that file by hand, but then lore and the file drift apart. `lore render` keeps them in step:
 
 - it writes the generated text to `.lore/LORE.md` (or the path you give with `--out`);
-- it adds a *pointer block* to each tool's file, between two marker comments. For a tool that follows imports it is an import line (`@.lore/LORE.md`); for the others it is one sentence telling the agent to read `.lore/LORE.md`. A tool file whose first lines say another tool generates it (`GENERATED FILE`, `do not edit`, `@generated`) is left alone with a note: that generator would drop the block on its next run, so point its source at `.lore/LORE.md` or wire another file (`lore render --add-target codex` for `AGENTS.md`).
+- it adds a *pointer block* to each tool's file, between two marker comments. For a tool that follows imports it is an import line (`@.lore/LORE.md`); for the others it is one sentence telling the agent to read `.lore/LORE.md`. A tool file whose first lines say another tool generates it (`GENERATED FILE`, `do not edit`, `@generated`) is left alone with a note: that generator would drop the block on its next run, so point its source at `.lore/LORE.md` or wire another file (`lore render --add-target codex` for `AGENTS.md`). Once another file gets the pointer (codex added), the note names that file instead of the command, and says the generated file's tool still reaches `.lore/LORE.md` only through its generator's source. `lore doctor` lists such a file as a note with the same two steps (never `lore render`, which leaves it alone again), so it does not make the doctor DEGRADED.
 - it never touches the rest of the tool's file, so your own hand-written notes are safe.
 
 Run it after you change rules or hotfixes, and commit the result.
@@ -50,7 +50,7 @@ Which tools a repo uses is read from the repo itself, so every clone agrees:
 
 ## Step 1 — Init finds your tools
 
-Here the repo already had a `CLAUDE.md` with hand-written notes before lore arrived, so `lore init` detects `claude_code` and puts the pointer on top of that file. In a repo with no tool file at all it would wire `AGENTS.md` instead. When one tool file already imports another (a `CLAUDE.md` starting with `@AGENTS.md`), init wires only the imported one and says `CLAUDE.md imports @AGENTS.md, so claude_code reads lore's pointer from AGENTS.md`: a second pointer would load `LORE.md` twice, the double load `lore doctor` warns about (its warning names the exact `lore policy set --key context.targets --value <profiles> --yes` that ends it), and doctor never suggests adding such a tool back as a target.
+Here the repo already had a `CLAUDE.md` with hand-written notes before lore arrived, so `lore init` detects `claude_code` and puts the pointer on top of that file. A tool's own files count too when its pointer file is missing: `.cursorrules` or a `.cursor/rules/*.mdc` rule picks `cursor`, and Claude Code's `.claude/rules/*.md`, `.claude/commands/*.md`, `.claude/agents/*.md` or `.claude/skills/*/SKILL.md` pick `claude_code` (so a team that tracks `.claude/rules` but keeps `CLAUDE.md` out of git still gets the pointer; lore's own files there and `.claude/settings*.json` do not count). In a repo with no tool file at all it would wire `AGENTS.md` instead. When one tool file already imports another (a `CLAUDE.md` starting with `@AGENTS.md`), init wires only the imported one and says `CLAUDE.md imports @AGENTS.md, so claude_code reads lore's pointer from AGENTS.md`: a second pointer would load `LORE.md` twice, the double load `lore doctor` warns about (its warning names the exact `lore policy set --key context.targets --value <profiles> --yes` that ends it), and doctor never suggests adding such a tool back as a target.
 
 <!-- example: render#init -->
 ```console
@@ -77,7 +77,7 @@ lore initialized
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2905 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3264 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (520 bytes, every pinned entry in full; not imported)
 = ~/work/website/CLAUDE.md (pointer present)
 $ cat CLAUDE.md
@@ -140,7 +140,7 @@ $ lore render --dry-run | head -12
 ```console
 # alice, in website
 $ lore render --target AGENTS.md
-✓ .lore/LORE.md (2899 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3258 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ ~/work/website/AGENTS.md (pointer → .lore/LORE.md)
 $ cat AGENTS.md
 <!-- lore:pointer:start -->
@@ -153,7 +153,7 @@ Read `.lore/LORE.md` (at the repository root) before answering: it holds this pr
 ```console
 # alice, in website
 $ lore render --out docs/agent-notes.md --target AGENTS.md
-✓ docs/agent-notes.md (2899 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ docs/agent-notes.md (3258 bytes, budget 16000 codex; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ docs/LORE.full.md (520 bytes, every pinned entry in full; not imported)
 ✓ ~/work/website/AGENTS.md (pointer → docs/agent-notes.md)
 $ cat AGENTS.md; ls docs
@@ -167,13 +167,15 @@ agent-notes.md
 
 In a package project (a folder below the repository's top with its own `.lore/`, made by `lore init` there), the sentence names the package's own file from the repository root (``Read `workers/extraction/.lore/LORE.md` (at the repository root) …``), so an agent that loads every AGENTS.md reads each project's rules. When two targets are one file (a `CLAUDE.md` that is a symbolic link to `AGENTS.md`), render writes one pointer block that serves both tools, the Claude Code `@import` lines then the sentence, and prints `= ~/work/website/CLAUDE.md (the same file as ~/work/website/AGENTS.md through a link: one pointer block serves both)`; the next render finds it present and writes nothing.
 
+A file lore writes in a repository (a tool file such as `CLAUDE.md`, `AGENTS.md`, `.cursorrules` or `GEMINI.md`, any `--target`, `.lore/LORE.md`, `.gitattributes`, a hook in a hooks folder inside the work tree) is never written through a symbolic link, or a linked folder, that leads out of the repository: such a link usually points at another repository's file (a `CLAUDE.md` linked in from a notes repository) or at one of yours. Render leaves a pointer file like that as it is and goes on, with one line naming it, where it leads and where the context is instead: `⚠ ~/work/app/CLAUDE.md: pointer skipped: it is a symbolic link to ~/work/notes/CLAUDE.md, outside the repository`, followed by a note that lore does not write there, naming `lore context` and the private render `lore render --report` points at. The git wiring skips such a `.gitattributes` or hook with a warning line and wires the rest. A link that stays inside the repository (`CLAUDE.md` -> `AGENTS.md`, `CLAUDE.md` -> `docs/CLAUDE.md`) is written through to its end when that is a regular file, or created there when it does not exist yet; the link stays a link. To have lore write the file in the repository, replace the link with a plain file or point it at a file inside the repository.
+
 `--no-pointer` writes the generated file and leaves every agent file alone:
 
 <!-- example: render#no-pointer -->
 ```console
 # alice, in website
 $ lore render --no-pointer
-✓ .lore/LORE.md (2905 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3264 bytes, budget 32000 claude_code; 1 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ```
 <!-- /example -->
 
@@ -195,7 +197,7 @@ $ head -3 AGENTS.md
 
 ## Try it: what did the tool read?
 
-`lore why-context` tells you what the last render wrote: when, where, how big, a checksum, and how many rules, hotfixes and memories went in. Add `--rendered` to print the full text after that summary. Use it when a coding tool did something odd and you want to know what it was told.
+`lore why-context` tells you what the last render wrote: when, where, how big, a checksum, and how many rules, hotfixes and memories went in. Add `--rendered` to print the full text after that summary. Use it when a coding tool did something odd and you want to know what it was told. It reads the repo's own `.lore/`, so run it in the code repo: from a folder that is no repo (your home folder) it says the last rendered context lives in each code repo and to cd into it; `--store` does not apply.
 
 <!-- example: render#why-context only=1 -->
 ```console
@@ -204,9 +206,9 @@ $ lore why-context
 render_id:    rnd_162d…9666
 created_at:   2026-11-02 10:00:00Z
 target:       .lore/LORE.md
-total_bytes:  2905
+total_bytes:  3264
 sha256:       601d2850ffd047c2890d2472633cc4dbdabe12fdb9d9fd5d80726fe085cf9dca
-scope:        1 rules, 1 hotfixes, 0 memories in full; 2905 of 32000 bytes (profile claude_code), nothing moved out of the core
+scope:        1 rules, 1 hotfixes, 0 memories in full; 3264 of 32000 bytes (profile claude_code), nothing moved out of the core
 ```
 <!-- /example -->
 
@@ -217,17 +219,17 @@ scope:        1 rules, 1 hotfixes, 0 memories in full; 2905 of 32000 bytes (prof
 # alice, in website
 $ lore render --trend
 .lore/LORE.md: renders in the last 14 days (budget 32000 bytes, profile claude_code)
-  2026-11-02 10:00     2905 bytes
-  2026-11-02 10:00     2905 bytes
-  2026-11-02 10:00     2899 bytes
-  2026-11-02 10:00     2905 bytes
+  2026-11-02 10:00     3264 bytes
+  2026-11-02 10:00     3264 bytes
+  2026-11-02 10:00     3258 bytes
+  2026-11-02 10:00     3264 bytes
 growth: needs renders at least a day apart
 ```
 <!-- /example -->
 
 ## Pin how a rule appears
 
-Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) is printed in full or as one line, by how much room the tool's budget leaves. When even the one-line forms do not fit, render first leaves out the high hotfix lines (the last section says how many and that `lore hotfix list` lists them), then shortens every line further; a `must` rule always keeps its id and the start of its text, and a critical hotfix is never shortened. `lore pin set --id <id> --context full` makes an entry always print in full, ahead of the other `must` rules; `--context line` makes it always one line: the id and the entry's summary, else its first sentence, else the start of its text cut at a word (the file's last section says once that `lore show --id <id>` prints the full text). The pin applies on the next `lore render`. `lore pin unset --id <id>` gives the choice back to render.
+Render decides on its own whether a `must` rule (or a `critical`/`high` hotfix) is printed in full or as one line, by how much room the tool's budget leaves. When even the one-line forms do not fit, render first shortens every line (`must` rules and high hotfixes alike); only when the shortest lines still do not fit does it leave out high hotfix lines, as few as the budget needs, keeping the first ones. A high hotfix line ranks above a `must` rule's full text and its longer line. The render line then says `0 + 12 hotfixes (8 left out)`, the file's last section says how many are left out, and `lore render --report` names each one by id. A `must` rule always keeps its id and the start of its text, and a critical hotfix is never shortened. `lore pin set --id <id> --context full` makes an entry always print in full, ahead of the other `must` rules; `--context line` makes it always one line: the id and the entry's summary, else its first sentence, else the start of its text cut at a word (the file's last section says once that `lore show --id <id>` prints the full text). The pin applies on the next `lore render`. `lore pin unset --id <id>` gives the choice back to render.
 
 <!-- example: render#pin -->
 ```console
@@ -259,7 +261,7 @@ Only `must` rules and `critical`/`high` hotfixes can be pinned; other notes are 
 
 ## Rules for one folder
 
-A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
+A rule added with `--scope dir:<path>` applies only to files under that folder. `lore scope list` shows every folder scope of the repo with its counts (every live rule and hotfix of any severity, and its memories and decisions) and the file that serves it, and `lore scope show --path <path>` prints the chain for one file: project, repo, then the folder (later wins on a conflict). A folder gets its own rendered file only once it has enough entries (the `context.dir_min_entries` policy, 3 by default); until then its rules go to the parent file, each marked with its folder (`<rule … scope="dir:src/checkout">` in full, `(only in src/checkout/)` on a one-line entry), and `lore rule list` counts them under "scoped to a folder (dir:src/checkout)" in its hidden-rows line.
 
 <!-- example: render#scope -->
 ```console
@@ -279,14 +281,14 @@ scope chain for src/checkout/pay.ts (general first; later wins on conflict)
   dir      src/checkout                 1 rule  (no file: lore render writes it when the folder has enough entries)
   glob     (none match this path)
 $ lore render
-✓ .lore/LORE.md (3202 bytes, budget 32000 claude_code; 3 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3561 bytes, budget 32000 claude_code; 3 full + 0 line rules, 1 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (792 bytes, every pinned entry in full; not imported)
 · AGENTS.md carries lore's pointer but context.targets does not name it, so render leaves it as is; list it with: lore policy set --key context.targets --value "<profiles incl. codex>" --yes
 = ~/work/website/CLAUDE.md (pointer present)
 ```
 <!-- /example -->
 
-When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
+When you rename the folder, tell lore with `lore scope move --old <old> --new <new>`. Only the scope row changes: the rules keep their ids and are not rewritten. Commit the changed scope file with the rename. If you forget, lore says so: the commit that moves the folder prints one line naming the folder and the exact `lore scope move` command (when git saw the rename; folder names in any script, with spaces or accents, are recognised, and so is a rename that only changes case, such as `src/Charts` to `src/charts`, also on macOS and Windows, where the file system ignores case: there a folder scope counts as present only when the folder is spelled exactly as the scope names it), and `lore doctor` and `lore render` warn about every folder scope whose folder is gone (until then its rules render into the root file and no longer apply to the moved folder). `lore fix` runs the `lore scope move` itself for each folder git saw renamed.
 
 <!-- example: render#scope-move -->
 ```console
@@ -312,7 +314,8 @@ To copy the lore skill into your coding tool's skill folder and keep it current,
 ## Pitfalls
 
 - <!-- ds:block id=render-pins-buj9dujv --> **Only the strongest notes are pinned.** Render pins rules with severity `must` and hotfixes with severity `critical` or `high`. `should` and `may` rules, memories, decisions and every other kind are left for `lore search`, which the directive tells the tool to run. If a note must be seen every time, make it a `must` rule.
-- **`lore scope move` does not move files.** Rename the folder with `git mv` yourself, then run `scope move` so the scope's label follows it.
+- **`lore scope move` does not move files.** Rename the folder with `git mv` yourself, then run `scope move` so the scope's label follows it. On macOS or Windows a rename that only changes case needs two steps (`git mv src/Charts src/charts.tmp`, then `git mv src/charts.tmp src/charts`).
+- **A folder scope names the folder as it is spelled on disk.** Where the file system ignores case, `--scope dir:SRC/charts` for the folder `src/charts` is refused (`no such folder in the repo`), since no file path would ever match it.
 - **Archived rules and hotfixes are dropped** from the rendered file on the next render.
 - **Never edit `.lore/LORE.md` by hand.** The next render replaces it. Edit the rows and render again.
 - **Write your own notes outside the markers.** Everything between `<!-- lore:pointer:start -->` and `<!-- lore:pointer:end -->` belongs to lore and is replaced on every render.

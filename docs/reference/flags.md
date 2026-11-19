@@ -31,8 +31,8 @@ ERROR: [E_UNSUPPORTED] --db is not supported by this command: its rows are row f
   hint: run the command inside the repository (or name a store with --store / --to)
 (exit 23)
 $ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout; a write can also name its store from here (--to <org>/<folder>, --to me; lore store list shows them)
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 $ cd work/website && lore rule list
 rul_54fe…28f2 [must/always] Run the tests before you push
@@ -79,6 +79,8 @@ These matter when you work for an org in client repos. A **store** is a separate
 | `--live` | share this row with everyone at once on the live list, before any commit | the `add` and `edit` commands of most row kinds |
 | `--no-live` | keep this row with the code: it travels with this branch's next commit | the same commands as `--live` |
 
+A `--live` or `--no-live` choice applies to rows of the repo. `--scope global` puts the row in your personal store, which is neither this branch's code nor the live list, so `rule add` and `memory add` refuse either flag next to it (E_INVALID_INPUT, naming the flag); the add line of a global row says `scope: [global]`.
+
 A note for yourself that should follow you into every repo is a plain `--to me` row. `lore store init --name me` makes the personal store first (here a folder store under `~/.lore/stores/_me`); the note written in `website` is listed in `landing` too:
 
 <!-- example: reference#personal-everywhere -->
@@ -93,16 +95,18 @@ ERROR: [E_INVALID_INPUT] unknown flag: --everywhere
   hint: lore memory add --help lists its flags
 (exit 20)
 $ lore memory add --to me --body 'I write short commit messages'
-lore: wrote ~/.lore/stores/_me/_store/actors/act_b4f4…a5b0.json (store me)
-lore: wrote ~/.lore/stores/_me/_store/memories/mem_2537…6bbb.json (store me)
-✓ mem_2537…6bbb [me]
+lore: wrote ~/.lore/stores/_me/_store/actors/act_2537…6bbb.json (store me)
+lore: wrote ~/.lore/stores/_me/_store/memories/mem_b69e…5ed7.json (store me)
+✓ mem_b69e…5ed7 [me]
   scope: [project]
 
 # alice, in landing
 $ lore memory list
-mem_2537…6bbb [retrieved] I write short commit messages [me]
+mem_b69e…5ed7 [retrieved] I write short commit messages [me]
 ```
 <!-- /example -->
+
+A flag that takes a value takes the next word, so a value that is another flag of the command (`--title --json`, as left by an empty shell variable after `--title`) is refused as a missing value (E_INVALID_INPUT, exit 20). To give a value that starts with `--`, glue it on with `=`: `lore task edit --id <id> --title=--json`; the refusal names that form.
 
 `lore task reassign --from @handle` is different: there `--from` names a person, and every open task of that person is reassigned.
 
@@ -112,7 +116,7 @@ mem_2537…6bbb [retrieved] I write short commit messages [me]
 |---|---|
 | `--yes` | answer yes to the question lore would ask (`rule add`, `memory add`, `decision add`, `comment add`, `org import`, `org link`, `move`). For `move` it is never accepted from an agent |
 | `--confirm` | required by commands that remove for good: `delete --purge`, `trash purge`, and a `delete` under policy `trash.purge_on_delete`. A plain `delete --confirm` still works: it moves the row to the trash, the same as `--yes` (v0.1.17's spelling, FA-DEL-1), and prints a hint at `lore trash purge` |
-| `--dry-run` | show what would happen and change nothing (`land`, `render`, `org link`, `live compact`, `sync promote`, `trash purge`, `sync fix-projects`, `sync install-action`, `sync ci-merge`, `skill compile`) |
+| `--dry-run` | show what would happen and change nothing: the run is a read, so it never makes a folder's project row or pushes (`land`, `render`, `org link`, `live compact`, `sync promote`, `trash purge`, `sync fix-projects`, `sync install-action`, `sync ci-merge`, `skill compile`) |
 | `--auto` | opt in to automatic runs that spend GitHub Actions minutes (`sync install-action`: adds the pull request and push triggers; without it the workflow runs only when started by hand, and a re-run keeps the triggers the file already has) |
 
 ## Writing a row

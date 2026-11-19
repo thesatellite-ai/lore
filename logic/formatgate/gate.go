@@ -33,10 +33,39 @@ const (
 	Refs         = "refs"
 	Vars         = "vars"
 	PersonalFlat = "personal_flat"
+	// BranchLayers: the folder has branch layers (BRANCH_LAYERS 15): a
+	// lore that does not know it must not write there, or a feature-branch
+	// note would land in the real notes.
+	BranchLayers = "branch_layers"
 )
 
 // since018 is the release that introduced the 0.1.18 features.
 const since018 = "0.1.18"
+
+// legacyBranchLayersFloor is the floor branch layers declared while they
+// were planned for 0.1.19 (devco:V-1): folders the 0.1.18 previews wrote
+// say "0.1.19" in _meta.json, though the feature ships in 0.1.18.
+const legacyBranchLayersFloor = "0.1.19"
+
+// floorOf is the floor Check holds a binary to: d's min_lore_version,
+// except the legacy branch-layers floor, which counts as the highest
+// release of the declared features when this binary knows every one of
+// them (a floor is only ever raised by a feature's Since: Declare). Why: a
+// released 0.1.18 must write the folders its own previews declared
+// (devco:V-1), while a folder with a feature this build does not know is
+// still refused by that feature.
+func floorOf(d Declared, unknown []string) string {
+	if d.MinLoreVersion != legacyBranchLayersFloor || len(unknown) > 0 || !slices.Contains(d.Features, BranchLayers) {
+		return d.MinLoreVersion
+	}
+	top := ""
+	for _, n := range d.Features {
+		if f, ok := Lookup(n); ok {
+			top = MaxVersion(top, f.Since)
+		}
+	}
+	return top
+}
 
 // known is every feature this binary understands (plus the test step's in
 // a loretest_format build). A declared name missing here makes the project
@@ -58,6 +87,7 @@ var releaseFeatures = []Feature{
 	{Name: Refs, Since: since018},
 	{Name: Vars, Since: since018},
 	{Name: PersonalFlat, Since: since018},
+	{Name: BranchLayers, Since: since018}, // branch layers ship in 0.1.18 (devco:V-1)
 }
 
 // Known returns a copy of the features this binary understands.
@@ -114,7 +144,7 @@ func Check(binary string, d Declared) Verdict {
 			v.Unknown = append(v.Unknown, f)
 		}
 	}
-	if versionBelow(effective(binary), d.MinLoreVersion) { // effective already lifts a dev build to the features it knows (FMT-EFF)
+	if versionBelow(effective(binary), floorOf(d, v.Unknown)) { // effective already lifts a dev build to the features it knows (FMT-EFF)
 		v.Floor = d.MinLoreVersion
 	}
 	v.Writable = len(v.Unknown) == 0 && v.Floor == ""

@@ -26,15 +26,18 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // EnvOrg chooses the org entry for this shell (F10 rule 1).
@@ -52,8 +55,10 @@ const (
 	// gitBin is the git program; remotes are read from git config.
 	gitBin = "git"
 	// rawRemoteKeyPattern matches every remote's fetch and push URL keys
-	// (a remote name may contain dots).
-	rawRemoteKeyPattern = `^remote\..*\.(url|pushurl)$`
+	// (a remote name may contain dots) and, in the same git run, every
+	// url.<base>.insteadOf rule (remotealias.go: an ssh alias spelling
+	// mapped back to the host it stands for, D-531).
+	rawRemoteKeyPattern = `^(remote\..*\.(url|pushurl)|url\..*\.insteadof)$`
 )
 
 // LinkSource answers the store links of a repo (F11). It is
@@ -149,7 +154,7 @@ func LoadConfig(home string) (cfg *orgconf.Config, exists bool, err error) {
 	}
 	c, perr := orgconf.Parse(b)
 	if perr != nil {
-		return nil, true, errs.Wrap(errs.ConfigInvalid, "~/.lore/config.yaml is not valid: "+perr.Error(), perr).
+		return nil, true, errs.Wrap(errs.ConfigInvalid, lorehome.Shown()+"/config.yaml is not valid: "+perr.Error(), perr).
 			WithHint("run `lore config check` for every problem with its location")
 	}
 	return c, true, nil
@@ -181,6 +186,43 @@ func ProjectID(dir string) string {
 		return ""
 	}
 	return m.ProjectID
+}
+
+// ownDataScanMax caps the actor files OwnData reads: one untrimmed row
+// decides, and a repo holds a handful of actors.
+const ownDataScanMax = 64
+
+// OwnData reports whether the lore data under dir was written as an org's
+// own repo: an actor row in .lore/data/actors holds a stable_key, a key
+// lore strips from every actor copy it writes into a client repo (F18).
+// Why (devco T-17): an own repo the git host moved to another owner
+// matches no own: pattern any more, and this is the evidence that keeps it
+// own (orgresolve.Inputs.OwnData) instead of a client repo by default.
+func OwnData(dir string) bool {
+	actors := filepath.Join(dir, loreDir, dataDir, "actors")
+	ents, err := os.ReadDir(actors)
+	if err != nil {
+		return false
+	}
+	for i, e := range ents {
+		if i >= ownDataScanMax {
+			break
+		}
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		b, rerr := os.ReadFile(filepath.Clean(filepath.Join(actors, e.Name())))
+		if rerr != nil {
+			continue
+		}
+		var row struct {
+			StableKey string `json:"stable_key"`
+		}
+		if json.Unmarshal(b, &row) == nil && row.StableKey != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectDir is the lore project root of a command run in dir
@@ -216,7 +258,7 @@ func workTreeTop(ctx context.Context, dir string) (top string, ok bool) {
 	if err != nil {
 		return "", false
 	}
-	return realPath(strings.TrimSpace(out)), true
+	return fspath.Canonical(strings.TrimSpace(out)), true
 }
 
 // ProjectRoot is the nearest folder from dir up to its git work tree top
@@ -238,9 +280,9 @@ func ProjectRoot(ctx context.Context, dir, home string) (root string, ok bool) {
 func projectRootUnder(top, dir, home string) (root string, ok bool) {
 	homeLore := ""
 	if home != "" {
-		homeLore = realPath(home)
+		homeLore = fspath.Canonical(home)
 	}
-	for d := realPath(dir); ; d = filepath.Dir(d) {
+	for d := fspath.Canonical(dir); ; d = filepath.Dir(d) {
 		rel, rerr := filepath.Rel(top, d)
 		if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return "", false // dir is not under the top (a symlinked path)
@@ -255,22 +297,13 @@ func projectRootUnder(top, dir, home string) (root string, ok bool) {
 	}
 }
 
-// realPath is p made absolute with its symlinks resolved, as far as that
-// works (p itself when it does not).
-func realPath(p string) string {
-	if abs, err := filepath.Abs(p); err == nil {
-		p = abs
-	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		p = r
-	}
-	return filepath.Clean(p)
-}
-
 // Remotes reads dir's git remote urls as written in git config (never
 // `git remote get-url`: insteadOf would swap the remote the org is keyed
 // on for a mirror, F10 edge cases) and normalises them; a url that is not
-// a hosted remote is a note. No git, no repo or no remote gives nil.
+// a hosted remote is a note. No git, no repo or no remote gives nil. An
+// ssh alias spelling (git@<alias>:<owner>/<repo>.git) is normalised to the
+// host it stands for (normalizeRemote), so classification, identity and
+// every printed remote name github.com/<owner>/<repo> (D-531).
 func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 	out, err := gitRun(ctx, "-C", dir, "config", "--get-regexp", rawRemoteKeyPattern)
 	if err != nil {
@@ -278,17 +311,19 @@ func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 	}
 	seen := map[string]bool{}
 	seenNote := map[string]bool{}
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	rules := insteadOfRules(lines)
+	for _, line := range lines {
 		key, val, ok := strings.Cut(line, " ")
 		val = strings.TrimSpace(val)
-		if !ok || val == "" {
+		if !ok || val == "" || !strings.HasPrefix(key, "remote.") {
 			continue
 		}
 		name := strings.TrimPrefix(key, "remote.")
 		if i := strings.LastIndex(name, "."); i > 0 {
 			name = name[:i]
 		}
-		n, err := repourl.Normalize(val)
+		n, err := normalizeRemote(val, rules)
 		if err != nil {
 			note := fmt.Sprintf("%s (%s): not a hosted remote, ignored", name, val)
 			if !seenNote[note] {
@@ -321,20 +356,10 @@ func repoTopProjectID(ctx context.Context, root string) string {
 		return ""
 	}
 	top := strings.TrimSpace(out)
-	if top == "" || sameDir(top, root) {
+	if top == "" || fspath.Same(top, root) {
 		return ""
 	}
 	return ProjectID(top)
-}
-
-// sameDir reports whether a and b name one folder (symlinks resolved).
-func sameDir(a, b string) bool {
-	ra, aerr := filepath.EvalSymlinks(a)
-	rb, berr := filepath.EvalSymlinks(b)
-	if aerr != nil || berr != nil {
-		return filepath.Clean(a) == filepath.Clean(b)
-	}
-	return ra == rb
 }
 
 // clientPatternMatches reports whether a repos: (client) pattern of any
@@ -355,6 +380,46 @@ func clientPatternMatches(cfg *orgconf.Config, remotes []string) bool {
 		}
 	}
 	return false
+}
+
+// scopeOrgs returns the org entries whose stores this repo's resolution
+// may read, or nil for all of them (devco D-278: a command in org A's repo
+// made fetches and ls-remotes to org B's store while resolving the org).
+// The set is the entries the repo already names without any store
+// (LORE_ORG, `lore org use`, the committed .lore/org.yaml, the active
+// setup's org) plus every entry whose own:/repos: patterns match one of
+// its remotes, so a client repo another org claims by pattern is still
+// read and still fails closed. With no such name at all every entry is
+// read, as before: then only the store links can say whose repo it is.
+func scopeOrgs(cfg *orgconf.Config, s *Situation, in In) map[string]bool {
+	var named []string
+	named = append(named, strings.TrimSpace(in.EnvOrg), in.Setup.Org)
+	if ro, ok := cfg.RepoOrgs[s.ProjectID]; ok && s.ProjectID != "" {
+		named = append(named, ro.Org)
+	}
+	if s.Committed != nil {
+		named = append(named, s.Committed.Org)
+	}
+	only := map[string]bool{}
+	for _, n := range named {
+		if n == "" {
+			continue
+		}
+		for i := range cfg.Orgs {
+			if cfg.Orgs[i].Name == n {
+				only[n] = true
+			}
+		}
+	}
+	if len(only) == 0 {
+		return nil
+	}
+	for i := range cfg.Orgs {
+		if entryMatches(&cfg.Orgs[i], s.Remotes) {
+			only[cfg.Orgs[i].Name] = true
+		}
+	}
+	return only
 }
 
 // Gather reads the machine and runs F10. A broken config is an error
@@ -383,28 +448,45 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		links = in.Links
 		defBranch = func(norm string) string { return in.Links.DefaultBranch(ctx, norm) }
 	}
+	if gl, ok := links.(*GitLinks); ok {
+		if only := scopeOrgs(cfg, s, in); only != nil {
+			scoped := *gl
+			scoped.Only = only
+			links = &scoped
+		}
+	}
 	var lr orgresolve.LinkResult
 	if s.ProjectID == "" {
 		// A repo with no lore data in it is linked by its remote
 		// (orgresolve.RemoteProjectID): the first remote a store links
 		// gives the project id, which lives only in that link row.
+		// D-532: a repo cloned through an ssh alias and linked before D-531
+		// has a link row whose project id came from the alias spelling
+		// (<alias>/<owner>/<repo>); that spelling is tried after the
+		// resolved one, so the old row is still found. LinkedByRemote then
+		// names that spelling: it is what the row keys the project by, and
+		// `lore init` derives the same project id from it.
+		spellings := aliasSpellings(ctx, root)
 		byRemote := func(src orgresolve.LinkSource) {
+		remotes:
 			for _, r := range s.Remotes {
-				pid, perr := orgresolve.RemoteProjectID(r)
-				if perr != nil {
-					continue
-				}
-				got, lerr := src.Links(ctx, pid, []string{r})
-				if lerr != nil {
-					// a store that cannot be read as one (a code repo listed
-					// under stores:) is reported by the project's own lookup and
-					// by whoami, as before; here it only means no remote link
-					// was found, so `lore init` in such a repo still runs
-					break
-				}
-				if len(got.Links) > 0 {
-					s.ProjectID, s.LinkedByRemote = pid, r
-					break
+				for _, key := range append([]string{r}, spellings[r]...) {
+					pid, perr := orgresolve.RemoteProjectID(key)
+					if perr != nil {
+						continue
+					}
+					got, lerr := src.Links(ctx, pid, sortedUnique([]string{r, key}))
+					if lerr != nil {
+						// a store that cannot be read as one (a code repo listed
+						// under stores:) is reported by the project's own lookup and
+						// by whoami, as before; here it only means no remote link
+						// was found, so `lore init` in such a repo still runs
+						break remotes
+					}
+					if len(got.Links) > 0 {
+						s.ProjectID, s.LinkedByRemote = pid, key
+						break remotes
+					}
 				}
 			}
 		}
@@ -424,7 +506,12 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 			}
 		}
 	}
-	lr, err = links.Links(ctx, s.ProjectID, s.Remotes)
+	linkRemotes := s.Remotes
+	if s.LinkedByRemote != "" && !slices.Contains(linkRemotes, s.LinkedByRemote) {
+		// D-532: the row keyed by an alias spelling names the repo by it
+		linkRemotes = sortedUnique(append(slices.Clone(linkRemotes), s.LinkedByRemote))
+	}
+	lr, err = links.Links(ctx, s.ProjectID, linkRemotes)
 	if err != nil {
 		return nil, err
 	}
@@ -453,6 +540,7 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		Links:              lr,
 		StoreDefaultBranch: defBranch,
 		Setup:              in.Setup,
+		OwnData:            s.LinkedByRemote == "" && OwnData(root),
 	})
 	if s.ResolveErr == nil && s.Result.Org != nil && s.ProjectID != "" && in.Links != nil && orgresolve.IsStaging(s.Result.Org, defBranch) {
 		if err := stagingLinks(ctx, s, in.Links); err != nil {

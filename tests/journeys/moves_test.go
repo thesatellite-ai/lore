@@ -64,6 +64,23 @@ func TestJourneyMovesFolderAndRepo(t *testing.T) {
 		lap.LoreIn(c, "fix").OK(t).Never(t, "ran: lore scope move")
 	})
 
+	// devco D-414: a case-only rename is a rename, also where the file
+	// system ignores case (a Mac): there a one-step git mv of a folder to
+	// its other-case name fails, so Kim renames in two steps, and a stat
+	// of the old spelling still finds the folder.
+	w.Step("day2/a-case-only-rename-is-a-rename", func() {
+		const caseMove = "lore scope move --old src/bookings --new src/Bookings"
+		c.Git("mv", "src/bookings", "src/bookings.tmp")
+		c.Git("mv", "src/bookings.tmp", "src/Bookings")
+		r := c.TryGit("commit", "-q", "-m", "capitalise bookings")
+		if r.Code != 0 || !strings.Contains(r.Out(), caseMove) {
+			t.Fatalf("the post-commit hook did not name %q: exit %d\n%s", caseMove, r.Code, r.Out())
+		}
+		lap.LoreIn(c, "fix").OK(t).Says(t, "ran: "+caseMove)
+		lap.LoreIn(c, "scope", "show", "src/Bookings/a.js").OK(t).Says(t, "src/Bookings")
+		lap.LoreIn(c, "doctor").Never(t, "scope move")
+	})
+
 	w.AdvanceDays(1)
 	w.Step("day3/the-repo-folder-moves-and-prune-removes-the-old-cache", func() {
 		repoCaches := func() []string {

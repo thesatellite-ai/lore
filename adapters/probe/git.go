@@ -313,9 +313,12 @@ type GitIdentity struct {
 }
 
 // GlobalIdentity reads git config --global user.name and user.email
-// (an unset key is "", not an error). Classes: ok, timeout, tool_missing, failed.
+// (an unset key is "", not an error), following the global file's
+// [include] files as git does when it commits (--includes: git leaves them
+// off for --global unless asked; devco D-594). Classes: ok, timeout,
+// tool_missing, failed.
 func (p *Prober) GlobalIdentity(ctx context.Context) GitIdentity {
-	return p.identity(ctx, "", "--global")
+	return p.identity(ctx, "", "--global", "--includes")
 }
 
 // RepoIdentity reads the user.name and user.email git uses in dir (every

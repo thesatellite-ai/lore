@@ -265,7 +265,7 @@ func TestProjectText(t *testing.T) {
 		t.Errorf("list %q", got)
 	}
 	ps := h.Must(infra.OpProjectShow, `{"id":"`+h.Project+`"}`) // INTEG-AUDIT-2: ends with the writers line
-	want := "Project: prj_ID\n  name:    demo\n  created: 2026-11-04 12:13:25Z\n\nRepos:\n  rep_ID  web\n  rep_ID  api\n" + opstest.IDPattern(contenttest.WriterLine(t, h.JSON(ps), "data"))
+	want := "Project: prj_ID\n  name:    demo\n  created: 2026-11-04 12:13:25Z\n  repos:   2\n\nRepos:\n  rep_ID  web\n  rep_ID  api\n" + opstest.IDPattern(contenttest.WriterLine(t, h.JSON(ps), "data"))
 	if got := opstest.IDPattern(opstest.Text(ps)); got != want {
 		t.Errorf("show:\n%q\nwant\n%q", got, want)
 	}

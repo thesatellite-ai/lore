@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -67,6 +68,8 @@ type idSearch struct {
 	id       string
 	attached []string // the stores attached here
 	folders  []string // "<org>/<folder>" of the org's store clones read
+	// gone is the tombstone an attached store holds for id (devco:D-590)
+	gone *goneRow
 }
 
 // attachFolderOfID is the B2-21 step (see the file comment); the returned
@@ -84,7 +87,27 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 	if err != nil {
 		return nil, nil // the operation reports the open error itself
 	}
-	if _, _, gerr := eng.Get(ctx, engine.Ref{ID: anyID}); gerr == nil || !errs.Has(gerr, errs.NotFound) {
+	src, got, gerr := eng.Get(ctx, engine.Ref{ID: anyID})
+	if gerr == nil && got.Deleted {
+		// devco:D-590: an attached store holds the row's tombstone (Get
+		// returns tombstones); the read's not-found says where and when
+		// it was deleted (a trashed row answers E_IN_TRASH, untouched).
+		// The repo's own tombstone is left to the repo's read: its live
+		// ref keeps its own purge list and dated answer (live_notfound.go
+		// whyMissingCode), which a purge before a sync only reaches there.
+		if src == store.SourceRepo {
+			return nil, nil
+		}
+		day := ""
+		if !got.HLC.Wall.IsZero() {
+			day = got.HLC.Wall.UTC().Format(dayLayout)
+		}
+		// a purged id is gone for good: E_PURGED, never the trash list
+		// (an unreadable list counts as purged, as purgedInFolderOf)
+		purged, perr := eng.IsPurged(ctx, src, anyID)
+		return &idSearch{id: id, gone: &goneRow{id: id, place: string(src), day: day, purged: purged || perr != nil}}, nil
+	}
+	if gerr == nil || !errs.Has(gerr, errs.NotFound) {
 		return nil, nil
 	}
 	search := &idSearch{id: id}
@@ -92,6 +115,13 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		search.attached = append(search.attached, string(s))
 	}
 	scan := a.orgFolders(ctx)
+	if sc, in := storeHere(a.opts.RepoDir); in {
+		// D-458: in a store clone's folder the other folders of the clone
+		// and of its org's stores (the setup's org knows nothing of a
+		// clone, which is under no setup's folders)
+		scan = a.cloneIDScan(ctx, sc)
+	}
+	var gone *goneRow
 	for _, f := range scan.Folders {
 		name := f.Org
 		if name == "" {
@@ -99,19 +129,84 @@ func (a *App) attachFolderOfID(ctx context.Context, e op.Entry, d op.Decoder) (*
 		}
 		target := name + targetSep + f.Folder
 		search.folders = append(search.folders, target)
-		dir, derr := a.storeDir(ctx, attach.Store{Name: store.Source(f.Label), URL: f.URL, Branch: f.Branch})
-		if derr != nil {
-			continue
+		dir := f.Dir
+		if dir == "" {
+			var derr error
+			if dir, derr = a.storeDir(ctx, attach.Store{Name: store.Source(f.Label), URL: f.URL, Branch: f.Branch}); derr != nil {
+				continue
+			}
 		}
 		hits, _ := filepath.Glob(filepath.Join(dir, f.Folder, "*", id+rowFileExt))
 		if len(hits) == 0 {
 			continue
 		}
+		if live, g := liveHit(hits, id, target); !live {
+			// devco:D-590: a tombstone is no row to read there; never
+			// "it is in <folder>" for a deleted row
+			if gone == nil {
+				gone = g
+			}
+			continue
+		}
 		a.attachExtra(attach.Store{Name: store.Source(target), URL: f.URL, Folder: f.Folder, Branch: f.Branch})
-		_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s, which this repo does not attach; read from there for this command (lore store add … --folder %s attaches it for good)\n", id, target, f.Folder)
+		_, _ = fmt.Fprintf(os.Stderr, "lore: %s is in %s, which is not attached here; read from there for this command (lore store add … --folder %s attaches it for good)\n", id, target, f.Folder)
 		return nil, nil
 	}
+	if gone != nil {
+		return nil, gone.err()
+	}
 	return search, nil
+}
+
+// cloneIDScan is the folders a row id is looked for in from the store
+// clone sc: every folder of cloneFolderScan but the one the read ran in
+// (attached already: the read looked there).
+func (a *App) cloneIDScan(ctx context.Context, sc storeCheckout) orgFolderScan {
+	all := a.cloneFolderScan(ctx, sc)
+	out := orgFolderScan{Unread: all.Unread, Searched: all.Searched}
+	for _, f := range all.Folders {
+		if f.Dir == sc.top && f.Folder == sc.folder {
+			continue
+		}
+		out.Folders = append(out.Folders, f)
+	}
+	return out
+}
+
+// cloneFolderScan is every folder a store clone sc reaches: the clone's
+// own folders, read from the clone on disk under the name its reads use
+// (<store>/<folder>), then every folder of the other stores of the
+// clone's org (scope.go's sources).
+func (a *App) cloneFolderScan(ctx context.Context, sc storeCheckout) orgFolderScan {
+	scan := orgFolderScan{Unread: map[string]error{}}
+	root, err := storeHereEntry(a.opts.Home, storeCheckout{top: sc.top, shown: sc.shown, folder: rowfs.FolderRoot, isGit: sc.isGit})
+	if err != nil {
+		return scan
+	}
+	base := string(root.Name)
+	scan.Searched = append(scan.Searched, base)
+	own, err := storeFolders(ctx, sc.top)
+	if err != nil {
+		scan.Unread[base] = err
+	}
+	for _, r := range own {
+		id, perr := ids.Parse[ids.Project](r.ID)
+		if perr != nil {
+			continue
+		}
+		scan.Folders = append(scan.Folders, orgFolder{Label: base, Org: base, Folder: r.Folder, ID: id, URL: root.URL, Branch: root.Branch, Dir: sc.top, Rows: r.Rows})
+	}
+	rootKey := placeKey(root.URL, root.Branch)
+	others := a.foldersOf(ctx, cloneEntries(cloneOrgEntry(a.opts.Home, root.URL), root))
+	for _, f := range others.Folders {
+		if placeKey(f.URL, f.Branch) != rootKey {
+			scan.Folders = append(scan.Folders, f)
+		}
+	}
+	for k, v := range others.Unread {
+		scan.Unread[k] = v
+	}
+	return scan
 }
 
 // attachExtra attaches target for the rest of this process (not recorded
@@ -136,6 +231,9 @@ func (s *idSearch) withSearchHint(err error) error {
 	var e *errs.Error
 	if s == nil || !errors.As(err, &e) || e.Code != errs.NotFound || !strings.Contains(e.Message, s.id) {
 		return err
+	}
+	if s.gone != nil {
+		return s.gone.err()
 	}
 	sort.Strings(s.attached)
 	sort.Strings(s.folders)

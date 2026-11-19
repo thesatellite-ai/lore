@@ -97,7 +97,7 @@ func (a *App) repoDBRows(ctx context.Context) (repoDB, error) {
 	// (MigrateLive, with its live stamp): lore.db holds the same row.
 	onLive := map[store.Key]bool{}
 	if folder, ferr := repoLiveFolder(ctx, top); ferr == nil {
-		if live, lerr := readLiveRows(ctx, top, []string{liveRefLocal, liveRefTracking}, folder, liveTables()); lerr == nil {
+		if live, lerr := readLiveRows(ctx, top, []string{liveRefLocal, liveRefTracking}, folder, liveTables(), false); lerr == nil {
 			for _, lr := range live {
 				onLive[store.Key{Table: lr.row.Table, ID: lr.row.ID}] = true
 			}

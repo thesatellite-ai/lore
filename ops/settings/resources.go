@@ -11,14 +11,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/contextfit"
 	"github.com/thesatellite-ai/lore/logic/filter"
 	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
 	"github.com/thesatellite-ai/lore/logic/sortspec"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -94,6 +97,9 @@ type ResValueFlags struct {
 
 // ResEditIn is the input of resource.edit.
 type ResEditIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Name  string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --where"`
 	Set   []string `json:"set,omitempty" flag:"set" desc:"field=value (repeatable)"`
 	Unset []string `json:"unset,omitempty" flag:"unset" desc:"field to remove (repeatable)"`
@@ -115,6 +121,8 @@ type ResRef struct {
 // references of its text values as every other show does (SECRETS 2.7,
 // 12); stored values never change and a sensitive value is never expanded.
 type ResShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Name          string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
 	expand.Flag
@@ -123,6 +131,9 @@ type ResShowIn struct {
 // ResDeleteIn is the input of resource.delete: one resource by name, or
 // the bulk form --kind with --where (CLI_REFERENCE 3.2, XQ1, XQ2).
 type ResDeleteIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Name   string   `json:"id,omitempty" arg:"0" desc:"the resource (name or res_ id); leave out for the bulk form --kind --where"`
 	Reason string   `json:"reason,omitempty" flag:"reason" desc:"why (recorded in the audit log)"`
 	Kind   string   `json:"kind,omitempty" flag:"kind" desc:"bulk: delete every resource of this kind matching --where (one batch)"`
@@ -152,16 +163,26 @@ func (o ResDeleteOut) Text() string { return o.Human }
 
 // ResNameIn names one resource for archive and check.
 type ResNameIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Name string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 }
 
 // ResListIn is the input of resource.list.
 type ResListIn struct {
-	Kind          string   `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
+	// Kind is optional (devco D-550): with none the list covers every
+	// kind, so `resource list --store <org>` answers like the rest.
+	Kind          string   `json:"kind,omitempty" arg:"0" desc:"the kind (name or knd_ id); every kind when left out"`
 	Where         []string `json:"where,omitempty" flag:"where" desc:"filter on a field: = != ~= > >= < <= ? !? or field:a,b (repeatable; all must match)"`
 	Sort          []string `json:"sort,omitempty" flag:"sort" desc:"sort by name, last_checked, archived_at or a field: <key>, <key>:asc or <key>:desc (repeatable; default name)"`
 	Archived      bool     `json:"archived,omitempty" flag:"archived" desc:"include archived resources"`
 	ShowSensitive bool     `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive values (asks first)"`
+	// Wide prints every field of the kind as a column (devco D-650: the
+	// default with a kind is the narrow view, kindColumns).
+	Wide bool `json:"wide,omitempty" flag:"wide" desc:"print every field of the kind as a column (default: project, url and at most two key fields; --json has every value)"`
 	// Meta and Place are metalist.Flags' --meta/--place (CLI_REFERENCE 3.2
 	// list --meta); the whole struct is not embedded because --sort and
 	// --archived already mean the resource forms here.
@@ -179,6 +200,8 @@ type ResListIn struct {
 
 // ResStaleIn is the input of resource.stale.
 type ResStaleIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Days int `json:"days,omitempty" flag:"days" min:"1" desc:"older than this many days (default 60)"`
 }
 
@@ -284,47 +307,238 @@ type ResListOut struct {
 	// kind's fields; stale: none).
 	columns []string
 	stale   bool
+	// every marks the no-kind list (resListEvery): its columns are the
+	// common ones (everyColumns), not one kind's fields.
+	every bool
+	// narrow marks a one-kind list without --wide (devco D-650): Text
+	// prints kindColumns of def, not every field.
+	narrow bool
+	def    kindDef
+	// asked are the fields --where and --sort name: the narrow view keeps
+	// them as columns (a sensitive one masked), so a filter shows what it
+	// matched on.
+	asked []string
+	// StaleCount / NeverChecked split a resource stale answer by reason
+	// (checkStateOf; the same counts resource report prints), and Days is
+	// its window; all three are left out of other lists.
+	StaleCount   int `json:"stale_count,omitempty"`
+	NeverChecked int `json:"never_checked,omitempty"`
+	Days         int `json:"days,omitempty"`
 	// Notes are metalist's lines after the rows (unregistered key, …).
 	Notes []string `json:"notes,omitempty"`
+	// left / leftFrom count the resources a folder-scoped list left out
+	// and the stores they are in (devco D-583, FolderScope.note).
+	left     int
+	leftFrom []store.Source
+	// leftBy is the read whose whole-org form the scope note names
+	// ("" for resource list).
+	leftBy string
+}
+
+// addLeft counts n resources left out from the stores from.
+func (o *ResListOut) addLeft(n int, from []store.Source) {
+	o.left += n
+	for _, s := range from {
+		if !slices.Contains(o.leftFrom, s) {
+			o.leftFrom = append(o.leftFrom, s)
+		}
+	}
+}
+
+// withScopeNote adds the folder-scope line when rows were left out.
+func (o ResListOut) withScopeNote(sc FolderScope, ok bool) ResListOut {
+	if ok && o.left > 0 {
+		by := o.leftBy
+		if by == "" {
+			by = OpResList
+		}
+		o.Notes = append(o.Notes, sc.noteFor(o.left, o.leftFrom, by))
+	}
+	return o
 }
 
 // Text implements op.Texter: the CLI_REFERENCE 3.2 tables.
 func (o ResListOut) Text() string {
 	if len(o.Data) == 0 {
-		return "(no resources)\n"
+		// a folder-scoped read that left every row out still says where
+		// they are (devco D-586)
+		return "(no resources)\n" + strings.Join(append(slices.Clip(o.Notes), ""), "\n")
 	}
 	var b strings.Builder
 	if o.stale {
 		b.WriteString("KIND\tNAME\tLAST_CHECKED\tAGE\n")
 		for _, r := range o.Data {
 			age := "never"
-			if t, err := time.Parse(time.RFC3339Nano, r.LastChecked); err == nil {
+			if t, ok := parseWhen(r.LastChecked); ok && r.LastChecked != "" {
 				age = strconv.Itoa(int(time.Since(t).Hours()/hoursPerDay)) + "d"
 			}
 			fmt.Fprintf(&b, "%s\t%s\t%s\t%s\n", r.Kind, r.Name, dayOf(r.LastChecked), age)
 		}
+		b.WriteString(checkSummary(o.StaleCount, o.NeverChecked, o.Days) + "\n")
+		for _, n := range o.Notes {
+			b.WriteString(n + "\n") // the folder-scope line (devco D-586)
+		}
 		return b.String()
 	}
+	// devco D-572: aligned columns (terminal cells, textwidth) and a count
+	// line, like every other list; the rows were raw tab-separated cells.
+	// devco D-584: the no-kind list shows the common columns (project,
+	// url) instead of none, CHECKED only when a row was checked, and every
+	// cell is cut to listCellMax so one long value cannot widen the table.
+	cols := o.columns
+	if o.every {
+		cols = everyColumns(o.Data)
+	}
+	if o.narrow {
+		cols = kindColumns(o.def, o.Data, o.asked)
+	}
+	checked := slices.ContainsFunc(o.Data, func(r Resource) bool { return r.LastChecked != "" })
 	head := []string{"KIND", "NAME"}
-	for _, c := range o.columns {
+	for _, c := range cols {
 		head = append(head, strings.ToUpper(c))
 	}
-	b.WriteString(strings.Join(append(head, "CHECKED"), "\t") + "\n")
+	if checked {
+		head = append(head, "CHECKED")
+	}
+	rows := [][]string{head}
 	for _, r := range o.Data {
 		cells := []string{r.Kind, r.Name}
-		for _, c := range o.columns {
-			cells = append(cells, r.shown(c))
+		for _, c := range cols {
+			cells = append(cells, contextfit.Cut(oneLine(r.shown(c)), listCellMax))
 		}
-		b.WriteString(strings.Join(append(cells, dayOf(r.LastChecked)), "\t") + "\n")
-		if q := quarantineLine(r.Quarantine); q != "" {
-			b.WriteString("  " + r.Name + " " + q + "\n") // R10: marked, never hidden
+		if checked {
+			cells = append(cells, dayOf(r.LastChecked))
 		}
+		rows = append(rows, cells)
+	}
+	ws := textwidth.Columns(rows)
+	for i, row := range rows {
+		var line strings.Builder
+		for j, c := range row {
+			if j > 0 {
+				line.WriteString("  ")
+			}
+			line.WriteString(textwidth.PadRight(c, ws[j]))
+		}
+		b.WriteString(strings.TrimRight(line.String(), " ") + "\n")
+		if i == 0 {
+			continue
+		}
+		if q := quarantineLine(o.Data[i-1].Quarantine); q != "" {
+			b.WriteString("  " + o.Data[i-1].Name + " " + q + "\n") // R10: marked, never hidden
+		}
+	}
+	b.WriteString(plural.Count(len(o.Data), "resource") + "\n")
+	if o.narrow && len(cols) < len(o.columns) {
+		// devco D-650: say the view is narrow and how to see the rest
+		fmt.Fprintf(&b, "%s not shown: add --wide for every field, or --json\n", plural.Count(len(o.columns)-len(cols), "more field"))
 	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
 	}
 	return b.String()
 }
+
+// listCellMax is the widest a resource list cell prints (as sql's
+// table cells); the full value is in resource show and --json.
+const listCellMax = 60
+
+// everyColumnNames are the fields the no-kind list prints when any of its
+// rows sets them (devco D-584): the folder a resource belongs to and where
+// it is, the two most kinds share.
+var everyColumnNames = []string{resProjectField, "url"}
+
+// kindKeyColumnsMax is how many of a kind's own fields the narrow one-kind
+// list adds after project and url (devco D-650).
+const kindKeyColumnsMax = 2
+
+// kindColumns are the narrow one-kind list's field columns (devco D-650:
+// `resource list --kind server` printed every field, ~15 columns and ~400
+// characters a line): the everyColumnNames the kind defines and some row
+// sets, the fields --where and --sort name, then at most kindKeyColumnsMax key fields, required ones first,
+// then those the most rows set (ties by name). A sensitive field prints
+// masked, as in the wide view. --wide and --json carry every field.
+func kindColumns(d kindDef, data []Resource, asked []string) []string {
+	set := func(c string) int {
+		n := 0
+		for _, r := range data {
+			if strings.TrimSpace(r.Values[c]) != "" {
+				n++
+			}
+		}
+		return n
+	}
+	var out []string
+	for _, c := range everyColumnNames {
+		if _, ok := d.byName[c]; ok && set(c) > 0 {
+			out = append(out, c)
+		}
+	}
+	for _, c := range asked {
+		if !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	type cand struct {
+		name     string
+		required bool
+		set      int
+	}
+	var cands []cand
+	for _, n := range d.fieldNames() {
+		f := d.byName[n]
+		if slices.Contains(out, n) {
+			continue
+		}
+		if c := set(n); c > 0 {
+			cands = append(cands, cand{n, flag(f.Row, fRequired), c})
+		}
+	}
+	slices.SortStableFunc(cands, func(a, b cand) int {
+		if a.required != b.required {
+			if a.required {
+				return -1
+			}
+			return 1
+		}
+		return b.set - a.set
+	})
+	for i := 0; i < len(cands) && i < kindKeyColumnsMax; i++ {
+		out = append(out, cands[i].name)
+	}
+	return out
+}
+
+// askedFields are the fields of d that --where and --sort terms name
+// ("env=prod", "has:tags", "cores:desc"), in order, each once.
+func askedFields(d kindDef, terms []string) []string {
+	var out []string
+	for _, t := range terms {
+		t = strings.TrimPrefix(strings.TrimSpace(t), "has:")
+		end := strings.IndexFunc(t, func(r rune) bool { return !(r == '_' || r == '.' || unicode.IsLetter(r) || unicode.IsDigit(r)) })
+		if end >= 0 {
+			t = t[:end]
+		}
+		if _, ok := d.byName[t]; ok && !slices.Contains(out, t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// everyColumns are the everyColumnNames some row of data sets.
+func everyColumns(data []Resource) []string {
+	var out []string
+	for _, c := range everyColumnNames {
+		if slices.ContainsFunc(data, func(r Resource) bool { return strings.TrimSpace(r.Values[c]) != "" }) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// oneLine folds a multi-line value into one table line.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // byWho is " (by <how>)" for a checked_by value, "" when unset (RQ8).
 func byWho(by string) string {
@@ -357,7 +571,7 @@ func (o ops) resourceOps() []op.Entry {
 			// XQ3: --show-sensitive always confirms; without a terminal it needs --yes.
 			Errors: append(slices.Clone(readErrors), errs.NeedsConfirm, errs.ResourceAmbiguous, errs.Unsupported), Confirm: op.ConfirmRule{When: "show_sensitive"},
 			Examples: []op.Example{{Title: "one resource", CLI: "lore resource show --id prod_db"}, {Title: "fill in its ${var:…} references", CLI: "lore resource show --id prod_db --expand"}}}, o.resShow),
-		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind", Permission: op.PermRead, Access: op.AccessRead,
+		op.Define(op.Spec{Name: OpResList, Summary: "List resources of a kind (every kind when none is given)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown, errs.KindConflict, errs.ResourceStale, errs.NeedsConfirm), Confirm: op.ConfirmRule{When: "show_sensitive"}, Examples: []op.Example{{Title: "every database", CLI: "lore resource list --kind database"}}}, o.resList),
 		// XQ2: MayAsk, not Always: the bulk form must count its rows before
 		// it may ask (a preview above batch.preview_rows); the one-row form
@@ -451,7 +665,7 @@ func decodeValues(r located) (resValues, error) {
 		if err != nil {
 			e = errs.Wrap(errs.ResourceInvalid, e.Error(), err)
 		}
-		return e.WithHint(`each entry must be {"name": <field>, "v": <value>} (STORE_SERVER_SPEC 4.4)`)
+		return e.WithHint(`each entry must be {"name": <field>, "v": <value>}`)
 	}
 	var entries map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &entries); err != nil {
@@ -923,7 +1137,7 @@ func (o ops) resEdit(ctx context.Context, in ResEditIn) (RowOut, error) {
 		}
 		return o.resEditWhere(ctx, in)
 	}
-	r, err := o.resourceByName(ctx, in.Name, "")
+	r, err := o.resourceInScope(ctx, in.Name, OpResEdit)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -1081,6 +1295,20 @@ func (o ops) resShow(ctx context.Context, in ResShowIn) (ResOut, error) {
 }
 
 func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
+	if strings.TrimSpace(in.Kind) == "" {
+		return o.resListEvery(ctx, in)
+	}
+	out, err := o.resListKind(ctx, in)
+	if err != nil {
+		return ResListOut{}, err
+	}
+	sc, scoped := o.folderScope()
+	return out.withScopeNote(sc, scoped), nil
+}
+
+// resListKind is resource list of one kind, without the folder-scope
+// note (resListEvery sums the left-out rows of every kind into one).
+func (o ops) resListKind(ctx context.Context, in ResListIn) (ResListOut, error) {
 	d, err := o.kindDefRead(ctx, in.Kind)
 	if err != nil {
 		return ResListOut{}, err
@@ -1099,13 +1327,14 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	if err != nil {
 		return ResListOut{}, err
 	}
-	out := ResListOut{Data: []Resource{}, columns: d.fieldNames()}
+	out := ResListOut{Data: []Resource{}, columns: d.fieldNames(), narrow: !in.Wide, def: d, asked: askedFields(d, append(slices.Clone(in.Where), in.Sort...))}
 	type hit struct {
 		res Resource
 		row located
 		got resValues
 	}
 	var hits []hit
+	sc, scoped := o.folderScope()
 	for _, r := range where(rows, map[string]string{rKind: d.kind.Row.ID.String()}) {
 		if text(r.Row, rArchivedAt) != "" && !in.Archived {
 			continue
@@ -1122,6 +1351,11 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 		v, verr := o.view(ctx, r, in.ShowSensitive)
 		if verr != nil {
 			return ResListOut{}, verr
+		}
+		if scoped && !sc.keeps(r.Src, v) {
+			// devco D-583: a folder's list keeps its own resources
+			out.addLeft(1, []store.Source{r.Src})
+			continue
 		}
 		hits = append(hits, hit{res: v, row: r, got: stored})
 	}
@@ -1157,6 +1391,52 @@ func (o ops) resList(ctx context.Context, in ResListIn) (ResListOut, error) {
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// resListEvery is resource list with no kind (devco D-550: `resource
+// list --store <org>` refused while `--kind <kind> --store <org>`
+// answered): every kind's list, one after another (kind, then name), with
+// no field columns since kinds differ in their fields. --where and --sort
+// name a kind's fields, so they still need --kind.
+func (o ops) resListEvery(ctx context.Context, in ResListIn) (ResListOut, error) {
+	if len(in.Where) > 0 || len(in.Sort) > 0 {
+		return ResListOut{}, errs.New(errs.InvalidInput, "resource list: --where and --sort filter on a kind's fields, so they need --kind").
+			WithHint("lore resource list --kind <kind> --where <field>=<value>; lore resource kinds names the kinds")
+	}
+	ks, err := o.kindList(ctx, KindsIn{})
+	if err != nil {
+		return ResListOut{}, err
+	}
+	out := ResListOut{Data: []Resource{}, every: true}
+	seen := map[string]bool{}
+	for _, k := range ks.Data {
+		if seen[k.ID] {
+			continue
+		}
+		seen[k.ID] = true
+		one := in
+		one.Kind = k.ID
+		got, lerr := o.resListKind(ctx, one)
+		if lerr != nil {
+			return ResListOut{}, lerr
+		}
+		out.Data = append(out.Data, got.Data...)
+		out.addLeft(got.left, got.leftFrom)
+		for _, n := range got.Notes {
+			if !slices.Contains(out.Notes, n) {
+				out.Notes = append(out.Notes, n)
+			}
+		}
+	}
+	slices.SortStableFunc(out.Data, func(a, b Resource) int {
+		if c := strings.Compare(a.Kind, b.Kind); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Name, b.Name)
+	})
+	out.Count = len(out.Data)
+	sc, scoped := o.folderScope()
+	return out.withScopeNote(sc, scoped), nil
 }
 
 // noteSensitiveFilter is RES 3.12's line under a list whose --where
@@ -1430,7 +1710,7 @@ func (o ops) referrers(ctx context.Context, id ids.AnyID) ([]string, error) {
 }
 
 func (o ops) resArchive(ctx context.Context, in ResNameIn) (RowOut, error) {
-	r, err := o.resourceByName(ctx, in.Name, "")
+	r, err := o.resourceInScope(ctx, in.Name, OpResArchive)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -1444,7 +1724,7 @@ func (o ops) resCheck(ctx context.Context, in ResCheckIn) (RowOut, error) {
 		}
 		return o.resCheckWhere(ctx, in)
 	}
-	r, err := o.resourceByName(ctx, in.Name, "")
+	r, err := o.resourceInScope(ctx, in.Name, OpResCheck)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -1465,13 +1745,24 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 	if err != nil {
 		return ResListOut{}, err
 	}
-	out := ResListOut{Data: []Resource{}, stale: true}
+	out := ResListOut{Data: []Resource{}, stale: true, Days: days, leftBy: OpResStale}
+	// a folder's stale list keeps that folder's resources, as its list
+	// does (devco D-586)
+	var left int
+	var leftFrom []store.Source
+	rows, left, leftFrom = o.inFolderScope(ctx, rows)
+	out.addLeft(left, leftFrom)
 	for _, r := range rows {
 		if text(r.Row, rArchivedAt) != "" {
 			continue
 		}
-		if t, err := time.Parse(time.RFC3339Nano, text(r.Row, rLastChecked)); err == nil && t.After(cut) {
+		switch checkStateOf(r.Row, cut) {
+		case checkFresh:
 			continue
+		case checkStale:
+			out.StaleCount++
+		case checkNever:
+			out.NeverChecked++
 		}
 		v, verr := o.view(ctx, r, false)
 		if verr != nil {
@@ -1480,7 +1771,8 @@ func (o ops) resStale(ctx context.Context, in ResStaleIn) (ResListOut, error) {
 		out.Data = append(out.Data, v)
 	}
 	out.Count = len(out.Data)
-	return out, nil
+	sc, scoped := o.folderScope()
+	return out.withScopeNote(sc, scoped), nil
 }
 
 // conflictsView shows a row's conflict entries by field name; a sensitive

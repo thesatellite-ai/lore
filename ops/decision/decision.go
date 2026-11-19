@@ -8,6 +8,7 @@ package decision
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/refpoint"
+	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/expand"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
 	"github.com/thesatellite-ai/lore/ops/internal/trashline"
@@ -29,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
 	"github.com/thesatellite-ai/lore/ops/internal/rowref"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -124,13 +127,16 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
 	Text       string   `json:"text,omitempty" arg:"0" argof:"body" desc:"the decision body, instead of --body"`
 	Status     string   `json:"status,omitempty" flag:"status" desc:"proposed | accepted | superseded | deprecated (default accepted)"`
 	Source     string   `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
-	SourceRef  string   `json:"source_ref,omitempty" flag:"source-ref" desc:"free-form provenance"`
 	Supersedes string   `json:"supersedes,omitempty" flag:"supersedes" desc:"decision_id (dec_*) this entry replaces"`
 	NoMeta     bool     `json:"no_meta,omitempty" flag:"no-meta" desc:"with --supersedes: do not copy the replaced row's metadata"`
 	To         string   `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
@@ -153,12 +159,15 @@ type AddOut struct {
 	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
-	label string
+	// Existing is true when --key found the row a previous run added
+	// (nothing written).
+	Existing bool `json:"existing,omitempty"`
+	label    string
 }
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, o.label) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
+	return fmt.Sprintf("✓ %s — %s %s\n", o.ID, o.Title, o.label) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings) + kn.ExistingLine(o.Existing)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
@@ -200,7 +209,10 @@ type ListIn struct {
 	All        bool     `json:"all,omitempty" flag:"all" desc:"every row: every repo's and the archived ones (the default list says how many it hides)"`
 	Project    string   `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	Tags       []string `json:"tags,omitempty" flag:"tag" desc:"only decisions with this tag (repeatable: all must match)"`
-	Store      string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store and its folders, <store>/<folder> (default every attached store)"`
+	// Status keeps decisions in any of these statuses (devco D-449: "which
+	// decisions wait for the owner" had only --sort status).
+	Status []string `json:"status,omitempty" flag:"status" desc:"only decisions with this status: proposed, accepted, superseded, deprecated (repeatable: any may match)"`
+	Store  string   `json:"store,omitempty" flag:"store" alias:"to" desc:"only decisions of this store and its folders, <store>/<folder> (default every attached store)"`
 	// MetaFlags: --meta / --place / --sort meta.<key> (METADATA 3.7).
 	kn.MetaFlags
 	// --limit / --page: the shared paging flags of every list (op.PageFlags, T-4).
@@ -433,7 +445,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err = rowref.Check(ctx, o.env, store.Source(in.To), refs); err != nil {
 		return AddOut{}, err
 	}
+	var existed bool
 	c := kn.Create{
+		Key: in.Key, Existed: &existed,
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
@@ -451,12 +465,15 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	if existed { // --key found the first run's decision: its refs were saved then
+		return AddOut{Existing: true, ID: w.Row.ID.String(), Store: string(src), Title: kn.Field(w.Row, kn.FieldTitle), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	}
 	if err = rowref.Save(ctx, o.env, src, noun.Table, kn.Field(w.Row, kn.FieldProject), w.Row.ID, rel, refs); err != nil {
 		return AddOut{}, err
 	}
 	// The reply echoes the stored title (after the write path's text
 	// cleanup), so --json shows what show and the row file hold (I-4).
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{Existing: existed, ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // addRefs writes --ref pointers of an existing decision it (parse, F15
@@ -482,9 +499,20 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.All {
 		in.Archived = true // --all: the metadata narrowing keeps them too
 	}
+	for _, st := range in.Status {
+		if err := kn.OneOf(noun, "status", st, schema.DecisionStatuses()); err != nil {
+			return ListOut{}, err
+		}
+	}
 	keep, err := kn.HasTags(ctx, o.env, in.Tags)
 	if err != nil {
 		return ListOut{}, err
+	}
+	if len(in.Status) > 0 {
+		tagged := keep
+		keep = func(r row.Row) bool {
+			return slices.Contains(in.Status, content.Field(r, fieldStatus)) && (tagged == nil || tagged(r))
+		}
 	}
 	items, hid, err := kn.List(ctx, o.env, noun, kn.Scope{Repo: in.Repo, NoInherit: in.NoInherit, MasterOnly: in.MasterOnly, AllRepos: in.AllRepos, Project: in.Project, All: in.All},
 		true, store.Source(in.Store), keep)
@@ -518,6 +546,11 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 
 // edit patches the given fields.
 func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	in.ID = id
 	if err := kn.OneOf(noun, "status", in.Status, schema.DecisionStatuses()); err != nil {
 		return WriteOut{}, err
 	}
@@ -556,6 +589,13 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 
 // archive sets archived_at.
 func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
+	if in.ID != "" {
+		id, err := o.resolveRef(ctx, in.ID)
+		if err != nil {
+			return WriteOut{}, err
+		}
+		in.ID = id
+	}
 	bulkForm, err := wheredel.ArchiveForm(noun.Name, in.ID, in.Where, in.DryRun)
 	if err != nil {
 		return WriteOut{}, err
@@ -572,6 +612,11 @@ func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
 
 // unarchive clears archived_at.
 func (o ops) unarchive(ctx context.Context, in IDIn) (WriteOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	in.ID = id
 	return o.stamp(ctx, in.ID, value.Null{}, "unarchived")
 }
 
@@ -586,6 +631,11 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 
 // delete writes the decision's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
+	id, err := o.resolveRef(ctx, in.ID)
+	if err != nil {
+		return WriteOut{}, err
+	}
+	in.ID = id
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
 	src, w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {

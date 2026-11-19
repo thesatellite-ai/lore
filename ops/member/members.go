@@ -14,6 +14,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
 	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
@@ -236,7 +237,7 @@ func resolveProject(ctx context.Context, env Env, r profilestore.Roster, ref str
 	if id, perr := ids.Parse[ids.Project](ref); perr == nil {
 		return Project{ID: id}, nil
 	}
-	return Project{}, errs.New(errs.NotFound, "no project "+work.Quote(ref)+" on the roster in "+r.Where()).
+	return Project{}, errs.New(errs.NotFound, "no project "+work.Quote(ref)+" on the roster of "+r.Label()).
 		WithHint("run `lore project list` to see the projects, or name it by its prj_ id")
 }
 
@@ -406,7 +407,49 @@ func openMember(ctx context.Context, env Env, write bool, project string, actor 
 	if err != nil {
 		return memberCtx{}, done, err
 	}
+	if write {
+		if err := requireAdminOrLead(ctx, r, p, all); err != nil {
+			return memberCtx{}, done, err
+		}
+	}
 	return memberCtx{r: r, project: p, actor: a, all: all, stints: stintsOf(all, p.ID.String(), a.ID.String())}, done, nil
+}
+
+// orgRoleAdmin is the org_role of an admin's stint (ops/team OrgRoleAdmin).
+const orgRoleAdmin = "admin"
+
+// requireAdminOrLead refuses a membership change by a caller who is
+// neither an admin of the org nor a lead of project (devco D-328): every
+// teammate's lore holds back such a change on read (adapters/backend/git
+// authority.go), whoever's membership it is, so it would only be refused
+// later, on everyone's machine. A roster with no admin stint at all (a
+// personal store, an org from before org roles) refuses nobody.
+func requireAdminOrLead(ctx context.Context, r profilestore.Roster, p Project, all []membership) error {
+	periods, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return err
+	}
+	caller := r.Caller().String()
+	anyAdmin := false
+	for _, x := range periods {
+		if x.Deleted || fieldText(x, schema.FieldPeriodEndedOn) != "" || fieldText(x, schema.FieldPeriodOrgRole) != orgRoleAdmin {
+			continue
+		}
+		if fieldText(x, schema.FieldPeriodActor) == caller {
+			return nil
+		}
+		anyAdmin = true
+	}
+	if !anyAdmin {
+		return nil
+	}
+	for _, m := range all {
+		if m.Project == p.ID.String() && m.Actor == caller && m.EndedOn.IsZero() && slices.Contains(m.Roles, teamprofile.RoleLead) {
+			return nil
+		}
+	}
+	return errs.New(errs.Refused, "only an admin of the org or a lead of "+p.Shown()+" can change who is on it, and you are neither on the roster of "+r.Label()+"; nothing was written").
+		WithHint("ask an admin of the org or a lead of the project to run it, e.g. lore project member add " + p.Shown() + " <@handle> --role <role>")
 }
 
 func memberAdd(ctx context.Context, env Env, in MemberAddIn) (MemberWriteOut, error) {
@@ -670,6 +713,8 @@ type MemberListIn struct {
 	Actor   op.ActorRef `json:"actor,omitempty" flag:"actor" desc:"only this person's memberships"`
 	Role    string      `json:"role,omitempty" flag:"role" desc:"only memberships holding this role"`
 	History bool        `json:"history,omitempty" flag:"history" desc:"include ended stints"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
@@ -710,6 +755,13 @@ func memberList(ctx context.Context, env Env, in MemberListIn) (MemberListOut, e
 	}
 	out := MemberListOut{Members: []MemberOut{}}
 	var project Project
+	if strings.TrimSpace(in.Project) == "" {
+		if hp, ok := upgrade.As[HereProjecter](env); ok {
+			if here, found := hp.HereProject(ctx); found {
+				in.Project = here
+			}
+		}
+	}
 	if strings.TrimSpace(in.Project) != "" {
 		if project, err = resolveProject(ctx, env, r, in.Project); err != nil {
 			return MemberListOut{}, err
@@ -814,6 +866,21 @@ func actorIndex(ctx context.Context, r profilestore.Roster) (map[string]row.Row,
 	return out, nil
 }
 
+// HomeProjecter is the Roster upgrade naming the roster folder's own
+// project (its _meta.json project id): the project an org-wide team is
+// tied to. wire's roster implements it; "" when the folder has none.
+type HomeProjecter interface {
+	HomeProject(ctx context.Context) (string, error)
+}
+
+// HereProjecter is the Env upgrade naming the project of the store folder
+// the command runs in (a store clone's folder); ok is false anywhere else.
+// `project member list` with no project lists that folder's members
+// (D-445: inside a project's folder it listed every project).
+type HereProjecter interface {
+	HereProject(ctx context.Context) (string, bool)
+}
+
 // teamWarnings are the TP-13 lines for project: one per member of an org
 // @team who has no open membership of it, sorted ("@frontend: @carol is
 // in the org team but not a member of acme-hub (…)"). A team is "of
@@ -833,13 +900,26 @@ func teamWarnings(ctx context.Context, r profilestore.Roster, project Project, a
 		return nil, nil
 	}
 	scope := map[string]bool{project.ID.String(): true}
-	projects, err := r.List(ctx, schema.TableProjects)
-	if err != nil {
-		return nil, err
-	}
-	for _, p := range projects {
-		if !p.Deleted {
-			scope[p.ID.String()] = true
+	if hp, ok := upgrade.As[HomeProjecter](r); ok {
+		// D-445: the roster folder's own project only; every other
+		// project row it holds belongs to another folder's teams, and
+		// counting them warned about every team of the org
+		home, herr := hp.HomeProject(ctx)
+		if herr != nil {
+			return nil, herr
+		}
+		if home != "" {
+			scope[home] = true
+		}
+	} else {
+		projects, lerr := r.List(ctx, schema.TableProjects)
+		if lerr != nil {
+			return nil, lerr
+		}
+		for _, p := range projects {
+			if !p.Deleted {
+				scope[p.ID.String()] = true
+			}
 		}
 	}
 	if all == nil {
@@ -862,6 +942,9 @@ func teamWarnings(ctx context.Context, r profilestore.Roster, project Project, a
 		if t.Deleted || fieldText(t, fieldTeamActive) == boolFalse || !scope[fieldText(t, fieldTeamProject)] {
 			continue
 		}
+		if only == nil && fieldText(t, fieldTeamProject) != project.ID.String() && !teamUsedIn(t, member, project) {
+			continue // D-445: an org-wide team this project does not use
+		}
 		for _, aid := range value.ItemStrings(t.Fields[schema.FieldTeamMembers]) {
 			if member[aid] || (only != nil && !only[aid]) {
 				continue
@@ -877,6 +960,24 @@ func teamWarnings(ctx context.Context, r profilestore.Roster, project Project, a
 	}
 	slices.Sort(out)
 	return slices.Compact(out), nil
+}
+
+// teamUsedIn reports whether the org-wide team t is one project uses:
+// one of its people is an open member of it, or its handle is the
+// project's name (@sync for sync). Every other org-wide team stays quiet:
+// `project member list --project sync` printed a line for each person of
+// every client team of the org (D-445). member is the project's open
+// members by actor id.
+func teamUsedIn(t row.Row, member map[string]bool, project Project) bool {
+	if project.Name != "" && strings.EqualFold(fieldText(t, fieldTeamHandle), project.Name) {
+		return true
+	}
+	for _, aid := range value.ItemStrings(t.Fields[schema.FieldTeamMembers]) {
+		if member[aid] {
+			return true
+		}
+	}
+	return false
 }
 
 // overlapErr is E_PERIOD_OVERLAP for a new open stint from on that

@@ -49,8 +49,9 @@ func decode(t *testing.T, h *opstest.H, name, in string, v any) {
 // `lore scope show|list|move` over rows that got their folder through
 // --scope on every pinning and note noun (rule, hotfix, decision, memory):
 // show prints project, repo and the covering folders outermost first plus
-// the matching glob rules, counting only pinned rows; list counts pinned
-// rows and notes per folder and flags no file before a render; move
+// the matching glob rules, counting only pinned rows; list counts every
+// live rule and hotfix (any severity, devco:Q-14) and the notes per folder
+// and flags no file before a render; move
 // relabels the folder and the folders under it with ids unchanged, and
 // refuses a move into itself, an unknown folder, a taken target and a
 // target folder that does not exist; after a move the old path can be
@@ -62,10 +63,10 @@ func TestScopeOps(t *testing.T) {
 		return h.ID(h.Must(name, in))
 	}
 	rOuter := add("rule.add", `{"body":"outer must","severity":"must","scope":"dir:src/booking"}`)
-	add("rule.add", `{"body":"outer should","severity":"should","scope":"dir:src/booking"}`) // not pinned: not counted
+	add("rule.add", `{"body":"outer should","severity":"should","scope":"dir:src/booking"}`) // not pinned: list counts it, show does not
 	add("rule.add", `{"body":"inner must","severity":"must","scope":"dir:src/booking/payments"}`)
 	add("hotfix.add", `{"title":"inner trap","body":"b","severity":"critical","scope":"dir:src/booking/payments"}`)
-	add("hotfix.add", `{"title":"inner low","body":"b","severity":"low","scope":"dir:src/booking/payments"}`) // not pinned
+	add("hotfix.add", `{"title":"inner low","body":"b","severity":"low","scope":"dir:src/booking/payments"}`) // not pinned: list counts it
 	add("decision.add", `{"title":"d","body":"b","scope":"dir:src/booking"}`)
 	add("memory.add", `{"body":"m","scope":"dir:src/booking"}`)
 	add("rule.add", `{"body":"project must","severity":"must","scope":"project"}`)
@@ -76,7 +77,7 @@ func TestScopeOps(t *testing.T) {
 	var list scope.ListOut
 	decode(t, h, "scope.list", `{}`, &list)
 	type cnt struct{ rules, hotfixes, notes int }
-	want := map[string]cnt{"src/booking": {1, 0, 2}, "src/booking/payments": {1, 1, 0}, "web": {1, 0, 0}}
+	want := map[string]cnt{"src/booking": {2, 0, 2}, "src/booking/payments": {1, 2, 0}, "web": {1, 0, 0}}
 	ids := map[string]string{}
 	if len(list.Data) != len(want) {
 		t.Fatalf("list %+v", list.Data)
@@ -142,11 +143,11 @@ func TestScopeOps(t *testing.T) {
 	for _, r := range list.Data {
 		switch r.Path {
 		case "src/billing":
-			if r.ID != ids["src/booking"] || r.Rules != 1 || r.Notes != 2 {
+			if r.ID != ids["src/booking"] || r.Rules != 2 || r.Notes != 2 {
 				t.Fatalf("moved outer %+v", r)
 			}
 		case "src/billing/payments":
-			if r.ID != ids["src/booking/payments"] || r.Hotfixes != 1 {
+			if r.ID != ids["src/booking/payments"] || r.Hotfixes != 2 {
 				t.Fatalf("moved inner %+v", r)
 			}
 		case "web":

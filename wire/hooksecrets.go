@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/logic/scan"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -391,6 +392,9 @@ func scanDocs(sc scan.Scanner, allows hookAllows, paths []string, docs map[strin
 // A hit a .gitleaksignore fingerprint names (path, rule, line) is dropped
 // last, on the hits as the refusal would print them.
 func scanDoc(sc scan.Scanner, allows hookAllows, p string, b []byte, inStore bool) []leakcheck.SecretHit {
+	if isBinaryDoc(b) {
+		return nil // devco:Q-8: a binary file is not scanned (git's rule, as gitleaks)
+	}
 	content := string(b)
 	if strings.Contains("/"+p, "/"+loreDataMark) || (inStore && isStoreRowPath(p)) {
 		if r, err := row.Decode(b); err == nil && !r.ID.IsZero() {
@@ -597,7 +601,11 @@ func (a *App) FindingMatchHash(ctx context.Context, r row.Row, field, rule, fing
 		return 0, err
 	}
 	found := map[uint32]bool{}
-	for _, text := range fieldTexts(r.Fields[field]) {
+	var v value.Value = r.Fields[field]
+	if field == row.KeyOrigin && !r.Origin.IsZero() {
+		v = r.Origin // devco:R-10: `lore check leaks --rows` scans `_o` too
+	}
+	for _, text := range fieldTexts(v) {
 		for _, f := range sc.Scan(field, text) {
 			fp := strings.TrimPrefix(f.Preview, "sha256:")
 			if f.RuleID == rule && (strings.HasPrefix(fp, fingerprint) || strings.HasPrefix(fingerprint, fp)) {
@@ -628,16 +636,16 @@ func (a *App) RepoFilePath(ctx context.Context, p string) (string, error) {
 	if top == "" {
 		return "", errs.New(errs.InvalidInput, "secrets allow --file: "+a.opts.RepoDir+" is not in a git repo")
 	}
-	top = realPath(top)
+	top = fspath.Canonical(top)
 	abs := p
 	if !filepath.IsAbs(abs) {
 		base := top
-		if wd, err := os.Getwd(); err == nil && within(top, realPath(wd)) {
-			base = realPath(wd)
+		if wd, err := os.Getwd(); err == nil && within(top, fspath.Canonical(wd)) {
+			base = fspath.Canonical(wd)
 		}
 		abs = filepath.Join(base, p)
 	}
-	abs = filepath.Join(realPath(filepath.Dir(abs)), filepath.Base(abs))
+	abs = filepath.Join(fspath.Canonical(filepath.Dir(abs)), filepath.Base(abs))
 	rel, err := filepath.Rel(top, abs)
 	if err != nil || !within(top, abs) || rel == "." {
 		return "", errs.New(errs.InvalidInput, "secrets allow --file: "+p+" is not a file in this repo ("+top+")")
@@ -657,7 +665,7 @@ func (a *App) FileFindingHash(ctx context.Context, path, rule, fingerprint strin
 		}
 	}
 	if content == nil {
-		b, err := os.ReadFile(filepath.Join(realPath(top), filepath.FromSlash(path)))
+		b, err := os.ReadFile(filepath.Join(fspath.Canonical(top), filepath.FromSlash(path)))
 		if err != nil {
 			return 0, errs.Wrap(errs.NotFound, "secrets allow --file: cannot read "+path, err)
 		}

@@ -38,8 +38,10 @@ import (
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // stampHexLen is the stamp's length in hex digits (64 bits, as the canary
@@ -159,7 +161,7 @@ func copyMessage(kind opsrender.CopyKind, file, what string) string {
 		return file + " is missing: " + what + " is not on disk"
 	case opsrender.CopyEdited:
 		return file + " was edited by hand since it was rendered: " + what + " no longer matches its rows (lore render replaces the edit)"
-	case opsrender.CopyStale, opsrender.PointerOrphan, opsrender.PointerMissing:
+	case opsrender.CopyStale, opsrender.PointerOrphan, opsrender.PointerMissing, opsrender.PointerGenerated:
 	}
 	return file + " is stale: its rows or render settings changed since it was rendered, so " + what + " is out of date"
 }
@@ -205,7 +207,18 @@ func (h *Host) copiesOf(ctx context.Context, root, out string, p *committedPlan)
 			if fk == opsrender.CopyEdited {
 				fk = opsrender.CopyStale
 			}
-			add(fk, filepath.ToSlash(filepath.Join(filepath.Dir(out), fullFileName)), "the full fallback file")
+			fullRel := filepath.ToSlash(filepath.Join(filepath.Dir(out), fullFileName))
+			if fk == opsrender.CopyMissing {
+				if rel, inside := fspath.Rel(root, fullPath); inside && !tracked(ctx, root, filepath.ToSlash(rel)) {
+					// devco O-8: the repo never carried it (a migrated
+					// repo, or one whose LORE.full.md was never added), so
+					// a fresh clone has nothing to compare: a note, not a
+					// failure, naming how to share it
+					found = append(found, untrackedFullFinding(fullRel))
+					fk = ""
+				}
+			}
+			add(fk, fullRel, "the full fallback file")
 		}
 	}
 	priv, err := h.privateCopies(ctx, root)
@@ -213,6 +226,20 @@ func (h *Host) copiesOf(ctx context.Context, root, out string, p *committedPlan)
 		return nil, err
 	}
 	return append(found, priv...), nil
+}
+
+// untrackedFullFinding is the note for a LORE.full.md that is not on
+// disk and that git does not track (devco O-8): the clone never carried
+// it, so lore render --check and doctor do not fail on it (Local); the
+// fix renders it and adds it to git so later clones carry it.
+func untrackedFullFinding(rel string) opsrender.CopyFinding {
+	return opsrender.CopyFinding{
+		Kind:    opsrender.CopyMissing,
+		File:    rel,
+		Message: rel + " is not in this checkout and git does not track it (the full fallback file was never committed)",
+		Fix:     renderFixCommand + " && git add " + rel,
+		Local:   true,
+	}
 }
 
 // fixIDsCommand is the fix of a private render that waits for its
@@ -260,6 +287,11 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 			found = append(found, opsrender.CopyFinding{Kind: kind, File: file, Message: msg, Fix: fix, Local: true})
 		}
 	}
+	for _, dir := range pp.leftoverFolders() {
+		file := h.redact(dir)
+		found = append(found, opsrender.CopyFinding{Kind: opsrender.CopyStale, File: file, Local: true, Fix: renderFixCommand,
+			Message: file + " is an earlier private render folder of this repo (named by its project id before its repo id arrived, or by an earlier name); lore render removes it and keeps " + h.redact(pp.dir)})
+	}
 	for _, l := range pp.locals {
 		if l.in == l.out {
 			continue
@@ -278,7 +310,7 @@ func (h *Host) privateCopies(ctx context.Context, root string) ([]opsrender.Copy
 // compared; a pointer file is never removed (it may hold the person's own
 // lines), so an orphan's fix keeps it listed and the message says how to
 // drop it by hand.
-func pointerCopies(root string, pick targetPick) []opsrender.CopyFinding {
+func pointerCopies(ctx context.Context, root string, pick targetPick) []opsrender.CopyFinding {
 	if pick.sel.Reason != toolprofile.ReasonSetting {
 		return nil
 	}
@@ -290,6 +322,34 @@ func pointerCopies(root string, pick targetPick) []opsrender.CopyFinding {
 			continue
 		}
 		if (rootProbe{root: root}).State(t.profile.PointerFile) == toolprofile.FileWired {
+			continue
+		}
+		if banner := generatedBannerOf(root, t.profile.PointerFile); banner != "" {
+			// devco L-13: render leaves a file another tool generates as it
+			// is (D-2), so "fix: lore render" looped forever; name the
+			// steps that do clear it, as render's own skip note does. When
+			// another listed file already carries the pointer, the note
+			// names it and offers no command (devco J-3: never "wire
+			// another file" once one is wired).
+			carriers := wiredPointerFiles(root, pick.targets, t.profile.PointerFile)
+			fix := ""
+			if len(carriers) == 0 {
+				fix = generatedFixCommand(t.profile.Name)
+			}
+			found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerGenerated, File: t.profile.PointerFile,
+				Message: fmt.Sprintf("%s has no lore pointer: %s", t.profile.PointerFile,
+					generatedSkipReason(banner, t.profile.Name, LoreMDRel, carriers)),
+				Fix: fix})
+			continue
+		}
+		if rule, ign := ignoredBy(ctx, root, t.profile.PointerFile); ign {
+			// devco:S-2: an ignored pointer file is never in a clone, so a
+			// bare "lore render" fixed this clone only and the finding came
+			// back in every fresh one. Local: CI's render --check, which
+			// judges committed files, notes it instead of failing.
+			found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerMissing, File: t.profile.PointerFile, Local: true,
+				Message: fmt.Sprintf("%s has no lore pointer: %s", t.profile.PointerFile, ignoredPointerText(t.profile.PointerFile, t.profile.Name, rule)),
+				Fix:     renderFixCommand})
 			continue
 		}
 		found = append(found, opsrender.CopyFinding{Kind: opsrender.PointerMissing, File: t.profile.PointerFile,
@@ -326,7 +386,7 @@ func (h *Host) renderedCopies(ctx context.Context, root string) ([]opsrender.Cop
 	if err != nil {
 		return nil, err
 	}
-	return append(found, pointerCopies(root, p.pick)...), nil
+	return append(found, pointerCopies(ctx, root, p.pick)...), nil
 }
 
 // splitLocalCopies splits found into the copies a clone carries (tracked)
@@ -367,12 +427,15 @@ func staleError(found []opsrender.CopyFinding) error {
 // last render. Only
 // for a project that renders, run from its root; a failure is a warning,
 // never a failed sync. A tracked render that matches the index is
-// rewritten only when the sync moved rows (brought: received, sent or
-// landed) or this clone's row files hold uncommitted writes, and the repo
-// is not a client repo (B-8, B-11): a no-op sync on a clean tree changes
-// no tracked file, and in a client repo the committed render is the
-// client's (render_auto.go).
-func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool) {
+// rewritten only when this clone's row files already hold uncommitted
+// writes, and the repo is not a client repo (B-8, B-11, devco:K-8): a
+// sync on a clean tree changes no tracked file, even one that brought
+// rows in (a store's, a teammate's live writes), because a dirty
+// committed render makes the next `git pull --rebase` refuse ("You have
+// unstaged changes"); the committed render catches up in the next commit
+// that carries row files (CommitRender) or on `lore render`. In a client
+// repo the committed render is the client's (render_auto.go).
+func (h *Host) rerenderStaleQuiet(ctx context.Context, root string) {
 	out := filepath.Join(root, filepath.FromSlash(LoreMDRel))
 	if _, err := os.Stat(out); err != nil {
 		return
@@ -381,8 +444,11 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool
 	if err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
 		return
 	}
+	if _, busy := wire.GitOpRunning(ctx, root); busy && renderTracked(ctx, root) {
+		return // devco:Q-15: heldStaleNotice names the operation instead
+	}
 	if h.RenderHeld(ctx, root) {
-		if client, cerr := h.repoIsClient(ctx); !(brought || rowsUncommitted(ctx, root)) || client || cerr != nil {
+		if client, cerr := h.repoIsClient(ctx); !rowsUncommitted(ctx, root) || client || cerr != nil {
 			return
 		}
 	}
@@ -404,4 +470,97 @@ func (h *Host) rerenderStaleQuiet(ctx context.Context, root string, brought bool
 	if err := h.runRender(ctx, rf); err != nil {
 		fmt.Fprintln(os.Stderr, h.decor.warn(syncLogPrefix+"re-render "+LoreMDRel+": "+err.Error()))
 	}
+}
+
+// heldStaleNotice is HeldStaleNotice. It runs after rerenderStaleQuiet:
+// a render that sync could rewrite was rewritten, so a stale render here
+// is one rerenderStaleQuiet kept (held, clean row files, not a client
+// repo, whose committed render is the client's).
+func (h *Host) heldStaleNotice(ctx context.Context, root string) string {
+	out := filepath.Join(root, filepath.FromSlash(LoreMDRel))
+	if _, err := os.Stat(out); err != nil {
+		return ""
+	}
+	if cwd, err := os.Getwd(); err != nil || filepath.Clean(cwd) != filepath.Clean(root) {
+		return ""
+	}
+	gop, busy := wire.GitOpRunning(ctx, root)
+	busy = busy && renderTracked(ctx, root)
+	if !busy && !h.RenderHeld(ctx, root) {
+		return ""
+	}
+	if client, cerr := h.repoIsClient(ctx); client || cerr != nil {
+		return ""
+	}
+	projectID, err := h.projectID(ctx)
+	if err != nil {
+		return ""
+	}
+	p, err := h.planCommitted(ctx, projectID, root, nil, nil)
+	if err != nil {
+		return ""
+	}
+	if kind, err := copyVerdict(out, p.body, canaryIn); err != nil || kind != opsrender.CopyStale {
+		return ""
+	}
+	if busy {
+		return syncLogPrefix + gitOpHeldLine(gop)
+	}
+	return syncLogPrefix + LoreMDRel + " is behind its rows (rows that reached this clone since it was committed); it stays as committed so your next git pull works. It catches up with your next commit that carries row files, or run lore render and commit it."
+}
+
+// gitOpHeldLine is the sentence a sync or `lore render` prints when it
+// left the tracked render files as they are because a git operation is
+// stopped in the work tree (devco:Q-15): what is running, why the files
+// stay, and what to run after.
+func gitOpHeldLine(op wire.GitOp) string {
+	return "a git " + op.Name + " is in progress in this clone, so " + LoreMDRel + " and the other tracked files lore renders stay as they are (a changed tracked file would stop it); finish it with " + op.End + ", then run lore render and commit the result."
+}
+
+// renderTracked reports whether git tracks any render file of the project
+// at root (LORE.md, LORE.full.md).
+func renderTracked(ctx context.Context, root string) bool {
+	for _, rel := range renderFileRels {
+		if tracked(ctx, root, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+// generatedBannerOf is the "generated file" banner of the repo's tool file
+// rel ("" when the file is missing, unreadable or has none).
+func generatedBannerOf(root, rel string) string {
+	b, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		return ""
+	}
+	return toolprofile.GeneratedBanner(string(b))
+}
+
+// wiredPointerFiles are the pointer files of targets, other than skip,
+// that already carry lore's pointer: where an agent reaches .lore/LORE.md
+// while a generated file is left alone.
+func wiredPointerFiles(root string, targets []contextTarget, skip string) []string {
+	var out []string
+	for _, t := range targets {
+		f := t.profile.PointerFile
+		if !t.profile.HasPointerFile() || f == skip || slices.Contains(out, f) {
+			continue
+		}
+		if (rootProbe{root: root}).State(f) == toolprofile.FileWired {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// generatedFixCommand is the doctor's fix of a pointer file another tool
+// generates: wire another tool file render can write (AGENTS.md), never
+// lore render alone, which skips the generated file again.
+func generatedFixCommand(profile string) string {
+	if profile == toolprofile.NameCodex {
+		return "lore render --add-target <profile>"
+	}
+	return "lore render --add-target " + toolprofile.NameCodex
 }

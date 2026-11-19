@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/store"
@@ -40,8 +41,8 @@ import (
 func (s storeSigner) cloneIdentity(ctx context.Context, remote string) git.CloneIdentity {
 	if sig, ok := s.owner(ctx, remote); ok {
 		why, who := "your identity in this store's org, the one lore signs its commits with", "org identity"
-		if org := orgOfURL(s.opts.Home, remote); org != "" {
-			why = "your identity in org " + org + " (orgs." + org + ".identity in ~/.lore/config.yaml), the one lore signs this store's commits with"
+		if org := orgOfMovingStore(ctx, s.opts.Home, remote); org != "" {
+			why = "your identity in org " + org + " (orgs." + org + ".identity in " + lorehome.Shown() + "/config.yaml), the one lore signs this store's commits with"
 			who = "your identity in org " + org
 		}
 		return git.CloneIdentity{Signature: sig, Why: why, Who: who}

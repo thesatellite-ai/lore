@@ -32,7 +32,7 @@ A setup name is lowercase letters, digits, `_` or `-`, at most 64 characters, an
 
 ## Step 1 — See the setups and the active one
 
-`lore setup list` prints every setup with its kind, org, default flag, folders and last health, then the setup active in the current folder and the rule that picked it, then one line about the folder itself (its org, attached stores, and who rows written there are stamped with). The same command in two folders gives two answers; `lore whoami --explain` shows every rule of the choice with its outcome:
+`lore setup list` prints every setup with its kind, org, default flag, folders and last health; under the table, a setup whose health is not all ok (`⚠ 1`) gets one line per check it counts, with the fix, and the command that lists them again (`lore setup show --name <name>`; the `--json` row carries them as `problems`). Health from an earlier day carries its date (`⚠ 1 (checked 2026-11-15)`; `checked_at` in `--json`), and health whose global git config, or a file it includes, changed since it was recorded is not shown as current: the cell reads `not checked since <date> (~/.gitconfig-acme changed since; check it again with lore setup check --setup <name> --step identity)` (`stale` in `--json`), and that check (or `lore doctor --all`) records it again. A problem line from an earlier day does not repeat the fix that older check wrote (it was advice for the machine as it was then): it says `found on <date>; its fix may be out of date: check again with lore setup check --setup <name> --step identity` (`lore doctor --all` for a check outside the identity step), in `setup list`, `setup show` and their `--json` alike. Then it prints the setup active in the current folder and the rule that picked it, then one line about the folder itself (its org, attached stores, and who rows written there are stamped with). The same command in two folders gives two answers; `lore whoami --explain` shows every rule of the choice with its outcome:
 
 <!-- example: setup-cli#list -->
 ```console
@@ -43,7 +43,7 @@ setups:
   agency    admin  agency  true     ~/work/agency/**    not checked yet (lore doctor --all)
   personal  solo           false    ~/work/personal/**  not checked yet (lore doctor --all)
 active: agency (folder: ~/work/agency/**)
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup agency (folder ~/work/agency/**)
 
 # tomas, in personal/dotfiles
 $ lore setup list
@@ -64,6 +64,8 @@ setup resolution (first step that answers wins):
   · 7. none     
 ```
 <!-- /example -->
+
+Inside a store clone (`~/.lore/stores/<owner>/<repo>` or a folder of it) the line names the store instead, for example "This folder: the clone of store agency (folder web), a lore store, not a code repo", and says that lore reads and writes the folder you stand in (`lore task list`) while `lore init` and setups are for code repos.
 
 The rules, first match wins: the `--setup` flag, `LORE_SETUP`, this repo's pin, the most specific folder glob, the org of the repo (when exactly one setup has it), the default setup, none. [Many setups, chosen by folder](guided-setup.md#step-4--know-which-setup-a-folder-uses) has the full table.
 
@@ -110,7 +112,7 @@ $ lore setup use --name personal --here
 pinned this repo to setup personal (this machine only; lore setup use --here --clear removes the pin)
 $ lore setup list | tail -2
 active: personal (repo: rep_2ad3…f891)
-This folder: org agency, no attached store, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3…f891)
+This folder: org agency, stores agency, agency/org, written as Tomas Weber <tomas@agency.example> — matches setup personal (repo rep_2ad3…f891)
 $ lore setup use --here --clear
 cleared this repo's setup pin; lore setup list shows the setup lore picks here now
 $ lore --setup nope task add --title 'check the sitemap'
@@ -216,7 +218,7 @@ Two more purge flags, `--clear-identity` and `--clear-personal-store`, also remo
 
 ## Step 7 — Save setup steps from a script
 
-The page is a list of steps, and each step is also a command: `lore setup plan --kind <k>` lists the steps of a kind (and the saved progress of setups being made), `lore setup check --setup <setup> --step <id> --answers '<json>'` validates one step's answers and runs its checks (it saves only the progress), and `lore setup apply` saves the step once every error-level check passes. Steps are saved in order: a step whose earlier steps are not done is `E_SETUP_STEP_ORDER`.
+The page is a list of steps, and each step is also a command: `lore setup plan --kind <k>` lists the steps of a kind (and the saved progress of setups being made), `lore setup check --setup <setup> --step <id> --answers '<json>'` validates one step's answers and runs its checks (it saves only the progress), and `lore setup apply` saves the step once every error-level check passes. Steps are saved in order: a step whose earlier steps are not done is `E_SETUP_STEP_ORDER`. An answer that looks like a secret (a token pasted into the name, for example) is refused with the other answer checks, `E_INVALID_INPUT` naming the question, the rule and a hash, never the value; nothing is saved (answers are kept as typed in `~/.lore/config.yaml`), so edit the answer and run the same command again. Only the first setup of a machine starts with "Use this setup when no folder matches" on; a later setup, solo or team, leaves the existing default alone unless you answer `default: true`.
 
 <!-- example: setup-cli#steps -->
 ```console
@@ -244,7 +246,7 @@ steps:
       ID      LABEL                    HELP         
       name    Your name                             
       email   Email                                 
-      emails  Other addresses you use  Optional. Eac
+      emails  Other addresses you use  Optional. You
       handle  Handle                   Optional shor
     checks: identity.email_format, identity.git_emai
     apply: identity

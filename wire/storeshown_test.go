@@ -10,8 +10,8 @@ import (
 // and sync output whatever a repo calls it. In a client repo the org's
 // name (`acme`) is the client store's linked folder; output names that
 // store as `lore store list` names it from any repo, plus the folder, and
-// adds the repo's name for it. The org file writes' normalised key gets
-// the same name.
+// never adds the repo's name for it (D-567: one label per place). The org
+// file writes' normalised key gets the same name.
 func TestStoreOwnNameInOutput(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
@@ -33,7 +33,7 @@ func TestStoreOwnNameInOutput(t *testing.T) {
 		}
 	}
 	for _, c := range []struct{ name, own, want string }{
-		{"acme", "client-store/bigco_hub", "client-store/bigco_hub (here: acme)"},
+		{"acme", "client-store/bigco_hub", "client-store/bigco_hub"},
 		{"acme/org", "acme/org", "acme/org"},
 		{"acme/.", "acme", "acme/."},
 		{"kb", "", "kb"},
@@ -43,7 +43,7 @@ func TestStoreOwnNameInOutput(t *testing.T) {
 		}
 	}
 	b := &storePush{name: "acme", own: "client-store/bigco_hub"}
-	if got := b.pushShown("bigco_hub", []string{"bigco_hub"}); got != "client-store/bigco_hub (here: acme)" {
+	if got := b.pushShown("bigco_hub", []string{"bigco_hub"}); got != "client-store/bigco_hub" {
 		t.Errorf("push line name %q", got)
 	}
 	if got := OrgStoreName(home, "example.com/bigco/client-store"); got != "client-store" {

@@ -87,7 +87,7 @@ func orgOfClone(home, dir string) string {
 			if rerr != nil {
 				continue
 			}
-			if oerr == nil && origin.Norm == r.Norm {
+			if oerr == nil && (origin.Norm == r.Norm || gitbackend.SameRepoViaAlias(origin, r)) { // D-627: an alias origin
 				return o.Name
 			}
 			for _, b := range []string{"", s.Branch} {
@@ -106,13 +106,17 @@ func orgOfURL(home, raw string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
-	want, err := canonical(attach.Store{URL: raw})
-	if err != nil {
+	same := sameStoreAs(raw)
+	if same == nil {
 		return ""
 	}
 	for _, o := range cfg.Orgs {
 		for _, s := range o.Stores {
-			if c, cerr := canonical(attach.Store{URL: s.URL}); cerr == nil && c == want {
+			// One store identity (sameStoreAs: host/path, an ssh alias
+			// resolved or routed by insteadOf): a clone whose origin is
+			// git@<alias>:org/repo or the https url is still the org's
+			// store (D-493, D-627).
+			if same(s.URL) {
 				return o.Name
 			}
 		}

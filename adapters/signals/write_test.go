@@ -227,7 +227,7 @@ func TestWriteFailsClosed(t *testing.T) {
 		{"offline", func(f *gitremote.FaultRemote, _ *Store) { f.SetOffline(true) }},
 		{"autopush off", func(_ *gitremote.FaultRemote, s *Store) { s.Autopush = false }},
 		{"retries used up", func(f *gitremote.FaultRemote, _ *Store) {
-			for i := 1; i <= 10; i++ {
+			for i := 1; i <= DefaultRetry.MaxAttempts; i++ { // more than the retry budget allows (devco:D-529)
 				f.RejectPush(i, gitremote.StatusStale)
 			}
 		}},
@@ -452,5 +452,18 @@ func TestRemoteCompanionPushedOnlyAfterTheLease(t *testing.T) {
 	})
 	if !errors.Is(err, ErrNotHeld) || fenced.pushed != 0 || client.OriginRef(liveRef) != before {
 		t.Fatalf("a fenced write must not reach the other remote: err=%v pushed=%d", err, fenced.pushed)
+	}
+}
+
+// TestSignalsMessageTrailers is devco:D-581: the agent that wrote a
+// signals commit is named in a trailer after the fixed message, never in
+// the author; no trailers keeps the bare message.
+func TestSignalsMessageTrailers(t *testing.T) {
+	if got := (&Store{}).message(); got != CommitMessage {
+		t.Fatalf("bare message = %q", got)
+	}
+	got := (&Store{Trailers: []string{" Lore-Agent: claude_code (agent:auto/x) ", ""}}).message()
+	if got != CommitMessage+"\n\nLore-Agent: claude_code (agent:auto/x)" {
+		t.Fatalf("message = %q", got)
 	}
 }

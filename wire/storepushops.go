@@ -39,6 +39,9 @@ const storeSetSubject = "lore: store set "
 
 // openGitStore opens src's store as a git clone (the caller closes it).
 func (a *App) openGitStore(ctx context.Context, src attach.Store) (*git.Backend, func(), error) {
+	if err := a.untrustedStoreErr(ctx, src); err != nil {
+		return nil, nil, err // devco R-9: never cloned before the person's yes
+	}
 	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return nil, nil, err
@@ -105,9 +108,9 @@ func (a *App) personalSharedBy(url string) []string {
 		if u == url {
 			return true
 		}
-		x, xerr := canonical(attach.Store{URL: u})
-		y, yerr := canonical(attach.Store{URL: url})
-		return xerr == nil && yerr == nil && x == y
+		x, xok := storeKey(u) // an ssh alias spelling is the same store (D-493)
+		y, yok := storeKey(url)
+		return xok && yok && x == y
 	}
 	var out []string
 	for _, e := range cfg.Setups {
@@ -548,7 +551,15 @@ func (a *App) doctorPushModes(ctx context.Context, warn, note func(string), wait
 	if err != nil {
 		return
 	}
+	pushModeNotes(views, warn, note, waits)
+}
+
+// pushModeNotes is doctorPushModes over views already read.
+func pushModeNotes(views []opsstores.PushView, warn, note func(string), waits map[string]string) {
 	for _, v := range views {
+		if v.Folder {
+			continue // a folder store has no push mode: its line read "store me: " and nothing after (devco J-12)
+		}
 		w := waits[v.Store]
 		switch {
 		case v.Problem != "":
@@ -559,4 +570,30 @@ func (a *App) doctorPushModes(ctx context.Context, warn, note func(string), wait
 			note(pushModeLine(v, w)) // a conflict's warning is doctorStoreConflicts'
 		}
 	}
+}
+
+// StoreClone implements opsstores.StoreCloneFinder (store show --store
+// <name>, devco D-571): this machine's clone view of the store name
+// resolves to, matched by store key (an ssh alias spelling is the same
+// store); found is false when the store is not one of the clones store
+// show lists.
+func (a *App) StoreClone(ctx context.Context, name string) (opsstores.CloneView, bool) {
+	src, err := a.findStore(ctx, "store show", name)
+	if err != nil {
+		return opsstores.CloneView{}, false
+	}
+	want, ok := storeKey(src.URL)
+	if !ok || a.opts.Local.Clones == nil {
+		return opsstores.CloneView{}, false
+	}
+	all, err := a.opts.Local.Clones.ShowClones(ctx, opsstores.ShowIn{})
+	if err != nil {
+		return opsstores.CloneView{}, false
+	}
+	for _, v := range all.Stores {
+		if k, ok := storeKey(v.URL); ok && k == want {
+			return v, true
+		}
+	}
+	return opsstores.CloneView{}, false
 }

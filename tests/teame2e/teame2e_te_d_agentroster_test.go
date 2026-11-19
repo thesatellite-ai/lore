@@ -39,8 +39,10 @@ func TestTeD_AgentRosterMissOnCachedFetchSyncsOnce(t *testing.T) {
 		t.Fatalf("the box's roster copy is cached: %d fetches", d)
 	}
 
-	// On her laptop alice starts the agent; the roster row is pushed.
+	// On her laptop alice starts the agent; her sync pushes the roster row
+	// (a store write is committed locally until lore sync, U-2).
 	ag := startAgent(t, a.alice, a.aliceApp, "frontend-2")
+	a.aliceApp.MustLore("sync")
 	onBox := box.Agent("frontend-2")
 	onBox.SetEnv(th.EnvLoreActor, ag.Env(th.EnvLoreActor))
 	onBox.SetEnv(th.EnvLoreSession, ag.Env(th.EnvLoreSession))
@@ -84,6 +86,7 @@ func TestTeD_AgentOwnerMissOnCachedFetchSyncsOnce(t *testing.T) {
 	laptop.WriteConfig(th.Config{Personal: boxCfg.Personal, Orgs: boxCfg.Orgs, Live: th.FreshFetch()})
 	laptopApp := laptop.Clone(a.app, "app")
 	laptopApp.MustLore("actor", "register")
+	laptopApp.MustLore("sync") // the roster row reaches the store on sync (U-2)
 
 	boxApp.MustLore("agent", "start", "--label", "box-agent")
 }

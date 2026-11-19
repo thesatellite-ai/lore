@@ -164,6 +164,8 @@ func typeOut(t EffectiveType) TypeOut {
 // ContactTypeListIn is the input of contact_type.list.
 type ContactTypeListIn struct {
 	Retired bool `json:"retired,omitempty" flag:"retired" desc:"include retired types"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
 	metalist.Audit
@@ -238,7 +240,7 @@ func (o ContactTypeOut) Text() string { return o.text() + profilestore.WarningTe
 
 // text is Text without the warnings.
 func (o ContactTypeOut) text() string {
-	return work.Success + " contact type " + o.Type.Name + " " + o.Verb + " in " + o.Where + "\n"
+	return work.Success + " contact type " + o.Type.Name + " " + o.Verb + " in the roster of " + o.Where + "\n"
 }
 
 // Verbs of ContactTypeOut.

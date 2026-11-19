@@ -21,6 +21,7 @@ package audit
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"strconv"
 	"strings"
 
@@ -50,7 +51,7 @@ const DefaultLimit = 50
 
 // ChainFile is where the hash chain lives, for messages: the machine store
 // file under the lore home (wire.MachineStoreFile), never synced.
-const ChainFile = "~/.lore/state/machine.db"
+func ChainFile() string { return lorehome.Shown() + "/state/machine.db" }
 
 // ExternalWriteSuffix ends the action of entries recorded for changes lore
 // found in the DB but did not make (v0.1.17 lsync.ChangeExternal).
@@ -130,9 +131,13 @@ type LogOut struct {
 
 // Text is v0.1.17's log: "<created> <action> <table>/<id>  by <actor>",
 // a forced reveal flagged loudly.
+//
+// devco:T-15: the log holds this repo's own rows only (a store write is
+// never in a checkout's chain), so the text says so and names where the
+// team reads store writes: the store's commits per person.
 func (o LogOut) Text() string {
 	if len(o.Data) == 0 {
-		return "· audit log is empty\n"
+		return "· audit log is empty: " + storeWritesNote + "\n"
 	}
 	var b strings.Builder
 	for _, r := range o.Data {
@@ -142,8 +147,13 @@ func (o LogOut) Text() string {
 		}
 		fmt.Fprintf(&b, "%s  %-28s %s/%s  by %s%s\n", r.CreatedAt, r.Action, r.TargetTable, r.TargetID, r.ActorID, loud)
 	}
+	b.WriteString("· " + storeWritesNote + "\n")
 	return b.String()
 }
+
+// storeWritesNote says what lore audit log covers and where a write to a
+// store (--to <store>, the org's roster) is recorded for the team.
+const storeWritesNote = "this log lists this repo's own rows; a write to a store (--to <store>, roster changes) is a commit in that store: lore member show --who <person> --history lists a person's commits in the org's stores"
 
 // VerifyIn is the input of audit.verify (no flags beyond --json).
 type VerifyIn struct{}
@@ -229,7 +239,7 @@ func verify(ctx context.Context, env Env) (VerifyOut, error) {
 	switch {
 	case rep.BrokenAt != "":
 		return VerifyOut{}, errs.New(errs.AuditChainBroken, "audit chain broken at "+rep.BrokenAt+" (an entry was edited or deleted)").
-			WithHint("the chain is the audit_chain table of " + ChainFile + "; compare it with a backup of that file to investigate")
+			WithHint("the chain is the audit_chain table of " + ChainFile() + "; compare it with a backup of that file to investigate")
 	case len(rep.ChangedOutside) > 0:
 		names := make([]string, 0, len(rep.ChangedOutside))
 		for _, c := range rep.ChangedOutside {

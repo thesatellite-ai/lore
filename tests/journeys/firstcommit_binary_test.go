@@ -4,8 +4,8 @@ package journeys
 
 // firstcommit_binary_test.go — mac:firstcommit-staged-binary: Dana starts
 // a repo, runs `lore init`, builds the program and stages everything, the
-// compiled binary included. The first commit goes through (it was still
-// checked for secrets), and the commit hook names the compiled program,
+// compiled binary included. The first commit goes through (a binary file
+// is not scanned for secrets), and the commit hook names the compiled program,
 // its size and the way to keep build output out of git. A later commit
 // that only changes source says nothing about it.
 

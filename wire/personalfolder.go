@@ -31,6 +31,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -67,7 +68,7 @@ func movePersonalFolder(home string, w io.Writer) {
 	case err != nil:
 		_, _ = fmt.Fprintln(w, "lore: could not move your personal store folder "+legacyPersonalFolderDir(home)+" to "+personalFolderDir(home)+" (tried again next run): "+err.Error())
 	case moved:
-		_, _ = fmt.Fprintln(w, "lore: moved your personal store folder "+legacyPersonalFolderDir(home)+" to "+personalFolderDir(home)+" (so it never clashes with a git owner named me); ~/.lore/"+ConfigFile+" now names the new place")
+		_, _ = fmt.Fprintln(w, "lore: moved your personal store folder "+legacyPersonalFolderDir(home)+" to "+personalFolderDir(home)+" (so it never clashes with a git owner named me); "+lorehome.Shown()+"/"+ConfigFile+" now names the new place")
 	}
 }
 

@@ -47,6 +47,9 @@ func (a *App) RescanRows(ctx context.Context) (string, error) {
 	// one read of each store for every table (B1-23: each List read the
 	// whole store again, ~80 tables per store)
 	ctx = engine.EnsureReadSnapshot(ctx)
+	// devco:R-14: reads mask a stored match; the check must see it to
+	// report it.
+	ctx = engine.WithRawRead(ctx)
 	for _, def := range schema.Builtin() {
 		for _, src := range st.eng.Stores() {
 			rs, err := st.eng.List(ctx, src, def.Name)
@@ -68,7 +71,9 @@ func (a *App) RescanRows(ctx context.Context) (string, error) {
 
 // rescanReport is the block report: a count line, then one line per hit
 // with the exact allow command for it (OV40-3: --match-hash, never the
-// text).
+// text). devco:R-14: the allow line gives the same sha256 fingerprint the
+// finding line shows (secrets allow resolves it to the stored hash), so
+// one finding has one hash form.
 func rescanReport(hits []rowscan.Hit) string {
 	var b strings.Builder
 	b.WriteString("lore check leaks --rows: " + strconv.Itoa(len(hits)) + " stored value(s) match a secret rule")
@@ -77,7 +82,7 @@ func rescanReport(hits []rowscan.Hit) string {
 		id := h.ID.String()
 		b.WriteString("\n  " + h.Source + " " + string(h.Table) + " " + id + " " + f.Field + ": " + f.RuleID +
 			" at line " + strconv.Itoa(f.Line) + ": " + f.Preview +
-			"\n    allow: " + leakcheck.AllowRowCommand(id, f.Field, f.RuleID, strconv.FormatUint(uint64(f.MatchHash), 10)))
+			"\n    allow: " + leakcheck.AllowRowCommand(id, f.Field, f.RuleID, f.Preview))
 	}
 	return b.String()
 }

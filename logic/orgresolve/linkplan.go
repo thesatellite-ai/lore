@@ -39,7 +39,10 @@ type LinkPlan struct {
 	ProjectID string
 	Remote    string // normalised
 	Own       bool
-	Default   bool
+	// OwnByPattern is true when Own comes from the org's own: patterns
+	// matching Remote, not from --own (the plan lines name the match).
+	OwnByPattern bool
+	Default      bool
 	// StoreExplicit is true when --store named the store, so the writer
 	// refuses a folder that lives in another store instead of following
 	// it (F13, cookbook 14).
@@ -151,7 +154,16 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 				"pass one of them: "+storeURLs(o)+"; or add it to the org first: lore org store add --org "+o.Name+" --url "+req.StoreURL)
 		}
 	}
-	if req.Own && !matchesAny(o.Own, []string{remote}) {
+	class := ClassifyRemote(o, []string{remote})
+	if req.Own && class.Role == RoleClient {
+		// D-428: linking never weakens the guards. A repo the org lists as a
+		// client's stays one; making it own is an admin's change to the
+		// org's patterns, never a side effect of a link.
+		return LinkPlan{}, &LinkRefusal{Is: ErrLinkClientListed,
+			Msg:  fmt.Sprintf("%v: %s matches %s's repos: pattern %s, so it stays a client repo and keeps its leak guards", ErrLinkClientListed, remote, o.Name, class.Pattern),
+			Next: "link it without --own (lore org link --org " + o.Name + " --project " + req.Folder + "); if it really is " + o.Name + "'s own repo, an admin removes it from repos: in " + o.Name + "'s lore-org.yaml first, then runs lore org refresh --org " + o.Name}
+	}
+	if req.Own && class.Role != RoleOwn {
 		return LinkPlan{}, &LinkRefusal{Is: ErrLinkOwnPattern,
 			Msg:  fmt.Sprintf("%v: %s does not match %s's own: patterns (%s)", ErrLinkOwnPattern, remote, o.Name, listOrNone(o.Own)),
 			Next: "link it without --own (as a client repo), or add a matching pattern to own: in " + o.Name + "'s lore-org.yaml and run lore org refresh --org " + o.Name}
@@ -161,8 +173,16 @@ func PlanLink(cfg *orgconf.Config, req LinkRequest) (LinkPlan, error) {
 		return LinkPlan{}, refuse(fmt.Sprintf("store url %q of org entry %s is not valid: %v", st.URL, o.Name, err),
 			"fix it in "+configFile+" (lore config check lists every problem)")
 	}
+	// devco P-6: a repo matching the org's own: patterns (and no repos:
+	// client entry) is one of its own repos whether or not --own was
+	// typed; linking it as a client
+	// repo would turn the leak guards on for the org's own code and keep
+	// lore files out of it. OwnByPattern lets the plan lines say why.
+	// D-428: the same rule as F10 (ClassifyRemote): a repos: client entry
+	// wins over an own: pattern, and no match at all is a client link.
+	byPattern := !req.Own && class.Role == RoleOwn
 	return LinkPlan{Entry: o.Name, StoreURL: storeURL, Branch: st.EffectiveBranch(), Folder: req.Folder,
-		ProjectID: pid, Remote: remote, Own: req.Own, Default: req.Default, StoreExplicit: req.StoreURL != "", FromRemote: fromRemote}, nil
+		ProjectID: pid, Remote: remote, Own: req.Own || byPattern, OwnByPattern: byPattern, Default: req.Default, StoreExplicit: req.StoreURL != "", FromRemote: fromRemote}, nil
 }
 
 // storeURLs lists o's store urls for a refusal's next step.
