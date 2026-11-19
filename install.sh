@@ -4,9 +4,10 @@
 # Usage:
 #   curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
 #
-# Detects OS + arch, downloads the latest released binary from GitHub
-# Releases, installs it to /usr/local/bin, and (optionally) installs the
-# Claude skill bundle to ~/.claude/skills/lore.
+# Detects OS + arch, downloads the latest release's archive
+# (lore_<os>_<arch>.tar.gz) from GitHub Releases, checks it against the
+# release's checksums.txt, installs lore to /usr/local/bin (INSTALL_DIR
+# overrides) and the agent skill bundle to ~/.claude/skills/lore.
 
 set -e
 
@@ -94,11 +95,12 @@ fi
 rm -rf "$tmpdir"
 
 echo ""
-echo "Installed. Next steps:"
-echo "  cd <your-project>"
-echo "  ${BINARY} init                 # create .lore/ + sqlite db"
-echo "  ${BINARY} setup                # build FTS5 search index"
-echo "  ${BINARY} directive install    # add the agent-directive block to CLAUDE.md / AGENTS.md"
+echo "Installed ${BINARY} ${TAG}. Next steps:"
+echo "  ${BINARY} version                          # check the install"
+echo "  ${BINARY} setup                            # optional: guided setup of this machine (identity, GitHub, stores)"
+echo "  ${BINARY} setup join --invite \"<invite>\"   # joining a team: the invite line or store url your admin sent"
+echo "  cd <your-project> && ${BINARY} init        # start lore in a code repo"
 echo ""
-echo "The Claude skill is at ${SKILL_DEST} (restart Claude Code to load it)."
-echo "Verify: ${BINARY} version"
+echo "The agent skill is at ${SKILL_DEST} (restart your coding agent to load it);"
+echo "${BINARY} skill install --all adds it for your other coding tools."
+echo "Upgrading from 0.1.17? Every teammate installs 0.1.18 first, then one person runs ${BINARY} migrate run in each repo."
