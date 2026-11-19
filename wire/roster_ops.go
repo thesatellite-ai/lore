@@ -407,9 +407,11 @@ func (a *App) rosterApp(ctx context.Context, r rosterAt) (*App, func(), error) {
 		return a, noop, nil
 	}
 	if p, ok := pinnedRoster(ctx); ok && p.at.src == r.src {
-		// a read naming its org (--store <org>, D-499): that org's roster
-		// alone, whatever this folder's repo or org is
-		alone, err := storeOnlyApp(ctx, a.opts, p.one)
+		// a read naming its org (--store <org>, D-499) and the write
+		// guard's roster of another org (RosterOfOrg): that org's roster
+		// alone, whatever this folder's repo or org is, read as the person
+		// that org knows (asOrg, devco D-694)
+		alone, err := storeOnlyApp(ctx, asOrg(a.opts, p.at.org), p.one)
 		if err != nil {
 			return nil, noop, err
 		}

@@ -17,6 +17,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -157,21 +158,5 @@ func policyReach(lv policy.Level, src string) string {
 
 // policyCommand is the exact command that answers the question with --yes.
 func policyCommand(verb, key, val, to string) string {
-	c := "lore policy " + verb + " --key " + key
-	if verb == "set" {
-		c += " --value " + shellWord(val)
-	}
-	if to != "" {
-		c += " --to " + to
-	}
-	return c + " --yes"
-}
-
-// shellWord quotes s for a printed command when it holds a space or a
-// shell character (a list value "a, b").
-func shellWord(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t'\"$`\\;&|<>*?()[]{}!#~") {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return profilestore.PolicyCommand(verb, key, val, to)
 }

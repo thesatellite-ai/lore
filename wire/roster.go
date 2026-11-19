@@ -545,9 +545,15 @@ func StoreOnlyRoster(ctx context.Context, opts Options, target store.Source) (*A
 }
 
 // storeOnlyApp is an App opened on store one alone (openStoreOnlyOn),
-// for the roster commands run outside any repo (StoreOnlyRoster).
+// for the roster commands run outside any repo (StoreOnlyRoster) and the
+// roster a command reads beside its own App (rosterApp: the write guard,
+// devco D-694). It is opened without the command's audit sink
+// (detachedOpts): New would rebind that sink to this App, and once it is
+// closed the command's own audit record fails with "the app is closed"
+// (W_AUDIT_DEFERRED on every write to another store). A store-only open
+// records into its store's machine-local trail and never uses opts.Audit.
 func storeOnlyApp(ctx context.Context, opts Options, one attach.Store) (*App, error) {
-	a, err := New(opts)
+	a, err := New(detachedOpts(opts))
 	if err != nil {
 		return nil, err
 	}
