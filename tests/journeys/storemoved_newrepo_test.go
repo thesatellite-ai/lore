@@ -50,7 +50,7 @@ func TestJourneyTeamLeadStoreMovedToNewRepo(t *testing.T) {
 			Never(t, "every teammate's lore follows it after their next sync")
 		s := lee.Lore(filepath.Join(lee.Home, "code"), "sync").OK(t)
 		// D-699: the old repo gets the move once the new one has it
-		s.Says(t, "at its old address "+tt.store.SSHURL()+" too")
+		s.Says(t, "forwarded 1 commit to the old address "+tt.store.SSHURL()+" (") // its own line and count; "sent 1" is the new address's
 		oldHead := w.Git(tt.store.Dir, "rev-parse", "refs/heads/main")
 		if newHead := w.Git(moved.Dir, "rev-parse", "refs/heads/main"); oldHead != newHead {
 			t.Fatalf("[devco:D-699] old repo main %s, new repo main %s: the move did not reach the old address", oldHead, newHead)
@@ -110,7 +110,7 @@ func TestJourneyTeamLeadStoreMovedToEmptyRepo(t *testing.T) {
 		w.AdvanceDays(1)
 		lee.Lore(lee.Home, "store", "set-url", "--name", tlOrg, "--url", empty.SSHURL(), "--yes").OK(t)
 		s := lee.Lore(filepath.Join(lee.Home, "code"), "sync").OK(t)
-		s.Never(t, "--restore").Says(t, "at its old address "+tt.store.SSHURL()+" too")
+		s.Never(t, "--restore").Says(t, "to the old address "+tt.store.SSHURL()+" (branch main, now at commit ")
 		newHead := w.Git(empty.Dir, "rev-parse", "refs/heads/main")
 		if oldHead := w.Git(tt.store.Dir, "rev-parse", "refs/heads/main"); oldHead != newHead {
 			t.Fatalf("[devco:D-699] old repo main %s, new repo main %s after the first sync", oldHead, newHead)
@@ -184,15 +184,17 @@ func storeMovedTeammatePushedToOldRepo(t *testing.T, follow string) {
 		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo before the move", "--to", tlOrg+"/org", "--yes").OK(t)
 		ann.Lore(annCode, "sync").OK(t)
 		r := lee.Lore(lee.Home, "store", "set-url", "--name", tlOrg, "--url", moved.SSHURL(), "--yes").OK(t)
-		r.Says(t, "commit(s) a teammate pushed to the old address "+tt.store.SSHURL())
+		r.Says(t, "took in 1 commit a teammate pushed to the old address "+tt.store.SSHURL()+" before following the move")
 		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo after the move", "--to", tlOrg+"/org", "--yes").OK(t)
 		ann.Lore(annCode, "sync").OK(t)
 	})
 
 	w.Step("day2/the-admin-syncs-every-commit-reaches-the-new-repo", func() {
 		s := lee.Lore(filepath.Join(lee.Home, "code"), "sync").OK(t)
-		s.Says(t, "a teammate pushed to "+tt.store.SSHURL()+" before following the move and sent them to "+moved.SSHURL(), "at its old address "+tt.store.SSHURL()+" too").
-			Never(t, "refused the move", "did not reach its old address")
+		// one line per remote the forward moved, each with its own count
+		s.Says(t, "to the new address "+moved.SSHURL()+" (branch main, now at commit ", "took in 1 commit a teammate pushed to its old address before following the move",
+			"to the old address "+tt.store.SSHURL()+" (branch main, now at commit ").
+			Never(t, "refused the move", "did not reach its old address", "commit(s) a teammate")
 		oldHead := w.Git(tt.store.Dir, "rev-parse", "refs/heads/main")
 		if newHead := w.Git(moved.Dir, "rev-parse", "refs/heads/main"); oldHead != newHead {
 			t.Fatalf("[devco:D-699] old repo main %s, new repo main %s: the move did not reach the old address", oldHead, newHead)

@@ -16,7 +16,8 @@ package stories
 //	(a) every commit it made in a store clone is authored by the org identity
 //	    of the store's org, and the clone's git user.name/email equal it;
 //	(b) a count of commits it prints ("sent N", "N commits") matches the
-//	    commits that moved;
+//	    commits that moved, each line against its own remote (a forward of
+//	    a set-url move: "forwarded N commits to the old|new address <url>");
 //	(c) two stores of the same shape (the org acme's team store and the org
 //	    acmeops's team store) get the same treatment for the same op: same
 //	    exit, same messages modulo names, ids and numbers;
@@ -891,6 +892,13 @@ var wwJSONCode = regexp.MustCompile(`"code":\s*"(E_[A-Z_]+)"`)
 // wwNum finds printed commit counts: "sent N", "N commit(s)".
 var wwNum = regexp.MustCompile(`(?i)\bsent (\d+)\b|\b(\d+) commits?\b`)
 
+// wwForward finds each line a sync or store push prints for a push the
+// forward of a set-url move made (devco D-699): to the store's old address,
+// or to the new one with what a teammate pushed to the old address, taken
+// in first. The whole line is matched, so its other numbers ("took in 2
+// commits") are not read again as counts of the store line.
+var wwForward = regexp.MustCompile(`(?m)^.*\bforwarded (\d+) commits? to the (?:old|new) address (\S+).*$`)
+
 // wwIDs and the rest normalize output for the twin comparison.
 var (
 	wwIDs    = regexp.MustCompile(`\b[a-z]{2,5}_(…)?[0-9A-Za-z]{6,}\b|\b[a-z]{2,5}_…[0-9A-Za-z]*`)
@@ -1042,18 +1050,44 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 		add(wwRuleScope, "(d) made the home folder a git repo")
 	}
 	// (e) no remote moves unless the op pushes or syncs; (b) counts
-	pushed := 0
+	movedBy := map[string]int{} // remote URL -> commits that reached it
 	for _, r := range w.remotes {
 		if now.remoteRefs[r.Slug] == before.remoteRefs[r.Slug] {
 			continue
 		}
-		pushed += wwRemoteMoved(w, r, before.remoteRefs[r.Slug], now.remoteRefs[r.Slug])
+		movedBy[r.SSHURL()] = wwRemoteMoved(w, r, before.remoteRefs[r.Slug], now.remoteRefs[r.Slug])
 		if _, exempt := wwPushOps[o.Name]; !exempt {
 			add(wwRuleRemote, "(e) moved the refs of "+r.Slug+": "+strings.Join(wLineDiff(before.remoteRefs[r.Slug], now.remoteRefs[r.Slug]), "; "))
 		}
 	}
+	// (b) devco:D-699 follow-up: each push the forward of a set-url move
+	// makes prints its own line and count ("forwarded N commits to the
+	// old|new address <url>"), read against that remote alone: N commits
+	// are taken off what reached it, so the old address (moved by the
+	// forward only) has none left, while the new one keeps what the store
+	// line's own push sent. Every other count ("sent N", "N commits") is
+	// compared with what is left, so a forward with no line of its own, or
+	// one that says fewer commits than went out, leaves "sent" short (no
+	// hidden push).
+	pushed, rest := 0, out
 	if res.Code == 0 {
-		for _, mm := range wwNum.FindAllStringSubmatch(out, -1) {
+		for _, mm := range wwForward.FindAllStringSubmatch(out, -1) {
+			n, _ := strconv.Atoi(mm[1])
+			got, ok := movedBy[mm[2]]
+			if !ok || got < n {
+				add(wwRuleCount, fmt.Sprintf("(b) printed %q but %d commits reached %s", strings.TrimSpace(mm[0]), got, mm[2]))
+			}
+			movedBy[mm[2]] = got - n
+		}
+		rest = wwForward.ReplaceAllString(out, "")
+	}
+	for _, n := range movedBy {
+		if n > 0 {
+			pushed += n
+		}
+	}
+	if res.Code == 0 {
+		for _, mm := range wwNum.FindAllStringSubmatch(rest, -1) {
 			n, _ := strconv.Atoi(mm[1] + mm[2])
 			if strings.HasPrefix(strings.ToLower(mm[0]), "sent") && n != pushed {
 				add(wwRuleCount, fmt.Sprintf("(b) printed %q but %d commits reached the remotes", mm[0], pushed))

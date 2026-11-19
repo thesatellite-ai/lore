@@ -12,7 +12,10 @@ package wire
 //	   old addresses (recordStoreForward)
 //	lore sync / lore store push ─▶ forwardStoreMoves: once the clone at the
 //	   new address has nothing waiting, push its tip to each old address
-//	   ├─▶ taken: "pushed … to its old address … too" (teammates follow)
+//	   ├─▶ taken: "forwarded N commits to the old address …" (teammates follow)
+//	   ├─▶ a teammate pushed to the old address first: "took in N commits
+//	   │   a teammate pushed to its old address …" and "forwarded N commits
+//	   │   to the new address …", then the forward above (a fast-forward)
 //	   ├─▶ no answer: kept, the next sync tries again
 //	   └─▶ refused or gone: said once, with the step each teammate runs
 //	       (a renamed repo redirects, so they follow without it)
@@ -95,8 +98,8 @@ func (a *App) forwardStoreMoves(ctx context.Context, w io.Writer) {
 		gb, closeStore := a.openMovedStore(ctx, name, e.URL, e.Branch)
 		var keep []string
 		for _, old := range e.Forward {
-			res, line := a.forwardTo(ctx, gb, name, e, old)
-			if line != "" {
+			res, lines := a.forwardTo(ctx, gb, name, e, old)
+			for _, line := range lines {
 				_, _ = fmt.Fprintln(w, line)
 			}
 			if res == forwardRetry {
@@ -141,39 +144,64 @@ func (a *App) openMovedStore(ctx context.Context, name, url, branch string) (gb 
 // what old holds that the clone lacks (a teammate who pushed there before
 // following the move, gb.MergeFrom) and sends that to the new address,
 // so the push to old is a fast-forward and the new address loses nothing;
-// then it pushes the clone's tip to old (forwardOne). line is "" when the
-// forward waits silently (commits still on their way to the new address).
-func (a *App) forwardTo(ctx context.Context, gb *gitbackend.Backend, name string, e storeAddrRecordEntry, old string) (forwardResult, string) {
+// then it pushes the clone's tip to old (forwardOne). It returns the lines
+// to print, none when the forward waits silently (commits still on their
+// way to the new address). One wording for every forward (devco D-699
+// follow-up, up5fwd2): each remote this moved has exactly one line naming
+// it with the commits git counted there ("forwarded N commits to the new
+// address <url>", "forwarded N commits to the old address <url>"), and the
+// take-in, which moves no remote, says "took in N commits a teammate
+// pushed to …". The store line's "sent N" counts neither: those commits
+// went out after it.
+func (a *App) forwardTo(ctx context.Context, gb *gitbackend.Backend, name string, e storeAddrRecordEntry, old string) (forwardResult, []string) {
 	shown, shownNew := repourl.Mask(old), repourl.Mask(e.URL)
-	var took string
+	var lines []string
 	if gb != nil {
 		mr, err := gb.MergeFrom(ctx, old)
 		switch {
 		case err != nil:
-			return forwardRetry, "lore: store " + name + ": the move to " + shownNew + " was not sent to its old address " + shown + ": what " + shown + " holds could not be taken in first (" + err.Error() + "); the next lore sync tries again"
+			return forwardRetry, []string{"lore: store " + name + ": the move to " + shownNew + " was not sent to its old address " + shown + ": what " + shown + " holds could not be taken in first (" + err.Error() + "); the next lore sync tries again"}
 		case mr.Offline:
-			return forwardFailure(mr.Detail, name, shown, shownNew)
+			res, line := forwardFailure(mr.Detail, name, shown, shownNew)
+			return res, []string{line}
 		case len(mr.Refused) > 0:
-			return forwardRefused, "lore: store " + name + ": the move to " + shownNew + " did not reach its old address: " + shown + " holds commits a teammate pushed there that clash with this clone's on rows lore cannot merge (" + refusalList(mr.Refused) + "), so they were not taken in and " + shownNew + " lacks them. A teammate whose lore still uses " + shown + " follows only if it redirects to " + shownNew + " (a renamed repo); otherwise each teammate runs: lore store set-url --name " + name + " --url " + shownNew
+			return forwardRefused, []string{"lore: store " + name + ": the move to " + shownNew + " did not reach its old address: " + shown + " holds commits a teammate pushed there that clash with this clone's on rows lore cannot merge (" + refusalList(mr.Refused) + "), so they were not taken in and " + shownNew + " lacks them. A teammate whose lore still uses " + shown + " follows only if it redirects to " + shownNew + " (a renamed repo); otherwise each teammate runs: lore store set-url --name " + name + " --url " + shownNew}
 		case mr.Commits > 0:
 			rep, serr := gb.Sync(ctx)
-			gb.TakePushes() // said by the line below, never as a second push line
-			took = "took " + strconv.Itoa(mr.Commits) + " commit(s) a teammate pushed to " + shown + " before following the move"
+			gb.TakePushes() // said by the forwarded line below, never as a second push line
 			if serr != nil || rep.Offline || len(rep.Refused) > 0 || !rep.Pushed {
-				return forwardRetry, "lore: store " + name + ": " + took + "; they wait in the clone until " + shownNew + " takes them, and the next lore sync sends them and then the move to " + shown
+				return forwardRetry, []string{"lore: store " + name + ": " + tookInLine(mr.Commits, "its old address "+shown) + "; they wait in the clone until " + shownNew + " takes them, and the next lore sync forwards them there and then the move to " + shown}
 			}
-			took += " and sent them to " + shownNew + "; "
+			sha, ref, ok := pushedTip(ctx, a.opts.Home, e.URL, e.Branch)
+			if !ok {
+				return forwardRetry, nil
+			}
+			lines = append(lines, forwardedLine(name, plural(rep.Commits, "commit"), "new", shownNew, ref, sha)+": "+tookInLine(mr.Commits, "its old address")+", taken in first, so the new address lacks none of them")
 		}
 	}
 	sha, ref, ok := pushedTip(ctx, a.opts.Home, e.URL, e.Branch)
 	if !ok {
-		return forwardRetry, ""
+		return forwardRetry, lines
 	}
 	res, line := forwardOne(ctx, sha, ref, name, e.URL, old, pushedDir(a.opts.Home, e.URL, e.Branch))
-	if took != "" {
-		line = strings.Replace(line, "lore: ", "lore: "+took, 1)
-	}
-	return res, line
+	return res, append(lines, line)
+}
+
+// tookInLine is the one wording of a take-in (set-url's and the forward's):
+// n commits a teammate pushed to where (an old address) that this clone
+// lacked were merged into it. A take-in moves no remote, so it never says
+// "forwarded" or "sent".
+func tookInLine(n int, where string) string {
+	return "took in " + plural(n, "commit") + " a teammate pushed to " + where + " before following the move"
+}
+
+// forwardedLine is the one wording of a push the forward made to a remote
+// other than the store line's push: "lore: store <s>: forwarded <count>
+// to the <which> address <url> (branch <b>, now at commit <c>)". count is
+// what git counted there ("3 commits"), or "the move" when it could not be
+// read; the WW matrix compares each such line with its own remote.
+func forwardedLine(name, count, which, shown, ref, sha string) string {
+	return "lore: store " + name + ": forwarded " + count + " to the " + which + " address " + shown + " (branch " + strings.TrimPrefix(ref, "refs/heads/") + ", now at commit " + gitbackend.Pushed{Commit: sha}.Short() + ")"
 }
 
 // refusalList names the rows of refused (at most three, then a count).
@@ -225,7 +253,7 @@ func (a *App) mergeOldAddresses(ctx context.Context, name, raw, branch string, o
 		case len(mr.Refused) > 0:
 			lines = append(lines, "the old address "+repourl.Mask(o)+" holds commits a teammate pushed there that clash with this clone's on rows lore cannot merge ("+refusalList(mr.Refused)+"); they were not taken in, so "+repourl.Mask(raw)+" lacks them")
 		case mr.Commits > 0:
-			lines = append(lines, "took "+strconv.Itoa(mr.Commits)+" commit(s) a teammate pushed to the old address "+repourl.Mask(o)+" into the clone of "+repourl.Mask(raw)+", so they go there with the move")
+			lines = append(lines, tookInLine(mr.Commits, "the old address "+repourl.Mask(o))+" into the clone of "+repourl.Mask(raw)+", so they go there with the move")
 		}
 	}
 	return lines
@@ -265,15 +293,61 @@ func pushedTip(ctx context.Context, home, url, branch string) (sha, ref string, 
 
 // forwardOne pushes sha to ref at the old address (a plain push: a
 // teammate's later commits there are never overwritten) and returns the
-// line that says what happened.
+// line that says what happened. The line carries its own commit count
+// (devco D-699 follow-up): the sync or push summary's "sent N" counts the
+// commits that reached the store's address only, so a forward that moved
+// the old address too says how many commits went there, and one that
+// moved nothing says so instead of claiming a push.
 func forwardOne(ctx context.Context, sha, ref, name, raw, old, dir string) (forwardResult, string) {
 	shown, shownNew := repourl.Mask(old), repourl.Mask(raw)
 	branch := strings.TrimPrefix(ref, "refs/heads/")
-	_, err := gitRun{dir: dir, args: []string{"push", "--quiet", old, sha + ":" + ref}}.output(ctx)
-	if err == nil {
-		return forwardTaken, "lore: pushed store " + name + ": commit " + gitbackend.Pushed{Commit: sha}.Short() + " to branch " + branch + " at its old address " + shown + " too, so a teammate whose lore still uses it follows the move to " + shownNew + " at their next sync"
+	out, err := gitRun{dir: dir, args: []string{"push", "--porcelain", old, sha + ":" + ref}, outInErr: true}.output(ctx)
+	if err != nil {
+		return forwardFailure(err.Error(), name, shown, shownNew)
 	}
-	return forwardFailure(err.Error(), name, shown, shownNew)
+	short := gitbackend.Pushed{Commit: sha}.Short()
+	n, known := forwardedCommits(ctx, dir, string(out), sha)
+	if known && n == 0 {
+		return forwardTaken, "lore: store " + name + ": its old address " + shown + " already holds the move to " + shownNew + " (commit " + short + " on branch " + branch + "), so nothing was pushed there"
+	}
+	count := "the move"
+	if known {
+		count = plural(n, "commit")
+	}
+	return forwardTaken, forwardedLine(name, count, "old", shown, ref, sha) + ", so a teammate whose lore still uses it follows the move to " + shownNew + " at their next sync"
+}
+
+// forwardedCommits counts the commits a `git push --porcelain` of sha
+// moved onto the remote, from its ref line: "old..new" (a fast-forward:
+// old..sha), "[new branch]" (all of sha's history) or "[up to date]" (0).
+// known is false when the line cannot be read, so the caller never prints
+// a count it did not establish.
+func forwardedCommits(ctx context.Context, dir, porcelain, sha string) (n int, known bool) {
+	for _, l := range strings.Split(porcelain, "\n") {
+		f := strings.Split(l, "\t")
+		if len(f) < 3 || !strings.Contains(f[1], ":") {
+			continue // "To <url>", "Done"
+		}
+		summary := strings.Fields(f[2])
+		rng := ""
+		switch {
+		case strings.HasPrefix(f[2], "[up to date]"):
+			return 0, true
+		case strings.HasPrefix(f[2], "[new branch]"):
+			rng = sha
+		case len(summary) > 0 && strings.Contains(summary[0], ".."):
+			rng = strings.SplitN(summary[0], "..", 2)[0] + ".." + sha
+		default:
+			return 0, false
+		}
+		cnt, err := gitRun{dir: dir, args: []string{"rev-list", "--count", rng}}.output(ctx)
+		if err != nil {
+			return 0, false
+		}
+		v, err := strconv.Atoi(strings.TrimSpace(string(cnt)))
+		return v, err == nil
+	}
+	return 0, false
 }
 
 // forwardFailure is the result and line of a push to an old address that

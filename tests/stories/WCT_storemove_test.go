@@ -14,6 +14,8 @@ package stories
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -65,11 +67,12 @@ func TestStoryWCTStoreMoveForward(t *testing.T) {
 			}
 
 			r := p.push().OK(t)
-			r.Says(t, "at its old address "+old.SSHURL()+" too")
 			oldHead, newHead := wqGit(t, old.Dir, "rev-parse", "main"), wqGit(t, fresh.Dir, "rev-parse", "main")
 			if oldHead != newHead {
 				t.Fatalf("[WCT D-699 %s] old repo main %s, new repo main %s after the explicit push:\n%s", p.name, oldHead, newHead, r)
 			}
+			// one line names the old address, with the commits git counts there
+			wctForwardedLine(t, p.name, r, "old", old.SSHURL(), wctCount(t, old.Dir, oldBefore+"..main"))
 			// said once: the next push owes the old address nothing
 			p.push().OK(t).Never(t, "old address")
 
@@ -142,17 +145,26 @@ func TestStoryWCTStoreMoveTakeIn(t *testing.T) {
 			bm.LoreIn(bc, "sync").OK(t)
 
 			m.Lore(m.Home, "store", "set-url", "--name", wOrg, "--url", fresh.SSHURL(), "--yes").OK(t).
-				Says(t, "commit(s) a teammate pushed to the old address "+old.SSHURL())
+				Says(t, "took in 1 commit a teammate pushed to the old address "+old.SSHURL()+" before following the move into the clone of "+fresh.SSHURL()).
+				Never(t, "commit(s) a teammate")
 			bm.LoreIn(bc, "memory", "add", "--body", "pushed to the old repo after the move "+f.name, "--to", wOrg+"/org").OK(t)
 			bm.LoreIn(bc, "sync").OK(t)
+			oldBefore := wqGit(t, old.Dir, "rev-parse", "main")
 
 			r := m.LoreIn(pc, "sync").OK(t)
-			r.Says(t, "a teammate pushed to "+old.SSHURL()+" before following the move and sent them to "+fresh.SSHURL(), "at its old address "+old.SSHURL()+" too").
-				Never(t, "refused the move", "did not reach its old address")
+			r.Says(t, "took in 1 commit a teammate pushed to its old address before following the move").
+				Never(t, "refused the move", "did not reach its old address", "commit(s) a teammate", "at its old address")
 			oldHead, newHead := wqGit(t, old.Dir, "rev-parse", "main"), wqGit(t, fresh.Dir, "rev-parse", "main")
 			if oldHead != newHead {
 				t.Fatalf("[WCT D-699 %s] old repo main %s, new repo main %s after the admin's sync:\n%s", f.name, oldHead, newHead, r)
 			}
+			// each remote that moved has one line with git's count there:
+			// the new one got the teammate's commit (and its merge) after the
+			// store line's push, the old one the move as a fast-forward
+			if n := wctForwardedLine(t, f.name, r, "new", fresh.SSHURL(), -1); n < 1 {
+				t.Fatalf("[WCT D-699 %s] the forward to the new address says %d commits, want the taken-in commit at least:\n%s", f.name, n, r)
+			}
+			wctForwardedLine(t, f.name, r, "old", old.SSHURL(), wctCount(t, old.Dir, oldBefore+"..main"))
 			if got := wqGit(t, fresh.Dir, "grep", "-l", "-e", "pushed to the old repo .* the move "+f.name, "main"); strings.Count(got, "\n")+1 < 2 {
 				t.Fatalf("[WCT D-699 %s] the new repo lacks the teammate's notes pushed to the old repo; files holding them:\n%s", f.name, got)
 			}
@@ -168,4 +180,30 @@ func TestStoryWCTStoreMoveTakeIn(t *testing.T) {
 			cur = fresh
 		})
 	}
+}
+
+// wctForwardedLine checks the one line a forward of a set-url move prints
+// for the remote at url (devco D-699 follow-up, one wording): exactly one
+// output line says "forwarded N commit(s) to the <which> address <url> (",
+// and N equals want, the commits git counts there (want < 0: any). It
+// returns N.
+func wctForwardedLine(t *testing.T, cell string, r teamharness.Result, which, url string, want int) int {
+	t.Helper()
+	re := regexp.MustCompile(`forwarded (\d+) commits? to the ` + which + ` address ` + regexp.QuoteMeta(url) + ` \(`)
+	all := r.Stdout + "\n" + r.Stderr
+	got := re.FindAllStringSubmatch(all, -1)
+	named := 0
+	for _, l := range strings.Split(all, "\n") {
+		if strings.Contains(l, "forwarded ") && strings.Contains(l, url+" (") {
+			named++
+		}
+	}
+	if len(got) != 1 || named != 1 {
+		t.Fatalf("[WCT D-699 %s] want exactly one line \"forwarded N commits to the %s address %s (…\", got %d (%d lines name it):\n%s", cell, which, url, len(got), named, r)
+	}
+	n, _ := strconv.Atoi(got[0][1])
+	if want >= 0 && n != want {
+		t.Fatalf("[WCT D-699 %s] the line says %d commits forwarded to the %s address %s, git counts %d there:\n%s", cell, n, which, url, want, r)
+	}
+	return n
 }
