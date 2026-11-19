@@ -2,16 +2,19 @@ package wire
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -83,8 +86,17 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 		return nil, err
 	}
 	if !slices.Contains(st.eng.Stores(), target) {
+		// devco N-1: a long-lived App (the setup page, `lore api`) opened
+		// its state before this same request wrote the org entry that
+		// attaches target (the admin setup's team step): open it again
+		// from the files as they are now, once, before refusing.
+		if st, err = a.reopenForStore(ctx, target, write); err != nil {
+			return nil, err
+		}
+	}
+	if !slices.Contains(st.eng.Stores(), target) {
 		return nil, errs.New(errs.NotFound, "roster: no store named "+string(target)+" is attached").
-			WithHint("the org's store is attached from ~/.lore/config.yaml in a repo of that org")
+			WithHint("the org's store is attached from " + lorehome.Shown() + "/config.yaml in a repo of that org")
 	}
 	if st.eng.IsClient(target) {
 		return nil, errs.New(errs.LeakBlocked, "roster: "+string(target)+" is a client repo; the roster lives in the org's store")
@@ -347,23 +359,62 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 		slices.SortFunc(live, func(x, y row.Row) int { return strings.Compare(x.ID.String(), y.ID.String()) })
 		return value.RefOf(live[0].ID)
 	}
+	// devco:T-11: a read (search, list, show, context) never creates a row.
+	// lore search in a repo with no lore data reached here for the personal
+	// store's root (no folder id) and committed a nameless project row there,
+	// which the next lore sync pushed.
+	// devco D-505: the refusal carries engine.ErrNoPlaceProject, so a read
+	// that filters by "this project" (content lists, link, tag, repo list)
+	// reads every project's rows instead, as memory list does here.
+	if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+		return value.Ref{}, errs.Wrap(errs.NotFound, "store "+string(target)+" has no project row yet, and a read never makes one", engine.ErrNoPlaceProject).
+			WithHint(noPlaceProjectHint(target))
+	}
 	n, err := value.TextOf(folder)
 	if err != nil {
 		return value.Ref{}, errs.Wrap(errs.InvalidInput, "roster: the folder name is not valid text", err)
 	}
 	fields := map[string]value.Value{rosterFieldName: n}
-	var w engine.Written
 	if pid.IsZero() {
-		w, err = st.eng.Create(ctx, target, schema.TableProjects, fields)
-	} else {
-		w, err = st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+		w, err := st.eng.Create(ctx, target, schema.TableProjects, fields)
+		a.wrote(err)
+		if err != nil {
+			return value.Ref{}, err
+		}
+		return value.RefOf(w.Row.ID)
+	}
+	return a.createFolderProject(ctx, st, target, pid, fields)
+}
+
+// createFolderProject creates target's folder project row under the
+// folder's natural id pid. devco D-437: parallel first writes into a new
+// folder each create this row; one that lost the race (another lore
+// process made the row after this one listed the folder) got E_STALE and
+// failed its write. The row it finds is the row it wanted: it re-reads the
+// folder and uses it.
+func (a *App) createFolderProject(ctx context.Context, st *state, target store.Source, pid ids.ID[ids.Project], fields map[string]value.Value) (value.Ref, error) {
+	// devco:D-665: the row is made on the side of the command that wrote
+	// to the folder first (a rule add, a team invite), so its own commit is
+	// named for it, "lore: project add prj_…: <folder>", never "lore: rule
+	// add prj_…" (a rule that is not in that commit).
+	ctx = store.WithCommitOp(ctx, folderProjectOp)
+	_, err := st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+	if errors.Is(err, store.ErrStale) {
+		if _, rerr := st.eng.Refresh(ctx, target); rerr != nil {
+			return value.Ref{}, rerr
+		}
+		return value.RefOf(pid.Any())
 	}
 	a.wrote(err)
 	if err != nil {
 		return value.Ref{}, err
 	}
-	return value.RefOf(w.Row.ID)
+	return value.RefOf(pid.Any())
 }
+
+// folderProjectOp names the commit of a folder's project row
+// (createFolderProject).
+const folderProjectOp = "project.add"
 
 // folderProjectIDOf is target's folder project id (_meta.json project_id,
 // or the id its first write records); zero when the backend has no folder
@@ -512,12 +563,15 @@ func storeOnlyApp(ctx context.Context, opts Options, one attach.Store) (*App, er
 // writes only there outside any repo: the roster commands and a write
 // naming its store with --to (targetoutside.go). An App opened before is
 // closed first. Its repo-only state refuses with E_NOT_A_STORE.
-func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.Source) error {
-	st, err := openDetachedHere(ctx, a.opts, &one, here) // a.opts: New filled the defaults (Wall)
+// also are attached beside one for reads (the org's company folder above
+// a project folder, so its kinds resolve); writes still go to one.
+func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.Source, also ...attach.Store) error {
+	st, err := openDetachedHere(ctx, a.opts, &one, here, also...) // a.opts: New filled the defaults (Wall)
 	if err != nil {
 		return err
 	}
 	st.here = here                     // "" for the roster: its rows name no project folder
+	st.storeOnly = true                // its folders are the read's whole scope (lensFolders)
 	st.eng.SetRedactHook(a.redactTask) // D21, as App.state does
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -526,7 +580,7 @@ func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.
 	}
 	a.opened, a.st, a.err = true, st, nil
 	a.cfgOpened = true
-	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; outside one only a write naming its store (--to) and the roster commands run").
+	a.cfgErr = errs.New(errs.NotAStore, "wire: this command needs a repo; outside one only the commands that name their store (--to, --store) or read the setup's org store run").
 		WithHint("run it inside a git repository")
 	return nil
 }
@@ -555,4 +609,12 @@ func readWithoutProject(ctx context.Context, opts Options) bool {
 func insideWorkTree(ctx context.Context, dir string) bool {
 	out, err := gitRun{dir: dir, args: []string{"rev-parse", "--is-inside-work-tree"}}.output(ctx)
 	return err == nil && strings.TrimSpace(string(out)) == "true"
+}
+
+// noPlaceProjectHint is the hint of rosterProject's read refusal at target
+// (a store with no project row). devco D-505: a not-here refusal names the
+// two ways out a person has from anywhere, --store (read the store's rows
+// by name) and --setup (the setup whose stores and folders a place is in).
+func noPlaceProjectHint(target store.Source) string {
+	return "a write there makes it (lore memory add --to " + string(target) + " --body \"…\"); lore search and lore <kind> list --store " + string(target) + " read its rows without one; lore setup check --setup <name> shows the folders of a setup and the store each one reads"
 }

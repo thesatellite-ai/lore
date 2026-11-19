@@ -10,38 +10,13 @@ package app
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/op"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 	hosthooks "github.com/thesatellite-ai/lore/wire/host"
 )
-
-// syncBrought reports whether a `lore sync` result received or merged any
-// row (a store or the repo pass) or its live pass moved rows (brought a
-// teammate's live writes in, sent this clone's, landed some): only then may
-// the sync rewrite a committed LORE.md (renderhost.RenderHeld; B-8). A result of another
-// shape answers true, as before.
-func syncBrought(res op.Result) bool {
-	v := res.Value()
-	if !v.IsValid() || !v.CanInterface() {
-		return true
-	}
-	out, ok := v.Interface().(opssync.RunOut)
-	if !ok {
-		return true
-	}
-	d := out.Data
-	if d.LiveMoved || len(d.Imported) > 0 || len(d.Deleted) > 0 || len(d.Merged) > 0 {
-		return true
-	}
-	for _, s := range d.Stores {
-		if s.Received > 0 || s.Merged > 0 {
-			return true
-		}
-	}
-	return false
-}
 
 // hookSyncRender names the hook in errors and tests.
 const hookSyncRender = "sync-render"
@@ -61,7 +36,12 @@ func syncRenderHook(rend *lateRender, wd string) hosthooks.Hook {
 		}
 		// SOURCE_OF_TRUTH rows 10, 11: LORE.md when its stamp no longer
 		// matches its rows, then the private files and import lines.
-		rend.h.RerenderStaleQuiet(ctx, wd, syncBrought(res))
+		rend.h.RerenderStaleQuiet(ctx, wd)
+		// devco:D-231: a committed render the sync kept as it is (K-8)
+		// is named with what brings it up to date.
+		if n := rend.h.HeldStaleNotice(ctx, wd); n != "" {
+			_, _ = os.Stderr.WriteString(n + "\n") // a sync never fails over its notice
+		}
 		rend.h.RerenderPrivateQuiet(ctx, wd)
 		hints := rend.h.ScopeRenameHints(ctx, wd)
 		if len(hints) == 0 {

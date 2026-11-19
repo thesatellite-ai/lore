@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsrepoinit "github.com/thesatellite-ai/lore/ops/repoinit"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -385,7 +387,7 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		} else {
 			m = sp.p.StoreMarker(ctx, u, sp.route(r))
 		}
-		vars := sp.urlVars(u, r)
+		vars := sp.urlVars(ctx, u, r)
 		vars[onboard.VarStoreName] = markerStoreName(r)
 		res := outcome(m.Outcome, vars)
 		if res.Status == onboard.StatusOK && !m.Present {
@@ -406,7 +408,7 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 		// does), an empty repo is made a store; only a repo that holds
 		// files and is no lore store is refused.
 		f := sp.p.RootFiles(ctx, u, sp.route(r), rowfs.MarkerFile, orgcfg.OrgFile)
-		res := outcome(f.Outcome, sp.urlVars(u, r))
+		res := outcome(f.Outcome, sp.urlVars(ctx, u, r))
 		if res.Status == onboard.StatusOK && !f.EmptyRepo && len(f.Found) == 0 {
 			res.Status, res.Detail = onboard.StatusFail, "the repo holds files but no "+rowfs.MarkerFile+": it is not a lore store"
 		}
@@ -418,7 +420,14 @@ func (sp setupProber) probeOne(ctx context.Context, r opssetup.ProbeRequest) ops
 	case onboard.CheckIdentityRoster, onboard.CheckIdentityPeriod:
 		return sp.rosterCheck(ctx, r) // setupprobe_roster.go
 	case onboard.CheckInviteFound:
+		if res, ok := sp.inviteJoinCheck(ctx, r); ok {
+			return res // setupprobe_invitejoin.go: a join by invite line (J-9)
+		}
 		return sp.memberJoinFound(ctx, r) // setupprobe_memberjoin.go: a join by org name or store url (B2-13)
+	case onboard.CheckInviteStatus, onboard.CheckInviteEmail:
+		if res, ok := sp.inviteJoinCheck(ctx, r); ok {
+			return res // setupprobe_invitejoin.go (J-9)
+		}
 	case onboard.CheckSecretsBackendPresent:
 		return sp.secretsBackend(ctx, r)
 	case onboard.CheckFoldersExist:
@@ -449,12 +458,12 @@ func (sp setupProber) storeRead(ctx context.Context, r opssetup.ProbeRequest) op
 		// the person asks lore to create may not exist yet (the save makes
 		// it); `existing` and every later check still need the folder.
 		if creating(r) {
-			return outcome(sp.p.FolderCreatable(dir), sp.urlVars(u, r))
+			return outcome(sp.p.FolderCreatable(dir), sp.urlVars(ctx, u, r))
 		}
-		return outcome(sp.p.FolderRead(dir), sp.urlVars(u, r))
+		return outcome(sp.p.FolderRead(dir), sp.urlVars(ctx, u, r))
 	}
 	res := sp.p.ReadRemote(ctx, u, sp.route(r))
-	vars := sp.urlVars(u, r)
+	vars := sp.urlVars(ctx, u, r)
 	vars[onboard.VarStoreName] = markerStoreName(r) // the reached-before fix names set-url and --restore with it
 	out := sp.reachedBefore(readVars(outcome(res.Outcome, vars), res.Class), u, r)
 	if out.Status == onboard.StatusOK && out.Detail == "" {
@@ -503,9 +512,18 @@ func markerStoreName(r opssetup.ProbeRequest) string {
 // urlVars are the fix vars of a store url: {url}, and {owner}/{repo} for
 // any host url (the fixes name them); a url gh cannot act on (not
 // github.com) selects the FixNotGitHub variant (A6 fix.go).
-func (sp setupProber) urlVars(u string, r opssetup.ProbeRequest) map[string]string {
+func (sp setupProber) urlVars(ctx context.Context, u string, r opssetup.ProbeRequest) map[string]string {
 	v := map[string]string{onboard.VarURL: probe.Sanitize(u)}
 	if owner, repo, ok := githubOwnerRepo(u, sp.route(r).HostAlias); ok {
+		v[onboard.VarOwner], v[onboard.VarRepo] = owner, repo
+		return v
+	}
+	// a host alias of github.com in ~/.ssh/config other than the setup's
+	// route (`git@<alias>:org/store.git` typed for the team store): the
+	// github step lists the same aliases (githubAliasList), so the team
+	// step checks the repo as on github.com instead of skipping it as
+	// "not a github.com url" (devco r10read)
+	if owner, repo, ok := githubOwnerRepo(u, sp.sshGitHubAlias(ctx, u)); ok {
 		v[onboard.VarOwner], v[onboard.VarRepo] = owner, repo
 		return v
 	}
@@ -514,6 +532,26 @@ func (sp setupProber) urlVars(u string, r opssetup.ProbeRequest) map[string]stri
 	}
 	v[onboard.VarFixVariant] = string(onboard.FixNotGitHub)
 	return v
+}
+
+// sshGitHubAlias is u's host when ~/.ssh/config maps it to github.com (one
+// of githubAliasList's aliases), else "". An unreadable config maps
+// nothing.
+func (sp setupProber) sshGitHubAlias(ctx context.Context, u string) string {
+	g, _, ok := onboard.ParseGitURL(u)
+	if !ok || g.Host == "" || g.Host == probe.GitHubHost {
+		return ""
+	}
+	cfg, err := sp.p.ReadSSHConfig(ctx)
+	if err != nil {
+		return ""
+	}
+	for _, a := range githubAliasList(cfg) {
+		if a.Alias == g.Host {
+			return g.Host
+		}
+	}
+	return ""
 }
 
 // readVars adds the FixUnreachable variant to a store.read result whose
@@ -698,14 +736,113 @@ func (sp setupProber) gitEmail(ctx context.Context, r opssetup.ProbeRequest) ops
 	if !id.Class.Ran() {
 		return outcome(id.Outcome, v)
 	}
-	if !slices.ContainsFunc(emails, func(e string) bool { return strings.EqualFold(e, id.Email) }) {
+	mine := func(e string) bool {
+		return slices.ContainsFunc(emails, func(x string) bool { return strings.EqualFold(x, strings.TrimSpace(e)) })
+	}
+	if !mine(id.Email) {
 		got := id.Email
 		if got == "" {
 			got = "no email"
 		}
+		if repoTarget(r.Target) == "" {
+			// Read outside a repo, git answers its global email only: an
+			// includeIf "gitdir:" file applies inside the repos it names,
+			// which is where this setup's commits are made (devco D-448:
+			// the step warned about the global address of a person whose
+			// work repos use the setup's address through an includeIf).
+			return sp.gitEmailOutsideRepo(ctx, r, got, mine, v)
+		}
 		return result(onboard.StatusFail, "git config user.email is "+got, v)
 	}
 	return result(onboard.StatusOK, "", v)
+}
+
+// gitEmailOutsideRepo is identity.git_email read outside a repo, where git
+// answers only its global email (got, not one of the setup's). The
+// global address is the person's own and often right for their other
+// work, so the check never asks to change it (devco D-530); it passes when:
+//   - an includeIf file sets the setup's address (any condition: gitdir:
+//     names the folder, hasconfig:remote.*.url: and the like apply in the
+//     repos they match; devco D-448), and, for a setup with folders, a
+//     gitdir: rule covers each folder (or the folder's own repo commits
+//     with the setup's address);
+//   - the setup has no folders: its only commits are store commits, and
+//     lore sets each store clone's git user itself (D-514), so the global
+//     address never reaches them.
+//
+// Otherwise it warns naming the folder git would commit from with the
+// wrong address; the fix is an includeIf or per-repo setting, never
+// --global.
+func (sp setupProber) gitEmailOutsideRepo(ctx context.Context, r opssetup.ProbeRequest, got string, mine func(string) bool, v map[string]string) opssetup.ProbeResult {
+	var rules []probe.IncludeIdentity
+	for _, in := range sp.p.IncludeIdentities(ctx) {
+		if mine(in.Email) {
+			rules = append(rules, in)
+		}
+	}
+	email := v[onboard.VarEmail]
+	if len(r.Setup.Folders) == 0 {
+		if len(rules) > 0 {
+			v[onboard.VarGitEmail] = rules[0].Email
+			return result(onboard.StatusOK, "git uses "+rules[0].Email+" "+includeWhere(rules[0])+"; the global "+got+" applies outside them", v)
+		}
+		return result(onboard.StatusOK, "this setup has no folders: its commits are store commits, which lore makes as "+email+" itself; git's global "+got+" stays for your other repos", v)
+	}
+	var covered []string
+	for _, f := range r.Setup.Folders {
+		in, ok := sp.folderIdentity(ctx, f, rules, mine)
+		if !ok {
+			return result(onboard.StatusFail, "git commits in "+f+" would carry the global "+got+": no includeIf gitdir: rule for that folder sets "+email+" (your global address is fine for your other repos; set "+email+" for this folder only)", v)
+		}
+		covered = append(covered, f+" ("+in+")")
+	}
+	v[onboard.VarGitEmail] = email
+	return result(onboard.StatusOK, "git uses "+email+" in "+strings.Join(covered, ", ")+"; the global "+got+" applies outside them", v)
+}
+
+// globRoot is the folder a setup folder glob or an includeIf gitdir:
+// pattern starts at: ~ expanded to home, cut before the first glob
+// character ("~/code/acme/*" and "~/code/acme/**" are both ~/code/acme).
+func globRoot(pattern, home string) string {
+	if rest, ok := strings.CutPrefix(pattern, "~/"); ok {
+		pattern = filepath.Join(home, rest)
+	} else if pattern == "~" {
+		pattern = home
+	}
+	if i := strings.IndexAny(pattern, "*?["); i >= 0 {
+		pattern = pattern[:i]
+	}
+	return filepath.Clean(pattern)
+}
+
+// includeWhere says where an includeIf rule applies, for the check detail.
+func includeWhere(in probe.IncludeIdentity) string {
+	if in.Folder != "" {
+		return "in repos under " + in.Folder + " (includeIf " + in.Condition + ")"
+	}
+	return "in the repos includeIf " + in.Condition + " matches"
+}
+
+// folderIdentity reports whether commits in setup folder f carry one of
+// the setup's addresses: a gitdir: rule among rules covers f, or f is
+// itself in a repo whose effective email (every scope, includeIf
+// included) is the setup's. The string names what decided it.
+func (sp setupProber) folderIdentity(ctx context.Context, f string, rules []probe.IncludeIdentity, mine func(string) bool) (string, bool) {
+	home := sp.p.Home()
+	abs := globRoot(f, home)
+	for _, in := range rules {
+		if in.Folder == "" {
+			continue
+		}
+		pre := globRoot(in.Folder, home)
+		if abs == pre || strings.HasPrefix(abs, pre+string(filepath.Separator)) {
+			return "includeIf " + in.Condition, true
+		}
+	}
+	if id := sp.p.RepoIdentity(ctx, abs); id.Class.Ran() && id.Class == probe.ClassOK && mine(id.Email) {
+		return "its repo's config", true
+	}
+	return "", false
 }
 
 // isHTTPS: the request's route is https (answers first, else the setup).
@@ -866,7 +1003,7 @@ func (sp setupProber) storeWrite(ctx context.Context, r opssetup.ProbeRequest) o
 	if u == "" {
 		return skip(skipNoURL)
 	}
-	v := sp.urlVars(u, r)
+	v := sp.urlVars(ctx, u, r)
 	if dir, ok := sp.p.FolderStorePath(u); ok {
 		// A folder store (no git): a temp file in the folder, not a push
 		// (for create: in its nearest existing parent when it is missing).
@@ -925,7 +1062,7 @@ func (sp setupProber) storePrivate(ctx context.Context, r opssetup.ProbeRequest)
 	if _, ok := sp.p.FolderStorePath(u); ok {
 		return skip(skipFolderStore)
 	}
-	v := sp.urlVars(u, r)
+	v := sp.urlVars(ctx, u, r)
 	if v[onboard.VarFixVariant] == string(onboard.FixNotGitHub) {
 		return skip(skipNotGitHub)
 	}
@@ -988,7 +1125,7 @@ func (sp setupProber) collaborator(ctx context.Context, r opssetup.ProbeRequest)
 	if u == "" {
 		return skip(skipNoURL)
 	}
-	v := sp.urlVars(u, r)
+	v := sp.urlVars(ctx, u, r)
 	v[onboard.VarUser] = user
 	if v[onboard.VarFixVariant] == string(onboard.FixNotGitHub) {
 		return skip(skipNotGitHub)
@@ -1079,6 +1216,21 @@ func (sp setupProber) prefill(ctx context.Context, id onboard.PrefillID, setup o
 		return text(sp.p.GlobalIdentity(ctx).Name), nil
 	case onboard.PrefillGitUserEmail:
 		return text(sp.p.GlobalIdentity(ctx).Email), nil
+	case onboard.PrefillGitEmails:
+		global := strings.TrimSpace(sp.p.GlobalIdentity(ctx).Email)
+		out := text(global)
+		seen := map[string]bool{}
+		add := func(email, detail string) {
+			if email = strings.TrimSpace(email); email != "" && !seen[strings.ToLower(email)] {
+				seen[strings.ToLower(email)] = true
+				out.Choices = append(out.Choices, onboard.Choice{Value: email, Label: email, Detail: detail})
+			}
+		}
+		add(global, "git config --global user.email")
+		for _, in := range sp.p.IncludeIdentities(ctx) {
+			add(in.Email, "includeIf "+in.Condition)
+		}
+		return out, nil
 	case onboard.PrefillGHAccounts:
 		s := sp.p.GHLogins() // hosts.yml only; the gh check asks GitHub
 		out := text(s.Active)
@@ -1451,7 +1603,7 @@ func (sp setupProber) repoStores(ctx context.Context, r opssetup.ProbeRequest) o
 		}
 		bad = append(bad, g.name+": "+g.res.Detail)
 		if v == nil {
-			v = sp.urlVars(cfg.Stores[i].URL, r)
+			v = sp.urlVars(ctx, cfg.Stores[i].URL, r)
 			v[onboard.VarStore] = probe.Sanitize(cfg.Stores[i].URL)
 			status = g.res.Class.Status()
 		}
@@ -1621,6 +1773,13 @@ func (sp setupProber) pointerFile(ctx context.Context, r opssetup.ProbeRequest) 
 			// repo's context.targets; the fix (render --add-target) adds it.
 			all = append(all, toolOne{tool: t, status: onboard.StatusFail, vars: v,
 				detail: "no " + p.PointerFile + " in this repo"})
+		case !strings.Contains(string(b), loreMDName) && toolprofile.GeneratedBanner(string(b)) != "":
+			// devco J-17: render skips a generated file, so its
+			// --add-target fix changed nothing and the check failed forever
+			gv := maps.Clone(v)
+			gv[onboard.VarFixVariant] = string(onboard.FixGenerated)
+			all = append(all, toolOne{tool: t, status: onboard.StatusFail, vars: gv,
+				detail: p.PointerFile + " does not import .lore/" + loreMDName + "; its banner says another tool generates it (" + strconv.Quote(toolprofile.GeneratedBanner(string(b))) + ")"})
 		case !strings.Contains(string(b), loreMDName):
 			all = append(all, toolOne{tool: t, status: onboard.StatusFail, detail: p.PointerFile + " does not import .lore/" + loreMDName, vars: v})
 		default:
@@ -1638,7 +1797,7 @@ func (sp setupProber) hooks(ctx context.Context, r opssetup.ProbeRequest) opsset
 	if root == "" {
 		return skip(skipNotInRepo)
 	}
-	if top := sp.hereTop(ctx); top == "" || resolvedPath(top) != resolvedPath(root) {
+	if top := sp.hereTop(ctx); top == "" || fspath.Canonical(top) != fspath.Canonical(root) {
 		return skip(detailHooksOther)
 	}
 	if !loreReady(root) {

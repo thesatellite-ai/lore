@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
 	"github.com/thesatellite-ai/lore/model/errs"
 
@@ -287,13 +288,13 @@ func readConfigRoot(home string) (*yaml.Node, error) {
 	}
 	doc := &yaml.Node{}
 	if err := yaml.Unmarshal(b, doc); err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+		return nil, errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not valid YAML", err)
 	}
 	if len(doc.Content) == 0 {
 		return &yaml.Node{Kind: yaml.MappingNode}, nil
 	}
 	if doc.Content[0].Kind != yaml.MappingNode {
-		return nil, errs.New(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not a mapping")
+		return nil, errs.New(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not a mapping")
 	}
 	return doc.Content[0], nil
 }
@@ -345,10 +346,10 @@ func (a *App) migratePersonalSettings(ctx context.Context, cands []personalSetti
 		}
 		node, valid := personalNode(pk, first.Value)
 		if !valid {
-			steps = append(steps, personalLine(first)+" holds a value ~/.lore/"+ConfigFile+" cannot hold; left in place")
+			steps = append(steps, personalLine(first)+" holds a value "+lorehome.Shown()+"/"+ConfigFile+" cannot hold; left in place")
 			continue
 		}
-		line := personalLine(first) + " → ~/.lore/" + ConfigFile + " " + k + " = " + node.Value
+		line := personalLine(first) + " → " + lorehome.Shown() + "/" + ConfigFile + " " + k + " = " + node.Value
 		if _, have := configLookup(root, k); have {
 			steps = append(steps, line+" (config.yaml already sets it; kept)")
 			continue
@@ -446,7 +447,7 @@ func (a *App) rollbackConfigKeys(keys []journalConfigKey) (line string, kept []s
 		case cur == k.Value:
 			drop = append(drop, k.Key)
 		default:
-			kept = append(kept, "~/.lore/"+ConfigFile+" "+k.Key+" (changed after the migration)")
+			kept = append(kept, lorehome.Shown()+"/"+ConfigFile+" "+k.Key+" (changed after the migration)")
 		}
 	}
 	if len(drop) == 0 {
@@ -460,5 +461,5 @@ func (a *App) rollbackConfigKeys(keys []journalConfigKey) (line string, kept []s
 	}); err != nil {
 		return "", nil, err
 	}
-	return "~/.lore/" + ConfigFile + ": " + strconv.Itoa(len(drop)) + " personal settings removed (" + strings.Join(drop, ", ") + ")", kept, nil
+	return lorehome.Shown() + "/" + ConfigFile + ": " + strconv.Itoa(len(drop)) + " personal settings removed (" + strings.Join(drop, ", ") + ")", kept, nil
 }

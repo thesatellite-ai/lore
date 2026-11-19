@@ -66,8 +66,9 @@ func newLiveFixture(t testing.TB) ltFixture { return newLiveFixtureWith(t, "", n
 
 // newLiveFixtureWith is newLiveFixture with a ~/.lore/config.yaml body
 // ("" = none) and a clock (nil = the wall clock); the repo holds a .lore/
-// folder so the cwd project resolves (doctor, sync).
-func newLiveFixtureWith(t testing.TB, configYAML string, clk clock.Clock) ltFixture {
+// folder so the cwd project resolves (doctor, sync). Each prepare runs on
+// the repo folder before the live session opens (a remote to land on).
+func newLiveFixtureWith(t testing.TB, configYAML string, clk clock.Clock, prepare ...func(dir string)) ltFixture {
 	t.Helper()
 	home := t.TempDir()
 	testenv.SetHome(t, home)
@@ -91,6 +92,9 @@ func newLiveFixtureWith(t testing.TB, configYAML string, clk clock.Clock) ltFixt
 	gitT(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 	if err := os.MkdirAll(filepath.Join(dir, ".lore", "data"), 0o750); err != nil { // an empty .lore/ is no project (D-20)
 		t.Fatal(err)
+	}
+	for _, p := range prepare {
+		p(dir)
 	}
 	h := &liveHost{cfg: LiveConfig{Home: loreHome, WorkDir: dir, Version: "0.1.18", Stderr: &strings.Builder{}, Clock: clk}}
 	run := &liveRun{h: h, sessions: map[string]*liveSession{}}

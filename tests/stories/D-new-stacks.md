@@ -56,5 +56,6 @@ Dev-company round 2, track D. Replayed by `TestStoryDNewStacks` in `D_new_stacks
 | D-102 | r2 D-21 | global `core.hooksPath` gets lore's hooks | `TestStoryDNewStacks` step 13; `TestJourneyNoLoreRepoGlobalHooksPath` |
 | D-103 | r2 D-22 | package pointer names the root's `LORE.md` | `TestStoryDNewStacks` step 3; `TestJourneyRenderedFiles` |
 | D-104 | r2 D-23 | `CLAUDE.md` symlink rewritten twice, import lost | `TestStoryDNewStacks` step 5; `TestJourneyRenderedFiles` |
+| D-502 | devco D-502 | `CLAUDE.md` linked to another repository's `CLAUDE.md`: render wrote its pointer block into that repository's tracked file | `TestJourneyToolFileLinkedOutOfTheRepo`; `TestStitchPointerLinkOutSkipped` |
 
 The client-repo findings of this track (r2 D-6, D-7, D-12, D-13, D-17: D-63, D-68, D-77, D-78, D-96) are replayed by story F, which owns the client repo.

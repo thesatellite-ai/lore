@@ -7,7 +7,7 @@ package userscen
 //
 //	TestMigrateGateNewerRow        a row file written by a newer lore (_v 3): show is
 //	                               E_OLD_LORE exit 19 with the exact message and
-//	                               `lore upgrade`; list leaves it out and says so; migrate
+//	                               `lore upgrade`; list leaves it out and says so (naming the file and `lore upgrade`); migrate
 //	                               status counts it as newer; migrate run and other writes
 //	                               leave its bytes alone; doctor names it
 //	TestMigrateGateDeclaredMatrix  _meta.json declares more than this lore knows (a floor
@@ -64,7 +64,10 @@ func TestMigrateGateNewerRow(t *testing.T) {
 		`","kind":"fact","new_field":1,"source_kind":"manual","updated_at":"2026-11-04T08:09:56.252002894Z","updated_by":"act_0e45506e64357c94a87e70ef1c6bbba9"}`
 	rel := migDataDir + "/memories/" + id + ".json"
 	c.WriteFile(rel, doc)
-	const msg = "row: written by a newer lore (_v 3, this lore reads up to 2)"
+	// no internal "row: " prefix in the error or the list warning: devco
+	// D-641 (owner use pass 3) drops internal package prefixes from every
+	// user-facing message (D-676)
+	const msg = "written by a newer lore (_v 3, this lore reads up to 2)"
 
 	c.Lore("memory", "show", id).Fails(t, th.ExitGuard, "[E_OLD_LORE] "+msg, "hint: upgrade lore: lore upgrade")
 	r := c.Lore("memory", "show", id, "--json")
@@ -73,7 +76,9 @@ func TestMigrateGateNewerRow(t *testing.T) {
 	}
 
 	list := c.Lore("memory", "list").OK(t)
-	list.Says(t, "an ordinary note", "invalid-file", rel, msg, "left out of every read (lore doctor)").Never(t, "from the future")
+	// The plain per-command warning (devco O-10, D-281): names the file, says
+	// what is wrong, and gives the next step.
+	list.Says(t, "an ordinary note", "lore: "+rel+" is not a usable row file: "+msg, "left out of every read (lore doctor)", "next: upgrade lore: lore upgrade").Never(t, "from the future", "invalid-file", "rowfs")
 
 	if p := migRepoPlace(t, migStatus(t, c)); p.Newer != 1 || p.Total != p.V1+p.V2+p.Newer {
 		t.Fatalf("migrate status: %+v, want newer 1 counted in the total", p)

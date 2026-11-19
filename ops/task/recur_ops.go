@@ -87,8 +87,16 @@ func (o ops) recurring(ctx context.Context, raw string) (store.Source, row.Row, 
 	return src, cur, rc, nil
 }
 
+// RecurShowIn is the input of task.recur.show: the task id and --store
+// (devco D-507). IDIn stays the writes' input, which take no --store.
+type RecurShowIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
+	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
+}
+
 // recurShow prints the rule, the series and the next dates.
-func (o ops) recurShow(ctx context.Context, in IDIn) (RecurOut, error) {
+func (o ops) recurShow(ctx context.Context, in RecurShowIn) (RecurOut, error) {
 	_, cur, rc, err := o.recurring(ctx, in.ID)
 	if err != nil {
 		return RecurOut{}, err
@@ -99,7 +107,7 @@ func (o ops) recurShow(ctx context.Context, in IDIn) (RecurOut, error) {
 	}
 	out := RecurOut{ID: cur.ID.String(), Recur: rc}
 	if due := work.Time(cur, fieldDue); !due.IsZero() && !rc.Stopped {
-		for _, d := range rule.Upcoming(due, upcomingShown) {
+		for _, d := range rule.Upcoming(calDay(due, time.Local), upcomingShown) {
 			out.Upcoming = append(out.Upcoming, d.Format(time.DateOnly))
 		}
 	}

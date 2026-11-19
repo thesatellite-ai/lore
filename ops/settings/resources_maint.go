@@ -44,7 +44,22 @@ const (
 	lintRequired   = "missing_required"
 	lintDeprecated = "deprecated_field"
 	lintRemind     = "remind"
-	lintDuplicate  = "duplicate"
+	// lintRemindUnset / lintRemindPassed (devco D-450): a date field with
+	// remind_before that is empty can never remind (a domain with no
+	// renews_on), and one whose date has passed was missed; lint was
+	// silent on both.
+	lintRemindUnset  = "remind_unset"
+	lintRemindPassed = "remind_passed"
+	lintDuplicate    = "duplicate"
+	// lintMissingUsual (devco D-490): a field most rows of the kind fill
+	// (renews_on on 13 of 15 domains) is empty on this one. The kind did
+	// not mark it required, so nothing else flagged the two gaps and lint
+	// said "no problems found".
+	lintMissingUsual = "missing_value"
+	// usualMinRows / usualShare: a field counts as usual for a kind with at
+	// least usualMinRows live rows when at least usualShare of them set it.
+	usualMinRows = 4
+	usualShare   = 0.75
 	// lintKindRoute: a kind (from an earlier build or a hand edit) named
 	// like a fixed resource command, so its REST route collides (G-META-9).
 	lintKindRoute = "kind_route_collision"
@@ -52,6 +67,9 @@ const (
 
 // ResRenameIn is the input of resource.rename.
 type ResRenameIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Old string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	New string `json:"new_name" arg:"1" desc:"the new name (the kind's name format)"`
 	// RewriteRows rewrites the ref label of every resource that refs this
@@ -62,6 +80,9 @@ type ResRenameIn struct {
 
 // ResMergeIn is the input of resource.merge.
 type ResMergeIn struct {
+	// --store <org>[/<folder>] (devco D-586): where the resource is, so
+	// the write runs from any folder, as resource list reads.
+	op.StoreFlag
 	Name   string `json:"id" arg:"0" desc:"the duplicate to fold away (name or res_ id)"`
 	Into   string `json:"into" flag:"into" desc:"the resource that survives (same kind)"`
 	DryRun bool   `json:"dry_run,omitempty" flag:"dry-run" desc:"list what would change; write nothing"`
@@ -109,7 +130,11 @@ func (o ResLintOut) Text() string {
 		if f.Fixed {
 			fixed = "  (fixed)"
 		}
-		fmt.Fprintf(&b, "%-16s %-30s %s%s\n", f.Check, what, f.Detail, fixed)
+		id := ""
+		if f.Row != "" {
+			id = "  [" + f.Row + "]"
+		}
+		fmt.Fprintf(&b, "%-16s %-30s %s%s%s\n", f.Check, what, f.Detail, fixed, id)
 	}
 	fmt.Fprintf(&b, "%d findings\n", len(o.Findings))
 	return b.String()
@@ -117,6 +142,9 @@ func (o ResLintOut) Text() string {
 
 // FieldRetypeIn is the input of resource.field.retype.
 type FieldRetypeIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	Kind   string `json:"kind" arg:"0" desc:"the kind (name or knd_ id)"`
 	Field  string `json:"field" arg:"1" desc:"the field name"`
 	Type   string `json:"type" arg:"2" desc:"the new value type"`
@@ -144,7 +172,7 @@ func (o ops) maintOps() []op.Entry {
 // id, so no meaning changes (RES 3.4). Referrers' stored ref labels refresh
 // on their next write, or all at once with --rewrite-rows (PASS3-A-3).
 func (o ops) resRename(ctx context.Context, in ResRenameIn) (RowOut, error) {
-	r, err := o.resourceByName(ctx, in.Old, "")
+	r, err := o.resourceInScope(ctx, in.Old, OpResRename)
 	if err != nil {
 		return RowOut{}, err
 	}
@@ -193,7 +221,7 @@ func (o ops) resMerge(ctx context.Context, in ResMergeIn) (ResRepointOut, error)
 	if in.Into == "" {
 		return ResRepointOut{}, errs.New(errs.InvalidInput, "resource merge: give --into <name>")
 	}
-	dup, err := o.resourceByName(ctx, in.Name, "")
+	dup, err := o.resourceInScope(ctx, in.Name, OpResMerge)
 	if err != nil {
 		return ResRepointOut{}, err
 	}
@@ -279,6 +307,7 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 	now := opclock.Now(o.env)
 	out := ResLintOut{Findings: []LintFinding{}}
 	defs := map[string]kindDef{}
+	usual := usualFields(rows)
 	for _, r := range rows {
 		kid := text(r.Row, rKind)
 		d, ok := defs[kid]
@@ -317,8 +346,14 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 			fid := f.Row.ID.String()
 			raw, has := stored.vals[fid]
 			if !has {
-				if flag(f.Row, fRequired) {
+				switch {
+				case flag(f.Row, fRequired):
 					add(lintRequired, fname, "required field has no value")
+				case remindWindow(f) > 0:
+					add(lintRemindUnset, fname, "has remind_before "+text(f.Row, fRemindBefore)+" but no date, so nothing will remind; set it: lore resource edit --id "+name+" --set "+fname+"=<YYYY-MM-DD>")
+				case usual[kid][fid] > 0:
+					add(lintMissingUsual, fname, fmt.Sprintf("has no value while %d of %d %s rows set it; set it: lore resource edit --id %s --set %s=<value> (or make it required: lore resource field edit --kind %s --field %s --required)",
+						usual[kid][fid], usual[kid][kindRowsKey], d.name(), name, fname, d.name(), fname))
 				}
 				continue
 			}
@@ -353,6 +388,8 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 				if w := remindWindow(f); w > 0 {
 					if t, ok := parseWhen(s); ok && !t.Before(now) && t.Sub(now) <= w {
 						add(lintRemind, fname, s+" is within "+text(f.Row, fRemindBefore))
+					} else if ok && t.Before(now) {
+						add(lintRemindPassed, fname, s+" has passed; renew it and set the next date: lore resource edit --id "+name+" --set "+fname+"=<YYYY-MM-DD>")
 					}
 				}
 			default:
@@ -381,6 +418,51 @@ func (o ops) resLint(ctx context.Context, in ResLintIn) (ResLintOut, error) {
 	}
 	out.Count = len(out.Findings)
 	return out, nil
+}
+
+// kindRowsKey is usualFields' per-kind entry holding the live row count;
+// no field id is empty.
+const kindRowsKey = ""
+
+// usualFields counts, per kind id, the live (not archived) rows and how
+// many of them set each field; it keeps only fields set on at least
+// usualShare of a kind with usualMinRows rows or more (the count under
+// kindRowsKey is the kind's row count). A row that cannot be decoded is
+// left out; lint reports it on its own.
+func usualFields(rows []located) map[string]map[string]int {
+	counts := map[string]map[string]int{}
+	for _, r := range rows {
+		if text(r.Row, rArchivedAt) != "" {
+			continue
+		}
+		vals, err := decodeValues(r)
+		if err != nil {
+			continue
+		}
+		kid := text(r.Row, rKind)
+		c := counts[kid]
+		if c == nil {
+			c = map[string]int{}
+			counts[kid] = c
+		}
+		c[kindRowsKey]++
+		for fid := range vals.vals {
+			c[fid]++
+		}
+	}
+	for kid, c := range counts {
+		n := c[kindRowsKey]
+		for fid, k := range c {
+			if fid == kindRowsKey {
+				continue
+			}
+			if n < usualMinRows || k == n || float64(k) < usualShare*float64(n) {
+				delete(c, fid)
+			}
+		}
+		counts[kid] = c
+	}
+	return counts
 }
 
 func replacedNote(d kindDef, f located) string {
@@ -551,7 +633,7 @@ func (o ops) resDeleteWithDependents(ctx context.Context, in ResDeleteIn) (ResDe
 	if err != nil {
 		return ResDeleteOut{}, err
 	}
-	idx, err := o.buildIndex(ctx, nil)
+	idx, err := o.buildIndex(ctx, nil, indexScope{})
 	if err != nil {
 		return ResDeleteOut{}, err
 	}

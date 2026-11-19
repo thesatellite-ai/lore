@@ -64,6 +64,21 @@ func ignoredData(ctx context.Context, root string) (map[string]string, error) {
 	return dataignore.Ignored(ctx, root, nil)
 }
 
+// loreDirIgnoreRule is the rule that makes git ignore the .lore folder of
+// the project at root, as "<source>:<line>:<pattern>" (".gitignore:1:.lore/"),
+// or "" when none does or git could not say (devco D-513: the private
+// project's notice names it).
+func loreDirIgnoreRule(ctx context.Context, root string) string {
+	hit, err := dataignore.Ignored(ctx, root, []string{loreDirRel})
+	if err != nil {
+		return ""
+	}
+	return hit[loreDirRel]
+}
+
+// loreDirRel is the project's .lore folder as git check-ignore names it.
+const loreDirRel = ".lore"
+
 // restoreGitignore puts root's .gitignore back as it was before the block
 // was added (existed false: it did not exist), inside root only.
 func restoreGitignore(root string, original []byte, existed bool) error {

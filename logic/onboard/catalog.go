@@ -224,7 +224,7 @@ func Catalog() []Step {
 					Help:    "A new or empty private repo, e.g. git@github.com:agency/lore-team.git, or your team's existing store to attach it.",
 					Prefill: PrefillStoreURLCreate, Rules: []Rule{R(RuleGitURL), MaxLen(maxURL)}},
 				{ID: QIDOwn, Label: "The team's own repos", Type: QGlobList,
-					Help: "Patterns host/owner/repo, with * or ** as a whole segment and never for the host, like " + RepoPatternExample + ".", Rules: []Rule{R(RuleRepoPattern), MaxLen(maxPattern)}},
+					Help: "Patterns host/owner/repo, with ** as a whole segment, * as a whole segment or inside one (client-*), never for the host, like " + RepoPatternExample + ".", Rules: []Rule{R(RuleRepoPattern), MaxLen(maxPattern)}},
 				{ID: QIDRepos, Label: "Client repos", Type: QGlobList,
 					Help: "Optional patterns of client repos the team works in, in the same shape, like github.com/client/*.", Rules: []Rule{R(RuleRepoPattern), MaxLen(maxPattern)}},
 				{ID: QIDOrgFolder, Label: "Folder inside the store", Type: QText,

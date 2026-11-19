@@ -313,7 +313,7 @@ func unpushedIn(ctx context.Context, cl cloneDirs) []string {
 		}
 	}
 	if cl.work != "" && exists(cl.work) {
-		st, err := gitRun{dir: cl.work, args: []string{"status", "--porcelain"}}.output(ctx)
+		st, err := gitRun{dir: cl.work, args: []string{"-c", "core.quotePath=false", "status", "--porcelain"}}.output(ctx)
 		if err != nil {
 			out = append(out, cl.work+" (unreadable)")
 		} else if n := realChanges(string(st)); n > 0 {

@@ -480,8 +480,8 @@ func trashDeleteRestore(t *testing.T, tw *trashWorld, tc *trashCase) {
 		}
 	}
 	sh := th.DecodeJSON[struct {
-		Data   trashItem         `json:"data"`
-		Fields map[string]string `json:"fields"`
+		Data   trashItem   `json:"data"`
+		Fields shownFields `json:"fields"`
 	}](t, c.MustLore("trash", "show", tc.id, "--json"))
 	if reason != "" && tc.store == trashStoreRepo {
 		if _, ok := trashByID(trashList(t, c, "--reason", tc.mark))[tc.id]; !ok {

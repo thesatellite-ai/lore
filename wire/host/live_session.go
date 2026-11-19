@@ -78,14 +78,7 @@ const (
 	// liveNoteFault holds why the last push did not reach the remote when
 	// waiting cannot fix it (no repository at the address, credentials
 	// refused): `lore live doctor` and `lore doctor` warn with it (B3-14).
-	liveNoteFault = "live-remote-fault"
-	// liveNoteRenderDue marks that a run wrote live rows here since the
-	// last lore sync: a write pushed at once (live.autopush) leaves the
-	// sync nothing to send or receive, yet its rows are not in a committed
-	// .lore/LORE.md, so the next sync takes the note as rows moved
-	// (RunData.LiveMoved) and refreshes the render (B-8 still holds: a
-	// sync with no such note and nothing moved rewrites no tracked file).
-	liveNoteRenderDue     = "live-render-due"
+	liveNoteFault         = "live-remote-fault"
 	liveNoteMode          = 0o600
 	updatedAtKey          = "updated_at"
 	defaultBranchFallback = "main"
@@ -113,7 +106,8 @@ type liveSession struct {
 	stateDir string
 	// autopush: live.autopush on (and LORE_LIVE_AUTOPUSH not "0"): each
 	// write pushes at once. It gates pushes only (D18 amended): reads and
-	// writes still fetch teammates' rows when the fetch is due.
+	// writes still fetch teammates' rows when the fetch is due (a write at
+	// orgconf.WriteFetchTTL, devco D-233).
 	autopush bool
 	// offline: LORE_LIVE_AUTOPUSH=0 keeps lore off the network on its own,
 	// fetches included (only `lore sync` reaches the remote).
@@ -126,8 +120,19 @@ type liveSession struct {
 	// asked: the command is a push the person asked for (liveRun.asked):
 	// it pushes waiting live writes even with live.autopush off.
 	asked bool
+	// landLive: this sync's landing pass carries the waiting live writes in
+	// its own push (canCarryLive, live.LandRequest.Live; devco L-12-land).
+	landLive bool
+	// still: the run leaves .git as it was (liveRun.still): prepare takes
+	// no lock, fetches and integrates nothing; finish writes nothing.
+	still bool
+	// ci: a CI-form run (liveRun.ci): readWiring says no wiring note.
+	ci bool
 	// fetchErr is the last fetch failure (offline).
 	fetchErr error
+	// netCause is the last unanswered push's cause ("" when none): the
+	// remote and git's reason, for sync's report (devco L-10).
+	netCause string
 	// remoteURL is remote.<RemoteName>.url as configured ("" without a
 	// remote); shown masked (repourl.Mask) in the not-pushed lines.
 	remoteURL string
@@ -138,6 +143,16 @@ type liveSession struct {
 	// waitWhy is the reason of the last push that left writes waiting
 	// ("" none): offline, or the remote's fault (gitfault).
 	waitWhy string
+	// branchRefused is set by the pre-push hook when the person's branch
+	// push may not go through: git sends no branch because it refused it
+	// (non-fast-forward), or the branch is no fast-forward as far as this
+	// clone can tell (remote tip unknown here: "fetch first"; or a forced
+	// push). The live ref waits too, with this line (devco:Q-10).
+	branchRefused string
+	// neverPushed is liveNeverPushedLine for this remote, held until the
+	// run's push: said only when the live rows did stay on this clone (a
+	// push that then sent them says that instead, devco:Q-10).
+	neverPushed string
 	// undelivered is the local live ref commit a push of this run could
 	// not deliver (offline, refused, a remote fault); "" when none. A
 	// later push of the same commit in the run (sync's own, then finish)
@@ -155,12 +170,6 @@ type liveSession struct {
 	finished bool
 	// wrote counts rows this run committed to the local live ref.
 	wrote int
-	// moved: this run brought remote live rows into the local live ref
-	// (integrate took, fast-forwarded, merged or re-applied the remote),
-	// pushed waiting writes or landed rows; lore sync reports it
-	// (RunData.LiveMoved) so its render step may refresh a committed
-	// LORE.md.
-	moved bool
 	notes []live.MergeNote
 	lock  *liveLock
 	// cache is the read cache repo runs git through (nil when the session
@@ -263,6 +272,9 @@ func (s *liveSession) prepare(ctx context.Context) {
 		return
 	}
 	s.prepared = true
+	if s.still {
+		return // live_still.go: the refs the clone has, as they are
+	}
 	l, err := acquireLiveLock(ctx, s.stateDir)
 	if err != nil {
 		s.warn(err.Error())
@@ -290,6 +302,7 @@ func (s *liveSession) prepare(ctx context.Context) {
 	if live.ShouldFetch(live.FetchInputs{
 		Now: now, LastFetch: live.FetchStamp(s.stateDir), TTL: ttl,
 		Kind: s.kind, Autopush: !s.offline, HasRemote: s.ref.Remote != nil,
+		LastFailure: live.FetchFailed(s.stateDir), Backoff: s.cfg.FetchTTL, // devco:U-6
 	}) {
 		s.fetch(ctx, now)
 	}
@@ -310,12 +323,9 @@ func (s *liveSession) integrate(ctx context.Context) {
 	case err != nil:
 		s.warn("integrate: " + err.Error())
 	case res.Action == live.IntegrateNeverPushed:
-		s.warn(fmt.Sprintf(liveNeverPushedLine, s.ref.RemoteName))
+		s.neverPushed = fmt.Sprintf(liveNeverPushedLine, s.ref.RemoteName) // said by finish unless the push sends them
 	default:
 		s.notes = append(s.notes, res.Notes...)
-		if res.Action != live.IntegrateNothing {
-			s.moved = true
-		}
 	}
 }
 
@@ -327,6 +337,14 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 	}
 	if err != nil {
 		s.fetchErr = err
+		if errors.Is(err, gitremote.ErrUnconfirmed) {
+			// the remote was not reached (offline, a connect timeout): the
+			// next commands back off for live.fetch_ttl instead of waiting
+			// for the network again (devco:U-6)
+			if werr := live.WriteFetchFailed(s.stateDir, now); werr != nil {
+				s.warn(werr.Error())
+			}
+		}
 		return
 	}
 	s.fetched = true
@@ -346,7 +364,9 @@ func (s *liveSession) fetch(ctx context.Context, now time.Time) {
 // It fetches like a rejected push does (FetchAlways): the coordination op
 // already reached the remote for the signals ref.
 func (s *liveSession) refetch(ctx context.Context) bool {
-	if s.lock == nil || s.fetched || s.blocked != nil || s.ref.Remote == nil {
+	// a fetch of this run that failed is not tried again: offline, the
+	// second try only waited for the network's timeout once more (devco:U-6)
+	if s.lock == nil || s.fetched || s.fetchErr != nil || s.blocked != nil || s.ref.Remote == nil {
 		return false
 	}
 	s.fetch(ctx, s.clk.Now())
@@ -388,7 +408,7 @@ func (s *liveSession) defaultBranch(ctx context.Context) string {
 // the remote behind the person's back (owner rule U-2).
 func (s *liveSession) finish(ctx context.Context) {
 	defer s.release()
-	if !s.prepared || s.finished {
+	if !s.prepared || s.finished || s.still {
 		return
 	}
 	s.finished = true
@@ -400,13 +420,12 @@ func (s *liveSession) finish(ctx context.Context) {
 	if err := s.flushCompanions(ctx); err != nil {
 		s.warn("supporting rows (actors, metadata keys) were not written: " + err.Error())
 	}
-	if s.wrote > 0 {
-		if err := s.writeNote(liveNoteRenderDue, "1"); err != nil {
-			s.warn("note the render refresh for the next sync: " + err.Error())
-		}
-	}
 	if s.push(ctx) {
 		s.autoCompact(ctx)
+	}
+	if s.neverPushed != "" {
+		s.warn(s.neverPushed)
+		s.neverPushed = ""
 	}
 }
 
@@ -442,6 +461,13 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.waitWhy = "a read never pushes"
 		return false
 	}
+	if s.branchRefused != "" {
+		s.printNotes()
+		s.waitWhy = s.branchRefused
+		s.h.line(s.branchRefused) // the line carries its own "lore:" prefix
+		s.neverPushed = ""        // one line says where the rows are
+		return false
+	}
 	if !s.autopush && !s.asked {
 		if s.wrote > 0 {
 			s.sayAutopushOnce(liveAutopushOff)
@@ -459,6 +485,13 @@ func (s *liveSession) push(ctx context.Context) bool {
 		return false
 	}
 	out, err := s.ref.Push(ctx)
+	return s.pushed(snap, out, err)
+}
+
+// pushed reports a push of the live ref whose local tip was snap.Local
+// (push, or the landing push that carried it: reportCarried) and whether
+// it went out.
+func (s *liveSession) pushed(snap live.Snapshot, out live.PushOutcome, err error) bool {
 	s.notes = append(s.notes, out.Notes...)
 	s.printNotes()
 	if err != nil {
@@ -473,6 +506,32 @@ func (s *liveSession) push(ctx context.Context) bool {
 		s.undelivered = snap.Local
 	}
 	return out.Pushed()
+}
+
+// canCarryLive reports whether lore sync's landing push may carry the
+// waiting live writes (devco L-12-land): the same conditions under which
+// push would send them now (a remote, not blocked, not a read, autopush or
+// a push the person asked for, ahead, not held back, not already tried).
+func (s *liveSession) canCarryLive(ctx context.Context) bool {
+	if s.ref.Remote == nil || s.blocked != nil || s.read || (!s.autopush && !s.asked) {
+		return false
+	}
+	snap, err := s.ref.Snapshot(ctx)
+	if err != nil || !snap.Ahead() || (s.undelivered != "" && s.undelivered == snap.Local) {
+		return false
+	}
+	_, held := s.leftHeld(ctx, snap)
+	return !held
+}
+
+// reportCarried reports the live ref's outcome of a landing push that
+// carried it (live.LandResult.Live) as push reports its own; local is the
+// live ref's tip the landing pass started from.
+func (s *liveSession) reportCarried(local string, out *live.PushOutcome) {
+	if out == nil {
+		return
+	}
+	s.pushed(live.Snapshot{Local: local}, *out, nil)
 }
 
 // leftHeld reports a push LiveConfig.PushHold keeps from running: the
@@ -523,6 +582,7 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 		} else {
 			s.warn("pushed waiting live writes" + where)
 		}
+		s.neverPushed = ""                   // they did not stay: the line above says where they went
 		_ = s.writeNote(liveNoteRefused, "") // best effort: clears a stale doctor note
 		s.clearWaitNotes()
 	case live.PushNoRemote:
@@ -539,7 +599,7 @@ func (s *liveSession) reportPush(out live.PushOutcome) {
 		s.sayOnce(fmt.Sprintf("(live, not pushed yet: %d waiting; the remote refused refs/lore/live: %s)", s.waiting(), out.Detail))
 		_ = s.writeNote(liveNoteRefused, out.Detail) // best effort: feeds `lore live doctor` only
 	case live.PushRetriesOut:
-		s.warn(fmt.Sprintf("(live, not pushed yet: %d waiting; lost %d races, the next command retries)", s.waiting(), out.Attempts))
+		s.warn(fmt.Sprintf(liveRacesLost, s.waiting(), out.Attempts))
 	}
 }
 
@@ -564,6 +624,7 @@ func (s *liveSession) reportOffline(stderr string) {
 	}
 	if kind == gitfault.Unreachable {
 		s.waitWhy = "offline"
+		s.netCause = s.causeOf("git push to", stderr)
 		_ = s.writeNote(liveNoteFault, "") // best effort: a no-answer is not a fault to fix
 	} else {
 		s.waitWhy = gitfault.Summary(kind, where)
@@ -584,7 +645,30 @@ func (s *liveSession) fetchFault() string {
 	if k := gitfault.ClassifyAt(te.Stderr, fsreason.GitPathState); k != gitfault.Unreachable {
 		return gitfault.Summary(k, s.remoteLabel())
 	}
-	return "offline"
+	return "offline (" + s.causeOf("git fetch from", te.Stderr) + ")"
+}
+
+// fetchCause is the failed fetch's cause for sync's report: the step,
+// the remote and git's reason ("" when the run's fetch did not fail).
+func (s *liveSession) fetchCause() string {
+	if s.fetchErr == nil {
+		return ""
+	}
+	var te *gitremote.TransportError
+	if !errors.As(s.fetchErr, &te) {
+		return "git fetch from " + s.remoteLabel() + ": " + s.fetchErr.Error()
+	}
+	return s.causeOf("git fetch from", te.Stderr)
+}
+
+// causeOf is "<step> <remote>: <git's reason>" (devco L-10: "offline"
+// alone named neither the remote nor the ssh error).
+func (s *liveSession) causeOf(step, stderr string) string {
+	why := gitfault.Reason(stderr)
+	if why == "" {
+		why = "no answer"
+	}
+	return step + " " + s.remoteLabel() + ": " + why
 }
 
 // fetchMissing reports whether the failed fetch's remote answered that
@@ -700,6 +784,14 @@ func livePushWhere(out live.PushOutcome) string {
 	}
 	return " commit " + shortCommit(out.Commit) + " to " + out.Remote + " " + out.Ref
 }
+
+// liveRacesLost is the line of a write whose push lost every race to
+// teammates' pushes (live.PushRetriesOut): the write is committed on this
+// clone's live ref and exits 0, but no teammate sees it yet. A read never
+// pushes (S-1), so it names what does: the next write or `lore sync`
+// (devco:D-498; "the next command retries" left a note unsent when every
+// later command was a read or a claim on the signals ref).
+const liveRacesLost = "(live, not pushed yet: %d waiting; lost %d races to teammates' pushes: your next live write or `lore sync` sends them)"
 
 // The once-per-repo live.autopush lines (owner rule U-2: nothing pushes
 // without the person saying so, and a person who turned pushing on is

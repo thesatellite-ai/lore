@@ -14,12 +14,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // closeReleaseWait bounds how long a test waits for the kernel to drop a
 // LockFileEx range after its handle is closed without an explicit unlock;
 // Microsoft documents that release as possibly delayed.
-const closeReleaseWait = 2 * time.Second
+var closeReleaseWait = testtime.Scale(2 * time.Second)
 
 // closeReleasePoll is the pause between two tries while waiting.
 const closeReleasePoll = 20 * time.Millisecond

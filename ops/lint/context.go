@@ -107,7 +107,7 @@ func contextFindings(all map[row.Table][]sourced) []Finding {
 		id, body := p.s.r.ID.String(), text(p.s.r, fBody)
 		if text(p.s.r, schema.FieldSummary) == "" && p.noun == "rule" {
 			out = append(out, Finding{Code: NoSummary, ID: id, Store: string(p.s.src),
-				Message: "pinned rule has no summary; its line form is the first sentence (CQ4)",
+				Message: "pinned rule has no summary; its line form is the first sentence",
 				Fix:     "lore " + p.noun + " edit --id " + id + " --summary \"...\""})
 		}
 		if len(body) > entryMax {

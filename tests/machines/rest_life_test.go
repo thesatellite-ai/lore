@@ -94,6 +94,11 @@ type restLife struct {
 	// member joins; invite is the join line a member setup uses.
 	team   lsTeam
 	invite string
+	// onRoster: the member's first join accepted the invite. A later new
+	// setup (the re-add after a purge, which frees the org entry) answers
+	// the join with the org's store url, as docs/team/invites.md says: the
+	// used line is refused on every fresh join (J-9, devco:D-230).
+	onRoster bool
 	// doctored is, per setup, the checks the last doctor run reported.
 	doctored map[string]map[onboard.CheckID]bool
 	// baseWarnings are config check's warnings on the shape as built (a
@@ -118,6 +123,7 @@ func runRestLife(t *testing.T, shape string, kind onboard.Kind) {
 	r.baseWarnings = lmWarnings(t, m)
 	r.consistent("start")
 	r.walk(restSetup, kind, false)
+	r.onRoster = kind == onboard.KindMember
 	r.consistent("create")
 	r.walk(restSetup, kind, true)
 	r.consistent("edit")
@@ -273,6 +279,10 @@ func (r *restLife) answersFor(name string, kind onboard.Kind, step opssetup.Plan
 		text("org", restOrg)
 		text("store_url", r.team.storeURL)
 	case onboard.StepJoin:
+		if r.onRoster {
+			text("invite", r.team.storeURL)
+			break
+		}
 		text("invite", r.invite)
 	case onboard.StepTools:
 		list("tools", "claude_code")

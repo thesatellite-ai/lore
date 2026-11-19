@@ -481,27 +481,25 @@ func TestF04_HigherHLCWinsForScalarsNotPushOrder(t *testing.T) {
 	}
 }
 
-// F4 text fields: both edits kept with markers; the row is a conflict that
-// `lore sync conflicts` lists and that cannot land.
-func TestF04_TextClashKeepsBothAndBlocksLanding(t *testing.T) {
+// F4 text fields on the live ref (devco D-219, L-19): the newer edit by
+// HLC is kept and the sync that settles the clash names the replaced text.
+// No conflict markers are written: the live ref is shared by every clone,
+// and markers there failed the sync of people who never touched the row.
+func TestF04_TextClashTakesTheNewerEditWithoutMarkers(t *testing.T) {
 	rt := newRepoTeam(t, th.Cmd("land"))
 	id := rt.addTask(t, rt.c1, "base title")
 	rt.c2.MustLore("task", "list")
 	rt.c1.With(autopushOff).MustLore("task", "edit", id, "--title", "title from dev1")
 	rt.c2.With(autopushOff).MustLore("task", "edit", id, "--title", "title from dev2")
 	rt.c1.MustLore("sync")
-	// The second sync merges both titles with markers, names the row and
-	// exits E_STALE (23) until it is settled (docs/sync/conflicts-and-duplicates.md).
-	rt.c2.Lore("sync").Fails(t, 23, "E_STALE", id, "lore sync resolve")
+	rt.c2.MustLore("sync").Says(t, id, "kept the newer edit", `title was "title from dev1"`)
 	row := mustRow(t, rt.app, refLive, liveRowPath(rootFolder, tblTasks, id))
-	if !strings.Contains(row.Title, "title from dev1") || !strings.Contains(row.Title, "title from dev2") {
-		t.Fatalf("both text edits must be kept: %q", row.Title)
+	if row.Title != "title from dev2" {
+		t.Fatalf("the newer edit must be kept, without markers: %q", row.Title)
 	}
-	rt.c2.MustLore("sync", "conflicts").Says(t, id)
-	rt.c2.Lore("land", id).Refused(t, "conflict")
-	if _, ok := rt.mainTask(t, id); ok {
-		t.Fatal("a row with conflict markers must never land")
-	}
+	rt.c2.MustLore("sync", "conflicts").Says(t, "no conflicts")
+	rt.c1.MustLore("sync")
+	rt.c1.MustLore("task", "show", id).Says(t, "title from dev2").Never(t, "<<<<<<<")
 }
 
 // ---------------------------------------------------------------- F5 landing

@@ -33,6 +33,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/reposync"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/wire"
 )
 
@@ -180,7 +181,10 @@ func hookBlocks(rel string) map[string]struct {
 	tooOld := `echo "` + bn + `: installed ` + bn + ` cannot check .lore/data (no 'sync hook'); upgrade it" >&2`
 	coreProbe := bn + " migrate --help >/dev/null 2>&1"
 	hasV2 := `grep -rqsE '"_v": *2' .lore/data`
-	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` on PATH is older; install lore 0.1.18 or newer to commit" >&2; exit 1`
+	// P-2: the person may keep an older lore as `lore` on purpose (a newer
+	// build beside it as lore-dev): the first step names what they can do
+	// with the build they have, which points these hooks at itself.
+	needsCore := `echo "` + bn + `: .lore/data holds lore 0.1.18 rows but the ` + bn + ` these hooks run ($(command -v ` + bn + `)) is older; run doctor --fix here with your lore 0.1.18 or newer build (e.g. lore-dev doctor --fix) so the hooks run that build, or install lore 0.1.18 or newer as ` + bn + `" >&2; exit 1`
 	absMsg := `m="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; `
 	// No lore that can check, in a clone the last check found to be a
 	// client repo (wire/clientmark.go): refuse rather than let the commit
@@ -200,6 +204,14 @@ func hookBlocks(rel string) map[string]struct {
 	// commit and is printed once.
 	oneCall := "lore_cm_ok=; ( " + absMsg + cd + guard + `o="$(` + bn + ` task hook commit-msg --check-leaks "$m" 2>&1)" && { [ -z "$o" ] || printf '%s\n' "$o" >&2; } ) && lore_cm_ok=1 || true`
 	fallback := `[ -n "$lore_cm_ok" ] || `
+	// devco:S-10: an older lore first on PATH cannot read 0.1.18 rows, and
+	// its leak check refused every commit, a README one too, as if the
+	// commit were a lore write. A commit that carries no row file, in a
+	// repo the last check did not find to be a client repo, goes through
+	// (the pre-commit block skips it the same way); one that carries rows,
+	// or any commit in a client repo, is refused naming the binary and
+	// the fix (needsCore).
+	oldLoreCommit := `if [ "$(git config --get ` + wire.ClientRepoGitKey + `)" = true ] || ! git diff --cached --quiet -- .lore/data 2>/dev/null; then `
 	return map[string]block{
 		hookPreCommit:    {marker, []string{"( " + cd + noRows + "if command -v " + bn + " >/dev/null 2>&1; then if ! " + coreProbe + " && " + hasV2 + "; then " + needsCore + "; elif " + probe + "; then " + bn + " sync hook pre-commit; else " + tooOld + "; fi; fi ) || exit $?"}},
 		hookPostCheckout: {marker, refresh(hookPostCheckout, "")},
@@ -208,7 +220,7 @@ func hookBlocks(rel string) map[string]struct {
 		hookCommitMsg: {marker, []string{
 			oneCall,
 			fallback + "( " + absMsg + cd + guard + bn + ` task hook commit-msg "$m" >/dev/null 2>&1 ) || true`,
-			fallback + "( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
+			fallback + "( " + absMsg + cd + "if command -v " + bn + " >/dev/null 2>&1 && " + hasV2 + " && ! " + coreProbe + "; then " + oldLoreCommit + needsCore + "; fi; elif command -v " + bn + " >/dev/null 2>&1 && " + bn + " check leaks --help >/dev/null 2>&1; then " + bn + ` check leaks --staged --commit-msg "$m"; ` + noChecker + `fi ) || exit $?`,
 		}},
 		hookPostCommit: {rideHookMarker, rideHookLines[hookPostCommit]},
 		hookPrePush:    {rideHookMarker, rideHookLines[hookPrePush]},
@@ -216,13 +228,18 @@ func hookBlocks(rel string) map[string]struct {
 }
 
 // hookBlocksFor is hookBlocks(rel), each block guarded by sharedHookLines
-// when the hooks folder is shared by every repo (hooksFolder).
-func hookBlocksFor(rel string, shared bool) map[string]struct {
+// when the hooks folder is shared by every repo (hooksFolder), and led by
+// pin (hookbin.go: the build these blocks run; "" for bare `lore`).
+func hookBlocksFor(rel string, shared bool, pin string) map[string]struct {
 	marker string
 	lines  []string
 } {
 	blocks := hookBlocks(rel)
 	if !shared {
+		for n, b := range blocks {
+			b.lines = withHookPin(pin, b.lines)
+			blocks[n] = b
+		}
 		return blocks
 	}
 	for n, b := range blocks {
@@ -295,6 +312,35 @@ func sharedHookLines(rel string, lines []string) []string {
 	return out
 }
 
+// wireWithoutLive wires the clone (merge drivers, attributes, hook
+// blocks) for a run with live rows off (LORE_LIVE=0 or LORE_SYNC=0),
+// exactly as ensureGitWiring does for a run with them on: a write wires,
+// a read only says what is missing. Why (devco D-224): with live rows off
+// the live hook opened no session, so nothing ever configured
+// merge.lore.driver, although then every row is a file on the branch that
+// git merges; two people's edits of one row met with git's line merge and
+// conflicted on the next `git pull`. LORE_SYNC_GIT=0 still turns wiring
+// off (ensureGitWiring). The session here is wiring-only: no live lock,
+// no fetch, no live ref.
+func (h *liveHost) wireWithoutLive(ctx context.Context, run *Run) {
+	root := liveProjectRoot(h.cfg.WorkDir)
+	if root == "" || leavesWorkRepo(run.Entry.Spec().Name) {
+		return
+	}
+	top, _ := livePlace(root)
+	repo, err := gitref.Open(ctx, top, h.git())
+	if err != nil || repo.Bare() {
+		return
+	}
+	common, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}})
+	if err != nil {
+		return
+	}
+	s := &liveSession{h: h, top: top, repo: repo, cfg: loadLiveSettings(h.cfg.Home), clk: h.clock(),
+		stateDir: filepath.Join(strings.TrimSpace(string(common)), liveStateDirName)}
+	s.ensureGitWiring(ctx, root, runWireMode(run))
+}
+
 // ensureGitWiring wires the clone for the project at root (see the file
 // comment).
 func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wireMode) {
@@ -311,12 +357,16 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		s.warn("git wiring: " + err.Error())
 		return
 	}
-	rel, rerr := filepath.Rel(s.top, root)
-	if rerr != nil || strings.HasPrefix(rel, "..") {
+	rel, inside := fspath.Rel(s.top, root)
+	if !inside {
 		rel = ""
 	}
 	bin := mergeDriverBinary()
-	blocks := hookBlocksFor(rel, shared)
+	pin := hookPinFor(s.top, dir, shared)
+	blocks := hookBlocksFor(rel, shared, pin)
+	// the pin is in the fingerprint: a run of another build (lore and
+	// lore-dev side by side) re-points the blocks at itself
+	fpBin := bin + "\n" + pin
 	paths := []string{strings.TrimSpace(string(cfgPath)), filepath.Join(root, gitAttributesFile), filepath.Join(root, gitignoreName)}
 	names := make([]string, 0, len(blocks))
 	for n := range blocks {
@@ -332,7 +382,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		return
 	}
 	paths = append(paths, localAttrs)
-	fp := wiringFingerprint(s.h.cfg.Version, bin, rel, paths)
+	fp := wiringFingerprint(s.h.cfg.Version, fpBin, rel, paths)
 	stamp := filepath.Join(s.stateDir, gitWiringStamp)
 	if b, rerr := os.ReadFile(filepath.Clean(stamp)); mode != wireInstall && rerr == nil && strings.TrimSpace(string(b)) == fp {
 		return
@@ -341,13 +391,29 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	// before (removed by hand, or a hook manager took the hooks over)
 	wasWired := !s.neverWired(ctx, dir)
 	guardBefore := missingGuardHooks(dir)
+	// devco D-500: .lore/ ignored by git: the project is private to this
+	// machine, so nothing goes into a file the repo tracks or would commit
+	// (.gitattributes, a hooks folder in the work tree); the clone's own
+	// .git/config and .git/hooks are still set up.
+	private := !s.repoMayHoldLoreFiles(ctx, root)
+	if private && s.trackedHooksFolder(ctx, dir) {
+		guardBefore = nil // lore never puts its blocks there: no leak-guard line
+	}
 	if mode == wireRead {
+		if private {
+			s.sayPrivate(ctx, root, stamp, fp)
+			return
+		}
 		if wasWired && len(guardBefore) > 0 && !wire.ProjectFormatOld(root) {
 			s.sayGuardOff(ctx, dir, guardBefore, false, fp, stamp+gitWiringReadSuffix)
 		}
 		// A read wires nothing (owner bug 6): it looks, and says once
 		// what is missing and which command sets it up.
-		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, localAttrs, stamp+gitWiringReadSuffix, fp)
+		// devco:Q-16: when the leak-guard line covers the missing hook
+		// blocks (this read says it, or doctor lists it first), the
+		// set-up note leaves them out: one cause, one line, one step.
+		guardSays := wasWired && len(guardBefore) > 0 && !wire.ProjectFormatOld(root)
+		s.readWiring(ctx, root, dir, shared, strings.TrimSpace(string(cfgPath)), bin, rel, localAttrs, stamp+gitWiringReadSuffix, fp, guardSays)
 		return
 	}
 	// The config, attributes and hook files (not .gitignore, which has its
@@ -375,20 +441,38 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	case !wire.HoldsLoreData(root):
 		// no row files here (a client repo): the rules would only change
 		// a tracked file of theirs for nothing (plain files sweep 3.8)
+	case private:
+		// D-500: the row files are never committed, so the rules would
+		// only change the team's .gitattributes for nothing
 	case formatOld:
 	case mode != wireInstall && !wire.TrackedWiringHere(ctx, root):
 		// A-1: a teammate's clone of a migrated project: the tracked
 		// block comes with the migrator's commit; until it is there the
 		// same rules apply from the clone's own attributes file, so the
 		// git pull that brings it finds no uncommitted .gitattributes.
+		if err := repoWriteRefused(s.top, localAttrs); err != nil {
+			s.warn("git wiring: " + err.Error()) // D-502: this file only; the hooks below still wire
+			break
+		}
 		if err := ensureLocalAttributes(attrs, localAttrs); err != nil {
 			s.warn("git wiring: " + err.Error())
 			return
 		}
 	default:
+		if err := repoWriteRefused(s.top, attrs); err != nil {
+			s.warn("git wiring: " + err.Error()) // D-502: this file only; the hooks below still wire
+			break
+		}
+		attrsBefore, _ := os.ReadFile(filepath.Clean(attrs)) // missing reads as empty: the block is then new
 		if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
 			s.warn("git wiring: " + err.Error())
 			return
+		}
+		if attrsAfter, _ := os.ReadFile(filepath.Clean(attrs)); string(attrsAfter) != string(attrsBefore) {
+			wire.HostWiringOf(ctx).Note(gitAttributesFile) // devco N-5: lore fix names it
+		}
+		if repoWriteRefused(s.top, localAttrs) != nil {
+			break // a clone's own attributes file linked out of the work tree: left as it is
 		}
 		if err := dropFileBlock(localAttrs, gitBlockMarker); err != nil {
 			s.warn("git wiring: " + err.Error())
@@ -406,16 +490,25 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	teamNew, teamChanged := s.teamHookWrites(ctx, dir, writes)
 	skip := map[string]bool{}
 	skipped := ""
-	if mode != wireInstall {
+	// D-501: an install step (init, doctor --fix, lore fix) writes there
+	// only on the explicit yes of `lore fix --tracked-hooks`; a private
+	// project (D-500) never does, and is not "wired in part" for it.
+	if mode != wireInstall || !trackedHooksYes(ctx) || private {
 		for _, n := range append(append([]string{}, teamNew...), teamChanged...) {
 			skip[n] = true
 		}
-		skipped = teamHookNames(teamNew, teamChanged)
+		if !private {
+			skipped = teamHookNames(teamNew, teamChanged)
+		}
 		teamNew, teamChanged = nil, nil
 	}
 	for _, n := range names {
 		b := blocks[n]
 		if skip[n] {
+			continue
+		}
+		if err := hookRefused(s.top, dir, n); err != nil {
+			s.warn("git wiring: " + err.Error()) // D-502: this hook only
 			continue
 		}
 		if err := ensureHookBlock(dir, n, b.marker, b.lines); err != nil {
@@ -434,11 +527,19 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 			sort.Strings(team)
 			note += fmt.Sprintf(trackedHooksCreated, dir, strings.Join(team, ", "))
 		}
-		s.cmdNotice(ctx, "set up git for lore's row files in this clone: "+strings.Join(changed, "; ")+note+" (`lore where` lists everything lore keeps here)")
+		text := "set up git for lore's row files in this clone: " + strings.Join(changed, "; ") + note + " (`lore where` lists everything lore keeps here)"
+		if !holdSetupNote(ctx, text, func(t string) { s.cmdNotice(ctx, t) }) { // said once the write goes through (setupnotes.go)
+			s.cmdNotice(ctx, text)
+		}
 	}
 	if skipped != "" && !wire.ReadNoticeSaid(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp) {
 		s.cmdNotice(ctx, fmt.Sprintf(trackedHooksSkipped, skipped, dir))
 		wire.MarkReadNotice(s.h.cfg.Home, stamp+trackedNoticeSuffix, fp)
+	}
+	if private {
+		s.sayPrivate(ctx, root, stamp, fp)
+		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
+		return // no row file is ever committed: nothing to re-include in .gitignore
 	}
 	if wasWired && len(guardBefore) > 0 && !formatOld {
 		after := missingGuardHooks(dir)
@@ -458,7 +559,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 		if skipped != "" {
 			return // not wired in full: the next write looks again
 		}
-		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
+		writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
 		return
 	}
 	if formatOld {
@@ -476,7 +577,7 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 	if skipped != "" {
 		return // not wired in full: the next write looks again (its notice is said once per state)
 	}
-	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, bin, rel, paths)
+	writeWiringStamp(s.stateDir, stamp, s.h.cfg.Version, fpBin, rel, paths)
 }
 
 // readWiring is a read's look at a clone whose wiring stamp is stale: it
@@ -485,7 +586,9 @@ func (s *liveSession) ensureGitWiring(ctx context.Context, root string, mode wir
 // plus the warning when git ignores row files. What it said is
 // remembered in the lore home per state of the wired files (readKey,
 // fp), so later reads of the same state are quiet and spawn no git.
-func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, localAttrs, readKey, fp string) {
+// guardSays: the leak-guard line names the missing hook blocks and
+// `lore fix` (devco:Q-16), so they are not named here a second time.
+func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared bool, cfgPath, bin, rel, localAttrs, readKey, fp string, guardSays bool) {
 	if wire.ReadNoticeSaid(s.h.cfg.Home, readKey, fp) {
 		return
 	}
@@ -506,17 +609,17 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 		}
 	}
 	var stale []string
-	blocks := hookBlocksFor(rel, shared)
+	blocks := hookBlocksFor(rel, shared, hookPinFor(s.top, hooks, shared))
 	for n, b := range blocks {
 		if hookBlockStale(filepath.Join(hooks, n), b.marker, b.lines) {
 			stale = append(stale, n)
 		}
 	}
-	if len(stale) > 0 {
+	if len(stale) > 0 && !guardSays {
 		sort.Strings(stale)
 		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
 	}
-	if len(missing) > 0 && !wire.ProjectFormatOld(root) { // fmt1: lore sync and writes set nothing up there before lore migrate run
+	if len(missing) > 0 && !s.ci && !wire.ProjectFormatOld(root) { // live_still.go: a CI job never runs lore sync; fmt1: lore sync and writes set nothing up there before lore migrate run
 		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
 	}
 	if data {
@@ -707,8 +810,57 @@ func fileBlockStale(path, marker string, lines []string) (bool, error) {
 }
 
 // withFileBlock is content with lore's block for marker holding exactly
-// lines: replaced in place, or appended when there is none.
+// lines: replaced in place, or appended when there is none. A file git
+// checked out with CRLF line ends (a team's `eol=crlf` rule applies to
+// .gitattributes too) is read as LF and keeps CRLF: the block used to be
+// matched against LF only, so every write "set up" the rules again and
+// left one more blank line (devco:Q-11). In .gitattributes lore's block
+// moves to the end when a later line takes text, eol or merge back for
+// the files it covers (a later line wins in git: wire.AttrBlockOverride).
 func withFileBlock(content, marker string, lines []string) string {
+	norm := strings.ReplaceAll(content, "\r\n", "\n")
+	next := withFileBlockLF(norm, marker, lines)
+	if marker == gitBlockMarker {
+		if _, over := wire.AttrBlockOverride(next, marker); over {
+			next = blockMovedToEnd(next, marker)
+		}
+	}
+	if next == norm {
+		return content
+	}
+	if norm != content {
+		next = strings.ReplaceAll(next, "\n", "\r\n")
+	}
+	return next
+}
+
+// blockMovedToEnd is content (LF) with lore's block for marker cut from
+// where it stands and appended at the end, after a blank line.
+func blockMovedToEnd(content, marker string) string {
+	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
+	i := strings.Index(content, start)
+	if i < 0 {
+		return content
+	}
+	j := strings.Index(content[i:], end)
+	if j < 0 {
+		return content
+	}
+	k := i + j + len(end)
+	if k < len(content) && content[k] == '\n' {
+		k++
+	}
+	block := content[i:k]
+	rest := content[:i] + strings.TrimPrefix(content[k:], "\n")
+	rest = strings.TrimRight(rest, "\n")
+	if rest == "" {
+		return block
+	}
+	return rest + "\n\n" + block
+}
+
+// withFileBlockLF is withFileBlock for LF text, the block in place.
+func withFileBlockLF(content, marker string, lines []string) string {
 	start, end := "# >>> "+marker+" >>>", "# <<< "+marker+" <<<"
 	block := start + "\n" + strings.Join(lines, "\n") + "\n" + end + "\n"
 	next := content
@@ -728,4 +880,21 @@ func withFileBlock(content, marker string, lines []string) string {
 		next += block
 	}
 	return next
+}
+
+// privateNoticeSuffix keys the read-notice memory of the private-project
+// line (D-500).
+const privateNoticeSuffix = ".private"
+
+// sayPrivate says once per state of the wired files why lore wrote
+// nothing into the repo's tracked files of the private project at root
+// (wire.PrivateProjectNotice, devco D-500), naming the .gitignore rule
+// (D-513). The rule costs one git process, spent only when the line is
+// said.
+func (s *liveSession) sayPrivate(ctx context.Context, root, stamp, fp string) {
+	if wire.ReadNoticeSaid(s.h.cfg.Home, stamp+privateNoticeSuffix, fp) {
+		return
+	}
+	s.cmdNotice(ctx, wire.PrivateProjectNotice(root, loreDirIgnoreRule(ctx, root)))
+	wire.MarkReadNotice(s.h.cfg.Home, stamp+privateNoticeSuffix, fp)
 }

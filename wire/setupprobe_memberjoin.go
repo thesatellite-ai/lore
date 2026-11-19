@@ -43,10 +43,16 @@ func orgForStoreURL(home, url string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
-	want, _ := storeKey(url)
+	// devco:D-644: one store in two spellings (an ssh alias of the
+	// provider, git@<alias>:o/r.git, and git@github.com:o/r.git) is one
+	// entry: sameStoreAs, the comparison every store match makes (D-627)
+	same := sameStoreAs(url)
+	if same == nil {
+		return ""
+	}
 	for _, o := range cfg.Orgs {
 		for _, st := range o.Stores {
-			if k, ok := storeKey(st.URL); ok && k == want {
+			if same(st.URL) {
 				return o.Name
 			}
 		}
@@ -76,6 +82,7 @@ func (sp setupProber) memberJoinFound(ctx context.Context, r opssetup.ProbeReque
 	if len(emails) == 0 {
 		return skip(skipNoEmail)
 	}
+	ctx = team.WithJoinSetup(ctx, r.Setup.Name) // a refusal names this setup's identity step (N-4)
 	admit := func(ctx context.Context, entry string) error {
 		return team.CheckMember(ctx, orgRosterStore{a: sp.a, org: entry}, entry, emails)
 	}
@@ -95,16 +102,15 @@ func (sp setupProber) memberJoinFound(ctx context.Context, r opssetup.ProbeReque
 		}
 		name, _, _ := strings.Cut(emails[0], "@")
 		name = cmp.Or(answerText(ans, onboard.QIDName), name)
-		_, err = host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(emails[0]), Name: name, Handle: answerText(ans, onboard.QIDHandle), SkipRegister: true,
+		// devco:D-644: a check writes nothing: the import's access rule,
+		// clone and machine id go again, whatever the roster said
+		err = probeImport(ctx, host, sp.a.opts.Home, orgcmd.ImportIn{URL: answer, Key: humanKeyOf(emails[0]), Name: name, Handle: answerText(ans, onboard.QIDHandle), SkipRegister: true,
 			Admit: func(ctx context.Context, entry string) error {
 				if aerr := admit(ctx, entry); aerr != nil {
 					return aerr
 				}
 				return errProbeAdmitted
-			}}, true)
-		if errors.Is(err, errProbeAdmitted) {
-			err = nil
-		}
+			}})
 	}
 	switch {
 	case err == nil:

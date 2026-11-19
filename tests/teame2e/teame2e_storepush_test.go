@@ -261,7 +261,7 @@ func TestE40_StorePushBatchCombinesWrites(t *testing.T) {
 	if v := spShow(t, p.ca, "me"); v.Push.Push != "batch" || v.Push.PushEvery != "10m" || v.Push.Unpushed < len(ids) {
 		t.Fatalf("show: want batch every 10m with >= %d waiting, got %+v", len(ids), v.Push)
 	}
-	p.ca.MustLore("sync").Says(t, "store me: sent")
+	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
 	spOneBatchOnTop(t, before, p.log(), len(ids))
 	body := p.tipBody(t)
 	for _, id := range ids {
@@ -326,7 +326,7 @@ func TestE42_StorePushOfflineBatchThenOnline(t *testing.T) {
 		t.Fatal(err)
 	}
 	spSameLog(t, "while offline", p.log(), before)
-	p.ca.MustLore("sync").Says(t, "store me: sent")
+	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
 	spOneBatchOnTop(t, before, p.log(), 3)
 	p.cb.MustLore("sync")
 	spSees(t, p.cb, "offline fact one", "offline fact two", "offline fact three")
@@ -352,7 +352,7 @@ func TestE43_StorePushManualPushesOnlyOnSync(t *testing.T) {
 	spSameLog(t, "manual mode before sync", p.log(), before)
 	p.cb.MustLore("sync")
 	p.cb.MustLore("memory", "list").Never(t, "manual fact one")
-	p.ca.MustLore("sync").Says(t, "store me: sent")
+	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
 	after := p.log()
 	if len(after) <= len(before) || !slices.Equal(after[len(after)-len(before):], before) {
 		t.Fatalf("the sync must add commits on top of the old history:\nbefore %q\nafter  %q", before, after)
@@ -623,7 +623,7 @@ func TestE49_StorePushCrashBeforePushLosesNothing(t *testing.T) {
 	spKilled(t, p, spPushStep, th.KillBefore)
 	spSameLog(t, "killed before the push", p.log(), before)
 	spSees(t, p.ca, bodies...)
-	p.ca.MustLore("sync").Says(t, "store me: sent")
+	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
 	spOneBatchOnTop(t, before, p.log(), 3)
 	p.cb.MustLore("sync")
 	spSees(t, p.cb, bodies...)
@@ -652,7 +652,7 @@ func TestE52_StorePushCrashWhileFoldingLosesNothing(t *testing.T) {
 	spKilled(t, p, spBatchStep, th.KillBefore)
 	spSameLog(t, "killed while folding the batch", p.log(), before)
 	spSees(t, p.ca, bodies...)
-	p.ca.MustLore("sync").Says(t, "store me: sent")
+	p.ca.MustLore("sync").Says(t, "store me: pushed (sent ")
 	spOneBatchOnTop(t, before, p.log(), 3)
 	p.cb.MustLore("sync")
 	spSees(t, p.cb, bodies...)
@@ -686,7 +686,7 @@ func TestE51_StorePushLeftoverMergeLosesNothing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(gitDir, "lore-merging"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p.ca.MustLore("sync").Says(t, "store me: sent")
+	p.ca.MustLore("sync").Says(t, "store me: pulled and pushed (sent ")
 	if r := p.w.TryGit(work, "rev-parse", "-q", "--verify", "MERGE_HEAD"); r.Code == 0 {
 		t.Fatal("the leftover merge must be gone after sync")
 	}

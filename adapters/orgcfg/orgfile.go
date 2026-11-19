@@ -72,6 +72,9 @@ type OrgFileStore struct {
 	Name      string `yaml:"name,omitempty"`
 	Branch    string `yaml:"branch,omitempty"`
 	OrgFolder string `yaml:"org_folder,omitempty"`
+	// Audience is who in the org uses the store (orgconf.Audience): ""
+	// every member, "admins" only the org's admins (D-442).
+	Audience string `yaml:"audience,omitempty"`
 }
 
 // orgFilePath is lore-org.yaml's path for an org folder: <folder>/lore-org.yaml,
@@ -129,6 +132,9 @@ type OrgFileResult struct {
 	Existed bool
 	// Pushed / Offline / NoPush as for a link.
 	Pushed, Offline, NoPush bool
+	// AudienceChanged: the file listed the store and its audience was
+	// changed (OrgFileStoreAdd.SetAudience).
+	AudienceChanged bool
 }
 
 // openClone makes sure the store's clone exists and fetches it; refuseOffline turns an unreachable remote into ErrStoreOffline even
@@ -233,6 +239,13 @@ type Suggestion struct {
 	// Path is where the file was read (orgFilePath, or the old place in a
 	// store not moved yet).
 	Path string
+	// Held are the changes to the file that were not applied: made by
+	// someone who is not an admin of the org (orgauthority.go, R-7).
+	// Doc, Version and Path are the last accepted version.
+	Held []HeldOrgChange
+	// dir and at are the clone and the commit the file was read at: where
+	// SharedFor checks the reader's role in the roster (D-442).
+	dir, at string
 }
 
 // parseOrgFileDoc decodes a store's lore-org.yaml: a value of the wrong

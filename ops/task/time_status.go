@@ -40,8 +40,26 @@ const (
 	defaultMaxEntryMin    = 1440
 )
 
-// agentStartHint is printed when an agent starts a task (TQ6).
-const agentStartHint = "  hint: agents get time from claims and runs; this start adds no time. Claim the task to count time: lore task claim "
+// agentStartHint is printed when an agent starts a task (TQ6), followed by
+// the claim command (agentClaimCmd).
+const agentStartHint = "  hint: agents get time from claims and runs; this start adds no time. Claim the task to count time: "
+
+// ClaimPushFlagger is the host's answer to whether a claim of task id here
+// needs --push (" --push") or not (""): the same rule the claim refusal
+// uses (devco:D-607). A host without coordination does not implement it.
+type ClaimPushFlagger interface {
+	ClaimPushFlag(ctx context.Context, id string) string
+}
+
+// agentClaimCmd is the claim of id an agent's start hint prints: named
+// --id, plus --push where the claim needs it (devco:D-607).
+func (o ops) agentClaimCmd(ctx context.Context, id string) string {
+	cmd := "lore task claim --id " + id
+	if f, ok := upgrade.As[ClaimPushFlagger](o.env); ok {
+		cmd += f.ClaimPushFlag(ctx, id)
+	}
+	return cmd
+}
 
 // timePolicy is the effective time.* keys at target.
 type timePolicy struct {
@@ -163,6 +181,9 @@ func (o ops) setStatus(ctx context.Context, src store.Source, cur row.Row, statu
 	if err = closeFields(cur, status, work.Now(o.env), patch); err != nil {
 		return "", err
 	}
+	if err = markClaimStatusSet(cur, patch); err != nil { // devco:D-464: a release keeps this status
+		return "", err
+	}
 	open := TimeOpen(cur)
 	now := opclock.Now(o.env).UTC()
 	who := o.callerOf(ctx)
@@ -174,7 +195,7 @@ func (o ops) setStatus(ctx context.Context, src store.Source, cur row.Row, statu
 			return "", nil
 		}
 		if who.agent {
-			return agentStartHint + cur.ID.String() + "\n", nil
+			return agentStartHint + o.agentClaimCmd(ctx, cur.ID.String()) + "\n", nil
 		}
 		for _, s := range open {
 			if s.ActorID == who.id {

@@ -75,13 +75,16 @@ created res_…e913  service  repo:service/hub_web
 
 ### list and show
 alice (work/infra)$ lore resource list --kind host
-KIND	NAME	IP	OS	PROVIDER	CHECKED
-host	hub_prod	203.0.113.10	ubuntu-24.04	hetzner	
-host	hub_stage	203.0.113.11	ubuntu-24.04	aws	
+KIND  NAME       PROVIDER  IP
+host  hub_prod   hetzner   203.0.113.10
+host  hub_stage  aws       203.0.113.11
+2 resources
+1 more field not shown: add --wide for every field, or --json
 alice (work/infra)$ lore resource list --kind service --where runs_on=hub_prod --sort name:desc
-KIND	NAME	DB_PASSWORD	RUNS_ON	URL	CHECKED
-service	hub_web		hub_prod	https://www.example.com	
-service	hub_api	gopass://acme/hub/db	hub_prod	https://api.example.com	
+KIND     NAME     URL                      RUNS_ON   DB_PASSWORD
+service  hub_web  https://www.example.com  hub_prod
+service  hub_api  https://api.example.com  hub_prod  gopass://acme/hub/db
+2 resources
 alice (work/infra)$ lore resource show --id hub_api
 res_4c590afb2a0cc7ae1b97b7e4e62d6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db
@@ -121,6 +124,7 @@ host	hub_prod		never
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 alice (work/infra)$ lore resource check --id hub_prod --note 'looked in the provider console'
 lore: wrote ~/work/infra/.lore/data/resources/res_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ checked hub_prod now (res_…a5b0)
@@ -129,6 +133,7 @@ KIND	NAME	LAST_CHECKED	AGE
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+3 to check: 0 stale (checked over 60 days ago), 3 never checked; lore resource check --id <name> records a check
 
 ### edit and history
 alice (work/infra)$ lore resource edit --id hub_prod --set os=debian-12
@@ -243,12 +248,14 @@ ERROR: [E_RESOURCE_ARCHIVED] service hub_admin: runs_on: hub_prod is archived
   hint: ref its replacement host hub_prod_new
 (exit 23)
 alice (work/infra)$ lore resource list --kind host --archived
-KIND	NAME	IP	OS	PROVIDER	CHECKED
-host	hub_cache	203.0.113.21	ubuntu-24.04	aws	
-host	hub_db	203.0.113.30	ubuntu-24.04	aws	2026-11-02
-host	hub_prod	203.0.113.10	debian-13	hetzner	2026-11-02
-host	hub_prod_new	203.0.113.12	debian-13	hetzner	2026-11-02
-host	hub_stage		ubuntu-24.04	aws	2026-11-02
+KIND  NAME          PROVIDER  OS            CHECKED
+host  hub_cache     aws       ubuntu-24.04
+host  hub_db        aws       ubuntu-24.04  2026-11-02
+host  hub_prod      hetzner   debian-13     2026-11-02
+host  hub_prod_new  hetzner   debian-13     2026-11-02
+host  hub_stage     aws       ubuntu-24.04  2026-11-02
+5 resources
+1 more field not shown: add --wide for every field, or --json
 
 ### merge
 alice (work/infra)$ lore resource edit --id hub_db --unset ip
@@ -356,8 +363,10 @@ alice (work/infra)$ lore resource edit --id hub_prod_new --set root_user=deploy
 lore: wrote ~/work/infra/.lore/data/resources/res_6a866bb99ce08addfe04ea845052ed8c.json
 ✓ edited server hub_prod_new (res_…ed8c)
 alice (work/infra)$ lore resource list --kind server
-KIND	NAME	ACCESS_KEY	IP	OS_IMAGE	PROVIDER	RENEWS	ROOT_USER	CHECKED
-server	hub_prod_new	${secret:gopass://acme/hub/aws-key}	203.0.113.12	debian-13	hetzner		•••	2026-11-02
+KIND    NAME          PROVIDER  ACCESS_KEY                           CHECKED
+server  hub_prod_new  hetzner   ${secret:gopass://acme/hub/aws-key}  2026-11-02
+1 resource
+4 more fields not shown: add --wide for every field, or --json
 alice (work/infra)$ lore resource show --id hub_prod_new --show-sensitive
 ERROR: [E_NEEDS_CONFIRM] resource show?
   hint: ask the person, then rerun with --yes
@@ -391,17 +400,19 @@ alice (work/infra)$ lore resource edit --kind server --where provider=hetzner --
 lore: wrote ~/work/infra/.lore/data/resources/res_6a866bb99ce08addfe04ea845052ed8c.json
 edit 1 server resources; batch bat_7289a21d2911016c7434415f3dccc813 (undo: lore batch undo --id bat_7289a21d2911016c7434415f3dccc813)
 alice (work/infra)$ lore resource lint
-remind           server hub_prod_new.renews     2026-11-20 is within 30d
+remind           server hub_prod_new.renews     2026-11-20 is within 30d  [res_6a866bb99ce08addfe04ea845052ed8c]
 1 findings
 alice (work/infra)$ lore resource report
 resources   5 (service 4, server 1)
 stale       0
 unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service hub_web
+  4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 dangling    0
 quarantined 0
   details: lore resource lint
 open links  1: task tsk_2537f9b2f7de77bfe5ca958860216bbb
-rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
+secret refs 2: gopass://acme/hub/db (service hub_api.db_password), gopass://acme/hub/jobs-db (service hub_jobs.db_password)
+  (where each is used; an offboarding report, --project or --meta, lists the ones to rotate)
 
 ### files
 alice (work/infra)$ git status --short .lore/data

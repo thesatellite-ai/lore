@@ -38,7 +38,7 @@ Once per company: turn a new, empty repo into the store. Run `lore store init --
 # alice, in tools
 $ lore store init --name agency --url git@github.com:agency/notes --yes
 lore store init: store clone ~/.lore/stores/agency/notes: git user set to Alice Doe <alice@agency.example> (your identity in org agency)
-✓ created store agency (sto_7a67…9504) at git@github.com:agency/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store agency (sto_7a67…9504) on git@github.com:agency/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 ```
 <!-- /example -->
 
@@ -50,50 +50,49 @@ Once per client repo, anyone at the agency links it to an internal project. Lore
 $ lore whoami
 org        agency  (matched by: repos pattern github.com/client/* of agency)
 identity   Alice Doe <human:alice@agency.example>   act_2ad3…f891  @alice  (from: org entry (config.yaml orgs[agency].identity))
-repo       client repo  (guards on)
+repo       client repo  (guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; lore fix here installs it)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 $ lore org link --org agency --project client
-lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 Continue? [y/N] y
 lore org link: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 This marks github.com/client/website as a CLIENT repo of agency: internal notes default to github.com/agency/notes client/,
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client/website → github.com/agency/notes@main:client/ (default=false)
 ✓ github.com/client/website (prj_162d…9666) linked to github.com/agency/notes client/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 $ git status --short
 $ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe…28f2.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
-✓ act_2ad3…f891 Alice Doe (@alice) registered in agency org/
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
+✓ act_2ad3…f891 Alice Doe (@alice) registered in the roster of agency (agency/org)
 $ lore sync
-lore: pushed store agency/org: commit 601d285 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 2, received 0, merged 0, refused 0
+lore: pushed store agency/org: commit 601d285 to branch main (3 commits, 2 row files)
+store me: up to date
+store me/everywhere: up to date
+store agency/client: up to date
+store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 
 # bob, in website
 $ lore actor register && lore sync
-lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore actor register: store clone ~/.lore/stores/agency/notes: git user set to Bob Roe <bob@agency.example> (your identity in org agency)
 lore actor register: store clone ~/.lore/stores/agency/notes: set up for plain git (merge driver, pre-commit hook; `lore where` lists them)
 lore: committed locally to store agency/org; lore sync sends it
+lore actor register: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_05e9…4603.json (store agency/org)
-✓ act_05e9…4603 Bob Roe (@bob) registered in agency org/
-lore: pushed store agency/org: commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 1, received 0, merged 0, refused 0
+✓ act_05e9…4603 Bob Roe (@bob) registered in the roster of agency (agency/org)
+lore: pushed store agency/org: commit 86dbae4 to branch main (1 commit, 1 row file)
+store me: up to date
+store me/everywhere: up to date
+store agency/client: up to date
+store agency/org: pushed (sent 1, received 0, merged 0, refused 0)
 ```
 <!-- /example -->
 
@@ -107,9 +106,9 @@ Notes go to the internal project by default. A project rule goes into the repo w
 ```console
 # alice, in website
 $ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_2ad3…f891.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_c0f3…b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [project]
@@ -126,63 +125,63 @@ $ git status --short
 
 The memory went to `agency/client` in the store and was pushed there. The rule is a file in the client's repo, to be committed with the code.
 
-Alice adds an internal task for Bob, from any branch. Bob sees it in his list and inbox, and finishes it from the client's repo. Nothing in the client's repo changes:
+Alice adds an internal task for Bob from the default branch: a task added on a feature branch would stay in that branch's notes until it lands ([branch layers](../concepts.md#branch-layers-notes-that-follow-the-code-branch)). Bob sees it in his list and inbox, and finishes it from the client's repo before he starts his own feature branch. Nothing in the client's repo changes:
 
 <!-- example: agency#internal-task -->
 ```console
 # alice, in website
-$ lore sync >/dev/null; git switch -q -c feat/checkout && lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
-lore: pushed store agency/client (here: agency): commit 9b40ce7 to branch main
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
+$ lore sync >/dev/null; lore task add --title 'send invoice reminder before demo' --to agency --assign @bob && lore sync
+lore: pushed store agency/client: commit 9b40ce7 to branch main (2 commits, 1 row file)
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d431…313a.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ tsk_b4f4…a5b0 — send invoice reminder before demo [medium] → [agency/client]
   created tasklist tlt_d431…313a "default" for tasks added without --tasklist
-lore: pushed store agency/client (here: agency): commit 05513aa to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 2 row files)
+store me: up to date
+store me/everywhere: up to date
+store agency/client: pushed (sent 1, received 0, merged 0, refused 0); rows: 2 sent
+store agency/org: up to date
 
 # bob, in website
-$ lore sync >/dev/null; git switch -q -c feat/login && lore task list
+$ lore sync >/dev/null; lore task list
 ○ tsk_b4f4…a5b0 send invoice reminder before demo [medium]  [agency/client]
 $ lore inbox
 -  assigned              tsk_b4f4…a5b0  send invoice reminder before demo (lead)
-$ lore task done --id tsk_b4f4…a5b0
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency)
+$ lore task done --id tsk_b4f4…a5b0 && lore sync >/dev/null && git switch -q -c feat/login
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4…a5b0.json (store agency/client)
 ✓ tsk_b4f4…a5b0 done
   learned something? `lore memory add --body "…"` (or pass --lesson next time)
+lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
 $ git status --short
 ```
 <!-- /example -->
 
 The `[agency/client]` label says where each row lives. `lore task done` found the task in the store's live rows and landed it on the store's `main`.
 
-For coding agents, `lore render` writes the internal context (the private notes the agent should know) outside the checkout: one private file per internal store under `~/.lore/render/<repo id>/`, with an `index.md` listing them. The checkout gets nothing new besides `.lore/LORE.md`; agents read the private files through `lore context` and the hooks:
+For coding agents, `lore render` writes the internal context (the private notes the agent should know) outside the checkout: one private file per internal store under `~/.lore/render/<repo id>/`, with an `index.md` listing them. The checkout gets nothing new besides `.lore/LORE.md` and `.lore/LORE.full.md`, which a clone that did not run `lore init` keeps out of `git status` (in `.git/info/exclude`) until the repo commits them, so a teammate's commit of them never makes your `git pull` abort; agents read the private files through `lore context` and the hooks:
 
 <!-- example: agency#render -->
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3052 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
+lore render: .lore/LORE.md and .lore/LORE.full.md not committed in this repo yet; added to this clone's .git/info/exclude so a git pull of a teammate's commit that adds them works (to commit them from this clone: git add -f .lore/LORE.md .lore/LORE.full.md)
 = ~/work/website/AGENTS.md (pointer present)
 ✓ private context → ~/.lore/render/app-rep_28f8…03df (2 stores, 2 rows, outside the checkout); no target tool has a private file: agents get it through `lore context` and the hooks
 $ cat ~/.lore/render/*/index.md
 <!-- generated by lore; private: never quote this content in committed files, client files, commits, PRs or chat -->
 repo app (rep_28f8…03df)
-- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 - agency-sto_7a67…9504.md  store agency, agency/org  -  internal
+- me-sto_4c59…6c38.md  store me, me/everywhere  -  internal
 $ git status --short
-?? .lore/LORE.full.md
-?? .lore/LORE.md
 ```
 <!-- /example -->
 
-If someone pastes internal text into a file of the client's repo, the commit is blocked:
+If someone pastes internal text into a file of the client's repo, the commit is blocked. The check runs from the clone's commit-msg hook: a client repo with no `.lore/` (linked by its remote only) gets lore's block when `lore org link` runs in that clone, and nothing else of lore's (no `.lore/`, merge driver or other hooks). In a teammate's clone that has not run the link, `lore whoami` says `guards OFF in this clone` and names the command; running the same `lore org link` there installs it (the store side is already so):
 
 <!-- example: agency#leak-blocked only=1,2 -->
 ```console
@@ -190,7 +189,7 @@ If someone pastes internal text into a file of the client's repo, the commit is 
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
@@ -200,7 +199,7 @@ Lore checks twice. At commit, the `pre-commit` hook checks the staged files and 
 
 A row written to the client repo (`--to repo`, or a kind whose default is the repo) is checked before it is written: if it quotes an internal note, lore refuses with `E_LEAK_BLOCKED`, says "Nothing written" and writes nothing.
 
-`git commit --no-verify` and `git push --no-verify` skip every local check. So the client's CI should run `lore check leaks --ci` as the backstop. It needs no store, so it catches internal rows by their ids and structure, not pasted sentences. Each finding names its file; an actor copy holding more than {id, display name, kind} (a `stable_key` left by lore 0.1.17) names `lore migrate run`, which trims every actor copy in `.lore/data` (it is safe to run again on a migrated repo): commit and push the rewritten files. In a client repo linked by its remote, which holds no `.lore/` at all, it passes from the repo root or any subfolder and says so: there are no row files to check.
+`git commit --no-verify` and `git push --no-verify` skip every local check. So the client's CI should run `lore check leaks --ci` as the backstop. It needs no store, so it catches internal rows by their ids and structure, not pasted sentences. Each finding names its file; an actor copy holding more than {id, display name, kind} (a `stable_key` left by lore 0.1.17) names `lore migrate run`, which trims every actor copy in `.lore/data` (it is safe to run again on a migrated repo): commit and push the rewritten files. In a client repo linked by its remote, which holds no `.lore/` at all, it passes from the repo root or any subfolder and says so: there are no row files to check. In a repo of your own it accepts the full actor rows lore writes there: an org's copies (stamped with the org's roster store) and, in a repo outside any org, the repo's own roster rows (`lore actor register`, `lore agent start`); `lore check leaks --as-client`, the check before a hand-over, still holds every actor copy to {id, display name, kind}.
 
 Before you hand one of your own repos over to a client, `lore check leaks --as-client` reads it as the client would: every tracked file (for secrets and internal notes), the `.lore/data` rows, resource values and their git history. It scans the files on every CPU; a repo with more than 8 MB of tracked text (generated code, say) first prints one line with the file count and size (`reading 10448 tracked files (70 MB) as the client would…`), since each file the client receives is checked and that takes seconds. Like every read and check, it writes nothing into the repo or its `.git`.
 
@@ -212,7 +211,7 @@ Agents check a pull request body or comment before posting it. The same text is 
 $ printf 'Fixes checkout.\n\nThey approve estimates faster when we send them on WhatsApp first.\n' > pr.md
 $ lore check pr-body --file pr.md
 ERROR: [E_LEAK_BLOCKED] blocked, this PR body would share internal content with the client repo:
-  PR body                                  matches internal note mem_c0f3…b5b8 (11 words)
+  PR body                                  matches internal note mem_c0f3…b5b8 (11 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text before posting
 (exit 19)
 $ printf 'Fixes checkout totals for INR.\n' | lore check pr-body --file -
@@ -228,7 +227,7 @@ Agents must say where a rule goes in a client repo. Lore refuses to guess for th
 $ lore agent start --label agent-backend --owner @alice
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_3b62…e913.json (store agency/org)
-✓ act_3b62…e913 agent agent-backend (owner @alice) registered in agency org/; LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
+✓ act_3b62…e913 agent agent-backend (owner @alice) registered in the roster of agency (agency/org); LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 export LORE_ACTOR=agent:agent-backend LORE_SESSION=s-10e90368
 $ lore rule add --body 'require prepayment from this client'
 ERROR: [E_INVALID_INPUT] stores: this write needs an explicit --to: a rule written by an agent in a client repo must pass --to (repo or agency); nothing written

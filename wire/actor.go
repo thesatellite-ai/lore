@@ -2,7 +2,9 @@ package wire
 
 import (
 	"context"
+	"os"
 	"slices"
+	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
@@ -36,6 +38,11 @@ func resolveIdentity(ctx context.Context, opts Options) (identity.Resolved, erro
 	in := identity.Inputs{Home: opts.Home, FlagActor: opts.FlagActor, Config: mc.Config, Dir: opts.RepoDir, Detect: DetectAgent}
 	if opts.PersonOnly {
 		in.Detect = nil // `lore api`: the server is the person, not its starter's tool
+		// devco D-440: an agent key in LORE_ACTOR is the starter's tool too
+		// (an admin's wrapper sets LORE_ACTOR=agent:<label>): a
+		// person-credited step resolves the person behind it, as it does for
+		// a detected tool. A human key there, or --actor, still wins.
+		in.Getenv = personEnv
 	}
 	// ONBOARDING 3.4: the active solo setup's identity, after the org entry.
 	in.Setup = setupIdentity(ctx, opts.Home, optsProjectDir(opts))
@@ -119,6 +126,32 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	if st.actorDone[target] {
 		return nil
 	}
+	// devco D-486: a folder of a store clone whose sibling folder (the
+	// roster's, org/) holds the row needs no copy: refs resolve across
+	// the attached stores. A row no sibling holds yet (an agent's first
+	// write in the clone) goes to the folder holding the person's row,
+	// once, as their own roster row, never into the folder written
+	// (actorhome.go).
+	home, herr := a.actorHomeFor(ctx, st, target)
+	if herr != nil {
+		return herr
+	}
+	if home != target {
+		st.actorDone[target] = true
+		if home == "" || st.actorDone[home] {
+			return nil
+		}
+		target, ctx = home, withOwnRosterRow(engine.Unstaged(ctx))
+	}
+	if w, ok := st.storeWho[target]; ok {
+		// C19: an org store's rows are stamped with the person's identity
+		// in that org (orgstoreactor.go), so that actor's row goes there.
+		if err := a.ensureWriterRow(ctx, st, target, w); err != nil {
+			return err
+		}
+		st.actorDone[target] = true
+		return nil
+	}
 	// In a client repo an agent's writes are stamped as its owner
 	// (clientActorAs), so the actor row written there is the owner's
 	// projection, never the agent's (D8).
@@ -128,13 +161,20 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 	}
 	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: who.Any()}
 	if _, cur, err := st.eng.Get(ctx, ref); err == nil {
-		if berr := a.backfillKey(ctx, st, ref, cur, who); berr != nil {
+		if serr := stoppedAgentErr(cur, who == st.actor); serr != nil {
+			return serr
+		}
+		// devco:K-6: both updates below are lore's own upkeep of a copy
+		// that exists, so a live write carries them with its row instead
+		// of rewriting the committed actor file (store.WithSupportingRefresh).
+		rctx := store.WithSupportingRefresh(ctx)
+		if berr := a.backfillKey(rctx, st, ref, cur, who); berr != nil {
 			return berr
 		}
 		// SOURCE_OF_TRUTH actors: a copy whose stamp is not its source's
 		// version is rewritten on this first write to its store
 		// (actor_source.go; the caller's own actor only).
-		a.refreshOwnCopy(ctx, st, target, cur)
+		a.refreshOwnCopy(rctx, st, target, cur)
 		st.actorDone[target] = true
 		return nil
 	} else if !errs.Has(err, errs.NotFound) {
@@ -193,6 +233,54 @@ func (a *App) ensureActor(ctx context.Context, st *state, target store.Source) e
 		return errs.Prefix("wire: write the actor row to store "+string(target), err)
 	}
 	st.actorDone[target] = true
+	return nil
+}
+
+// stoppedAgentErr refuses the write of an agent session whose actor row a
+// person deactivated (devco:S-14: `lore actor deactivate --handle @<label>`
+// is how a person stops an agent in any repo, org or not). own is whether
+// cur is the caller's own row; nil for anyone else, and for people (a
+// deactivated person keeps v0.1.17's register-to-come-back rule).
+func stoppedAgentErr(cur row.Row, own bool) error {
+	x := actorOfRow(cur)
+	if !own || cur.Deleted || x.Active || x.Kind != schema.ActorKindAgent {
+		return nil
+	}
+	return errs.New(errs.StatusChange, "agent @"+x.Label+" ("+x.ID+") was stopped: a person deactivated it, so this session cannot write").
+		WithHint("stop this session; its owner starts it again with `lore agent start --label " + x.Label + " --yes` if it should go on")
+}
+
+// ensureWriterRow writes the actor row of w, the person's identity in the
+// org that owns target (storeWho), into target unless it is there: the
+// same projection ensureActor writes for the open's own identity (kind,
+// display_name, and stable_key, handle, owner and label where
+// fullActorRow allows them).
+func (a *App) ensureWriterRow(ctx context.Context, st *state, target store.Source, w storeWriter) error {
+	ref := engine.Ref{Store: target, Table: schema.TableActors, ID: w.id.Any()}
+	if _, _, err := st.eng.Get(ctx, ref); err == nil {
+		return nil
+	} else if !errs.Has(err, errs.NotFound) {
+		return err
+	}
+	vals := map[string]string{actorFieldKind: actorKindOf(w.who.Kind), actorFieldDisplay: w.who.DisplayName}
+	if fullActorRow(st, target) {
+		vals[actorFieldKey], vals[actorFieldHandle], vals["label"] = w.who.StableKey, w.who.Handle, w.who.Label
+		if o := w.who.Owner; o != nil {
+			if oid, oerr := o.ActorID(); oerr == nil {
+				if oerr := a.ensureOwnerRow(ctx, st, target, oid, *o); oerr != nil {
+					return oerr
+				}
+				vals[rosterFieldOwner] = oid.String()
+			}
+		}
+	}
+	fields, err := textFields(vals)
+	if err != nil {
+		return errs.Prefix("wire: the actor row of your identity in store "+string(target), err)
+	}
+	if _, err := st.eng.CreateWithID(ctx, target, schema.TableActors, w.id.Any(), fields); err != nil && !errs.Has(err, errs.Stale) {
+		return errs.Prefix("wire: write the actor row to store "+string(target), err)
+	}
 	return nil
 }
 
@@ -556,4 +644,20 @@ func actorField(r row.Row, name string) string {
 		return ""
 	}
 	return v.String()
+}
+
+// personEnv is os.Getenv with an agent key in LORE_ACTOR hidden: the
+// environment of an identity resolved person-only (Options.PersonOnly).
+func personEnv(k string) string {
+	v := os.Getenv(k)
+	if k == identity.EnvActor && envAgentKey(v) {
+		return ""
+	}
+	return v
+}
+
+// envAgentKey reports whether a LORE_ACTOR value names an agent
+// (agent:<label>).
+func envAgentKey(v string) bool {
+	return strings.HasPrefix(strings.TrimSpace(v), identity.KindAgent+":")
 }

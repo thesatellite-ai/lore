@@ -36,6 +36,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 )
 
@@ -135,6 +136,14 @@ func (x Exec) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 	bin := x.Binary
 	if bin == "" {
 		bin = gitBinary
+		// gitfast (devco:D-418): a read the process's Session can answer
+		// from the repository files starts no git
+		if rep, ok := gitfast.Try(ctx, inv.Dir, inv.Args, inv.Env, inv.Stdin); ok {
+			if rep.Code != 0 {
+				return rep.Out, &Error{Args: inv.Args, ExitCode: rep.Code, Err: &gitfast.ExitError{Code: rep.Code}}
+			}
+			return rep.Out, nil
+		}
 	}
 	path, err := exec.LookPath(bin)
 	if err != nil {
@@ -169,10 +178,16 @@ func (x Exec) Run(ctx context.Context, inv Invocation) ([]byte, error) {
 		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		}
+		if x.Binary == "" {
+			gitfast.Note(ctx, inv.Dir, inv.Args, inv.Env, inv.Stdin, out.Bytes(), code, code >= 0 && ctx.Err() == nil)
+		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			err = fmt.Errorf("%w (%w)", ctxErr, err)
 		}
 		return out.Bytes(), &Error{Args: inv.Args, ExitCode: code, Stderr: strings.TrimSpace(stderr.String()), Err: err}
+	}
+	if x.Binary == "" {
+		gitfast.Note(ctx, inv.Dir, inv.Args, inv.Env, inv.Stdin, out.Bytes(), 0, true)
 	}
 	return out.Bytes(), nil
 }

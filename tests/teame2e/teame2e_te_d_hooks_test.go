@@ -26,9 +26,11 @@ func teDSoloPair(t *testing.T, caps ...th.Cap) (*th.Clone, *th.Actor) {
 	return bob.Clone(r, "tool"), carol
 }
 
-// TestE2E_PreCommitBlocksHandAddedSecret, ported: carol's clone gets the
-// pre-commit guard from her first lore command; a secret she pastes into
-// a row file by hand is refused at commit and never reaches the remote.
+// TestE2E_PreCommitBlocksHandAddedSecret, ported: carol's first lore
+// command in her clone is a read, which wires nothing (owner bug 6) but
+// says git is not set up and that `lore sync` sets it up; once she runs
+// it, a secret she pastes into a row file by hand is refused at commit and
+// never reaches the remote.
 func TestTeD_PreCommitBlocksHandAddedSecretInTeammateClone(t *testing.T) {
 	bc, carol := teDSoloPair(t)
 	bc.MustLore("init", "--non-interactive", "--name=tool")
@@ -37,7 +39,10 @@ func TestTeD_PreCommitBlocksHandAddedSecretInTeammateClone(t *testing.T) {
 	bc.AdminPush("origin", "main")
 
 	cc := carol.Clone(bc.Remote, "tool")
-	cc.MustLore("rule", "list").Says(t, "nothing secret here")
+	list := cc.MustLore("rule", "list")
+	list.Says(t, "nothing secret here")
+	list.Says(t, "git is not set up for lore's row files in this clone: `lore sync`")
+	cc.MustLore("sync")
 	rel := dataDir + "/" + tblRules + "/" + id + ".json"
 	body, ok := cc.ReadFile(rel)
 	if !ok || !strings.Contains(body, "nothing secret here") {

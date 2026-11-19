@@ -28,7 +28,7 @@ func TestWritableHomeReadOnlyHomeUsesScratch(t *testing.T) {
 	if got == home || !strings.HasPrefix(got, os.Getenv("TMPDIR")) {
 		t.Fatalf("writableHome(%s) = %s, want a scratch folder under TMPDIR", home, got)
 	}
-	path, err := combinedCachePath(home, "/work/app")
+	path, err := combinedCachePath(home, "/work/app", "")
 	if err != nil {
 		t.Fatalf("a cache path on a read-only home: %v", err)
 	}

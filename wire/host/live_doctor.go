@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -116,23 +118,28 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		return base, nil
 	}
 	branch := s.defaultBranch(ctx)
+	lands := landsNext(plan, folder) // what the next sync lands (devco N-14)
 	only, old, waiting, conflicts := 0, 0, 0, 0
 	for _, p := range plan {
 		if p.File.Deleted() {
 			continue
 		}
-		only++
+		if !p.Decision.OnMain() { // devco N-14: main holds this version too
+			only++
+		}
 		if p.File.Block.Conflict || isConflict(p) {
 			conflicts++
 		}
-		if p.Decision.Action != live.LandStay {
+		if lands[p.Key] {
 			waiting++
 		}
 		since := p.File.Block.LastCopyAt
 		if since.IsZero() {
 			since = p.File.Block.LiveSince
 		}
-		if !since.IsZero() && now.Sub(since) > s.cfg.MaxAge && !p.Leave {
+		// devco N-14: a row main already holds (its max-age copy landed)
+		// is copied, whatever its live block's copy time says
+		if !since.IsZero() && now.Sub(since) > s.cfg.MaxAge && !p.Leave && !p.Decision.OnMain() {
 			old++
 		}
 	}
@@ -157,7 +164,15 @@ func (d liveDoctor) Base(ctx context.Context, fix bool) (opsdoctor.Base, error) 
 		note(fmt.Sprintf("live ref: %d commit(s) since the last compaction (epoch %d; automatic past %d)", n, tree.Epoch(), s.cfg.CompactAfter))
 	}
 	s.doctorHooks(ctx, branch, fix, warn, note)
-	if g := s.doctorGuard(ctx); len(g) > 0 {
+	// S-8: row files removed by hand, not deleted with lore (handdelete.go)
+	if root := liveProjectRoot(d.h.cfg.WorkDir); root != "" {
+		if changed, _, cerr := changedUnder(ctx, s.repo, root, loreDataPathspec); cerr == nil {
+			if w := handDeletedWarning(handDeletedRows(ctx, s.repo, root, changed)); w != "" {
+				warn(w)
+			}
+		}
+	}
+	if g := s.doctorGuard(ctx, branch); len(g) > 0 {
 		// H-18: the leak guard being off is what a person must read
 		// first, before rows riding along or fetch times
 		base.Warnings = append(g, base.Warnings...)
@@ -188,6 +203,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	missing := missingRideHooks(dir)
 	if len(missing) == 0 {
 		note("post-commit and pre-push hook blocks installed")
+		s.doctorHookBuild(dir, shared, warn, note)
 		return
 	}
 	what := "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + ")"
@@ -205,12 +221,38 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		note(what + "; this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it")
 		return
 	}
+	if !fix && len(s.guardOff(ctx, dir)) > 0 {
+		return // devco:Q-16: the leak-guard warning names these blocks and `lore fix` (doctorGuard)
+	}
+	// devco D-501: the ride-along blocks went into a hooks folder committed
+	// with the repo (core.hooksPath=.githooks) on doctor --fix with no
+	// question, past the guard every other hook write has (teamHookWrites).
+	// Only `lore fix --tracked-hooks` writes there, and never in a private
+	// project (D-500).
+	rides := make([]hookWrite, 0, len(missing))
+	for _, h := range missing {
+		rides = append(rides, hookWrite{name: h, marker: rideHookMarker, lines: rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))})
+	}
+	if created, changed := s.teamHookWrites(ctx, dir, rides); len(created)+len(changed) > 0 {
+		if !s.repoMayHoldLoreFiles(ctx, s.top) {
+			note(what + "; not installed: " + dir + " is committed with the repo and this project is private to this machine (.lore/ is ignored by git), so lore adds no block there")
+			return
+		}
+		if !fix || !trackedHooksYes(ctx) {
+			warn(what + "; " + fmt.Sprintf(trackedHooksSkipped, teamHookNames(created, changed), dir))
+			return
+		}
+	}
 	if !fix {
 		warn(what + "; run `lore fix` (or `lore sync`) to install it; a read never does")
 		return
 	}
 	for _, h := range missing {
-		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared)); ierr != nil {
+		if rerr := hookRefused(s.top, dir, h); rerr != nil {
+			warn(what + "; not installed: " + rerr.Error()) // D-502
+			return
+		}
+		if ierr := ensureHookBlock(dir, h, rideHookMarker, rideBlockLines(h, shared, hookPinFor(s.top, dir, shared))); ierr != nil {
 			warn(what + "; installing it failed: " + ierr.Error())
 			return
 		}
@@ -218,6 +260,38 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	// the fixing run's line, which the re-check no longer gives: the
 	// doctor lists it as fixed
 	warn(what + "; installed now in " + dir)
+}
+
+// doctorHookBuild says which lore the clone's hook blocks run when it is
+// not this build (devco P-2): a pinned build that is gone (the blocks then
+// run the first lore on PATH, which may be too old for this clone's rows)
+// is a warning; another build, pinned or first on PATH, is a note. Both
+// name the step that points the blocks at this build.
+func (s *liveSession) doctorHookBuild(dir string, shared bool, warn, note func(string)) {
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, hookPrePush)))
+	if err != nil {
+		return
+	}
+	want := hookPinFor(s.top, dir, shared)
+	fix := "; `doctor --fix` run with the build you want points them at it"
+	got, pinned := pinnedHookProgram(string(b))
+	switch {
+	case pinned && !executableHookFile(filepath.FromSlash(got.prog)):
+		warn("git hooks in " + dir + " run " + got.prog + ", which is gone: they run the first lore on PATH (" + pathLore() + ") instead" + fix)
+	case pinned && got.line() != want:
+		note("git hooks in " + dir + " run " + got.describe() + ", not this build" + fix)
+	case !pinned && want != "" && !shared && !hooksDirInWorkTree(s.top, dir):
+		note("git hooks in " + dir + " run the first lore on PATH (" + pathLore() + "), not this build" + fix)
+	}
+}
+
+// pathLore is the first lore on PATH, for doctor's lines.
+func pathLore() string {
+	p, err := exec.LookPath(binaryName)
+	if err != nil {
+		return "none found"
+	}
+	return p
 }
 
 // missingRideHooks are the ride-along hooks (post-commit, pre-push) in
@@ -237,17 +311,25 @@ func missingRideHooks(dir string) []string {
 // merge.lore.driver in its config and no lore block (gitBlockMarker, the
 // ride-along blocks included) in any hook of dir. A fresh clone is like
 // that until its first lore write; a clone whose blocks were removed after
-// lore wired it keeps its driver config and is not.
+// lore wired it keeps its driver config and is not. The commit-msg block
+// `lore org link` puts into a client repo (clientguard.go, with
+// lore.clientrepo set) is not a set-up of the clone: the first lore init
+// there said "leak guard off … restored now (commits made meanwhile were
+// not checked)" for hooks lore had never installed (devco:N-10).
 func (s *liveSession) neverWired(ctx context.Context, dir string) bool {
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "merge." + mergeDriverLore + ".driver"}}); err == nil && strings.TrimSpace(string(out)) != "" {
 		return false
+	}
+	onlyGuard := false
+	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", wire.ClientRepoGitKey}}); err == nil && strings.TrimSpace(string(out)) == "true" {
+		onlyGuard = true // the link's commit guard alone is no wiring
 	}
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return true // no hook folder yet: nothing was ever installed
 	}
 	for _, e := range ents {
-		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") {
+		if e.IsDir() || strings.HasSuffix(e.Name(), ".sample") || (onlyGuard && e.Name() == hookCommitMsg) {
 			continue
 		}
 		if b, rerr := os.ReadFile(filepath.Clean(filepath.Join(dir, e.Name()))); rerr == nil && strings.Contains(string(b), gitBlockMarker) {
@@ -275,16 +357,29 @@ func (s *liveSession) clientHooksInWorkTree(ctx context.Context, dir string) boo
 // found. Nil when the guard is in place, in a fresh clone (the set-up
 // note covers it), in a client repo whose hooks are tracked files lore
 // never changes (doctorHooks says so), and on the 0.1.17 format.
-func (s *liveSession) doctorGuard(ctx context.Context) []string {
+func (s *liveSession) doctorGuard(ctx context.Context, branch string) []string {
 	dir, _, err := s.hooksFolder(ctx)
-	if err != nil || wire.ProjectFormatOld(s.top) {
+	if err != nil {
 		return nil
 	}
-	missing := missingGuardHooks(dir)
-	if len(missing) == 0 || s.neverWired(ctx, dir) || s.clientHooksInWorkTree(ctx, dir) {
+	missing := s.guardOff(ctx, dir)
+	if len(missing) == 0 {
 		return nil
 	}
-	out := []string{liveDoctorPrefix + s.guardOffText(ctx, dir, missing) + "; run `lore fix` to restore them"}
+	line := s.guardOffText(ctx, dir, missing)
+	// devco:D-326: doctorHooks leaves the missing ride-along blocks to this
+	// line (Q-16, one line per cause), so it names the ones that are no
+	// guard hook (post-commit) too; they were left unreported.
+	var rideOnly []string
+	for _, h := range missingRideHooks(dir) {
+		if !slices.Contains(missing, h) {
+			rideOnly = append(rideOnly, h)
+		}
+	}
+	if len(rideOnly) > 0 {
+		line += "; the " + strings.Join(rideOnly, ", ") + " hook block is missing too, so rows cannot ride along on a protected " + branch
+	}
+	out := []string{liveDoctorPrefix + line + s.guardNextStep(ctx)}
 	if found := s.unguardedLeaks(ctx); found != "" {
 		out = append(out, liveDoctorPrefix+found)
 	}

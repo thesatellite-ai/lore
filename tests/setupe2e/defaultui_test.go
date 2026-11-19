@@ -13,13 +13,17 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // defaultUIDeadline bounds the whole check: one world, one start, two GETs.
-const defaultUIDeadline = 2 * time.Minute
+var defaultUIDeadline = testtime.Scale(2 * time.Minute)
 
 // defaultUIMarkers are what only the open-core page holds (surface/setupweb/opencore).
 var defaultUIMarkers = []string{"The guided setup page comes with lore EE", "lore setup plan", "/setup/assets/opencore.css"}
@@ -40,7 +44,18 @@ func TestBinaryServesDefaultUI(t *testing.T) {
 	}
 	defer w.Stop()
 	page := getPage(ctx, t, w.Origin()+"/setup/")
-	for _, want := range defaultUIMarkers {
+	// devco D-419: the page names the binary that serves it, its version
+	// (what `lore --version` prints) and its resolved path.
+	out, err := exec.CommandContext(ctx, loreBin, "--version").Output()
+	if err != nil {
+		t.Fatalf("lore --version: %v", err)
+	}
+	ver := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(out)), "lore version "))
+	exe, err := filepath.EvalSymlinks(loreBin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range append(defaultUIMarkers, "<code>"+ver+"</code>", "<code>"+exe+"</code>", "a source build of the open core", "lore-dev setup") {
 		if !strings.Contains(page, want) {
 			t.Errorf("the core binary's /setup/ lacks %q:\n%s", want, page)
 		}

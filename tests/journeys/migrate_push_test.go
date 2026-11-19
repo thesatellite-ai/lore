@@ -9,7 +9,8 @@ package journeys
 // trims the actor copy to {id, display name, kind}; the migration commit
 // passes (the value was already in that row at HEAD) and so does its push
 // (the value was already in that row on the remote): the two checks agree.
-// A fresh CI clone of the remote passes `lore check leaks --ci`. A truly
+// A fresh CI clone of the remote passes `lore check leaks --ci --since
+// <the remote head before the push>`. A truly
 // new key is still refused at push, with a ready allow line in the one
 // spelling every hint uses.
 
@@ -63,7 +64,10 @@ func TestJourneyMigratePushAndCI(t *testing.T) {
 
 	w.Step("day1/ci-clone-passes-check-leaks-ci", func() {
 		ci := lap.Clone(remote, "migpush-ci")
-		lap.LoreIn(ci, "check", "leaks", "--ci").OK(t)
+		// devco D-330: CI scans the commits the push brought, after the
+		// remote head before it (what the push event names as before); the
+		// 0.1.17 value was already there, so it is not new.
+		lap.LoreIn(ci, "check", "leaks", "--ci", "--since", "HEAD~1").OK(t)
 	})
 
 	w.Step("day1/a-new-key-is-still-refused-at-push", func() {

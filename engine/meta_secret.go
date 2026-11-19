@@ -178,7 +178,7 @@ func (e *Engine) refuseClientMetaRefs(target store.Source, rowID ids.AnyID, hits
 		fields = append(fields, h.findings[0].Field)
 	}
 	return errs.New(errs.LeakBlocked, ""+rowID.String()+": a secret reference in metadata ("+strings.Join(fields, ", ")+") cannot live in a client repo; nothing written").
-		WithHint("drop the value, or keep the row in one of your own stores (BATCH 5)")
+		WithHint("drop the value, or keep the row in one of your own stores")
 }
 
 // auditFindings records secret.detected once per finding (SECRETS 16,

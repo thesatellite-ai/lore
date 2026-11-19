@@ -16,6 +16,8 @@
 //	       with it (INTEG-TRASH-6); --dry-run lists them (Env.PurgePlan)
 //	    └► --archived-before: ArchivedPurger.PurgeArchived (DEL-ARCH, 3.12):
 //	       archived rows of the row files ─► tombstones (not lore.db)
+//	lore trash add --born-branch <b> [--kind <k>] [--dry-run] --yes
+//	    └► every note created on the branch (_o.git.branch) ─► one batch (born.go)
 //	lore trash purge --local --purged [--dry-run | --confirm]
 //	    └► this machine's safety copies of ids in .lore/data/_purged.json
 //	       ─► LocalCopyDropper (local_purged.go, DELETION 3.10)
@@ -32,13 +34,17 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
+	"github.com/thesatellite-ai/lore/ops/internal/metalist"
+	"github.com/thesatellite-ai/lore/ops/internal/opclock"
 	"github.com/thesatellite-ai/lore/ops/internal/resmask"
+	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
@@ -110,6 +116,9 @@ type ListIn struct {
 	FromHistory bool `json:"from_history,omitempty" flag:"from-history" desc:"list rows purged or hard-deleted, read from this place's git history"`
 	// Local lists this machine's safety copies instead (local.go, DQ1).
 	Local bool `json:"local,omitempty" flag:"local" desc:"this machine's safety copies (_lore_sync_trash), this machine only; replaces lore sync trash"`
+	// Born is --born-branch, the one flag every list shares (D-392):
+	// the rows `lore trash add --born-branch` moved here.
+	metalist.Born
 }
 
 // defaultPageRows is --limit when only --page is given (DELETION 4.5:
@@ -118,6 +127,8 @@ const defaultPageRows = 50
 
 // ShowIn is the input of trash.show.
 type ShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID            string `json:"id" arg:"0" flag:"id" alias:"target" desc:"the row id"` // --target like restore/purge (A-18)
 	ShowSensitive bool   `json:"show_sensitive,omitempty" flag:"show-sensitive" desc:"print sensitive field values (asks first)"`
 	FromHistory   bool   `json:"from_history,omitempty" flag:"from-history" desc:"show a purged row's last content from git history (3.6)"`
@@ -221,19 +232,27 @@ type Warning struct {
 
 // ShowOut is the output of trash.show.
 type ShowOut struct {
-	Data   Item              `json:"data"`
-	Fields map[string]string `json:"fields"`
+	Data Item `json:"data"`
+	// Fields are the row's fields; a list field stays a JSON array (D-455).
+	Fields showfield.Map `json:"fields"`
 	// History marks a --from-history show (the last content of a purged row).
 	History bool `json:"from_history,omitempty"`
 }
 
 // StatsIn is the input of trash.stats (none).
-type StatsIn struct{}
+type StatsIn struct {
+	// --store <store> (devco D-499).
+	op.StoreFlag
+}
 
 // Count is one named count of trash.stats.
 type Count struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+	// Label is a by_deleter entry's @handle or display name (devco:T-16:
+	// stats printed the act_ id while trash list named the person); Name
+	// keeps the id.
+	Label string `json:"label,omitempty"`
 }
 
 // StatsOut is the output of trash.stats (DELETION 4.5).
@@ -268,6 +287,34 @@ type ResultOut struct {
 	// Warnings are the engine's warnings of the write (W_AUDIT_DEFERRED:
 	// the audit record is kept with the rows and added later).
 	Warnings []Warning `json:"warnings,omitempty"`
+	// label shows a store in Text (storeLabeler; nil = the attached name).
+	label func(string) string
+}
+
+// storeLabeler is the Env upgrade that names a store as a row's label
+// reads (wire.App.StoreLabel: "acme/sync" for the org store attached at
+// its sync folder under the bare org name in a linked repo).
+type storeLabeler interface {
+	StoreLabel(name store.Source) string
+}
+
+// labeled is out with its Text naming each store by the Env's label
+// (devco D-647: a restore in a linked repo printed "(memories, acme)"
+// while the same restore from the home folder printed "(memories,
+// acme/sync)"). The JSON keeps the attached store names.
+func (o ops) labeled(out ResultOut) ResultOut {
+	if l, ok := upgrade.As[storeLabeler](o.env); ok {
+		out.label = func(s string) string { return l.StoreLabel(store.Source(s)) }
+	}
+	return out
+}
+
+// storeShown is s as Text names it.
+func (o ResultOut) storeShown(s string) string {
+	if o.label == nil || s == "" {
+		return s
+	}
+	return o.label(s)
 }
 
 // Comment is one comment a purge takes with its row (INTEG-TRASH-6).
@@ -304,6 +351,10 @@ func Ops(env Env) []op.Entry {
 			Confirm: op.ConfirmRule{MayAsk: true}, Examples: []op.Example{{Title: "bring a row back", CLI: "lore trash restore --id rul_1f3a"}, {Title: "undo a whole bulk delete", CLI: "lore trash restore --id bat_9e02"}}}, o.restore),
 		op.Define(op.Spec{Name: OpPurge, Summary: "Remove rows from the trash for good, with their comments and links (a tombstone stays forever); needs --confirm",
 			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported), Examples: []op.Example{{Title: "see what a purge would remove", CLI: "lore trash purge --older-than 180d --dry-run"}, {Title: "remove one row for good", CLI: "lore trash purge --id rul_1f3a --confirm"}}}, o.purge),
+		op.Define(op.Spec{Name: OpAdd, Summary: "Move every note created on a code branch to the trash (also after it landed), as one batch; prints the count per kind; needs --yes",
+			Permission: op.PermWrite, Access: op.AccessWrite, Errors: append(slices.Clone(write), errs.NeedsConfirm, errs.Unsupported),
+			Confirm:  op.ConfirmRule{MayAsk: true, NoSecretFindings: true},
+			Examples: []op.Example{{Title: "see what a branch left on main", CLI: "lore trash add --born-branch feat/x --dry-run"}, {Title: "trash only the tasks of a branch", CLI: "lore trash add --born-branch feat/x --kind task --yes"}}}, o.add),
 		op.Define(op.Spec{Name: OpStats, Summary: "Count the trash per type, store and deleter, rows past retention, and tombstones",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: read,
 			Examples: []op.Example{{Title: "trash counts as JSON", CLI: "lore trash stats --json", Want: `"tombstones"`}}}, o.stats),
@@ -316,7 +367,7 @@ type ops struct{ env Env }
 // list is trash.list: every trashed row of every attached store, newest
 // first, filtered (DELETION 2.2).
 func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
-	since, err := sinceOf(in.Since, time.Now())
+	since, err := sinceOf(in.Since, opclock.Now(o.env)) // the app clock (LORE_NOW in a test build), as the rows were stamped
 	if err != nil {
 		return ListOut{}, err
 	}
@@ -333,6 +384,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	if in.FromHistory {
 		return o.listHistory(ctx, in, since, by)
 	}
+	born, err := engine.ParseBornBranch(in.BornBranch)
+	if err != nil {
+		return ListOut{}, err
+	}
 	all, err := o.env.Trashed(ctx)
 	if err != nil {
 		return ListOut{}, err
@@ -343,9 +398,10 @@ func (o ops) list(ctx context.Context, in ListIn) (ListOut, error) {
 	for _, t := range all {
 		it := itemOf(t)
 		switch {
-		case in.To != "" && it.Store != strings.TrimSpace(in.To):
+		case in.To != "" && !engine.InNamedStore(store.Source(in.To), store.Source(it.Store)):
 		case in.Type != "" && !typeMatches(it.Table, in.Type):
 		case by != "" && it.DeletedBy != by:
+		case born != "" && !engine.BornOn(t.Row, born):
 		case in.Batch != "" && it.Batch != strings.TrimSpace(in.Batch):
 		case in.Reason != "" && !strings.Contains(strings.ToLower(it.Reason), strings.ToLower(in.Reason)):
 		case in.Search != "" && !matches(it, in.Search):
@@ -448,21 +504,21 @@ const hiddenValue = "(sensitive, hidden)"
 // each sensitive entry of a resource's "fields" JSON (a resource kind's own
 // fields, RQ1), unless showSensitive. The resource fields are hidden whole
 // when the kind fields cannot be read (fail closed).
-func (o ops) shownFields(ctx context.Context, r row.Row, showSensitive bool) map[string]string {
-	out := map[string]string{}
+func (o ops) shownFields(ctx context.Context, r row.Row, showSensitive bool) showfield.Map {
+	out := showfield.Map{}
 	def, _ := o.env.TableSchema(ctx, r.Table)
 	for k, v := range r.Fields {
 		if f, ok := def.Field(k); ok && f.Sensitive && !showSensitive {
-			out[k] = hiddenValue
+			out[k] = showfield.Text(hiddenValue)
 			continue
 		}
-		out[k] = v.String()
+		out[k] = showfield.Of(v)
 	}
 	if _, has := out[resmask.FieldsField]; has && r.Table == schema.TableResources && !showSensitive {
-		out[resmask.FieldsField] = hiddenValue
+		out[resmask.FieldsField] = showfield.Text(hiddenValue)
 		if getter, canGet := o.env.(resmask.Getter); canGet {
 			if m, _, ok := resmask.Fields(ctx, getter, r, hiddenValue); ok {
-				out[resmask.FieldsField] = m
+				out[resmask.FieldsField] = showfield.Text(m)
 			}
 		}
 	}
@@ -494,7 +550,7 @@ func (o ops) restore(ctx context.Context, in TargetIn) (ResultOut, error) {
 	if err != nil {
 		return ResultOut{}, err
 	}
-	return resultOf("restored", res, false), nil
+	return o.labeled(resultOf("restored", res, false)), nil
 }
 
 // purge is trash.purge (DELETION 3.5, 2.6): by target, --older-than or
@@ -519,12 +575,15 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return o.purgeArchived(ctx, before, in.DryRun, in.Confirm)
 	}
 	if target != "" {
+		// devco:L-8: read what the purge would take before asking for
+		// --confirm, so a live row, a purged id or an unknown one gets its
+		// own answer instead of a confirmation to destroy it for good.
+		plan, err := o.env.PurgePlan(ctx, target)
+		if err != nil {
+			return ResultOut{}, err
+		}
 		if in.DryRun {
-			res, err := o.env.PurgePlan(ctx, target)
-			if err != nil {
-				return ResultOut{}, err
-			}
-			return resultOf("would purge", res, true), nil
+			return o.labeled(resultOf("would purge", plan, true)), nil
 		}
 		if !in.Confirm {
 			return ResultOut{}, needsConfirm(ctx, "purge removes "+target+" (its dependents in the trash, its comments and links too) for good; only a tombstone stays", "trash", "purge", "--id", target, "--confirm")
@@ -536,7 +595,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		if err = o.dropLocalCopies(ctx, res); err != nil {
 			return ResultOut{}, err
 		}
-		return resultOf("purged", res, false), nil
+		return o.labeled(resultOf("purged", res, false)), nil
 	}
 	cutoff := time.Time{}
 	args := []string{"trash", "purge", "--expired", "--confirm"}
@@ -545,7 +604,7 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		if err != nil {
 			return ResultOut{}, err
 		}
-		cutoff = time.Now().Add(-d)
+		cutoff = opclock.Now(o.env).Add(-d)
 		args = []string{"trash", "purge", "--older-than", in.OlderThan, "--confirm"}
 	}
 	if !in.DryRun && !in.Confirm {
@@ -556,12 +615,12 @@ func (o ops) purge(ctx context.Context, in PurgeIn) (ResultOut, error) {
 		return ResultOut{}, err
 	}
 	if in.DryRun {
-		return resultOf("would purge", res, true), nil
+		return o.labeled(resultOf("would purge", res, true)), nil
 	}
 	if err = o.dropLocalCopies(ctx, res); err != nil {
 		return ResultOut{}, err
 	}
-	return resultOf("purged", res, false), nil
+	return o.labeled(resultOf("purged", res, false)), nil
 }
 
 // ArchivedPurger is the optional Env upgrade `purge --archived-before`
@@ -579,7 +638,7 @@ type ArchivedPurger interface {
 // It replaces the v0.1.17 lore.db purge (lsync); rows in the trash that
 // were archived are purged too.
 func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool) (ResultOut, error) {
-	cutoff, err := sinceOf(before, time.Now())
+	cutoff, err := sinceOf(before, opclock.Now(o.env))
 	if err != nil {
 		return ResultOut{}, err
 	}
@@ -596,12 +655,12 @@ func (o ops) purgeArchived(ctx context.Context, before string, dry, confirm bool
 		return ResultOut{}, err
 	}
 	if dry {
-		return resultOf("would purge", res, true), nil
+		return o.labeled(resultOf("would purge", res, true)), nil
 	}
 	if err = o.dropLocalCopies(ctx, res); err != nil {
 		return ResultOut{}, err
 	}
-	return resultOf("purged", res, false), nil
+	return o.labeled(resultOf("purged", res, false)), nil
 }
 
 // overruled is `trash list --overruled` (DELETION 3.7): the alive rows a
@@ -615,7 +674,7 @@ func (o ops) overruled(ctx context.Context, in ListIn) (ListOut, error) {
 	out := ListOut{Data: []Item{}, Overruled: true}
 	for _, r := range rows {
 		it := Item{ID: r.Row.ID.String(), Table: r.Row.Table.String(), Store: string(r.Store), Title: titleOf(r.Row), Overruled: r.Note}
-		if (in.To != "" && it.Store != strings.TrimSpace(in.To)) || (in.Type != "" && !typeMatches(it.Table, in.Type)) {
+		if (in.To != "" && !engine.InNamedStore(store.Source(in.To), store.Source(it.Store))) || (in.Type != "" && !typeMatches(it.Table, in.Type)) {
 			continue
 		}
 		out.Data = append(out.Data, it)
@@ -630,8 +689,18 @@ func (o ops) stats(ctx context.Context, _ StatsIn) (StatsOut, error) {
 	if err != nil {
 		return StatsOut{}, err
 	}
-	return StatsOut{Rows: st.Rows, Dependents: st.Dependents, Expired: st.Expired,
-		ByTable: counts(st.ByTable), ByStore: counts(st.ByStore), ByDeleter: counts(st.ByDeleter), Tombstones: counts(st.Tombstones)}, nil
+	out := StatsOut{Rows: st.Rows, Dependents: st.Dependents, Expired: st.Expired,
+		ByTable: counts(st.ByTable), ByStore: counts(st.ByStore), ByDeleter: counts(st.ByDeleter), Tombstones: counts(st.Tombstones)}
+	if len(out.ByDeleter) > 0 {
+		labels := o.deleterLabels(ctx)
+		for i, c := range out.ByDeleter {
+			out.ByDeleter[i].Label = Item{DeletedBy: c.Name, byLabel: labels[c.Name]}.deleter()
+			if out.ByDeleter[i].Label == c.Name {
+				out.ByDeleter[i].Label = ""
+			}
+		}
+	}
+	return out, nil
 }
 
 // counts is m as a list, largest first, then by name.
@@ -664,6 +733,9 @@ func (o StatsOut) Text() string {
 		b.WriteString(sec.name + "\n")
 		for _, c := range sec.c {
 			name := c.Name
+			if c.Label != "" {
+				name = c.Label
+			}
 			if name == "" {
 				name = "(unknown)"
 			}
@@ -935,6 +1007,9 @@ func (it Item) deleter() string {
 	if it.byLabel != "" {
 		return it.byLabel
 	}
+	if name, ok := auditfill.NameOf(it.DeletedBy); ok {
+		return name
+	}
 	return it.DeletedBy
 }
 
@@ -945,15 +1020,25 @@ func (o ops) labelDeleters(ctx context.Context, items []Item) {
 	if len(items) == 0 {
 		return
 	}
+	handles := o.deleterLabels(ctx)
+	for i := range items {
+		items[i].byLabel = handles[items[i].DeletedBy]
+	}
+}
+
+// deleterLabels maps each actor id of the attached stores to its @handle,
+// else its display name (labelDeleters, stats). A failed roster read
+// returns what was read so far: it only costs the labels.
+func (o ops) deleterLabels(ctx context.Context) map[string]string {
+	handles := map[string]string{}
 	a, ok := upgrade.As[Actors](o.env)
 	if !ok {
-		return
+		return handles
 	}
-	handles := map[string]string{}
 	for _, src := range engine.ReadStoresOf(a) {
 		rows, err := a.List(ctx, src, schema.TableActors)
 		if err != nil {
-			return
+			return handles
 		}
 		for _, r := range rows {
 			if r.Deleted {
@@ -969,9 +1054,7 @@ func (o ops) labelDeleters(ctx context.Context, items []Item) {
 			}
 		}
 	}
-	for i := range items {
-		items[i].byLabel = handles[items[i].DeletedBy]
-	}
+	return handles
 }
 
 // line is one row of `lore trash list`.
@@ -1012,7 +1095,7 @@ func (o ShowOut) Text() string {
 }
 
 // fieldLines renders fields as "  key: value" lines in key order.
-func fieldLines(fields map[string]string) string {
+func fieldLines(fields showfield.Map) string {
 	keys := make([]string, 0, len(fields))
 	for k := range fields {
 		keys = append(keys, k)
@@ -1020,7 +1103,7 @@ func fieldLines(fields map[string]string) string {
 	slices.Sort(keys)
 	var b strings.Builder
 	for _, k := range keys {
-		b.WriteString("  " + k + ": " + fields[k] + "\n")
+		b.WriteString("  " + k + ": " + fields[k].String() + "\n")
 	}
 	return b.String()
 }
@@ -1071,18 +1154,18 @@ func (o ResultOut) Text() string {
 	}
 	b.WriteString("\n")
 	for _, it := range o.Rows {
-		b.WriteString("  " + it.ID + " (" + it.Table + ", " + it.Store + ")\n")
+		b.WriteString("  " + it.ID + " (" + it.Table + ", " + o.storeShown(it.Store) + ")\n")
 	}
 	if len(o.Comments) > 0 {
 		b.WriteString("with " + count(len(o.Comments), "comment") + " on them\n")
 		for _, c := range o.Comments {
-			b.WriteString("  " + c.ID + " (comments, " + c.Store + ")\n")
+			b.WriteString("  " + c.ID + " (comments, " + o.storeShown(c.Store) + ")\n")
 		}
 	}
 	if len(o.Links) > 0 {
 		b.WriteString("with " + count(len(o.Links), "link") + " to them\n")
 		for _, l := range o.Links {
-			b.WriteString("  " + l.ID + " (" + l.Table + ", " + l.Store + ")\n")
+			b.WriteString("  " + l.ID + " (" + l.Table + ", " + o.storeShown(l.Store) + ")\n")
 		}
 	}
 	if o.Action == "purged" {

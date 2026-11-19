@@ -9,7 +9,7 @@ Git knows what changed. lore knows why: the task, the decision or the memory beh
 There are two ways to connect a task with code:
 
 - `lore link add --entity <id> --commit <sha>` records a link from any row (a task, a decision, a mission) to a commit. `lore link list` and `lore commit-show` read the links back.
-- `lore task done --id <id> --commit <sha>` finishes the task and remembers the commit. lore then watches for that commit on `main` and marks the task *merged* (the change is in `main`) when it gets there. `lore task merged` marks it by hand when lore cannot see the merge.
+- `lore task done --id <id> --commit <sha>` finishes the task and remembers the commit. `--commit` takes a sha, `HEAD` or a branch, and the task records the full sha it names at that moment (a value that names no commit in the repository is refused), so the merge watch in another clone checks your commit, never theirs. lore then watches for that commit on `main` and marks the task *merged* (the change is in `main`) when it gets there. `lore task merged` marks it by hand when lore cannot see the merge.
 
 A *sha* is the id git gives a commit, like `05513aa…`. `git log --oneline` shows the short form; `git rev-parse HEAD` prints the full sha of your last commit.
 
@@ -38,6 +38,8 @@ error: failed to push some refs to '/srv/git/github.com/client/website'
 $ git pull -q --rebase origin main && git push -q origin main
 ```
 <!-- /example -->
+
+If you run `lore sync` instead of the second `git push`, it does not land those rows a second time on the remote: it says they wait in your unpushed commit and names `git push origin main`, so your main never diverges from the remote's.
 
 ## Step 2 — Link the commit to the task
 
@@ -74,7 +76,7 @@ Commit 86dbae476bd6 — 1 linked entities:
 ```
 <!-- /example -->
 
-A rebase or an amend gives your commits new ids. lore's post-rewrite hook moves every link of a rewritten commit to its new id, so `lore commit show --id <new-sha>` lists the rows; a rewrite made without lore's hooks leaves links on the old commits, `lore doctor` names them (`commit_links: … on no branch`), and `lore link remap --pair <old>=<new>` moves them.
+A rebase or an amend gives your commits new ids. lore's post-rewrite hook moves every link of a rewritten commit to its new id, so `lore commit show --id <new-sha>` lists the rows; a rewrite made without lore's hooks leaves links on the old commits, `lore doctor` names them (`commit_links: … on no branch`), and `lore link remap --pair <old>=<new>` moves them. When the old commit is gone from the repository (`git filter-repo` drops it), doctor names the link as a commit that no longer exists, and `lore commit show` ends with `note: commit <sha> does not exist in this repository` (`commit_missing: true` in JSON).
 
 `lore commit show` (with a space) is the same command under the `commit` group and prints the same list. A short sha that two linked commits share is refused with `E_AMBIGUOUS_ID`, which lists both shas; add characters until one is left. A word that is neither a sha nor a git revision is refused with `E_INVALID_INPUT`.
 
@@ -92,7 +94,6 @@ $ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
 lore live: landed on main (05513aa); leaves live once main is fetched
 lore live: 4 row(s) left live (main holds them)
-lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 $ lore task list --status done
 ✓ tsk_162d…9666 merged 10:04 (found by: ancestry, 86dbae4)
 ✓ tsk_2ad3…f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06
@@ -160,7 +161,7 @@ lore: wrote ~/work/website/.lore/data/commit_links/cml_6a86…ed8c.json
 - **`HEAD` means the commit you are on now.** `lore commit show --id HEAD` resolves `HEAD` in the folder you run it from; after another commit, the linked one is `HEAD~1`. `lore link list --commit` still matches only the full sha.
 - **A rebase changes the sha.** `git pull --rebase` gives your commit a new id. Link the commit after you push, as in Step 1 to 2, so the link points at the commit that is really on `main`.
 - **`lore task show` does not print the commit.** Its `commit:` line is the task's commitment (how sure it is), not a git commit. Use `lore link list --entity <id>` or `lore task list --status done`.
-- **A squash merge keeps the link through the `Lore-Task` trailer.** While you hold a claim on a task, lore's `commit-msg` hook adds a `Lore-Task: <id>` line to the end of your commit messages (only when the task row lives in the repo you commit to, a client repo's own task included). Only a claim adds it: `lore task start` writes no claim, so a task you only started gets no trailer; claim it (`lore task claim --id <id> --push` on a code repo) before you commit. A squash or rebase merge that keeps that line lets lore find the merge on `main` even though the commit sha changed; without it, use Step 5. See [How it works](../team/how-it-works.md).
+- **A squash merge keeps the link through the `Lore-Task` trailer.** While you hold a claim on a task, lore's `commit-msg` hook adds a `Lore-Task: <id>` line to the end of your commit messages (only when the task row lives in the repo you commit to, a client repo's own task included). Only a claim adds it: `lore task start` writes no claim, so a task you only started gets no trailer; claim it (`lore task claim --id <id> --push` on a code repo) before you commit. A squash or rebase merge that keeps that line lets lore find the merge on `main` even though the commit sha changed; without it, use Step 5. When the merge dropped the line and the branch is deleted, the task's commit is on no branch and no commit carries its trailer: the next `lore sync` and `lore doctor` (a `lost_merge` note) name the task and `lore task merged --id <id>`; if the branch is not deleted, the person who finished the task (the note names them and the branch) pushes it again. A commit this clone does not have at all is a different case: a teammate's task done on a branch you have not fetched. Then the note says the commit is `not fetched here` and the next step is `git fetch`, then `lore sync`; it is gone once the branch is fetched. See [How it works](../team/how-it-works.md).
 - **Links are saved like other rows.** `link add` writes a file to `.lore/data` ("not committed — commit them with your change"); commit it, or your teammates will not see the link.
 
 ## Related

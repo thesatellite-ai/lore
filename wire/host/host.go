@@ -186,6 +186,14 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 		ctx = wire.WithNoCreate(ctx)      // lore fix --dry-run changes nothing
 		ctx = gitbackend.WithNoClone(ctx) // … not even a store clone (B4-14)
 	}
+	if ciRun(run0) {
+		// devco O-7, O-18: a CI-form run reads the checkout only. An
+		// attached store with no clone here is left out (unreachable)
+		// instead of being cloned into the runner's HOME, and no store is
+		// fetched: the job has no store credentials, and a HOME it cannot
+		// write must not fail the check (docs/operations/ci.md).
+		ctx = gitbackend.WithNoFetch(gitbackend.WithNoClone(ctx))
+	}
 	run := &Run{Entry: e, Decoder: d, Caller: c, ReadOnly: readOnly, Cmd: r.State.Cmd, Args: r.State.Args}
 	// D7 (B2-20): `lore sync` in a repo lore 0.1.17 wrote and nobody
 	// migrated yet runs as a read: it changes no tracked file, so the
@@ -230,9 +238,20 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			snap = takeSetupSnapshot(ctx, wd)
 		}
 	}
+	// S-11: the set-up lines of a write are said when it goes through; a
+	// refused write drops them with the set-up it undoes (setupnotes.go)
+	var notes *setupNotes
+	if snap != nil {
+		ctx, notes = withSetupNotes(ctx)
+	}
 	undo := func(err error) error {
 		defer fresh.restore()
-		undone := append(snap.restore(), tree.restore(ctx)...)
+		notes.drop()
+		// the git set-up goes back without a word: its own line was never
+		// said, and the clone is as it was; only the work-tree files a
+		// first write migrated and rendered (W-6) are named
+		_ = snap.restore()
+		undone := tree.restore(ctx)
 		slices.Sort(undone)
 		announceUndo(os.Stderr, slices.Compact(undone))
 		return err
@@ -245,12 +264,14 @@ func (r *Runner) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller)
 			return op.Result{}, undo(err)
 		}
 	}
-	if e.Spec().Access == op.AccessWrite && run.ReadOnly {
+	if e.Spec().Access == op.AccessWrite && run.ReadOnly && !nextReads(run) { // a plain task next only reads (devco:D-426)
 		return op.Result{}, errs.New(errs.ReadOnly, "command requires write access but read-only mode is active").
 			WithHint("unset --read-only and " + EnvReadOnly)
 	}
 	res, err := r.around(ctx, run, 0)
 	if err == nil {
+		fresh.settle() // D-282: a set-up run that set nothing up leaves no empty .lore/
+		notes.flush()
 		return res, nil
 	}
 	for _, h := range r.hooks {

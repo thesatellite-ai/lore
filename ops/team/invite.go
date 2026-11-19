@@ -194,7 +194,7 @@ func inviteTeams(ctx context.Context, r profilestore.Roster, refs []string) ([]s
 			return nil, err
 		}
 		if !ok {
-			return nil, teamMissErr(h, r.Where())
+			return nil, teamMissErr(h, r.Label())
 		}
 		if fieldText(cur, teamFieldActive) == boolFalse {
 			return nil, errs.New(errs.StatusChange, "--team @"+h+": the team is removed; nobody joins it").
@@ -383,7 +383,7 @@ func resolveProject(ctx context.Context, env Env, r profilestore.Roster, ref str
 	}
 	switch len(hits) {
 	case 0:
-		return "", errs.New(errs.NotFound, "no project "+work.Quote(ref)+" on "+r.Where()).WithHint("--project <prj_ id>")
+		return "", errs.New(errs.NotFound, "no project "+work.Quote(ref)+" on the roster of "+r.Label()).WithHint("--project <prj_ id>")
 	case 1:
 		return hits[0], nil
 	}
@@ -434,7 +434,7 @@ func findInvite(ctx context.Context, r profilestore.Roster, ref string) (inviteR
 				return x, nil
 			}
 		}
-		return inviteRow{}, errs.New(errs.InviteNotFound, "invite "+ref+" is not in "+r.Where()).WithHint("lore team invite list")
+		return inviteRow{}, errs.New(errs.InviteNotFound, "invite "+ref+" is not on the roster of "+r.Label()).WithHint("lore team invite list")
 	}
 	email, nerr := teamprofile.Normalize(schema.ContactKindEmail, ref)
 	if nerr != nil {
@@ -447,7 +447,7 @@ func findInvite(ctx context.Context, r profilestore.Roster, ref string) (inviteR
 		}
 	}
 	if len(found) == 0 {
-		return inviteRow{}, errs.New(errs.InviteNotFound, "no invite for "+email+" in "+r.Where()).
+		return inviteRow{}, errs.New(errs.InviteNotFound, "no invite for "+email+" on the roster of "+r.Label()).
 			WithHint("lore team invite --email " + email)
 	}
 	today := r.Today()
@@ -501,7 +501,7 @@ func (o ops) revoke(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamIn
 // resend is team.invite.resend: the same line again, nothing written. A
 // used, revoked or expired invite answers its E_INVITE_* code, since its
 // line could no longer be accepted.
-func (o ops) resend(ctx context.Context, in setup.TeamInviteRefIn) (setup.TeamInviteResendOut, error) {
+func (o ops) resend(ctx context.Context, in setup.TeamInviteResendIn) (setup.TeamInviteResendOut, error) {
 	e, err := adminSetup(ctx, o.env)
 	if err != nil {
 		return setup.TeamInviteResendOut{}, err

@@ -16,7 +16,8 @@ package rowfs
 import (
 	"os"
 	"path/filepath"
-	"strings"
+
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // gitEntry is a git work tree's .git (a folder, or a pointer file).
@@ -26,13 +27,7 @@ const gitEntry = ".git"
 // its top folder (symlinks resolved) and whether it is a git clone. It
 // only reads (a few stats on the way up).
 func StoreTop(dir string) (top string, isGit bool, ok bool) {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return "", false, false
-	}
-	if real, rerr := filepath.EvalSymlinks(abs); rerr == nil {
-		abs = real
-	}
+	abs := fspath.Canonical(orCwd(dir)) // the top is stored and compared later (devco D-413)
 	folderTop := ""
 	for d := abs; ; d = filepath.Dir(d) {
 		hasMarker := isRegular(filepath.Join(d, MarkerFile))
@@ -58,18 +53,16 @@ func StoreTop(dir string) (top string, isGit bool, ok bool) {
 // StoreFolderAt is the store folder dir sits in, inside the store whose
 // top is top: the nearest folder from dir up to top (top excluded) whose
 // project marker (the folder's _meta.json) exists, slash separated; the
-// store root (FolderRoot) when there is none or dir is outside top.
+// store root (FolderRoot) when there is none or dir is outside top. Both
+// paths are compared with symlinks resolved, so top may be given either way.
 func StoreFolderAt(top, dir string) string {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return FolderRoot
-	}
-	if real, rerr := filepath.EvalSymlinks(abs); rerr == nil {
-		abs = real
-	}
+	// both canonical: an unresolved top (a caller's own path, t.TempDir on
+	// macOS where /var links to /private/var) never matched the resolved
+	// dir and every folder read as outside the store (D-389, D-413)
+	abs, top := fspath.Canonical(orCwd(dir)), fspath.Canonical(orCwd(top))
 	for d := abs; d != top && filepath.Dir(d) != d; d = filepath.Dir(d) {
-		rel, rerr := filepath.Rel(top, d)
-		if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		rel, inside := fspath.Rel(top, d)
+		if !inside {
 			return FolderRoot
 		}
 		name, cerr := CleanFolder(filepath.ToSlash(rel))
@@ -87,4 +80,13 @@ func StoreFolderAt(top, dir string) string {
 func isRegular(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.Mode().IsRegular()
+}
+
+// orCwd is p, or "." for "": filepath.Abs("") is the working folder,
+// which these functions always took an empty path to mean.
+func orCwd(p string) string {
+	if p == "" {
+		return "."
+	}
+	return p
 }

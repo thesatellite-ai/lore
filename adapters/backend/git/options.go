@@ -22,6 +22,20 @@ type Merger interface {
 	Merge(base, ours, theirs []byte) (merged []byte, conflict bool, err error)
 }
 
+// ClashNamer is a Merger that can name the fields whose text both sides
+// changed (logic/merge.Driver): a landing refusal names them so the person
+// knows what to settle (devco V-15).
+type ClashNamer interface {
+	Clashes(base, ours, theirs []byte) ([]string, error)
+}
+
+// NewerTextMerger is a Merger that can merge with the newer edit of a
+// clashing text kept (the D-219 rule; logic/merge.Driver): two copies of
+// one branch layer merge this way, never a refusal (devco V-12).
+type NewerTextMerger interface {
+	MergeNewerText(base, ours, theirs []byte) ([]byte, error)
+}
+
 // Signature is a commit author: the actor a batch is written for, or the
 // opener's default.
 type Signature struct {

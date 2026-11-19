@@ -41,6 +41,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -51,7 +52,7 @@ const cliWorkers = 4
 // cliTimeout bounds one command of a sweep: every command here runs with
 // no input and no terminal, so one that is still running after this long
 // is waiting on something a user could not answer.
-const cliTimeout = 60 * time.Second
+var cliTimeout = testtime.Scale(60 * time.Second)
 
 // cliExitUsage is the exit of every usage error (FLAG2, class bad_input).
 const cliExitUsage = 20
@@ -125,7 +126,7 @@ func cliRunMany(t *testing.T, clones []*th.Clone, jobs [][]string) []cliProc {
 func cliRunOne(cmd *exec.Cmd, args []string) cliProc {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = &stdout, &stderr, nil
-	cmd.WaitDelay = 5 * time.Second
+	cmd.WaitDelay = testtime.Scale(5 * time.Second)
 	p := cliProc{Args: args, Code: -1}
 	if err := cmd.Start(); err != nil {
 		p.Stderr = err.Error()
@@ -507,7 +508,8 @@ func cliCheckJSON(t *testing.T, r cliProc) {
 	if !slices.Contains(cliExits, r.Code) {
 		t.Errorf("exit %d is not a documented exit status: %s", r.Code, r)
 	}
-	// lore fix ends with doctor's status and exits as doctor does (0/1/2)
+	// lore fix ends with doctor's status; doctor exits 1 degraded, lore fix 1
+	// when a step failed (warnings alone exit 0, devco D-522)
 	isDoctor := len(r.Args) > 0 && (r.Args[0] == "doctor" || r.Args[0] == "fix")
 	if r.Code == 1 && !isDoctor {
 		t.Errorf("exit 1 (E_INTERNAL, an unexpected failure) for a bare call: %s", r)

@@ -12,9 +12,17 @@ import (
 // ShowIn is the input of the show operation: the id flags plus --expand.
 type ShowIn struct {
 	ID string `json:"id" arg:"0" desc:"the handoff id (hnd_…)"`
+	// Store is --store (devco D-499) with no --to alias: a handoff's --to
+	// names the person it is for (handoff add), so its reads keep --to
+	// unknown, as handoff list does.
+	Store string `json:"store,omitempty" flag:"store" desc:"read this store: <org> (every folder of the org), <org>/<folder>, repo, or a store's name (default every attached store)"`
 	expand.Flag
 	expand.RevealFlag
 }
+
+// RoutedStore implements the op package's StoreRouter: the read runs on the store
+// --store names (wire routedStoreRead), as op.StoreFlag's reads do.
+func (in ShowIn) RoutedStore() string { return in.Store }
 
 // showExpand is the show operation: the stored row as before, and with
 // --expand its text fields filled in at the show point (secrets and

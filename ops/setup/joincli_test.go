@@ -17,6 +17,12 @@ func TestJoinSetupName(t *testing.T) {
 		{"", "https://git.acme.example/Acme/team-store.git", "acme"},
 		{"agency", "git@git.acme.example:acme/team-store.git", "agency"},
 		{"", "/srv/git/team-store.git", "team-store"},
+		// devco P-8: a self-hosted folder path never names the setup
+		// after its first segment (a disk), but after the repo
+		{"", "ssh://githost/srv/tmp/co/remotes/team-store.git", "team-store"},
+		{"", "ssh://git.example.com/srv/git/initrode.git", "initrode"},
+		{"", "git@git.example.com:srv/git/initrode.git", "initrode"},
+		{"", "https://git.acme.example/acme/team-store", "acme"},
 		{"", "", ""},
 	} {
 		if got := joinSetupName(c.org, c.url); got != c.want {
@@ -40,7 +46,7 @@ func TestJoinCommands(t *testing.T) {
 		{ID: onboard.StepTools, Kinds: []onboard.Kind{onboard.KindMember}, Optional: true},
 		{ID: onboard.StepSummary, Kinds: []onboard.Kind{onboard.KindMember}},
 	}}
-	got := strings.Join(joinCommands("acme", "git@git.acme.example:acme/team-store.git", "sam@acme.example", plan), "\n")
+	got := strings.Join(joinCommands("acme", "git@git.acme.example:acme/team-store.git", joinIdentity{Email: "sam@acme.example"}, plan), "\n")
 	want := strings.Join([]string{
 		`lore setup apply --setup acme --step kind --answers '{"kind":"member","name":"acme"}'`,
 		`lore setup apply --setup acme --step identity --answers '{"email":"sam@acme.example","name":"Sam O'\''Neil"}'`,
@@ -67,5 +73,52 @@ func TestHereForJoin(t *testing.T) {
 	}
 	if line := onboard.HereLine(got); !strings.Contains(line, "offers a member setup acme") {
 		t.Fatalf("line %q", line)
+	}
+}
+
+// TestJoinCommandsNeverOfferAnotherOrgsEmail (devco N-4): a git email that
+// is another org's identity on this machine is replaced in the identity
+// line, also when the plan prefilled it, so the line asks for this org's
+// address instead of carrying the first org's.
+func TestJoinCommandsNeverOfferAnotherOrgsEmail(t *testing.T) {
+	plan := PlanOut{Steps: []PlanStep{
+		{ID: onboard.StepIdentity, Kinds: []onboard.Kind{onboard.KindMember}, Values: onboard.Answers{"email": {Text: "ngozi@first.example"}, "name": {Text: "Ngozi"}}},
+		{ID: onboard.StepJoin, Kinds: []onboard.Kind{onboard.KindMember}},
+	}}
+	id := joinIdentity{Email: "<your email in second>", Avoid: "ngozi@first.example", Note: "note"}
+	got := strings.Join(joinCommands("second", "git@git.second.example:second/store.git", id, plan), "\n")
+	if strings.Contains(got, "ngozi@first.example") || !strings.Contains(got, `"email":"<your email in second>"`) {
+		t.Fatalf("identity line carries another org's address:\n%s", got)
+	}
+	if out := (JoinOut{Commands: []string{"x"}, IdentityNote: id.Note}).Text(); !strings.Contains(out, "note") {
+		t.Fatalf("Text leaves out the identity note:\n%s", out)
+	}
+}
+
+// TestJoinCommandsTakeTheRosterNameAndGitHub (devco D-487): the roster's
+// name and GitHub login replace the plan's prefill (global git's
+// user.name, this machine's gh login) in the identity and github lines,
+// the github line is written even when the plan had nothing for it, and
+// the note says where each value came from.
+func TestJoinCommandsTakeTheRosterNameAndGitHub(t *testing.T) {
+	plan := PlanOut{Steps: []PlanStep{
+		{ID: onboard.StepIdentity, Kinds: []onboard.Kind{onboard.KindMember}, Values: onboard.Answers{"name": {Text: "gituser"}}},
+		{ID: onboard.StepGitHub, Kinds: []onboard.Kind{onboard.KindMember}, Optional: true},
+		{ID: onboard.StepJoin, Kinds: []onboard.Kind{onboard.KindMember}},
+	}}
+	id := joinIdentity{Email: "sam@acme.example", Name: "Sam Roster", GitHub: "sam-roster", NameFrom: "the roster of acme (sam@acme.example)", GitHubFrom: "the roster of acme (sam@acme.example)"}
+	cmds := joinCommands("acme", "acme", id, plan)
+	got := strings.Join(cmds, "\n")
+	for _, want := range []string{`"name":"Sam Roster"`, `--step github --answers '{"github_account":"sam-roster"}'`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("join lines lack %s:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "gituser") {
+		t.Errorf("join lines keep git's name:\n%s", got)
+	}
+	note := prefillNote(id, cmds)
+	if !strings.Contains(note, "name from the roster of acme") || !strings.Contains(note, "GitHub account from the roster of acme") {
+		t.Errorf("prefill note %q", note)
 	}
 }

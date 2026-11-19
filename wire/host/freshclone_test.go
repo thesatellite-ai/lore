@@ -17,7 +17,9 @@ import (
 // set up (no merge driver, no lore hook block) the missing ride-along
 // blocks are a note naming what sets them up, so a teammate's fresh clone
 // does not read DEGRADED; once lore wired the clone (its merge driver is
-// set) the same missing blocks are a warning again (they were removed).
+// set) the same missing blocks are a warning again (they were removed):
+// one warning, the leak guard's, with one next step (devco:Q-16: doctor
+// also said "git hook block missing … run lore fix (or lore sync)").
 func TestDoctorHooksFreshCloneIsANote(t *testing.T) {
 	testenv.SetHome(t, t.TempDir())
 	ctx := context.Background()
@@ -27,10 +29,10 @@ func TestDoctorHooksFreshCloneIsANote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &liveSession{repo: repo, top: dir}
+	s := &liveSession{repo: repo, top: dir, h: &liveHost{}} // no leak checker: the guard scan finds nothing
 	check := func() (warns, notes []string) {
 		s.doctorHooks(ctx, "main", false, func(w string) { warns = append(warns, w) }, func(n string) { notes = append(notes, n) })
-		return warns, notes
+		return append(s.doctorGuard(ctx, "main"), warns...), notes
 	}
 	warns, notes := check()
 	if len(warns) != 0 || len(notes) != 1 || !strings.Contains(notes[0], "git hook block missing in post-commit, pre-push") || !strings.Contains(notes[0], "not set up for lore yet") {
@@ -38,9 +40,18 @@ func TestDoctorHooksFreshCloneIsANote(t *testing.T) {
 	}
 
 	gitT(t, dir, "config", "merge."+mergeDriverLore+".driver", "lore merge-driver %O %A %B %P")
-	if warns, _ = check(); len(warns) != 1 || !strings.Contains(warns[0], "run `lore fix` (or `lore sync`)") {
-		t.Fatalf("a wired clone whose blocks are gone: warnings %q, want the warning", warns)
+	if warns, _ = check(); len(warns) != 1 || !strings.Contains(warns[0], "leak guard off in this clone") || !strings.Contains(warns[0], "run `lore fix` to restore them") || strings.Contains(warns[0], "lore sync") {
+		t.Fatalf("a wired clone whose blocks are gone: warnings %q, want the one leak-guard warning", warns)
 	}
+	managed := filepath.Join(dir, ".husky", "_")
+	if err := os.MkdirAll(managed, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, dir, "config", "core.hooksPath", ".husky/_")
+	if warns, _ = check(); len(warns) != 1 || !strings.Contains(warns[0], "core.hooksPath=.husky/_") || !strings.Contains(warns[0], "run `lore fix` again after it reinstalls its hooks") {
+		t.Fatalf("a hook manager's folder: warnings %q, want one warning naming core.hooksPath and the step after a reinstall", warns)
+	}
+	gitT(t, dir, "config", "--unset", "core.hooksPath")
 
 	gitT(t, dir, "config", "--unset", "merge."+mergeDriverLore+".driver")
 	hooks := filepath.Join(dir, ".git", "hooks")

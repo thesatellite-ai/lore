@@ -47,6 +47,10 @@ const errOneMode = "pass only one of --for-file, --for-task, --topic, --topics, 
 
 // FetchIn is the input of context.fetch (the v0.1.17 flags).
 type FetchIn struct {
+	// --store <org>[/<folder>] (devco D-555): context for a store read
+	// from anywhere (the home folder, a repo not linked to a folder), as
+	// every other read takes it.
+	op.StoreFlag
 	ForFile      string `json:"for_file,omitempty" flag:"for-file" desc:"rules, hotfixes and notes for this path"`
 	ForTask      string `json:"for_task,omitempty" flag:"for-task" desc:"the task, its plan and links, then what applies to the files it names"`
 	Topic        string `json:"topic,omitempty" flag:"topic" desc:"every row tagged with this topic"`
@@ -54,7 +58,7 @@ type FetchIn struct {
 	ForPrompt    string `json:"for_prompt,omitempty" flag:"for-prompt" desc:"rows matching this free text"`
 	Hook         string `json:"hook,omitempty" flag:"hook" desc:"answer a tool hook (claude_code, codex, gemini_cli)"`
 	HookStdin    bool   `json:"hook_stdin,omitempty" flag:"hook-stdin" desc:"with --hook: read the hook input JSON from stdin"`
-	SessionStart bool   `json:"session_start,omitempty" flag:"session-start" desc:"with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)"`
+	SessionStart bool   `json:"session_start,omitempty" flag:"session-start" desc:"with --hook: answer SessionStart (in a repo with no LORE.md the always-on rules first, then in-flight tasks, rows changed since your last session)"`
 	MaxBytes     int    `json:"max_bytes,omitempty" flag:"max-bytes" min:"1" desc:"cap the output in bytes (default 16000; hooks: context.hook_cap)"`
 	Meta         bool   `json:"meta,omitempty" flag:"meta" desc:"also print each returned row's metadata (sensitive values masked)"`
 	Internal     bool   `json:"internal,omitempty" flag:"internal" desc:"internal, global and personal rows (outside this checkout)"`

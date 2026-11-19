@@ -22,9 +22,11 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -141,11 +143,11 @@ func (a *App) InitStore(ctx context.Context, in opsstores.InitIn) (opsstores.Ini
 		return opsstores.InitOut{}, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: vis, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
-	got, already, err := a.makeStore(ctx, canon, raw, m)
+	got, made, err := a.makeStore(ctx, canon, raw, m)
 	if err != nil {
 		return opsstores.InitOut{}, err
 	}
-	out := opsstores.InitOut{Name: in.Name, URL: raw, Already: already, Org: org, OrgSetup: orgAdminSetup(a.opts.Home, org)}
+	out := opsstores.InitOut{Name: in.Name, URL: raw, Already: made.already, Pushed: made.pushed, Org: org, OrgSetup: orgAdminSetup(a.opts.Home, org)}
 	if !got.ID.IsZero() {
 		out.ID = got.ID.String()
 	}
@@ -184,50 +186,77 @@ func attachedAs(top, name string) (attach.Store, bool, error) {
 // .lore/stores.yaml entry. A setup's own personal_store url uses it, since
 // the setup entry is what points at that store (realmac finding 13: the
 // page promised "Save will run lore store init" and nothing ran).
-func (a *App) InitStoreMarker(ctx context.Context, raw string) (bool, error) {
+func (a *App) InitStoreMarker(ctx context.Context, raw string) (InitMarkerResult, error) {
 	raw, err := cleanFileURL(raw)
 	if err != nil {
-		return false, err
+		return InitMarkerResult{}, err
 	}
 	canon, err := canonical(attach.Store{URL: raw})
 	if err != nil {
-		return false, err
+		return InitMarkerResult{}, err
 	}
 	id, err := ids.New[ids.Store]()
 	if err != nil {
-		return false, errs.Wrap(errs.Internal, "store init: new store id", err)
+		return InitMarkerResult{}, errs.Wrap(errs.Internal, "store init: new store id", err)
 	}
 	m := rowfs.Marker{ID: id, Visibility: rowfs.VisibilityInternal, Created: a.opts.Wall().UTC().Format(markerDateLayout)}
-	_, already, err := a.makeStore(ctx, canon, raw, m)
-	return already, err
+	_, made, err := a.makeStore(ctx, canon, raw, m)
+	return InitMarkerResult{Already: made.already, Pushed: made.pushed}, err
+}
+
+// InitMarkerResult is what InitStoreMarker did.
+type InitMarkerResult struct {
+	// Already: the url was a lore store before; nothing was written.
+	Already bool
+	// Pushed: the new store's marker commit was pushed to its git remote
+	// (devco D-613: the setup step's output names it).
+	Pushed bool
+}
+
+// storeMade is what makeStore did beyond the marker in force.
+type storeMade struct {
+	// already: the url was a lore store before; nothing was written.
+	already bool
+	// pushed: the marker commit went to the git remote (a new git store).
+	// Publishing the new store is the point of a store url, so the first
+	// push needs no --push; every output that made one says so (devco
+	// D-613: nothing reaches a remote without the person seeing it).
+	pushed bool
 }
 
 // makeStore writes m as the marker of the store at canon unless it already
-// has one; it returns the marker in force and whether it was already there.
-func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) (rowfs.Marker, bool, error) {
+// has one; it returns the marker in force and what it did.
+func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) (rowfs.Marker, storeMade, error) {
 	u, err := url.Parse(canon)
 	if err != nil {
-		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: the url does not parse")
+		return rowfs.Marker{}, storeMade{}, errs.New(errs.StoreScheme, "store init: the url does not parse")
 	}
 	if u.Scheme == folder.Scheme {
 		dir := fileuri.OSPath(u.Path)
 		if old, rerr := rowfs.ReadMarker(dir); rerr == nil {
-			return old, true, nil
+			return old, storeMade{already: true}, nil
 		} else if !errs.Has(rerr, errs.NotAStore) {
 			if !errors.Is(rerr, fs.ErrNotExist) {
-				return rowfs.Marker{}, false, rerr
+				return rowfs.Marker{}, storeMade{}, rerr
 			}
 		}
-		return m, false, folder.Init(dir, m, a.opts.rowfsOptions()...)
+		if err = folder.Init(dir, m, a.opts.rowfsOptions()...); err != nil {
+			return rowfs.Marker{}, storeMade{}, err
+		}
+		if fspath.Same(dir, personalFolderDir(a.opts.Home)) {
+			// N-13: the personal folder is the one a person may later put in git by hand
+			err = folder.IgnoreState(dir)
+		}
+		return m, storeMade{}, err
 	}
 	b, err := a.openStore(ctx, canon, raw)
 	if err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	defer func() { _ = b.Close() }() // read-mostly handle; the commit below already landed
 	gb, ok := b.(*git.Backend)
 	if !ok {
-		return rowfs.Marker{}, false, errs.New(errs.StoreScheme, "store init: not a git store")
+		return rowfs.Marker{}, storeMade{}, errs.New(errs.StoreScheme, "store init: not a git store")
 	}
 	if old := gb.Marker(); old.Version > 0 {
 		// B3-29: the marker is the clone's; judge the remote's own content.
@@ -235,40 +264,40 @@ func (a *App) makeStore(ctx context.Context, canon, raw string, m rowfs.Marker) 
 		// not "already a lore store": this clone of the old one is stale.
 		reset, rerr := gb.RemoteReset(ctx)
 		if rerr != nil {
-			return rowfs.Marker{}, false, rerr
+			return rowfs.Marker{}, storeMade{}, rerr
 		}
 		if reset {
 			shown := raw
-			return rowfs.Marker{}, false, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
+			return rowfs.Marker{}, storeMade{}, errs.New(errs.Refused, "store init: "+shown+" was deleted and made again, but this machine's clone "+gb.Dir()+" still holds the old store ("+old.ID.String()+"); nothing was changed").
 				WithHint("start fresh: lore store forget --url " + shown + ", then run this command again; or put the old store back: lore store add --name <name> --url " + shown + ", then lore store push --store <name> --restore")
 		}
-		return old, true, nil
+		return old, storeMade{already: true}, nil
 	}
 	if err = rowfs.WriteMarker(gb.Dir(), m); err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	files := []string{rowfs.MarkerFile}
 	if readme, rerr := readmeForCommit(ctx, gb.Dir()); rerr != nil {
-		return rowfs.Marker{}, false, rerr
+		return rowfs.Marker{}, storeMade{}, rerr
 	} else if readme != "" {
 		files = append(files, readme)
 	}
 	if wrote, serr := rowfs.EnsureSignpost(gb.Dir()); serr != nil {
-		return rowfs.Marker{}, false, serr
+		return rowfs.Marker{}, storeMade{}, serr
 	} else if wrote {
 		files = append(files, rowfs.SignpostFile) // a new store: lore 0.1.17 says so first (rowfs/signpost.go)
 	}
 	if err = gitCommitFilesAs(ctx, gb.Dir(), a.opts.Wall(), storeIdentityFunc(a.opts), initSubject, files...); err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	rep, err := gb.Sync(git.WithFirstPush(ctx)) // the store's first push (remotereset.go)
 	if err != nil {
-		return rowfs.Marker{}, false, err
+		return rowfs.Marker{}, storeMade{}, err
 	}
 	if len(rep.Refused) > 0 {
-		return rowfs.Marker{}, false, errs.New(errs.PolicyDenied, "store init: the remote refused the marker commit: "+rep.Refused[0].Reason)
+		return rowfs.Marker{}, storeMade{}, errs.New(errs.PolicyDenied, "store init: the remote refused the marker commit: "+rep.Refused[0].Reason)
 	}
-	return m, false, nil
+	return m, storeMade{pushed: true}, nil
 }
 
 // readmeForCommit writes lore's README.md into the git store clone dir
@@ -429,18 +458,20 @@ func (s storeSigner) owner(ctx context.Context, raw string) (git.Signature, bool
 	if s.opts.OrgSigners == nil {
 		return git.Signature{}, false
 	}
-	key, ok := storeKey(raw)
-	if !ok {
-		return git.Signature{}, false
-	}
 	orgs, err := s.opts.OrgSigners(ctx)
 	if err != nil {
 		return git.Signature{}, false
 	}
-	for _, o := range orgs {
-		for _, u := range o.StoreURLs {
-			if k, ok := storeKey(u); ok && k == key {
-				return git.Signature{Name: o.Name, Email: o.Email}, true
+	for _, addr := range ownerAddresses(ctx, raw) { // D-514: a store set-url is moving is still its org's
+		key, ok := storeKey(addr)
+		if !ok {
+			continue
+		}
+		for _, o := range orgs {
+			for _, u := range o.StoreURLs {
+				if k, ok := storeKey(u); ok && k == key {
+					return git.Signature{Name: o.Name, Email: o.Email}, true
+				}
 			}
 		}
 	}
@@ -474,13 +505,21 @@ func (s storeSigner) envFor(ctx context.Context, dir string) ([]string, error) {
 // differences (clone folders and locations are keyed on it), so two urls
 // are compared as one store only through this key.
 func storeKey(raw string) (string, bool) {
+	k, _, ok := storeKeyRemote(raw)
+	return k, ok
+}
+
+// storeKeyRemote is storeKey plus the git remote the key came from (nil
+// for a file:// store), for the comparisons that also ask whether two
+// hosts are one host under two names (sameStoreAs).
+func storeKeyRemote(raw string) (string, *git.Remote, bool) {
 	c, err := canonical(attach.Store{URL: raw})
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
 	u, err := url.Parse(c)
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
 	u.RawQuery, u.Fragment = "", ""
 	if u.Scheme == folder.Scheme {
@@ -488,13 +527,52 @@ func storeKey(raw string) (string, bool) {
 			u.Path = p
 		}
 		u.RawPath = ""
-		return u.String(), true
+		return u.String(), nil, true
 	}
 	r, err := git.RemoteOf(u)
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
-	return r.Norm, true
+	return r.Norm, &r, true
+}
+
+// localRemote reports a git remote that is a local path (no host).
+func localRemote(r git.Remote) bool { return strings.HasPrefix(r.Norm, git.LocalHost+"/") }
+
+// sameStoreAs is the test "names the store raw names" for finding the org
+// entry (or personal store) a store clone's origin belongs to; nil when raw
+// is no store url. Two urls are one store when they share storeKey, or are
+// git remotes with one repository path on hosts that are one host under
+// two names (git.SameRepoViaAlias: an ssh alias the ssh config sends to
+// the other host, or a single-label alias host it does not name).
+//
+// devco D-627: a clone's origin spelled git@<alias>:org/store.git keyed as
+// <alias>/org/store when the ssh config did not rename the alias (a git
+// url.<base>.insteadOf route), so the org lookup missed the org's
+// git@github.com:org/store.git entry although lore uses that very clone
+// for it (CloneDirFor asks SameRepoViaAlias): a read in the clone folder
+// lost the org folder layer and named the store by its folder. Every
+// lookup of a store url in an org entry or store list asks the same rule
+// the clone folder lookup does.
+func sameStoreAs(raw string) func(other string) bool {
+	want, wr, ok := storeKeyRemote(raw)
+	if !ok {
+		return nil
+	}
+	return func(other string) bool {
+		k, r, kok := storeKeyRemote(other)
+		switch {
+		case !kok:
+			return false
+		case k == want:
+			return true
+		case wr == nil || r == nil || localRemote(*wr) || localRemote(*r):
+			return false // a folder store or a local path has no host alias
+		default:
+			// devco D-680: or git itself rewrites both to one target
+			return git.SameRepoViaAlias(*wr, *r) || git.SameRepoViaRewrite(raw, other)
+		}
+	}
 }
 
 // storeOpeners is newOpeners with this App's commit signing: every git
@@ -689,14 +767,16 @@ func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
 	for _, e := range out {
 		taken[e.Name] = true
 	}
+	var listed []string
 	if top != "" {
 		if c, rerr := readStoresFile(top); rerr == nil {
 			for _, s := range c.Stores {
 				taken[string(s.Name)] = true
+				listed = append(listed, s.URL)
 			}
 		}
 	}
-	return append(out, a.otherOrgStores(out, taken)...), nil
+	return append(out, a.otherOrgStores(out, taken, listed)...), nil
 }
 
 // otherOrgStores are the stores of the org entries behind got (the org
@@ -707,9 +787,19 @@ func (a *App) OrgStoreEntries(ctx context.Context) ([]opsstores.Entry, error) {
 // (storeshortname.go; owner report 2026-11-11: only the org's first store
 // was listed), or by its url when the short name is a name taken here
 // (a stores.yaml entry, an attached org name, or another store's).
-func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool) []opsstores.Entry {
+//
+// listed are the urls this repo's stores.yaml attaches: such a store is
+// already a row under the name given there, so it is not listed a second
+// time under its org short name or url (devco T-22: one client store
+// showed as "clientco … stores.yaml" and again as "client-store … org").
+func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool, listed []string) []opsstores.Entry {
 	orgs := map[string]bool{}
 	seen := map[string]bool{}
+	for _, u := range listed {
+		if k, ok := storeKey(u); ok {
+			seen[k] = true
+		}
+	}
 	for _, e := range got {
 		org, _, _ := strings.Cut(e.Name, targetSep)
 		orgs[org] = true
@@ -740,7 +830,11 @@ func (a *App) otherOrgStores(got []opsstores.Entry, taken map[string]bool) []ops
 				name = sc.URL
 			}
 			taken[name] = true
-			out = append(out, opsstores.Entry{Name: name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
+			e := opsstores.Entry{Name: name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg}
+			if sc.AdminsOnly() {
+				e.Audience = string(orgconf.AudienceAdmins) // D-442: an admin sees which store members never read
+			}
+			out = append(out, e)
 		}
 	}
 	return out
@@ -792,8 +886,8 @@ func samePlace(a, b attach.Store) bool {
 	if sameURL(a, b) {
 		return true
 	}
-	na, ea := repourl.NormalizeStore(a.URL)
-	nb, eb := repourl.NormalizeStore(b.URL)
+	na, ea := storeIdentity(a.URL)
+	nb, eb := storeIdentity(b.URL)
 	return ea == nil && eb == nil && na == nb && a.Branch == b.Branch
 }
 
@@ -823,6 +917,9 @@ func (a *App) folderExists(ctx context.Context, src attach.Store, f string) (boo
 // file:// store, the lore-owned worktree of a git store (of src's pinned
 // branch, when it names one).
 func (a *App) storeDir(ctx context.Context, src attach.Store) (string, error) {
+	if err := a.untrustedStoreErr(ctx, src); err != nil {
+		return "", err
+	}
 	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return "", err
@@ -1017,6 +1114,9 @@ func (a *App) findStore(ctx context.Context, verb, name string) (attach.Store, e
 // it returns are committed (gitCommitFilesAs: org identity or FLAG4) and
 // pushed in one sync. edit returning no paths commits nothing.
 func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string, edit func(dir string) ([]string, error)) error {
+	if err := a.untrustedStoreErr(ctx, src); err != nil {
+		return err
+	}
 	canon, err := canonical(attach.Store{URL: src.URL, Branch: src.Branch})
 	if err != nil {
 		return err
@@ -1080,7 +1180,7 @@ func (a *App) withStoreDir(ctx context.Context, src attach.Store, subject string
 	// this very commit leaves it) is now; otherwise it waits for `lore sync`.
 	if m, merr := rowfs.ReadMarker(gb.Dir()); merr != nil || !pushesNow(m.Push) {
 		if a.opts.Notice != nil {
-			a.opts.Notice("committed locally to store " + string(src.Name) + "; lore sync sends it")
+			a.opts.Notice("committed locally to store " + a.writtenStoreLabel(src) + "; lore sync sends it")
 		}
 		return nil
 	}
@@ -1248,4 +1348,21 @@ func (a *App) personalInitOutsideRepo(ctx context.Context, e op.Entry, d op.Deco
 		}
 	}
 	return false
+}
+
+// writtenStoreLabel names the store a commit landed in, as lore sync and
+// store show name it: an org's store by its own short name (the org's
+// folder store by the org), else the name src was reached by. An org's
+// second store is reached under the org entry's name, so "committed
+// locally to store <org>" named the wrong store (devco D-542).
+func (a *App) writtenStoreLabel(src attach.Store) string {
+	if k, ok := storeKey(src.URL); ok {
+		if org := a.orgFolderStores()[k]; org != "" {
+			return org
+		}
+		if n := a.orgShortNames()[k]; n != "" {
+			return n
+		}
+	}
+	return string(src.Name)
 }

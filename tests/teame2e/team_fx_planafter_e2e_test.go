@@ -38,7 +38,7 @@ tasks:
 	}
 
 	_, ac := cr.agent(t, "backend-1")
-	ac.MustLore("task", "next").Says(t, ids["invite mutation + email"])
+	ac.MustLore("task", "next", "--claim").Says(t, ids["invite mutation + email"])
 	ac.MustLore("task", "done", ids["invite mutation + email"], "--no-lesson")
-	ac.Lore("task", "next").Fails(t, th.ExitNoWork, "merged")
+	ac.Lore("task", "next", "--claim").Fails(t, th.ExitNoWork, "merged")
 }

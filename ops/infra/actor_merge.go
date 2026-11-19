@@ -40,6 +40,12 @@ type ActorMergeIn struct {
 	Into string `json:"into" arg:"1" desc:"the actor id that stays (act_…; usually the org roster's)"`
 	// DryRun counts what the merge would rewrite.
 	DryRun bool `json:"dry_run,omitempty" flag:"dry-run" desc:"count the rows that name <from>; change nothing"`
+	// To names the org store (folder) holding the two actors, so the merge
+	// runs from any folder (devco D-424); empty: the stores this command
+	// reads, then every org store of this machine.
+	// It is not the generic write target (json "to"): that one resolves
+	// only the folder's own stores outside a repo.
+	To string `json:"store,omitempty" flag:"store" alias:"to" desc:"the org store holding both actors (<org>/<folder>); default: the stores this command reads, then this machine's org stores"`
 }
 
 // ActorMergeTable is how many rows of one table name the merged actor.

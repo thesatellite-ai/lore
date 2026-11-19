@@ -84,3 +84,25 @@ func TestLockedTable(t *testing.T) {
 		t.Fatal("LockedTable")
 	}
 }
+
+// TestLegacyBranchLayersFloorWritable (devco:V-1): folders the 0.1.18
+// previews declared say branch_layers with min_lore_version 0.1.19 (the
+// old plan). Branch layers ship in 0.1.18, so a released 0.1.18 (and any
+// build that knows every declared feature) writes there; a floor of 0.1.19
+// without branch_layers, with a feature this build does not know, or a
+// higher floor still refuses.
+func TestLegacyBranchLayersFloorWritable(t *testing.T) {
+	legacy := Declared{Features: []string{BranchLayers, Meta}, MinLoreVersion: "0.1.19"}
+	if v := Check("0.1.18", legacy); !v.Writable {
+		t.Fatalf("0.1.18 may not write its previews' folder: %+v", v)
+	}
+	if v := Check("0.1.18", Declared{Features: []string{Meta}, MinLoreVersion: "0.1.19"}); v.Writable {
+		t.Fatalf("a 0.1.19 floor without branch layers was waived: %+v", v)
+	}
+	if v := Check("0.1.18", Declared{Features: []string{BranchLayers, "from_the_future"}, MinLoreVersion: "0.1.19"}); v.Writable {
+		t.Fatalf("an unknown feature was waived: %+v", v)
+	}
+	if v := Check("0.1.18", Declared{Features: []string{BranchLayers}, MinLoreVersion: "0.1.20"}); v.Writable {
+		t.Fatalf("a floor above the legacy one was waived: %+v", v)
+	}
+}

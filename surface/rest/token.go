@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -123,7 +124,7 @@ func TokenFileAuth(home string) func(next http.Handler) http.Handler {
 			}
 			if !bearerMatches(r, sha256.Sum256([]byte(tok))) {
 				refuseBearer(w, errs.New(errs.Unauthorized, "missing or wrong bearer token").
-					WithHint("send Authorization: Bearer <the token in ~/.lore/api-token>"))
+					WithHint("send Authorization: Bearer <the token in "+lorehome.Shown()+"/api-token>"))
 				return
 			}
 			next.ServeHTTP(w, r)

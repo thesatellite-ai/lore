@@ -65,7 +65,7 @@ With `--json` (and every `lore api` error body), one object:
 
 | Code | Exit | What to do |
 |---|---|---|
-| `E_NO_WORK` | 10 | `lore task next` found nothing ready; the message lists why each candidate is blocked. Wait, or check `lore inbox` |
+| `E_NO_WORK` | 10 | `lore task next --claim` found nothing ready; the message lists why each candidate is blocked. Wait, or check `lore inbox` |
 | `E_CONTENDED` | 11 | another writer won every attempt (a claim race, or a live push whose remote moved on every retry); retry after a short wait |
 | `E_LOST_CLAIM` | 12 | your claim is gone (lease expired, reclaimed or revoked); stop work on this task |
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it; stop |

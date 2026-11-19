@@ -44,6 +44,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/logic/agentdetect"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
@@ -700,7 +701,7 @@ func jAgentsStartAPI(t *testing.T, c *teamharness.Clone, tool *jAgentsTool, sess
 			t.Fatal(err)
 		}
 		return &jAgentsAPI{t: t, base: mm[1], token: strings.TrimSpace(string(b))}
-	case <-time.After(30 * time.Second):
+	case <-time.After(testtime.Scale(30 * time.Second)):
 		t.Fatal("lore api printed no listening line")
 	}
 	return nil

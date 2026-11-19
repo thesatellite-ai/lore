@@ -126,6 +126,21 @@ func TestStoryBPeople(t *testing.T) {
 		}
 	})
 
+	s.Step("day1/admin-reads-from-the-code-folder", func() {
+		// devco D-421: ~/code (the parent of the clones, inside the setup's
+		// folders, not a repo) reads what `--to` wrote, with the same --to;
+		// with no flag a read reads the org's stores. It never becomes a repo.
+		code := filepath.Join(cto.Home, "code")
+		cto.Lore(code, "rule", "list", "--to", bOrg+"/org").OK(t).Says(t, bRule).Never(t, "E_NOT_A_STORE", "git init")
+		cto.Lore(code, "search", "--query", "health", "--to", bOrg+"/org").OK(t).Says(t, bRule)
+		cto.Lore(code, "rule", "list").OK(t).Says(t, bRule)
+		cto.Lore(code, "lint").OK(t).Never(t, "E_NOT_A_STORE")
+		cto.Lore(code, "actor", "list").OK(t).Says(t, bLead.Name)
+		if _, err := os.Stat(filepath.Join(code, ".git")); !os.IsNotExist(err) {
+			t.Fatalf("a read from %s made it a git repo (%v)", code, err)
+		}
+	})
+
 	s.Step("day8/new-hire-joins-by-the-store-url", func() {
 		s.AdvanceDays(7)
 		nia := b.person(t, bHire)

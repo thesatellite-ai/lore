@@ -89,7 +89,7 @@ type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
 
-	OnTable string `json:"on_table" flag:"on-table" desc:"target entity table (memories|rules|decisions|...)"`
+	OnTable string `json:"on_table,omitempty" flag:"on-table" desc:"target entity table (memories|rules|decisions|...); default: the table of the --on-id prefix"`
 	OnID    string `json:"on_id" flag:"on-id" desc:"target entity id"`
 	Body    string `json:"body" flag:"body" desc:"the comment text" ui:"widget=markdown"`
 	To      string `json:"to,omitempty" flag:"to" alias:"store" desc:"store to write to (a name from .lore/stores.yaml, me, <store>/<folder>; default repo)"`
@@ -299,6 +299,10 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		return AddOut{}, errs.New(errs.EmptyBody, "comment add: the body is empty").
 			WithHint(`lore comment add --on-table <table> --on-id <id> --body "<text>"`)
 	}
+	var err error
+	if in.OnTable, err = lookup.OnTable("comment add", in.OnTable, in.OnID); err != nil {
+		return AddOut{}, err
+	}
 	to := store.Source(in.To)
 	if to == "" {
 		// F-5: a comment with no --to follows its target's store (a task
@@ -450,7 +454,7 @@ func (o ops) search(ctx context.Context, in SearchIn) (SearchOut, error) {
 	if err != nil {
 		return SearchOut{}, err
 	}
-	hits, err := o.env.Search(ctx, table, in.Query, maxSearchLimit)
+	hits, err := opsmemory.SearchRanked(ctx, o.env, "comment", table, in.Query, maxSearchLimit) // D-461: read and ranked as `lore search`
 	if err != nil {
 		return SearchOut{}, err
 	}

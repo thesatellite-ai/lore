@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -95,6 +96,9 @@ type PushView struct {
 	// one personal store `me`, shared by all their setups (decided
 	// 2026-11-09; journey joiner).
 	SharedBy []string `json:"shared_by,omitempty"`
+	// Folders are the store's folders (store show --store <name>, devco
+	// D-571); empty for a store with none or a build that cannot list them.
+	Folders []string `json:"folders,omitempty"`
 }
 
 // Text prints one store's settings.
@@ -107,7 +111,7 @@ func (v PushView) Text() string {
 	}
 	fmt.Fprintf(&b, "%s: %s\n", v.Store, v.Summary)
 	v.personalLines(&b)
-	where := "~/.lore/config.yaml (personal:)"
+	where := lorehome.Shown() + "/config.yaml (personal:)"
 	switch v.Place {
 	case PlaceOrg:
 		where = "the store's lore-store.yaml (org " + v.Org + "; set by an org admin"
@@ -123,6 +127,9 @@ func (v PushView) Text() string {
 		fmt.Fprintf(&b, "  problem   %s (pushing as now until it is fixed)\n", v.Problem)
 	}
 	fmt.Fprintf(&b, "  epoch     %d\n", v.Epoch)
+	if len(v.Folders) > 0 {
+		fmt.Fprintf(&b, "  folders   %s\n", strings.Join(v.Folders, ", "))
+	}
 	if v.Unpushed > 0 {
 		age := ""
 		if v.WaitingFor != "" {
@@ -314,8 +321,14 @@ type PushOut struct {
 	Store    string `json:"store"`
 	URL      string `json:"url"`
 	Restored bool   `json:"restored,omitempty"`
-	Sent     int    `json:"sent"`
-	Offline  bool   `json:"offline,omitempty"`
+	// Sent is the commits the push put on the remote (the store branch's
+	// over the remote's tip before it, plus each branch layer ref's), and
+	// Rows the row files they changed in any folder of the store. A commit
+	// that changes no row (an org file) is still sent: "sent 0" only when
+	// nothing moved (D-517: a pushed lore-org.yaml commit said "sent 0").
+	Sent    int  `json:"sent"`
+	Rows    int  `json:"rows"`
+	Offline bool `json:"offline,omitempty"`
 }
 
 // Text prints the push.
@@ -324,9 +337,16 @@ func (o PushOut) Text() string {
 	case o.Offline:
 		return "store " + o.Store + ": offline, nothing pushed; the local commits wait for the next sync\n"
 	case o.Restored:
-		return "✓ store " + o.Store + ": this machine's copy is back at " + o.URL + " (sent " + strconv.Itoa(o.Sent) + ")\n"
+		return "✓ store " + o.Store + ": this machine's copy is back at " + o.URL + " (" + o.sentText() + ")\n"
+	case o.Sent == 0:
+		return "✓ store " + o.Store + ": nothing to send, the remote already has every commit\n"
 	}
-	return "✓ store " + o.Store + ": sent " + strconv.Itoa(o.Sent) + "\n"
+	return "✓ store " + o.Store + ": " + o.sentText() + "\n"
+}
+
+// sentText is "sent 1 commit (2 row files)": what the push moved.
+func (o PushOut) sentText() string {
+	return "sent " + plural(o.Sent, "commit") + " (" + plural(o.Rows, "row file") + ")"
 }
 
 // StorePusherNow is the optional Manager upgrade behind store.push

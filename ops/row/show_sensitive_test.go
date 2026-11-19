@@ -82,8 +82,8 @@ func TestShowSensitiveResourceFields(t *testing.T) {
 			t.Fatalf("show leaks %s:\n%s", p, all)
 		}
 	}
-	if !slices.Equal(out.MetaMasked, []string{"ip", "vpn"}) || !strings.Contains(out.Fields["fields"], "debian-12") ||
-		!strings.Contains(out.Fields["fields"], `"v":"(sensitive, hidden)"`) {
+	if !slices.Equal(out.MetaMasked, []string{"ip", "vpn"}) || !strings.Contains(out.Fields["fields"].String(), "debian-12") ||
+		!strings.Contains(out.Fields["fields"].String(), `"v":"(sensitive, hidden)"`) {
 		t.Fatalf("masked resource show: %+v", out)
 	}
 	h.Fails(row.OpShow, `{"id":"`+id+`","show_sensitive":true}`, errs.NeedsConfirm)
@@ -91,7 +91,7 @@ func TestShowSensitiveResourceFields(t *testing.T) {
 	if err := json.Unmarshal([]byte(h.JSON(h.MustYes(row.OpShow, `{"id":"`+id+`","show_sensitive":true}`))), &shown); err != nil {
 		t.Fatal(err)
 	}
-	if len(shown.MetaMasked) != 0 || !strings.Contains(shown.Fields["fields"], "203.0.113.11") || !strings.Contains(shown.Fields["fields"], "probe-vpn-7") {
+	if len(shown.MetaMasked) != 0 || !strings.Contains(shown.Fields["fields"].String(), "203.0.113.11") || !strings.Contains(shown.Fields["fields"].String(), "probe-vpn-7") {
 		t.Fatalf("--show-sensitive resource show: %+v", shown)
 	}
 }

@@ -21,8 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/ops/internal/showfield"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -127,7 +129,7 @@ func (o ops) listHistory(ctx context.Context, in ListIn, since time.Time, by str
 	for _, h := range hs {
 		it, _, _ := historyItem(h)
 		switch {
-		case in.To != "" && it.Store != strings.TrimSpace(in.To):
+		case in.To != "" && !engine.InNamedStore(store.Source(in.To), store.Source(it.Store)):
 		case in.Type != "" && !typeMatches(it.Table, in.Type):
 		case by != "" && it.DeletedBy != by:
 		case in.Search != "" && !matches(it, in.Search):
@@ -160,7 +162,7 @@ func (o ops) showHistory(ctx context.Context, in ShowIn) (ShowOut, error) {
 		it, r, ok := historyItem(h)
 		one := []Item{it}
 		o.labelDeleters(ctx, one)
-		out := ShowOut{Data: one[0], Fields: map[string]string{}, History: true}
+		out := ShowOut{Data: one[0], Fields: showfield.Map{}, History: true}
 		if !ok {
 			return out, nil
 		}
@@ -178,7 +180,7 @@ func (o ops) restoreHistory(ctx context.Context, id string) error {
 	if err := o.removedByCommit(ctx, id); err != nil {
 		return err
 	}
-	return errs.New(errs.Purged, "trash: "+id+" was purged; purged rows never come back (DQ4)").
+	return errs.New(errs.Purged, "trash: "+id+" was purged; purged rows never come back").
 		WithHint("read it: lore trash show --id " + id + " --from-history; then add what you still need as a new row")
 }
 

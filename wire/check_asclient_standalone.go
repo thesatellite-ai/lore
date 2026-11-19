@@ -44,6 +44,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/leakcheck"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -165,13 +166,7 @@ func asClientLine(f leakcheck.Finding, explain bool) string {
 	if f.Line > 0 {
 		where = fmt.Sprintf("%s:%d", where, f.Line)
 	}
-	detail := f.Detail
-	if !explain && f.Rule == leakcheck.RuleText {
-		detail = fmt.Sprintf("matches internal note %s (%d words)", f.RowID, f.Words)
-	}
-	if explain {
-		detail = fmt.Sprintf("[%s rule] %s %s", f.Rule, detail, f.Label)
-	}
+	detail := f.Describe(explain)
 	return fmt.Sprintf("  %-40s %s\n      fix: %s", where, detail, leakFix(LeakWhereCommit, f.Path))
 }
 
@@ -290,7 +285,7 @@ func asClientDataPrefix(top, root string) string {
 // root that does not exist yet through its deepest existing folder; plain
 // EvalSymlinks left such a root unresolved and the prefix fell back to the
 // top's .lore/data/.
-func realGitPath(p string) string { return resolvedPath(p) }
+func realGitPath(p string) string { return fspath.Canonical(p) }
 
 // trackedItems reads every tracked file of the checkout at top (work tree
 // copy) as a leak-check item; large files, symlinks and submodules are
@@ -515,3 +510,8 @@ func inCIEnv() bool {
 	}
 	return false
 }
+
+// InCIEnv reports a CI run (any of the CI marker variables set non-empty):
+// the host's live hook then reads the checkout only, fetching nothing and
+// writing nothing in .git (wire/host/live_still.go).
+func InCIEnv() bool { return inCIEnv() }

@@ -51,7 +51,8 @@ func TestPlanLinkMatrix(t *testing.T) {
 		{"no remote", func(r *LinkRequest) { r.Remotes = nil }, "", ErrLinkNoRemote},
 		{"two remotes, no --remote", func(r *LinkRequest) { r.Remotes = []string{"github.com/acme/app", "github.com/me/fork"} }, "choose one with --remote", nil},
 		{"--remote not ours", func(r *LinkRequest) { r.Remote = "github.com/x/y" }, "not a remote of this repo", nil},
-		{"--own on a client repo", func(r *LinkRequest) { r.Own = true }, "", ErrLinkOwnPattern},
+		{"--own on a client repo", func(r *LinkRequest) { r.Own = true }, "stays a client repo", ErrLinkClientListed}, // D-428
+		{"--own on an unlisted repo", func(r *LinkRequest) { r.Own = true; r.Remotes = []string{"github.com/other/x"} }, "", ErrLinkOwnPattern},
 		{"--store not the entry's", func(r *LinkRequest) { r.StoreURL = "git@github.com:betalabs/lore" }, "not one of", nil},
 	}
 	for _, c := range cases {

@@ -34,6 +34,8 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/gitfault"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -176,8 +178,30 @@ func (s syncRows) SyncTrashRestore(ctx context.Context, in opssync.TrashRestoreI
 	return opssync.DoneOut{Done: text, Lines: []string{text}}, nil
 }
 
-// syncStoreOffline follows a store line whose remote could not be reached.
-const syncStoreOffline = " (offline: local changes kept, sent on the next sync)"
+// storeOfflineNote follows the line of a store whose remote stopped
+// answering (devco L-10: name the remote and git's reason; L-11: a store
+// that sent its commits in this same run is never "local changes kept").
+func storeOfflineNote(sent int, url, detail string) string {
+	cause := storeOfflineCause(url, detail)
+	if sent > 0 {
+		return " (sent; then " + cause + "; the next sync fetches again)"
+	}
+	return " (offline: " + cause + "; local changes kept, sent on the next sync)"
+}
+
+// storeOfflineCause is "<url> did not answer: <git's reason>" for a store
+// whose fetch or push got no answer (after the one retry of a dropped
+// connection), credentials masked.
+func storeOfflineCause(url, detail string) string {
+	where := "the store's remote"
+	if url != "" {
+		where = repourl.Mask(url)
+	}
+	if why := gitfault.Reason(detail); why != "" {
+		return where + " did not answer: " + why
+	}
+	return where + " did not answer"
+}
 
 // SyncRun implements opssync.Env: the host's pass, then, for a host that
 // leaves them to the core (opssync.CoreStores: cmd/lore's live-only host),
@@ -188,6 +212,21 @@ const syncStoreOffline = " (offline: local changes kept, sent on the next sync)"
 // report lines are printed first on stderr, since a failed run has no
 // stdout.
 func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut, error) {
+	out, err := s.syncRun(ctx, in)
+	if err == nil {
+		// devco R-7 / R-2: what the stores hold but lore did not take (a
+		// non-admin's change to lore-org.yaml, files lore does not own) is
+		// named with the commit, its author and the step that settles it.
+		for _, line := range s.app.storeTrustLines(ctx) {
+			out.Lines = append(out.Lines, line)
+			out.Data.Warnings = append(out.Data.Warnings, line)
+		}
+	}
+	return out, err
+}
+
+// syncRun is SyncRun before the store trust lines.
+func (s syncRows) syncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut, error) {
 	if s.app.setupSyncHere(ctx) {
 		return s.app.SyncSetup(ctx) // no code repo here: every store of the setup (syncsetup.go)
 	}
@@ -201,32 +240,40 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 	// G-SYNC-2: a row file a git merge left with conflict markers is a
 	// conflict of this pass too (sync status / conflicts list it the same
 	// way), so the --json report names it instead of only a stderr line.
-	// B2-8: a live row this pass merged with conflict markers (both sides
-	// rewrote one text field) is named too, with its number for resolve;
-	// before, the sync printed only the store lines and exited 0.
+	// B2-8: a live row holding a conflict (a strict metadata key two
+	// machines set differently, or markers an older lore wrote) is named
+	// too, with its cause and next step. D-220: it never fails the sync:
+	// the live ref is shared by every clone, so an E_STALE here stopped
+	// the sync of people who never touched the row; the row itself does
+	// not land until a person settles it.
+	stale := 0 // conflicts that are this clone's own to settle (E_STALE)
 	if live, lerr := s.hostConflicts(ctx, opssync.ConflictsIn{}); lerr == nil {
 		for _, c := range live.Data {
 			if c.Resolved {
 				continue
 			}
-			out.Data.Conflicts = append(out.Data.Conflicts, opssync.ConflictNote{Path: c.Table + "/" + c.RowID, Kept: c.Kept, Why: syncLiveConflictWhy})
-			out.Lines = append(out.Lines, fmt.Sprintf("conflict #%d live %s/%s: %s (lore sync resolve --id %d --take kept|other)", c.ID, c.Table, c.RowID, syncLiveConflictWhy, c.ID))
+			why, next := liveConflictCause(c)
+			out.Data.Conflicts = append(out.Data.Conflicts, opssync.ConflictNote{Path: c.Table + "/" + c.RowID, Kept: c.Kept, Why: why})
+			out.Lines = append(out.Lines, fmt.Sprintf("conflict #%d live %s/%s: %s (%s)", c.ID, c.Table, c.RowID, why, next))
 		}
 	}
 	if files, ferr := s.app.BranchConflicts(ctx); ferr == nil {
 		for _, f := range files {
 			out.Data.Conflicts = append(out.Data.Conflicts, opssync.ConflictNote{Path: f.Place, Kept: branchConflictKept, Why: syncMarkedFileWhy})
 			out.Lines = append(out.Lines, "conflict "+f.Place+": "+syncMarkedFileWhy)
+			stale++
 		}
 	}
 	res, serr := s.app.SyncStores(ctx, "")
 	var goneNames, goneNexts []string // H-11 / G-16: stores whose address holds no store now
 	goneSaid := map[string]bool{}     // a store's folders share its clone: said once
+	cloneSent := storeCloneSent(res.Stores, func(name string) string { return s.app.storeURLOf(ctx, name) })
 	for _, r := range res.Stores {
 		out.Data.Stores = append(out.Data.Stores, opssync.StoreReport{Store: r.Store, Sent: r.Sent, Received: r.Received,
-			Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held})
+			SentCommits: r.SentCommits, ReceivedCommits: r.ReceivedCommits, Merged: r.Merged, Refused: r.Refused, Problems: r.Problems, Offline: r.Offline, HeldBy: r.HeldBy, Held: r.Held, Pushed: r.Pushed})
 		shown := s.app.shownStoreName(ctx, r.Store) // B-9: the store's own name (storeshown.go)
-		line := fmt.Sprintf("store %s: sent %d, received %d, merged %d, refused %d", shown, r.Sent, r.Received, r.Merged, r.Refused)
+		pushed := folderPushed(r.Pushed, r.Sent, cloneSent[storeCloneKey(r.Store, s.app.storeURLOf(ctx, r.Store))])
+		line := storeSyncLine(shown, storeStatusOf(r.Sent, r.Received, r.Merged, r.Refused, pushed), syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused}, pushed)
 		if r.Unattached {
 			line += syncUnattachedFolder
 		}
@@ -238,19 +285,30 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			// set-url and --restore take the store, never one folder of it
 			storeName, _, _ := strings.Cut(shown, targetSep)
 			u := s.app.storeURLOf(ctx, r.Store)
+			head := "store " + shown + ": "
 			if cause, n, gone := storeGone(r.OfflineDetail, u, storeName); gone {
 				// H-11 / G-16: not offline (it said so with exit 0 forever):
-				// the address holds no store now
+				// the address holds no store now (the FAILED shape of a
+				// store line outside a repo, N-15)
 				if goneSaid[u] {
-					line += " (the same store: see above)"
+					line = head + "FAILED: the same store: see above"
 				} else {
 					goneSaid[u] = true
-					line += " (" + cause + ")"
+					line = head + "FAILED: " + cause
 					next = n
 					goneNames, goneNexts = append(goneNames, storeName), append(goneNexts, storeName+": "+n)
 				}
 			} else {
-				line += syncStoreOffline
+				if r.Sent == 0 && r.Received == 0 && r.Merged == 0 {
+					// N-15: the "offline: <cause>" shape of a store line
+					// outside a repo, never "up to date" for a store that
+					// did not answer
+					line = head + opssync.StoreStatusOffline + ": " + storeOfflineCause(u, r.OfflineDetail) + "; local changes kept, sent on the next sync"
+				} else {
+					line += storeOfflineNote(r.Sent, u, r.OfflineDetail)
+				}
+				out.Data.Stores[len(out.Data.Stores)-1].URL = repourl.Mask(u)
+				out.Data.Stores[len(out.Data.Stores)-1].Error = storeOfflineCause(u, r.OfflineDetail)
 			}
 		}
 		out.Lines = append(out.Lines, line)
@@ -261,6 +319,10 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			out.Lines = append(out.Lines, "  "+p)
 		}
 	}
+	// R-5/R-6/R-18: changes no one with authority made, read as their
+	// last accepted version, named here (rosterhold.go)
+	out.Lines = append(out.Lines, s.app.heldSyncLines(ctx)...)
+	out.Lines = append(out.Lines, res.Notes...) // branch layers landed or trashed (BRANCH_LAYERS 9, 10)
 	if serr == nil {
 		if f := opsrun.FlushOutbox(ctx, s.app); f.Written > 0 || f.Failed != "" {
 			if f.Failed != "" {
@@ -275,10 +337,10 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 		serr = errs.New(errs.StoreUnreachable, fmt.Sprintf("sync: %d store(s) answer that there is no repository at their address: %s (the rest synced; local changes are kept)", len(goneNames), strings.Join(goneNames, ", "))).
 			WithHint(strings.Join(goneNexts, "; "))
 	}
-	if serr == nil && len(out.Data.Conflicts) > 0 {
-		// the sync ran, but rows wait on a person: say so in the exit code
-		// too, as a refused store row does (E_STALE)
-		serr = errs.New(errs.Stale, fmt.Sprintf("sync: %d row(s) hold a conflict to settle", len(out.Data.Conflicts))).
+	if serr == nil && stale > 0 {
+		// the sync ran, but row files of this clone wait on a person: say
+		// so in the exit code too, as a refused store row does (E_STALE)
+		serr = errs.New(errs.Stale, fmt.Sprintf("sync: %d row(s) hold a conflict to settle", stale)).
 			WithHint("both edits are kept: `lore sync conflicts` shows both versions, `lore sync resolve --id <n> --take kept|other` settles one (or edit the row)")
 	}
 	if serr != nil {
@@ -294,6 +356,17 @@ func (s syncRows) SyncRun(ctx context.Context, in opssync.RunIn) (opssync.RunOut
 			// repo_id in _meta.json) wrote files; "already in sync" alone
 			// hid them until a git merge refused to overwrite them
 			out.Lines = []string{line}
+		}
+	}
+	// devco O-12: a done task whose merge lore can no longer find (its
+	// commit squash-merged without the Lore-Task trailer, the branch
+	// deleted) is named here, after the push that usually follows such a
+	// merge, with the command that settles it.
+	if lost, lerr := s.app.DoctorLostMerges(ctx); lerr == nil {
+		for _, f := range lost {
+			line := "lore: " + f.Message + "; next: " + f.Fix
+			out.Lines = append(out.Lines, line)
+			out.Data.Warnings = append(out.Data.Warnings, line)
 		}
 	}
 	return out, nil
@@ -348,6 +421,39 @@ const syncMarkedFileWhy = "git conflict markers; it is left out of every read un
 // the sync report.
 const syncLiveConflictWhy = "both sides edited a text field; both kept with conflict markers"
 
+// LiveMetaConflictWhy is the cause of a live row whose strict metadata
+// key two machines set differently (METADATA 3.12): both values are kept
+// in the entry, the row never lands until a person picks one (D-220).
+const LiveMetaConflictWhy = "a strict metadata key was set to different values on two machines; both values are kept in the entry and the row does not land until one is chosen"
+
+// LiveMetaConflictNext is the command that settles a strict metadata key
+// conflict on row id: set the key to the value it should hold.
+func LiveMetaConflictNext(id, key string) string {
+	return "lore meta set --id " + id + " --pair " + key + "=<value>"
+}
+
+// liveConflictCause is the cause and next step of one live conflict in
+// the sync report: a strict metadata key clash names the key and `lore
+// meta set` (D-220); markers in a text field name `lore sync resolve`.
+func liveConflictCause(c opssync.Conflict) (why, next string) {
+	resolve := fmt.Sprintf("lore sync resolve --id %d --take kept|other", c.ID)
+	text := false
+	key := ""
+	for _, f := range c.Fields {
+		if k, ok := strings.CutPrefix(f, "meta."); ok {
+			if key == "" {
+				key = k
+			}
+			continue
+		}
+		text = true
+	}
+	if key != "" && !text {
+		return LiveMetaConflictWhy, LiveMetaConflictNext(c.RowID, key) + ", or " + resolve
+	}
+	return syncLiveConflictWhy, resolve
+}
+
 // syncUnattachedFolder follows the line of a store folder this repo does
 // not attach whose rows the clone's sync carried (W-5).
 const syncUnattachedFolder = " (a folder of the store this repo does not attach)"
@@ -385,6 +491,7 @@ func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (op
 		return out, serr
 	}
 	if len(files) == 0 && len(stores) == 0 {
+		s.app.saveConflictList(ctx, out.Data) // a reprinted list replaces the last one, empty too
 		return out, nil
 	}
 	if out.Count == 0 {
@@ -398,6 +505,7 @@ func (s syncRows) SyncConflicts(ctx context.Context, in opssync.ConflictsIn) (op
 	}
 	storeConflictNumbered(&out, stores, func(name string) string { return s.app.shownStoreName(ctx, name) })
 	out.Count = len(out.Data)
+	s.app.saveConflictList(ctx, out.Data)
 	return out, nil
 }
 
@@ -413,6 +521,11 @@ func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	if err != nil || n < 1 {
 		return s.Env.SyncResolve(ctx, in) // the host's own refusal
 	}
+	shown := n // the number the person typed, from the printed list
+	if n, err = s.listedNumber(ctx, n); err != nil {
+		return opssync.DoneOut{}, err
+	}
+	in.ID = strconv.Itoa(n)
 	host, err := s.hostConflicts(ctx, opssync.ConflictsIn{})
 	if err != nil {
 		return opssync.DoneOut{}, err
@@ -431,13 +544,13 @@ func (s syncRows) SyncResolve(ctx context.Context, in opssync.ResolveIn) (opssyn
 	}
 	i := n - host.Count - 1
 	if i >= len(files) {
-		return s.resolveStore(ctx, n, i-len(files), take)
+		return s.resolveStore(ctx, shown, i-len(files), take)
 	}
 	f := files[i]
 	if err = s.app.ResolveBranchConflict(ctx, f, take == resolveOther); err != nil {
 		return opssync.DoneOut{}, err
 	}
-	done := fmt.Sprintf("resolved #%d %s/%s (took %s); commit %s", n, f.Table, f.RowID, take, f.Place)
+	done := fmt.Sprintf("resolved #%d %s/%s (took %s); commit %s", shown, f.Table, f.RowID, take, f.Place)
 	return opssync.DoneOut{Done: done, Lines: []string{"✓ " + done}}, nil
 }
 
@@ -459,7 +572,66 @@ func (s syncRows) resolveStore(ctx context.Context, n, i int, take string) (opss
 		side = "the store's copy"
 	}
 	done := fmt.Sprintf("resolved #%d %s/%s in store %s (took %s: %s) and synced", n, c.Table, c.ID, c.Store, take, side)
-	return opssync.DoneOut{Done: done, Items: []string{c.ID.String()}, Lines: []string{"✓ " + done}}, nil
+	lines := []string{"✓ " + done}
+	if left, lerr := s.app.StoreConflicts(ctx); lerr == nil && len(left) > 0 {
+		// devco O-6: the other rows still wait; the ids stay the ones the
+		// last `lore sync conflicts` printed
+		lines = append(lines, fmt.Sprintf(resolveStillOpen, len(left)))
+	}
+	return opssync.DoneOut{Done: done, Items: []string{c.ID.String()}, Lines: lines}, nil
+}
+
+// resolveStillOpen follows a store resolve that left other rows of the
+// store open; %d is how many.
+const resolveStillOpen = "· %d other conflict(s) still open and held back (the other edits of the store were sent); settle each with lore sync resolve --id <n> --take kept|other, using the ids lore sync conflicts printed"
+
+// listedNumber maps conflict #n of the list `lore sync conflicts` last
+// printed here to its number in the list as it stands now: a resolve
+// renumbers the rest, and `resolve --id 2` from the printed list used to
+// fail E_NOT_FOUND or settle another row (devco O-6). A row of that list
+// that is no longer open is refused by name; with no printed list (or n
+// past it) n stands.
+func (s syncRows) listedNumber(ctx context.Context, n int) (int, error) {
+	listed := s.app.conflictList(ctx)
+	if n > len(listed) {
+		return n, nil
+	}
+	want := listed[n-1]
+	now, err := s.currentConflicts(ctx)
+	if err != nil {
+		return n, err
+	}
+	for _, c := range now {
+		if c.RowID == want {
+			return int(c.ID), nil
+		}
+	}
+	return n, errs.New(errs.NotFound, fmt.Sprintf("conflict #%d (%s) is not open any more: it was settled", n, want)).
+		WithHint("lore sync conflicts lists what is still open, with new ids")
+}
+
+// currentConflicts is SyncConflicts' list without saving it as printed.
+func (s syncRows) currentConflicts(ctx context.Context) ([]opssync.Conflict, error) {
+	out, err := s.hostConflicts(ctx, opssync.ConflictsIn{})
+	if err != nil {
+		return nil, err
+	}
+	all := slices.Clone(out.Data)
+	files, err := s.app.BranchConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range files {
+		all = append(all, opssync.Conflict{ID: int64(len(all) + 1), Table: f.Table, RowID: f.RowID})
+	}
+	stores, err := s.app.StoreConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range stores {
+		all = append(all, opssync.Conflict{ID: int64(len(all) + 1), Table: string(c.Table), RowID: c.ID.String()})
+	}
+	return all, nil
 }
 
 // Explain implements opssync.Env: the host's answer, and for a row the
@@ -805,4 +977,129 @@ func (a *App) FixProjects(ctx context.Context, keep string, dryRun bool) (FixRes
 		return fx, werr
 	}
 	return fx, nil
+}
+
+// storeCloneKey names the clone a store report's folder lives in: the
+// folders of one store (agency/client, agency/org) share its url and so
+// one clone and one push; a store with no url known is its own clone.
+func storeCloneKey(name, url string) string {
+	if url == "" {
+		return "name:" + name
+	}
+	return "url:" + url
+}
+
+// storeCloneSent is the rows each clone's push sent, summed over the
+// folders that share it (storeCloneKey): one push carries every folder's
+// rows, so a folder that sent none of them did not push "commits with no
+// note rows" when a sibling folder's rows rode the same push (after-land
+// 29e8d071: agency/client said so beside agency/org's "sent 2").
+func storeCloneSent(reps []opsstores.Report, urlOf func(string) string) map[string]int {
+	sent := map[string]int{}
+	for _, r := range reps {
+		sent[storeCloneKey(r.Store, urlOf(r.Store))] += r.Sent
+	}
+	return sent
+}
+
+// folderPushed says whether a store folder's line reports a push: the
+// folders of one store share one clone and one push, so a folder that sent
+// no rows while a sibling's rows rode that push is "up to date", not
+// "pushed (sent 0, …)" (devco N-15: agency/client said "pushed" with every
+// count 0 beside agency/org's "sent 2"). A push that carried no row of any
+// folder is still a push (store links, org settings: devco J-4).
+func folderPushed(clonePushed bool, sent, cloneSent int) bool {
+	return clonePushed && (sent > 0 || cloneSent == 0)
+}
+
+// syncPushedNoRows follows the line of a store whose sync pushed local
+// commits that carry no row (a store link, the org file): "sent 0" alone
+// read as nothing left the machine under the push line (devco J-4).
+// storeStatusOf is the opssync.StoreStatus* word of a store's sync from
+// its counts: what moved, refused when the store only refused rows (they
+// stay here), or up to date.
+func storeStatusOf(sent, received, merged, refused int, pushed bool) string {
+	out := sent > 0 || pushed
+	in := received > 0 || merged > 0
+	switch {
+	case refused > 0 && !out && !in:
+		return storeStatusRefused
+	case out && in:
+		return opssync.StoreStatusBoth
+	case out:
+		return opssync.StoreStatusPushed
+	case in:
+		return opssync.StoreStatusPulled
+	}
+	return opssync.StoreStatusUpToDate
+}
+
+// storeStatusRefused is a store line's status when the store refused this
+// clone's rows and nothing else moved.
+const storeStatusRefused = "refused"
+
+// storeCountsLine is the one shape of a store's sync line, in a code repo,
+// a client repo and outside any repo alike (devco N-15: the two paths
+// printed "sent 1, received 0, merged 0, refused 0" and "pushed (sent 3,
+// received 0, merged 0)"): "store <name>: up to date", or the status and
+// every count.
+func storeCountsLine(name, status string, c syncCounts) string {
+	if status == opssync.StoreStatusUpToDate {
+		return "store " + name + ": " + status
+	}
+	sent, received := orRows(c.sentCommits, c.sent), orRows(c.receivedCommits, c.received)
+	return fmt.Sprintf("store %s: %s (sent %d, received %d, merged %d, refused %d)", name, status, sent, received, c.merged, c.refused) + rowsNote(c)
+}
+
+// syncCounts are a store line's numbers: rows sent, received, merged and
+// refused, and the commits git counted going out and coming in.
+type syncCounts struct {
+	sent, sentCommits, received, receivedCommits, merged, refused int
+}
+
+// orRows is the commits git counted, or the rows when it counted none (a
+// backend without commits): a store line's "sent" and "received" are
+// commits, counted with rev-list over the tips before and after, so they
+// agree with git and with the push line (devco D-648: "sent 5" after 3
+// commits went out, "received 4" when 8 commits arrived).
+func orRows(commits, rows int) int {
+	if commits > 0 {
+		return commits
+	}
+	return rows
+}
+
+// rowsNote names the rows behind the commit counts when they differ
+// ("; rows: 5 sent, 4 received"); nothing when they agree.
+func rowsNote(c syncCounts) string {
+	var parts []string
+	if c.sentCommits > 0 && c.sent != c.sentCommits {
+		parts = append(parts, strconv.Itoa(c.sent)+" sent")
+	}
+	if c.receivedCommits > 0 && c.received != c.receivedCommits {
+		parts = append(parts, strconv.Itoa(c.received)+" received")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; rows: " + strings.Join(parts, ", ")
+}
+
+const syncPushedNoRows = "; pushed local commit(s) with no note rows (store links or org settings)"
+
+// storeSyncLine is a store's sync line once the sync knows whether its
+// push ran: storeCountsLine, and for a push whose commits carry no note
+// row (a store link, the org file) "sent 0" with syncPushedNoRows, never
+// the commits as "sent 2; rows: 0 sent" (devco D-527, broken again by the
+// D-684 commit counts of a waiting org store push). "sent" there is the
+// note rows that went out; the commits git moved stay on the push line
+// on stderr ("lore: pushed store <store>: commit … (2 commits)") and in
+// --json's sent_commits. Every path that prints a store line (code repo,
+// setup or home folder, waiting org store push) goes through here.
+func storeSyncLine(name, status string, c syncCounts, pushed bool) string {
+	if !pushed || c.sent != 0 || status == opssync.StoreStatusUpToDate {
+		return storeCountsLine(name, status, c)
+	}
+	c.sentCommits = 0 // no note row went out: the line's sent is 0, its note says what did
+	return storeCountsLine(name, status, c) + syncPushedNoRows
 }

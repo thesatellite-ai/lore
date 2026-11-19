@@ -7,6 +7,7 @@ package wire
 // the lines they printed.
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -41,7 +42,13 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.requirePushAsked(in.Push, "a claim"); err != nil {
+	return h.claimOn(ctx, w, in)
+}
+
+// claimOn is the claim of in.ID on world w: task claim's, and the store
+// task queue's claim of the task it ranked first (devco:D-666).
+func (h standaloneCoord) claimOn(ctx context.Context, w *coordWorld, in opscoord.ClaimIn) (opscoord.Report, error) {
+	if err := w.requirePushAsked(in.Push, claimAsk("a claim", claimRerun(in), in.ID)); err != nil {
 		return opscoord.Report{}, err
 	}
 	env := w.env(ctx)
@@ -54,21 +61,21 @@ func (h standaloneCoord) TaskClaim(ctx context.Context, in opscoord.ClaimIn) (op
 	opts.OpenChildren = coord.OpenChildrenOf(docs)
 	cr, err := coord.Claim(ctx, env, in.ID, opts)
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(w.namedDoneBy(ctx, err))
 	}
 	var lines []string
 	if in.Coordinate && len(opts.OpenChildren(in.ID)) > 0 {
-		lines = append(lines, fmt.Sprintf("you now coordinate %s; claim a child to work: lore task claim --id %s", in.ID, opts.OpenChildren(in.ID)[0]))
+		lines = append(lines, fmt.Sprintf("you now coordinate %s; claim a child to work: lore task claim --id %s%s", in.ID, opts.OpenChildren(in.ID)[0], w.claimPushFlag()))
 	}
 	if in.Strict && len(cr.Overlaps) > 0 && !cr.Plan.Resumed {
 		// The claim is taken; --strict gives it back at once.
 		if rerr := coord.Release(ctx, env, in.ID); rerr != nil {
-			return opscoord.Report{}, coordErr(rerr)
+			return opscoord.Report{}, w.coordErr(rerr)
 		}
 		return opscoord.Report{}, errs.New(errs.InvalidInput, "file ownership overlaps: "+strings.Join(cr.Overlaps, "; ")).
 			WithHint("drop --strict to claim with a warning")
 	}
-	return opscoord.Report{Lines: append(lines, claimLines(in.ID, cr, w.lease.TTL, env.Signals.Ref)...)}, nil
+	return opscoord.Report{Lines: append(lines, claimLines(in.ID, cr, w.lease.TTL, w.claimPlace(env.Signals.Ref))...)}, nil
 }
 
 // claimLines is v0.1.17 printClaim.
@@ -94,6 +101,36 @@ func claimLines(id string, cr coord.ClaimResult, ttl time.Duration, ref string) 
 		out = append(out, "! file ownership overlaps: "+o)
 	}
 	return out
+}
+
+// claimPlace is where a claim line says the claim went: the signals ref,
+// and for a repo with no remote that it stays local (devco:D-362: there is
+// nothing to push to, so --push changes nothing and nobody else sees it).
+//
+// devco:D-560: a linked repo's claim is no ref of the code repo nor a branch
+// of the store clone: it is the store's signals ref, written on the store's
+// remote (the clone keeps only a tracking copy under refs/remotes), while
+// the task row's status is a row commit in the store folder that the
+// "committed locally" line names. Saying only "on refs/lore/signals/main"
+// sent people looking for a ref that exists in neither place.
+//
+// devco:D-608: it is the one label of every signals write (claim, next
+// --claim, release, hold, hold release, revoke, reassign); a code repo's
+// write names the remote it was pushed to, as the revoke line did.
+func (w *coordWorld) claimPlace(ref string) string {
+	if w.spot.store {
+		// devco:D-580: a signals write is pushed in the same command or not
+		// made at all (signals.Store fails closed with autopush off), so the
+		// "kept in the local store clone" wording this had was never true.
+		return "the signals ref " + ref + " of store " + w.spot.label + " (pushed to the store's remote now: teammates see it on their next fetch)"
+	}
+	if _, local := localSignalsRemote(w.spot, w.commonDir); local {
+		return ref + " (local: this repo has no remote, so the claim stays in this repository)"
+	}
+	if w.spot.remote != nil {
+		return ref + " of this repo's remote " + cmp.Or(w.spot.remoteName, w.remoteName) + " (pushed now: teammates see it on their next fetch)"
+	}
+	return ref
 }
 
 // shortDuration prints 20m instead of 20m0s.
@@ -125,9 +162,39 @@ func (h standaloneCoord) hereRepo(ctx context.Context, w *coordWorld) string {
 // of this session (rate limited to renew_every), or keep renewing them
 // (--daemon, heartbeatDaemon).
 func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.HeartbeatIn) (opscoord.Report, error) {
+	if !inCodeRepo(ctx, h.a.opts.RepoDir) {
+		// the home folder, a plain folder, a store clone: the claims held
+		// on the org stores' signals refs (devco:D-666), kept alive by
+		// --daemon too (devco:D-671)
+		if in.Daemon {
+			return h.storeHeartbeatDaemon(ctx, in.ID)
+		}
+		return h.storeHeartbeat(ctx, in.ID, nil)
+	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
 		return opscoord.Report{}, err
+	}
+	if in.ID == "" && !in.Daemon {
+		// a code repo renews its own held claims, then the store tasks
+		// held from home (their held record is the store clone's)
+		var repoIDs []string
+		for _, r := range w.held().List(w.session()) {
+			repoIDs = append(repoIDs, r.Task)
+		}
+		rep, rerr := h.renewHeld(ctx, w, repoIDs, true)
+		if rerr != nil {
+			return rep, rerr
+		}
+		srep, serr := h.storeHeartbeat(ctx, "", repoIDs)
+		rep.Lines = append(rep.Lines, srep.Lines...)
+		if serr != nil {
+			return rep, serr
+		}
+		if len(rep.Lines) == 0 && len(repoIDs) == 0 {
+			rep.Lines = []string{"no claims held by this session"}
+		}
+		return rep, nil
 	}
 	var ids []string
 	if in.ID != "" {
@@ -136,16 +203,31 @@ func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.Heartbea
 		for _, r := range w.held().List(w.session()) {
 			ids = append(ids, r.Task)
 		}
-		if len(ids) == 0 {
-			return opscoord.Report{Lines: []string{"no claims held by this session"}}, nil
+	}
+	if in.Daemon {
+		// devco:D-673: the store claims this session took from home are
+		// held on the store clones, not this repo (repoDaemonScope)
+		if store, uncovered := h.repoDaemonScope(ctx, w, in.ID, ids); store {
+			return h.storeHeartbeatDaemon(ctx, in.ID)
+		} else if len(uncovered) > 0 {
+			fmt.Fprintln(os.Stderr, uncoveredStoreClaims(uncovered))
 		}
+	}
+	if len(ids) == 0 {
+		return opscoord.Report{Lines: []string{"no claims held by this session"}}, nil
 	}
 	if in.Daemon {
 		return w.heartbeatDaemon(ctx, ids)
 	}
+	return h.renewHeld(ctx, w, ids, in.ID == "")
+}
+
+// renewHeld renews each claim of ids on world w; limited skips one renewed
+// within lease.renew_every (a heartbeat with no --id).
+func (h standaloneCoord) renewHeld(ctx context.Context, w *coordWorld, ids []string, limited bool) (opscoord.Report, error) {
 	var lines []string
 	for _, id := range ids {
-		if in.ID == "" && w.renewedRecently(id) {
+		if limited && w.renewedRecently(id) {
 			continue
 		}
 		if ferr := w.forHeld(ctx, id); ferr != nil {
@@ -153,7 +235,7 @@ func (h standaloneCoord) TaskHeartbeat(ctx context.Context, in opscoord.Heartbea
 		}
 		s, rerr := coord.Renew(ctx, w.env(ctx), id)
 		if rerr != nil {
-			return opscoord.Report{Lines: lines}, coordErr(rerr)
+			return opscoord.Report{Lines: lines}, w.coordErr(rerr)
 		}
 		lines = append(lines, fmt.Sprintf("%s %s renewed until %s (seq %d)", markOK, id, s.Expires.UTC().Format(time.RFC3339), s.RenewedSeq))
 	}
@@ -202,7 +284,7 @@ func (w *coordWorld) heartbeatDaemon(ctx context.Context, ids []string) (opscoor
 				}
 				renewals++
 				if b := w.workBranch(ctx); b != "" {
-					w.pushWorkBranch(ctx, b) // best effort; mission status reports an unpushed branch
+					w.pushWorkBranch(ctx, b) // best effort; inbox and mission status say "not pushed" from the remote-tracking ref (D-619)
 				}
 			}
 			next = w.a.Now().Add(w.lease.RenewEvery)
@@ -237,7 +319,7 @@ func (w *coordWorld) renewOnce(ctx context.Context, id string) error {
 		return err
 	}
 	if _, err := coord.Renew(ctx, w.env(ctx), id); err != nil {
-		return coordErr(err)
+		return w.coordErr(err)
 	}
 	return nil
 }
@@ -266,10 +348,13 @@ func (h standaloneCoord) TaskRelease(ctx context.Context, in opscoord.ReleaseIn)
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = coord.Release(ctx, w.env(ctx), in.ID); err != nil {
-		return opscoord.Report{}, coordErr(err)
+	env := w.env(ctx)
+	if err = coord.Release(ctx, env, in.ID); err != nil {
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{markOK + " released " + in.ID}}, nil
+	// devco:D-582: say where the release went, the same place the claim
+	// line named (the store's remote, the code repo's remote, or local).
+	return opscoord.Report{Lines: []string{markOK + " released " + in.ID + ": the claim is off " + w.claimPlace(env.Signals.Ref)}}, nil
 }
 
 // TaskRevoke implements opscoord.Host: a person drops the current claim;
@@ -285,30 +370,119 @@ func (h standaloneCoord) TaskRevoke(ctx context.Context, in opscoord.RevokeIn) (
 	if err = w.requireHuman(ctx, "revoke"); err != nil {
 		return opscoord.Report{}, err
 	}
-	removed, err := coord.Override(ctx, w.env(ctx), in.ID, coord.OverrideRevoke, nil)
+	env := w.env(ctx)
+	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, pushAsk{what: "a revoke", rerun: withFlag([]string{"task", "revoke", "--id", in.ID}, "--from", in.From)}); err != nil {
+		return opscoord.Report{}, err
+	}
+	removed, err := coord.Override(ctx, env, in.ID, coord.OverrideRevoke, nil)
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	who := "no one held it"
-	if removed != nil {
-		who = "was held by " + holderName(*removed)
+	if removed == nil {
+		return opscoord.Report{Lines: []string{fmt.Sprintf("%s revoked the claim on %s (no one held it)", markOK, in.ID)}}, nil
 	}
-	return opscoord.Report{Lines: []string{fmt.Sprintf("%s revoked the claim on %s (%s)", markOK, in.ID, who)}}, nil
+	lines := []string{fmt.Sprintf("%s revoked the claim on %s (was held by %s)", markOK, in.ID, holderName(*removed))}
+	return opscoord.Report{Lines: append(lines, w.overridePushedLine(removed.Holder != w.actorID))}, nil
+}
+
+// claimRerun is the `task claim` the person ran (every flag they gave,
+// named), without --push: the command a push refusal prints with --push
+// appended (devco:D-669).
+func claimRerun(in opscoord.ClaimIn) []string {
+	argv := []string{"task", "claim", "--id", in.ID}
+	for _, o := range in.Owns {
+		argv = append(argv, "--owns", o)
+	}
+	argv = withSwitch(argv, "--strict", in.Strict)
+	argv = withSwitch(argv, "--coordinate", in.Coordinate)
+	return withFlag(argv, "--from", in.From)
+}
+
+// nextRerun is the `task next --claim` the person ran (its filters and
+// --owns), without --push (devco:D-669). It names no task: task next
+// picks it, so there is no claim-free command with a known id to offer.
+func nextRerun(in opscoord.NextIn) []string {
+	argv := []string{"task", "next", "--claim"}
+	argv = withFlag(argv, "--mission", in.Mission)
+	argv = withFlag(argv, "--repo", in.Repo)
+	argv = withFlag(argv, "--role", in.Role)
+	argv = withFlag(argv, "--store", in.Store) // devco:D-666: a queue of an org store from home
+	for _, o := range in.Owns {
+		argv = append(argv, "--owns", o)
+	}
+	return withSwitch(argv, "--why", in.Why)
+}
+
+// withFlag appends "flag value" to argv when value is set.
+func withFlag(argv []string, flag, value string) []string {
+	if value == "" {
+		return argv
+	}
+	return append(argv, flag, value)
+}
+
+// withSwitch appends a boolean flag to argv when on.
+func withSwitch(argv []string, flag string, on bool) []string {
+	if !on {
+		return argv
+	}
+	return append(argv, flag)
+}
+
+// requireOverridePush is requirePushAsked for a person's override
+// (revoke, reassign; devco:S-17): it asks only when the override changes
+// the signals ref, that is when the task has a claim or a revoke marker on
+// it. An override of a task nobody holds writes its row only, which waits
+// for lore sync like every other row.
+func (w *coordWorld) requireOverridePush(ctx context.Context, env coord.Env, id string, asked bool, ask pushAsk) error {
+	if asked || !w.pushNeeded() {
+		return nil
+	}
+	v, err := env.Signals.Read(ctx)
+	if err != nil {
+		return w.coordErr(err)
+	}
+	_, claimed := v.Board[signals.ClaimPath(env.Folder, id)]
+	_, marked := v.Board[signals.RevokedPath(env.Folder, id)]
+	if !claimed && !marked {
+		return nil
+	}
+	return w.requirePushAsked(false, ask)
+}
+
+// overridePushedLine says what a revoke sent and to where (devco:S-17: the
+// row line alone read "not pushed yet" although the holder was already
+// fenced out). marked: the holder is kept off the task until a reassign.
+// devco:D-608: the place is claimPlace, the label a claim and a release
+// print, not "pushed <ref> to <remote name>".
+func (w *coordWorld) overridePushedLine(marked bool) string {
+	line := "  on " + w.claimPlace(w.spot.ref) + ": the holder is fenced out now"
+	if marked {
+		line += " and lore task next will not hand it this task again until a person runs `lore task reassign`"
+	}
+	return line + "; the task row itself waits for your next lore sync"
 }
 
 // nextTagName is the tag whose tasks get the next_tag term (TASK 13.2).
 const nextTagName = "next"
 
-// TaskNext implements opscoord.Host: resume the claim held, or claim the
-// most urgent ready leaf; --dry-run ranks and explains, writing nothing.
-// Poisoned tasks are announced even when the claim then fails.
+// TaskNext implements opscoord.Host. By default it reads (devco:D-426:
+// the name reads like a read, and a claim commits): it shows the task
+// --claim would take, why (its urgency terms), the ranking and what waits,
+// writing nothing. --claim resumes the claim held or claims the most urgent
+// ready leaf, as before; --dry-run prints the old ranking form and never
+// claims. Poisoned tasks are announced (and blocked) only by a claim.
 func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opscoord.NextOut, error) {
+	if out, ok, serr := h.storeQueue(ctx, in); ok {
+		return out, serr // an org store's tasks with no code repo (devco:D-666)
+	}
 	w, err := h.openWorldFor(ctx, "")
 	if err != nil {
 		return opscoord.NextOut{}, err
 	}
-	if !in.DryRun {
-		if err = w.requirePushAsked(in.Push, "the claim task next takes"); err != nil {
+	claim := in.Claim && !in.DryRun
+	if claim {
+		if err = w.requirePushAsked(in.Push, pushAsk{what: "the claim task next takes", rerun: nextRerun(in)}); err != nil {
 			return opscoord.NextOut{}, err
 		}
 	}
@@ -322,17 +496,18 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		Opts:   coord.ClaimOptions{Owns: in.Owns, WorkBranch: w.workBranch(ctx), InRepo: w.taskInRepo()},
 		List:   rows.List, RepoName: rows.RepoName, Pick: cryptoPick, Urgency: h.urgencyContext(ctx),
 	}
-	if in.DryRun {
-		v, rerr := env.Signals.Read(ctx)
+	if !claim {
+		pk, rerr := coord.PeekNext(ctx, env, req)
 		if rerr != nil {
-			return opscoord.NextOut{}, coordErr(rerr)
+			return opscoord.NextOut{}, w.coordErr(rerr)
 		}
-		res, rerr := coord.Queue(ctx, env, v, req)
-		if rerr != nil {
-			return opscoord.NextOut{}, coordErr(rerr)
+		out := nextRanking(pk.Queue)
+		if in.DryRun {
+			out.Lines = dryRunLines(pk.Queue, in.Why)
+			return out, nil
 		}
-		out := nextRanking(res)
-		out.Lines = dryRunLines(res, in.Why)
+		out.Holding = pk.Holding
+		out.Lines = readLines(pk, in.Why, w.claimPushFlag())
 		return out, nil
 	}
 	res, err := coord.Next(ctx, env, req)
@@ -341,13 +516,13 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 		lines = append(lines, fmt.Sprintf("! %s failed %d times and is now blocked (owner's inbox)", p, w.agents.MaxAttempts))
 	}
 	if err != nil {
-		return opscoord.NextOut{Lines: lines}, coordErr(err)
+		return opscoord.NextOut{Lines: lines}, w.coordErr(w.namedDoneBy(ctx, err))
 	}
 	if res.Resumed {
 		lines = append(lines, fmt.Sprintf("you hold %s; resume, or `lore task release --id %s`", res.Task, res.Task))
 		return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
 	}
-	lines = append(lines, claimLines(res.Task, res.Claim, w.lease.TTL, env.Signals.Ref)...)
+	lines = append(lines, claimLines(res.Task, res.Claim, w.lease.TTL, w.claimPlace(env.Signals.Ref))...)
 	if s, ok := res.Scores[res.Task]; ok && in.Why {
 		lines = append(lines, "  urgency "+urgency.Format(s.Total))
 		for _, l := range s.Lines() {
@@ -356,6 +531,83 @@ func (h standaloneCoord) TaskNext(ctx context.Context, in opscoord.NextIn) (opsc
 	}
 	lines = append(lines, "  read its notes: lore task show --id "+res.Task)
 	return opscoord.NextOut{Claimed: res.Task, Lines: lines}, nil
+}
+
+// readLines is the text of a plain `task next` (devco:D-426): the task
+// --claim would take and why it is next, the rest of the ranking, what
+// waits, and how to take it. why breaks the reason out term by term; push
+// is claimPushFlag, so the printed claim is one that works here (D-607).
+func readLines(pk coord.Peek, why bool, push string) []string {
+	return readLinesAt(pk, why, push, "", true)
+}
+
+// readLinesAt is readLines with scope, the flag that names the store
+// task queue again (" --store <org>", " --setup <setup>", devco:D-666), on
+// every printed task next; claimByID keeps the "or task claim --id"
+// alternative (false where a claim by id would not reach that store).
+func readLinesAt(pk coord.Peek, why bool, push, scope string, claimByID bool) []string {
+	res := pk.Queue
+	var out []string
+	switch {
+	case pk.Holding != "":
+		out = append(out, fmt.Sprintf("you hold %s; resume it (%s resumes it), or `lore task release --id %s`", pk.Holding, "lore task next --claim"+push+scope, pk.Holding))
+	case len(res.Ready) == 0:
+		out = append(out, "nothing ready")
+	default:
+		top := res.Ready[0]
+		s := res.Scores[top.ID]
+		out = append(out, fmt.Sprintf("next %s %s   urgency %s", top.ID, top.Title, urgency.Format(s.Total)))
+		out = append(out, nextReason(res, s, why)...)
+	}
+	if pk.Holding == "" && len(res.Ready) > 1 {
+		out = append(out, "ranked:")
+		for i, t := range res.Ready {
+			out = append(out, fmt.Sprintf("  %d  %s  %s", i+1, t.ID, urgency.Format(res.Scores[t.ID].Total)))
+		}
+	}
+	var waiting []string
+	for _, wt := range res.Waiting {
+		if wt.Task.ID != pk.Holding { // your own claim is said above, not as work that waits
+			waiting = append(waiting, fmt.Sprintf("  %s  %s", wt.Task.ID, wt.Reason))
+		}
+	}
+	if len(waiting) > 0 {
+		out = append(append(out, "waiting:"), waiting...)
+	}
+	if pk.Holding == "" && len(res.Ready) > 0 {
+		if !claimByID {
+			return append(out, "nothing written; take it: lore task next --claim"+push+scope)
+		}
+		return append(out, fmt.Sprintf("nothing written; take it: %s (or %s)", "lore task next --claim"+push+scope, "lore task claim --id "+res.Ready[0].ID+push))
+	}
+	return append(out, "nothing written")
+}
+
+// nextReason is why the top task is next: its urgency terms on one line
+// ("why: +6.00 priority high; +2.00 age 3d"), or one per line with why,
+// and the lead over the runner-up when there is one.
+func nextReason(res queue.Result, s urgency.Score, why bool) []string {
+	terms := s.Lines()
+	var out []string
+	switch {
+	case len(terms) == 0:
+		out = append(out, "  why: the only ready task")
+		if len(res.Ready) > 1 {
+			out[0] = "  why: first of the ready tasks at equal urgency"
+		}
+	case why:
+		out = append(out, "  why:")
+		for _, l := range terms {
+			out = append(out, "    "+l)
+		}
+	default:
+		out = append(out, "  why: "+strings.Join(terms, "; "))
+	}
+	if len(res.Ready) > 1 {
+		second := res.Ready[1]
+		out = append(out, fmt.Sprintf("  ahead of %s (urgency %s)", second.ID, urgency.Format(res.Scores[second.ID].Total)))
+	}
+	return out
 }
 
 // cryptoPick is a uniformly random number in [0, n).

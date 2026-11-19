@@ -26,6 +26,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 
 	"github.com/thesatellite-ai/lore/logic/fileuri"
@@ -227,8 +228,8 @@ func validateSetupsRaw(raw []byte) (onboard.Config, error) {
 
 // setupsInvalid is the E_CONFIG_INVALID of a list of problems.
 func setupsInvalid(problems []string) error {
-	return errs.New(errs.ConfigInvalid, "~/.lore/"+ConfigFile+": "+strings.Join(problems, "; ")).
-		WithHint("fix the entries named above (lore setup edit --name <name>, or edit ~/.lore/" + ConfigFile + "), then lore config check")
+	return errs.New(errs.ConfigInvalid, lorehome.Shown()+"/"+ConfigFile+": "+strings.Join(problems, "; ")).
+		WithHint("fix the entries named above (lore setup edit --name <name>, or edit " + lorehome.Shown() + "/" + ConfigFile + "), then lore config check")
 }
 
 // editSetups runs edit on the node tree, then validates the candidate
@@ -326,7 +327,7 @@ func PatchSetup(home string, before, after onboard.SetupEntry) error {
 		seq := setupsSeq(root)
 		i := setupIndex(seq, after.Name)
 		if i < 0 {
-			return errs.New(errs.NotFound, "setup "+strconv.Quote(after.Name)+" is no longer in ~/.lore/"+ConfigFile+" (another lore command removed it)").
+			return errs.New(errs.NotFound, "setup "+strconv.Quote(after.Name)+" is no longer in "+lorehome.Shown()+"/"+ConfigFile+" (another lore command removed it)").
 				WithHint("lore setup list shows the setups")
 		}
 		cur := seq.Content[i]

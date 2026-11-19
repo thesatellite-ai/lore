@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -47,9 +48,10 @@ func (e engine) List(ctx context.Context, _ ListIn) (ListOut, error) {
 		if folders == nil {
 			folders = []string{}
 		}
+		h := e.health(ctx, st, hs, s.Name)
 		out.Setups = append(out.Setups, SetupSummary{Name: s.Name, Kind: s.Kind, Org: s.Org, Default: s.Default, Folders: folders,
-			Health: e.health(ctx, st, hs, s.Name), Disabled: s.Disabled, DisabledAt: s.DisabledAt, Note: s.Note,
-			Unfinished: unfinishedSteps(s)})
+			Health: h.cell, Problems: h.problems, CheckedAt: h.checkedAt, Stale: h.stale, earlier: h.earlier,
+			Disabled: s.Disabled, DisabledAt: s.DisabledAt, Note: s.Note, Unfinished: unfinishedSteps(s)})
 	}
 	out.Trashed = len(cfg.Trash)
 	out.Leftovers = onboard.Leftovers(cfg)
@@ -103,15 +105,13 @@ func (o ListOut) Text() string {
 		if s.Disabled {
 			name += " (disabled)"
 		}
-		health := s.Health
-		if health == "" {
-			health = healthNotChecked
-		}
+		health := healthText(s)
 		_, _ = tw.Write([]byte("  " + name + "\t" + string(s.Kind) + "\t" + s.Org + "\t" + def + "\t" + strings.Join(s.Folders, ", ") + "\t" + health + "\n"))
 	}
 	_ = tw.Flush()
+	writeHealthProblems(&b, o.Setups)
 	if len(o.Leftovers) > 0 {
-		b.WriteString("leftovers in ~/.lore/config.yaml (no setup uses them; lore setup leftovers clear --what <kind>):\n")
+		b.WriteString("leftovers in " + lorehome.Shown() + "/config.yaml (no setup uses them; lore setup leftovers clear --what <kind>):\n")
 		for _, l := range o.Leftovers {
 			b.WriteString("  " + string(l.Kind) + "  " + l.Key + " = " + l.Value + "\n")
 		}
@@ -146,6 +146,44 @@ func (o ListOut) Text() string {
 	return b.String()
 }
 
+// writeHealthProblems names what each setup's Health cell counts (devco
+// D-483): `acme-ops ⚠ 1` alone sent the person hunting for the
+// warning. One line per problem with its fix, then the command that
+// shows them again.
+func writeHealthProblems(b *strings.Builder, setups []SetupSummary) {
+	for _, s := range setups {
+		if len(s.Problems) == 0 {
+			continue
+		}
+		b.WriteString(s.Name + " " + s.Health + ":\n")
+		for _, p := range s.Problems {
+			b.WriteString("  " + problemLine(p) + "\n")
+		}
+		b.WriteString("  (lore setup show --name " + s.Name + " lists them with their fixes; lore doctor --all checks again)\n")
+	}
+}
+
+// problemLine is one check result as a line: its outcome as HealthCell
+// counts it (a warn-level fail is a warning), check, target, detail and
+// fix.
+func problemLine(r onboard.CheckResult) string {
+	st := r.Status
+	if st == onboard.StatusFail && r.Level != onboard.LevelError {
+		st = onboard.StatusWarn
+	}
+	line := string(st) + " " + string(r.Check)
+	if r.Target != "" {
+		line += " " + r.Target
+	}
+	if r.Detail != "" {
+		line += ": " + r.Detail
+	}
+	if r.Fix.Text != "" {
+		line += " (fix: " + r.Fix.Text + ")"
+	}
+	return line
+}
+
 // Show is setup.show: the 3.2 entry (keys and paths only; setups[] never
 // holds a secret).
 func (e engine) Show(ctx context.Context, in ShowIn) (ShowOut, error) {
@@ -162,8 +200,8 @@ func (e engine) Show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	// with its fix, so a "⚠ 2" on Home is never a count nothing names.
 	if st, serr := e.env.SetupStore(ctx); serr == nil {
 		hs, _ := e.env.(HealthSource)
-		rs := e.healthResults(ctx, st, hs, name)
-		out.Health, out.Problems = HealthCell(rs), Problems(rs)
+		h := e.health(ctx, st, hs, name)
+		out.Health, out.Problems, out.CheckedAt, out.Stale = h.cell, h.problems, h.checkedAt, h.stale
 	}
 	return out, nil
 }
@@ -223,18 +261,108 @@ const (
 	healthNotChecked = "not checked yet (lore doctor --all)"
 )
 
-// health is setup name's Health cell from the newer of two sources: the
-// last doctor results the env recorded (HealthSource) and the last check
-// results of its unfinished steps (setup_progress). The newer one wins, so
-// a fresh doctor run and a later step re-check each show on Home (a
-// finished setup has no progress rows: doctor only). "" when neither has
-// results (never checked; `lore doctor --all` fills it). Nothing is probed.
-func (e engine) health(ctx context.Context, st Store, hs HealthSource, name string) string {
-	return HealthCell(e.healthResults(ctx, st, hs, name))
+// HealthAger is an optional upgrade of Onboard: whether a file the
+// setup checks read changed after they ran (wire: the global git config
+// and every file it includes, by modification time). setup list showed a
+// three-day-old identity.git_email warning, with the fix that older check
+// printed, as current until setup check ran again (devco D-605, owner use
+// pass 2 weak 2). It compares each file's size and modification time with
+// those recorded beside the results, so no clock is involved.
+type HealthAger interface {
+	// HealthInputChanged names (as the person writes it, ~ for the home) a
+	// file setup's stored checks read that changed (or appeared, or went)
+	// since they were recorded; "" when none did.
+	HealthInputChanged(ctx context.Context, setup string) string
 }
 
-// healthResults are the results health counts (the newer of the two
-// sources), one per check and target (Latest): the same list setup show
+// healthView is what setup list and setup show say of a setup's health.
+type healthView struct {
+	cell      string
+	problems  []onboard.CheckResult
+	checkedAt string
+	stale     string
+	earlier   string
+}
+
+// health is a setup's Health cell, its problems and their age: the
+// results healthResults picks, dated by their newest check, and dropped
+// as stale (with the reason) when a file they read changed since (devco
+// D-605). A result from an earlier day keeps its cell and carries that
+// day, so the text never shows it as today's.
+func (e engine) health(ctx context.Context, st Store, hs HealthSource, name string) healthView {
+	rs := e.healthResults(ctx, st, hs, name)
+	v := healthView{cell: HealthCell(rs), problems: Problems(rs)}
+	at := lastChecked(rs)
+	if v.cell == "" || at.IsZero() {
+		return v
+	}
+	v.checkedAt = at.UTC().Format(time.RFC3339)
+	day := at.Local().Format(time.DateOnly)
+	if ag, ok := e.env.(HealthAger); ok {
+		if f := ag.HealthInputChanged(ctx, name); f != "" {
+			v.stale = f + " changed since"
+			v.cell, v.problems = "", nil
+			v.earlier = day
+			return v
+		}
+	}
+	now := time.Now()
+	if e.now != nil {
+		now = e.now()
+	}
+	if day != now.Local().Format(time.DateOnly) {
+		v.earlier = day
+		v.problems = agedProblems(v.problems, name, day)
+	}
+	return v
+}
+
+// agedProblems are problems from a check of an earlier day with their
+// stored fix replaced by the check that refreshes them (devco D-646: setup
+// list kept printing the fix an older check wrote, "git config --global
+// user.email …", after the person had set the identity another way, until
+// `setup check` ran): a fix is advice for the machine as it was that day,
+// so it is shown only from a check of today. The detail (what was found)
+// stays. The command works where it is printed: an identity check
+// refreshes with the identity step, anything else with lore doctor --all.
+func agedProblems(ps []onboard.CheckResult, setup, day string) []onboard.CheckResult {
+	out := make([]onboard.CheckResult, len(ps))
+	for i, p := range ps {
+		again := "lore doctor --all"
+		if strings.HasPrefix(string(p.Check), identityCheckPrefix) {
+			again = "lore setup check --setup " + setup + " --step " + string(onboard.StepIdentity)
+		}
+		p.Fix = onboard.Fix{Text: "found on " + day + "; its fix may be out of date: check again with " + again}
+		out[i] = p
+	}
+	return out
+}
+
+// identityCheckPrefix starts the id of every check the identity step runs
+// (identity.git_email, …).
+const identityCheckPrefix = "identity."
+
+// healthText is the text table's Health cell of s: "not checked since
+// <date> (<why>; check it again with lore setup check --setup <name>
+// --step identity)" for stale results (the identity step's checks are the ones that
+// read the git config; its results replace theirs in the stored health),
+// "not checked yet" when there are none, the cell with "(checked <date>)"
+// for results from an earlier day, else the cell.
+func healthText(s SetupSummary) string {
+	switch {
+	case s.Stale != "":
+		return "not checked since " + s.earlier + " (" + s.Stale + "; check it again with lore setup check --setup " + s.Name + " --step identity)"
+	case s.Health == "":
+		return healthNotChecked
+	case s.earlier != "":
+		return s.Health + " (checked " + s.earlier + ")"
+	}
+	return s.Health
+}
+
+// healthResults are the results a setup's Health cell counts (HealthCell;
+// the newer of the two sources: the last doctor results the env recorded
+// and the last check results of its unfinished steps), one per check and target (Latest): the same list setup show
 // prints the problems of, so every count on Home is explained there.
 func (e engine) healthResults(ctx context.Context, st Store, hs HealthSource, name string) []onboard.CheckResult {
 	var doc []onboard.CheckResult

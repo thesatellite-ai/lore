@@ -161,6 +161,13 @@ func isIdentChar(r rune) bool {
 // terminal or hide text from a person while an agent reads it. --json
 // output needs none of this: JSON encodes every control as \u00XX. Text
 // with no such character is returned as is (no allocation).
+//
+// The characters Clean strips on write (bidi embedding, override and
+// isolate controls, ZWSP, a BOM) are escaped the same way (\u202e), R-3: a
+// row that reached the store without the write path (a hand-made file
+// pushed with plain git) must not reorder or split what a person reads on
+// the terminal or in the rendered agent context; the escape shows that the
+// character is there instead of hiding it. ZWJ and ZWNJ stay, as in Clean.
 func EscapeControls(s string) string {
 	if strings.IndexFunc(s, escaped) < 0 {
 		return s
@@ -182,5 +189,5 @@ func EscapeControls(s string) string {
 
 // escaped reports whether EscapeControls replaces r.
 func escaped(r rune) bool {
-	return r < 0x20 && r != '\t' && r != '\n' || r == 0x7f || r >= 0x80 && r <= 0x9f
+	return r < 0x20 && r != '\t' && r != '\n' || r == 0x7f || r >= 0x80 && r <= 0x9f || stripChars[r]
 }

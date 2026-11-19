@@ -29,11 +29,13 @@ import (
 	"github.com/thesatellite-ai/lore/model/hlc"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
+	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/bulk"
 	"github.com/thesatellite-ai/lore/ops/internal/lookup"
 	"github.com/thesatellite-ai/lore/ops/internal/textcut"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -104,7 +106,7 @@ type Skip struct {
 func undoEntry(o ops) op.Entry {
 	return op.Define(op.Spec{Name: OpUndo, Summary: "Undo a bulk action: restore a delete batch, put the rows an edit batch changed back, or move the rows a create batch added to the trash",
 		Permission: op.PermWrite, Access: op.AccessWrite, Confirm: op.ConfirmRule{MayAsk: true},
-		Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Stale, errs.NeedsConfirm, errs.Cancelled, errs.ParentDeleted, errs.Internal},
+		Errors:   []errs.Code{errs.InvalidInput, errs.NotFound, errs.Unsupported, errs.Stale, errs.NeedsConfirm, errs.Cancelled, errs.ParentDeleted, errs.Refused, errs.Internal},
 		Examples: []op.Example{{Title: "undo a bulk delete", CLI: "lore batch undo --id bat_<id>", Want: "restored"}}}, o.undo)
 }
 
@@ -144,11 +146,14 @@ func (o ops) undo(ctx context.Context, in UndoIn) (UndoOut, error) {
 			updated = append(updated, ev)
 		case actPurge:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" purged "+ev.ID.String()+
-				"; purged rows never come back (DQ4)").
+				"; purged rows never come back").
 				WithHint("see what it changed: lore batch show --id " + id.String() + " --all")
 		default:
 			return UndoOut{}, errs.New(errs.Unsupported, "batch undo: "+id.String()+" holds a "+strconv.Quote(ev.Action)+" row ("+ev.ID.String()+"); only delete and create batches can be undone")
 		}
+	}
+	if err = o.companyGuard(ctx, id, updated, created); err != nil {
+		return UndoOut{}, err
 	}
 	out := UndoOut{Batch: id.String(), Restored: []string{}, Trashed: []string{}, Reverted: []string{}, Skipped: []Skip{}}
 	if len(updated) > 0 {
@@ -219,6 +224,73 @@ func (o ops) undoEdits(ctx context.Context, id ids.ID[ids.Batch], evs []Event, o
 	out.Reverts = into.String()
 	return nil
 }
+
+// companyGuard refuses, before anything is written, an undo that would
+// take a company must rule or critical/high hotfix out of what every repo
+// of the org is told when the caller is no admin of the org (devco D-664:
+// the role check of the one-row and bulk forms, D-637/D-659, did not cover
+// undo). An edit batch's undo takes one out when putting it back lowers
+// its severity or stamps archived_at again; a create batch's undo trashes
+// the rows it added. A delete batch's undo restores rows: it adds, which
+// every member may. Rows are read through the optional getter upgrade;
+// without it there is nothing to check here.
+func (o ops) companyGuard(ctx context.Context, id ids.ID[ids.Batch], updated, created []Event) error {
+	g, ok := upgrade.As[getter](o.env)
+	if !ok || (len(updated) == 0 && len(created) == 0) {
+		return nil
+	}
+	var hit []profilestore.Placed
+	if rv, has := upgrade.As[Reverter](o.env); has && len(updated) > 0 {
+		priors, err := rv.BatchPriors(ctx, id)
+		if err != nil {
+			return err
+		}
+		seen := map[ids.AnyID]bool{}
+		for _, ev := range updated { // the batch's order, so the refusal names rows stably
+			p, known := priors[ev.ID]
+			if !known || seen[ev.ID] {
+				continue
+			}
+			seen[ev.ID] = true
+			rid := ev.ID
+			src, cur, gerr := g.Get(ctx, engine.Ref{Store: p.Store, Table: p.Before.Table, ID: rid})
+			if gerr != nil || cur.Deleted {
+				continue // refuseChanged names it
+			}
+			if profilestore.TakesOut(cur, backPatch(p.Before)) {
+				hit = append(hit, profilestore.Placed{Source: src, Row: cur})
+			}
+		}
+	}
+	for _, ev := range created {
+		src, cur, gerr := g.Get(ctx, engine.Ref{Store: ev.Store, Table: ev.Table, ID: ev.ID})
+		if gerr == nil && !cur.Deleted {
+			hit = append(hit, profilestore.Placed{Source: src, Row: cur})
+		}
+	}
+	return profilestore.RequireAdminForRows(ctx, g, hit, "undo batch "+id.String()+", which takes out", "lore batch undo --id "+id.String(), "")
+}
+
+// backPatch is the part of a row's image before a batch that decides
+// whether putting it back takes it out of the pinned part: its severity
+// and archived_at.
+func backPatch(before row.Row) map[string]value.Value {
+	patch := map[string]value.Value{}
+	for _, f := range []string{fieldSeverity, fieldArchivedAt} {
+		if v, ok := before.Fields[f]; ok {
+			patch[f] = v
+		} else if f == fieldArchivedAt {
+			patch[f] = value.Null{}
+		}
+	}
+	return patch
+}
+
+// Fields backPatch reads (schema rules/hotfixes).
+const (
+	fieldSeverity   = "severity"
+	fieldArchivedAt = "archived_at"
+)
 
 // editOrder is each edited row once, in the order the batch first wrote
 // it. An update with no before-image (a batch written before the log kept

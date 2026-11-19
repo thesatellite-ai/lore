@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/merge"
@@ -63,10 +65,12 @@ const (
 	// combinedDir holds the CFG3 combined caches under cacheDir.
 	combinedDir = "combined"
 	// MaxStoreCaches is how many attached store folders get their own
-	// cache file; past it the repo uses one combined cache (CFG3, O10):
-	// a lens attaches at most sqlite.MaxLensSources files, one of them the
-	// repo's own.
-	MaxStoreCaches = sqlite.MaxLensSources - 1
+	// cache file; past it the open uses one combined cache (CFG3, O10):
+	// a lens attaches at most sqlite.MaxLensSources files, and two of them
+	// are kept free for the repo's own cache and the deleted-rows file of
+	// `lore sql --include-deleted` (devco D-478: a store-only open over 16
+	// folders, and a repo with 9 stores plus that file, went past it).
+	MaxStoreCaches = sqlite.MaxLensSources - 2
 	// cacheDirMode is the mode of cache folders lore creates (owner only:
 	// caches hold internal rows).
 	cacheDirMode = 0o700
@@ -93,7 +97,21 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		if err != nil {
 			return nil, err
 		}
-		st, err := openDetachedHere(ctx, opts, &one, one.Name)
+		// the org's company folder beside a project folder: its roster
+		// (--assign @handle), kinds and policy, as a linked repo has it
+		// (scope.go, devco D-433)
+		var also []attach.Store
+		if one.Folder != "" {
+			also = cloneCompanyFolder(cloneOrgEntry(opts.Home, one.URL), one)
+		}
+		// a folder attached for this one command (a row named by id in
+		// another folder of the clone, idfolder.go; D-458)
+		for _, x := range extra {
+			if x.Name != one.Name && !slices.ContainsFunc(also, func(s attach.Store) bool { return s.Name == x.Name }) {
+				also = append(also, x)
+			}
+		}
+		st, err := openDetachedHere(ctx, opts, &one, one.Name, also...)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +145,16 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	remote := ""
 	if !repoOnly && opts.RepoLinkedByRemote != nil && !loreFolderAt(repo.Dir()) && !settingUpHere(ctx, repo.Dir()) {
 		if remote = opts.RepoLinkedByRemote(ctx); remote != "" {
-			repo.MarkReadOnly()
+			// devco:V-3: an own repo linked to a store folder is not called a
+			// client repo (repoIsClient fails closed: an unknown answer keeps
+			// the client wording)
+			client, _ := repoIsClient(ctx, opts)
+			linked := orgAliases(ctx, opts, repo.Dir())[attach.ReservedTeam]
+			target := ""
+			if linked == "" && opts.RepoLinkTarget != nil {
+				target = opts.RepoLinkTarget(ctx) // devco:D-670: the link's folder, not attached here
+			}
+			repo.MarkReadOnlyBecause(clientRepoWriteRefusal(remote, linked, target, !client))
 		}
 	}
 	st.linkedByRemote = remote
@@ -149,6 +176,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 
 	var attached []attach.Opened
+	var aliasOpts []engine.Option
 	if !repoOnly {
 		personal, perr := localPersonalStores(ctx, opts)
 		if perr != nil {
@@ -159,7 +187,8 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		for _, s := range org {
 			optional[s.Name] = true
 		}
-		if attached, st.unreachable, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, org, personal), optional); err != nil {
+		aliasOpts = storeAliasOpts(slices.Concat(extra, org, personal))
+		if attached, st.unreachable, st.untrusted, err = openAttached(ctx, st.repoTop, opts, reg, slices.Concat(extra, org, personal), optional); err != nil {
 			return fail(err)
 		}
 	}
@@ -172,6 +201,17 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 				return fail(err)
 			}
 		}
+	}
+	// BRANCH_LAYERS 7, 8: a project folder of a git store reads and writes
+	// the layer of the checkout's code branch when that branch is isolated
+	// (branchlayer.go); the code repo is asked once, only when such a
+	// folder is attached.
+	wrapLayers(ctx, st, opts.Home, repoBackend, attached)
+	// devco:D-411: a branch whose pinned mode is shared now (share chosen,
+	// a pattern or a teammate's pushed policy) reads main's cache; the layer
+	// cache it kept while isolated goes now, before any cache opens
+	for _, o := range attached {
+		dropSharedBranchCache(opts.Home, layerOf(o.Backend))
 	}
 	// D16 (formatold.go): a shared store still on lore 0.1.17's layout is
 	// read, never written in the new format, until lore migrate run
@@ -196,13 +236,15 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 			return fail(err)
 		}
 	case NoCreate(ctx) && !loreFolderAt(st.repoTop): // doctor_nocreate.go: a read (or a write that may not set up, S-2) never creates .lore/
-		return fail(noProjectErr(ctx, st.repoTop))
+		return fail(withOwnOrgLink(noProjectErr(ctx, st.repoTop), ownOrgOf(ctx, opts)))
 	default:
 		// Only a command that sets a repo up on purpose (init, setup,
 		// link, store add, sync: host.setsUpRepo) or an in-process caller
 		// with a plain ctx makes .lore/ here (a read reaches here only when
 		// it exists: MkdirAll then changes nothing).
-		if mkErr := os.MkdirAll(filepath.Join(st.repoTop, loreFolderName), cacheDirMode); mkErr != nil {
+		// a committed folder: the work tree's modes, group access in a
+		// group's shared checkout (D-390), as init makes it
+		if mkErr := rowfs.MkdirShared(filepath.Join(st.repoTop, loreFolderName)); mkErr != nil {
 			return fail(errs.FileIO("create the .lore folder", filepath.Join(st.repoTop, loreFolderName), mkErr))
 		}
 		repoCache = RepoCachePath(opts.Home, st.repoTop)
@@ -227,7 +269,11 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		// CFG3 fallback (O10): past the lens attach limit every attached
 		// store shares one combined cache file for this repo, each applied
 		// under its own source name.
-		path, pathErr := combinedCachePath(opts.Home, st.repoTop)
+		layered := make([]store.Backend, len(attached))
+		for i, o := range attached {
+			layered[i] = o.Backend
+		}
+		path, pathErr := combinedCachePath(opts.Home, st.repoTop, layerSubOf(layered))
 		if pathErr != nil {
 			return fail(pathErr)
 		}
@@ -291,6 +337,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	}
 	ra := newRoutedAudit(repoAudit, opts.Home, attached)
 	ra.rowFile = st.rowFileOf
+	ra.placeOf = st.placeLabelOf
 	st.audit = ra
 
 	repoClient, note := repoIsClient(ctx, opts)
@@ -308,14 +355,18 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	engOpts := []engine.Option{
 		engine.WithStore(engine.Attached{Name: store.SourceRepo, Backend: repoBackend, Client: repoClient, ActorAs: st.clientActorAs(repoClient),
 			AgentsInternal: details == AgentDetailsInternal, Place: repoPlace(ctx, st.repoTop)}),
-		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
+		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner), engine.WithReadScanner(readScanner()),
 		engine.WithActor(actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(newProvenance(opts, st.repoTop)), // _o place facts and the _w stamp (PROV4, PROV6, PROV8, OQ7)
 	}
+	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go: an org store's rows carry that org's identity (C19)
 	for _, o := range attached {
 		a := o.Attached
-		a.KeyNamespace = keyNamespace(a)
+		a.KeyNamespace = keyNamespace(a, o.Folder)
 		a.Place = placeOf(ctx, a) // FQ4: sto_ id (+ "/<folder prj_ id>") of a marked store; "" keeps the attached name
+		if as := st.storeWriterAs(a.Name); as != nil {
+			a.ActorAs = as
+		}
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	// FQ11 / FA-AGENT-6: this machine's stricter local policy values.
@@ -329,11 +380,16 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 		}
 	}
 	engOpts = append(engOpts, engine.WithMachinePolicy(machinePol))
+	if opts.Notice != nil && !repoOnly {
+		engOpts = append(engOpts, engine.WithNotice(opts.Notice)) // devco:V-16: a newer lore's policy key is a note, not an error
+	}
 	// P3-LOCAL-2: this machine's machine store, when a table needs it.
 	if engOpts, err = st.withMachine(ctx, opts.Home, reg, exp, engOpts); err != nil {
 		return fail(err)
 	}
 	st.defaultTarget = store.SourceRepo
+	engOpts = append(engOpts, aliasOpts...)
+	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
@@ -347,8 +403,9 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil {
 		return fail(err)
 	}
-	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: a removed person writes only to their personal store (B2-12)
-	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
+	st.refuseWritesIfLeft(ctx, opts.Home, attached)           // leftgate.go: a removed person writes only to their personal store (B2-12)
+	st.refuseOrgFolderIfContractor(ctx, attached, repoClient) // contractorgate.go: a contractor writes only to their client folders (J-15, R-16)
+	st.armLeftHold(opts.Home, attached)                       // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	if repoClient && st.who.Kind == identity.KindAgent {
 		// D8 / LORE_TEAM_SPEC 7.6: by default (agent_details: internal) an
 		// agent in a client repo is recorded as its owning person; an org
@@ -440,6 +497,27 @@ func repoIsClient(ctx context.Context, opts Options) (client bool, note string) 
 	return client, ""
 }
 
+// storeAliasOpts are the engine aliases of the stores to attach: each
+// store's Aliases, unless a store is attached under that name itself or
+// an earlier store already took the alias (devco T-5).
+func storeAliasOpts(stores []attach.Store) []engine.Option {
+	names := make(map[store.Source]bool, len(stores))
+	for _, s := range stores {
+		names[s.Name] = true
+	}
+	var out []engine.Option
+	for _, s := range stores {
+		for _, a := range s.Aliases {
+			if a == "" || names[a] {
+				continue
+			}
+			names[a] = true
+			out = append(out, engine.WithStoreAlias(a, s.Name))
+		}
+	}
+	return out
+}
+
 // orgStores asks opts.OrgStores for the folders the repo's org brings; no
 // hook or an error gives none (fail closed: nothing internal is attached on
 // a guess, and a write naming the org store then answers "no store named").
@@ -508,15 +586,18 @@ func renameOrgClashes(org []attach.Store, top string) []attach.Store {
 // reads keep working offline (spec 5.4) and each write decides how to
 // fail closed (App.unreachableGuard). Any other failure, and any failure
 // of a committed or personal store, still fails the open.
-func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store, optional map[store.Source]bool) (opened []attach.Opened, unreachable map[store.Source]error, err error) {
+func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema.Registry, extra []attach.Store, optional map[store.Source]bool) (opened []attach.Opened, unreachable map[store.Source]error, untrusted []untrustedStore, err error) {
 	home := opts.Home
 	cfg, err := readStoresFile(repoTop)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err = cleanStoresFileURLs(repoTop, cfg); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+	// devco R-9: a committed store on a host outside the org that nobody
+	// attached here waits for the person's `lore store trust`
+	cfg.Stores, untrusted = heldCommittedStores(ctx, home, repoTop, cfg.Stores)
 	for _, x := range extra {
 		// The committed file wins a name clash (an org store the repo
 		// also attaches by hand, or a recorded folder target).
@@ -526,7 +607,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	}
 	mc, err := readMachineConfig(home)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// ONBOARDING 3.4: the active setup's personal_store replaces it.
 	// B4-22: a lore 0.1.17 local personal store already attached as `me`
@@ -567,13 +648,13 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 	raws := make([]string, 0, len(cfg.Stores))
 	for i, s := range cfg.Stores {
 		if cfg.Stores[i].URL, err = canonical(s); err != nil {
-			return nil, nil, errs.Prefix("wire: store "+string(s.Name), err)
+			return nil, nil, nil, errs.Prefix("wire: store "+string(s.Name), err)
 		}
 		raws = append(raws, s.URL)
 	}
 	openers, err := storeOpeners(reg, originsOf(raws...), opts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var strict, maybe attach.Config
 	for _, s := range cfg.Stores {
@@ -586,7 +667,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		}
 	}
 	if opened, err = attach.Open(ctx, strict, openers, opts.openOptions()); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, s := range maybe.Stores {
 		one, oerr := attach.Open(ctx, attach.Config{Stores: []attach.Store{s}}, openers, opts.openOptions())
@@ -601,7 +682,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 			for _, o := range opened {
 				_ = o.Backend.Close() // best effort: the open error is what the caller needs
 			}
-			return nil, nil, oerr
+			return nil, nil, nil, oerr
 		}
 		opened = append(opened, one...)
 	}
@@ -614,7 +695,7 @@ func openAttached(ctx context.Context, repoTop string, opts Options, reg *schema
 		opened[i].Location = location(urls[opened[i].Name], opened[i].Folder)
 	}
 	afterAttach(ctx, home, repoTop, opened, urls) // orgsource.go, storeaddr.go: SOURCE_OF_TRUTH rows 7 and 9
-	return opened, unreachable, nil
+	return opened, unreachable, untrusted, nil
 }
 
 // location is engine.Attached.Location for a store opened from the
@@ -814,15 +895,50 @@ func storeMergeReport(u *url.URL, notice func(string)) func(merge.Result) {
 			return
 		}
 		at := storeMergeReportPrefix + where + ": " + string(res.Row.Table) + "/" + res.Row.ID.String() + ": "
-		if len(res.NewerWins) > 0 {
+		if len(res.NewerWins) > 0 || len(res.Replaced) > 0 {
 			// TE-F-2: a field both sides changed is settled newer-wins;
-			// the teammate's older value never vanishes silently.
-			notice(at + "both sides changed " + strings.Join(res.NewerWins, ", ") + "; kept the newer edit")
+			// the teammate's older value never vanishes silently. A text
+			// settled that way (two copies of a branch layer, devco V-12)
+			// names the value it replaced, as the live rows do (D-219).
+			notice(at + replacedLine(res))
 		}
 		if res.Trash != "" {
 			notice(at + string(res.Trash))
 		}
 	}
+}
+
+// maxReplacedText bounds one replaced value in a merge notice.
+const maxReplacedText = 80
+
+// replacedLine is "both sides changed priority, title; kept the newer
+// edit (replaced title \"old\")": every field settled newer-wins, and the
+// older value of each text it replaced.
+func replacedLine(res merge.Result) string {
+	fields := slices.Clone(res.NewerWins)
+	var replaced []string
+	for _, r := range res.Replaced {
+		if !slices.Contains(fields, r.Field) {
+			fields = append(fields, r.Field)
+		}
+		if slices.Contains(res.NewerWins, r.Field) {
+			continue // not a text: the field name says enough
+		}
+		old := "(none)"
+		if r.Older != nil {
+			if old = r.Older.String(); len([]rune(old)) > maxReplacedText {
+				old = string([]rune(old)[:maxReplacedText]) + "…"
+			}
+			old = strconv.Quote(old)
+		}
+		replaced = append(replaced, r.Field+" "+old)
+	}
+	slices.Sort(fields)
+	line := "both sides changed " + strings.Join(fields, ", ") + "; kept the newer edit"
+	if len(replaced) > 0 {
+		line += " (replaced " + strings.Join(replaced, ", ") + ")"
+	}
+	return line
 }
 
 // markerOf is implemented by both 0.1.18 backends: the store's
@@ -883,6 +999,9 @@ func cachePath(home string, o attach.Opened) (string, error) {
 		name = clean
 	}
 	dir := filepath.Join(writableHome(home), cacheDir, cacheStoresDir, id, filepath.FromSlash(branch))
+	if sub := layerCacheDirOf(o.Backend); sub != "" {
+		dir = filepath.Join(dir, filepath.FromSlash(sub)) // BRANCH_LAYERS 6.3: one cache per layer
+	}
 	path := filepath.Join(dir, filepath.FromSlash(name)+cacheExt)
 	if err := mkCacheDir(filepath.Dir(path)); err != nil {
 		return "", err
@@ -900,7 +1019,7 @@ func mkCacheDir(dir string) error {
 		return nil
 	}
 	if errors.Is(err, fs.ErrPermission) || errors.Is(err, syscall.EROFS) {
-		return errs.Wrap(errs.ReadOnlyFS, "lore cannot create its cache folder "+dir+": the lore home (~/.lore) is not writable", err).
+		return errs.Wrap(errs.ReadOnlyFS, "lore cannot create its cache folder "+dir+": the lore home ("+lorehome.Shown()+") is not writable", err).
 			WithHint("make the lore home writable (chmod u+w on it and on its cache folder), then run the command again")
 	}
 	return errs.Wrap(errs.Internal, "wire: create the cache folder "+dir, err)
@@ -913,11 +1032,30 @@ func cacheOpen(ctx context.Context, path string, reg *schema.Registry, exp sqlit
 
 // combinedCachePath is <home>/cache/combined/<sha256 of the repo top>.db:
 // one file per code repo, outside the repo so it never shows in git status.
-func combinedCachePath(home, repoTop string) (string, error) {
+// layerSub is the layer cache sub-folder of the command's isolated branch
+// ("" on a shared one, layerSubOf): an isolated branch gets a combined file
+// of its own (<sha256 of top NUL sub>.db), so its layer rows never reach
+// the file the shared branches of this checkout read (devco:D-411).
+func combinedCachePath(home, repoTop, layerSub string) (string, error) {
 	if err := mkCacheDir(filepath.Join(writableHome(home), cacheDir, combinedDir)); err != nil {
 		return "", err
 	}
+	if layerSub != "" {
+		return hashedCacheFile(home, combinedDir, repoTop+"\x00"+layerSub), nil
+	}
 	return hashedCacheFile(home, combinedDir, repoTop), nil
+}
+
+// layerSubOf is the layer cache sub-folder of the first backend that reads
+// through a layer cache, "" when none does (one checkout has one branch,
+// so every layer wrapper of a command names the same one).
+func layerSubOf(backends []store.Backend) string {
+	for _, b := range backends {
+		if sub := layerCacheDirOf(b); sub != "" {
+			return sub
+		}
+	}
+	return ""
 }
 
 // hashedCacheFile is <home>/cache/<dir>/<sha256 of repoTop>.db, the name of
@@ -984,16 +1122,26 @@ func linkedByRemote(ctx context.Context, opts Options) string {
 type markerBackend interface{ Marker() rowfs.Marker }
 
 // keyNamespace is an attached store's natural-id namespace: its marker's
-// sto_ id, plus "/<folder>" for a `<store>/<folder>` target ("" when the
-// backend has no marker id: such a store keeps v0.1.17's ids).
-func keyNamespace(a engine.Attached) string {
+// sto_ id, plus "/<folder>" for the data folder the attachment writes to
+// ("" when the backend has no marker id: such a store keeps v0.1.17's
+// ids). folder is the attached folder (attach.Store.Folder): a linked
+// repo attaches its org store under the bare org name at the linked
+// folder, and devco D-689 (owner use pass 4 weak 6) was that this folder
+// was left out, so `policy set` of one key in two linked folders gave
+// both rows one pol_ id, and the same folder got another id from $HOME
+// (`--to <org>/<folder>`). The folder of a `<store>/<folder>` name wins;
+// else the attached folder; the store root adds nothing.
+func keyNamespace(a engine.Attached, folder string) string {
 	mb, ok := concrete(a.Backend).(markerBackend)
 	if !ok || mb.Marker().ID.IsZero() {
 		return ""
 	}
 	ns := mb.Marker().ID.String()
-	if _, folder, has := strings.Cut(string(a.Name), "/"); has {
-		ns += "/" + folder
+	if _, named, has := strings.Cut(string(a.Name), "/"); has {
+		return ns + "/" + named
+	}
+	if f := rootFolder(folder); f != "" {
+		ns += "/" + f
 	}
 	return ns
 }
@@ -1028,16 +1176,26 @@ func placeOf(ctx context.Context, a engine.Attached) string {
 	}
 	fb, ok := c.(folderIDOf)
 	if !ok {
-		return keyNamespace(a)
+		return attachedNamespace(a)
 	}
 	pid, err := fb.FolderProjectID(ctx)
 	if err != nil {
-		return keyNamespace(a)
+		return attachedNamespace(a)
 	}
 	if pid.IsZero() {
 		return mb.Marker().ID.String() // the store root has no folder id
 	}
 	return mb.Marker().ID.String() + "/" + pid.String()
+}
+
+// attachedNamespace is a's natural-id namespace as open set it
+// (keyNamespace with the attached folder), else keyNamespace from its name
+// alone for an Attached built without it.
+func attachedNamespace(a engine.Attached) string {
+	if a.KeyNamespace != "" {
+		return a.KeyNamespace
+	}
+	return keyNamespace(a, "")
 }
 
 // sameURL reports whether two store entries name the same store url and
@@ -1166,7 +1324,7 @@ func orgStoreNamed(ctx context.Context, opts Options, target store.Source) (atta
 	idx := slices.IndexFunc(org, func(s attach.Store) bool { return s.Name == target })
 	if idx < 0 {
 		return attach.Store{}, errs.New(errs.NotFound, "roster: no org store named "+string(target)+" is configured").
-			WithHint("the org entry in ~/.lore/config.yaml names the store and its org_folder")
+			WithHint("the org entry in " + lorehome.Shown() + "/config.yaml names the store and its org_folder")
 	}
 	return org[idx], nil
 }
@@ -1182,7 +1340,9 @@ func openDetached(ctx context.Context, opts Options, one *attach.Store) (*state,
 
 // openDetachedHere is openDetached; a non-empty here names the attached
 // store that answers for the repo store (engine.WithRepoAlias, storehere.go).
-func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here store.Source) (*state, error) {
+// also are attached beside one (never the default target): the company
+// folder a store-only open on a project folder reads kinds and policy from.
+func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here store.Source, also ...attach.Store) (*state, error) {
 	st := &state{actorDone: map[store.Source]bool{}}
 	if err := st.resolveActor(ctx, opts, true); err != nil {
 		return nil, err
@@ -1198,17 +1358,35 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	target := store.SourceMachine
 	var attached []attach.Opened
+	urlOf := map[store.Source]string{}
 	if one != nil {
 		target = one.Name
-		raw := one.URL
+		raws := []string{one.URL}
 		if one.URL, err = canonical(*one); err != nil {
 			return nil, errs.Prefix("wire: store "+string(one.Name), err)
 		}
-		openers, oerr := storeOpeners(reg, originsOf(raw), opts)
+		stores := []attach.Store{*one}
+		urlOf[one.Name] = one.URL
+		for _, s := range also {
+			if s.URL, err = canonical(s); err != nil {
+				return nil, errs.Prefix("wire: store "+string(s.Name), err)
+			}
+			if dup, same := samePlaceAttached(stores, s); dup {
+				if same {
+					continue // the same place named twice (devco:D-683)
+				}
+				return nil, errs.New(errs.ConfigInvalid, "store "+string(s.Name)+" attached twice, at two different places").
+					WithHint("`lore store list` shows where each store of this machine lives")
+			}
+			raws = append(raws, s.URL)
+			stores = append(stores, s)
+			urlOf[s.Name] = s.URL
+		}
+		openers, oerr := storeOpeners(reg, originsOf(raws...), opts)
 		if oerr != nil {
 			return nil, oerr
 		}
-		if attached, err = attach.Open(ctx, attach.Config{Stores: []attach.Store{*one}}, openers, opts.openOptions()); err != nil {
+		if attached, err = attach.Open(ctx, attach.Config{Stores: stores}, openers, opts.openOptions()); err != nil {
 			return nil, err
 		}
 	}
@@ -1216,7 +1394,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	for i := range attached {
 		st.backends = append(st.backends, attached[i].Backend)
 		attached[i].Level = levelOf(attached[i])
-		attached[i].Location = location(one.URL, attached[i].Folder)
+		attached[i].Location = location(urlOf[attached[i].Name], attached[i].Folder)
 		if opts.WrapBackend != nil {
 			if attached[i].Backend, err = wrapBackend(ctx, opts, attached[i].Name, attached[i].Folder, attached[i].Backend); err != nil {
 				return fail(err)
@@ -1228,14 +1406,10 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	exp := refs.Expander{Resolver: rv}
 	st.byName = map[store.Source]store.Backend{}
 	st.folders = map[store.Source]string{}
+	if err = openDetachedCaches(ctx, opts.Home, st.caches, attached, reg, exp); err != nil {
+		return fail(err)
+	}
 	for _, o := range attached {
-		path, pathErr := cachePath(opts.Home, o)
-		if pathErr != nil {
-			return fail(pathErr)
-		}
-		if err = st.caches.open(ctx, o.Name, path, reg, exp); err != nil {
-			return fail(err)
-		}
 		st.byName[o.Name] = o.Backend
 		st.folders[o.Name] = o.Folder
 	}
@@ -1248,6 +1422,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	}
 	ra := newRoutedAudit(storeOnlyAudit{}, opts.Home, attached)
 	ra.rowFile = st.rowFileOf
+	ra.placeOf = st.placeLabelOf
 	st.audit = ra
 	machinePol, polNotes, err := machinePolicy(opts.Home)
 	if err != nil {
@@ -1259,15 +1434,20 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		}
 	}
 	engOpts := []engine.Option{
-		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner),
+		engine.WithCache(reexpandCache{caches: st.caches, rv: rv}), engine.WithRegistry(reg), engine.WithScanner(scanner), engine.WithReadScanner(readScanner()),
 		engine.WithActor(st.actor), engine.WithAudit(st.audit), engine.WithWall(opts.Wall),
 		engine.WithProvenance(storeOnlyProvenance{inner: newProvenance(opts, "")}),
 		engine.WithMachinePolicy(machinePol),
+		engine.WithNotice(opts.Notice), // devco:V-16: a newer lore's policy key is a note, not an error
 	}
+	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go (C19)
 	for _, o := range attached {
 		a := o.Attached
-		a.KeyNamespace = keyNamespace(a)
+		a.KeyNamespace = keyNamespace(a, o.Folder)
 		a.Place = placeOf(ctx, a)
+		if as := st.storeWriterAs(a.Name); as != nil {
+			a.ActorAs = as
+		}
 		engOpts = append(engOpts, engine.WithStore(a))
 	}
 	if engOpts, err = st.withMachine(ctx, opts.Home, reg, exp, engOpts); err != nil { // P3-LOCAL-2
@@ -1282,6 +1462,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		// own default (the first store) has nothing to pick.
 		engOpts = append(engOpts, engine.WithDefaultTarget(store.SourceMachine))
 	}
+	linkRosterSources(attached) // contractorgate.go: a client store is checked against its org's roster (R-15)
 	if st.eng, err = engine.New(engOpts...); err != nil {
 		return fail(err)
 	}
@@ -1292,8 +1473,9 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	if err = st.canonicalActor(ctx, opts.Notice); err != nil { // TEAM_PROFILES 6.3, as in open
 		return fail(err)
 	}
-	st.refuseWritesIfLeft(ctx, opts.Home, attached) // leftgate.go: inside a store clone too (B2-25)
-	st.armLeftHold(opts.Home, attached)             // leftgate.go: the sync that brings a removal holds later writes (F-9)
+	st.refuseWritesIfLeft(ctx, opts.Home, attached)     // leftgate.go: inside a store clone too (B2-25)
+	st.refuseOrgFolderIfContractor(ctx, attached, true) // contractorgate.go (J-15); a store clone has no code repo
+	st.armLeftHold(opts.Home, attached)                 // leftgate.go: the sync that brings a removal holds later writes (F-9)
 	// rowState: App.finishOpen reads the formats before the first write
 	if !st.refreshPending {
 		if err = st.readFormats(ctx, opts); err != nil {
@@ -1366,4 +1548,64 @@ func (a *App) LinkedRemoteProject(ctx context.Context) (ids.ID[ids.Project], str
 		return ids.ID[ids.Project]{}, "", false
 	}
 	return pid, remote, true
+}
+
+// openDetachedCaches opens the caches of a store-only open: one file per
+// store folder, or past MaxStoreCaches one combined file for all of them
+// (CFG3, O10), as a repo's open does. Without it a read at a store clone
+// root, a setup folder or `--setup <org>` over a store of more than ten
+// folders asked the lens to attach every folder's file and failed on
+// SQLite's attach limit (devco D-478). The combined file is named by the
+// attached places, so another read over the same folders reuses it.
+func openDetachedCaches(ctx context.Context, home string, c *caches, attached []attach.Opened, reg *schema.Registry, exp sqlite.Expander) error {
+	if len(attached) <= MaxStoreCaches {
+		for _, o := range attached {
+			path, err := cachePath(home, o)
+			if err != nil {
+				return err
+			}
+			if err = c.open(ctx, o.Name, path, reg, exp); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	places := make([]string, 0, len(attached))
+	names := make([]store.Source, len(attached))
+	layered := make([]store.Backend, len(attached))
+	for i, o := range attached {
+		places = append(places, string(o.Name)+"\x00"+o.Location)
+		names[i] = o.Name
+		layered[i] = o.Backend
+	}
+	slices.Sort(places)
+	path, err := combinedCachePath(home, detachedCombinedKey+strings.Join(places, "\x00"), layerSubOf(layered))
+	if err != nil {
+		return err
+	}
+	return c.openCombined(ctx, names, path, reg, exp)
+}
+
+// detachedCombinedKey starts the key of a store-only open's combined cache
+// file, so it never shares a name with a repo's (keyed by the repo path).
+const detachedCombinedKey = "store-only\x00"
+
+// samePlaceAttached reports whether name s.Name is in stores already (dup) and,
+// if so, whether that entry is the same place (same: store place, by
+// placeKey, and folder). Why (devco:D-683): a world over every folder of a setup
+// lists the company folder among the folders and again as the level
+// above each folder (companyFolderOf), so `task next --setup <setup>`
+// from the home folder failed "store <org>/org attached twice" whenever a
+// folder sorted before the company one. One place named twice is
+// attached once; one name over two places stays a refusal.
+func samePlaceAttached(stores []attach.Store, s attach.Store) (dup, same bool) {
+	for _, have := range stores {
+		if have.Name != s.Name {
+			continue
+		}
+		k := placeKey(have.URL, have.Branch)
+		samePlace := (have.URL == s.URL && have.Branch == s.Branch) || (k != "" && k == placeKey(s.URL, s.Branch))
+		return true, samePlace && strings.Trim(have.Folder, "/") == strings.Trim(s.Folder, "/")
+	}
+	return false, false
 }

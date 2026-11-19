@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/logic/gitenv"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsdoctor "github.com/thesatellite-ai/lore/ops/doctor"
 	opsfix "github.com/thesatellite-ai/lore/ops/fix"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
@@ -96,13 +97,14 @@ func TestFixRepoWalk(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: /x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	remotes := map[string][]string{linked: {"github.com/acme/linked"}, filepath.Join(base, "org/plain"): {"github.com/acme/plain"}}
+	// keyed canonically: the walk hands remotes the canonical folder (devco D-413)
+	remotes := map[string][]string{fspath.Canonical(linked): {"github.com/acme/linked"}, fspath.Canonical(filepath.Join(base, "org/plain")): {"github.com/acme/plain"}}
 	w := fixRepoWalk{
 		known:  []string{nested, filepath.Join(base, "gone")},
 		bases:  []string{base, filepath.Join(base, "missing")},
 		linked: map[string]bool{"github.com/acme/linked": true},
 		remotes: func(_ context.Context, dir string) []string {
-			return remotes[resolvedPath(dir)]
+			return remotes[fspath.Canonical(dir)]
 		},
 	}
 	got, err := w.run(context.Background())
@@ -111,7 +113,7 @@ func TestFixRepoWalk(t *testing.T) {
 	}
 	want := []string{a, nested, deep, worktree}
 	for i := range want {
-		want[i] = resolvedPath(want[i])
+		want[i] = fspath.Canonical(want[i])
 	}
 	slices.Sort(want)
 	if !slices.Equal(got.Roots, want) {
@@ -120,7 +122,7 @@ func TestFixRepoWalk(t *testing.T) {
 	var skipped []string
 	for _, s := range got.Skipped {
 		wantWhy := skipNotRepo
-		if s.Path == resolvedPath(linked) {
+		if s.Path == fspath.Canonical(linked) {
 			wantWhy = skipNoLoreData
 		}
 		if s.Why != wantWhy {
@@ -128,7 +130,7 @@ func TestFixRepoWalk(t *testing.T) {
 		}
 		skipped = append(skipped, s.Path)
 	}
-	if wantSkip := []string{resolvedPath(base), resolvedPath(linked), resolvedPath(notRepo)}; !slices.Equal(skipped, wantSkip) {
+	if wantSkip := []string{fspath.Canonical(base), fspath.Canonical(linked), fspath.Canonical(notRepo)}; !slices.Equal(skipped, wantSkip) {
 		t.Fatalf("skipped %v, want %v", skipped, wantSkip)
 	}
 	// the depth bound: one level below the base finds only "a" and the
@@ -139,13 +141,13 @@ func TestFixRepoWalk(t *testing.T) {
 	}
 	// E-16: when the base's .lore is lore's own home (~/.lore), the base
 	// is not listed as a skipped folder; the other skips stay
-	w.depth, w.loreHome = 0, resolvedPath(filepath.Join(base, ".lore"))
+	w.depth, w.loreHome = 0, fspath.Canonical(filepath.Join(base, ".lore"))
 	got, _ = w.run(context.Background())
 	var homeSkips []string
 	for _, s := range got.Skipped {
 		homeSkips = append(homeSkips, s.Path)
 	}
-	if want := []string{resolvedPath(linked), resolvedPath(notRepo)}; !slices.Equal(homeSkips, want) {
+	if want := []string{fspath.Canonical(linked), fspath.Canonical(notRepo)}; !slices.Equal(homeSkips, want) {
 		t.Fatalf("skipped with the lore home %v, want %v", homeSkips, want)
 	}
 	if s := (opsfix.Skip{Path: "/p", Why: "w"}).Line(); s != "skipped /p: w" {

@@ -61,7 +61,7 @@ func TestWrapBackend(t *testing.T) {
 		t.Fatal("the engine's agency backend is not the wrapper")
 	}
 	att := engine.Attached{Name: "agency", Backend: st.byName["agency"]}
-	if ns := keyNamespace(att); ns != folderStore {
+	if ns := keyNamespace(att, ""); ns != folderStore {
 		t.Fatalf("namespace through the wrapper = %q, want the marker's %s", ns, folderStore)
 	}
 

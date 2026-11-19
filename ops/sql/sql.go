@@ -3,7 +3,8 @@
 // spec 15 step 5: `lore sql "SELECT name, ip FROM res_server"`).
 //
 // What the query sees is the lens wire builds: a `<table>_all` view per
-// table with a leading `source` column (the store's name), plus each table
+// table with a leading `source` column and `place`, both the
+// <org>/<folder> label search prints (D-568, D-685), plus each table
 // by its plain name (the nearest store's copy). In a client repo the lens
 // holds only the repo's own cache, never a store's data (MQ6, CFG6).
 //
@@ -34,6 +35,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
+	"github.com/thesatellite-ai/lore/logic/textwidth"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
@@ -113,6 +116,11 @@ type RunIn struct {
 	Internal      bool          `json:"internal,omitempty" flag:"internal" desc:"in a client repo, also read the internal stores (their rows are internal: never copy them into the repo)"`
 	// IncludeDeleted: DELETION 2.9 (FA-META-2).
 	IncludeDeleted bool `json:"include_deleted,omitempty" flag:"include-deleted" desc:"also read the rows in the trash (tables and their _all views; time_spent counts deleted tasks)"`
+	// Store names the stores the lens reads (devco D-473), as every other
+	// read's --store: `<org>` is every folder of the org's stores, each a
+	// source <store>/<folder>; `<org>/<folder>` is that folder. wire routes
+	// it before the op runs (runOutsideRepo), from any folder.
+	Store string `json:"store,omitempty" flag:"store" alias:"to" desc:"read this store instead of the repo's: <org> (every folder, each a source <store>/<folder>) or <store>/<folder>; works from any folder"`
 }
 
 // RunOut is the output of sql.run (--json and REST): column names, rows
@@ -155,6 +163,37 @@ func cellOf(v value.Value) Cell {
 	return Cell{Kind: string(v.Kind()), Value: v.String()}
 }
 
+// maskSecrets replaces every secret-shaped value in the text cells of rows
+// with its safe preview (gitleaks.MaskText), in place.
+//
+// Why (devco R-11): the lens can hand back a value lore would refuse to
+// store or print, such as a literal typed into the query itself
+// (`SELECT '<token>'`) or a token in a row someone wrote by hand, and the
+// command promises sensitive values masked. --show-sensitive (which asks
+// first) prints them as they are. The cells are checked joined once, so a
+// clean result costs one scan however many rows it has.
+func maskSecrets(rows []Row) {
+	var all strings.Builder
+	for _, r := range rows {
+		for _, c := range r.Cells {
+			if c.Kind == string(value.KindText) {
+				all.WriteString(c.Value)
+				all.WriteByte('\n')
+			}
+		}
+	}
+	if !gitleaks.HasSecret(all.String()) {
+		return
+	}
+	for _, r := range rows {
+		for j, c := range r.Cells {
+			if c.Kind == string(value.KindText) {
+				r.Cells[j].Value = gitleaks.MaskText(c.Value)
+			}
+		}
+	}
+}
+
 // Ops returns the sql operation bound to env.
 func Ops(env Env) []op.Entry {
 	return []op.Entry{
@@ -163,11 +202,12 @@ func Ops(env Env) []op.Entry {
 			Permission: op.PermRead, Access: op.AccessRead, RESTNoun: restNoun,
 			Errors: []errs.Code{
 				errs.InvalidInput, errs.InvalidIdentifier, errs.SQLRefused, errs.SQLTimeout, errs.NeedsConfirm, errs.Cancelled,
-				errs.Unsupported, errs.DBNotFound, errs.NotAStore, errs.StoreUnreachable, errs.OldLore, errs.Internal,
+				errs.Unsupported, errs.DBNotFound, errs.NotAStore, errs.NotFound, errs.StoreUnreachable, errs.OldLore, errs.Internal,
 			},
 			Confirm: op.ConfirmRule{When: showSensitiveField},
 			Examples: []op.Example{
 				{Title: "count memories per store", CLI: `lore sql run --query "SELECT source, COUNT(*) AS n FROM memories_all GROUP BY source"`, Want: "source"},
+				{Title: "every rule of the org, from any folder", CLI: `lore sql run --store acme --query "SELECT source, body FROM rules_all ORDER BY source"`, Want: "source"},
 				{Title: "every resource as csv", CLI: `lore sql run --query "SELECT kind, name FROM res__all ORDER BY kind, name" --format csv`, Want: "kind,name"},
 			},
 		}, func(ctx context.Context, in RunIn) (RunOut, error) { return run(ctx, env, in) }),
@@ -211,6 +251,9 @@ func run(ctx context.Context, env Env, in RunIn) (RunOut, error) {
 			cells[j] = cellOf(v)
 		}
 		rows[i] = Row{Cells: cells}
+	}
+	if !in.ShowSensitive {
+		maskSecrets(rows)
 	}
 	cols := res.Columns
 	if cols == nil {
@@ -279,7 +322,7 @@ func (o RunOut) tableText() string {
 	for _, line := range cells {
 		for i, c := range line {
 			if i < len(widths) {
-				widths[i] = max(widths[i], utf8.RuneCountInString(c))
+				widths[i] = max(widths[i], textwidth.Width(c))
 			}
 		}
 	}
@@ -291,7 +334,7 @@ func (o RunOut) tableText() string {
 			}
 			b.WriteString(c)
 			if i < len(line)-1 && i < len(widths) {
-				b.WriteString(strings.Repeat(" ", widths[i]-utf8.RuneCountInString(c)))
+				b.WriteString(strings.Repeat(" ", widths[i]-textwidth.Width(c)))
 			}
 		}
 		b.WriteString("\n")

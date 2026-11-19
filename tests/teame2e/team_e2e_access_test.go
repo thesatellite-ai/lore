@@ -49,7 +49,12 @@ func TestAccess_CanonicalOrgStoreThroughMachineMapping(t *testing.T) {
 	repo.CommitAll("lore")
 	repo.AdminPush("origin", "main")
 	repo.MustLore("store", "init", "acme_notes", accessTeamURL)
-	repo.MustLore("org", "create", "acme", "--store", "acme_notes", "--key", "human:alice@acme.example", "--name", "Alice", "--yes")
+	repo.MustLore("org", "create", "acme", "--store", "acme_notes", "--key", "human:alice@acme.example", "--name", "Alice", "--yes").
+		Says(t, "committed in the local clone; `lore sync` pushes it")
+	if _, ok := notes.Read("refs/heads/main", "org/lore-org.yaml"); ok {
+		t.Fatal("org create pushed by itself; a store write waits for lore sync (U-2)")
+	}
+	repo.MustLore("sync") // the store commit goes out through the mapping
 	orgFile, ok := notes.Read("refs/heads/main", "org/lore-org.yaml")
 	if !ok || !strings.Contains(orgFile, accessTeamURL) {
 		t.Fatalf("lore-org.yaml must name the canonical url:\n%s", orgFile)
@@ -75,6 +80,7 @@ func TestAccess_CanonicalOrgStoreThroughMachineMapping(t *testing.T) {
 
 	// A store write by its short name, pushed through the mapping.
 	bob.Lore(out, "store", "folder", "add", "lore-x", "client_a").OK(t).Says(t, "client_a in lore-x")
+	bob.Lore(out, "sync").OK(t).Says(t, "store lore-x: pushed") // the store write is pushed by sync, through the mapping
 	if !slices.ContainsFunc(second.Files("refs/heads/main"), func(f string) bool { return strings.HasPrefix(f, "client_a/") }) {
 		t.Fatalf("client_a was not pushed to the second store: %v", second.Files("refs/heads/main"))
 	}
@@ -90,7 +96,7 @@ func TestAccess_CanonicalOrgStoreThroughMachineMapping(t *testing.T) {
 	// Without the mapping the canonical host is unreachable, and doctor
 	// says how to map it.
 	bob.WriteHomeFile(".lore/config.yaml", withoutKey(string(cfg), "access"))
-	bob.Lore(out, "doctor").Says(t, "store_access", accessSecondURL, "cannot be reached", "access:", "insteadOf")
+	bob.Lore(out, "doctor").Says(t, "store_access", "cannot reach "+accessSecondURL, "access:", "insteadOf")
 }
 
 // withoutKey is config.yaml text without one top-level key's block.

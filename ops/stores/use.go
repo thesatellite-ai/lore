@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
@@ -91,7 +92,7 @@ var useErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.BadPath, errs
 func useOp(m Manager) op.Entry {
 	const verb = "store use"
 	return op.Define(op.Spec{
-		Name: OpUse, Summary: "Use your own git clone of a store (cloned anywhere) instead of lore's clone under ~/.lore/stores; --default goes back",
+		Name: OpUse, Summary: "Use your own git clone of a store (cloned anywhere) instead of lore's clone under " + lorehome.Shown() + "/stores; --default goes back",
 		Permission: op.PermWrite, Access: op.AccessRead, Errors: useErrors,
 		Examples: []op.Example{
 			{Title: "use a clone you made yourself", CLI: "git clone git@github.com:acme/notes ~/work/notes && lore store use --path ~/work/notes", Want: "now uses your clone"},

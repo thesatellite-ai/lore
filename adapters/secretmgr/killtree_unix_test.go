@@ -13,38 +13,69 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // TestTimeoutKillsProcessTree (OV13b, SECRETS 6): a manager CLI that
 // starts a helper of its own (a gpg-agent prompt, a vault login child)
-// and then hangs loses the helper too when the timeout fires, not only
-// the direct child; the call returns E_SECRET_UNAVAILABLE "timed out"
-// well before the helper would have ended.
+// and then hangs loses the helper too when its time is up, not only the
+// direct child; the call returns E_SECRET_UNAVAILABLE "timed out" well
+// before the helper would have ended.
+//
+// devco D-415: the test armed a 300 ms timeout and hoped the helper had
+// started by then; under load it had not ("the helper never started").
+// The kill is the behaviour, so the test waits for the event instead: the
+// helper writes its pid, then the call's context ends, which runs the same
+// kill branch as the manager timeout (that the timeout itself fires is
+// TestRevealUnavailable's hanging-CLI case). Only the "how long may
+// that take" limits are run time, so only they scale.
 func TestTimeoutKillsProcessTree(t *testing.T) {
 	// the helper writes its pid, then sleeps; the CLI itself sleeps too
 	scripts := map[string]string{}
-	scripts[Gopass] = `d=$(dirname "$0"); sh -c "echo \$\$ > '$d/helper.pid'; exec sleep 30" & sleep 30`
+	scripts[Gopass] = `d=$(dirname "$0"); sh -c "echo \$\$ > '$d/helper.pid.tmp' && mv '$d/helper.pid.tmp' '$d/helper.pid'; exec sleep 30" & sleep 30`
 	look, dir := fakeCLIs(t, scripts)
-	set := Builtin(Options{LookPath: look, Timeout: 300 * time.Millisecond})
+	// the manager timeout is only a hang guard here: the context ends first
+	set := Builtin(Options{LookPath: look, Timeout: testtime.Scale(20 * time.Second)})
 	gp, _ := set.Get(Gopass)
-	start := time.Now()
-	_, err := gp.Reveal(context.Background(), Locator{Path: "a/b"})
-	if !errs.Has(err, errs.VaultEntryUnavailable) || !strings.Contains(err.Error(), "timed out") {
-		t.Fatalf("err = %v, want a timeout", err)
-	}
-	if d := time.Since(start); d > 5*time.Second {
-		t.Fatalf("the call took %s", d)
-	}
-	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "helper.pid")))
-	if err != nil {
-		t.Fatalf("the helper never started: %v", err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type result struct{ err error }
+	done := make(chan result, 1)
+	go func() {
+		_, err := gp.Reveal(ctx, Locator{Path: "a/b"})
+		done <- result{err}
+	}()
+	pidFile := filepath.Clean(filepath.Join(dir, "helper.pid"))
+	var b []byte
+	for wait := time.Now().Add(testtime.Scale(10 * time.Second)); ; time.Sleep(10 * time.Millisecond) {
+		var err error
+		if b, err = os.ReadFile(pidFile); err == nil {
+			break
+		}
+		select {
+		case r := <-done:
+			t.Fatalf("the call ended before the helper started: %v", r.err)
+		default:
+		}
+		if time.Now().After(wait) {
+			t.Fatal("the helper never started")
+		}
 	}
 	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
 	if err != nil || pid <= 1 {
 		t.Fatalf("bad helper pid %q", b)
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	cancel()
+	select {
+	case r := <-done:
+		if !errs.Has(r.err, errs.VaultEntryUnavailable) || !strings.Contains(r.err.Error(), "timed out") {
+			t.Fatalf("err = %v, want a timeout", r.err)
+		}
+	case <-time.After(testtime.Scale(5 * time.Second)):
+		t.Fatal("the call did not return after its time was up")
+	}
+	deadline := time.Now().Add(testtime.Scale(3 * time.Second))
 	for {
 		err := syscall.Kill(pid, 0)
 		if errors.Is(err, syscall.ESRCH) {
@@ -57,7 +88,7 @@ func TestTimeoutKillsProcessTree(t *testing.T) {
 			_ = syscall.Kill(pid, syscall.SIGKILL) // clean up the leaked helper
 			t.Fatalf("the helper (pid %d) survived the timeout", pid)
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 

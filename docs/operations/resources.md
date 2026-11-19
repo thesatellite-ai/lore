@@ -37,12 +37,12 @@ Available Commands:
   kind        Resource kinds (add, edit, rename, show)
   kinds       List resource kinds with their fields and row counts
   lint        Find dangling and bare-name refs, missing required fields, deprecated fields, due reminders and duplicates
-  list        List resources of a kind
+  list        List resources of a kind (every kind when none is given)
   merge       Fold a duplicate resource into another of the same kind: refs move, values fill, the duplicate is archived
   rehome      List the kinds and refs a place can no longer see after its chain changed
   rename      Rename a resource (ids and refs stay)
   repoint     Move every ref from one resource to another of the same kind, then archive the old one
-  report      Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate
+  report      Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references in use (to rotate when offboarding)
   show        Show one resource
   stale       Resources whose last_checked is older than --days, or never set
 ```
@@ -170,19 +170,22 @@ created res_…e913  service  repo:service/hub_web
 
 ## Step 4 — List, filter and show
 
-`list <kind>` prints one column per field. `--where` filters (`=`, `!=`, `~=`, `>`, `>=`, `<`, `<=`, `?` for set, `!?` for not set, `field:a,b` for any of), `--sort` orders by name, `last_checked`, `archived_at` or a field, and `show` prints one resource:
+`list <kind>` prints one column per field, each as wide as its widest cell, and ends with a count line. `--where` filters (`=`, `!=`, `~=`, `>`, `>=`, `<`, `<=`, `?` for set, `!?` for not set, `field:a,b` for any of), `--sort` orders by name, `last_checked`, `archived_at` or a field, and `show` prints one resource:
 
 <!-- example: resources#list-and-show -->
 ```console
 # alice, in infra
 $ lore resource list --kind host
-KIND	NAME	IP	OS	PROVIDER	CHECKED
-host	hub_prod	203.0.113.10	ubuntu-24.04	hetzner	
-host	hub_stage	203.0.113.11	ubuntu-24.04	aws	
+KIND  NAME       PROVIDER  IP
+host  hub_prod   hetzner   203.0.113.10
+host  hub_stage  aws       203.0.113.11
+2 resources
+1 more field not shown: add --wide for every field, or --json
 $ lore resource list --kind service --where runs_on=hub_prod --sort name:desc
-KIND	NAME	DB_PASSWORD	RUNS_ON	URL	CHECKED
-service	hub_web		hub_prod	https://www.example.com	
-service	hub_api	gopass://acme/hub/db	hub_prod	https://api.example.com	
+KIND     NAME     URL                      RUNS_ON   DB_PASSWORD
+service  hub_web  https://www.example.com  hub_prod
+service  hub_api  https://api.example.com  hub_prod  gopass://acme/hub/db
+2 resources
 $ lore resource show --id hub_api
 res_4c59…6c38  service  repo:service/hub_api
   db_password = gopass://acme/hub/db
@@ -192,7 +195,7 @@ created 2026-11-02T10:01:20Z by alice · updated 2026-11-02T10:01:20Z by alice
 ```
 <!-- /example -->
 
-`list` hides archived rows unless you pass `--archived`; `--include-deleted` and `--deleted-only` show rows in the trash. Every command takes `--json`.
+`list` hides archived rows unless you pass `--archived`; `--include-deleted` and `--deleted-only` show rows in the trash. Every command takes `--json`. Every read (`list`, `show`, `kinds`, `kind show`, `stale`, `report`, `history`, `graph`, `impact`, `export`) takes `--store` to read one store from any folder, as `lore rule list --store` does: `--store <org>` reads every folder of the org, `--store <org>/<folder>` one folder (`lore resource list --kind code_repo --store acme/org` from the home folder), `--store repo` this repo's own rows; a name no store answers to is refused with `E_NOT_FOUND`, never ignored. With no `--kind`, `lore resource list` lists every kind's resources (by kind, then name) in a narrow table: `KIND`, `NAME` and the `PROJECT` and `URL` fields when a row sets them, and `CHECKED` only when a row was checked, so `lore resource list --store acme` answers from any folder as the other reads do; with `--kind` the table stays narrow too: `KIND`, `NAME`, the `PROJECT` and `URL` fields when the kind has them and a row sets them, the fields `--where` and `--sort` name, and at most two more of the kind's fields (required ones first, then those most rows set; a sensitive one masked), with a line under it saying how many fields it left out; `--wide` prints every field of the kind as a column, and `--json` has every value. A cell longer than 60 characters is cut and ends with `…` (the whole value is in `lore resource show` and `--json`). `--where` and `--sort` filter on one kind's fields, so they still need `--kind`. A read of one project folder (`--store acme/sync` from any folder, or any resource read run inside that folder of the store clone) sees the kinds of the org folder (`acme/org`), the same from everywhere; its `list` shows the resources stored in the folder and those of the org folder whose `project` field is the folder (`sync`), and the line under it says how many org-wide or other folders' resources it left out and that `lore resource list --store acme` lists the whole org. `show --id <name>` still finds an org folder's resource from there. `stale` and `report` keep to the same resources with the same line (naming `lore resource stale --store acme` or `lore resource report --store acme`), and `graph --id <name>` and `impact --id <name>` start only from one of them (a resource of another folder is refused with `E_NOT_FOUND` naming `lore resource graph --id <name> --store acme`, or `impact`) and walk only those resources: a ref into an org-wide or another folder's resource prints it as `code_repo shared_ci (acme/org, outside this folder)` and is not followed further, a resource of the org that uses one of the folder's is left out, and the line under the tree names `lore resource graph --id <name> --store acme` for the whole org. In `--json` each graph and impact node carries `store` (where it is stored, `<org>/<folder>`, as `list` rows do) and `outside: true` when it is such a left-out resource. The writes that find a resource by name (`check`, `edit`, `archive`, `rename`, `merge`) take `--store` too, so `lore resource check --id acme_app --store acme/sync --yes` works from the home folder: `--store <org>` finds the resource in any folder of the org and writes it where it is, `--store <org>/<folder>` keeps to that folder's resources as `list` does. The other writes that name a row by name take it the same way: `kind edit`, `kind rename`, `field rename`, `field retype`, `field remove`, `repoint` and `delete` (`lore resource kind rename --id code_repo --new-name code_repos --store acme/org --yes` from the home folder). Inside a repo they find the row in the stores the repo attaches; a `--store` naming a store or folder the repo does not attach is refused with `E_NOT_FOUND`, naming what the repo attaches and the same command to run from the home folder (`cd ~ && lore … --store acme/tools`), and nothing is written anywhere else. The metadata reads (`lore meta get`, `show`, `keys`, `history`, `export`) and `lore trash show` / `lore trash stats` take it too.
 
 ## Step 5 — See what depends on what
 
@@ -235,7 +238,7 @@ what breaks if host hub_prod goes down
 
 ## Step 6 — Check that the facts are still right
 
-Infrastructure facts go stale. `check` stamps `last_checked` (a person or agent looked and the facts are right, with an optional `--note`), and `stale` lists resources never checked or checked more than `--days` ago (default 60):
+Infrastructure facts go stale. `check` stamps `last_checked` (a person or agent looked and the facts are right, with an optional `--note`), and `stale` lists resources never checked or checked more than `--days` ago (default 60), then the same count line `report` prints (`N to check: S stale (checked over 60 days ago), U never checked`):
 
 <!-- example: resources#check-and-stale -->
 ```console
@@ -246,6 +249,7 @@ host	hub_prod		never
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 $ lore resource check --id hub_prod --note 'looked in the provider console'
 lore: wrote ~/work/infra/.lore/data/resources/res_b4f4…a5b0.json
 ✓ checked hub_prod now (res_…a5b0)
@@ -254,6 +258,7 @@ KIND	NAME	LAST_CHECKED	AGE
 host	hub_stage		never
 service	hub_api		never
 service	hub_web		never
+3 to check: 0 stale (checked over 60 days ago), 3 never checked; lore resource check --id <name> records a check
 ```
 <!-- /example -->
 
@@ -348,7 +353,7 @@ imported 2 rows (2 created, 0 updated) from csv; batch bat_9a34…b418
 ```
 <!-- /example -->
 
-A ref field in the file may name a row the same file creates, by its bare name or its qualified name (`<kind>/<name>`, `<place>:<kind>/<name>`). An import is one batch, all or nothing. When one row does not fit, nothing is written; `--dry-run` shows why each row fails, and `--skip-errors` writes the valid rows and lists the rest. `--upsert-by name` updates rows that already exist under the same kind and name instead of refusing them:
+A ref field in the file may name a row the same file creates, by its bare name or its qualified name (`<kind>/<name>`, `<place>:<kind>/<name>`). An import is one batch, all or nothing. When one row does not fit, nothing is written; `--dry-run` shows why each row fails, and `--skip-errors` writes the valid rows and lists the rest. `--upsert-by name` updates rows that already exist under the same kind and name instead of refusing them; an update merges with the row's stored values, so a column or key the file leaves out (a required one too) keeps its value:
 
 <!-- example: resources#import-refused -->
 ```console
@@ -426,12 +431,14 @@ ERROR: [E_RESOURCE_ARCHIVED] service hub_admin: runs_on: hub_prod is archived
   hint: ref its replacement host hub_prod_new
 (exit 23)
 $ lore resource list --kind host --archived
-KIND	NAME	IP	OS	PROVIDER	CHECKED
-host	hub_cache	203.0.113.21	ubuntu-24.04	aws	
-host	hub_db	203.0.113.30	ubuntu-24.04	aws	2026-11-02
-host	hub_prod	203.0.113.10	debian-13	hetzner	2026-11-02
-host	hub_prod_new	203.0.113.12	debian-13	hetzner	2026-11-02
-host	hub_stage		ubuntu-24.04	aws	2026-11-02
+KIND  NAME          PROVIDER  OS            CHECKED
+host  hub_cache     aws       ubuntu-24.04
+host  hub_db        aws       ubuntu-24.04  2026-11-02
+host  hub_prod      hetzner   debian-13     2026-11-02
+host  hub_prod_new  hetzner   debian-13     2026-11-02
+host  hub_stage     aws       ubuntu-24.04  2026-11-02
+5 resources
+1 more field not shown: add --wide for every field, or --json
 ```
 <!-- /example -->
 
@@ -591,8 +598,10 @@ $ lore resource edit --id hub_prod_new --set root_user=deploy
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
 ✓ edited server hub_prod_new (res_…ed8c)
 $ lore resource list --kind server
-KIND	NAME	ACCESS_KEY	IP	OS_IMAGE	PROVIDER	RENEWS	ROOT_USER	CHECKED
-server	hub_prod_new	${secret:gopass://acme/hub/aws-key}	203.0.113.12	debian-13	hetzner		•••	2026-11-02
+KIND    NAME          PROVIDER  ACCESS_KEY                           CHECKED
+server  hub_prod_new  hetzner   ${secret:gopass://acme/hub/aws-key}  2026-11-02
+1 resource
+4 more fields not shown: add --wide for every field, or --json
 $ lore resource show --id hub_prod_new --show-sensitive
 ERROR: [E_NEEDS_CONFIRM] resource show?
   hint: ask the person, then rerun with --yes
@@ -611,7 +620,7 @@ created 2026-11-02T10:02:45Z by alice · updated 2026-11-02T10:06:10Z by alice
 
 ## Step 15 — Find problems and get a summary
 
-`lint` finds dangling refs, bare-name refs, missing required fields, deprecated fields still in use, dates within their `--remind-before` window and duplicates; `lint --fix` resolves bare-name refs by lookup. `report` sums up everything in view: counts per kind, stale, unchecked, dangling, quarantined, open linked tasks and incidents, and the vault entries to rotate (`--kind`, `--days`; `--meta` and `--project` narrow it when someone leaves a project):
+`lint` finds dangling refs, bare-name refs, missing required fields, deprecated fields still in use, dates within their `--remind-before` window, a `--remind-before` date that is empty (`remind_unset`: nothing will remind) or already past (`remind_passed`), a field most rows of the kind fill but this one leaves empty (`missing_value`, for a kind with 4 or more rows where 3 in 4 set it, such as a domain with no `renews_on`) and duplicates; every finding ends with the row's id; `lint --fix` resolves bare-name refs by lookup. `report` sums up everything in view: counts per kind, stale, unchecked, dangling, quarantined, open linked tasks and incidents, and the vault entries in use, each with the rows and fields that use it (`--kind`, `--days`; `--meta` and `--project` narrow it when someone leaves a project, and then those entries are listed under `rotate`):
 
 <!-- example: resources#lint-and-report -->
 ```console
@@ -620,17 +629,19 @@ $ lore resource edit --kind server --where provider=hetzner --set renews=2026-11
 lore: wrote ~/work/infra/.lore/data/resources/res_6a86…ed8c.json
 edit 1 server resources; batch bat_7289…c813 (undo: lore batch undo --id bat_7289…c813)
 $ lore resource lint
-remind           server hub_prod_new.renews     2026-11-20 is within 30d
+remind           server hub_prod_new.renews     2026-11-20 is within 30d  [res_6a86…ed8c]
 1 findings
 $ lore resource report
 resources   5 (service 4, server 1)
 stale       0
 unchecked   4: service hub_api, service hub_jobs, service hub_prod_new, service hub_web
+  4 to check: 0 stale (checked over 60 days ago), 4 never checked; lore resource check --id <name> records a check
 dangling    0
 quarantined 0
   details: lore resource lint
 open links  1: task tsk_2537…6bbb
-rotate      2: gopass://acme/hub/db, gopass://acme/hub/jobs-db
+secret refs 2: gopass://acme/hub/db (service hub_api.db_password), gopass://acme/hub/jobs-db (service hub_jobs.db_password)
+  (where each is used; an offboarding report, --project or --meta, lists the ones to rotate)
 ```
 <!-- /example -->
 

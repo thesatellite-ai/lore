@@ -27,7 +27,9 @@ import (
 	"fmt"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +37,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
+	"github.com/thesatellite-ai/lore/logic/actorsource"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 )
 
@@ -251,6 +254,31 @@ type Finding struct {
 // explicit self-register (which keeps a handle, BATCH2 #15) writes to the
 // org store's org/ folder, never to the client repo.
 const StableKeyBlocks = true
+
+// TextDetail is the text rule's one-line detail: the internal note by id
+// and the run length, plus the threshold, so a user who pasted a shorter
+// copy that passed knows where the line is (D-651).
+func TextDetail(rowID string, words int) string {
+	return fmt.Sprintf("matches internal note %s (%d words in a row; the check blocks a verbatim copy of %d or more words)", rowID, words, MinRunWords)
+}
+
+// Describe is the line a refusal prints for f. Plain: the detail, the text
+// rule naming the note by id only. explain adds the rule and the source
+// label, once: a detail that already names the label ("names a row of
+// store acme") does not get it a second time (D-651).
+func (f Finding) Describe(explain bool) string {
+	detail := f.Detail
+	if f.Rule == RuleText && !explain {
+		detail = TextDetail(f.RowID, f.Words)
+	}
+	if !explain {
+		return detail
+	}
+	if f.Label != "" && !strings.Contains(detail, f.Label) {
+		detail += " " + f.Label
+	}
+	return fmt.Sprintf("[%s rule] %s", f.Rule, detail)
+}
 
 // Blocking returns the findings that block (Warn unset).
 func Blocking(fs []Finding) []Finding {
@@ -855,7 +883,7 @@ func textHits(it Item, content string, idx *Index, allowed map[string]bool) []Fi
 			}
 			if f, ok := best[row]; !ok || n > f.Words {
 				best[row] = Finding{Rule: RuleText, Where: it.Where, Line: words[i].line, RowID: row, Label: idx.IDs[row], Words: n,
-					Detail: fmt.Sprintf("matches internal note %s (%d words)", row, n)}
+					Detail: TextDetail(row, n)}
 			}
 		}
 	}
@@ -906,6 +934,106 @@ type CIFinding struct {
 // (profileTables, TP-7) blocks outright. files maps repo-relative paths to
 // content.
 func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
+	return CheckCIMode(files, repoProjectID, CIClientRules)
+}
+
+// CIMode chooses which actor copies a CI check accepts (CheckCIMode).
+type CIMode int
+
+const (
+	// CIClientRules holds every actor copy to the client projection
+	// ({id, display name, kind}): the hand-over check (--as-client), where
+	// the repo is about to become the client's.
+	CIClientRules CIMode = iota
+	// CIOwnCopiesKept also accepts the full actor copy lore writes in an
+	// org's own repo (Q-R2-2: stable_key and handle, stamped with an org
+	// origin; OwnRepoActorCopy). `lore check leaks --ci` runs with no store
+	// and cannot read the org config, so the stamp is what tells it the
+	// copy came from an own repo's write: lore never stamps a copy in a
+	// client repo or a repo outside any org (actorsource Copy.Projected).
+	// An unstamped copy, a 0.1.17 copy and `_o` still block.
+	CIOwnCopiesKept
+)
+
+// ownCopyKeys are the keys a full actor copy of an org's own repo adds to
+// the projection (actorsource: the source's identity fields and the stamp).
+var ownCopyKeys = map[string]bool{
+	actorsource.FieldStableKey: true, actorsource.FieldHandle: true, actorsource.FieldKeyAliases: true,
+	actorsource.FieldOriginStore: true, actorsource.FieldOriginVersion: true,
+}
+
+// ownOriginPrefixes start the origin_store of a copy written inside an org:
+// the roster store's id (sto_…) or the org entry's identity (org:<org>).
+var ownOriginPrefixes = []string{"sto_", actorsource.OriginOrgPrefix}
+
+// formatVersionOwn is the row format lore 0.1.18 writes (model/row
+// FormatVersion); a 0.1.17 copy (_v 1) is never an own-repo copy of this
+// release, so `lore migrate run` still trims it.
+const formatVersionOwn = 2
+
+// OwnRepoActorCopy reports whether doc is the full actor copy lore 0.1.18
+// writes in an org's own repo: format 2, an origin_store naming an org
+// origin and an origin_version (devco R-13: `lore check leaks --ci` failed
+// every own repo where a teammate had written a row, on the copies lore
+// itself wrote, and hinted `lore migrate run`, which keeps them).
+func OwnRepoActorCopy(doc canonjson.Object) bool {
+	if v, ok := doc["_v"].AsNumber(); !ok || v != strconv.Itoa(formatVersionOwn) {
+		return false
+	}
+	if doc.Str(actorsource.FieldOriginVersion) == "" {
+		return false
+	}
+	origin := doc.Str(actorsource.FieldOriginStore)
+	for _, p := range ownOriginPrefixes {
+		if strings.HasPrefix(origin, p) && len(origin) > len(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// repoRosterKeys are the keys a roster row adds to the projection when the
+// repo itself is the roster (RepoRosterActorRow): a person's stable key,
+// handle and key aliases, an agent's label and owner.
+var repoRosterKeys = map[string]bool{
+	actorsource.FieldStableKey: true, actorsource.FieldHandle: true, actorsource.FieldKeyAliases: true,
+	actorLabelKey: true, actorOwnerKey: true,
+}
+
+// Actor fields of an agent's roster row (schema actors: label,
+// owner_actor_id).
+const (
+	actorLabelKey = "label"
+	actorOwnerKey = "owner_actor_id"
+)
+
+// RepoRosterActorRow reports whether doc is a roster row lore 0.1.18 wrote
+// into a repo outside any org, where the repo is the roster (`lore actor
+// register`, `lore agent start`, and a `lore sync` landing them from the
+// live ref: Q12): format 2, lore's write stamp (`_w` with its version) and
+// no origin stamp, since only a copy of an org's roster is stamped (devco
+// S-16, a regression of R-13: `lore check leaks --ci` refused these rows
+// in every no-org repo where a person had registered, and hinted `lore
+// migrate run`, which keeps them as the roster needs them for `--assign
+// @handle`). A hand-made copy, a 0.1.17 copy and `_o` still block, and
+// `--as-client` (CIClientRules) holds every copy to the projection.
+func RepoRosterActorRow(doc canonjson.Object) bool {
+	if v, ok := doc["_v"].AsNumber(); !ok || v != strconv.Itoa(formatVersionOwn) {
+		return false
+	}
+	if doc.Str(actorsource.FieldOriginStore) != "" || doc.Str(actorsource.FieldOriginVersion) != "" {
+		return false
+	}
+	w, ok := doc[envWrite].AsObject()
+	if !ok {
+		return false
+	}
+	v, ok := w[writeVersionKey].AsString()
+	return ok && v != ""
+}
+
+// CheckCIMode is CheckCI with the actor-copy rule mode chose.
+func CheckCIMode(files map[string][]byte, repoProjectID string, mode CIMode) []CIFinding {
 	var out []CIFinding
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -933,7 +1061,15 @@ func CheckCI(files map[string][]byte, repoProjectID string) []CIFinding {
 		if table == tableActors {
 			// BATCH2 #14: name the keys (exact reason); the id stays
 			// withheld as for every CI finding.
-			if extra := actorExtraKeys(doc); len(extra) > 0 {
+			extra := actorExtraKeys(doc)
+			switch {
+			case mode != CIOwnCopiesKept:
+			case OwnRepoActorCopy(doc):
+				extra = slices.DeleteFunc(extra, func(k string) bool { return ownCopyKeys[k] })
+			case RepoRosterActorRow(doc):
+				extra = slices.DeleteFunc(extra, func(k string) bool { return repoRosterKeys[k] })
+			}
+			if len(extra) > 0 {
 				out = append(out, CIFinding{Where: where, Path: p, Fix: ActorCopyFix, Detail: "an actor copy holds more than {id, display name, kind}: " + strings.Join(extra, ", ")})
 			}
 			continue

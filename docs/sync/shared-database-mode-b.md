@@ -35,8 +35,8 @@ $ lore store add --name client2 --url file://$HOME/stores/client2
 # alice, in app
 $ lore store list
 stores:
-  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
-  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok     
+  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS  AUDIENCE
+  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok              
 count: 1
 ```
 <!-- /example -->
@@ -144,7 +144,7 @@ Upgraded 2 rows
   mode-b: rules/rul_d191…45c2 → store shared (~/.lore/stores/infra)
   mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 $ ls .lore; cat .lore/stores.yaml
@@ -164,7 +164,7 @@ Run it in each repo that pointed at the shared database. Repos that pointed at t
 
 ## Step 5 — Check the migration, undo it, or declare a format feature
 
-`lore migrate status` shows, for every place lore writes (the repo and each attached store), how many row files are still in the v0.1.17 format (`V1`), in the 0.1.18 format (`V2`) or newer than this lore knows (`NEWER`), the format features the repo has declared, the last migration with its backup ref, and the migration lock. In `infra` it shows the conversion from Step 4 and that it cannot be rolled back (`lore migrate rollback` there answers `E_UNSUPPORTED` and changes nothing; the way back to v0.1.17 is renaming `.lore/lore.yaml.migrated` back to `.lore/lore.yaml` and removing the `shared` entry from `.lore/stores.yaml`); in `app`, which never ran a migration, `lore migrate rollback` has nothing to undo. `lore migrate unlock` releases this machine's lock after a migration crashed (`--team` clears a stale team lock and asks first). `lore migrate enable --feature <feature>` declares a format feature in `.lore/data/_meta.json` before its first use, so an older lore on a teammate's machine stops with a clear "upgrade" message instead of misreading the files; running it twice changes nothing:
+`lore migrate status` shows, for every place lore writes (the repo and each attached store), how many row files are still in the v0.1.17 format (`V1`), in the 0.1.18 format (`V2`) or newer than this lore knows (`NEWER`), the format features the repo has declared, the last migration with its backup ref, and the migration lock. In `infra` it shows the conversion from Step 4 and that it cannot be rolled back (`lore migrate rollback` there answers `E_UNSUPPORTED` and changes nothing; the way back to v0.1.17 is renaming `.lore/lore.yaml.migrated` back to `.lore/lore.yaml` and removing the `shared` entry from `.lore/stores.yaml`); in `app`, which never ran a migration, `lore migrate rollback` has nothing to undo. `lore migrate unlock` releases this machine's lock after a migration crashed (`--team` clears a stale team lock and asks first). `lore migrate status` runs in a code repo: from a folder that is no repo (your home folder) or inside a store clone it says the migration journal lives in each code repo and to cd into it (`E_UNSUPPORTED`; `--store` does not apply; a store's own layout is checked by `lore store doctor`). `lore migrate enable --feature <feature>` declares a format feature in `.lore/data/_meta.json` before its first use, so an older lore on a teammate's machine stops with a clear "upgrade" message instead of misreading the files; running it twice changes nothing:
 
 <!-- example: projects#migration-status -->
 ```console
@@ -220,8 +220,8 @@ lore works inside a git repo (any folder of it). Outside one it stops instead of
 ```console
 # alice, in ~
 $ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 ```
 <!-- /example -->
@@ -232,7 +232,7 @@ ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
 - **A folder store stays on your machine.** It is not committed anywhere, so back it up yourself, or use a git store if the notes should reach other machines or people.
 - **Use a full path in the address.** `file://~/…` is not expanded; write `file://$HOME/…` so your shell fills it in.
 - **`..` is refused in an old pointer's `db_path`** (`E_BAD_PATH`) when `lore migrate run` reads it, so a cloned repo cannot point lore at a file outside where you expect. `LORE_ALLOW_DB_PATH_OUTSIDE=1` allows it for one run when you really mean it; see [Environment variables](../reference/environment.md).
-- **`${LORE_HOME}` in an old pointer** means `~/.lore` unless `LORE_HOME` is set; set it for the `lore migrate run` that converts such a repo if the shared database lives elsewhere.
+- **`${LORE_HOME}` in an old pointer** means lore's home (`~/.lore`, or `LORE_HOME`, which moves all of lore's files); if the shared database lives elsewhere, set `LORE_V017_HOME=<that folder>` for the `lore migrate run` that converts such a repo (it fills `${LORE_HOME}` in `db_path` only), or write the absolute path into `db_path`.
 
 ## Related
 

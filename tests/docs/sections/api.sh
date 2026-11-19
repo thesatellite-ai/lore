@@ -10,16 +10,18 @@ lore_repo alice client/website
 # below name it $PORT, and the transcript shows it as $PORT too.
 local api_port
 api_port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
-local api_env="PORT=$api_port"
+# API_LIFE caps the server at 120 s and API_TRIES polls its start and stop for 10 s (0.2 s apart),
+# both times the machine factor (testtime_secs, lib.sh): a slower machine waits longer.
+local api_env="PORT=$api_port API_LIFE=$(testtime_secs 120) API_TRIES=$(( $(testtime_secs 10) * 5 ))"
 
 # api_start / api_stop: start the server in the background (hidden: a shell job is not
 # part of the example) and wait until it answers; stop it and wait until it is gone.
 api_start() {
-  EXTRA_ENV="$api_env" quiet alice work/website 'timeout 120 lore api --port $PORT > ~/api.log 2>&1 < /dev/null & echo $! > ~/api.pid'
-  EXTRA_ENV="$api_env" quiet alice . 'for i in $(seq 1 50); do curl -s -o /dev/null http://127.0.0.1:$PORT/ && exit 0; sleep 0.2; done; echo "lore api did not start"; cat ~/api.log; exit 1'
+  EXTRA_ENV="$api_env" quiet alice work/website 'timeout $API_LIFE lore api --port $PORT > ~/api.log 2>&1 < /dev/null & echo $! > ~/api.pid'
+  EXTRA_ENV="$api_env" quiet alice . 'for i in $(seq 1 $API_TRIES); do curl -s -o /dev/null http://127.0.0.1:$PORT/ && exit 0; sleep 0.2; done; echo "lore api did not start"; cat ~/api.log; exit 1'
 }
 api_stop() {
-  quiet alice . 'kill $(cat ~/api.pid); for i in $(seq 1 50); do kill -0 $(cat ~/api.pid) 2>/dev/null || exit 0; sleep 0.2; done; echo "lore api did not stop"; exit 1'
+  EXTRA_ENV="$api_env" quiet alice . 'kill $(cat ~/api.pid); for i in $(seq 1 $API_TRIES); do kill -0 $(cat ~/api.pid) 2>/dev/null || exit 0; sleep 0.2; done; echo "lore api did not stop"; exit 1'
 }
 api_start
 

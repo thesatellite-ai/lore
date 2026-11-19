@@ -176,3 +176,28 @@ func TestAccessFailureNote(t *testing.T) {
 		t.Errorf("host-wide note %q", w)
 	}
 }
+
+// TestCanonicalSSHProviderRoute (devco D-629): an alias whose HostName is
+// a provider's port-443 route canonicalizes to the provider's host, port
+// dropped (the port is the route's), so the shared config names
+// git@github.com:… and never git@ssh.github.com:….
+func TestCanonicalSSHProviderRoute(t *testing.T) {
+	route := func(host string) (SSHAlias, bool) {
+		if host == "work-443" {
+			return SSHAlias{HostName: "ssh.github.com", User: "git"}, true
+		}
+		return SSHAlias{}, false
+	}
+	for raw, want := range map[string]string{
+		"git@work-443:acme/lore-x.git":           "git@github.com:acme/lore-x.git",
+		"ssh://git@work-443:443/acme/lore-x.git": "ssh://git@github.com/acme/lore-x.git",
+		// devco D-630: typed on the route host itself, no alias
+		"git@ssh.github.com:acme/lore-x.git":           "git@github.com:acme/lore-x.git",
+		"ssh://git@ssh.github.com:443/acme/lore-x.git": "ssh://git@github.com/acme/lore-x.git",
+	} {
+		got, err := CanonicalSSH(raw, route)
+		if err != nil || got.URL != want || got.HostName != "github.com" {
+			t.Errorf("CanonicalSSH(%q) = %+v, %v; want url %s host github.com", raw, got, err, want)
+		}
+	}
+}

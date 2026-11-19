@@ -32,11 +32,9 @@ import (
 	"sync/atomic"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
-	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
-	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -50,15 +48,26 @@ const (
 
 // Backend is one open data folder of a git store.
 type Backend struct {
-	cfg      config
-	git      runner
-	mode     mode
-	readOnly bool
-	root     *rowfs.Root   // the worktree (clone mode) or the repo top (repo mode)
-	folder   *rowfs.Folder // the data folder this Backend reads and writes
-	work     string        // absolute worktree path (= root.Dir())
-	branch   string        // clone mode: the store branch
-	marker   rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
+	// rosterMu guards rosterFrom: the org roster a store with no org
+	// folder is checked against (SetRosterSource, authority.go).
+	rosterMu   sync.Mutex
+	rosterFrom rosterFunc
+	cfg        config
+	git        runner
+	mode       mode
+	readOnly   bool
+	// readOnlyErr, when set (MarkReadOnlyBecause), is what a refused write
+	// answers instead of the bare store.ErrReadOnly, so the refusal names the
+	// store, why it takes no writes and what to do instead (devco N-8).
+	readOnlyErr error
+	// unwritable: the clone was opened read-only because lore may not
+	// write it (openCloneReadOnly, devco:U-4): no fetch, no sync, no lock.
+	unwritable bool
+	root       *rowfs.Root   // the worktree (clone mode) or the repo top (repo mode)
+	folder     *rowfs.Folder // the data folder this Backend reads and writes
+	work       string        // absolute worktree path (= root.Dir())
+	branch     string        // clone mode: the store branch
+	marker     rowfs.Marker  // clone mode: lore-store.yaml at open (zero on an empty store)
 
 	// beforePush, when set (tests only), runs before each push attempt so a
 	// test can push from another clone and make this one lose the race.
@@ -162,6 +171,21 @@ func (b *Backend) Get(ctx context.Context, table row.Table, id ids.AnyID) (store
 		if b.unmergedPaths(ctx)[path] {
 			return b.rowAtHead(ctx, path, table, id)
 		}
+		if h, herr := b.headIfHeld(ctx, path); herr == nil && h != "" {
+			if auth, _ := b.authorityOf(ctx, h); auth != nil {
+				var r store.Row
+				var err error
+				if blob, held := auth.heldBlob(path); held {
+					r, err = b.rowAtBlob(ctx, blob, table, id)
+				} else {
+					r, err = b.folder.Get(table, id)
+				}
+				if err != nil {
+					return store.Row{}, err
+				}
+				return auth.creditRow(path, r), nil // C35: the committer named as the writer
+			}
+		}
 	}
 	return b.folder.Get(table, id)
 }
@@ -191,6 +215,19 @@ func (b *Backend) unmergedPaths(ctx context.Context) map[string]bool {
 // brings in).
 func (b *Backend) rowAtHead(ctx context.Context, path string, table row.Table, id ids.AnyID) (store.Row, error) {
 	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", "HEAD:" + path}})
+	if err != nil {
+		return store.Row{}, store.ErrNotFound
+	}
+	return rowfs.DecodeRowFile(rowfs.RowPath(table, id), out)
+}
+
+// rowAtBlob is the row in blob (a git object id); store.ErrNotFound for
+// "" (a held-back file with no accepted version, authority.go).
+func (b *Backend) rowAtBlob(ctx context.Context, blob string, table row.Table, id ids.AnyID) (store.Row, error) {
+	if blob == "" {
+		return store.Row{}, store.ErrNotFound
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"cat-file", "blob", blob}})
 	if err != nil {
 		return store.Row{}, store.ErrNotFound
 	}
@@ -348,7 +385,7 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 		return err
 	}
 	if b.readOnly {
-		return store.ErrReadOnly
+		return b.refusedWrite()
 	}
 	if len(changes) == 0 {
 		return nil
@@ -378,6 +415,7 @@ func (b *Backend) writeBatch(ctx context.Context, batch Batch, changes []store.C
 		return err
 	}
 	applied, err := b.folder.ApplyAudited(ctx, changes, recs)
+	err = b.heldWriteErr(changes, err)
 	if err == nil && b.mode == modeClone {
 		var undo func()
 		if undo, err = b.addMissingMarker(applied); err == nil {
@@ -503,7 +541,7 @@ func (b *Backend) writePurge(ctx context.Context, changes []store.Change, purged
 		return err
 	}
 	if b.readOnly {
-		return store.ErrReadOnly
+		return b.refusedWrite()
 	}
 	if b.mode == modeClone {
 		if err := b.refusePersonGitOp(ctx, b.work); err != nil {
@@ -569,34 +607,47 @@ func subjectOf(ctx context.Context, op string, changes []store.Change) string {
 	if len(t) > maxTitleLen {
 		t = strings.ToValidUTF8(t[:maxTitleLen], "")
 	}
+	noun, _, _ := strings.Cut(op, ".")
+	own, side := splitSideRows(noun, "", changes)
 	n := "1 row"
-	if len(changes) != 1 {
-		n = strconv.Itoa(len(changes)) + " rows"
+	if own != 1 {
+		n = strconv.Itoa(own) + " rows"
 	}
-	return "lore: " + t + " (" + n + ")"
+	return "lore: " + t + " (" + n + side + ")"
 }
 
-// subject is the commit subject of a batch (B2-4, B3-23): `lore: <op
-// words>: <title>` for a row with a short title (a task, a plan: `lore:
-// task add: Ship the beta (3 rows)`), else `lore: <op words> <id>`. The
-// row is the first whose table is the operation's noun, else the first
-// that is not an actor copy. Free text (a memory's or rule's body, a
-// comment) never goes into a subject: a subject is the most visible part
-// of git history (every `git log --oneline`, the forge's commit list) and
-// outlives a delete or purge. A delete, trash or purge subject names only
-// the operation and the id, and a title the secret scanner flags falls
-// back to the id too. A write made outside a command is named after its
-// table (`lore: machine register mch_…`); a purge keeps `lore: purge <id>`.
+// subject is the commit subject of a batch (B2-4, B3-23): one form for
+// every row of every kind, `lore: <op words> <id>`, then the count of the
+// command's own rows and the rows written on the side (splitSideRows:
+// `lore: task add tsk_… (3 rows)`, `lore: memory add mem_… (+ actor
+// act_…)`). The row is the first whose table is the operation's noun,
+// else the first that is not an actor copy.
+//
+// No row text ever goes into a subject: not a body, not a title, not an
+// actor's name. A subject is the most visible part of git history (every
+// `git log --oneline`, the forge's commit list) and outlives a delete or
+// purge, and a title can hold private text as easily as a body. Owner
+// decision 3 (2026-11-18) kept rule and memory subjects id-only; devco
+// D-685 (owner use pass 4 weak 1) made every kind follow that one rule,
+// where a task, plan, project or actor subject still carried its title
+// ("lore: task claim tsk_…: Question: …"). A write made outside a command
+// is named after its table (`lore: machine register mch_…`); a purge keeps
+// `lore: purge <id>`.
 func subject(op string, changes []store.Change) string {
+	if s, ok := actorOnlySubject(op, changes); ok {
+		return s
+	}
 	c := primaryChange(op, changes)
 	words := strings.ReplaceAll(op, ".", " ")
 	s := "lore: " + words + " " + c.Row.ID.String()
 	if op != DefaultOp && op != purgeOp {
-		if l := rowTitle(c.Row); l != "" && !removingOp(op) && !looksSecret(l) {
-			s = "lore: " + words + ": " + l
-		}
-		if len(changes) > 1 {
-			return s + " (" + strconv.Itoa(len(changes)) + " rows)"
+		noun, _, _ := strings.Cut(op, ".")
+		own, side := splitSideRows(noun, string(c.Row.Table), changes)
+		switch {
+		case own > 1:
+			s += " (" + strconv.Itoa(own) + " rows" + side + ")"
+		case side != "":
+			s += " (" + strings.TrimPrefix(side, " ") + ")"
 		}
 		return s
 	}
@@ -619,11 +670,112 @@ func subject(op string, changes []store.Change) string {
 	return s
 }
 
+// actorOnlySubject is the subject of a batch that holds only actor rows
+// and none of the command's own (devco:D-642): a member's first write
+// registers their agent actor ("<name> via claude_code") in the org
+// store, while the row the command wrote went to another store, so that
+// store's commit carried just the actor row under "lore: memory add
+// act_…", naming a memory that is not in it. It says what the commit is:
+// `lore: actor register act_…: <name>` for a new actor row (Expect zero:
+// the row must not exist yet), `lore: actor copy act_…: <name>` for a
+// refresh. The display name is the row's own short label, already in the
+// file; a removal keeps the id only (B3-23). A new actor row written
+// outside any command (lore's own registration of an agent at its first
+// write) says "actor register" too (devco:D-665), where it read "actor
+// copy act_…"; a refresh there keeps W-11's "actor copy <id>". ok is false
+// for any other batch, which subject words as before.
+func actorOnlySubject(op string, changes []store.Change) (string, bool) {
+	if len(changes) == 0 || op == purgeOp {
+		return "", false
+	}
+	noun, _, _ := strings.Cut(op, ".")
+	if tableOfNoun(actorsTable, noun) {
+		return "", false // an actor command (actor merge, actor add): its own words
+	}
+	fresh := true
+	for _, c := range changes {
+		if string(c.Row.Table) != actorsTable || c.Row.Deleted {
+			return "", false
+		}
+		fresh = fresh && c.Expect.IsZero()
+	}
+	if op == DefaultOp && !fresh {
+		return "", false // a refresh outside any command keeps W-11's "actor copy <id>"
+	}
+	c := changes[0]
+	words := actorCopyWords
+	if fresh {
+		words = actorRegisterWords
+	}
+	s := "lore: " + words + " " + c.Row.ID.String()
+	if len(changes) > 1 {
+		s += " (" + strconv.Itoa(len(changes)) + " rows)"
+	}
+	return s, true
+}
+
+// sideRowWords name the rows a write makes on the side of a command's own
+// row, per table (devco:D-665): the writer's actor row registered by
+// their first write, the folder's project row made at its first write.
+var sideRowWords = map[string]string{
+	actorsTable:   "actor",
+	projectsTable: "project",
+}
+
+// projectsTable is the table of a folder's project row.
+const projectsTable = "projects"
+
+// maxSideRows bounds the side rows a subject lists by id; the rest are
+// counted.
+const maxSideRows = 2
+
+// splitSideRows splits a command batch (devco:D-665): own is the number
+// of rows that are not side rows, side the subject's words for the side
+// rows, " + actor act_…" or " + actor act_…, project prj_…" ("" when
+// there are none), which the caller puts in the subject's parentheses:
+// `lore: memory add mem_… (+ actor act_…)`, `lore: setup join: <email> (4
+// rows + actor act_…)`, where they read "(2 rows)" and "(5 rows)" before.
+// A side row is one of sideRowWords' tables that is neither the op noun's
+// table nor primary (the subject's own row), so a project add's project
+// row and an actor merge's actor rows stay the command's own rows.
+func splitSideRows(noun, primary string, changes []store.Change) (int, string) {
+	own := 0
+	var listed []string
+	more := 0
+	for _, ch := range changes {
+		table := string(ch.Row.Table)
+		w, ok := sideRowWords[table]
+		if !ok || table == primary || tableOfNoun(table, noun) {
+			own++
+			continue
+		}
+		if len(listed) == maxSideRows {
+			more++
+			continue
+		}
+		listed = append(listed, w+" "+ch.Row.ID.String())
+	}
+	if len(listed) == 0 {
+		return own, ""
+	}
+	if more > 0 {
+		listed = append(listed, strconv.Itoa(more)+" more")
+	}
+	return own, " + " + strings.Join(listed, ", ")
+}
+
+// Words of an actor-only commit (actorOnlySubject): a new actor row, and a
+// refresh of one that exists.
+const (
+	actorRegisterWords = "actor register"
+	actorCopyWords     = "actor copy"
+)
+
 // backgroundTitles name the writes lore makes by itself, per table; any
 // other table is "<noun> save".
 var backgroundTitles = map[string]string{
 	"machines": "machine register",
-	"actors":   "actor copy",
+	"actors":   actorCopyWords,
 }
 
 // backgroundWords is the words of a write made outside a command.
@@ -647,21 +799,6 @@ func singular(table string) string {
 		return strings.TrimSuffix(n, "s")
 	}
 	return n
-}
-
-// removingVerbs are the operation words that take a row away; their
-// subjects carry no text at all (B3-23), only the operation and the id.
-var removingVerbs = map[string]bool{"delete": true, "purge": true, "trash": true, "remove": true, "forget": true, "archive": true, "merge": true}
-
-// removingOp reports whether op takes rows away (any dotted segment is a
-// removing verb: memory.delete, sync.purge, trash.restore is not).
-func removingOp(op string) bool {
-	for _, seg := range strings.Split(op, ".") {
-		if removingVerbs[seg] {
-			return true
-		}
-	}
-	return false
 }
 
 // actorsTable is the table of the actor copy a write may carry.
@@ -694,71 +831,6 @@ func tableOfNoun(table, noun string) bool {
 	}
 	stem, ok := strings.CutSuffix(noun, "y")
 	return ok && table == stem+"ies"
-}
-
-// titleFields are the short title fields a subject may show, per table
-// ("" = any table): a title, and a task list's name. Never a body,
-// content, description or text field (B3-23).
-var titleFields = []struct{ table, field string }{{"", "title"}, {"task_lists", "name"}}
-
-// maxLabelLen bounds a title in a subject, in runes.
-const maxLabelLen = 60
-
-// rowTitle is the short title of a row: its title field's first line,
-// shortened; "" when its kind has none, the row is deleted, or it cannot
-// be read.
-func rowTitle(r store.Row) string {
-	if r.Deleted || len(r.Doc) == 0 {
-		return ""
-	}
-	d, err := r.Decode()
-	if err != nil {
-		return ""
-	}
-	for _, tf := range titleFields {
-		if tf.table != "" && tf.table != string(r.Table) {
-			continue
-		}
-		v, ok := d.Fields[tf.field]
-		if !ok || v == nil || v.Kind() != value.KindText {
-			continue
-		}
-		line, _, _ := strings.Cut(strings.TrimSpace(v.String()), "\n")
-		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
-		if line == "" {
-			continue
-		}
-		if rs := []rune(line); len(rs) > maxLabelLen {
-			line = string(rs[:maxLabelLen-1]) + "…"
-		}
-		return line
-	}
-	return ""
-}
-
-// subjectScanner is lore's secret scanner (the gitleaks default rules),
-// built on the first titled subject; nil when it cannot be built.
-var subjectScanner = sync.OnceValue(func() *gitleaks.Scanner {
-	rules, err := gitleaks.Defaults()
-	if err != nil {
-		return nil
-	}
-	sc, err := gitleaks.New(rules)
-	if err != nil {
-		return nil
-	}
-	return sc
-})
-
-// looksSecret reports whether the secret scanner flags text; without a
-// scanner every title counts as flagged, so no subject carries text the
-// scan could not check.
-func looksSecret(text string) bool {
-	sc := subjectScanner()
-	if sc == nil {
-		return true
-	}
-	return len(sc.Scan("title", text)) > 0
 }
 
 var _ store.Holder = (*Backend)(nil)

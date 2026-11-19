@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/e2eenv"
 	"github.com/thesatellite-ai/lore/tests/tmpworld"
 )
@@ -130,7 +131,7 @@ func (r Result) String() string {
 }
 
 // runTimeout bounds one lore run.
-const runTimeout = 90 * time.Second
+var runTimeout = testtime.Scale(90 * time.Second)
 
 // Lore runs the binary in cwd ("" = Home).
 func (m *Machine) Lore(t testing.TB, cwd string, args ...string) Result {

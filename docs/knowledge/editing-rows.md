@@ -206,7 +206,7 @@ lore: wrote ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json (store n
 ✓ tsk_2ad3…f891 updated in store notes: body, priority
   file ~/.lore/stores/acme/notes/_store/tasks/tsk_2ad3…f891.json
 $ lore task show --id tsk_2ad3…f891
-tsk_2ad3…f891
+tsk_2ad3…f891 [notes]
   title:    Renew the TLS certificate
   status:   todo
   priority: high

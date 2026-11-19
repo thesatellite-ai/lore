@@ -19,6 +19,16 @@ func TestE2ERepoSetURLFollowsStoreLinks(t *testing.T) {
 	if !strings.Contains(res.Stdout, "mirror address added: "+mirror) {
 		t.Fatalf("set-url output: %s", res.Stdout)
 	}
+	// devco D-224: a store write waits in this machine's clone until `lore
+	// sync` (owner rule U-2); the line says so, the remote has the old
+	// links until then, and the sync sends the new one
+	if !strings.Contains(res.Stdout, "link updated (2 confirmed addresses); committed locally to the store, `lore sync` sends it") {
+		t.Fatalf("set-url must say the store link waits for lore sync: %s", res.Stdout)
+	}
+	if meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile); strings.Contains(meta, mirror) {
+		t.Fatalf("the link reached the store without a push: %s", meta)
+	}
+	a.aliceApp.MustLore("sync").Says(t, "pushed local commit(s)")
 	meta, _ := a.store.Read(refMain, folderAcme+"/"+metaFile)
 	for _, slug := range []string{slugApp, mirror} {
 		if !strings.Contains(meta, `"remote": "`+slug+`"`) && !strings.Contains(meta, `"remote":"`+slug+`"`) {

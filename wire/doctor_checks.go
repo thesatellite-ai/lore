@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -261,7 +262,23 @@ type lockHolder interface {
 // finding (a warning): the lock is then kept by a descriptor that outlived
 // its lore process (a child it forked), and writes wait on it until that
 // process is stopped.
+//
+// devco D-438: a lock held by this doctor itself (another of its own
+// handles, e.g. a pick-up or write it runs) is no other command at work:
+// it is skipped, so doctor never reports "held by pid <its own pid> (0s
+// ago)". devco D-466: its parent is not skipped; the parent is often no
+// lore at all (a shell, a test, a script that took the lock), and skipping
+// it hid a real holder.
 func (a *App) DoctorStoreLocks(ctx context.Context) ([]DoctorFinding, error) {
+	return a.doctorStoreLocks(ctx, ownProcess)
+}
+
+// ownProcess reports whether pid is this process.
+func ownProcess(pid int) bool { return pid == os.Getpid() }
+
+// doctorStoreLocks is DoctorStoreLocks with the own-process test passed in
+// (a test holds the lock in its own process and still wants the note).
+func (a *App) doctorStoreLocks(ctx context.Context, own func(int) bool) ([]DoctorFinding, error) {
 	st, err := a.state(ctx)
 	if err != nil {
 		return nil, err
@@ -276,6 +293,9 @@ func (a *App) DoctorStoreLocks(ctx context.Context) ([]DoctorFinding, error) {
 		ls, perr := lh.LockHolder()
 		if perr != nil || !ls.Held || seen[ls.Path] {
 			continue // a probe that fails says nothing about a holder
+		}
+		if ls.PID != 0 && own(ls.PID) {
+			continue // this doctor's own hold (or its parent lore's): no other command at work
 		}
 		seen[ls.Path] = true
 		out = append(out, storeLockFinding(src, ls, processAlive))

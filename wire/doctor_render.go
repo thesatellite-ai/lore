@@ -64,11 +64,13 @@ func (a *App) DoctorRenderedCopies(ctx context.Context) ([]DoctorFinding, error)
 // (B3-25: every new laptop's first doctor said DEGRADED for it).
 func renderedCopyFinding(f opsrender.CopyFinding) DoctorFinding {
 	check := DoctorCheckRenderedCopy
-	if f.Kind == opsrender.PointerOrphan || f.Kind == opsrender.PointerMissing {
+	if f.Kind == opsrender.PointerOrphan || f.Kind == opsrender.PointerMissing || f.Kind == opsrender.PointerGenerated {
 		check = DoctorCheckToolPointer
 	}
 	level := DoctorWarning
-	if f.Local && f.Kind == opsrender.CopyMissing {
+	if (f.Local && f.Kind == opsrender.CopyMissing) || f.Kind == opsrender.PointerGenerated {
+		// devco L-13: a file another tool generates is left alone on
+		// purpose; a note, so doctor is not DEGRADED from day one
 		level = DoctorNote
 	}
 	return DoctorFinding{Check: check, Level: level, Message: f.Message, Fix: f.Fix}

@@ -25,6 +25,7 @@ func TestTeD_OrgNameClashWithCommittedStoresYAML(t *testing.T) {
 	tc.CommitAll("lore + stores.yaml naming the store root")
 	tc.AdminPush("origin", "main")
 	tc.MustLore("org", "link", orgNorthwind, "--project", "tools", "--yes")
+	tc.MustLore("sync") // the link is a store write: dev1 sees it once alice syncs (U-2)
 
 	clash := orgNorthwind + "/tools"
 	tc.MustLore("store", "list").Says(t, clash)
@@ -36,7 +37,7 @@ func TestTeD_OrgNameClashWithCommittedStoresYAML(t *testing.T) {
 		memIn(tc, "alice to team", "team"):                "tools/memories/",
 		memIn(tc, "alice to the folder", clash):           "tools/memories/",
 		memIn(tc, "alice to the bare org", orgNorthwind):  "tools/memories/",
-		memIn(tc, "alice to the root", orgNorthwind+"/."): "memories/",
+		memIn(tc, "alice to the root", orgNorthwind+"/."): "_store/memories/", // a store root row lives in _store/ (rowfs.StoreDataDir)
 	}
 
 	// dev1 clones the repo with the committed stores.yaml: same names, same
@@ -45,7 +46,7 @@ func TestTeD_OrgNameClashWithCommittedStoresYAML(t *testing.T) {
 	dc.MustLore("store", "list").Says(t, clash)
 	where[memIn(dc, "dev1 to team", "team")] = "tools/memories/"
 	where[memIn(dc, "dev1 to the bare org", orgNorthwind)] = "tools/memories/"
-	where[memIn(dc, "dev1 to the root", orgNorthwind+"/.")] = "memories/"
+	where[memIn(dc, "dev1 to the root", orgNorthwind+"/.")] = "_store/memories/"
 	tc.MustLore("sync")
 	dc.MustLore("sync")
 

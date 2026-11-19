@@ -427,6 +427,19 @@ func (i Input) Bool(name string) (value, ok bool) {
 	return false, false
 }
 
+// String returns the value of the string field with json name name; ok is
+// false when there is no such string field. Why: the run's gates read one
+// flag of an op before it runs (task next --store outside a code repo is
+// no repo-only read, devco:D-666), as Bool does for a switch.
+func (i Input) String(name string) (value string, ok bool) {
+	for _, f := range i.fields {
+		if f.Name == name && f.Type == TypeString {
+			return i.v.FieldByIndex(f.index).String(), true
+		}
+	}
+	return "", false
+}
+
 // Op returns the name of the operation the input was decoded for.
 func (i Input) Op() string { return i.op }
 
@@ -438,11 +451,14 @@ type Result struct {
 	// Runner's step for something no single operation knows (a delete the
 	// engine purged instead of trashing, P3-DEL-1). Nil = none.
 	edit func(string) string
+	// top are top-level text fields the Runner adds to the JSON form
+	// (WithTopText, topfield.go: the folder a read was routed to).
+	top []topText
 }
 
 // WithTextEdit returns r whose human text (Text) is passed through edit
 // after any edit already set. The JSON form is never edited: it carries the
-// operation's own fields.
+// operation's own fields (and any WithTopText field).
 func (r Result) WithTextEdit(edit func(string) string) Result {
 	if prev := r.edit; prev != nil {
 		r.edit = func(s string) string { return edit(prev(s)) }
@@ -488,7 +504,7 @@ func (r Result) JSON() ([]byte, error) {
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "op: encode result", err)
 	}
-	return b, nil
+	return r.spliceTop(b)
 }
 
 // checkRequired refuses a decoded input whose required fields are zero.

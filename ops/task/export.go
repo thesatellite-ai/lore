@@ -65,6 +65,8 @@ const (
 
 // ExportIn is the input of task.export.
 type ExportIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	Format string   `json:"format,omitempty" flag:"format" desc:"csv | json | markdown | github (default json); json is the shape task import --from json reads; github is an issue list for gh scripts"`
 	Where  []string `json:"where,omitempty" flag:"where" desc:"only tasks matching this filter (the task list --where grammar; repeatable)"`
 	Tree   bool     `json:"tree,omitempty" flag:"tree" desc:"markdown: nest sub-tasks under their parent"`
@@ -129,9 +131,7 @@ func (o ops) export(ctx context.Context, in ExportIn) (ExportOut, error) {
 		}
 		rows = withDescendants(rows, allRows)
 	}
-	slices.SortStableFunc(rows, func(a, b row.Row) int {
-		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), cmp.Compare(a.ID.String(), b.ID.String()))
-	})
+	slices.SortStableFunc(rows, row.ByCreation)
 	names, err := o.refNames(ctx, rows)
 	if err != nil {
 		return ExportOut{}, err

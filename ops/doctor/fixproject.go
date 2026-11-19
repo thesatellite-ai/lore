@@ -74,6 +74,10 @@ const (
 	StepRender     = "render"
 	StepAgentHooks = "agent hooks"
 	StepOldClones  = "old clones"
+	// StepOutsideClones removes, with --yes, store clones no org, setup
+	// or repo of the machine uses (left by an earlier lore that followed
+	// a store list it should not have; devco R-7).
+	StepOutsideClones = "outside clones"
 	// StepOldFiles removes lore 0.1.17's database and backups from the
 	// repo once every row they hold is accounted for (B4-7).
 	StepOldFiles = "0.1.17 files"
@@ -81,6 +85,9 @@ const (
 	// (B3-5), before render so the rules land in the new folder's file.
 	StepScopes    = "folder scopes"
 	StepDoctorFix = "doctor fixes"
+	// StepGitWiring is lore fix's step naming the tracked git wiring files
+	// (.gitignore, .gitattributes) the run wrote (devco N-5).
+	StepGitWiring = "git wiring"
 )
 
 // ResultCurrent is a step's result when nothing was needed.

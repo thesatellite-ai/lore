@@ -228,7 +228,7 @@ func agStart(t *testing.T) *agJ {
 			t.Errorf("acme before the link is not a client repo: %q", l)
 		}
 		before := j.acme.Status()
-		m.LoreIn(j.acme, "org", "link", agOrg, "--project", agFolderAcme, "--yes").OK(t).Says(t, "nothing was written to this repo")
+		m.LoreIn(j.acme, "org", "link", agOrg, "--project", agFolderAcme, "--yes").OK(t).Says(t, "no tracked file of this repo was written")
 		if j.acme.Status() != before {
 			t.Errorf("org link changed the client repo: %q → %q", before, j.acme.Status())
 		}
@@ -406,7 +406,7 @@ func TestJourneyAgencyClientMoves(t *testing.T) {
 		if !agStoreLinks(t, j.storeR, agFolderAcme, acmePrj) {
 			t.Errorf("an unconfirmed unlink changed the store")
 		}
-		m.LoreIn(j.acme, "org", "unlink", agOrg, "--yes").OK(t).Says(t, "2 link(s) removed", "nothing was written to this repo")
+		m.LoreIn(j.acme, "org", "unlink", agOrg, "--yes").OK(t).Says(t, "2 link(s) removed", "no tracked file of this repo was written")
 		// C5: the unlink reaches the store with her sync, from a repo still
 		// linked to the agency (acme no longer is)
 		m.LoreIn(j.globex, "sync").OK(t)

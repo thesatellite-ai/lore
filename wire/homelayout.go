@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 )
 
 // homeEntry is one kind of path in the lore home.
@@ -65,6 +66,7 @@ var homeLayout = []homeEntry{
 	{Pattern: "state/machine.db-*", What: "SQLite's working files of state/machine.db", ByHand: byHandNoEdit},
 	{Pattern: "state/local.db*", What: "the local state's file before it moved into state/machine.db; lore moves it on its next run", ByHand: "leave it: lore moves its rows and removes it"},
 	{Pattern: "state/" + "store-clones.json", What: "store clones that are not at their usual place: your own clone (`lore store use`) or a second store with the same name", ByHand: "deleting it makes lore use its own clones under stores/ again (your clone stays where it is)", Readme: true},
+	{Pattern: "state/trusted-stores.json", What: "stores a repo's .lore/stores.yaml attaches on a host outside your org that you trusted (`lore store trust`)", ByHand: "deleting it makes lore ask again before it reads them", Readme: true},
 	{Pattern: "state/store-addresses.json*", What: "store addresses lore remembers for this machine", ByHand: "deleting it makes lore ask for them again", Readme: true},
 	{Pattern: "state/discover-cache.json*", What: "what `lore setup` found on this machine (accounts, keys), kept for a while", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "state/suggest-again.json", What: "setup suggestions you put off", ByHand: "deleting it brings them back", Readme: true},
@@ -88,9 +90,11 @@ var homeLayout = []homeEntry{
 	// (stores/<host>/<owner>/<repo>/<branch>/<folder>/.lore/…); a store id
 	// never holds a dot, a host does
 	{Pattern: "cache/stores/*.*", Dir: true, Collapse: true, What: "lore 0.1.17's store caches (stores/<host>/<owner>/<repo>/…); this lore does not read them", ByHand: "safe to delete; `lore cache prune` removes them"},
-	{Pattern: "cache/stores", Dir: true, What: "one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)", ByHand: byHandRebuilt, Readme: true},
+	{Pattern: "cache/stores", Dir: true, What: "one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each); a code branch that keeps its own notes (isolated: `lore branch mode`) reads a store folder through its own cache, stores/<store id>/<branch>/" + layerCacheSeg + "/<repo key>/<branch key>/<folder>.db (repo key: 12 hex digits of the repo's remote; branch key: the branch name with / written %2F), while a shared branch (the default branch, dev, staging, release/*, one marked `lore branch share`) reads the folder's own cache; a layer cache is removed when that branch's notes are landed, dropped or purged, when the branch becomes shared, by `lore doctor --fix` (doctor lists a stray one), and by `lore cache prune` once no repo reads it", ByHand: byHandRebuilt, Readme: true},
+	// devco:V-17: the branch-layer caches, explained in the row above
+	{Pattern: "cache/stores/*/*/" + layerCacheSeg + "/**", What: "a code branch's cache of a store folder (its branch layer on top of the shared notes)", ByHand: byHandRebuilt},
 	{Pattern: "cache/stores/**", What: "a store folder's cache", ByHand: byHandRebuilt},
-	{Pattern: "cache/combined", Dir: true, What: "one cache per repo that attaches more stores than get a file each: combined/<hash of the repo path>.db", ByHand: byHandRebuilt, Readme: true},
+	{Pattern: "cache/combined", Dir: true, What: "one cache per repo that attaches more stores than get a file each, and per set of store folders a read outside a repo covers past that: combined/<hash of the repo path or the folders>.db", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/combined/**", What: "a repo's combined cache", ByHand: byHandRebuilt},
 	{Pattern: "cache/" + repoCacheDir, Dir: true, What: "one cache per code repo checkout, of the rows in its .lore/data: " + repoCacheDir + "/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)", ByHand: byHandRebuilt, Readme: true},
 	{Pattern: "cache/" + repoCacheDir + "/**", What: "a code repo's cache", ByHand: byHandRebuilt},
@@ -100,6 +104,8 @@ var homeLayout = []homeEntry{
 	{Pattern: "cache/uses/**", What: "a repo's cache use record", ByHand: "safe to delete"},
 	{Pattern: "cache/repos", Dir: true, What: "the cache use records as an older lore kept them; the next command moves them to cache/uses", ByHand: "safe to delete"},
 	{Pattern: "cache/repos/**", What: "a repo's cache use record (older layout)", ByHand: "safe to delete"},
+	// devco:D-418: git answers kept between commands (adapters/gitfast)
+	{Pattern: "cache/" + gitfast.CacheDirName, Dir: true, Collapse: true, What: "git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files", ByHand: "safe to delete: the next command asks git again", Readme: true},
 	{Pattern: "cache/doctor-health.json", What: "the last `lore doctor` summary, for the setup page", ByHand: "safe to delete", Readme: true},
 	{Pattern: "cache/prj_*", What: "a cache from lore 0.1.17; `lore cache prune` removes it", ByHand: "safe to delete"},
 	{Pattern: "cache/links-*.json", What: "lore 0.1.17's index of an org's store links; this lore reads the links from the store clones; `lore cache prune` removes it", ByHand: "safe to delete"},

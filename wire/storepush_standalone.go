@@ -133,6 +133,10 @@ type storePush struct {
 	waitSaid bool
 	// localSaid: this command already said a write stayed local (sayLocal).
 	localSaid bool
+	// backingOff: the remote was out of reach less than live.fetch_ttl ago
+	// (live.BackingOff), so this command neither fetches nor pushes it
+	// (devco:U-6).
+	backingOff bool
 	// hold keeps local commits a person made after the org removed them
 	// from being pushed (leftgate.go armLeftHold, F-9); nil = none.
 	hold gitbackend.PushHoldFunc
@@ -246,6 +250,9 @@ func (b *storePush) refresh(ctx context.Context) {
 		return
 	}
 	b.fetched = true
+	if gb := gitOf(b.inner); gb != nil && gb.Unwritable() {
+		return // a clone lore may not write reads as it is: no fetch (devco:U-4)
+	}
 	autopush, ttl := b.settings(ctx)
 	in := live.FetchInputs{Now: b.res.now(), TTL: ttl, Kind: live.FetchCached, Autopush: autopush, HasRemote: true}
 	if b.res != nil && b.res.fetchAlways {
@@ -256,14 +263,31 @@ func (b *storePush) refresh(ctx context.Context) {
 	}
 	if b.stateDir != "" {
 		in.LastFetch = live.FetchStamp(b.stateDir)
+		in.LastFailure, in.Backoff = live.FetchFailed(b.stateDir), ttl // devco:U-6
+	}
+	if live.BackingOff(in) {
+		// the remote was out of reach less than live.fetch_ttl ago: no
+		// fetch, no retried push, so an offline command never waits for the
+		// network's timeout again; `lore sync` always tries (devco:U-6)
+		b.backingOff = true
+		if readRun(ctx) || opsmigrate.NoPushAsked(ctx) || opsmigrate.InCommand(ctx) {
+			// the remote was out of reach a moment ago: a read still names
+			// the commits that wait and how they are sent (devco:D-387)
+			b.reach = reachOffline
+			b.readWaiting(ctx, in, autopush)
+		}
+		return
 	}
 	held := b.held()
 	// No hidden magic (2026-11-12): a read never pushes. It fetches when
 	// the fetch is due and says when local commits wait (readRefresh); the
 	// push is a write's, `lore sync`'s or a hook's. A writing command (or
 	// one whose access is unknown here) pushes as its store's mode says.
-	if readRun(ctx) || opsmigrate.NoPushAsked(ctx) {
-		b.readRefresh(ctx, in, autopush) // a --no-push migration fetches like a read
+	if readRun(ctx) || opsmigrate.NoPushAsked(ctx) || opsmigrate.InCommand(ctx) {
+		// a --no-push migration fetches like a read; so does any migration
+		// run's read (devco:D-521): it pushes only the commits it makes
+		// itself (its Finish), never the ones that already waited
+		b.readRefresh(ctx, in, autopush)
 		return
 	}
 	push := !held || (autopush && b.pushSettings().Push == storepush.ModeBatch && in.Kind == live.FetchAlways)
@@ -307,6 +331,9 @@ func (b *storePush) refresh(ctx context.Context) {
 	if push || len(rep.Refused) > 0 {
 		b.observeSync(ctx, rep, err) // a fetch-only sync cannot clear a refusal
 	}
+	if rep.Offline {
+		b.markUnreachable(in.Now)
+	}
 	if err != nil || rep.Offline || b.stateDir == "" {
 		return
 	}
@@ -315,6 +342,28 @@ func (b *storePush) refresh(ctx context.Context) {
 		writeStamp(b.stateDir, pushStampFile, in.Now) // only a push that sent commits: a fetch is no push
 	}
 }
+
+// markFetched records that this command fetched the store's clone (a sync
+// that reached the remote), so a later sync of it in the same command
+// reuses the fetch (devco L-12-perf: one fetch per remote per run).
+func (b *storePush) markFetched() {
+	if gb := gitOf(b.inner); gb != nil && b.res != nil {
+		b.res.fetched.first(gb.Dir(), b.req)
+	}
+}
+
+// reuseFetch returns ctx saying the clone was fetched earlier in this
+// command (gitbackend.WithFetchedClone) when it was, and whether it was.
+func (b *storePush) reuseFetch(ctx context.Context) (context.Context, bool) {
+	gb := gitOf(b.inner)
+	if gb == nil || b.res == nil || !b.res.fetched.has(gb.Dir(), b.req) {
+		return ctx, false
+	}
+	return gitbackend.WithFetchedClone(ctx, gb.Dir()), true
+}
+
+// reached reports whether a sync reached the remote (no error, not offline).
+func reached(rep store.SyncReport, err error) bool { return err == nil && !rep.Offline }
 
 // hasUnpushed reports whether the clone holds commits its remote does not.
 func (b *storePush) hasUnpushed(ctx context.Context) bool {
@@ -341,10 +390,27 @@ func (b *storePush) hasUnpulled(ctx context.Context) bool {
 // store's push folds its unpushed commits into one batch commit. A manual
 // store (the default, C5) sends its commits as they are: each keeps its
 // subject and author (a layout commit, a hand edit, a settings change).
+//
+// A clone this command already fetched (any folder of it, markFetched) is
+// not fetched again (devco L-12-perf): a fetch-only sync of it has nothing
+// left to do, and a sync that pushes merges and pushes over that fetch.
 func (b *storePush) syncInner(ctx context.Context, noPush bool) (store.SyncReport, error) {
 	if b.hold != nil {
 		ctx = gitbackend.WithPushHold(ctx, b.hold)
 	}
+	ctx, reused := b.reuseFetch(ctx)
+	if reused && noPush {
+		return store.SyncReport{}, nil // merged by this command's earlier sync of the clone
+	}
+	rep, err := b.syncOnce(ctx, noPush)
+	if reached(rep, err) {
+		b.markFetched()
+	}
+	return rep, err
+}
+
+// syncOnce is syncInner's one sync of the clone.
+func (b *storePush) syncOnce(ctx context.Context, noPush bool) (store.SyncReport, error) {
 	gb := gitOf(b.inner)
 	if gb == nil || (!noPush && !b.held()) {
 		if noPush {
@@ -406,6 +472,7 @@ func (b *storePush) pushNow(ctx context.Context) {
 	case err != nil:
 		b.note("pushing failed")
 	case rep.Offline:
+		b.markUnreachable(b.res.now())
 		b.note(b.offlineWhy(rep))
 	case len(rep.Refused) > 0:
 		if own, _ := splitHeld(rep.Refused); len(own) == 0 {
@@ -507,7 +574,39 @@ func (b *storePush) pushAfterWrite(ctx context.Context) {
 		b.sayWaiting(ctx)
 		return
 	}
+	// The back-off is checked only here, where a push would really be
+	// tried: a store whose mode keeps writes local (manual, a batch not
+	// due) says "committed locally" as always, not that lore skipped a
+	// push it would never have tried (devco:D-387).
+	if b.backingOff && (b.res == nil || !b.res.fetchAlways) {
+		b.sayBackingOff() // devco:U-6: no push while the remote was just out of reach
+		return
+	}
 	b.pushNow(ctx)
+}
+
+// markUnreachable records that the store's remote could not be reached at
+// now (live.WriteFetchFailed), so the next commands back off for
+// live.fetch_ttl instead of waiting for the network again (devco:U-6).
+// Best effort: a lost stamp only means the next command tries again.
+func (b *storePush) markUnreachable(now time.Time) {
+	if b.stateDir != "" {
+		_ = live.WriteFetchFailed(b.stateDir, now)
+	}
+}
+
+// backoffWhy is the note of a write kept local while the store backs off
+// (devco:U-6): it names why lore did not try the remote.
+const backoffWhy = "the remote was out of reach a moment ago, so lore did not try it again (it tries once live.fetch_ttl has passed)"
+
+// sayBackingOff says once per command and store that a write stayed in the
+// local clone because the remote was out of reach lately.
+func (b *storePush) sayBackingOff() {
+	if b.localSaid || b.notes == nil {
+		return
+	}
+	b.localSaid = true
+	b.note(backoffWhy)
 }
 
 // sayLocal says once per command and store that a write stayed in the
@@ -518,7 +617,7 @@ func (b *storePush) sayLocal() {
 		return
 	}
 	b.localSaid = true
-	_, _ = fmt.Fprintln(b.notes, "lore: committed locally to store "+string(b.name)+"; lore sync sends it")
+	_, _ = fmt.Fprintln(b.notes, "lore: committed locally to store "+b.label()+"; lore sync sends it")
 }
 
 // pendingPush is what happens to a commit whose push failed: the next
@@ -530,7 +629,18 @@ const pendingPush = "run `lore sync` when the store is reachable (or the next lo
 // note says the write waits in the local store clone and when it is
 // pushed.
 func (b *storePush) note(why string) {
-	_, _ = fmt.Fprintln(b.notes, "lore: the change is committed in the local copy of store "+string(b.name)+"; "+why+"; "+pendingPush)
+	_, _ = fmt.Fprintln(b.notes, "lore: the change is committed in the local copy of store "+b.label()+"; "+why+"; "+pendingPush)
+}
+
+// label is the store as a write's note names it: its own <org>/<folder>
+// name when it has one, else the attached name (devco:D-566: a row written
+// in one folder was "committed locally to store <org>" while search and
+// sync named the same place <org>/<folder>).
+func (b *storePush) label() string {
+	if b.own != "" {
+		return b.own
+	}
+	return string(b.name)
 }
 
 // Write implements store.Backend: commit, then push.
@@ -574,12 +684,24 @@ func (b *storePush) Sync(ctx context.Context) (store.SyncReport, error) {
 	if !rep.Offline && len(rep.Refused) == 0 && rep.Held == "" {
 		b.pushed(ctx, waiting)
 	}
+	return b.withEarlier(rep), nil
+}
+
+// withEarlier is rep with the counts of this command's earlier syncs of
+// the clone added (carry), which it then forgets: what a read's fetch
+// merged is this sync's to report.
+func (b *storePush) withEarlier(rep store.SyncReport) store.SyncReport {
 	rep.Sent += b.earlier.Sent
+	rep.Commits += b.earlier.Commits
 	rep.Received += b.earlier.Received
+	// devco D-660: the commits a read's fetch merged arrived too (a sync
+	// --setup refreshes each store before it syncs it): without them the
+	// line counted the rows instead ("received 7" when 5 commits arrived)
+	rep.CommitsIn += b.earlier.CommitsIn
 	rep.Merged = append(b.earlier.Merged, rep.Merged...)
 	rep.Others = addOthers(rep.Others, b.earlier.Others)
 	b.earlier = store.SyncReport{}
-	return rep, nil
+	return rep
 }
 
 // addOthers adds the per-folder counts of from to into (made when nil):
@@ -603,7 +725,9 @@ func (b *storePush) carry(rep store.SyncReport, err error) {
 		return
 	}
 	b.earlier.Sent += rep.Sent
+	b.earlier.Commits += rep.Commits
 	b.earlier.Received += rep.Received
+	b.earlier.CommitsIn += rep.CommitsIn
 	b.earlier.Merged = append(b.earlier.Merged, rep.Merged...)
 	b.earlier.Others = addOthers(b.earlier.Others, rep.Others)
 }

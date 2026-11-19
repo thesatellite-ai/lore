@@ -80,6 +80,9 @@ func (s *SetupHost) PlanAgentHooks(ctx context.Context, remove, promptSearch boo
 	if err != nil {
 		return nil, err
 	}
+	if err := s.refuseClientRepo(ctx, remove); err != nil {
+		return nil, err
+	}
 	if set, ok := s.h.policySet(ctx); ok {
 		if e, found := set.Get(policy.KeyContextPromptSearch); found {
 			if b, isBool := e.Value.(value.Bool); isBool && b.Bool() {
@@ -122,6 +125,36 @@ func (s *SetupHost) WriteAgentHooks(ctx context.Context, plans []opssetup.HookPl
 	}
 	return nil
 }
+
+// refuseClientRepo refuses to add hooks in a client repo (devco D-494):
+// every hook goes in a settings file inside the checkout (.claude/,
+// .codex/, .gemini/), and a client's repo holds nothing of lore's, not
+// even a git-excluded file (the private render writes no import file
+// there either). Taking lore's hooks out (remove) stays allowed.
+func (s *SetupHost) refuseClientRepo(ctx context.Context, remove bool) error {
+	if remove || s.h.app == nil {
+		return nil
+	}
+	client, err := s.h.app.ClientRepo(ctx)
+	if err != nil || !client {
+		return nil // not known as a client repo: the usual plan decides
+	}
+	e := errs.New(errs.InvalidInput, "lore setup --agent-hooks writes nothing in a client repo: every agent hook goes in a settings file inside the checkout, and a client's repo never holds lore files")
+	if why := s.h.app.UnlistedOwnHere(ctx); why != "" {
+		// devco D-525: client only by default (the org's own repo never
+		// listed under own:): say so and name the way out first
+		return e.WithHint(why + "; until then " + clientHooksHint)
+	}
+	return e.WithHint(clientHooksHint)
+}
+
+// clientHooksHint is how an agent gets lore's notes in a client repo.
+const clientHooksHint = "an agent reads them with `lore context --for-file <path>` or `lore context --for-prompt <text>`; " +
+	"for the always-on rules at each session start, put `" + clientSessionStartCmd + "` as a SessionStart hook in your user-level tool settings (outside the repo, such as ~/.claude/settings.json)"
+
+// clientSessionStartCmd is the SessionStart context hook command for
+// Claude Code (toolprofile.ContextHooks).
+const clientSessionStartCmd = "lore context --hook " + toolprofile.NameClaudeCode + " --hook-stdin --session-start"
 
 // agentHooksRoot is the top of the git work tree --agent-hooks writes in.
 func agentHooksRoot(ctx context.Context) (string, error) {

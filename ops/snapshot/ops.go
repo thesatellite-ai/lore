@@ -133,7 +133,7 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if err != nil {
 		return content.WriteOut{}, err
 	}
-	fields, err := content.Texts(Noun, map[string]string{fieldTitle: in.Title, content.FieldBody: body, content.FieldSourceKind: source})
+	fields, err := content.Texts(Noun, map[string]string{fieldTitle: in.Title, content.FieldBody: body, content.FieldSourceKind: source, content.FieldSourceRef: in.SourceRef})
 	if err != nil {
 		return content.WriteOut{}, err
 	}

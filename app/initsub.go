@@ -26,11 +26,8 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
-
-// initLoreDirMode is the mode of a `.lore` folder init creates: the folder
-// is committed, so git's usual work-tree mode (rowfs.WithSharedModes).
-const initLoreDirMode = 0o755
 
 // rootInitAt makes wd the root the repo store opens for `lore init`:
 // when wd has no `.lore` folder it creates one (any `.lore` above wd would
@@ -50,7 +47,7 @@ func rootInitAt(wd string) (undo func(), err error) {
 	case !errors.Is(err, os.ErrNotExist):
 		return noop, errs.Wrap(errs.Internal, "init: read "+dir, err)
 	}
-	if err := os.Mkdir(dir, initLoreDirMode); err != nil {
+	if err := rowfs.MkdirShared(dir); err != nil {
 		if errors.Is(err, os.ErrPermission) {
 			// A folder the person may not write (a read-only mount, a
 			// checkout owned by another user) is their input to fix, not
@@ -73,7 +70,7 @@ func rootInitAt(wd string) (undo func(), err error) {
 const repoMetaPathspec = ":(glob)**/" + rowfs.RepoMetaPath
 
 // mergeIDsHint is the way out of two repo ids in one checkout.
-const mergeIDsHint = "one repository has one repo id (PROVENANCE 11.6): keep one, then run `lore repo merge-ids` in each project that carried the other"
+const mergeIDsHint = "one repository has one repo id: keep one, then run `lore repo merge-ids` in each project that carried the other"
 
 // checkoutRepoMetas is the repo identity of every lore project in wd's git
 // checkout except the one rooted at wd, keyed by its folder relative to the
@@ -93,7 +90,7 @@ func checkoutRepoMetas(ctx context.Context, wd string) (map[string]rowfs.RepoMet
 	if err != nil {
 		return nil, errs.Wrap(errs.Internal, "init: list the projects of this checkout", err)
 	}
-	self := realPath(wd)
+	self := fspath.Canonical(wd)
 	metas := map[string]rowfs.RepoMeta{}
 	for _, p := range strings.Split(string(list), "\x00") {
 		if p == "" {
@@ -104,7 +101,7 @@ func checkoutRepoMetas(ctx context.Context, wd string) (map[string]rowfs.RepoMet
 			rel = "."
 		}
 		dir := filepath.Join(top, filepath.FromSlash(rel))
-		if realPath(dir) == self || metas[rel].RepoID != "" {
+		if fspath.Canonical(dir) == self || metas[rel].RepoID != "" {
 			continue
 		}
 		m, exists, rerr := rowfs.ReadRepoMeta(dir)
@@ -116,17 +113,6 @@ func checkoutRepoMetas(ctx context.Context, wd string) (map[string]rowfs.RepoMet
 		}
 	}
 	return metas, nil
-}
-
-// realPath is p with symlinks resolved (p itself when that fails).
-func realPath(p string) string {
-	if abs, err := filepath.Abs(p); err == nil {
-		p = abs
-	}
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
 }
 
 // chooseRepoMeta is the one repo identity the projects of a checkout share

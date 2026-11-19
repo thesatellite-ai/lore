@@ -65,7 +65,7 @@ func TestTeamAddListShow(t *testing.T) {
 	if got := strings.Join(memberIDs(out.Team), ","); got != x.admin.String()+","+tomas.String() {
 		t.Fatalf("members = %s, want mira then tomas, once each", got)
 	}
-	if !strings.HasPrefix(out.Text(), "✓ "+out.Team.ID+" @web (2 member(s)) added in agency org/") {
+	if !strings.HasPrefix(out.Text(), "✓ "+out.Team.ID+" @web (2 member(s)) added on the roster of agency (agency/org)") {
 		t.Errorf("text = %q", out.Text())
 	}
 	rows := x.e.All(schema.TableTeams)
@@ -83,7 +83,7 @@ func TestTeamAddListShow(t *testing.T) {
 	if !strings.Contains(list.Text(), "@web") || !strings.Contains(list.Text(), "2 member(s)") {
 		t.Errorf("list text = %q", list.Text())
 	}
-	show, err := teamShow(x.ctx, x.e, TeamRefIn{Handle: "web"})
+	show, err := teamShow(x.ctx, x.e, TeamShowIn{Handle: "web"})
 	if err != nil || show.Team.ID != out.Team.ID {
 		t.Fatalf("show = %+v, %v", show, err)
 	}
@@ -92,12 +92,12 @@ func TestTeamAddListShow(t *testing.T) {
 			t.Errorf("show text lacks %q: %q", want, show.Text())
 		}
 	}
-	byID, err := teamShow(x.ctx, x.e, TeamRefIn{Handle: out.Team.ID})
+	byID, err := teamShow(x.ctx, x.e, TeamShowIn{Handle: out.Team.ID})
 	if err != nil || byID.Team.Handle != "web" {
 		t.Fatalf("show by tem_ id = %+v, %v", byID, err)
 	}
 	missing := "tem_01a1a5aca7f57659be7320c5f4b7f00d"
-	if _, err := teamShow(x.ctx, x.e, TeamRefIn{Handle: missing}); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "no team "+missing) {
+	if _, err := teamShow(x.ctx, x.e, TeamShowIn{Handle: missing}); !errs.Has(err, errs.NotFound) || !strings.Contains(err.Error(), "no team "+missing) {
 		t.Errorf("show of a missing tem_ id: %v", err)
 	}
 }
@@ -223,7 +223,7 @@ func TestTeamRemoveAndBack(t *testing.T) {
 	if !strings.Contains(out.Text(), "lore team add --handle @web brings it back") {
 		t.Errorf("text = %q", out.Text())
 	}
-	if l, _ := teamList(x.ctx, x.e, TeamListIn{}); len(l.Teams) != 0 || !strings.HasPrefix(l.Text(), "no teams on agency org/") {
+	if l, _ := teamList(x.ctx, x.e, TeamListIn{}); len(l.Teams) != 0 || !strings.HasPrefix(l.Text(), "no teams on the roster of agency (agency/org)") {
 		t.Errorf("list after remove = %+v", l)
 	}
 	if l, _ := teamList(x.ctx, x.e, TeamListIn{All: true}); len(l.Teams) != 1 || !strings.Contains(l.Text(), removedMark) {

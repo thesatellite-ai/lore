@@ -87,6 +87,18 @@ type LensOptions struct {
 	// time_spent view reads as the client column: the policy
 	// time.client_key (TQ8, FB-TASK-4). "" means TimeClientKey ("client").
 	TimeClientKey string
+	// Now is the time an open time span ends at in the time_spent view: the
+	// app clock (LORE_NOW in a test build), so `lore sql` agrees with
+	// `lore task list` on a running timer. Zero means the machine's clock.
+	Now time.Time
+	// Places maps a source name to the readable label of its place, the
+	// one search and every list print ("acme/web" for the source "acme"
+	// attached at folder web: devco D-568). Each "<table>_all" view
+	// carries it as both the `source` and the `place` column (devco D-685:
+	// one folder, one source name in every placement; `place` stays for
+	// queries written before). A source missing here is labelled by its
+	// name.
+	Places map[string]string
 }
 
 // LensHit is where ResolveID found an id.
@@ -125,6 +137,10 @@ type Lens struct {
 	trash  []TrashRow
 	// clientKey is LensOptions.TimeClientKey (timespans.go).
 	clientKey string
+	// now is LensOptions.Now: where an open time span ends (zero = time.Now).
+	now time.Time
+	// places is LensOptions.Places (the `place` column, D-568).
+	places map[string]string
 }
 
 // attachedName is the schema name of the i-th source. Store names are
@@ -183,7 +199,7 @@ func OpenLensWith(ctx context.Context, sources []LensSource, o LensOptions) (*Le
 	if err != nil {
 		return nil, errors.Join(dbErr("open lens", err), db.Close())
 	}
-	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey}
+	l := &Lens{db: db, conn: conn, sources: slices.Clone(sources), masked: o.MaskSensitive, expand: o.Expand, trash: o.Trash, clientKey: o.TimeClientKey, now: o.Now, places: o.Places}
 	if err := l.setup(ctx); err != nil {
 		return nil, errors.Join(err, l.Close())
 	}
@@ -311,7 +327,11 @@ func (l *Lens) setup(ctx context.Context) error {
 	}
 	// TIME 9 (timespans.go): task_time_spans + the time_spent view, built
 	// from the rows before the lens locks (open spans end now).
-	if err := l.createTimeSpent(ctx, tables, time.Now()); err != nil {
+	now := l.now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	if err := l.createTimeSpent(ctx, tables, now); err != nil {
 		return err
 	}
 	// TASK 6.6 (rollup.go): task_rollup over tasks_all, task_tree_all and
@@ -330,6 +350,46 @@ func (l *Lens) setup(ctx context.Context) error {
 type srcTable struct {
 	src  int
 	cols []string
+}
+
+// LensPlaceColumn is the column after `source` in every "<table>_all"
+// view: the readable place of the row's source ("<org>/<folder>", the
+// label search and lists print; LensOptions.Places). A table with its own
+// column of that name (a kind field "place") keeps it, and its view gets
+// no place column, so no query over the field changes meaning.
+const LensPlaceColumn = "place"
+
+// placeOf is the place label of the source named name.
+func (l *Lens) placeOf(name string) string {
+	if p := l.places[name]; p != "" {
+		return p
+	}
+	return name
+}
+
+// placeExpr is the SQL of the place column for a source whose `source`
+// column is src: a literal for a plain source, a CASE over the row's own
+// _source for a combined or deleted-rows file (each row labelled by its
+// own store).
+func (l *Lens) placeExpr(s LensSource, src string) string {
+	if !s.ownSource() {
+		return literal(l.placeOf(s.Name))
+	}
+	if src == "NULL" || len(l.places) == 0 {
+		return src
+	}
+	names := make([]string, 0, len(l.places))
+	for n := range l.places {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	var b strings.Builder
+	b.WriteString("CASE " + src)
+	for _, n := range names {
+		b.WriteString(" WHEN " + literal(n) + " THEN " + literal(l.placeOf(n)))
+	}
+	b.WriteString(" ELSE " + src + " END")
+	return b.String()
 }
 
 // createViews creates "<n>_all" over every source that has table n (by
@@ -351,6 +411,7 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 	if err != nil {
 		return err
 	}
+	withPlace := !slices.Contains(all, LensPlaceColumn)
 	var parts []string
 	for _, st := range srcs {
 		src := literal(l.sources[st.src].Name)
@@ -364,7 +425,17 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		if selErr != nil {
 			return selErr
 		}
-		part := "SELECT " + src + ` AS "source", ` + sel + ` FROM "` + attachedName(st.src) + `".` + tq
+		// devco D-685 (owner use pass 4 weak 1): `source` is the place
+		// label too, so one folder has one source name in every placement
+		// (a linked repo attaches its org store as the bare org name at the
+		// linked folder, and `GROUP BY source` gave "<org>" there but
+		// "<org>/<folder>" at the store folder or from the home folder)
+		label := l.placeExpr(l.sources[st.src], src)
+		head := "SELECT " + label + ` AS "source", `
+		if withPlace {
+			head += label + ` AS "` + LensPlaceColumn + `", `
+		}
+		part := head + sel + ` FROM "` + attachedName(st.src) + `".` + tq
 		if l.sources[st.src].Shared && !l.sources[st.src].ownSource() && slices.Contains(st.cols, colSource) {
 			part += ` WHERE "` + colSource + `" = ` + literal(l.sources[st.src].Name)
 		}
@@ -655,7 +726,7 @@ func sqliteErrText(se *modernc.Error) string {
 // lensQueryHint is the next step after the caller's own SQL failed to
 // compile or run: every lens table and view is listed in
 // sqlite_temp_master, and pragma_table_info names a table's columns.
-const lensQueryHint = `check the statement; list the tables with lore sql --query "SELECT name FROM sqlite_temp_master ORDER BY name" and a table's columns with lore sql "SELECT name FROM pragma_table_info('memories')"`
+const lensQueryHint = `check the statement; list the tables with lore sql --query "SELECT name FROM sqlite_temp_master ORDER BY name" and a table's columns with lore sql --query "SELECT name FROM pragma_table_info('memories')"`
 
 // primaryCodeMask keeps the primary result code of an extended one.
 const primaryCodeMask = 0xff

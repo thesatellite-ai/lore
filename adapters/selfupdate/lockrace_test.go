@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // envLockHelper=1 makes the test binary act as one lore process taking
@@ -112,8 +114,8 @@ func (p *lockProc) line(t *testing.T) string {
 	select {
 	case l := <-p.first:
 		return l
-	case <-time.After(30 * time.Second):
-		t.Fatal("helper process printed nothing in 30s")
+	case <-time.After(testtime.Scale(30 * time.Second)):
+		t.Fatalf("helper process printed nothing in %s", testtime.Scale(30*time.Second))
 		return ""
 	}
 }

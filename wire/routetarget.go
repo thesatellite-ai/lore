@@ -29,9 +29,22 @@ func (a *App) DefaultTargetOf(ctx context.Context, table row.Table) (store.Sourc
 	if err != nil {
 		return "", err
 	}
-	to, err := a.opts.DefaultTarget(ctx, q)
+	to, err := a.routedDefault(ctx, q)
 	if err != nil || to == store.SourceRepo {
 		return "", err
 	}
 	return to, nil
+}
+
+// routedDefault is Options.DefaultTarget (F14) for a code repo; inside a
+// store checkout a write with no --to stays in the store folder it runs
+// in (the repo store there, storehere.go). Why (devco D-693): a store
+// clone now resolves its store's org, and F14 then sent the write to the
+// org's linked project, which a store clone has none of ("no internal
+// project is linked to this repo").
+func (a *App) routedDefault(ctx context.Context, q WriteQuery) (store.Source, error) {
+	if inStore(a.opts.RepoDir) {
+		return store.SourceRepo, nil
+	}
+	return a.opts.DefaultTarget(ctx, q)
 }

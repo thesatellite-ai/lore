@@ -95,7 +95,11 @@ func TestJourneyRewriteKeepsNotes(t *testing.T) {
 	w.Step("day3/a-git-rm-is-named-with-its-author-and-the-way-back", func() {
 		b.Git("pull", "-q")
 		b.Git("rm", "-q", ".lore/data/decisions/"+dec+".json")
-		b.Git("commit", "-q", "-m", "Remove the Go pin decision")
+		// devco:D-388: since S-8 the pre-commit hook stops a hand drop and
+		// names the row and the escape; Ben drops it on purpose with it, so
+		// the way back below is still reached from a real git rm.
+		b.TryGit("commit", "-q", "-m", "Remove the Go pin decision").Refused(t, "E_NEEDS_CONFIRM", dec, "LORE_ALLOW_ROW_DROP=1")
+		b.With("LORE_ALLOW_ROW_DROP=1").Git("commit", "-q", "-m", "Remove the Go pin decision")
 		removed := b.Git("rev-parse", "--short", "HEAD")
 		b.Git("push", "-q")
 		a.Git("pull", "-q")
@@ -115,8 +119,15 @@ func TestJourneyRewriteKeepsNotes(t *testing.T) {
 		a.CommitAll("One devbox binary work")
 		ana.LoreIn(a, "link", "add", "--entity", task, "--commit", "HEAD").OK(t)
 		a.CommitAll("link the work")
-		a.TryGit("rebase", "--force-rebase", "HEAD~2").OK(t).Says(t, "moved 1 commit link(s)")
-		rewritten := a.Git("rev-parse", "HEAD~1")
+		// devco:Q-5: the moved link goes into lore's own commit on top, so
+		// the rebase ends with a clean tree and the next checkout works.
+		a.RewriteGit("rebase", "--force-rebase", "HEAD~2") // a later committer date: new ids even within one second (D-459).OK(t).Says(t, "moved 1 commit link(s)", "committed them as")
+		if st := a.Status(); st != "" {
+			t.Fatalf("the rebase that moved a commit link left changes (Q-5):\n%s", st)
+		}
+		a.Git("checkout", "-q", "-b", "after-rebase", "HEAD~3")
+		a.Git("checkout", "-q", "-")
+		rewritten := a.Git("rev-parse", "HEAD~2")
 		ana.LoreIn(a, "commit", "show", "--id", rewritten).OK(t).Says(t, "tasks/"+task)
 		ana.LoreIn(a, "doctor").Never(t, "commit_links:")
 	})

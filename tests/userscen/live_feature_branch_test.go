@@ -37,6 +37,11 @@ func TestLiveLand_FeatureBranchSaysWhenRowsShow(t *testing.T) {
 			c.AdminPush("origin", "main")
 			if tc.branch != "main" {
 				c.Git("checkout", "-q", "-b", tc.branch)
+				// devco:D-388-livefeature: since branch layers a write on an
+				// isolated branch stays with the branch's files; this test is
+				// about live rows that land from a feature branch, so the
+				// shell shares them (LORE_LAYER=off, docs/team/concepts.md).
+				p.SetEnv("LORE_LAYER", "off")
 			}
 			tag := trashID(t, c.MustLore("tag", "add", "--name", "ftag", "--json"))
 			note := "landed on main; this checkout is on " + tc.branch + ", so those rows show here after you merge main"

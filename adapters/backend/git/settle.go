@@ -161,7 +161,53 @@ func (b *Backend) SettleRow(ctx context.Context, id ids.AnyID, takeTheirs bool) 
 		return err
 	}
 	all[s.Path] = settlement{Mine: s.mineBlob, Theirs: s.theirsBlob, TakeTheirs: takeTheirs}
-	return b.writeSettlements(ctx, all)
+	if err := b.writeSettlements(ctx, all); err != nil {
+		return err
+	}
+	if !takeTheirs {
+		return nil // this clone's copy is what every read here shows already
+	}
+	return b.commitTaken(ctx, s)
+}
+
+// settleSubject is the subject of the local commit that takes the remote's
+// copy of a settled row (commitTaken).
+const settleSubject = "lore: take the store's copy of "
+
+// commitTaken commits the settled row with the remote's side taken (only
+// the clashing fields, with a PreferMerger) on the local branch at once.
+// Before, the choice was only recorded for the next merge, and that merge
+// is aborted while any other row of the store still clashes, so every
+// read here kept showing this machine's copy (devco O-6). The commit puts
+// the remote's values on this side too: the next merge sees both sides
+// agree on them and needs no settlement for the row.
+func (b *Backend) commitTaken(ctx context.Context, s RowSides) error {
+	result := s.Theirs
+	if pm, can := b.cfg.merger.(PreferMerger); can {
+		if m, err := pm.MergePrefer(s.Base, s.Mine, s.Theirs, true); err == nil {
+			result = m
+		}
+	}
+	if result == nil || string(result) == string(s.Mine) {
+		return nil
+	}
+	if err := b.root.WriteFile(s.Path, result); err != nil {
+		return err
+	}
+	env, err := b.commitEnv(ctx, Signature{})
+	if err != nil {
+		return err
+	}
+	_, rel, _ := rowPlace(s.Path)
+	_, id, _ := rowfs.ParseRowPath(rel)
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"add", "--", s.Path}}); err != nil {
+		return errs.Wrap(errs.Internal, "git: stage the settled row", err)
+	}
+	msg := b.cfg.withTrailers(settleSubject + id.String())
+	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", msg, "--", s.Path}, env: env}); err != nil {
+		return errs.Wrap(errs.Internal, "git: commit the settled row", err)
+	}
+	return nil
 }
 
 // settled is the side to take for the conflicted path: ok only when a

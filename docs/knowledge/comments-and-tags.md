@@ -15,7 +15,7 @@ Both point at a row by its *table* (the kind of row, in the plural: `rules`, `me
 
 ## Step 1 — Comment on a decision
 
-`--on-table` names the kind of row and `--on-id` its id. The body is the comment text.
+`--on-id` names the row and `--on-table` its kind; leave `--on-table` out and lore takes the kind from the id's prefix (`dec_` → `decisions`, `tsk_` → `tasks`). The body is the comment text.
 
 <!-- example: knowledge#comment only=1 -->
 ```console

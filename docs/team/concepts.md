@@ -136,6 +136,44 @@ Each folder in a store is a full lore project. It has branch data (on the store'
 
 A **link** ties a client repo to its internal project: "project `prj_…` at `github.com/client/website` belongs to `client/`". Someone at the agency makes it once with `lore org link --org agency --project client`. The link is saved **only in the store** (in `client/_meta.json`). So nothing is written to the client's repo, and everyone at the agency finds the link on their next command. Several repos can link to one project. That is a **group**: three client 2 repos, one `client2/` project.
 
+## Branch layers: notes that follow the code branch
+
+In a repo whose notes live in a store folder, a code branch other than the default branch keeps its own notes: a **branch layer**. Everything lore writes there for the linked project (tasks, memories, rules, decisions, comments) goes into that branch's layer, not into the folder's shared notes. People and agents on the branch see the shared notes with the layer on top; people on `main` or another branch see none of it. When the branch merges, `lore branch land` squashes the layer into the shared notes as one commit; a branch deleted without merging leaves its layer to be dropped into the trash.
+
+```text
+ store repo (github.com/agency/notes)
+   main                                         the shared notes (client/…)
+   refs/lore/layer/main/client/<repo>/feat%2Fx  feat/x's own notes: a hidden ref, no branch on GitHub
+   refs/lore/layer-trash/…@<stamp>              landed or dropped notes, kept until purged
+```
+
+```console
+$ git switch -c feat/x
+$ lore task add --title "try the new cache"
+lore: wrote tasks/tsk_2ad3…f891 to the feat/x notes of client (store agency) (not shared with the default branch; lore branch land when the branch merges)
+$ lore sync                                   # teammates on feat/x get it; main does not
+$ lore branch list
+BRANCH    REPO                   ROWS     AGE   STATE
+feat/x    github.com/client/app  1 task   2d    merged
+feat/x merged into main: land its notes with lore branch land --branch feat/x
+$ lore branch land --branch feat/x --pr 123
+✓ landed 1 task of feat/x into client: commit 1a2b3c4 on main (pushed); the notes are in the trash (lore branch restore --branch feat/x)
+```
+
+- **Tasks follow the branch too.** Tasks, assignments, claims, holds, notes and done, missions, handoffs and comments isolate like every other row and land with the merge: a task given on a feature branch reaches its assignee only when that branch lands, and a done marked on a feature branch reaches `main` with it. An edit made on an isolated branch to a row of the shared notes goes into the layer as well. So give a teammate a task from the default branch (or with `--no-layer`), and mark a work branch that several people or agents coordinate through, such as a mission's agent branches, with `lore branch share --branch <b>`: its claims, notes and done then reach the shared notes at once.
+- **Which branches.** The default branch always writes to the shared notes, and so do `dev`, `staging` and `release/*` (policy `branches.main_like`). Every other branch is isolated, whatever its name. `lore branch mode` says which rule decided; `lore branch isolate --branch <b>` or `lore branch share --branch <b>` makes an exception for the whole team, and any member may make it, also in a project folder of the company store (the patterns of `branches.main_like` are an admin's). The choice is read before anything else in a command, so a shared branch reads the same cache as `main` and an isolated one a cache of its own; a change of choice (yours, or a teammate's after a sync) takes effect on the next command.
+- **Landing.** One commit with every row's own author and times; a row both sides changed is merged field by field, and the same text changed on both sides stops the landing (`E_LAND_CONFLICT`, naming the row, the field and the `--take` commands) and changes nothing; `--dry-run` says so first. A normal merge is detected and offered: a branch is merged only when every copy of it (yours, origin's) is in the default branch and the commits its notes were written on are there too, so a branch reset to `main`'s tip is not merged; a squash merge is landed by the CI step (`lore branch land --store <url> --folder <folder> --repo <repo> --branch <b>`) or by hand.
+- **Abandoned branches.** A branch deleted without merging shows as orphaned; `lore sync` moves its notes to the trash after 14 days (`branches.orphan_days`), `lore branch restore` brings them back (and `lore sync` then keeps them until the branch writes again or someone drops them), and only `lore branch purge --confirm` removes them for good. Only a machine that wrote a branch's notes judges it deleted: on a teammate's machine a branch that was never pushed stays open, since it may live on its author's laptop.
+- **Two people on one branch.** Their notes merge on `lore sync` field by field; when both changed the same text of a row, the newer edit wins and the sync line names the value it replaced, as on the shared notes.
+- **Now, not later.** `--no-layer` on every add and edit (`task`, `rule`, `memory`, `decision`, `comment`, `mission`, `plan`, …) writes to the shared notes on a branch; `LORE_LAYER=off` (also `0` or `false`, in any case) does it for every command of one shell, and any other value is refused; `lore branch promote --ids <id>` shares a row already written.
+- **Older lore.** The first branch notes of a folder mark it as needing lore 0.1.18, the release that ships branch layers (`_meta.json`), so an older lore reads it but refuses to write there (`E_OLD_LORE`) instead of writing a branch's note into the shared notes.
+- **Landing options.** `--kinds tasks,memories` lands only those tables and keeps the rest with the branch; `--review` asks keep or drop for every row (a terminal only); `--take branch --ids <id>` (or `--take main`) settles a row whose text both sides changed: only the clashing fields take that side, a field only the other side changed keeps its change. `lore branch restore --branch <b> --revert` also reverts a landing with a new commit.
+- **Stacked branches.** A branch made from another branch that has notes (`feat/b` from `feat/a`) reads `feat/a`'s notes under its own, also before it writes a note of its own. `lore branch land --branch feat/b --into feat/a` moves its notes into `feat/a`'s; when `feat/a` lands, `feat/b`'s notes move onto the shared notes.
+- **Older notes.** `lore branch adopt --branch <b>` moves rows written on a branch into the shared notes before branch layers existed (their origin names the branch) into that branch's notes.
+- **Find and trash by the branch a note was born on.** Every row remembers the code branch it was created on (`lore show --id <id> --origin`), and a land, a stacked land `--into`, an adopt or a `restore --revert` keeps it. So every list and `lore search` take `--born-branch <b>` (also the REST list routes, as `born_branch`), on the branch and long after it landed. `lore branch show --branch <b>` counts the rows of the shared notes born on it (landed or adopted), also when the branch has no open notes any more, and names the list and trash commands. `lore trash add --born-branch <b> [--kind task] --dry-run` prints the count per kind and the rows; without `--dry-run` it asks first (`E_NEEDS_CONFIRM`, answer `--yes`) and moves them as one batch, each restorable with `lore trash restore --id <id>` (or the whole batch with `--id <bat_…>`). A row born on the branch whose delete would take rows made elsewhere (a task list made on the branch that `main`'s tasks now use) stays and is named. Only notes are swept, never the org's setup (actors, repos, policies, tags). In a repo's own notes a row keeps the branch name only when the branch has an upstream (a local-only branch name is never written into a code repo), so such rows are not found by it.
+- **CI.** In a repo of your own, `lore branch list` and `lore doctor` offer `lore branch install-action`, which writes a GitHub workflow that runs the land step when a pull request merges (it asks first; never in a client's repo, where the file would name the internal store).
+- **A repo whose notes live in its own `.lore/data`.** Rules and memories already follow the branch with git. On an isolated branch, new tasks, missions, handoffs and comments do too: they are written with the branch's files instead of going live, and reach `main` when the branch merges. `main`, `dev`, `staging` and `release/*` keep live rows as before; `--live`, `--no-layer` or `LORE_LAYER=off` share one row or one shell at once.
+
 ## Orgs, identity and `whoami`
 
 An **org** is one entry under `orgs:` in your `~/.lore/config.yaml`. It is a company you work for. It holds your identity there, its stores, and URL patterns for its own repos (`own:`) and its client repos (`repos:`).
@@ -150,6 +188,8 @@ In every repo lore picks **at most one org**, by the first rule that answers:
  5. own: or repos: pattern matches   e.g. github.com/client/*
  6. nothing matched                  no org: your fallback identity, everywhere/ notes only
 ```
+
+A store's own clone (its remote is the url of a store exactly one entry attaches) belongs to that entry before rule 5: the clone of an ops store kept under the company's GitHub owner is the ops org's, even though the company's `own:` pattern matches its url (`matched by: store url … of <org> (this is its clone)`).
 
 If two entries match at the same rule, that is an error (`E_ORG_AMBIGUOUS`): lore never guesses. `lore whoami` prints the result and the rule that decided it. `lore whoami --explain` prints every rule with hit or miss.
 
@@ -182,8 +222,9 @@ The **repo role** decides which guards apply. A leak guard is a check that stops
 
 | Role | When | Leak guards |
 |---|---|---|
-| **client repo** | matched by `repos:` or linked without `--own` | on: internal kinds default to the store, commits are checked |
-| **own repo** | matched by `own:`, or linked with `--own` | off |
+| **client repo** | matched by `repos:` (this wins over `own:`, and a link never changes it: `org link --own` on such a repo is refused, and a link recorded as own reads as client), or linked without `--own` when no `own:` pattern matches it | on: internal kinds default to the store, commits are checked |
+| **moved own repo** | no `own:` pattern matches its remote any more, nothing links it as a client, and its lore data was written as an own repo (actor rows lore keeps out of client repos) | off: it stays an own repo; `lore whoami` names the move and both fixes (an admin adds the new owner under `own:`, or `lore org link --org <org> --project <folder> --yes` makes it a client repo) |
+| **own repo** | matched by `own:` and by no `repos:` pattern, or linked with `--own` (a repo only `own:` matches links as own without it) | off |
 | **no org** | nothing matched | off; only your `everywhere/` personal notes load |
 
 ## People: profiles and stints
@@ -220,6 +261,7 @@ Contacts marked as **identity contacts** tie every email and GitHub login of one
 10. Signals are not rows: they never land and never build history.
 11. Coordination writes (claim, renew, release, done on a claimed task, gate approval, resource holds) succeed only when the remote confirmed them. A gate is a step that waits for a person to say yes. Offline, these writes fail. They are never queued.
 12. One org per repo. Orgs never mix.
+13. A write on an isolated code branch stays with that branch: in a store folder its layer, in a repo's own notes the branch's files (new tasks too). It reaches the shared notes only by landing (`lore branch land`, or the branch's merge for a repo's own notes) or `lore branch promote`.
 
 The one rule behind all of them: **hidden is not private**. Anyone who can clone a repo can download every ref in it. Privacy is decided only by which repo a row is stored in.
 

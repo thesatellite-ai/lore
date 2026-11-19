@@ -31,6 +31,7 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/gitcommit"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/identity"
@@ -42,6 +43,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -78,9 +80,16 @@ type coordWorld struct {
 	autopushChosen bool
 	lease          signals.Lease
 	agents         coord.Agents
-	folder         string
-	who            identity.Resolved
-	actorID        string
+	// maxClaimsConfig is agents.max_claims_per_agent as config.yaml (top
+	// level, then the org entry) sets it; 0 = unset. It may only lower the
+	// team policy's cap (devco:S-20, env).
+	maxClaimsConfig int
+	// commonDir is the repository's shared git directory when it has no
+	// remote: its signals ref is written there (devco:D-362).
+	commonDir string
+	folder    string
+	who       identity.Resolved
+	actorID   string
 	// sit is the org resolution of this checkout (links, role, org).
 	sit orgresolve.Result
 	// orgStore is the attached name of the org store at this repo's linked
@@ -111,20 +120,29 @@ type sigSpot struct {
 	folder     string
 	// store: the linked store's ref (the task row is not in this repo).
 	store bool
+	// label is the store folder as every line names it, <org>/<folder>
+	// (storeOwnName); "" for a code repo's own ref (devco:D-560).
+	label string
+	// url is the store clone's remote url ("" for a code repo's own ref):
+	// it picks the identity that signs the store's signals commits
+	// (devco:D-581, storeSigner.identityFor).
+	url string
 }
 
 // openWorld gathers the world, refusing what this host cannot coordinate:
 // no git repo, a caller that is neither agent nor person, a linked repo.
 func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	a := h.a
+	if sc, ok := storeHere(a.opts.RepoDir); ok {
+		return nil, errCoordInStore(sc)
+	}
 	top, err := a.repoTop(ctx)
 	if err != nil || top == "" {
-		return nil, errs.New(errs.Unsupported, "coordination needs a git repository").
-			WithHint("claims and holds live on refs/lore/signals of the repo's remote")
+		return nil, errCoordNoRepo(a.opts.RepoDir)
 	}
 	repo, err := gitref.Open(ctx, top, nil)
 	if err != nil {
-		return nil, errs.Wrap(errs.Unsupported, "coordination needs a git repository", err)
+		return nil, errs.Wrap(errs.Unsupported, "coordination needs a git repository", errCoordNoRepo(a.opts.RepoDir))
 	}
 	gitDir, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--absolute-git-dir"}})
 	if err != nil {
@@ -160,7 +178,7 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		// An agent actor (LORE_ACTOR) must be on the roster; a detected
 		// coding agent acts for its person (owner rule 2026-11-11), who
 		// is not checked here either.
-		if err = a.requireRosterAgent(ctx, who.StableKey, sit.Result.Org.Name); err != nil {
+		if err = a.requireRosterAgent(ctx, who.StableKey); err != nil {
 			return nil, err
 		}
 	}
@@ -168,7 +186,7 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 		a: a, repo: repo, stateDir: filepath.Join(strings.TrimSpace(string(gitDir)), signalsStateDir),
 		folder: signalsRootFolder, who: who, actorID: actor.String(), sit: sit.Result,
 	}
-	if rel, rerr := filepath.Rel(top, a.projectDir()); rerr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+	if rel, inside := fspath.Rel(top, a.projectDir()); inside && rel != "." {
 		w.folder = filepath.ToSlash(rel)
 	}
 	if sit.Result.Org != nil {
@@ -180,6 +198,8 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 	w.settings(sit.Config, sit.Result.Org)
 	if _, rerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + w.remoteName + ".url"}}); rerr == nil {
 		w.remote = &gitremote.Git{Repo: repo, Name: w.remoteName}
+	} else if out, cerr := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--path-format=absolute", "--git-common-dir"}}); cerr == nil {
+		w.commonDir = strings.TrimSpace(string(out)) // devco:D-362: the signals ref of a repo with no remote
 	}
 	w.spot = w.repoSpot()
 	return w, nil
@@ -188,6 +208,9 @@ func (h standaloneCoord) openWorld(ctx context.Context) (*coordWorld, error) {
 // openWorldFor is openWorld pointed at where task id is coordinated
 // (forTask; "" = the work queue).
 func (h standaloneCoord) openWorldFor(ctx context.Context, id string) (*coordWorld, error) {
+	if sw, ok, serr := h.openStoreWorld(ctx, id); ok {
+		return sw, serr // a store task outside every code repo (devco:D-635)
+	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
 		return nil, err
@@ -238,8 +261,11 @@ func (w *coordWorld) remoteRepoName(ctx context.Context) string {
 // (BUG-T6, v0.1.17 stores.RosterCheck): an agent its owner started a
 // moment ago on another machine is on the remote roster but not yet in a
 // copy fetched within live.fetch_ttl. A hit costs no extra fetch; a sync
-// that fails leaves the local copy's answer (the refusal) standing.
-func (a *App) requireRosterAgent(ctx context.Context, stableKey, org string) error {
+// that fails leaves the local copy's answer (the refusal) standing. The
+// refusal names the roster as every roster sentence does, "the roster of
+// acme (acme/org)" (devco D-668: "is not on acme's roster" named the org
+// only).
+func (a *App) requireRosterAgent(ctx context.Context, stableKey string) error {
 	r, err := a.coordRoster(ctx)
 	if err != nil {
 		return err
@@ -248,7 +274,7 @@ func (a *App) requireRosterAgent(ctx context.Context, stableKey, org string) err
 	if err != nil || ok {
 		return err
 	}
-	return errs.New(errs.IdentityFailed, identity.EnvActor+"="+stableKey+" is not on "+org+"'s roster (register it with `lore agent start --label …`)").
+	return errs.New(errs.IdentityFailed, identity.EnvActor+"="+stableKey+" is not on "+r.of()+" (register it with `lore agent start --label <label>`)").
 		WithHint("its owner runs `lore agent start --label <l>` first")
 }
 
@@ -301,7 +327,7 @@ func (w *coordWorld) forHolds(ctx context.Context) error {
 	}
 	if w.unlinkedClient() {
 		return errs.New(errs.Unsupported, "this is a client repo with no store link: its holds belong on a linked store's signals ref, and none is linked").
-			WithHint("never written into the client repo (D8); link it with `" + w.linkCommand(ctx) + "`")
+			WithHint("never written into the client repo; link it with `" + w.linkCommand(ctx) + "`")
 	}
 	return w.useStore(ctx)
 }
@@ -356,11 +382,16 @@ func (w *coordWorld) useStore(ctx context.Context) error {
 	remote := &gitremote.Git{Repo: repo, Name: gitbackend.RemoteName}
 	// The store clone's signals ref is reached as the setup that owns the
 	// store (storeRoute); a store no setup owns gets no route.
+	label, url := string(w.orgStore), ""
 	if u, uerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + gitbackend.RemoteName + ".url"}}); uerr == nil {
-		remote.RouteArgs, remote.RouteEnv, _ = storeRoute(ctx, w.a.opts.Home, w.a.projectDir(), strings.TrimSpace(string(u)))
+		url = strings.TrimSpace(string(u))
+		remote.RouteArgs, remote.RouteEnv, _ = storeRoute(ctx, w.a.opts.Home, w.a.projectDir(), url)
+		if own := storeOwnName(w.a.opts.Home, url, folder); own != "" {
+			label = own
+		}
 	}
 	w.spot = sigSpot{repo: repo, remote: remote, remoteName: gitbackend.RemoteName,
-		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true}
+		ref: signals.StoreRef(branch), seen: filepath.Join(gitbackend.StateDirOf(dir), signalsSeenFile), folder: folder, store: true, label: label, url: url}
 	w.folder = folder
 	return nil
 }
@@ -425,7 +456,7 @@ func (w *coordWorld) settings(cfg *orgconf.Config, org *orgconf.Org) {
 				continue
 			}
 			if ag.MaxClaimsPerAgent != nil {
-				w.agents.MaxClaims = *ag.MaxClaimsPerAgent
+				w.maxClaimsConfig = *ag.MaxClaimsPerAgent
 			}
 			if ag.MaxAttempts != nil {
 				w.agents.MaxAttempts = *ag.MaxAttempts
@@ -460,10 +491,38 @@ const (
 	envPushClaimsOn = "1"
 )
 
-// requirePushAsked refuses a new claim or hold (what names it) that would
-// push refs/lore/signals to this code repo's own remote when the person
-// did not ask for that push (asked: the command's --push; or
-// LORE_PUSH_CLAIMS=1; or live.autopush: true in config.yaml, the choice
+// pushAsk is what a claim or hold refused for want of --push prints as
+// its next step (devco:D-669): the noun of the refusal ("a claim", "a
+// hold"), the exact command that pushes it now (the person's own command
+// with every flag they gave, plus --push) and, where there is one, the
+// command that does the work without a claim. Why: the refusal printed
+// "run the command again with --push" and "`lore task start --id <id>`
+// works on a task without a claim" for every refusal, a hold's included:
+// a placeholder where the id was known, and a task step in a hold refusal.
+type pushAsk struct {
+	what    string   // the noun the refusal names: "a claim", "a hold", …
+	rerun   []string // the command after "lore", without --push (pushRerun appends it)
+	without []string // a command after "lore" that needs no claim; nil when none
+}
+
+// claimAsk is the pushAsk of `task claim` (and of anything that names the
+// claim of one task): the claim again with --push, or `task start`,
+// which marks the task in progress with no claim and no push.
+func claimAsk(what string, rerun []string, id string) pushAsk {
+	return pushAsk{what: what, rerun: rerun, without: []string{"task", "start", "--id", id}}
+}
+
+// pushNeeded reports whether a new claim or hold here must be asked for
+// with --push (requirePushAsked): the place has a remote, and neither
+// LORE_PUSH_CLAIMS=1 nor live.autopush: true gives a standing go-ahead.
+func (w *coordWorld) pushNeeded() bool {
+	return !w.autopushChosen && w.spot.remote != nil && os.Getenv(envPushClaims) != envPushClaimsOn
+}
+
+// requirePushAsked refuses a new claim or hold (ask names it and its next
+// step) that would push refs/lore/signals to this code repo's own remote
+// when the person did not ask for that push (asked: the command's --push;
+// or LORE_PUSH_CLAIMS=1; or live.autopush: true in config.yaml, the choice
 // to push every write at once). Owner rule D-15: nothing reaches a remote without
 // an explicit push, sync or git push, and a claim is pushed in the same
 // command because it is a lease two people race for: it cannot wait for
@@ -472,12 +531,44 @@ const (
 // remote fails as before (offline). Renewing, releasing or finishing a
 // claim already pushed needs no new go-ahead: it changes what the person
 // published.
-func (w *coordWorld) requirePushAsked(asked bool, what string) error {
-	if asked || w.autopushChosen || w.spot.store || w.spot.remote == nil || os.Getenv(envPushClaims) == envPushClaimsOn {
+func (w *coordWorld) requirePushAsked(asked bool, ask pushAsk) error {
+	if asked || !w.pushNeeded() {
 		return nil
 	}
-	return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through %s on this repo's remote %s, and lore pushes nothing to a code remote unless you ask; nothing was written", what, signals.CodeRepoRef, w.remoteName)).
-		WithHint("run the command again with --push to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim); `lore task start --id <id>` works on a task without a claim")
+	hint := pushAskHint(ask)
+	if w.spot.store {
+		// devco:D-580: a linked store's signals ref is a remote too; a claim
+		// there was pushed unasked although --push says it is refused.
+		return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through the signals ref %s of store %s on the store's remote, and lore pushes nothing to a remote unless you ask; nothing was written", ask.what, w.spot.ref, w.spot.label)).
+			WithHint(hint).WithNext(pushRerun(ask.rerun)[0], pushRerun(ask.rerun)[1:]...)
+	}
+	return errs.New(errs.Refused, fmt.Sprintf("%s here is shared through %s on this repo's remote %s, and lore pushes nothing to a code remote unless you ask; nothing was written", ask.what, signals.CodeRepoRef, w.remoteName)).
+		WithHint(hint).WithNext(pushRerun(ask.rerun)[0], pushRerun(ask.rerun)[1:]...)
+}
+
+// pushRerun is the argv ("lore", …) of rerun with --push appended.
+func pushRerun(rerun []string) []string {
+	return append(append([]string{defaultCommandName}, rerun...), "--push")
+}
+
+// pushAskHint is the hint of a push refusal: the exact command that pushes
+// now, the standing go-ahead, and the claim-free command when there is one.
+func pushAskHint(ask pushAsk) string {
+	h := "run `" + printedCommand(pushRerun(ask.rerun)) + "` to push it now (LORE_PUSH_CLAIMS=1 in the environment, or live.autopush: true in config.yaml, asks for every claim and hold)"
+	if len(ask.without) > 0 {
+		h += "; `" + printedCommand(append([]string{defaultCommandName}, ask.without...)) + "` starts the task without a claim and pushes nothing"
+	}
+	return h
+}
+
+// printedCommand is argv as a person pastes it into a POSIX shell: each
+// word that a shell would split or expand is single-quoted (shellWord).
+func printedCommand(argv []string) string {
+	words := make([]string, len(argv))
+	for i, a := range argv {
+		words[i] = shellWord(a)
+	}
+	return strings.Join(words, " ")
 }
 
 // taskInRepo reports whether the claimed task row lives in this checkout's
@@ -535,19 +626,42 @@ func (w *coordWorld) held() coord.HeldStore {
 	return coord.HeldStore{Path: filepath.Join(w.stateDir, heldFile)}
 }
 
+// localSignalsRemoteName names the tracking namespace of the signals ref
+// of a repo with no remote (refs/lore-remote/local/…), so it never mixes
+// with a remote's copy once the repo gets one.
+const localSignalsRemoteName = "local"
+
+// localSignalsRemote is the repo's own git directory as the signals
+// "remote" when this repo's own ref has no remote (devco:D-362: claims in a
+// solo repo failed E_OFFLINE "autopush is off"). The signals ref then
+// lives in this repository only; a linked store's ref never takes this.
+func localSignalsRemote(sp sigSpot, commonDir string) (gitremote.Remote, bool) {
+	if sp.remote != nil || sp.store || sp.repo == nil || commonDir == "" {
+		return nil, false
+	}
+	return &gitremote.Git{Repo: sp.repo, Name: commonDir}, true
+}
+
 // signalsStore is this repo's own signals ref (§1 "Refs").
-func (w *coordWorld) signalsStore() *signals.Store {
-	name := w.who.DisplayName
-	email := signatureEmail(w.who.StableKey)
+func (w *coordWorld) signalsStore(ctx context.Context) *signals.Store {
+	sig := w.signalsSignature(ctx)
 	sp := w.spot
+	remote, remoteName, autopush := sp.remote, sp.remoteName, w.autopush && sp.remote != nil
+	if local, ok := localSignalsRemote(sp, w.commonDir); ok {
+		// devco:D-362: a repo with no remote coordinates on its own git
+		// directory: the claim is local by nature (nothing to push to),
+		// with the same lease, fencing and companions as a pushed one.
+		remote, remoteName, autopush = local, localSignalsRemoteName, true
+	}
 	return &signals.Store{
-		Repo: sp.repo, Remote: sp.remote, RemoteName: sp.remoteName, Ref: sp.ref,
+		Repo: sp.repo, Remote: remote, RemoteName: remoteName, Ref: sp.ref,
 		Seen:  signals.SeenStore{Path: sp.seen},
 		Clock: w.a, Lease: w.lease,
 		Signature: func(at time.Time) gitref.Signature {
-			return gitref.Signature{Name: name, Email: email, When: at}
+			return gitref.Signature{Name: sig.Name, Email: sig.Email, When: at}
 		},
-		Autopush: w.autopush && sp.remote != nil, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
+		Trailers: w.signalsTrailers(),
+		Autopush: autopush, Tokens: signals.CryptoTokens{}, Jitter: signals.CryptoJitter{},
 		Trace: signalsTrace(os.Stderr),
 		// FORMAT_EVOLUTION rule 2 (OV48): no claim, renew or release on a
 		// project this lore may not write. The engine's floor alone
@@ -591,6 +705,38 @@ func signalsTrace(w io.Writer) func(string) {
 	return func(line string) { _, _ = fmt.Fprintln(w, "trace: "+line) } // stderr gone: nothing left to report to
 }
 
+// signalsSignature is who signs a signals commit (devco:D-581): on a
+// linked store's ref the identity every other commit of that store uses
+// (storeSigner.identityFor: the org identity for an org store), on a code
+// repo's own ref the person (the owner of a detected agent). It was
+// "<person> via <tool> <agent.auto/…@lore.invalid>", an author no store
+// commit may carry; the agent goes into the Lore-Agent trailer
+// (signalsTrailers). A caller with no person (the CI actor) keeps the
+// v0.1.17 non-routable address.
+func (w *coordWorld) signalsSignature(ctx context.Context) gitref.Signature {
+	if w.spot.store && w.spot.url != "" {
+		if s := storeIdentityFunc(w.a.opts).identityFor(ctx, w.spot.url); s.Name != "" && s.Email != "" && !agentSignature(s.Name, s.Email) {
+			return gitref.Signature{Name: s.Name, Email: s.Email}
+		}
+	}
+	if name, email := w.who.Person().CommitSignature(); name != "" && email != "" && !agentSignature(name, email) {
+		return gitref.Signature{Name: name, Email: email}
+	}
+	return gitref.Signature{Name: w.who.DisplayName, Email: signatureEmail(w.who.StableKey)}
+}
+
+// signalsTrailers names the agent that wrote a signals commit for its
+// person (Lore-Agent trailer, devco:D-581); none for a person or CI.
+func (w *coordWorld) signalsTrailers() []string {
+	if !w.isAgent() || w.who.Agent == "" {
+		return nil
+	}
+	if t := gitcommit.AgentTrailer(w.who.Label, w.who.Agent); t != "" {
+		return []string{t}
+	}
+	return nil
+}
+
 // signatureEmail turns a stable key into a commit e-mail; agents get a
 // non-routable address (v0.1.17 signatureEmail).
 func signatureEmail(stableKey string) string {
@@ -606,8 +752,12 @@ func (w *coordWorld) env(ctx context.Context) coord.Env {
 	if w.client {
 		rows = clientRowsFor(w)
 	}
-	e := coord.Env{Signals: w.signalsStore(), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: w.agents, Held: w.held()}
-	if set, err := w.a.Policy(ctx, store.SourceRepo); err == nil {
+	agents := w.agents
+	agents.PerCheckout = !w.isAgent() // devco:Q-1: a person's limit is per worktree, an agent's per session
+	e := coord.Env{Signals: w.signalsStore(ctx), Folder: w.folder, Rows: rows, Caller: w.caller(), Agents: agents, Held: w.held()}
+	set, perr := w.a.Policy(ctx, store.SourceRepo)
+	e.Agents.TeamMaxClaims, e.Agents.MaxClaims = maxClaims(set, perr == nil, w.maxClaimsConfig)
+	if perr == nil {
 		// OV15B-URG, OV7-6: the repo's urgency weights and claim-span keys;
 		// a policy that cannot be read leaves the built-in defaults.
 		if uw, uerr := opstask.UrgencyWeights(set); uerr == nil {
@@ -616,6 +766,25 @@ func (w *coordWorld) env(ctx context.Context) coord.Env {
 		e.Time = claimSpans(set)
 	}
 	return e
+}
+
+// maxClaims is the team's cap and the effective WIP limit (devco:S-20):
+// the policy agents.max_claims_per_agent (built-in 1 when no level sets
+// it or the policy cannot be read; below 1 counts as 1), lowered by the
+// person's config.yaml when that sets less. A config value above the
+// team's cap is ignored: an agent cannot lift its own limit.
+func maxClaims(set policy.Set, read bool, configured int) (team, effective int) {
+	team = defaultMaxClaims
+	if read {
+		if n, ok := set.Limit(policy.KeyAgentsMaxClaimsPerAgent); ok {
+			team = max(int(n), 1)
+		}
+	}
+	effective = team
+	if configured > 0 && configured < team {
+		effective = configured
+	}
+	return team, effective
 }
 
 // Built-in time.long_span / time.coalesce_gap (TQ2 10h, TQ4 2m).
@@ -1035,12 +1204,36 @@ func docValue(f schema.FieldDef, v canonjson.Value) (value.Value, error) {
 
 // ---- errors ----
 
+// claimPushFlag is " --push" when a new claim or hold here is refused
+// without it (requirePushAsked: a code repo's remote or a linked store's,
+// with no LORE_PUSH_CLAIMS=1 and no live.autopush), else "". Every hint
+// that names `lore task next --claim` or `lore task claim --id …` appends
+// it, so the printed next step is never the claim refusal (devco:D-607).
+func (w *coordWorld) claimPushFlag() string {
+	if w == nil || !w.pushNeeded() {
+		return ""
+	}
+	return " --push"
+}
+
+// coordErr is coordErrPush with this world's claim flag: a hint that
+// sends the person to another claim names --push where the claim needs it.
+func (w *coordWorld) coordErr(err error) error {
+	return coordErrPush(err, w.claimPushFlag())
+}
+
 // coordErr maps coordination failures to the spec's codes (§1 "Error
-// codes", v0.1.17 coordError); anything else passes through.
-func coordErr(err error) error {
+// codes", v0.1.17 coordError) for a place whose claims need no --push;
+// anything else passes through.
+func coordErr(err error) error { return coordErrPush(err, "") }
+
+// coordErrPush is coordErr whose claim hints carry push (claimPushFlag:
+// " --push" or "").
+func coordErrPush(err error, push string) error {
 	if err == nil {
 		return nil
 	}
+	next := "lore task next --claim" + push // the command that takes other work
 	var e *errs.Error
 	if errors.As(err, &e) {
 		return err
@@ -1054,7 +1247,7 @@ func coordErr(err error) error {
 	var hoc *coord.HasOpenChildrenError
 	switch {
 	case errors.As(err, &hoc):
-		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim --id " + hoc.Children[0] + "   (or: lore task claim --id " + hoc.Task + " --coordinate)")
+		return errs.New(errs.HasOpenChildren, hoc.Error()).WithHint("lore task claim --id " + hoc.Children[0] + push + "   (or: lore task claim --id " + hoc.Task + " --coordinate" + push + ")")
 	case errors.As(err, &fe):
 		code := errs.LostClaim // an unknown kind fails closed as a lost claim
 		switch fe.Kind {
@@ -1065,7 +1258,7 @@ func coordErr(err error) error {
 		case coord.FenceLost:
 			code = errs.LostClaim
 		}
-		return errs.New(code, fe.Error()).WithHint("stop work on this task; `lore task next` finds other work")
+		return errs.New(code, fe.Error()).WithHint("stop work on this task; `" + next + "` takes other work")
 	case errors.As(err, &off) && off.RacesLost:
 		// Reachable, but another writer won every attempt: contention, not
 		// a network problem (the remote answered each push).
@@ -1082,9 +1275,11 @@ func coordErr(err error) error {
 			msg = fmt.Sprintf("%s is coordinated by %s (until %s)", he.By.Task, holderName(he.By), he.By.Expires.UTC().Format(time.Kitchen))
 		}
 		if he.SameActor {
-			return errs.New(errs.Refused, msg) // P2-TASK-3: waiting will not help
+			// P2-TASK-3: waiting will not help. devco:M-8: the other session
+			// keeps it; this one picks other work or works under its own name.
+			return errs.New(errs.Refused, msg).WithHint(next + " takes other work; the other session finishes or releases this one")
 		}
-		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or pick other work with `lore task next`")
+		return errs.New(errs.Contended, msg).WithHint("retry after the hold ends, or take other work with `" + next + "`")
 	case errors.As(err, &we):
 		// B-ERRS-4: the WIP limit, a poisoned task and a task that is not
 		// open are refusals by rule or by the data's state (E_REFUSED,
@@ -1099,7 +1294,12 @@ func coordErr(err error) error {
 		}
 		return errs.New(errs.NoWork, nw.Error()).WithHint(hint)
 	case errors.Is(err, coord.ErrContended):
-		return errs.New(errs.Contended, "ready work exists but every claim attempt lost a race").WithHint("retry after a short wait")
+		msg := "ready work exists but every claim attempt lost a race"
+		var ce *coord.ContendedError
+		if errors.As(err, &ce) {
+			msg = fmt.Sprintf("ready work exists but every claim attempt lost a race: %d attempts over %s, other agents kept taking the ready tasks first", ce.Attempts, ce.Elapsed.Round(time.Millisecond))
+		}
+		return errs.New(errs.Contended, msg).WithHint("retry after a short wait")
 	case errors.As(err, &pe):
 		return errs.New(errs.Refused, pe.Error())
 	case errors.Is(err, coord.ErrUnknownTask):
@@ -1116,13 +1316,45 @@ func coordErr(err error) error {
 		}
 		return e
 	case errors.Is(err, coord.ErrNotOpen):
-		return errs.New(errs.Refused, err.Error())
+		// devco:M-9: one plain refusal, never the package's "coord:" text;
+		// the next step is the next ready task.
+		hint := "lore task next shows the next ready task (--claim" + push + " takes it); lore task list shows the open ones"
+		if ad, ok := coord.IsAlreadyDone(err); ok {
+			return errs.New(errs.Refused, ad.Error()).WithHint(hint)
+		}
+		if rv, ok := coord.IsRevoked(err); ok {
+			// devco:S-13: the person who revoked it decides who works on it.
+			return errs.New(errs.Refused, rv.Error()).
+				WithHint(next + " takes other work; a person hands it back with `lore task reassign --id " + rv.Task + " --assign @<handle>" + push + "`")
+		}
+		msg := strings.TrimPrefix(err.Error(), coord.ErrNotOpen.Error()+": ")
+		return errs.New(errs.Refused, msg+"; only an open task can be claimed").WithHint(hint)
+	case errors.Is(err, coord.ErrNotGated):
+		// devco:L-3: approving a task nobody asked a gate for is a refusal
+		// by the data's state, not an internal error; the next step is to
+		// request the gate first. The id is the last word before the
+		// parenthesised next step coord.Approve appends.
+		id := notGatedID(err)
+		return errs.New(errs.Refused, id+" has no gate to approve (nobody requested one)").
+			WithHint("lore gate request --id " + id + " puts a gate on it; approve once it is requested")
 	case errors.Is(err, signals.ErrNotHeld):
 		return errs.New(errs.LostClaim, err.Error())
 	case errors.Is(err, signals.ErrBadName):
 		return errs.New(errs.InvalidInput, err.Error())
 	}
 	return err
+}
+
+// notGatedID is the task id a coord.ErrNotGated names (its text is
+// "<ErrNotGated>: <id> (request one …)"); "the task" when none parses.
+func notGatedID(err error) string {
+	rest := strings.TrimPrefix(err.Error(), coord.ErrNotGated.Error()+": ")
+	if f := strings.Fields(rest); len(f) > 0 {
+		if _, perr := ids.ParseAny(f[0]); perr == nil {
+			return f[0]
+		}
+	}
+	return "the task"
 }
 
 // unknownCoordID is the id a coord.ErrUnknownTask names (its text is
@@ -1139,3 +1371,24 @@ func unknownCoordID(err error) ids.AnyID {
 // markOK is a coordination outcome line's success mark (v0.1.17
 // style.Success without colour: the op's text is plain).
 const markOK = "✓"
+
+// errCoordInStore refuses coordination (task next, claims, inbox) inside a
+// store clone with the real reason (devco D-434): the folder is a git
+// repo, but a store's, and claims live on refs/lore/signals of a code
+// repo's remote. Decision: coordination stays a code-repo feature; the
+// hint names where it runs and what works here instead.
+func errCoordInStore(sc storeCheckout) error {
+	return errs.New(errs.Unsupported, "coordination (task next, claims, inbox) runs in a code repo: "+sc.shown+" is a lore store clone, not a code repo").
+		WithHint("run it in a code repo linked to this folder (`lore org link --org <org> --project <folder>`); here, `lore task list` lists the tasks and `lore task edit --id <id> --assign @<handle>` assigns one")
+}
+
+// ClaimPushFlag implements task.ClaimPushFlagger: " --push" when a claim
+// of task id here is refused without it (claimPushFlag), "" otherwise and
+// when the place has no coordination to ask.
+func (a *App) ClaimPushFlag(ctx context.Context, id string) string {
+	w, err := standaloneCoord{a: a}.openWorldFor(ctx, id)
+	if err != nil {
+		return ""
+	}
+	return w.claimPushFlag()
+}

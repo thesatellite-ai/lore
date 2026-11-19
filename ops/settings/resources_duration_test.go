@@ -53,7 +53,7 @@ func TestResourceDurationGrammar(t *testing.T) {
 		}
 	}
 	list := opstest.Text(h.Must(settings.OpResList, `{"kind":"job"}`))
-	if !strings.Contains(list, "\t1h30m\t") || strings.Contains(list, "0m0s") || strings.Contains(list, ".000") {
+	if !strings.Contains(list, "  1h30m\n") || strings.Contains(list, "0m0s") || strings.Contains(list, ".000") {
 		t.Errorf("list text %q", list)
 	}
 	// JSON keeps the stored form (a wire contract).

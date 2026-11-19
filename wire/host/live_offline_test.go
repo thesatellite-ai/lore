@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/adapters/gitremote"
 	"github.com/thesatellite-ai/lore/adapters/live"
 )
 
@@ -129,5 +130,23 @@ func TestLiveRefusedLineSaidOnce(t *testing.T) {
 	}
 	if n := strings.Count(out.String(), "the remote refused refs/lore/live"); n != 0 {
 		t.Fatalf("already said during sync: said %d more times:\n%s", n, out.String())
+	}
+}
+
+// devco L-10: an unanswered fetch or push names the remote and ssh's own
+// reason, for sync's line and its --json live_error, never "offline" alone.
+func TestLiveOfflineCauseNamed(t *testing.T) {
+	s, _ := offlineSession(t, "ssh://git.example.invalid/site.git")
+	s.reportOffline(gitNoAnswer)
+	want := "git push to origin (ssh://git.example.invalid/site.git): ssh: Could not resolve hostname git.example.invalid: Name or service not known"
+	if s.netCause != want {
+		t.Fatalf("push cause %q, want %q", s.netCause, want)
+	}
+	s.fetchErr = &gitremote.TransportError{Op: "fetch", Err: gitremote.ErrUnconfirmed, Stderr: gitNoAnswer}
+	if got := s.fetchCause(); got != strings.Replace(want, "git push to", "git fetch from", 1) {
+		t.Fatalf("fetch cause %q", got)
+	}
+	if got := s.fetchFault(); !strings.HasPrefix(got, "offline (git fetch from origin (ssh://git.example.invalid/site.git): ssh: Could not resolve") {
+		t.Fatalf("fetch fault %q", got)
 	}
 }

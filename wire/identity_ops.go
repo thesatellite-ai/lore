@@ -13,10 +13,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsidentity "github.com/thesatellite-ai/lore/ops/identity"
@@ -51,7 +53,7 @@ func (a *App) SetIdentity(ctx context.Context, e opsidentity.Entry) (opsidentity
 		path, migrated, err := SetIdentity(home, ent)
 		return opsidentity.SetResult{Path: path, Migrated: migrated}, err
 	case s.Kind.HasOrg():
-		path, err := a.SetOrgIdentity(ctx, s.Org, e)
+		_, path, err := a.SetOrgIdentity(ctx, s.Org, e)
 		return opsidentity.SetResult{Path: path, Org: s.Org}, err
 	}
 	if err := setSetupIdentity(home, s.Name, ent); err != nil {
@@ -99,12 +101,25 @@ func (a *App) MigrateIdentity(ctx context.Context, keep string) (opsidentity.Mig
 
 // SetOrgIdentity implements opsidentity.Manager: orgs[<org>].identity.
 // The org entry must exist (v0.1.17 lorecfg.SetOrgIdentity: E_CONFIG_INVALID).
-func (a *App) SetOrgIdentity(_ context.Context, org string, e opsidentity.Entry) (string, error) {
+// A name or handle the call leaves empty keeps the one the entry has
+// (devco N-12: `identity set --org acme --key human:<new email>`, the
+// documented email change, wrote the key alone, so whoami showed the
+// email's local part and the store clone's git user became the org's
+// name). The entry as written is returned.
+func (a *App) SetOrgIdentity(_ context.Context, org string, e opsidentity.Entry) (opsidentity.Entry, string, error) {
 	err := editMachineConfig(a.opts.Home, func(root *yaml.Node) error {
 		entry := orgEntry(root, org)
 		if entry == nil {
-			return errs.New(errs.ConfigInvalid, "identity set: ~/.lore/"+ConfigFile+" has no org entry named "+strconv.Quote(org)).
+			return errs.New(errs.ConfigInvalid, "identity set: "+lorehome.Shown()+"/"+ConfigFile+" has no org entry named "+strconv.Quote(org)).
 				WithHint("lore org create or lore org import adds the entry first")
+		}
+		if old := mapGet(entry, configKeyIdentity); old != nil && old.Kind == yaml.MappingNode {
+			if e.Name == "" {
+				e.Name = scalarAt(old, "name")
+			}
+			if e.Handle == "" {
+				e.Handle = scalarAt(old, "handle")
+			}
 		}
 		n := &yaml.Node{Kind: yaml.MappingNode}
 		mapSet(n, "key", scalar(e.Key))
@@ -117,7 +132,16 @@ func (a *App) SetOrgIdentity(_ context.Context, org string, e opsidentity.Entry)
 		mapSet(entry, configKeyIdentity, n)
 		return nil
 	})
-	return configPath(a.opts.Home), err
+	return e, configPath(a.opts.Home), err
+}
+
+// scalarAt is the trimmed text of the scalar under key in mapping m, ""
+// when absent or not a scalar.
+func scalarAt(m *yaml.Node, key string) string {
+	if v := mapGet(m, key); v != nil && v.Kind == yaml.ScalarNode {
+		return strings.TrimSpace(v.Value)
+	}
+	return ""
 }
 
 // UnsetIdentity implements opsidentity.Manager (wire.UnsetIdentity plus the
@@ -192,15 +216,15 @@ func (a *App) ShowIdentity(ctx context.Context) (opsidentity.Shown, error) {
 func oldIdentityFileNotes(home string) ([]string, error) {
 	var notes []string
 	for _, f := range []struct{ name, note string }{
-		{identity.LegacyFile, "is from v0.1.17 and is read only while identity: in ~/.lore/" + ConfigFile + " is unset: `lore migrate run` moves it into identity:"},
+		{identity.LegacyFile, "is from v0.1.17 and is read only while identity: in " + lorehome.Shown() + "/" + ConfigFile + " is unset: `lore migrate run` moves it into identity:"},
 		{legacyIdentityTOML, "is from before v0.1.17 and is not read: set who you are with `lore identity set --identity <email>`; `lore identity unset` removes the old file"},
 	} {
 		switch _, err := os.Stat(filepath.Join(home, f.name)); {
 		case err == nil:
-			notes = append(notes, "~/.lore/"+f.name+" "+f.note)
+			notes = append(notes, lorehome.Shown()+"/"+f.name+" "+f.note)
 		case errors.Is(err, fs.ErrNotExist):
 		default:
-			return nil, errs.Wrap(errs.Internal, "wire: check ~/.lore/"+f.name, err)
+			return nil, errs.Wrap(errs.Internal, "wire: check "+lorehome.Shown()+"/"+f.name, err)
 		}
 	}
 	return notes, nil

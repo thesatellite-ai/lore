@@ -26,6 +26,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // storedRefsKey is the context key of WithStoredRefs.
@@ -85,7 +86,11 @@ func NullEmptyRefs(reg *schema.Registry, r row.Row) (row.Row, []string) {
 
 // readRow is r as a read returns it: empty-string refs read as null unless
 // ctx asks for the stored values.
-func (e *Engine) readRow(ctx context.Context, r row.Row) row.Row {
+//
+// Every read is also masked for secrets (readmask.go, devco:R-14): a row
+// that reached src without lore's write scan never prints its match.
+func (e *Engine) readRow(ctx context.Context, src store.Source, r row.Row) row.Row {
+	r = e.maskRead(ctx, src, r)
 	if storedRefs(ctx) {
 		return r
 	}

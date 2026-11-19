@@ -17,8 +17,8 @@ import (
 	"github.com/thesatellite-ai/lore/logic/listcap"
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/logic/textnorm"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/surface/errmask"
 )
 
 // Output formatting constants.
@@ -104,7 +104,10 @@ func printJSON(w io.Writer, r op.Result) error {
 // a table under its name, an object field an indented block. Optional
 // (omitempty) fields holding their zero value are skipped, as in the JSON.
 // pal colours the success and warning lines (colour.go; off = plain).
-func printHuman(w io.Writer, r op.Result, pal Palette, cmd string) error {
+//
+// read marks an operation that only reads (op.Spec.OnlyReads): its answer
+// is never silent (writeNothing). A write may print nothing.
+func printHuman(w io.Writer, r op.Result, pal Palette, cmd string, read bool) error {
 	v := r.Value()
 	if !v.IsValid() {
 		return nil
@@ -118,6 +121,9 @@ func printHuman(w io.Writer, r op.Result, pal Palette, cmd string) error {
 	var b strings.Builder
 	if err := writeObject(&b, v, r.Fields(), ""); err != nil {
 		return err
+	}
+	if b.Len() == 0 && read {
+		writeNothing(&b, v, r.Fields())
 	}
 	_, err := io.WriteString(w, pal.Lines(shownText(b.String(), jsonHint(cmd))))
 	return err
@@ -147,6 +153,21 @@ func writeObject(b *strings.Builder, v reflect.Value, fields []op.FieldInfo, ind
 		}
 	}
 	return nil
+}
+
+// writeNothing writes "no <name>" for each empty list field of v, for an
+// answer that would otherwise print nothing at all. Why (devco:D-504):
+// writeObject skips an empty list (emptyList), so `lore team invite list`
+// with no invites exited 0 with no output, which reads as a hang or a
+// lost answer; a read always says what it found, even nothing. Writes and
+// outputs with their own text (op.Texter: hooks that answer nothing) keep
+// their silence.
+func writeNothing(b *strings.Builder, v reflect.Value, fields []op.FieldInfo) {
+	for _, f := range fields {
+		if fv, ok := jsonField(v, f.Name); ok && emptyList(fv, f.Type) {
+			fmt.Fprintf(b, "no %s\n", strings.ReplaceAll(f.Name, "_", " "))
+		}
+	}
 }
 
 // writeTable writes a list of structs as an aligned table, one column per
@@ -352,7 +373,7 @@ func jsonField(v reflect.Value, name string) (reflect.Value, bool) {
 // with --json the spec 9.4 object on stdout, else the human line on stderr,
 // its "ERROR:" and hint coloured by pal (the stderr palette; off = plain).
 func printError(stdout, stderr io.Writer, err error, asJSON bool, pal Palette, cmd string) int {
-	env := errs.EnvelopeOf(err)
+	env := errmask.Of(err)
 	if asJSON {
 		// Envelope is a fixed struct of strings and ints: Marshal cannot
 		// fail on it, and a failing writer has nowhere left to report to.

@@ -23,6 +23,7 @@ package teamharness
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -126,6 +127,9 @@ exit 0
 
 // World is one isolated team universe. Create it with New.
 type World struct {
+	// env are variables every actor of this world runs lore with (SetEnv),
+	// before an actor's own overrides.
+	env     []string
 	T       testing.TB
 	Root    string // everything lives under here
 	Bin     string // the lore binary under test
@@ -269,7 +273,7 @@ func (w *World) baseEnv(home, actorName string) []string {
 	// variable itself is dropped above with every LORE_ one): they change what a lore process
 	// costs, never what it does.
 	env = append(env, e2eenv.LoreGoEnv()...)
-	return append(env,
+	return append(append(env,
 		"HOME="+home,
 		"USERPROFILE="+home, // os.UserHomeDir on Windows
 		"PATH="+w.shimDir+string(os.PathListSeparator)+os.Getenv("PATH"),
@@ -298,8 +302,13 @@ func (w *World) baseEnv(home, actorName string) []string {
 		EnvGitLog+"="+w.gitLog,
 		EnvLockTrace+"="+w.lockTrace,
 		EnvActorName+"="+actorName,
-	)
+	), w.env...)
 }
+
+// SetEnv makes every actor of the world run lore with key=value (an
+// actor's own SetEnv still wins): a suite-wide switch, such as the team
+// suite's LORE_LAYER=off.
+func (w *World) SetEnv(key, value string) { w.env = append(w.env, key+"="+value) }
 
 // Git runs the real git (not the wrapper) for harness bookkeeping, with an
 // isolated environment, and fails the test on error.
@@ -322,9 +331,16 @@ func (w *World) TryGit(dir string, args ...string) Result {
 // harness bug and fails the test; a non-zero exit is data.
 func (w *World) run(dir string, env []string, name string, args ...string) Result {
 	w.T.Helper()
+	return w.runStdin(dir, env, nil, name, args...)
+}
+
+// runStdin is run with stdin fed to the process (nil: none).
+func (w *World) runStdin(dir string, env []string, stdin io.Reader, name string, args ...string) Result {
+	w.T.Helper()
 	cmd := binCmd(name, args...)
 	cmd.Dir = dir
 	cmd.Env = env
+	cmd.Stdin = stdin
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if name != w.Bin {

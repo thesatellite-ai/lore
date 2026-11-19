@@ -19,6 +19,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 )
@@ -127,8 +128,8 @@ func (a *App) ConfigProblems(context.Context) []opssetup.ConfigProblem {
 func cleanProblem(p string) string {
 	p = strings.TrimSpace(p)
 	p = strings.TrimPrefix(p, orgconfPrefix)
-	for _, pre := range []string{"wire: ~/.lore/" + ConfigFile + " is not valid YAML: ", "wire: ~/.lore/" + ConfigFile + " is not valid: ",
-		"~/.lore/" + ConfigFile + ": ", ConfigFile + " is not valid YAML: ", ConfigFile + ": "} {
+	for _, pre := range []string{"wire: " + lorehome.Shown() + "/" + ConfigFile + " is not valid YAML: ", "wire: " + lorehome.Shown() + "/" + ConfigFile + " is not valid: ",
+		lorehome.Shown() + "/" + ConfigFile + ": ", ConfigFile + " is not valid YAML: ", ConfigFile + ": "} {
 		p = strings.TrimPrefix(p, pre)
 	}
 	return strings.TrimSpace(p)

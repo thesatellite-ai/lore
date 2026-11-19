@@ -164,8 +164,10 @@ func TestRenderBrokenFences(t *testing.T) {
 		},
 		{
 			name: "CRLF and a byte-order mark",
+			// devco:D-326: the block is CRLF like the rest of the file
+			// (git warns on a mixed one) and the mark stays first.
 			in:   "\ufeffBOM file\r\nwindows line\r\n",
-			want: renderPtrAt + "\n\ufeffBOM file\r\nwindows line\r\n",
+			want: "\ufeff" + strings.ReplaceAll(renderPtrAt+"\n", "\n", "\r\n") + "BOM file\r\nwindows line\r\n",
 		},
 		{
 			name: "only the block, stale target path",
@@ -228,7 +230,7 @@ func TestRenderTargetSelection(t *testing.T) {
 		}
 		// A hand-written tool file the row does not name: named, never wired.
 		c.WriteFile("CLAUDE.md", "# mine\n")
-		c.MustLore("render").Says(t, "CLAUDE.md found but not wired to lore; add it with: lore policy set --key context.targets --value \"<profiles incl. claude_code>\" --yes")
+		c.MustLore("render").Says(t, "CLAUDE.md found but not wired to lore; add it with: lore render --add-target claude_code")
 		if got := renderRead(t, c, "CLAUDE.md"); got != "# mine\n" {
 			t.Errorf("an unlisted tool file is left alone: %q", got)
 		}

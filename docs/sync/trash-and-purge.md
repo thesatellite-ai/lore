@@ -23,7 +23,7 @@ Archiving (`lore memory archive --id <id>`, `lore rule archive --id <id>`, ...) 
 
 ## Step 1 — Get back a note whose file disappeared
 
-Alice deletes a memory's file (here with `git rm`, as a teammate's commit or a revert would). The file is the note, so the memory is gone from `lore memory list` at once. It is not in lore's trash, which only holds notes deleted with a lore command; git has the file, so `git checkout` brings it back and the note is there again:
+Alice deletes a memory's file (here with `git rm`, as a teammate's commit would; a `git revert` that deletes a note's file gets it back in your work tree and a refused push until you commit it, see [Hooks](hooks-and-merge-driver.md)). The file is the note, so the memory is gone from `lore memory list` at once. It is not in lore's trash, which only holds notes deleted with a lore command; git has the file, so `git checkout` brings it back and the note is there again:
 
 <!-- example: sync#trash -->
 ```console
@@ -41,7 +41,7 @@ $ git add -A && git status --short
 
 When the deleting commit is already older, take the file from the commit before it: `git log --diff-filter=D -- .lore/data/memories/<id>.json` names that commit. lore names it for you: `lore memory show --id <id>` (any kind's `show`) and `lore trash restore --id <id>` answer an id whose file a commit removed with that commit, its author and the line that brings the file back (`git checkout <commit>^ -- :/.lore/data/memories/<id>.json`, then commit), and `lore trash list --from-history` lists such a note as `removed <date> by <author>` with the same line under it. A purged note never comes back; a removed one does.
 
-A note whose commit a force-push or a rebase dropped (the commit is on no branch any more) is missing the same way. When this clone still has that commit in its reflog (you pulled it before the force-push), the `show` answer names it and the way back: `git cherry-pick <commit>` (or only the file: `git checkout <commit> -- :/<path>`). The author's clone usually still has it too, ahead of the remote. See [Rewriting history](hooks-and-merge-driver.md#rewriting-history-rebase-amend-force-push) for what lore says before and after such a rewrite.
+A note whose commit a force-push or a rebase dropped (the commit is on no branch any more) is missing the same way. When this clone still has that commit in its reflog (you pulled it before the force-push), the `show` answer names it and the way back: `git cherry-pick <commit>` (or only the file: `git checkout <commit> -- :/<path>`). The author's clone usually still has it too, ahead of the remote. A note you committed on a detached HEAD (after `git checkout <commit>`) is on no branch either: the answer says so, with `git branch detached-<commit> <commit>` to keep the commit or `git cherry-pick <commit>` to bring it to your branch. See [Rewriting history](hooks-and-merge-driver.md#rewriting-history-rebase-amend-force-push) for what lore says before and after such a rewrite.
 
 Notes missing because you switched branches ([Branches: peek and promote](branches-peek-promote.md)) come back by themselves when you switch back, because their files are still on that branch.
 
@@ -147,7 +147,7 @@ mem_2537…6bbb [retrieved] The demo is on Friday at 10.
 ```
 <!-- /example -->
 
-`lore trash list` takes filters: `--type memories`, `--by @handle`, `--since 7d`, `--reason <text>`, `--search <text>`, `--batch <bat_id>`, `--to <store>`, and `--limit` / `--page` for long lists. `--from-history` lists rows that were purged or deleted for good, read from git history; `lore trash show --id <id> --from-history` shows such a row's last content, but it never comes back.
+`lore trash list` takes filters: `--type memories`, `--by @handle`, `--since 7d`, `--reason <text>`, `--search <text>`, `--batch <bat_id>`, `--to <store>`, `--born-branch <branch>` (rows created on that code branch), and `--limit` / `--page` for long lists. `--from-history` lists rows that were purged or deleted for good, read from git history; `lore trash show --id <id> --from-history` shows such a row's last content, but it never comes back.
 
 ## Step 5 — Undo a bulk delete
 
@@ -172,8 +172,8 @@ by type
 by store
   repo  3
 by deleter
-  act_54fe…28f2  2
-  act_28f8…03df  1
+  alice  2
+  bob  1
 tombstones (kept forever)
   repo  1
 $ lore batch list
@@ -196,6 +196,8 @@ mem_6a86…ed8c [retrieved] Production deploys on Tuesday.
 
 Preview a bulk delete with `--dry-run`; it writes nothing, so it never asks. A batch's `rows` count is the rows it wrote, each once: the single-row delete restored in Step 4 stays `1 rows (repo 1)`, and its list line adds `; restore 1, trash 1`. `lore batch list` filters with `--kind task|meta|delete|resource|import|secrets`, `--by` and `--since`; `lore batch show --all` lists every row instead of a sample. `lore trash restore --id <bat_id>` also brings back a whole delete batch.
 
+`lore trash add --born-branch <branch>` is the bulk delete for everything a code branch left behind: every note created on that branch (its origin's git branch), also after the branch landed on `main`. `--kind task` (repeatable) narrows it, `--dry-run` prints the count per kind and the rows, and without `--dry-run` it asks first (`--yes` answers) and moves them as one batch; `lore trash restore --id <id>` brings one back, `--id <bat_id>` all of them. See [Branch layers](../team/concepts.md#branch-layers-notes-that-follow-the-code-branch).
+
 ## Try it — the old local safety copies
 
 `lore trash list --local` lists this machine's safety copies, the ones an older lore (v0.1.17) kept in its `lore.db` when sync removed a file. On a repo that only ever used 0.1.18 the list is empty; on an older one, `lore trash restore --local --target <n>` puts copy `<n>` back:
@@ -212,7 +214,7 @@ this machine only: local safety copies of rows sync removed (never shared)
 ## Pitfalls
 
 - **A removed file is not in the trash.** `lore trash list` shows notes deleted with a lore command (`lore <kind> delete`, `lore sync merge-rows`), and `lore trash restore --id <id>` brings one back with the same id. A file removed with git comes back from git: `lore trash restore --id <id>` prints the `git checkout` line for it. Prefer `archive` for notes you may still want to read.
-- **`lore trash list --local` is only for copies from v0.1.17.** It lists the safety copies an older lore kept in this machine's `lore.db` when a file disappeared; 0.1.18 adds no new ones. Numbers there (`#4`) are per machine, not row ids.
+- **`lore trash list --local` is only for copies from v0.1.17.** It lists the safety copies an older lore kept in this machine's `lore.db` when a file disappeared; 0.1.18 adds no new ones. Numbers there (`#4`) are per machine, not row ids. Inside a store clone it reads that clone's own copies; a store clone never had a `lore.db`, so it says `trash is empty`.
 - **`lore sync trash` is the old spelling.** It still works in 0.1.18, prints a note that names `lore trash --local`, and goes away in the next release.
 - **Purge only touches archived rows.** A row that is not archived is never purged, however old it is.
 - **Run purge on main and commit `_purged.json`.** Purged on a feature branch only, the rows come back from main when the branch merges.

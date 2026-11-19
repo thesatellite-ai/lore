@@ -23,11 +23,14 @@ package wire
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -63,11 +66,92 @@ func sshAliasResolver(ctx context.Context) orgconf.AliasResolver {
 // the no-dot guess only for a host the config does not name. The config
 // is read on each question: it is asked only when a clone folder holds an
 // origin with the same path on another host.
+//
+// Since D-493 the backend also asks it for every ssh store url it parses
+// (Remote.Norm is the store's identity with the alias resolved), so the
+// answers are cached for the process: the ssh config is read once per
+// host per run, from the file only (no ssh process, no network).
 func init() {
-	gitbackend.SetAliasHosts(func(host string) (string, bool) {
-		al, ok := sshAliasResolver(context.Background())(host)
-		return al.HostName, ok
+	gitbackend.SetAliasHosts(aliasHostResolver(
+		func(host string) (orgconf.SSHAlias, bool) { return sshAliasResolver(context.Background())(host) },
+		setupAliasHost,
+	))
+}
+
+// aliasHostResolver is the answer SetAliasHosts installs: the HostName
+// ssh reads for host (sshConfig, cached per host for the process), else a
+// setup's github.host_alias (setupHost), asked again on every ssh miss
+// because the lore home and its setups may differ per call. devco D-684:
+// the ssh miss was cached first and answered from the cache on the next
+// call, so only a process's first question about an alias the ssh config
+// does not name (a fake or bare HOME, a machine whose ~/.ssh/config lives
+// elsewhere) reached the setup; `lore sync` in a linked client repo cloned
+// as git@<host_alias>:<owner>/<repo>.git asked first for a store url, then
+// saw its own remote unresolved, matched no link and attached no store.
+func aliasHostResolver(sshConfig orgconf.AliasResolver, setupHost func(string) (string, bool)) gitbackend.AliasHostFunc {
+	var cache sync.Map // host → aliasAnswer (the ssh config's answer only)
+	return func(host string) (string, bool) {
+		a, ok := cache.Load(host)
+		if !ok {
+			al, sok := sshConfig(host)
+			a = aliasAnswer{hostName: al.HostName, ok: sok}
+			cache.Store(host, a)
+		}
+		if ans := a.(aliasAnswer); ans.ok {
+			return ans.hostName, true
+		}
+		return setupHost(host)
+	}
+}
+
+// init gives the backend's same-store test git's own url rewrite
+// (gitbackend.SameRepoViaRewrite, devco D-680): the person's
+// url.<base>.insteadOf rules, read from git config (no network), cached
+// per git config home and url for the process. It is asked only when two
+// store spellings differ by host and the ssh config did not join them.
+func init() {
+	var cache sync.Map // HOME, GIT_CONFIG_GLOBAL, url → rewritten url
+	gitbackend.SetURLRewrite(func(raw string) string {
+		key := os.Getenv("HOME") + "\x00" + os.Getenv("GIT_CONFIG_GLOBAL") + "\x00" + raw
+		if v, ok := cache.Load(key); ok {
+			return v.(string)
+		}
+		w := orgcfg.GitRewrite(context.Background(), raw)
+		cache.Store(key, w)
+		return w
 	})
+}
+
+// setupAliasHost answers a setup's github.host_alias as github.com when the
+// ssh config does not rename host (D-531): host_alias is by definition the
+// ssh Host lore uses for this setup's github.com urls, so a code repo cloned
+// as git@<host_alias>:<owner>/<repo>.git is github.com/<owner>/<repo> even
+// where ~/.ssh/config cannot be read. Only a single-label host is looked up
+// (an alias never has a dot), so a store url on a real host reads no file.
+func setupAliasHost(host string) (string, bool) {
+	if host == "" || strings.Contains(host, ".") {
+		return "", false
+	}
+	home, err := lorehome.Resolve()
+	if err != nil {
+		return "", false
+	}
+	cfg, err := ReadSetupsConfig(home.Dir)
+	if err != nil {
+		return "", false
+	}
+	for _, e := range cfg.Setups {
+		if strings.EqualFold(strings.TrimSpace(e.GitHub.HostAlias), host) {
+			return probe.GitHubHost, true
+		}
+	}
+	return "", false
+}
+
+// aliasAnswer is one cached ssh-config answer of the alias-host resolver.
+type aliasAnswer struct {
+	hostName string
+	ok       bool
 }
 
 // typedStoreURL is a store url a person typed for a shared file, after
@@ -95,7 +179,7 @@ func (t typedStoreURL) Note() string {
 		return ""
 	}
 	c := t.Alias
-	return fmt.Sprintf("%s uses your ssh alias %s (HostName %s): the shared config gets the canonical url %s, and ~/.lore/config.yaml maps it back for this machine (access: url %s via %s)",
+	return fmt.Sprintf("%s uses your ssh alias %s (HostName %s): the shared config gets the canonical url %s, and "+lorehome.Shown()+"/config.yaml maps it back for this machine (access: url %s via %s)",
 		t.Typed, c.Alias, c.HostName, c.URL, c.Rule.URL, c.Rule.Via)
 }
 
@@ -132,8 +216,8 @@ func recordAccess(home string, t typedStoreURL) error {
 		if strings.TrimSpace(r.Via) == want.Via {
 			return nil
 		}
-		return errs.New(errs.InvalidInput, fmt.Sprintf("~/.lore/config.yaml access: already maps %s via %s, and the url typed reaches it via %s", want.URL, r.Via, want.Via)).
-			WithHint("type the canonical url (" + t.URL + "), or change that access: rule's via in ~/.lore/config.yaml to the alias you use")
+		return errs.New(errs.InvalidInput, fmt.Sprintf(lorehome.Shown()+"/config.yaml access: already maps %s via %s, and the url typed reaches it via %s", want.URL, r.Via, want.Via)).
+			WithHint("type the canonical url (" + t.URL + "), or change that access: rule's via in " + lorehome.Shown() + "/config.yaml to the alias you use")
 	}
 	return writeOrgConfig(home, func(root *yaml.Node) error { return appendAccessNode(root, want) })
 }
@@ -152,7 +236,7 @@ func appendAccessNode(root *yaml.Node, rule orgconf.Access) error {
 		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: orgconf.AccessKey}, list)
 	}
 	if list.Kind != yaml.SequenceNode {
-		return errs.New(errs.ConfigInvalid, "~/.lore/config.yaml: access: is not a list").
+		return errs.New(errs.ConfigInvalid, lorehome.Shown()+"/config.yaml: access: is not a list").
 			WithHint("make it a list of {url, via} entries (docs: store access)")
 	}
 	n := &yaml.Node{}

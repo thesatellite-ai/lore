@@ -13,6 +13,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/logic/dirscope"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -211,6 +212,9 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	// 6.2.3 / CQ12: --scope picks the store, repo and folder.
+	if err := opsscope.RefuseLive(in.Scope, in.Live, in.NoLive); err != nil {
+		return WriteOut{}, err
+	}
 	st, err := opsscope.ForWrite(ctx, o.env, in.Scope, in.To, in.Repo, false)
 	if err != nil {
 		return WriteOut{}, err
@@ -247,6 +251,7 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 			return WriteOut{}, err
 		}
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.env); v != nil {
 		fields[fieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}
@@ -269,6 +274,9 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	var old ids.ID[ids.Memory]
 	var oldSrc store.Source
 	var carry metalist.Carry // 3.19: --supersedes carries the metadata over unless --no-meta
+	if err := metalist.NoMetaNeedsSupersedes(in.NoMeta, in.Supersedes); err != nil {
+		return WriteOut{}, err
+	}
 	if in.Supersedes != "" {
 		var oldRow row.Row
 		if old, oldSrc, oldRow, err = o.checkSupersedes(ctx, project, in.Supersedes); err != nil {
@@ -311,14 +319,26 @@ func (o ops) add(ctx context.Context, in AddIn) (WriteOut, error) {
 	}
 	out := writeOut(src, w)
 	out.CarriedMeta = carry.Count
-	scope := badgeMaster
-	if in.Repo != "" {
-		scope = "repo:" + in.Repo
-	}
 	// v0.1.17: "✓ <id> <label>" ("" in the repo, keeping its space), then
 	// the scope line.
-	out.Human = strings.TrimSpace(mark+" "+out.ID+" "+Label(LabelerOf(o.env), src)) + "\n  scope: [" + scope + "]\n" + carry.Line()
+	out.Human = strings.TrimSpace(mark+" "+out.ID+" "+Label(LabelerOf(o.env), src)) + "\n  scope: [" + addScopeLabel(st, in.Repo) + "]\n" + carry.Line()
 	return out, nil
+}
+
+// addScopeLabel is the scope the add line prints. --scope global or
+// dir:<path> prints itself, as rule add does (devco O-4: a global memory
+// printed [project]); otherwise v0.1.17's badge: repo:<repo> with a repo,
+// else project.
+func addScopeLabel(st opsscope.Target, repo string) string {
+	switch st.Spec.Kind {
+	case dirscope.KindGlobal, dirscope.KindDir:
+		return st.Spec.Label()
+	case dirscope.KindDefault, dirscope.KindOrg, dirscope.KindProject, dirscope.KindRepo:
+	}
+	if repo != "" {
+		return "repo:" + repo
+	}
+	return badgeMaster
 }
 
 // maxAddKey bounds an idempotency key (it is hashed into the id and

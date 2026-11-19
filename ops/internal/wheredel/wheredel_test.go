@@ -204,6 +204,7 @@ var noTrashReason = map[string]string{
 	"resource.field.remove": "edits the kind's field list; no row is deleted",
 	"setup.remove":          "a machine-local setup in the setup trash, not a store row",
 	"store.remove":          "detaches a store; its rows stay",
+	"org.store.remove":      "drops a store from lore-org.yaml; the store and its rows stay",
 	"task.checklist.rm":     "an in-row tombstone on the checklist item",
 	"task.time.rm":          "an in-row tombstone on the time entry",
 	"team.remove":           "marks the team removed (active false, left_at); its row stays so tasks that named it still read",

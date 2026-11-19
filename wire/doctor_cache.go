@@ -26,7 +26,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
@@ -95,7 +97,7 @@ func (c *machineDoctorCache) Close() error { return c.db.Close() }
 // the entry's own fields that its checks read, plus the entry. Each part
 // that cannot be read adds a fixed marker, so "unreadable" is a state of
 // its own and a later readable value is a change.
-func (a *App) DoctorStamp(_ context.Context, e onboard.SetupEntry) string {
+func (a *App) DoctorStamp(ctx context.Context, e onboard.SetupEntry) string {
 	h := sha256.New()
 	part := func(s string) {
 		h.Write([]byte(s))
@@ -125,7 +127,27 @@ func (a *App) DoctorStamp(_ context.Context, e onboard.SetupEntry) string {
 	}
 	part(personal)
 	part(topIdentityStamp(a.opts.Home)) // identity.top_level reads it (doctor_identitysource.go)
+	part(gitConfigStamp(ctx))           // identity.git_email reads the git config and its includes: an edit re-probes at once (devco D-605)
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+// gitConfigStamp is the size and time of every global git config file and
+// file it includes (setuphealth_age.go gitConfigStates): a setup check run
+// right after a git config edit got the cached result from before it for
+// up to a minute, and its stale warning went on to setup list (devco
+// D-605).
+func gitConfigStamp(ctx context.Context) string {
+	states := gitConfigStates(ctx)
+	files := make([]string, 0, len(states))
+	for f := range states {
+		files = append(files, f)
+	}
+	sort.Strings(files)
+	var b strings.Builder
+	for _, f := range files {
+		b.WriteString(f + "@" + states[f] + "\x00")
+	}
+	return b.String()
 }
 
 // stampUnreadable stands for a stamp input that could not be read.

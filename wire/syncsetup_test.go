@@ -1,10 +1,12 @@
 package wire
 
 import (
+	"strings"
 	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/model/errs"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	opssync "github.com/thesatellite-ai/lore/ops/sync"
 )
 
@@ -26,13 +28,18 @@ func TestSyncSetupHelpers(t *testing.T) {
 	if c := sameCode([]errs.Code{errs.Stale, errs.Internal}); c != errs.Stale {
 		t.Errorf("mixed: %s", c)
 	}
-	lines := syncStoreLines(opssync.StoreReport{Store: "notes-two", Status: opssync.StoreStatusFailed, Error: "no such repo", Next: "check the url"})
+	lines := syncStoreLines(opssync.StoreReport{Store: "notes-two", Status: opssync.StoreStatusFailed, Error: "no such repo", Next: "check the url"}, "")
 	if len(lines) != 2 || lines[0] != "store notes-two: FAILED: no such repo" || lines[1] != "  next: check the url" {
 		t.Errorf("failed lines: %q", lines)
 	}
-	lines = syncStoreLines(opssync.StoreReport{Store: "acme", Status: opssync.StoreStatusPulled, Received: 2})
-	if len(lines) != 1 || lines[0] != "store acme: pulled (sent 0, received 2, merged 0)" {
+	lines = syncStoreLines(opssync.StoreReport{Store: "acme", Status: opssync.StoreStatusPulled, Received: 2}, "")
+	if len(lines) != 1 || lines[0] != "store acme: pulled (sent 0, received 2, merged 0, refused 0)" {
 		t.Errorf("pulled lines: %q", lines)
+	}
+	// devco J-4: a push of commits with no row is said, not "up to date"
+	lines = syncStoreLines(opssync.StoreReport{Store: "client-store", Status: opssync.StoreStatusPushed, Pushed: true}, "")
+	if len(lines) != 1 || lines[0] != "store client-store: pushed (sent 0, received 0, merged 0, refused 0)"+syncPushedNoRows {
+		t.Errorf("pushed-no-rows lines: %q", lines)
 	}
 }
 
@@ -43,5 +50,39 @@ func TestStoreIdentityFix(t *testing.T) {
 	want := "git -C /home/pat/.lore/stores/acme/notes config user.email pat@work.example && git -C /home/pat/.lore/stores/acme/notes config user.name 'Pat Person'"
 	if got != want {
 		t.Errorf("fix =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// TestWaitingPushReport (devco D-224): an org store clone pushed by the
+// sync outside a code repo is one store line: pushed, offline (exit with
+// E_STORE_UNREACHABLE and the next step) or failed with its problem.
+func TestWaitingPushReport(t *testing.T) {
+	const url = "git@git.example.invalid:acme/lore-x.git"
+	r, code := waitingPushReport(url, opsstores.Report{Store: "lore-x", Sent: 1, Pushed: true})
+	if code != "" || r.Status != opssync.StoreStatusPushed || !r.Pushed || r.URL != url {
+		t.Fatalf("pushed: %+v %q", r, code)
+	}
+	if got := syncStoreLines(r, "")[0]; got != "store lore-x: pushed (sent 1, received 0, merged 0, refused 0)" {
+		t.Errorf("pushed line = %q", got)
+	}
+	// devco D-561: a push that sent no commit (only a branch made by hand
+	// in the clone was ahead) is no push: no "pushed", no no-rows tail
+	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x"})
+	if code != "" || r.Status != opssync.StoreStatusUpToDate || r.Pushed {
+		t.Fatalf("nothing sent: %+v %q", r, code)
+	}
+	if got := syncStoreLines(r, "")[0]; strings.Contains(got, "pushed") {
+		t.Errorf("nothing-sent line claims a push: %q", got)
+	}
+	if rep := orgPushReport("lore-x", opsstores.PushOut{}, storeNowPush{}, nil); rep.Pushed {
+		t.Errorf("orgPushReport of a push that sent 0 commits says pushed: %+v", rep)
+	}
+	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Offline: true})
+	if code != errs.StoreUnreachable || r.Status != opssync.StoreStatusOffline || !strings.Contains(r.Next, url) {
+		t.Fatalf("offline: %+v %q", r, code)
+	}
+	r, code = waitingPushReport(url, opsstores.Report{Store: "lore-x", Problems: []string{"rejected"}})
+	if code != errs.StoreUnreachable || r.Status != opssync.StoreStatusFailed || r.Error != "rejected" || !strings.Contains(r.Next, "lore store push --store "+url) {
+		t.Fatalf("failed: %+v %q", r, code)
 	}
 }

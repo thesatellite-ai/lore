@@ -31,6 +31,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // csErr is the spec 9.4 error object a --json refusal prints.
@@ -399,7 +401,7 @@ func csStartAPI(t *testing.T, m *Machine, cwd string) *csAPI {
 			t.Fatal(err)
 		}
 		return &csAPI{base: mm[1], token: strings.TrimSpace(string(b))}
-	case <-time.After(30 * time.Second):
+	case <-time.After(testtime.Scale(30 * time.Second)):
 		t.Fatal("lore api printed no listening line")
 	}
 	return nil

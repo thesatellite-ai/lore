@@ -1,6 +1,6 @@
 # Where lore keeps things: `lore where` and lore's home
 
-**In short:** lore keeps its own files in one folder per machine (`~/.lore`), in a `.lore/` folder in each code repo, in a few marked blocks of files it shares with you (`.gitignore`, `.gitattributes`, `CLAUDE.md`, git hooks) and in a few git config entries. `lore where` (also spelled `lore files`) lists every one of them on this machine and in the repo you run it in, one line each, with what it is. `~/.lore/README.md` explains the home folder in plain words. Nothing is hidden: when lore writes into your repo or its git config for the first time it says what and where.
+**In short:** lore keeps its own files in one folder per machine (`~/.lore`, or the absolute folder `LORE_HOME` names; the first line of `lore where` says which and why), in a `.lore/` folder in each code repo, in a few marked blocks of files it shares with you (`.gitignore`, `.gitattributes`, `CLAUDE.md`, git hooks) and in a few git config entries. `lore where` (also spelled `lore files`) lists every one of them on this machine and in the repo you run it in, one line each, with what it is. `~/.lore/README.md` explains the home folder in plain words. Nothing is hidden: when lore writes into your repo or its git config for the first time it says what and where.
 
 ## What it is and when you want it
 
@@ -14,19 +14,24 @@ Run it anywhere; inside a repo it adds that repo's files:
 ```console
 # alice, in website
 $ lore where
+lore home: ~/.lore (default; set LORE_HOME to an absolute folder to move it)
 lore's home: ~/.lore
   README.md
       this map of lore's home, written by lore and rewritten when the layout changes
   cache
       rebuildable caches: everything here is made again from the row files when deleted
+  cache/gitfast
+      git answers kept between commands so an everyday command starts few git processes: each repo folder's git config with the files it came from, and the history and org checks of each store at one commit; an answer is dropped when a config file or git itself changes, and the oldest go past 256 files
   cache/machine-store.db
       the cache of state/machine.db, arranged for search
   cache/repo
       one cache per code repo checkout, of the rows in its .lore/data: repo/<repo folder name>-<short hash of the repo path>.db (kept here so a command never creates a file in the repo)
   cache/repo/website-<hash>.db
       a code repo's cache; used by ~/work/website
+  cache/repo/website-<hash>.db.lore-dir-ignored
+      a code repo's cache
   cache/stores
-      one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each)
+      one cache file per store folder: stores/<store id>/<branch>/<folder>.db (`lore where` names the store and the repos that use each); a code branch that keeps its own notes (isolated: `lore branch mode`) reads a store folder through its own cache, stores/<store id>/<branch>/_layers/<repo key>/<branch key>/<folder>.db (repo key: 12 hex digits of the repo's remote; branch key: the branch name with / written %2F), while a shared branch (the default branch, dev, staging, release/*, one marked `lore branch share`) reads the folder's own cache; a layer cache is removed when that branch's notes are landed, dropped or purged, when the branch becomes shared, by `lore doctor --fix` (doctor lists a stray one), and by `lore cache prune` once no repo reads it
   cache/stores/sto_7a67…9504/main/root.db
       a store folder's cache; store notes; used by ~/work/website
   cache/uses
@@ -81,6 +86,8 @@ this repo: ~/work/website
       lore's block: row files merge with lore's merge driver and show collapsed in diffs
   .git/config [remote.origin.fetch]
       fetches lore's live refs with every git fetch
+  .git/config [lore.initedhere]
+      this clone ran lore init or the migration, so its commit brings the repo's first render and wiring files (teammates' clones keep theirs out of git status until then)
   .git/config [merge.lore.name]
       the merge driver git runs for lore's row files (lore merges them field by field)
   .git/config [merge.lore.driver]
@@ -138,7 +145,7 @@ machine.json
 state
 stores
 $ head -20 ~/.lore/README.md
-<!-- written by lore, layout 2026-11-12.4; lore rewrites this file when its layout changes -->
+<!-- written by lore, layout 2026-11-15.2; lore rewrites this file when its layout changes -->
 # lore's home on this machine
 This folder is where lore keeps what belongs to this machine: its settings, the stores it cloned, caches and small state files. Your notes themselves live in stores (git repositories or folders) and in your code repos' .lore/data folders; nothing here is synced by itself.
 `lore where` lists every file lore keeps on this machine and in the repo you run it in, one line each, with the store and repo each cache file belongs to (`lore where --json` for scripts). It also names anything in this folder lore does not recognise; lore never deletes such a file.
@@ -195,13 +202,15 @@ The first time lore writes any of these it says so, with the file and the lines 
 
 A repo that holds no lore data of its own (a client repo whose notes live in a store folder, with at most `.lore/stores.yaml`) never gets a tracked file changed by lore, `lore fix` included: no `.gitignore` lines and no `.gitattributes` block. lore's local files stay out of git status through `.git/info/exclude`, and lore says so the first time. In a project someone migrated with `lore migrate run`, only the clone that ran it (git config `lore.migratedhere`) adds lore's lines to the tracked `.gitignore` and `.gitattributes` on its next write; other clones keep the same rules in `.git/info/exclude` and `.git/info/attributes` until that commit reaches them, and `lore doctor --fix` or `lore fix` writes the tracked lines anywhere ([Upgrading](upgrade.md)).
 
+A repo whose `.gitignore` ignores `.lore/` keeps the project private to this machine: lore writes into no file the repo tracks (no `.gitattributes` block, no pointer block in `CLAUDE.md` or `AGENTS.md`, no hook block in a committed hooks folder) and says so once, in one line that starts `git ignores lore data` and names the `.gitignore` rule. A client repo is not such a project: its `.lore/` is committed, so its pointer stays in its tools' files. `.lore/LORE.md` is still rendered, and Claude Code reads it through the pointer in `CLAUDE.local.md`, which lore excludes in `.git/info/exclude`; a tool with no such local file gets the notes from `lore context` or the agent hooks.
+
 `lore fix` (and `lore doctor --fix`, which runs the same steps) checks again after fixing: the status it prints is the state after the fixes, and a `Fixed` list under it names what changed (`fixed` in `--json`).
 
 ## Reads change nothing; writes say where
 
 A command that only reads (`list`, `show`, `search`, `whoami`, `doctor`, `where`, …) never writes into your repo, its `.git` or a store clone's files, and never pushes. It may fetch a store, and when commits wait in a store clone it says `N local commit(s) wait to be pushed; a read never pushes: run lore sync`, once: the next reads stay quiet until the count changes or the store comes back online.
 
-A command that writes names each row file it wrote (`lore: wrote /home/pat/code/app/.lore/data/memories/mem_….json`, or a count per folder when there are many), and every push names the store, the commit and the branch: `lore: pushed store notes: commit 1a2b3c4 to branch main`.
+A command that writes names each row file it wrote (`lore: wrote /home/pat/code/app/.lore/data/memories/mem_….json`, or a count per folder when there are many), and every push names the store, the commit and the branch, with the commits and row files it sent as `git rev-list` and `git diff` count them: `lore: pushed store notes: commit 1a2b3c4 to branch main (3 commits, 4 row files)`. A row written to a folder of an org store is named by its folder (`(store acme/web)`), as search and the lists name it, and one push that carried several folders of a store clone is one line for the whole clone: `lore: pushed store acme (the store clone: folders org, web): …`.
 
 A command that only reads also never sets up git: it does not install the merge driver, hooks, attributes or a clone's identity, in a code repo or a store clone. When something is missing it prints at most one line naming the command that sets it up (`lore sync`, `lore fix`, or the next write), and that command says what it wrote.
 

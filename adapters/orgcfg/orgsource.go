@@ -21,6 +21,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -91,10 +92,23 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 // readSuggestionFile reads the lore-org.yaml at p in tip (folder its org
 // folder); found is false when tip has no file there.
 func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, storeID string) (Suggestion, bool, error) {
-	raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+p)
-	if rerr != nil {
+	if _, rerr := gitRun(ctx, "-C", dir, "cat-file", "-e", tip+":"+p); rerr != nil {
 		return Suggestion{}, false, nil // no lore-org.yaml here
 	}
+	// R-7 (C30): only an admin's change to the org file is read; a
+	// change by anyone else is held back and named (orgauthority.go).
+	at, held := acceptedOrgFile(ctx, dir, tip, folder)
+	if len(held) > 0 && at == "" {
+		return Suggestion{Held: held}, false, fmt.Errorf("%w: %s@%s (every version of %s was held back: %s)", ErrNoOrgFile, norm, branch, p, held[0])
+	}
+	if at == "" {
+		at = tip
+	}
+	raw, ap, ok := readFirstBlob(ctx, dir, at, orgFilePaths(folder))
+	if !ok {
+		return Suggestion{}, false, nil
+	}
+	p = ap
 	doc, perr := parseOrgFileDoc(raw)
 	if perr != nil {
 		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, perr)
@@ -102,20 +116,46 @@ func readSuggestionFile(ctx context.Context, dir, tip, p, folder, norm, branch, 
 	if serr := doc.checkShortNames(); serr != nil {
 		return Suggestion{}, false, fmt.Errorf("orgcfg: %s in %s: %w", p, norm, serr)
 	}
-	blob, berr := gitRun(ctx, "-C", dir, "rev-parse", tip+":"+p)
+	blob, berr := gitRun(ctx, "-C", dir, "rev-parse", at+":"+p)
 	if berr != nil {
 		return Suggestion{}, false, berr
 	}
-	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p}, true, nil
+	return Suggestion{Doc: doc, Folder: folder, StoreURL: norm, Branch: branch, Version: strings.TrimSpace(blob), StoreID: storeID, Path: p, Held: held, dir: dir, at: at}, true, nil
 }
 
 // Shared is the suggestion's shared fields as an org entry holds them.
 func (s Suggestion) Shared() orgconf.Shared {
 	sh := orgconf.Shared{Own: s.Doc.Own, Repos: s.Doc.Repos, Defaults: orgconf.OrgDefaults{ClientRepos: s.Doc.Defaults.ClientRepos}}
 	for _, st := range s.Doc.Stores {
-		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Name: st.Name, Branch: st.Branch, OrgFolder: st.OrgFolder})
+		sh.Stores = append(sh.Stores, orgconf.Store{URL: st.URL, Name: st.Name, Branch: st.Branch, OrgFolder: st.OrgFolder, Audience: orgconf.Audience(st.Audience)})
 	}
 	return sh
+}
+
+// SharedFor is Shared as the org entry of the person with identity key
+// (human:<email>) holds it (D-442): the whole file for an admin of the
+// org (an open roster stint with org_role admin in the org folder, at the
+// commit the file was read at, as for an org-file change, R-7), else
+// without the admins-only stores, which come back as skipped. A file with
+// no admins-only store skips the roster read.
+func (s Suggestion) SharedFor(ctx context.Context, key string) (orgconf.Shared, []orgconf.Store) {
+	sh := s.Shared()
+	if !sh.HasAdminsOnly() {
+		return sh, nil
+	}
+	return sh.ForPerson(s.IsAdmin(ctx, key))
+}
+
+// IsAdmin reports whether the person with identity key is an admin of the
+// org at the commit the suggestion was read at. No key, or a suggestion
+// not read from a clone, is no admin (a member's copy: fail safe, they
+// only miss the admins' store).
+func (s Suggestion) IsAdmin(ctx context.Context, key string) bool {
+	email, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(key)), "human:")
+	if !ok || email == "" || s.dir == "" || s.at == "" {
+		return false
+	}
+	return orgAdminAt(ctx, s.dir, s.at, s.Folder, email)
 }
 
 // Source is the stamp a config copy of this suggestion carries.
@@ -148,6 +188,10 @@ type OrgFileMoveResult struct {
 	Pushed, Offline, NoPush bool
 	// Suggestion is the file as it now reads (its new blob id).
 	Suggestion Suggestion
+	// Undone is true when this move put the file back as it was before
+	// the clone's last move, which was never pushed: both move commits
+	// were dropped (dropNetZeroMove), so nothing waits to be sent.
+	Undone bool
 }
 
 // MoveOrgFileStore rewrites the store urls in lore-org.yaml after a store
@@ -175,6 +219,7 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 			if !found {
 				return nil, fmt.Errorf("%w: %s@%s", ErrNoOrgFile, norm, branch)
 			}
+			old = acceptedOrgRaw(ctx, dir, tip, cur.Folder, old)
 			doc, perr := parseOrgFileDoc(string(old))
 			if perr != nil {
 				return nil, fmt.Errorf("orgcfg: %s in %s: %w", path, norm, perr)
@@ -193,10 +238,77 @@ func (g *GitLinks) MoveOrgFileStore(ctx context.Context, m OrgFileMove) (OrgFile
 	if err != nil {
 		return res, err
 	}
+	if res.Changed && !res.Pushed {
+		res.Undone = dropNetZeroMove(ctx, dir, branch)
+	}
 	if res.Suggestion, err = g.suggestionAt(ctx, dir, norm, branch); err != nil {
 		return res, err
 	}
 	return res, nil
+}
+
+// dropNetZeroMove drops the last two commits of branch in the store clone
+// at dir when they are two unpushed store moves that cancel out (set-url
+// to an address and straight back): the branch's tree is the one before
+// both, so they change nothing, and the first may carry a path on this
+// machine into the org's history (D-565, owner use pass: the round trip
+// left two commits for the next sync to push). Anything else between or
+// on top (a note, a pushed move) keeps every commit. It reports whether
+// it dropped them; a git failure keeps them.
+func dropNetZeroMove(ctx context.Context, dir, branch string) bool {
+	ctx, unlock, err := gitbackend.LockClone(ctx, dir)
+	if err != nil {
+		return false
+	}
+	defer unlock()
+	git := func(args ...string) (string, bool) {
+		out, gerr := gitRun(ctx, append([]string{"-C", dir}, args...)...)
+		return strings.TrimSpace(out), gerr == nil
+	}
+	head := "refs/heads/" + branch
+	subjects, ok := git("log", "-2", "--format=%s", head)
+	lines := strings.Split(subjects, "\n")
+	if !ok || len(lines) != 2 || !isOrgMoveSubject(lines[0]) || !isOrgMoveSubject(lines[1]) {
+		return false
+	}
+	now, ok1 := git("rev-parse", "--verify", "--quiet", head+"^{tree}")
+	before, ok2 := git("rev-parse", "--verify", "--quiet", head+"~2^{tree}")
+	if !ok1 || !ok2 || now != before {
+		return false
+	}
+	if movePushed(git, head+"~1", trackingRef(branch)) {
+		return false // the first move reached a remote: its undo must go there too
+	}
+	if cur, _ := git("symbolic-ref", "--quiet", "HEAD"); cur != head {
+		return false // the clone has another branch out: leave it to the person
+	}
+	_, ok = git("reset", "--keep", head+"~2")
+	return ok
+}
+
+// movePushed reports whether commit ever reached a remote: whether the
+// tracking ref holds it now or held it at any point its reflog recorded.
+// The reflog matters: set-url re-points origin, so after a move to another
+// address the tracking ref follows that address and no longer shows what
+// the old one got. No reflog to read answers true: nothing is dropped on
+// a guess.
+func movePushed(git func(args ...string) (string, bool), commit, track string) bool {
+	tips, ok := git("reflog", "show", "--format=%H", track)
+	if !ok || tips == "" {
+		return true
+	}
+	for _, tip := range append(strings.Split(tips, "\n"), track) {
+		if _, in := git("merge-base", "--is-ancestor", commit, tip); in {
+			return true
+		}
+	}
+	return false
+}
+
+// isOrgMoveSubject reports a commit subject MoveOrgFileStore writes.
+func isOrgMoveSubject(subject string) bool {
+	org, rest, ok := strings.Cut(strings.TrimPrefix(subject, "lore: org "), " store moved to ")
+	return ok && org != "" && rest != "" && strings.HasPrefix(subject, "lore: org ")
 }
 
 // MoveStoreURLs points every stores[].url of doc naming one of old at

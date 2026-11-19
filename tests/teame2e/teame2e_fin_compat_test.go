@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/thesatellite-ai/lore/model/fspath"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 	"github.com/thesatellite-ai/lore/tests/tmpworld"
 )
@@ -90,7 +91,11 @@ func buildOldLore() (string, error) {
 		return "", err
 	}
 	oldBinDir = dir
-	src := filepath.Join(dir, "src")
+	// canonical (devco D-413, M-12): go build compares GOWORK with the
+	// folder it runs in, which it reads resolved; under a linked temp
+	// folder (macOS /var -> /private/var) the two spellings differed and
+	// go refused the build ("not one of the workspace modules")
+	src := filepath.Join(fspath.Canonical(dir), "src")
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		return "", err
 	}
@@ -217,7 +222,7 @@ func TestFinCompat_V017FreshCloneRefusesTreeRows(t *testing.T) {
 	rt.c1.MustLore("task", "edit", l, "--assign", d1, "--lead", d1, "--no-live")
 	rt.c1.CommitAll("tasks")
 	rt.c1.Git("pull", "-q", "--rebase", "origin", "main")
-	rt.c1.AdminPush("origin", "main")
+	rt.c1.AdminPushLanding("origin", "main") // U-2: the actor row on live lands with this push
 	if m, _ := rt.c1.ReadFile(".lore/data/_meta.json"); !strings.Contains(m, "task_tree") {
 		t.Fatalf("the first parent_id write declares task_tree in _meta.json (TASK_SYSTEM 23):\n%s", m)
 	}
@@ -313,7 +318,7 @@ func TestFinCompat_V017ExistingCloneSkipsTreeRows(t *testing.T) {
 	c1.MustLore("task", "edit", legacy, "--parent", p, "--assign", d1, "--lead", d1, "--no-live")
 	c1.CommitAll("tree and lead on 0.1.18")
 	c1.Git("pull", "-q", "--rebase", "origin", "main")
-	c1.AdminPush("origin", "main")
+	c1.AdminPushLanding("origin", "main") // U-2: the actor row on live lands with this push
 
 	// The v0.1.17 clone pulls. Its own .gitignore line is dropped first
 	// (v0.1.17 appends one on every run; it is not what this test is about).

@@ -21,11 +21,14 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
@@ -52,8 +55,27 @@ const orgRefreshLockWait = 200 * time.Millisecond
 // refresh the org entries from their stores' lore-org.yaml, then refuse
 // writes to a second address of a store id.
 func afterAttach(ctx context.Context, home, top string, opened []attach.Opened, urls map[store.Source]string) {
-	refreshOrgSources(ctx, home)
+	refreshOrgSources(ctx, home, urls)
 	markSplitAddresses(home, top, opened, urls)
+}
+
+// orgsOfStores returns the names of the org entries that list one of the
+// store urls a command opened, or nil when none does (a folder in no org).
+func orgsOfStores(cfg *orgconf.Config, urls map[store.Source]string) map[string]bool {
+	var out map[string]bool
+	for i := range cfg.Orgs {
+		for _, sc := range cfg.Orgs[i].Stores {
+			for _, u := range urls {
+				if storeaddr.Same(sc.URL, u) {
+					if out == nil {
+						out = map[string]bool{}
+					}
+					out[cfg.Orgs[i].Name] = true
+				}
+			}
+		}
+	}
+	return out
 }
 
 // orgSuggestionLocal is the lore-org.yaml org o's store holds on this
@@ -76,30 +98,74 @@ func orgSuggestionLocal(ctx context.Context, home string, cfg *orgconf.Config, o
 }
 
 // refreshOrgSources is the automatic refresh (see the file comment). Best
-// effort: any failure leaves the entry for the doctor.
-func refreshOrgSources(ctx context.Context, home string) {
+// effort: any failure leaves the entry for the doctor. Only the entries
+// whose stores this command opened (urls) are refreshed, so a command in
+// org A's repo never reads org B's store clone (devco D-278); a command
+// that opened no org's store refreshes every entry, as before.
+func refreshOrgSources(ctx context.Context, home string, urls map[store.Source]string) {
 	cfg, _, err := orgcfg.LoadConfig(home)
 	if err != nil || cfg == nil {
 		return
 	}
+	only := orgsOfStores(cfg, urls)
 	for i := range cfg.Orgs {
 		o := &cfg.Orgs[i]
+		if only != nil && !only[o.Name] {
+			continue // another org's store: its own repos refresh it
+		}
 		sg, ok := orgSuggestionLocal(ctx, home, cfg, o)
 		if !ok {
 			continue
 		}
+		mine, _ := sg.SharedFor(ctx, orgPersonKey(cfg, o))
 		switch orgconf.StateOf(o, sg.StoreID, sg.Version) {
 		case orgconf.SourceCurrent:
-			continue
+			if !adminsOnlyDiffer(orgconf.SharedOf(o), mine) {
+				continue
+			}
+			// D-442: the file is unchanged but the person's role is not
+			// (made an admin: the admins' store comes in; no longer one:
+			// it goes), so the entry is copied again.
 		case orgconf.SourceStale:
 		case orgconf.SourceUnstamped, orgconf.SourceOtherStore:
-			if !orgconf.SharedOf(o).Equal(sg.Shared()) {
+			if !orgconf.SharedOf(o).Equal(mine) {
 				continue // the person decides: doctor, lore org refresh
 			}
 		}
-		sh, _ := keepMovedStores(home, orgconf.SharedOf(o), sg.Shared())
+		sh, _ := keepMovedStores(home, orgconf.SharedOf(o), mine)
 		_ = writeOrgSource(home, orgRefreshLockWait, o.Name, sh, sg.Source()) // best effort, see above
 	}
+}
+
+// orgPersonKey is the identity key of the person org entry o speaks for:
+// the entry's own, else the config's top-level identity (F10 rule 6).
+func orgPersonKey(cfg *orgconf.Config, o *orgconf.Org) string {
+	if o.Identity.Key != "" {
+		return o.Identity.Key
+	}
+	return cfg.Identity.Key
+}
+
+// mineOf is lore-org.yaml sg as org entry o's person holds it (D-442: no
+// admins-only store for a member) and the stores left out for them.
+func mineOf(ctx context.Context, cfg *orgconf.Config, o *orgconf.Org, sg orgcfg.Suggestion) (orgconf.Shared, []orgconf.Store) {
+	return sg.SharedFor(ctx, orgPersonKey(cfg, o))
+}
+
+// adminsOnlyDiffer reports whether the entry's copy have and the person's
+// copy of the current file want list different admins-only stores: the
+// person's role changed since the copy (D-442).
+func adminsOnlyDiffer(have, want orgconf.Shared) bool {
+	names := func(sh orgconf.Shared) []string {
+		var out []string
+		for _, s := range sh.Stores {
+			if s.AdminsOnly() {
+				out = append(out, s.URL)
+			}
+		}
+		return out
+	}
+	return !slices.Equal(names(have), names(want))
 }
 
 // keepMovedStores is sh (lore-org.yaml's copy) with each store url that
@@ -164,7 +230,7 @@ func orgEntryNode(root *yaml.Node, name string) *yaml.Node {
 func setOrgSourceNode(root *yaml.Node, name string, sh orgconf.Shared, src orgconf.OrgSource) error {
 	entry := orgEntryNode(root, name)
 	if entry == nil {
-		return errs.New(errs.NotFound, "no org entry named "+name+" in ~/.lore/"+ConfigFile)
+		return errs.New(errs.NotFound, "no org entry named "+name+" in "+lorehome.Shown()+"/"+ConfigFile)
 	}
 	if err := setOrgKey(entry, orgKeyStores, sh.Stores, len(sh.Stores) == 0); err != nil {
 		return err
@@ -224,6 +290,11 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 		if !ok {
 			continue
 		}
+		if _, skipped := mineOf(ctx, cfg, o, sg); len(skipped) > 0 {
+			// D-442: say why a store of the org is not on this machine, as
+			// information: nothing to fix
+			out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorNote, Message: strings.TrimPrefix(skippedStoresNote(o.Name, skipped), " · ")})
+		}
 		msg := ""
 		switch orgconf.StateOf(o, sg.StoreID, sg.Version) {
 		case orgconf.SourceCurrent:
@@ -231,7 +302,7 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 		case orgconf.SourceStale:
 			msg = "org entry " + o.Name + " is older than the store's suggestion (" + orgFileShown(sg) + " is at version " + short(sg.Version) + ", the entry copied " + short(o.Source.Version) + ")"
 		case orgconf.SourceUnstamped, orgconf.SourceOtherStore:
-			if orgconf.SharedOf(o).Equal(sg.Shared()) {
+			if mine, _ := mineOf(ctx, cfg, o, sg); orgconf.SharedOf(o).Equal(mine) {
 				continue // stamped by the next open
 			}
 			msg = "org entry " + o.Name + " differs from the store's suggestion " + orgFileShown(sg) + " and records no source version (stores, own, repos or defaults were changed by hand or by an older lore)"
@@ -239,6 +310,19 @@ func (a *App) DoctorOrgSources(ctx context.Context) ([]DoctorFinding, error) {
 		out = append(out, DoctorFinding{Check: DoctorCheckOrgSource, Level: DoctorWarning, Message: msg, Fix: "lore org refresh --org " + o.Name})
 	}
 	return out, nil
+}
+
+// skippedStoresNote is " · " and the sentence naming the admins-only
+// stores of org a member's entry leaves out (D-442), "" when none.
+func skippedStoresNote(org string, skipped []orgconf.Store) string {
+	if len(skipped) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(skipped))
+	for _, s := range skipped {
+		names = append(names, s.ShortName())
+	}
+	return " · " + org + "'s store " + strings.Join(names, ", ") + " is for the org's admins (audience: admins in lore-org.yaml); you are not an admin of " + org + ", so lore does not clone or read it (it comes in at your next sync if you are made an admin)"
 }
 
 // orgFileShown names lore-org.yaml in its store.
@@ -268,7 +352,7 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 	}
 	o := cfg.FindOrg(in.Org)
 	if o == nil {
-		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in ~/.lore/config.yaml").
+		return opsorgcmd.Report{}, errs.New(errs.NotFound, "no org entry named "+in.Org+" in "+lorehome.Shown()+"/config.yaml").
 			WithHint("entries: lore config check lists them; join one with lore org import --url <url>")
 	}
 	sc := o.OrgFolderStore()
@@ -286,7 +370,8 @@ func (h *standaloneOrg) Refresh(ctx context.Context, in opsorgcmd.RefreshIn) (op
 	}
 	before := orgconf.SharedOf(o)
 	state := orgconf.StateOf(o, sg.StoreID, sg.Version)
-	after, kept := keepMovedStores(h.home, before, sg.Shared())
+	mine, _ := mineOf(ctx, cfg, o, sg)
+	after, kept := keepMovedStores(h.home, before, mine)
 	keptLines := make([]string, 0, len(kept))
 	for _, k := range kept {
 		keptLines = append(keptLines, "  kept "+k+": lore store set-url moved it on this machine; lore-org.yaml still names the old address until an admin of "+in.Org+" runs lore store set-url --name "+in.Org+" --url <new-url>")

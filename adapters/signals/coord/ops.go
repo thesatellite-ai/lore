@@ -41,6 +41,16 @@ type RowWrite struct {
 type Agents struct {
 	MaxClaims   int
 	MaxAttempts int
+	// PerCheckout counts MaxClaims per checkout instead of per session:
+	// the caller is a person (devco:Q-1). A person's session is
+	// `<key>@<host>`, the same in every worktree, so a per-session limit
+	// let one person hold one task on the whole machine; with a worktree
+	// per task each worktree (its own held-claims record) holds its own.
+	PerCheckout bool
+	// TeamMaxClaims is the team's cap (policy agents.max_claims_per_agent,
+	// devco:S-20); MaxClaims is at most this. The WIP refusal names the
+	// command that raises whichever of the two stopped the claim.
+	TeamMaxClaims int
 }
 
 // Env is one project's coordination context.
@@ -201,6 +211,13 @@ func exemptFromWIP(ctx context.Context, env Env, v signals.View, opts ClaimOptio
 		if opts.coordinating(task) {
 			return true
 		}
+		// devco:Q-1: a person's claim taken in another worktree (not in
+		// this checkout's held record) counts toward that worktree's limit.
+		if env.Agents.PerCheckout {
+			if _, here := env.Held.Get(env.Caller.Session, task); !here {
+				return true
+			}
+		}
 		if s, ok := v.Board[signals.ClaimPath(env.Folder, task)]; !ok || s.Holder != env.Caller.ActorID {
 			return false
 		}
@@ -232,14 +249,25 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		if !ok {
 			return signals.Change{}, nil, fmt.Errorf("%w: %s", ErrUnknownTask, id)
 		}
-		if !claimable(mission, doc.Status()) {
-			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
-		}
 		// G-10: finished elsewhere, and this row has not seen the done yet.
+		// devco:M-9: checked before the status, and a done row gives the
+		// same AlreadyDoneError, so a claim of a done task gets one refusal
+		// whether the done reached the signals ref, the row, or both.
 		if !mission {
 			if err := AlreadyDone(v, env.Folder, id, doc); err != nil {
 				return signals.Change{}, nil, err
 			}
+			if doc.Status() == statusDone {
+				return signals.Change{}, nil, doneRowError(id, doc)
+			}
+			// devco:S-13: a task a person revoked from this actor stays
+			// off it until a person reassigns it (or the marker expires).
+			if err := RevokedFrom(v, env.Folder, id, env.Caller.ActorID); err != nil {
+				return signals.Change{}, nil, err
+			}
+		}
+		if !claimable(mission, doc.Status()) {
+			return signals.Change{}, nil, fmt.Errorf("%w: %s is %s", ErrNotOpen, id, doc.Status())
 		}
 		// 6.9: a parent with open children is coordinated, never worked.
 		lease := false
@@ -265,7 +293,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		plan, err := signals.DecideClaim(v, signals.ClaimRequest{
 			Caller: env.Caller, Folder: env.Folder, ID: id, CountsTowardWIP: !mission && !lease, Exempt: exemptFromWIP(ctx, env, v, opts),
-			MaxClaims: env.Agents.MaxClaims, MaxAttempts: env.Agents.MaxAttempts,
+			MaxClaims: env.Agents.MaxClaims, TeamMaxClaims: env.Agents.TeamMaxClaims, PerCheckout: env.Agents.PerCheckout, MaxAttempts: env.Agents.MaxAttempts,
 			Row: signals.RowState{Epoch: doc.Epoch(), Attempts: doc.Int(keyAttempts)}, Token: tok,
 			WorkBranch: workBranch, Owns: opts.Owns,
 		})
@@ -291,6 +319,15 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 		}
 		next.SetInt(keyEpoch, plan.Epoch)
 		next.SetInt(keyAttempts, plan.Attempts)
+		// devco:D-427: what a release puts back. A reclaim, or a claim of a
+		// task an expired claim left in_progress, continues that chain and
+		// records nothing (the release reads the chain's first Before); any
+		// other claim records the row as it is, in_progress included when a
+		// person had started the task.
+		var before *ClaimBefore
+		if _, chained := claimBefore(doc.ClaimLog()); !plan.Reclaim && (doc.Status() != statusInProgress || !chained) {
+			before = &ClaimBefore{Status: doc.Status(), StartedAt: doc.Str(keyStartedAt)}
+		}
 		if doc.Status() != statusInProgress {
 			next.SetStr(keyStatus, statusInProgress)
 			if doc.Time(keyStartedAt).IsZero() {
@@ -301,7 +338,7 @@ func Claim(ctx context.Context, env Env, id string, opts ClaimOptions) (ClaimRes
 			next.SetStr(keyWorkBranch, workBranch)
 		}
 		entry := ClaimLogEntry{At: now.UTC().Truncate(time.Second), Event: ClaimEventClaim,
-			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: plan.Epoch}
+			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: plan.Epoch, Before: before}
 		if plan.Reclaim && plan.Prev != nil {
 			entry.Event = ClaimEventReclaim
 			entry.PrevActorID = plan.Prev.Holder
@@ -400,13 +437,37 @@ func classify(ctx context.Context, env Env, id string, cause error) error {
 	}
 	detail := nh.Error()
 	if rec, had := env.Held.Get(env.Caller.Session, id); had {
-		if ev, ok := lastRevokeSince(doc, rec.Claimed); ok && nh.Current == nil {
+		switch m, byMarker := revokeOf(nh, rec.Token); {
+		case byMarker:
+			// devco:S-12: the revoke's row change has not reached this
+			// clone; the marker on the signals ref names the person.
+			detail = fmt.Sprintf("%s: your claim (token %s…) was revoked by %s at %s", id, prefix(rec.Token), revokerName(m), m.Since.UTC().Format(time.Kitchen))
+		case nh.Current == nil && hasRevokeSince(doc, rec.Claimed):
+			ev, _ := lastRevokeSince(doc, rec.Claimed)
 			detail = fmt.Sprintf("%s: your claim (token %s…) was revoked by %s at %s", id, prefix(rec.Token), ev.ActorID, ev.At.UTC().Format(time.Kitchen))
-		} else {
+		case rec.Expires.After(env.Signals.Clock.Now()):
+			// The lease has not run out: never call it expired.
+			detail += fmt.Sprintf("; your token %s… was dropped before its lease ended (%s)", prefix(rec.Token), rec.Expires.UTC().Format(time.Kitchen))
+		default:
 			detail += fmt.Sprintf("; your token %s… expired %s", prefix(rec.Token), rec.Expires.UTC().Format(time.Kitchen))
 		}
 	}
 	return &FencedError{Kind: FenceLost, Task: id, Detail: detail}
+}
+
+// revokeOf is the revoke marker that names the caller's token, read from
+// the fencing error's view of the board.
+func revokeOf(nh *signals.NotHeldError, token string) (signals.Signal, bool) {
+	if nh.Revoke == nil || token == "" || nh.Revoke.ClaimToken != token {
+		return signals.Signal{}, false
+	}
+	return *nh.Revoke, true
+}
+
+// hasRevokeSince reports a revoke in the row's claim log since the claim.
+func hasRevokeSince(doc Doc, since time.Time) bool {
+	_, ok := lastRevokeSince(doc, since)
+	return ok
 }
 
 // lastRevokeSince returns the newest revoke in the row's claim log at or
@@ -470,8 +531,25 @@ func Renew(ctx context.Context, env Env, id string) (signals.Signal, error) {
 	return renewed, err
 }
 
+// noWorkSpan is the longest claim a release counts as no work when the
+// lease was never renewed (devco:D-427): a claim given back within it
+// writes no time entry, so `claim` then `release` leaves no agent time and
+// switches no time feature on. A heartbeat, or holding it longer, is work.
+const noWorkSpan = time.Minute
+
+// claimSawWork reports whether claim s, released at now, counts as work
+// whose span is recorded: renewed at least once, or held at least
+// noWorkSpan.
+func claimSawWork(s signals.Signal, now time.Time) bool {
+	return s.RenewedSeq > 0 || now.Sub(s.Since) >= noWorkSpan
+}
+
 // Release gives a claim back (F7 "release"): the claim leaves the signals
-// ref and the row gets one claim_log entry, atomically.
+// ref and the row gets one claim_log entry, atomically. The row goes back
+// to the status and started_at it had before the claim (devco:D-427); the
+// holder's span is recorded only when the claim saw work (claimSawWork).
+// A status set explicitly during the claim (ClaimBefore.StatusSet,
+// devco:D-464) is work: the row keeps it and the span is recorded.
 func Release(ctx context.Context, env Env, id string) error {
 	now := env.Signals.Clock.Now()
 	_, err := writeSignals(ctx, env, func(v signals.View) (signals.Change, []RowWrite, error) {
@@ -496,9 +574,13 @@ func Release(ctx context.Context, env Env, id string) error {
 			return ch, nil, nil
 		}
 		next := doc.Clone()
-		if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
-			return signals.Change{}, nil, err
+		b, _ := claimBefore(doc.ClaimLog())
+		if b.StatusSet || claimSawWork(s, v.Now) {
+			if err = next.closeClaimSpan(s, v.Now, v.Lease.TTL, env.Time); err != nil { // D4: same write
+				return signals.Change{}, nil, err
+			}
 		}
+		next.restoreBefore() // reads the log before the release entry ends the chain
 		if err := next.AppendClaimLog(ClaimLogEntry{At: v.Now.UTC().Truncate(time.Second), Event: ClaimEventRelease,
 			ActorID: env.Caller.ActorID, Session: env.Caller.Session, Epoch: s.ClaimEpoch}); err != nil {
 			return signals.Change{}, nil, err
@@ -667,6 +749,7 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 				return signals.Change{}, nil, err
 			}
 		}
+		ch = withRevokeMarker(ch, env, v, id, kind, removed)
 		next.touch(v.Now)
 		if ch, err = withDoneMarker(ch, env, v, id, next); err != nil {
 			return signals.Change{}, nil, err
@@ -674,6 +757,27 @@ func OverrideChecked(ctx context.Context, env Env, id string, kind OverrideKind,
 		return ch, []RowWrite{{ID: id, Doc: next}}, nil
 	})
 	return removed, err
+}
+
+// withRevokeMarker adds the revoke marker of a claim a person revoked
+// (devco:S-12, S-13), and drops the marker on a reassign: the person
+// chose who works on the task next, so nobody stays fenced off it.
+func withRevokeMarker(ch signals.Change, env Env, v signals.View, id string, kind OverrideKind, removed *signals.Signal) signals.Change {
+	p := signals.RevokedPath(env.Folder, id)
+	switch {
+	case kind == OverrideReassign:
+		if _, ok := v.Board[p]; ok {
+			ch.Delete = append(ch.Delete, p)
+		}
+	case kind == OverrideRevoke && removed != nil:
+		if m, ok := revokeMarker(env, v, id, *removed); ok {
+			if ch.Put == nil {
+				ch.Put = map[string]signals.Signal{}
+			}
+			ch.Put[p] = m
+		}
+	}
+	return ch
 }
 
 // GateHash is the approval hash over title and body (§7.4: editing either

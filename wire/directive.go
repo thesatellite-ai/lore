@@ -15,9 +15,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsdirective "github.com/thesatellite-ai/lore/ops/directive"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -41,7 +43,7 @@ func (a *App) toolRegistry(ctx context.Context) (*toolprofile.Registry, error) {
 	}
 	reg, err := toolprofile.New(user)
 	if err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in ~/.lore/"+ConfigFile, err).
+		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in "+lorehome.Shown()+"/"+ConfigFile, err).
 			WithHint("run `lore config check` for every problem with its location")
 	}
 	return reg, nil
@@ -119,7 +121,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 			}
 			rel := v
 			if filepath.IsAbs(v) {
-				if r, rerr := filepath.Rel(root, v); rerr == nil && !strings.HasPrefix(r, "..") {
+				if r, inside := fspath.Rel(root, v); inside {
 					rel = r
 				}
 			}
@@ -160,7 +162,7 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 		sel, err = reg.Select(names, repoProbe{root: root})
 		if err != nil {
 			return opsdirective.Pick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(err).Error.Message, string(policy.KeyContextTargets)+": "), err).
-				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
+				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
 		}
 	} else {
 		sel = reg.Resolve(repoProbe{root: root})
@@ -210,7 +212,7 @@ func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) [
 	for _, p := range sel.Unwired {
 		hint := "lore render --target " + p.Name
 		if sel.Reason == toolprofile.ReasonSetting {
-			hint = "lore policy set --key " + key + " --value \"<profiles incl. " + p.Name + ">\" --yes"
+			hint = "lore render --add-target " + p.Name // devco:S-4: one step, no profile list to compose
 		}
 		out = append(out, "· "+p.PointerFile+" found but not wired to lore; add it with: "+hint)
 	}

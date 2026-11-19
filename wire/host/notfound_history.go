@@ -10,13 +10,18 @@ package host
 //	  └► git log --reflog -1 --diff-filter=AM -- <file>
 //	        a commit that had it is on no branch or remote branch (a
 //	        force-push or a rebase dropped it, the reflog keeps it): name
-//	        it and `git cherry-pick <sha>`
+//	        it and `git cherry-pick <sha>`; one committed here on a
+//	        detached HEAD (no branch reflog ever held it) is named as
+//	        that, with `git branch` to keep it (devco:Q-3)
 //
 // Neither: "" (the older-branch / other-repo hint stands). Nothing is
 // fetched; git reads what this clone has.
 
 import (
 	"context"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
@@ -81,5 +86,80 @@ func rowFileHint(ctx context.Context, repo *gitref.Repo, id, rel string) string 
 	if !ok || onSomeBranch(ctx, repo, c.sha) {
 		return ""
 	}
-	return id + " is in commit " + c.about() + ", which is on no branch any more (a force-push or a rebase dropped it; git's reflog still has it): bring it back with `git cherry-pick " + c.short() + "` (or only the file: `git checkout " + c.short() + " -- " + spec + "`); the author's clone may still have it too (`git status` there says ahead)"
+	back := "`git cherry-pick " + c.short() + "` (or only the file: `git checkout " + c.short() + " -- " + spec + "`)"
+	switch commitOrigin(ctx, repo, c.sha) {
+	case originDetached:
+		return id + " is in commit " + c.about() + ", made on a detached HEAD in this clone, so it is on no branch (nothing dropped it): keep it with `git branch detached-" + c.short() + " " + c.short() + "`, or bring it to this branch with " + back
+	case originDroppedHere:
+		return id + " is in commit " + c.about() + ", made in this clone and on no branch any more (a rebase or a reset here dropped it; git's reflog still has it): bring it back with " + back
+	}
+	return id + " is in commit " + c.about() + ", which is on no branch any more (a force-push or a rebase dropped it; git's reflog still has it): bring it back with " + back + "; the author's clone may still have it too (`git status` there says ahead)"
+}
+
+// commitWhere is where a commit on no branch came from, as this clone's
+// reflogs tell it (devco:Q-3).
+type commitWhere int
+
+const (
+	// originElsewhere: not committed in this clone (fetched, then a
+	// force-push upstream dropped it), or the reflogs cannot tell.
+	originElsewhere commitWhere = iota
+	// originDetached: committed here while HEAD was detached; no branch
+	// ever held it.
+	originDetached
+	// originDroppedHere: committed here on a branch that no longer holds
+	// it (a rebase or a reset in this clone).
+	originDroppedHere
+)
+
+// commitOrigin reads this clone's reflogs for sha: HEAD's (of this
+// worktree) says whether it was committed here, the branches' (shared by
+// every worktree) whether a branch ever held it. Read from the files, no
+// git process per branch; any read failure answers originElsewhere (the
+// hint then says what it said before).
+func commitOrigin(ctx context.Context, repo *gitref.Repo, sha string) commitWhere {
+	out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--absolute-git-dir", "--path-format=absolute", "--git-common-dir"}})
+	if err != nil {
+		return originElsewhere
+	}
+	dirs := strings.Fields(string(out))
+	if len(dirs) != 2 {
+		return originElsewhere
+	}
+	head, err := os.ReadFile(filepath.Join(dirs[0], "logs", "HEAD"))
+	if err != nil || !reflogHas(head, sha, "commit") {
+		return originElsewhere
+	}
+	held := false
+	_ = filepath.WalkDir(filepath.Join(dirs[1], "logs", "refs", "heads"), func(p string, d fs.DirEntry, werr error) error {
+		if werr != nil || d.IsDir() || held {
+			return nil // a missing folder: no branch reflogs
+		}
+		if b, rerr := os.ReadFile(p); rerr == nil && reflogHas(b, sha, "") {
+			held = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if held {
+		return originDroppedHere
+	}
+	return originDetached
+}
+
+// reflogHas reports whether a reflog file's text has an entry moving the
+// ref to sha whose message starts with msgPrefix ("" any message). A line
+// is "<old> <new> <who> <time> <tz>\t<message>".
+func reflogHas(text []byte, sha, msgPrefix string) bool {
+	for line := range strings.SplitSeq(string(text), "\n") {
+		f := strings.SplitN(line, " ", 3)
+		if len(f) < 3 || f[1] != sha {
+			continue
+		}
+		_, msg, _ := strings.Cut(line, "\t")
+		if strings.HasPrefix(msg, msgPrefix) {
+			return true
+		}
+	}
+	return false
 }

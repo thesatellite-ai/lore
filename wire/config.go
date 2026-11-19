@@ -15,6 +15,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
@@ -98,7 +99,7 @@ func editMachineConfig(home string, edit func(root *yaml.Node) error) (err error
 	case b == nil:
 	default:
 		if err = yamlfmt.Decode(b, doc); err != nil {
-			return errs.Wrap(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not valid YAML", err)
+			return errs.Wrap(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not valid YAML", err)
 		}
 	}
 	if len(doc.Content) == 0 {
@@ -107,7 +108,7 @@ func editMachineConfig(home string, edit func(root *yaml.Node) error) (err error
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return errs.New(errs.ConfigInvalid, "wire: ~/.lore/"+ConfigFile+" is not a mapping")
+		return errs.New(errs.ConfigInvalid, "wire: "+lorehome.Shown()+"/"+ConfigFile+" is not a mapping")
 	}
 	// The file as an edit that changes nothing would write it: such an
 	// edit (a refused command, a name not found, a value already set)
@@ -151,7 +152,7 @@ func lockMachineConfig(home string) (func() error, error) {
 	}
 	release, err := rowfs.LockFile(context.Background(), filepath.Join(home, configLockFile), configLockWait)
 	if errs.Has(err, errs.StoreLocked) {
-		return nil, errs.Wrap(errs.StoreLocked, "another lore process kept ~/.lore/"+ConfigFile+" locked for "+configLockWait.String(), err).
+		return nil, errs.Wrap(errs.StoreLocked, "another lore process kept "+lorehome.Shown()+"/"+ConfigFile+" locked for "+configLockWait.String(), err).
 			WithHint("retry when the other lore command (or the setup page's save) has finished")
 	}
 	return release, err
@@ -251,7 +252,7 @@ func UnsetIdentity(home, org string) (found bool, migrated string, err error) {
 		if org != "" {
 			target = orgEntry(root, org)
 			if target == nil {
-				return errs.New(errs.NotFound, "identity unset: ~/.lore/"+ConfigFile+" has no org "+strconv.Quote(org)).
+				return errs.New(errs.NotFound, "identity unset: "+lorehome.Shown()+"/"+ConfigFile+" has no org "+strconv.Quote(org)).
 					WithHint("lore config list shows the org entries")
 			}
 		}
@@ -389,7 +390,7 @@ func agentDetailsOf(home, org string) (string, error) {
 			return AgentDetailsClient, nil
 		}
 		return "", errs.New(errs.ConfigInvalid, "wire: orgs["+org+"].agent_details "+strconv.Quote(o.AgentDetails)+" must be "+AgentDetailsInternal+" or "+AgentDetailsClient).
-			WithHint("fix it in ~/.lore/" + ConfigFile)
+			WithHint("fix it in " + lorehome.Shown() + "/" + ConfigFile)
 	}
 	return AgentDetailsInternal, nil
 }

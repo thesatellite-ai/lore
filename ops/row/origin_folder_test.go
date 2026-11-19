@@ -24,7 +24,7 @@ func TestOriginFolderLine(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			g := Origin{Origin: OriginBlock{Recorded: true, Cmd: "memory add", Store: sto, Folder: c.folder}}
+			g := Origin{Origin: OriginBlock{Recorded: true, Cmd: "memory add", Store: Named{ID: sto}, Folder: c.folder}}
 			text := g.text()
 			if c.line == "" {
 				if strings.Contains(text, "folder ") {

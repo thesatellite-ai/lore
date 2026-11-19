@@ -41,6 +41,8 @@ type RepoAddIn struct {
 
 // RepoListIn is the input of repo.list.
 type RepoListIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Project string `json:"project,omitempty" flag:"project" desc:"override project (id or name)"`
 	// --created-by / --updated-by: the shared writer filters of every
 	// noun list (INTEG-AUDIT-1; engine.List applies them).
@@ -124,7 +126,8 @@ func identChar(r rune) bool {
 	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.'
 }
 
-// projectRepos is the live repos of project pid in the repo store.
+// projectRepos is the live repos of project pid in the repo store ("" =
+// every project's: repo list at a place with no project of its own).
 func (o ops) projectRepos(ctx context.Context, pid string) ([]row.Row, error) {
 	rows, err := o.env.List(ctx, repoStore, schema.TableRepos)
 	if err != nil {
@@ -132,11 +135,60 @@ func (o ops) projectRepos(ctx context.Context, pid string) ([]row.Row, error) {
 	}
 	var out []row.Row
 	for _, r := range rows {
-		if !r.Deleted && work.Field(r, fieldProject) == pid {
+		if !r.Deleted && (pid == "" || work.Field(r, fieldProject) == pid) {
 			out = append(out, r)
 		}
 	}
 	return out, nil
+}
+
+// listedRepos is what repo list shows: project pid's repos in the repo
+// store, or, for every project (pid ""), the repos of every read store
+// (devco:D-656): under --setup or at a store clone root each folder of
+// the org store keeps the repos registered for its project, and the repo
+// store alone missed every one of them. A row read through two stores
+// is listed once.
+func (o ops) listedRepos(ctx context.Context, pid string) ([]work.Sourced, error) {
+	srcs := []store.Source{repoStore}
+	if pid == "" {
+		srcs = append(srcs, engine.ReadStoresOf(o.env)...)
+	}
+	seen := map[string]bool{}
+	var out []work.Sourced
+	for _, src := range srcs {
+		var rows []row.Row
+		var err error
+		if src == repoStore {
+			rows, err = o.projectRepos(ctx, pid)
+		} else {
+			rows, err = o.storeRepos(ctx, src)
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			if id := r.ID.String(); !seen[id] {
+				seen[id] = true
+				out = append(out, work.Sourced{Source: src, Row: r})
+			}
+		}
+	}
+	return out, nil
+}
+
+// storeRepos is the live repos rows of read store src.
+func (o ops) storeRepos(ctx context.Context, src store.Source) ([]row.Row, error) {
+	rows, err := o.env.List(ctx, src, schema.TableRepos)
+	if err != nil {
+		return nil, fmt.Errorf("list the repos of %s: %w", src, err)
+	}
+	live := rows[:0:0]
+	for _, r := range rows {
+		if !r.Deleted {
+			live = append(live, r)
+		}
+	}
+	return live, nil
 }
 
 // repoAdd registers a repo in the project (a taken mount name is
@@ -160,7 +212,10 @@ func (o ops) repoAdd(ctx context.Context, in RepoAddIn) (work.WriteOut, error) {
 				WithHint("pick another mount name; `lore repo list` shows the names in use (an archived repo keeps its name: `lore repo unarchive` brings it back)")
 		}
 	}
-	fields, err := work.Texts(NounRepo, map[string]string{fieldMountName: name, fieldOrigin: in.Origin, fieldDisplayName: in.DisplayName})
+	// D-576: an ssh host alias url is recorded under the host it stands
+	// for, as every other path keys the repo
+	origin := resolveURL(ctx, o.env, in.Origin)
+	fields, err := work.Texts(NounRepo, map[string]string{fieldMountName: name, fieldOrigin: origin, fieldDisplayName: in.DisplayName})
 	if err != nil {
 		return work.WriteOut{}, err
 	}
@@ -175,18 +230,22 @@ func (o ops) repoAdd(ctx context.Context, in RepoAddIn) (work.WriteOut, error) {
 }
 
 // repoList lists the repos of the project, oldest first.
+// devco D-505: at a place with no project of its own (an org store's
+// root) and no --project it lists every project's repos, as memory list
+// does there.
 func (o ops) repoList(ctx context.Context, in RepoListIn) (RepoListOut, error) {
 	pid, err := work.Project(ctx, o.env, NounRepo, in.Project)
-	if err != nil {
+	every := in.Project == "" && engine.EveryProject(err)
+	if err != nil && !every {
 		return RepoListOut{}, err
 	}
-	rows, err := o.projectRepos(ctx, pid.String())
+	project := pid.String()
+	if every {
+		project = ""
+	}
+	sourced, err := o.listedRepos(ctx, project)
 	if err != nil {
 		return RepoListOut{}, err
-	}
-	sourced := make([]work.Sourced, 0, len(rows))
-	for _, r := range rows {
-		sourced = append(sourced, work.Sourced{Source: repoStore, Row: r})
 	}
 	out := RepoListOut{SchemaVersion: SchemaVersion, Kind: KindRepoList, Data: []Repo{}}
 	for _, s := range sortByCreated(sourced) {
@@ -243,11 +302,52 @@ const originRemote = "origin"
 // the fork's repo store).
 const forkSuffix = "-fork"
 
-// Remote is one configured git remote URL, exactly as written in git
-// config (never `git remote get-url`, which applies insteadOf rewrites).
+// Remote is one configured git remote URL as written in git config
+// (never `git remote get-url`, which applies insteadOf rewrites), with an
+// ssh host alias resolved to the host it stands for (devco D-576): URL is
+// what the repo's identity keys and records, so a clone through
+// git@<alias>:<owner>/<repo>.git and one from github.com are one repo, as
+// org matching, layer keys and org link already say (D-531, D-532).
 type Remote struct {
 	Name string
 	URL  string
+	// Spelled is the url as written when URL resolved an alias out of it
+	// ("" when the same): a history or origin_url recorded before D-576
+	// may still hold that spelling, so a remote is known by either.
+	Spelled string
+}
+
+// keys is every normalised key the remote is known by: URL's, then the
+// written spelling's when it differs (devco D-576).
+func (r Remote) keys() []string {
+	var out []string
+	for _, u := range []string{r.URL, r.Spelled} {
+		if k, err := repourl.Normalize(u); err == nil && u != "" && !slices.Contains(out, k) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// RemoteResolver is the optional Env upgrade that resolves an ssh host
+// alias out of a code repo url a person typed (`repo add --origin`,
+// `repo set-url --url`) or a repos row holds, the way RepoRemotes resolves
+// the clone's own remotes (devco D-576). This layer cannot read git or ssh
+// config itself; wire.App implements it. Without it a url is kept as
+// typed.
+type RemoteResolver interface {
+	// ResolveRemoteURL is raw with an ssh host alias's host replaced by
+	// the host it connects to (git@<alias>:o/r.git → git@github.com:o/r.git);
+	// raw itself when it names no alias or cannot be read.
+	ResolveRemoteURL(ctx context.Context, raw string) string
+}
+
+// resolveURL is raw through env's RemoteResolver, raw without one.
+func resolveURL(ctx context.Context, env Env, raw string) string {
+	if r, ok := upgrade.As[RemoteResolver](env); ok && strings.TrimSpace(raw) != "" {
+		return r.ResolveRemoteURL(ctx, raw)
+	}
+	return raw
 }
 
 // RepoFiles is what the repo identity verbs need beyond Env: the
@@ -350,7 +450,13 @@ func cleanRemotes(rs []Remote) (out []Remote, warns []URLWarning) {
 		if stripped {
 			warns = append(warns, URLWarning{Code: WarnURLUserinfo, Remote: r.Name, Stored: clean})
 		}
-		out = append(out, Remote{Name: r.Name, URL: clean})
+		spelled := ""
+		if r.Spelled != "" {
+			if c, _, serr := repourl.StripCredentials(r.Spelled); serr == nil && c != clean {
+				spelled = c
+			}
+		}
+		out = append(out, Remote{Name: r.Name, URL: clean, Spelled: spelled})
 	}
 	return out, warns
 }
@@ -442,7 +548,7 @@ func EnsureIdentity(ctx context.Context, env Env, files RepoFiles) (id Identity,
 	}
 	adopted, ok := rowByID(rows, nid.String())
 	if !ok {
-		adopted, ok = adoptRow(ctx, files, rows, clean)
+		adopted, ok = adoptRow(ctx, env, files, rows, clean)
 	}
 	h := repourl.History{}
 	by, day := files.RepoActor(ctx), today(env)
@@ -570,17 +676,25 @@ func migrateHistory(urls []string, day, by string) repourl.History {
 
 // adoptRow is the live v0.1.17 repos row that already describes this
 // checkout: one whose origin_url is a remote of this clone, else one whose
-// mount name is the checkout folder's name.
-func adoptRow(ctx context.Context, files RepoFiles, rows []row.Row, remotes []Remote) (row.Row, bool) {
+// mount name is the checkout folder's name. A remote and an origin_url
+// match under either spelling of an ssh host alias (devco D-576: a row
+// registered through the alias, a clone from github.com, or the reverse).
+func adoptRow(ctx context.Context, env Env, files RepoFiles, rows []row.Row, remotes []Remote) (row.Row, bool) {
 	keys := map[string]bool{}
 	for _, r := range remotes {
-		if k, err := repourl.Normalize(r.URL); err == nil {
+		for _, k := range r.keys() {
 			keys[k] = true
 		}
 	}
 	for _, r := range rows {
-		if k, err := repourl.Normalize(work.Field(r, fieldOrigin)); err == nil && keys[k] {
-			return r, true
+		origin := work.Field(r, fieldOrigin)
+		if origin == "" {
+			continue
+		}
+		for _, k := range (Remote{URL: resolveURL(ctx, env, origin), Spelled: origin}).keys() {
+			if keys[k] {
+				return r, true
+			}
 		}
 	}
 	name, err := files.RepoDirName(ctx)
@@ -685,6 +799,9 @@ func CheckAddresses(ctx context.Context, env Env, files RepoFiles) (AddressRepor
 		h = first
 	}
 	for _, r := range clean {
+		if knownSpelling(h, r) {
+			continue // recorded before D-576 under the alias spelling
+		}
 		next, added, serr := h.Seen(r.URL, today(env), files.RepoActor(ctx))
 		if serr != nil {
 			continue
@@ -706,6 +823,17 @@ func CheckAddresses(ctx context.Context, env Env, files RepoFiles) (AddressRepor
 	}
 	rep.Notices = notices(h, clean, fresh)
 	return rep, nil
+}
+
+// knownSpelling reports whether h holds r only under the spelling it is
+// written with in git config (an ssh host alias, recorded before D-576):
+// the address is known, so nothing is appended and no notice repeats.
+func knownSpelling(h repourl.History, r Remote) bool {
+	if r.Spelled == "" {
+		return false
+	}
+	k, err := repourl.Normalize(r.Spelled)
+	return err == nil && h.Find(k) >= 0
 }
 
 // firstAddress records this clone's remote as the repo's primary address
@@ -770,7 +898,7 @@ func notices(h repourl.History, clean []Remote, fresh map[string]bool) []Address
 	}
 	byKey := map[string]string{}
 	for _, r := range clean {
-		if k, err := repourl.Normalize(r.URL); err == nil {
+		for _, k := range r.keys() {
 			byKey[k] = r.Name
 		}
 	}
@@ -832,7 +960,7 @@ func AddressStatus(ctx context.Context, env Env, files RepoFiles) (AddressReport
 	mine = append(mine, own.Confirmed()...)
 	for _, r := range clean {
 		k, nerr := repourl.Normalize(r.URL)
-		if nerr != nil || slices.Contains(mine, k) {
+		if nerr != nil || slices.ContainsFunc(r.keys(), func(x string) bool { return slices.Contains(mine, x) }) {
 			continue
 		}
 		if other, ok := others[k]; ok && rep.Mismatch == "" {
@@ -845,7 +973,7 @@ func AddressStatus(ctx context.Context, env Env, files RepoFiles) (AddressReport
 	}
 	byKey := map[string]string{}
 	for _, r := range clean {
-		if k, nerr := repourl.Normalize(r.URL); nerr == nil {
+		for _, k := range r.keys() {
 			byKey[k] = r.Name
 		}
 	}
@@ -861,7 +989,8 @@ func AddressStatus(ctx context.Context, env Env, files RepoFiles) (AddressReport
 	// repo's confirmed address is the Mismatch above.
 	for _, r := range clean {
 		k, nerr := repourl.Normalize(r.URL)
-		if nerr != nil || recorded == "" || own.Find(k) >= 0 || slices.Contains(meta.URLs, k) || others[k] != "" {
+		if nerr != nil || recorded == "" || own.Find(k) >= 0 || slices.Contains(meta.URLs, k) || others[k] != "" || knownSpelling(own, r) ||
+			slices.ContainsFunc(r.keys(), func(x string) bool { return slices.Contains(meta.URLs, x) }) {
 			continue
 		}
 		_, caseOnly := own.CaseVariant(k)
@@ -926,6 +1055,10 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 		return RepoSetURLOut{}, errs.New(errs.URLUserinfo, "the URL cannot be read, and lore cannot tell whether it holds a credential").
 			WithHint("give the address without any user name or token, e.g. https://github.com/<owner>/<repo>.git")
 	}
+	if repourl.IsLocalRemote(clean) {
+		return localRemoteSetURL(ctx, files, clean), nil
+	}
+	clean = resolveURL(ctx, env, clean) // D-576: an alias url records the host it stands for
 	key, err := repourl.Normalize(clean)
 	if err != nil {
 		// E_REPO_URL: the address does not normalise (PROVENANCE 10.4)
@@ -1010,6 +1143,31 @@ func repoSetURL(ctx context.Context, env Env, files RepoFiles, in RepoSetURLIn) 
 	}
 	out.human = setURLText(out)
 	return out, nil
+}
+
+// localRemoteSetURL is `lore repo set-url --url <path>` (O-13): a remote
+// that is a folder on this machine names no repo across clones, so lore
+// records nothing (repourl.Normalize refuses it as a key) and git remote
+// set-url alone is the move. Before, the command lore's own "the repo
+// moved" hint named for a path remote was refused E_REPO_URL. The text
+// says nothing needed recording, and names the git step when no remote
+// uses the path yet.
+func localRemoteSetURL(ctx context.Context, files RepoFiles, path string) RepoSetURLOut {
+	out := RepoSetURLOut{URL: path, Mode: modePrimary, Confirmed: []string{}}
+	if m, ok, err := files.ReadRepoMeta(ctx); err == nil && ok {
+		out.RepoID = m.RepoID
+	}
+	used := false
+	if remotes, err := files.RepoRemotes(ctx); err == nil {
+		used = slices.ContainsFunc(remotes, func(r Remote) bool { return strings.TrimSpace(r.URL) == path })
+	}
+	out.human = "lore repo set-url: " + path + " is a folder on this machine, not an address lore records (it would not name the repo on a teammate's machine), so nothing was recorded"
+	if used {
+		out.human += "; a git remote already uses it, which is all lore sync needs\n"
+	} else {
+		out.human += "; point git at it with git remote set-url origin " + path + ", then lore sync\n"
+	}
+	return out
 }
 
 // followProjectOrigin moves the project's origin_url along with a moved
@@ -1190,7 +1348,7 @@ func repoFork(ctx context.Context, env Env, files RepoFiles, in RepoForkIn) (Rep
 		return RepoForkOut{}, errs.New(errs.InvalidInput, "this clone has no git remote, so it cannot be told apart from "+up.Meta.RepoID).
 			WithHint("add the fork's remote first: git remote add origin <url>")
 	}
-	if slices.Contains(up.History.Confirmed(), mustKey(clean[0].URL)) {
+	if slices.ContainsFunc(clean[0].keys(), func(k string) bool { return slices.Contains(up.History.Confirmed(), k) }) {
 		return RepoForkOut{}, errs.New(errs.InvalidInput, "this clone's remote "+mustKey(clean[0].URL)+" is a confirmed address of "+up.Meta.RepoID+", so it is that repo, not a fork").
 			WithHint("change the remote to the fork's address first (git remote set-url origin <fork url>)")
 	}

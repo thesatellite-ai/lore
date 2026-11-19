@@ -110,6 +110,7 @@ func TestTeamInviteOutText(t *testing.T) {
 		"⚠ tomas-dev has no access to agency-org/lore-team yet\n" +
 		"  fix: gh api -X PUT repos/agency-org/lore-team/collaborators/tomas-dev -f permission=push\n" +
 		"       (or add tomas-dev to a GitHub team that has write access)\n" +
+		"access: tomas@agency.example needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone\n" +
 		"Send this to tomas@agency.example (it holds no secret):\n  lore setup join --invite lore-invite:v1:abc\n"
 	if got := o.Text(); got != want {
 		t.Errorf("got\n%s\nwant\n%s", got, want)

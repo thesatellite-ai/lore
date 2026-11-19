@@ -111,7 +111,7 @@ func TestChainAuditOnTheStandaloneSink(t *testing.T) {
 	}
 	_, err = h.Run(opsaudit.OpVerify, `{}`)
 	var e *errs.Error
-	if !errors.As(err, &e) || e.Code != errs.AuditChainBroken || !strings.Contains(e.Message, legacy[1].ID) || !strings.Contains(e.Hint, opsaudit.ChainFile) {
+	if !errors.As(err, &e) || e.Code != errs.AuditChainBroken || !strings.Contains(e.Message, legacy[1].ID) || !strings.Contains(e.Hint, opsaudit.ChainFile()) {
 		t.Fatalf("tamper: err = %#v", err)
 	}
 }

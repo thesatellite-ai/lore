@@ -28,7 +28,7 @@ func ErrSymlink(err error) bool { return errors.Is(err, errSymlink) }
 
 // refuseSymlink is the error for a symlink found at rel.
 func refuseSymlink(rel string) error {
-	return errs.Wrap(errs.BadPath, "rowfs: "+quote(rel)+" is a symlink; lore never follows links inside a store", errSymlink)
+	return errs.Wrap(errs.BadPath, "rowfs: "+quote(rel)+" is a symlink; lore never follows links in its data (a store or a repo's .lore/data)", errSymlink)
 }
 
 // checkChain Lstats every existing component of rel (slash-separated,
@@ -235,8 +235,10 @@ func (r *Root) WriteFile(rel string, b []byte) error {
 }
 
 // mkdirModes is os.MkdirAll(dir, m.dir) that also gives each folder it
-// creates its group's access in a setgid parent (groupWiden): a new table
-// folder of a group's shared checkout is 2770/2775, never 2700 (I-11).
+// creates its group's access in a shared parent (groupWiden): a new table
+// folder of a group's shared checkout is 2770/2775 on Linux (0770/0775 on
+// macOS, where the group comes from the parent without setgid), never
+// 2700/0700 (I-11, D-390).
 func mkdirModes(dir string, m fileModes) error {
 	var made []string
 	for cur := dir; ; cur = filepath.Dir(cur) {
@@ -251,6 +253,11 @@ func mkdirModes(dir string, m fileModes) error {
 	if err := os.MkdirAll(dir, m.dir); err != nil {
 		return err
 	}
+	if emulateBSDMkdir {
+		if err := clearSetgid(made); err != nil {
+			return err
+		}
+	}
 	for i := len(made) - 1; i >= 0; i-- { // parents first: a child checks its parent's bit
 		if err := groupWiden(made[i], filepath.Dir(made[i]), m.dir, groupDirBits); err != nil {
 			return err
@@ -259,22 +266,67 @@ func mkdirModes(dir string, m fileModes) error {
 	return nil
 }
 
+// emulateBSDMkdir, when true, makes mkdirModes clear the setgid bit of
+// each folder it creates, right after creating it, as mkdir does on macOS
+// and the BSDs (a new folder takes its parent's group but never the bit).
+// Why: the guard test TestSharedWriteBSDMkdir runs the macOS path on Linux,
+// where mkdir copies the bit and hid the D-390 bug (devco D-416). Only a
+// non-parallel test sets it; product code never does.
+var emulateBSDMkdir bool
+
+// clearSetgid removes the setgid bit from each folder of dirs.
+func clearSetgid(dirs []string) error {
+	for _, d := range dirs {
+		fi, err := os.Stat(d)
+		if err != nil {
+			return err
+		}
+		if fi.Mode()&fs.ModeSetgid != 0 {
+			if err := os.Chmod(d, fi.Mode().Perm()); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// MkdirShared creates dir and any missing parents with a committed work
+// tree's folder modes (0777 less the umask, as git checks folders out),
+// group read/write/search added in a folder a group shares (groupWiden).
+// Callers that make a repo's .lore/ use it so the shared mark carries down
+// to the rows rowfs writes below (D-390: on macOS a .lore/ made 0755 cut
+// the chain and every row came out -rw-r--r--). An existing dir is left
+// as it is.
+func MkdirShared(dir string) error { return mkdirModes(dir, sharedModes) }
+
 // groupWiden adds bits (group read/write) to path when the write meant
 // group access (want holds group read: a shared work-tree mode, never an
-// owner-only one) and parent is setgid, the mark of a folder a group
-// shares (git's core.sharedRepository=group sets it; so does `chmod g+s`).
-// Elsewhere the umask alone decides, as for git's own checkout.
+// owner-only one) and parent is a folder a group shares: setgid (git's
+// core.sharedRepository=group sets it; so does `chmod g+s`) or
+// group-writable, and path belongs to parent's group. Both marks count
+// because the setgid bit alone is not portable: on macOS and the BSDs a new
+// folder always takes its parent's group but mkdir never copies the setgid
+// bit, so with setgid as the only mark the first new folder of a shared
+// checkout was widened and everything below it fell back to the umask
+// (D-390: rows -rw-r--r-- a teammate could not edit). A widened folder is
+// group-writable, so the mark carries down on every OS. The group check
+// keeps a group-writable folder from widening a file to the writer's own
+// primary group on Linux, where a new file takes the parent's group only
+// under setgid. Elsewhere the umask alone decides, as for git's checkout.
 func groupWiden(path, parent string, want, bits fs.FileMode) error {
 	if want&0o040 == 0 {
 		return nil
 	}
 	pi, err := os.Stat(parent)
-	if err != nil || pi.Mode()&fs.ModeSetgid == 0 {
-		return nil //nolint:nilerr // no setgid parent (or none to read): the umask decides
+	if err != nil || (pi.Mode()&fs.ModeSetgid == 0 && pi.Mode().Perm()&0o020 == 0) {
+		return nil //nolint:nilerr // no shared parent (or none to read): the umask decides
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
 		return err
+	}
+	if !sameGroup(info, pi) {
+		return nil // not the folder's group: widening would share it with another
 	}
 	have := info.Mode()
 	if have.Perm()&bits == bits {

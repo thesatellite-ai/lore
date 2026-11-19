@@ -78,7 +78,7 @@ func TestJourneySoloStoreRenamedWithWaitingNote(t *testing.T) {
 		nw := w.Remote(jsuNewStore)
 		r := m.LoreIn(app, "store", "set-url", "me", nw.SSHURL()).OK(t)
 		r.Says(t, "is now at "+nw.SSHURL(), "1 unpushed commit(s)", "`lore sync` sends its waiting commits")
-		m.LoreIn(app, "sync").OK(t).Says(t, "store me: sent 1")
+		m.LoreIn(app, "sync").OK(t).Says(t, "store me: pushed (sent 1")
 		if !jsuRemoteHas(w, jsuNewStore, "written after the rename") {
 			t.Errorf("the note written while the old address was gone never reached lore-personal")
 		}

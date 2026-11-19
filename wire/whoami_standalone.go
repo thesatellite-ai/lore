@@ -102,6 +102,8 @@ func (w *standaloneWhoami) Whoami(ctx context.Context, in opswhoami.ShowIn) (ops
 		d.Error = red.str(errs.EnvelopeOf(fail).Error.Message) // the code is in the exit status and the CLI's error line
 	}
 	lines := whoamiLines(s, id, actor, idErr, in.Explain, red, agent, m, personal)
+	lines = guardsOffRepoLine(ctx, s, lines)            // whoami_guards.go: never 'guards on' without the hook (J-11)
+	lines = withReadsRows(lines, w.whoamiReads(ctx, s)) // whoami_reads.go: the <org>/<folder> this folder reads (D-596)
 	if fail == nil {
 		if l := w.identityContact(ctx); l != "" {
 			d.IdentityContact = red.str(strings.TrimPrefix(l, identityContactPrefix))
@@ -290,6 +292,14 @@ func whoamiPersonal(ctx context.Context, home, dir string) string {
 	return mc.localPersonalV017(home)
 }
 
+// PersonalStoreURL is the personal store the active setup configures for
+// the command's folder, as whoami's personal line shows it ("" when none
+// is set up). The live hook asks it before telling a person their
+// personal store "is not set up" (devco:D-654).
+func (a *App) PersonalStoreURL(ctx context.Context) string {
+	return whoamiPersonal(ctx, a.opts.Home, a.projectDir())
+}
+
 // personalNotSet is the personal row when no personal store is set.
 const personalNotSet = "not set"
 
@@ -428,6 +438,9 @@ func whoamiRepoRow(s *orgcfg.Situation) string {
 		if place != "" {
 			return place + "  (treated as a client repo: guards on)"
 		}
+		if why := UnlistedOwnStep(UnlistedClientRepo(r.Org, r.Links, s.Remotes)); why != "" {
+			return "treated as a client repo  (guards on: " + why + ")"
+		}
 		return "client repo  (guards on)"
 	case orgresolve.RoleOwn:
 		if place != "" {
@@ -516,7 +529,13 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, actor string, idErr 
 			}
 			sv := red.str(st.URL) + " on branch " + st.EffectiveBranch()
 			if st.OrgFolder != "" {
-				sv += "  (org folder " + red.folder(st.OrgFolder) + ")"
+				// the place, not the bare folder name: an org folder is often
+				// named "org", and "(org folder org)" read like a typo (D-596)
+				place := r.Org.Name
+				if st.OrgFolder != "." {
+					place += targetSep + red.folder(st.OrgFolder)
+				}
+				sv += "  (org folder " + place + ": roster, teams, company rules)"
 			}
 			row(label, sv)
 		}
@@ -524,7 +543,7 @@ func whoamiLines(s *orgcfg.Situation, id identity.Resolved, actor string, idErr 
 			row("global", "(no store sets org_folder: no roster or company rules)")
 		}
 		for _, l := range r.Links {
-			lv := red.str(l.StoreURL) + " " + red.folder(l.Folder) + "/"
+			lv := red.str(repourl.ShownStore(l.StoreURL)) + " " + red.folder(l.Folder) + "/" // a path store as its path (D-564)
 			if l.Default {
 				lv += " (default link)"
 			}

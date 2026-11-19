@@ -20,6 +20,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
 )
 
@@ -32,9 +33,9 @@ func (sp setupProber) FolderFacts(ctx context.Context, in opssetup.FoldersIn) (o
 	if err != nil {
 		return opssetup.FolderFacts{}, err
 	}
-	f := opssetup.FolderFacts{Home: resolvedPath(home), Start: start, Setup: strings.TrimSpace(in.Setup)}
+	f := opssetup.FolderFacts{Home: fspath.Canonical(home), Start: start, Setup: strings.TrimSpace(in.Setup)}
 	if top := gitTopLevel(ctx, start); top != "" {
-		f.GitRoot = resolvedPath(top)
+		f.GitRoot = fspath.Canonical(top)
 	}
 	for _, inc := range sp.p.IncludeIdentities(ctx) {
 		if inc.Folder != "" {
@@ -70,7 +71,7 @@ func (sp setupProber) startFolder() (string, error) {
 		}
 		start = wd
 	}
-	return resolvedPath(start), nil
+	return fspath.Canonical(start), nil
 }
 
 // Browse implements opssetup.FolderLister.

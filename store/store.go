@@ -65,6 +65,12 @@ type Cursor string
 type Change struct {
 	Row    Row
 	Expect hlc.HLC
+	// Upkeep marks lore's own refresh of a row that exists (the write ran
+	// under WithSupportingRefresh), never an edit a person asked for. A
+	// staged batch writes under another context, so the mark rides on the
+	// change itself; the live overlay holds such a change with the run's
+	// content row (devco:K-6).
+	Upkeep bool
 }
 
 // Capabilities are optional features; the core uses one only when the
@@ -103,11 +109,22 @@ type Backend interface {
 
 // SyncReport tells the core and the person what a Sync did.
 type SyncReport struct {
-	Sent     int         // local changes now on the remote
-	Received int         // remote changes now local
-	Merged   []ids.AnyID // rows merged field by field
-	Refused  []Refusal
-	Offline  bool // the remote could not be reached; nothing was lost
+	Sent int // local changes now on the remote
+	// Commits counts the commits this sync put on the remote: the store
+	// branch's over the remote's tip before the push, plus each branch
+	// layer ref's over the remote's copy. Unlike Sent it counts a commit
+	// that changed no row of this folder (another folder's rows, an org
+	// file): `lore store push` said "sent 0" after pushing one (D-517).
+	Commits  int
+	Received int // remote changes now local
+	// CommitsIn counts the commits this sync brought into the clone (git
+	// rev-list --count <tip before>..<tip after>), so the sync line agrees
+	// with git as the push line does (devco D-648: a pull said "received
+	// 4", its rows, while 8 commits arrived). 0 when nothing arrived.
+	CommitsIn int
+	Merged    []ids.AnyID // rows merged field by field
+	Refused   []Refusal
+	Offline   bool // the remote could not be reached; nothing was lost
 	// Folder is the data folder this backend reads (rowfs folder name,
 	// "." for the root), "" for a backend without folders. Sent and
 	// Received count only its rows when it has one.
@@ -131,6 +148,11 @@ type SyncReport struct {
 	// the person was removed from the org, F-9). Not a refusal: nothing is
 	// wrong with the rows, and the sync itself succeeded.
 	Held string
+	// Pushed is true when this sync pushed local commits to the remote,
+	// even ones that carry no row file (a store link, the org file): Sent
+	// counts rows only, so without it a sync that sent such a commit
+	// reported "up to date" under its own push line (devco J-4).
+	Pushed bool
 }
 
 // FolderCount is what one sync sent and received for one data folder.

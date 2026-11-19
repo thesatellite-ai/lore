@@ -28,6 +28,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -117,10 +119,26 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 	// (the result is then written even when it equals the upcast ours,
 	// so the file lands at `_v: 2` beside the migrated rows)
 	oursFile := ours
+	// devco Q-6: git's add/add (no copy at the merge base) is still true
+	// for the rule below, but the field diff runs against the copy both
+	// histories share (a cherry-picked row), so an edit to a field the
+	// other side never touched is kept (mergedriver_base.go).
+	addAdd := len(bytes.TrimSpace(base)) == 0
+	if addAdd {
+		if hb := historyBase(ctx, repoPath, theirsPath); len(bytes.TrimSpace(hb)) > 0 {
+			base = hb
+		}
+	}
 	up := wire.UpcastForMerge(base, ours, theirs)
 	base, ours, theirs = up[0], up[1], up[2]
 	var res merge.Result
-	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }, OursFirst: true}.Merge(base, ours, theirs)
+	// devco O-10 (the D-219 rule): a row added on both sides (no base: a
+	// force-pushed or rewritten branch brings the same row back with no
+	// common copy) keeps the newer edit of each text field by HLC and the
+	// replaced value is named below, never markers in the row. A clash
+	// over a common base keeps the documented manual settle (markers,
+	// lore sync conflicts / resolve).
+	out, conflict, err := merge.Driver{Registry: reg, Report: func(r merge.Result) { res = r }, OursFirst: true, TextNewerWins: addAdd}.Merge(base, ours, theirs)
 	if err != nil {
 		// Not a core row on some side (a hand edit, a file of another
 		// tool): git's line merge, which writes no format of its own.
@@ -129,10 +147,10 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 	if err := writeMerged(oursPath, oursFile, out); err != nil {
 		return err
 	}
-	if len(res.NewerWins) > 0 {
-		// git shows a driver's stderr: say which changes lost, so a
-		// teammate's edit never vanishes silently.
-		_, _ = fmt.Fprintf(stderr, "%s%s: both sides changed %s; kept the newer edit\n", mergeDriverPrefix, repoPath, strings.Join(res.NewerWins, ", ")) // stderr gone: the merge result stands
+	if len(res.NewerWins) > 0 || len(res.Replaced) > 0 {
+		// git shows a driver's stderr: say which changes lost and what
+		// they were, so a teammate's edit never vanishes silently.
+		_, _ = fmt.Fprintln(stderr, mergeDriverPrefix+repoPath+": "+newerWinsLine(res)) // stderr gone: the merge result stands
 	}
 	if res.Trash != "" {
 		// DELETION 3.7: a delete that lost to an edit (or two deletes) is
@@ -145,6 +163,38 @@ func runMergeDriver(ctx context.Context, stderr io.Writer, basePath, oursPath, t
 		return ExitStatus(1)
 	}
 	return nil
+}
+
+// maxReplacedShown bounds one replaced value in the merge driver's line.
+const maxReplacedShown = 80
+
+// newerWinsLine names the fields both sides changed, that the newer edit
+// was kept, and each value it replaced (Result.Replaced), quoted on one
+// line: "both sides changed title; kept the newer edit (replaced title
+// \"old\")".
+func newerWinsLine(res merge.Result) string {
+	fields := slices.Clone(res.NewerWins)
+	var replaced []string
+	for _, r := range res.Replaced {
+		if !slices.Contains(fields, r.Field) {
+			fields = append(fields, r.Field)
+		}
+		old := "(none)"
+		if r.Older != nil {
+			old = r.Older.String()
+			if len(old) > maxReplacedShown {
+				old = old[:maxReplacedShown] + "…"
+			}
+			old = strconv.Quote(old)
+		}
+		replaced = append(replaced, r.Field+" "+old)
+	}
+	slices.Sort(fields)
+	line := "both sides changed " + strings.Join(fields, ", ") + "; kept the newer edit"
+	if len(replaced) > 0 {
+		line += " (replaced " + strings.Join(replaced, ", ") + ")"
+	}
+	return line
 }
 
 // writeMerged writes out over ours unless it is unchanged.

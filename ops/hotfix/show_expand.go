@@ -2,6 +2,7 @@ package hotfix
 
 import (
 	"context"
+	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 
 	"github.com/thesatellite-ai/lore/model/row"
@@ -11,6 +12,8 @@ import (
 
 // ShowIn is the input of the show operation: the id flags plus --expand.
 type ShowIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	ID      string `json:"id" arg:"0" desc:"the hotfix id (hfx_…)"`
 	Project string `json:"project,omitempty" flag:"project" desc:"accepted for v0.1.17 scripts; the id already names its project"`
 	expand.Flag

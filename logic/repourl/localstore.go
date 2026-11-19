@@ -58,3 +58,21 @@ func ShownStore(norm string) string {
 	}
 	return "/" + rest
 }
+
+// IsLocalRemote reports a git remote that is a path on this machine,
+// written the way git and lore's own messages quote one: a file:// url,
+// an absolute path (/srv/git/x.git, C:\\git\\x), or one starting with ./,
+// ../ or ~ (O-13). A bare word (github.com, kit.git) is not: lore reads it
+// as an address and Normalize decides. Such a remote names a folder, not
+// the repo across clones, so it is no address lore records: git remote
+// set-url alone moves it.
+func IsLocalRemote(raw string) bool {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(strings.ToLower(s), "file://") || fileuri.IsDrivePath(s) {
+		return true
+	}
+	if strings.Contains(s, schemeSep) {
+		return false
+	}
+	return strings.HasPrefix(s, "/") || strings.HasPrefix(s, "./") || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "~/")
+}

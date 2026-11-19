@@ -50,7 +50,9 @@ func TestTasksTitles_OddTitlesRoundTrip(t *testing.T) {
 		if got := tasksShow(t, s.c, id).Title; got != "renamed "+tc.name {
 			t.Fatalf("%s: renamed: %q", tc.name, got)
 		}
-		s.c.MustLore("task", "edit", id, "--title", tc.want)
+		// The = form (devco:D-326): a title that starts with -- is
+		// written --title=--json, since --title --json is a missing value.
+		s.c.MustLore("task", "edit", id, "--title="+tc.want)
 		if got := tasksShow(t, s.c, id).Title; got != tc.want {
 			t.Fatalf("%s: renamed back: %q", tc.name, got)
 		}
@@ -63,6 +65,11 @@ func TestTasksTitles_OddTitlesRoundTrip(t *testing.T) {
 	}
 	id := tasksAdd(t, s.c, "keep my title")
 	s.c.Lore("task", "edit", id, "--title", " ").Refused(t)
+	// --title --json is a missing value, and the refusal names the = form.
+	e := tasksJSONErr(t, s.c, "task", "edit", id, "--title", "--json")
+	if !strings.Contains(e.Error.Hint, "--title=--json") {
+		t.Fatalf("a flag after --title names the = form: %+v", e)
+	}
 	if got := tasksShow(t, s.c, id).Title; got != "keep my title" {
 		t.Fatalf("a refused blank rename keeps the title: %q", got)
 	}

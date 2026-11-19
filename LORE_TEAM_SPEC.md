@@ -781,7 +781,7 @@ error E_LOST_CLAIM: tsk_31 is held by agent-frontend-2 since 13:58 (your token c
 |---|---|---|
 | claim | task ready (§7.3), no unexpired claim, caller holds fewer than `max_claims_per_agent` | signals: new claim with fresh `claim_token`, `claim_epoch = row.claim_epoch + 1`, `expires = now + lease.ttl`. Atomic with live: task row `claim_epoch++`, `status = in_progress` on first claim, `attempts = 1` on the first claim and `attempts++` on each reclaim (a claim after a voluntary release keeps the count), one `claim_log` entry |
 | renew (heartbeat) | caller's token is on the ref and not expired | signals only: `expires`, `renewed_seq++`. Never touches the row or its status |
-| release | caller's token on the ref | signals: remove the claim. Atomic with live: one `claim_log` entry |
+| release | caller's token on the ref | signals: remove the claim. Atomic with live: one `claim_log` entry; the row's status and `started_at` go back to what the claim found (recorded as `before` on the claim's `claim_log` entry, devco:D-427); the holder's time span is written only when the claim saw work (renewed, or held at least a minute). A status set explicitly during the claim (`task start`, `task edit --status`, done, cancel, reopen) is work: the status writer marks the claim's `before` with `status_set`, and the release keeps the row's status and `started_at` and writes the span (devco:D-464) |
 | done / note / gate request by the holder | token on the ref, not expired, and row `claim_epoch` equals the claim's | atomic: signals (drop or keep the claim) + live (the row change) |
 | revoke / cancel / reassign by a human | human actor from the identity file | atomic: signals (remove the claim) + live (`claim_epoch++`, status or assignee) |
 | expire | `now > expires + lease.grace` on the reader's clock **and** the reader has seen the same `renewed_seq` for at least `lease.renew_every` | readers treat it as absent; the next writer drops the file |
@@ -951,7 +951,7 @@ project: lore-tools   # the internal project folder, optional
 This marks client/website as a CLIENT repo of agency: internal notes default to agency/notes client/,
 and the leak guards turn on for everyone in agency. Continue? [y/N] y
 ✓ client/website (prj_01a1…, github.com/client/website) linked to agency/notes client/ (created; pushed)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 ```
 
 **Contract.**
@@ -1003,7 +1003,10 @@ init:  refuse if the target branch has any file outside the allowed list; write 
 use (every time a store from stores: is read or written, after its fetch):
   git ls-tree -r --name-only <store branch> (no checkout)
   no lore-store.yaml                 → E_NOT_A_STORE "not a lore store; create one with lore store init in a new empty repo"
-  any path outside the allowed list  → E_NOT_A_STORE "store contains non-lore files: <first 3>"
+  no lore-store.yaml + other paths   → E_NOT_A_STORE "store contains non-lore files: <first 3>"
+  lore-store.yaml + other paths      → a store: those files are skipped, and lore sync / doctor name
+                                       each with the commit and author that added it (devco R-2:
+                                       one plain-git push by any member must never lock the org out)
   allowed: lore-store.yaml, README*, LICENSE*, .gitattributes, .github/workflows/lore-*.yml, <folder>/.lore/**
 out:  ok, cached per store commit (a new commit is checked again)
 ```
@@ -1164,7 +1167,8 @@ CheckLeaks(staged files + commit message | live write | landing commit | PR body
            every landing commit, `lore check pr-body` (agents run it before opening a PR or posting a comment)
   cannot decide (store unreadable, no cached index) → block with "cannot check: store unreachable"
       (the hook fails closed; bypassing it is the user's deliberate --no-verify)
-CI mode (`lore check leaks --ci`, in the client's CI): no store access, ids and structure only (an id prefix or
+CI mode (`lore check leaks --ci`, in the client's CI): no store access; secrets in the files (and names) the pushed commits
+  add or change (built-in rules, the repo's .gitleaks.toml, committed secret_allows; hash only), then ids and structure (an id prefix or
   project id that is not this repo's, a reference field pointing outside), output names no internal id, store or org
 out:  findings; with --explain the rule, the source and the matched words
 ```
@@ -1506,7 +1510,7 @@ Hooks are local and optional, so a determined or careless person can always leak
 | Path | Why hooks miss it | What remains |
 |---|---|---|
 | `git commit --no-verify` | the commit hooks never run | the pre-push leak check (same rules, fails closed) |
-| `git push --no-verify`, a changed `core.hooksPath`, a teammate without lore | no hook runs | the client CI check (ids and structure only); the leak is caught late or not at all for plain text |
+| `git push --no-verify`, a changed `core.hooksPath`, a teammate without lore | no hook runs | the client CI check (secrets, ids and structure); the leak is caught late or not at all for plain text |
 | edits in the GitHub web UI | no local hook | the client CI check |
 | an agent writing internal text into a PR body, issue comment, chat or a screenshot | not a commit | the fixed "never quote" header in the render, `lore check pr-body`, and the agent's own instructions |
 | text paraphrased rather than copied | the text rule matches runs of words | nothing technical; this is a people problem |
@@ -1546,6 +1550,8 @@ Several agents (agent sessions on a laptop, tmux sessions on a dev server, other
 | **Mission status** | `lore mission status mis_12 [--json]` with columns ready / waiting / gated / claimed / expired / blocked / done | view |
 
 ### 7.3 `lore task next`
+
+Plain `lore task next` reads (devco:D-426): it runs steps 1-2 and the ranking without writing and prints the task step 4 would claim, why (its urgency terms) and what waits. `lore task next --claim` runs every step below; `--dry-run` prints the older ranking form and never claims.
 
 ```text
 in:   caller (agent actor + session), --mission, --repo, --role, --owns, clock

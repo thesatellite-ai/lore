@@ -44,6 +44,11 @@ type Attached struct {
 	// WriteRefused, when set, is returned for every write to this store
 	// (SOURCE_OF_TRUTH row 7: a second address of a store id; wire sets it).
 	WriteRefused error
+	// WriteRefusedLifted, when set, lets a write through WriteRefused when
+	// it answers true for the write's ctx (RefuseWritesUnless). Why
+	// (J-15): a contractor's org folder refuses their writes, but their
+	// own roster row (lore actor register) is still theirs to write.
+	WriteRefusedLifted func(context.Context) bool
 	// Level is the settings level this store's policies, secret_rules and
 	// secret_allows rows count at (logic/policy, O1). Empty: the repo
 	// store counts at policy.LevelRepo, any other store at
@@ -160,6 +165,10 @@ type Engine struct {
 	// repoAlias answers for the repo store when none is attached
 	// (WithRepoAlias): a command run inside a store's folder.
 	repoAlias store.Source
+	// aliases are other names of attached stores (WithStoreAlias): an org
+	// store's short name from lore-org.yaml answers for the name it is
+	// attached under here (devco T-5).
+	aliases   map[store.Source]store.Source
 	cache     store.Cache
 	reg       *schema.Registry
 	scanner   scan.Scanner
@@ -175,12 +184,23 @@ type Engine struct {
 	// machinePolicy are this machine's stricter local policy values
 	// (WithMachinePolicy, FQ11); storeSettings resolves them with the rows.
 	machinePolicy []policy.Entry
+	// notice prints a one-line note for the person (WithNotice); nil
+	// prints nothing. unknownSaid keeps each ignored policy key to one
+	// note per process (devco:V-16).
+	notice      func(string)
+	unknownMu   sync.Mutex
+	unknownSaid map[policy.Key]bool
 	// machine: the machine store (store.SourceMachine) is attached in
 	// stores but kept out of order (WithMachineStore, P3-LOCAL-1).
 	machine bool
 	// written is set by the first write (refuseNeverClient); RebindActor
 	// refuses after it (TEAM_PROFILES 6.3).
 	written writeMark
+	// readMask is the read-side secret masking state (readmask.go,
+	// devco:R-14), made on first use.
+	readMaskOnce sync.Once
+	readMask     *readMasks
+	readScanner  scan.Scanner // nil: reads are not masked (WithReadScanner)
 }
 
 // Option configures New.
@@ -274,6 +294,34 @@ func WithRepoAlias(name store.Source) Option {
 	return func(e *Engine) error { e.repoAlias = name; return nil }
 }
 
+// WithStoreAlias makes alias name the attached store name wherever an
+// operation names a store (--to, --from). Why (devco T-5): an org store is
+// attached under its org's name ("agency", "agency/org") in a linked repo,
+// so the name its admin gave it (`lore store init --name clientco`,
+// lore-org.yaml `name:`) answered E_NOT_FOUND there. An alias never hides
+// a store attached under that very name.
+func WithStoreAlias(alias, name store.Source) Option {
+	return func(e *Engine) error {
+		if e.aliases == nil {
+			e.aliases = map[store.Source]store.Source{}
+		}
+		e.aliases[alias] = name
+		return nil
+	}
+}
+
+// StoreName is name, or the attached store an alias names (WithStoreAlias)
+// when no store is attached under name itself.
+func (e *Engine) StoreName(name store.Source) store.Source {
+	if _, ok := e.stores[name]; ok {
+		return name
+	}
+	if to, has := e.aliases[name]; has {
+		return to
+	}
+	return name
+}
+
 // WithCache sets the cache port (required).
 func WithCache(c store.Cache) Option { return func(e *Engine) error { e.cache = c; return nil } }
 
@@ -299,6 +347,11 @@ func WithSettings(s Settings) Option { return func(e *Engine) error { e.settings
 func WithMachinePolicy(entries []policy.Entry) Option {
 	return func(e *Engine) error { e.machinePolicy = entries; return nil }
 }
+
+// WithNotice sets where the engine's one-line notes for the person go
+// (stderr in the CLI). Today: a policy row whose key this build does not
+// know, ignored (devco:V-16). nil (the default) prints nothing.
+func WithNotice(f func(string)) Option { return func(e *Engine) error { e.notice = f; return nil } }
 
 // WithActor sets the actor every write is stamped with (required).
 func WithActor(a ids.ID[ids.Actor]) Option { return func(e *Engine) error { e.actor = a; return nil } }
@@ -372,6 +425,15 @@ func New(opts ...Option) (*Engine, error) {
 // Stores lists the attached store names in precedence order.
 func (e *Engine) Stores() []store.Source { return slices.Clone(e.order) }
 
+// AnswersRepo reports whether a store answers for the repo store (one
+// attached as repo, or the alias a store-only open names for it). A
+// store-only open run under a setup from a plain folder has neither
+// (devco D-631): there is no "this repo's project" to ask for.
+func (e *Engine) AnswersRepo() bool {
+	_, err := e.attached(store.SourceRepo)
+	return err == nil
+}
+
 // IsClient reports whether the attached store name is a client repo
 // (Attached.Client); false for an unknown name.
 func (e *Engine) IsClient(name store.Source) bool { return e.stores[name].Client }
@@ -411,6 +473,7 @@ func (e *Engine) attached(name store.Source) (Attached, error) {
 	if !ok && name == store.SourceRepo && e.repoAlias != "" {
 		a, ok = e.stores[e.repoAlias]
 	}
+
 	if !ok {
 		return Attached{}, errs.New(errs.NotFound, "no store named "+string(name)+" is attached").
 			WithHint("run `lore store list` to see the stores this repo attaches")
@@ -418,9 +481,19 @@ func (e *Engine) attached(name store.Source) (Attached, error) {
 	return a, nil
 }
 
+// CheckWritable is nil when a write to the store named name may go
+// through here, else the refusal the write would get (unknown, read-only,
+// or refused like an own repo linked to a store folder). An operation that
+// asks before it writes checks it first, so it never asks a question and
+// prints a --yes command for a write that is then refused (devco D-603).
+func (e *Engine) CheckWritable(ctx context.Context, name store.Source) error {
+	_, err := e.writable(ctx, e.StoreName(name))
+	return err
+}
+
 // writable returns the named store when a write may go to it (spec 9.2
 // permission, 0.1.18: attached and not read_only).
-func (e *Engine) writable(name store.Source) (Attached, error) {
+func (e *Engine) writable(ctx context.Context, name store.Source) (Attached, error) {
 	a, err := e.attached(name)
 	if err != nil {
 		return Attached{}, err
@@ -429,7 +502,7 @@ func (e *Engine) writable(name store.Source) (Attached, error) {
 		return Attached{}, errs.Wrap(errs.StoreReadOnly, "store "+string(name)+" is attached read-only", store.ErrReadOnly).
 			WithHint("write to another store with --to")
 	}
-	if a.WriteRefused != nil {
+	if a.WriteRefused != nil && (a.WriteRefusedLifted == nil || !a.WriteRefusedLifted(ctx)) {
 		return Attached{}, a.WriteRefused
 	}
 	return a, nil

@@ -21,7 +21,7 @@ The cache is never the truth. Lore keeps every row it read from the files and bu
 
 - Each clone and each git worktree has its own repo cache, `~/.lore/cache/repo/<repo folder>-<hash>.db`, in lore's home and never in the repo (a moved or renamed repo folder gets a fresh one).
 - Caches of store folders live under `~/.lore/cache/stores/`, named by the store's permanent id, so every repo on the machine that attaches the same store folder shares one file.
-- A repo that attaches more than nine store folders gets one combined cache, `~/.lore/cache/combined/<hash>.db`, instead of one file per folder.
+- A repo that attaches more than eight store folders, and a read over more than eight folders of a store from its clone, a setup folder or `--setup` / `--store <org>`, gets one combined cache, `~/.lore/cache/combined/<hash>.db`, instead of one file per folder, so search and `lore sql` read any number of folders.
 - `lore cache prune` lists the cache files of stores no repo on this machine attaches any more, and removes them after asking.
 
 ## If this, then that
@@ -30,7 +30,7 @@ The cache is never the truth. Lore keeps every row it read from the files and bu
 - **If a note must never be committed to this repo** (your rates, notes about a client), write it `--to` a store. Use a folder store when only you need it on this machine, a git store when a teammate or a second machine needs it.
 - **If you want your personal notes on two machines,** make `personal.store` a private git repo of your own (`lore store init --name me --url git@github.com:octo-personal/lore-me`), not a folder.
 - **If your company shares notes across repos and people,** use a git store and link the repos to it with `lore org link` (see [How to lay out your stores](store-layout.md)).
-- **If you started with a folder store and now need to share it,** push the folder to a private git repo (the files are already in the git layout) and point the store at it with `lore store set-url --name <name> --url <url>`.
+- **If you started with a folder store and now need to share it,** make an empty private git repo and run `lore store set-url --name <name> --url <url>`: lore copies the folder into its clone of that repo and commits it (the files are already in the git layout; the folder's lock and state stay out) and uses that clone from then on; then run `lore sync`, which pushes it.
 - **If a repo should only read a store,** attach it with `lore store add --name <name> --url <url> --read-only`.
 - **If the store's notes may appear in committed files** (the rendered `.lore/LORE.md`, a client repo), mark it `lore store visibility --name <name> --visibility shareable`; the default `internal` keeps them out.
 - **If lore feels slow or a cache looks wrong,** you never need to delete anything by hand: `lore doctor` checks it, and `lore search rebuild` rebuilds the search index.
@@ -90,7 +90,7 @@ $ find ~/.lore/cache -name '*.db' | sed -e 's#/sto_[0-9a-z]*/#/<store id>/#' -e 
 ```console
 # alice, in website
 $ lore store init --name synced --url file://$HOME/Dropbox/notes
-ERROR: [E_NETWORK_FS] rowfs: the store is inside a "dropbox" folder (cloud sync)
+ERROR: [E_NETWORK_FS] the store is inside a "dropbox" folder (cloud sync)
   hint: move the store to a local folder, or set LORE_ALLOW_NETWORK_FS=1 to accept the risk
 (exit 23)
 ```

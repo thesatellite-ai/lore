@@ -360,3 +360,60 @@ func TestDisagreesHintNamesLiveFlags(t *testing.T) {
 		t.Fatalf("hint %q", oe.Hint)
 	}
 }
+
+// devco T-17: an own repo moved to another owner on the git host matches
+// no own: pattern; its own lore data keeps it own (named in a warning
+// with both fixes), and a client link or repos: pattern still wins.
+func TestResolveMovedOwnRepoStaysOwn(t *testing.T) {
+	cfg := &orgconf.Config{Orgs: []orgconf.Org{{Name: "acme", Own: []string{"git.example.test/acme/*"}, Repos: []string{"git.example.test/client/*"}}}}
+	in := Inputs{Config: cfg, ProjectID: "prj_1", Remotes: []string{"git.example.test/other/app"}, OwnData: true,
+		Setup: SetupHint{Name: "work", Org: "acme", Why: "folder ~/code/**"}}
+	r, err := Resolve(in)
+	if err != nil || r.Role != RoleOwn {
+		t.Fatalf("moved own repo: role %s err %v, want own", r.Role, err)
+	}
+	if len(r.Warnings) == 0 || !strings.Contains(r.Warnings[0], "git.example.test/other/*") || !strings.Contains(r.Warnings[0], "lore org link --org acme") {
+		t.Fatalf("the move is not named with its fixes: %q", r.Warnings)
+	}
+	in.OwnData = false
+	if r, _ := Resolve(in); r.Role != RoleClient {
+		t.Fatalf("without own data the fail-closed default must stay client, got %s", r.Role)
+	}
+	in.OwnData, in.Remotes = true, []string{"git.example.test/client/app"}
+	if r, _ := Resolve(in); r.Role != RoleClient {
+		t.Fatalf("a repos: pattern match must stay client whatever its data, got %s", r.Role)
+	}
+}
+
+// TestPartialPatternNeverTurnsClientOwn: with `*` inside a segment the
+// client pattern still wins over an own pattern that matches the same
+// repo (devco D-453; fail closed as for whole-segment patterns).
+func TestPartialPatternNeverTurnsClientOwn(t *testing.T) {
+	cfg := &orgconf.Config{
+		Orgs: []orgconf.Org{{
+			Name:     "northwind",
+			Identity: orgconf.OrgIdentity{Key: "human:alice@northwind.example"},
+			Stores:   []orgconf.Store{{URL: "git@github.com:northwind/lore", OrgFolder: "org"}},
+			Own:      []string{"github.com/northwind/*", "github.com/northwind/client*"},
+			Repos:    []string{"github.com/northwind/client-*", "github.com/northwind/*-shop"},
+		}},
+		RepoOrgs: map[string]orgconf.RepoOrg{},
+	}
+	for _, c := range []struct {
+		remote string
+		want   Role
+	}{
+		{"github.com/northwind/client-acme", RoleClient},
+		{"github.com/northwind/acme-shop", RoleClient},
+		{"github.com/northwind/clientele", RoleOwn},
+		{"github.com/northwind/api", RoleOwn},
+	} {
+		res, err := Resolve(Inputs{Config: cfg, Remotes: norm(t, c.remote)})
+		if err != nil {
+			t.Fatalf("%s: %v", c.remote, err)
+		}
+		if res.Role != c.want {
+			t.Errorf("%s: role %s (matched by %q), want %s", c.remote, res.Role, res.MatchedBy, c.want)
+		}
+	}
+}

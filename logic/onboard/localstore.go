@@ -55,12 +55,25 @@ func SetupsOnLocalStore(cfg Config, except string) []string {
 }
 
 // LocalStoreDetail is the page's detail line of the local choice: the
-// folder, and, when other setups already keep their notes there, that it
-// is shared with them.
-func LocalStoreDetail(cfg Config, setup string) string {
+// folder under shownHome (the lore home as messages name it: ~/.lore, or
+// the LORE_HOME folder; "" = ~/.lore), and, when other setups already
+// keep their notes there, that it is shared with them. devco D-448: under
+// LORE_HOME=~/.lore-dev the choice said file://~/.lore/stores/_me while
+// the step wrote ~/.lore-dev/stores/_me.
+func LocalStoreDetail(cfg Config, setup, shownHome string) string {
+	url := LocalStoreURLIn(shownHome)
 	others := SetupsOnLocalStore(cfg, setup)
 	if len(others) == 0 {
+		return url
+	}
+	return url + " (your one personal store, shared with " + plural(len(others), "your setup ", "your setups ") + strings.Join(others, ", ") + ")"
+}
+
+// LocalStoreURLIn is LocalStoreURL under shownHome ("" = ~/.lore): the
+// url the "local folder" choice stands for in that home.
+func LocalStoreURLIn(shownHome string) string {
+	if shownHome == "" {
 		return LocalStoreURL
 	}
-	return LocalStoreURL + " (your one personal store, shared with " + plural(len(others), "your setup ", "your setups ") + strings.Join(others, ", ") + ")"
+	return "file://" + strings.TrimSuffix(shownHome, "/") + "/stores/" + LocalStoreFolder
 }

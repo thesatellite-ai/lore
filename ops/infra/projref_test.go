@@ -84,3 +84,12 @@ func TestProjectVerbsTakeAName(t *testing.T) {
 		t.Errorf("archive twin by id: %q", got)
 	}
 }
+
+// TestProjectShowDefaultsToHere: project show with no id shows the project
+// of the folder it runs in (devco D-449: it needed --id even there).
+func TestProjectShowDefaultsToHere(t *testing.T) {
+	h := opstest.New(t)
+	if got := h.ID(h.Must(infra.OpProjectShow, `{}`)); got != h.Project {
+		t.Fatalf("project show with no id: %q, want %q", got, h.Project)
+	}
+}

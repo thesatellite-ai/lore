@@ -8,6 +8,7 @@ import (
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/internal/work"
+	"github.com/thesatellite-ai/lore/schema"
 )
 
 // The org roster verbs (LORE_TEAM_SPEC F18, §7.2): `lore actor register`
@@ -72,8 +73,9 @@ func RosterOps(r Roster) []op.Entry {
 				return actorRegister(ctx, r, in)
 			}),
 		op.Define(op.Spec{Name: OpActorDeactivate, Summary: "Mark someone as gone (active=false, left_at); actors are never deleted", Permission: op.PermWrite, Access: op.AccessWrite,
-			Errors:   append([]errs.Code{errs.InvalidInput}, writeErrors...),
-			Examples: []op.Example{{Title: "someone left the team", CLI: "lore actor deactivate --handle @carol", Want: "deactivated"}}},
+			Errors: append([]errs.Code{errs.InvalidInput}, writeErrors...),
+			Examples: []op.Example{{Title: "someone left the team", CLI: "lore actor deactivate --handle @carol", Want: "deactivated"},
+				{Title: "stop an agent session (its next write is refused)", CLI: "lore actor deactivate --handle @agent-frontend", Want: "deactivated"}}},
 			func(ctx context.Context, in ActorDeactivateIn) (ActorDeactivateOut, error) {
 				return actorDeactivate(ctx, r, in)
 			}),
@@ -115,7 +117,8 @@ type ActorRegisterOut struct {
 	Label  string `json:"label,omitempty"`
 	// Created is false when the actor was already registered (refreshed).
 	Created bool `json:"created"`
-	// Where names the roster: "agency org/" or "this repo".
+	// Where names the roster: "agency (agency/org)" or "this repo"; a
+	// line says "registered in the roster of <where>" (devco D-668).
 	Where string `json:"where"`
 	// ViaContact is set when the caller's key is an identity contact of
 	// this existing actor (TEAM_PROFILES 6.3, TP-4): nothing was written,
@@ -128,7 +131,7 @@ type ActorRegisterOut struct {
 // "✓ <id> agent <label> registered in <where>".
 func (o ActorRegisterOut) Text() string {
 	if o.Kind == RegisterKindAgent {
-		return work.Success + " " + o.ID + " agent " + o.Label + " registered in " + o.Where + "\n"
+		return work.Success + " " + o.ID + " agent " + o.Label + " registered in the roster of " + o.Where + "\n"
 	}
 	verb := "registered"
 	switch {
@@ -141,18 +144,21 @@ func (o ActorRegisterOut) Text() string {
 	if o.Handle != "" {
 		h = " (" + handleMark + o.Handle + ")"
 	}
-	return work.Success + " " + o.ID + " " + o.Name + h + " " + verb + " in " + o.Where + "\n"
+	return work.Success + " " + o.ID + " " + o.Name + h + " " + verb + " in the roster of " + o.Where + "\n"
 }
 
 // ActorDeactivateIn is the input of actor.deactivate.
 type ActorDeactivateIn struct {
-	Handle string `json:"handle" arg:"0" desc:"the person's @handle"`
+	Handle string `json:"handle" arg:"0" desc:"the person's @handle, an agent's @label, or an act_ id"`
 }
 
 // ActorDeactivateOut is the deactivated actor.
 type ActorDeactivateOut struct {
 	ID   string `json:"id"`
 	Name string `json:"display_name"`
+	// Kind is the actor's kind (human, agent): an agent's next steps differ
+	// (devco:S-14: offboard needs an org and ends a person's stint).
+	Kind string `json:"kind,omitempty"`
 	// handle is the @handle the caller named (text only): the offboard
 	// hint names the person the way they were named.
 	handle string
@@ -165,8 +171,13 @@ func (o ActorDeactivateOut) Text() string {
 	if who == "" {
 		who = o.ID
 	}
-	return work.Success + " " + o.ID + " " + o.Name + " deactivated (kept on the roster; old rows still resolve)\n" +
-		"  to end their projects and stint too: lore actor offboard --actor " + who + "\n"
+	line := work.Success + " " + o.ID + " " + o.Name + " deactivated (kept on the roster; old rows still resolve)\n"
+	if o.Kind == schema.ActorKindAgent {
+		// devco:S-14: stopping an agent session; its next write is refused.
+		return line + "  its sessions' next lore write is refused (E_STATUS_CHANGE); hand its open tasks on: lore task reassign --from " + who + " --assign @<handle> --yes (a claim it holds: lore task revoke --id <task>)\n" +
+			"  its owner starts it again with: lore agent start --label " + strings.TrimPrefix(o.Name, handleMark) + " --yes\n"
+	}
+	return line + "  to end their projects and stint too: lore actor offboard --actor " + who + "\n"
 }
 
 // ActorDeleteIn is the input of actor.delete (the id is optional: the
@@ -219,7 +230,7 @@ func actorRegister(ctx context.Context, r Roster, in ActorRegisterIn) (ActorRegi
 func actorDeactivate(ctx context.Context, r Roster, in ActorDeactivateIn) (ActorDeactivateOut, error) {
 	h := strings.TrimPrefix(strings.TrimSpace(in.Handle), handleMark)
 	if h == "" {
-		return ActorDeactivateOut{}, errs.New(errs.InvalidInput, "name the person as @handle")
+		return ActorDeactivateOut{}, errs.New(errs.InvalidInput, "name the person as --handle @<handle> (an agent: --handle @<label>, or an act_ id)")
 	}
 	out, err := r.ActorDeactivate(ctx, handleMark+h)
 	out.handle = handleMark + h

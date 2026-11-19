@@ -4,8 +4,10 @@
 // what the release binary matches.
 //
 // Patterns use `*` for exactly one path segment and `**` for any number of
-// segments (zero or more). Nothing else is special: a pattern reads as a
-// path.
+// segments (zero or more). Inside a segment `*` is any run of characters
+// that stays in that segment (`client-*`, `*-api`; devco D-453: an org
+// listed its client repos one by one because only a whole-segment `*`
+// was accepted). Nothing else is special: a pattern reads as a path.
 
 package repourl
 
@@ -34,8 +36,9 @@ func (p Pattern) String() string { return p.raw }
 
 // Compile validates and normalises a pattern. The host segment may not be a
 // wildcard (a pattern for "any host" would match every repo of every
-// company), `**` may appear at most once, and a segment is either a literal
-// or exactly a wildcard.
+// company), `**` may appear at most once and only as a whole segment, and
+// any other segment is a literal that may hold `*` (any run of characters
+// within the segment).
 func Compile(raw string) (Pattern, error) {
 	s := strings.Trim(strings.TrimSpace(raw), "/")
 	if s == "" {
@@ -55,7 +58,7 @@ func Compile(raw string) (Pattern, error) {
 		return Pattern{}, fmt.Errorf("repourl: pattern %q needs a host and at least one path segment", raw)
 	}
 	segs[0] = strings.ToLower(segs[0])
-	if segs[0] == WildSegment || segs[0] == WildAny {
+	if strings.Contains(segs[0], WildSegment) {
 		return Pattern{}, fmt.Errorf("repourl: pattern %q may not use a wildcard for the host", raw)
 	}
 	anyCount := 0
@@ -66,8 +69,8 @@ func Compile(raw string) (Pattern, error) {
 		case seg == WildAny:
 			anyCount++
 		case seg == WildSegment:
-		case strings.Contains(seg, WildSegment):
-			return Pattern{}, fmt.Errorf("repourl: pattern %q: %q mixes text and a wildcard; use * or ** as a whole segment", raw, seg)
+		case strings.Contains(seg, WildAny):
+			return Pattern{}, fmt.Errorf("repourl: pattern %q: %q mixes text and **; ** stands for whole segments only (use * inside a segment, like client-*)", raw, seg)
 		}
 	}
 	if anyCount > 1 {
@@ -100,10 +103,36 @@ func matchSegs(pat, val []string) bool {
 		if len(val) == 0 {
 			return false
 		}
-		if ps != WildSegment && ps != val[0] {
+		if !segMatch(ps, val[0]) {
 			return false
 		}
 		val = val[1:]
 	}
 	return len(val) == 0
+}
+
+// segMatch matches one pattern segment against one value segment: `*`
+// alone is any segment, a `*` inside a segment any run of characters
+// (also none), every other character itself.
+func segMatch(ps, v string) bool {
+	if ps == WildSegment {
+		return true
+	}
+	parts := strings.Split(ps, WildSegment)
+	if len(parts) == 1 {
+		return ps == v
+	}
+	if !strings.HasPrefix(v, parts[0]) {
+		return false
+	}
+	v = v[len(parts[0]):]
+	last := parts[len(parts)-1]
+	for _, mid := range parts[1 : len(parts)-1] {
+		i := strings.Index(v, mid)
+		if i < 0 {
+			return false
+		}
+		v = v[i+len(mid):]
+	}
+	return len(v) >= len(last) && strings.HasSuffix(v, last)
 }

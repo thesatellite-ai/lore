@@ -123,22 +123,32 @@ type ConflictNote struct {
 // StoreReport is one attached store's sync result (ops/stores.Report's
 // shape, repeated here so the sync noun imports no other noun).
 type StoreReport struct {
-	Store    string   `json:"store"`
-	Sent     int      `json:"sent"`
-	Received int      `json:"received"`
-	Merged   int      `json:"merged"`
-	Refused  int      `json:"refused"`
-	Problems []string `json:"problems,omitempty"`
-	Offline  bool     `json:"offline,omitempty"`
+	Store    string `json:"store"`
+	Sent     int    `json:"sent"`
+	Received int    `json:"received"`
+	// SentCommits / ReceivedCommits are the commits behind Sent and
+	// Received (rows), counted by git (devco D-648).
+	SentCommits     int      `json:"sent_commits,omitempty"`
+	ReceivedCommits int      `json:"received_commits,omitempty"`
+	Merged          int      `json:"merged"`
+	Refused         int      `json:"refused"`
+	Problems        []string `json:"problems,omitempty"`
+	Offline         bool     `json:"offline,omitempty"`
 	// HeldBy names the store folder whose refusal held this folder's push
 	// and Held is the line that says so (ops/stores.HeldLine); empty when
 	// the folder's push was its own.
 	HeldBy string `json:"held_by,omitempty"`
 	Held   string `json:"held,omitempty"`
+	// Pushed is true when this sync pushed local commits of the store,
+	// also ones that carry no row (a store link, the org file), which
+	// Sent does not count.
+	Pushed bool `json:"pushed,omitempty"`
 	// URL, Status, Error and Next are set by `lore sync` run outside a
 	// code repo (every store of the setup, or the store checkout it runs
 	// in): the store's url, what happened (StoreStatus*), and for a store
-	// that failed the cause and the next step. Empty inside a repo.
+	// that failed the cause and the next step. Inside a repo only URL and
+	// Error are set, for an offline store (devco L-10: the cause was in no
+	// field).
 	URL    string `json:"url,omitempty"`
 	Status string `json:"status,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -178,14 +188,15 @@ type RunData struct {
 	// LivePending counts live writes this sync could not push (offline, or
 	// the remote refused refs/lore/*); they wait in the clone for the next
 	// sync. 0 (omitted) when every write reached the remote.
-	LivePending int           `json:"live_pending,omitempty"`
+	LivePending int `json:"live_pending,omitempty"`
+	// LiveOffline and LiveError (devco L-10): the live pass could not
+	// reach the repo's remote (its fetch or its push failed, after one
+	// retry of a dropped connection); LiveError names the remote, the git
+	// step and git's own reason, so a script can tell a failed sync from a
+	// clean one without reading the text.
+	LiveOffline bool          `json:"live_offline,omitempty"`
+	LiveError   string        `json:"live_error,omitempty"`
 	Stores      []StoreReport `json:"stores,omitempty"`
-	// LiveMoved: the live pass of this sync moved rows (brought a
-	// teammate's live writes into this clone, sent waiting writes, or
-	// landed rows). The live pass fills no Imported/Exported list, so this
-	// is how the sync's render step tells a sync that changed rows from a
-	// no-op one (B-8). Not in --json: the report lines already say it.
-	LiveMoved bool `json:"-"`
 }
 
 // RunOut is the output of sync.run (envelope kind sync.report).

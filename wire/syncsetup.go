@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/fsreason"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
@@ -146,6 +147,7 @@ func loreFolderUpTo(dir, top string) bool {
 func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 	out := opssync.RunOut{SchemaVersion: opssync.SchemaVersion, Kind: opssync.KindReport, Data: opssync.RunData{Pass: opssync.PassSetup}}
 	var stores []attach.Store
+	var shown []string // each store's name in the text lines (setupStoresShown)
 	if sc, in := storeHere(a.opts.RepoDir); in {
 		one, err := storeHereEntry(a.opts.Home, sc)
 		if err != nil {
@@ -162,7 +164,7 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		stores = []attach.Store{one}
 	} else {
 		var err error
-		if stores, err = a.setupStores(ctx); err != nil {
+		if stores, shown, err = a.setupStoresShown(ctx); err != nil {
 			return out, err
 		}
 		// B-9: one clone per store, each named as `lore store list` names
@@ -175,22 +177,50 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 		}
 	}
 	out.Lines = bareLines(ctx, a.opts.RepoDir)
-	if len(stores) == 0 {
-		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
-		return out, nil
+	if out.Data.Pass != opssync.PassStore && !insideWorkTree(ctx, a.opts.RepoDir) {
+		out.Lines = append(out.Lines, a.noSetupScope(ctx)...)
 	}
 	var failed []opssync.StoreReport
 	var codes []errs.Code
-	for _, one := range stores {
-		r, code := a.syncOneStore(ctx, one)
+	add := func(r opssync.StoreReport, code errs.Code, name string) {
 		out.Data.Stores = append(out.Data.Stores, r)
-		out.Lines = append(out.Lines, syncStoreLines(r)...)
+		out.Lines = append(out.Lines, syncStoreLines(r, name)...)
 		if r.Status == opssync.StoreStatusFailed || r.Status == opssync.StoreStatusOffline {
 			failed = append(failed, r)
 			codes = append(codes, code)
 		}
 	}
+	synced := map[string]bool{} // normalized urls this pass reported
+	for i, one := range stores {
+		r, code := a.syncOneStore(ctx, one)
+		name := ""
+		if i < len(shown) {
+			name = shown[i]
+		}
+		add(r, code, name)
+		if norm, nerr := repourl.NormalizeStore(one.URL); nerr == nil && norm != "" {
+			synced[norm] = true
+		}
+	}
+	if out.Data.Pass != opssync.PassStore {
+		// D-224: an org store written from a folder in no setup (`lore
+		// store folder add` from ~) said "lore sync sends it"; its clone's
+		// waiting commits go out here as they do from a repo
+		for _, p := range a.waitingOrgPushes(ctx, synced, a.syncOrg(ctx)) {
+			r, code := waitingPushReport(a.urlLabel(p.url), p.report)
+			add(r, code, "")
+		}
+	}
+	if len(out.Data.Stores) == 0 {
+		out.Lines = append(out.Lines, "no stores to sync: this folder is in no setup with a team or personal store (`lore setup list`, `lore store list`)")
+		return out, nil
+	}
 	if len(failed) == 0 {
+		if insideWorkTree(ctx, a.opts.RepoDir) {
+			// a repo linked to a store folder by its remote: its branch
+			// layers land (auto_land) or retire (orphaned) here too
+			out.Lines = append(out.Lines, a.sweepLayers(ctx)...) // BRANCH_LAYERS 9, 10
+		}
 		return out, nil
 	}
 	// a failed run prints no stdout: the lines go to stderr first, then
@@ -206,6 +236,34 @@ func (a *App) SyncSetup(ctx context.Context) (opssync.RunOut, error) {
 	}
 	msg := fmt.Sprintf("sync: %d of %d stores failed: %s (the other stores synced)", len(failed), len(stores), strings.Join(names, ", "))
 	return out, errs.New(sameCode(codes), msg).WithHint(strings.Join(nexts, "; "))
+}
+
+// noSetupScope is the line that opens `lore sync` in a folder no setup
+// covers (the home folder of a person whose setups name ~/code/**), when
+// this machine has setups: the sync covers only the stores `lore store
+// list` shows here plus the org store clones with commits waiting, and
+// `--setup` syncs a setup's stores. Before (devco D-561, owner use pass)
+// a home sync printed one org's admin store as if it were the whole sync,
+// and the company store was never named. Nothing when a setup is in effect
+// here: its stores are what this sync syncs, as `lore store list` says.
+func (a *App) noSetupScope(ctx context.Context) []string {
+	if res, err := a.SetupResolution(ctx, ""); err != nil || res.Active.Name != "" {
+		return nil
+	}
+	raw, err := readConfigRaw(a.opts.Home)
+	if err != nil || raw == nil {
+		return nil
+	}
+	d, err := decodeSetupsDoc(raw)
+	if err != nil || len(d.Setups) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(d.Setups))
+	for _, e := range d.Setups {
+		names = append(names, e.Name)
+	}
+	return []string{"no setup covers this folder, so this sync covers only the stores `lore store list` shows here and the org store clones with commits waiting; " +
+		"`lore sync --setup <name>` syncs every store of a setup (yours: " + strings.Join(names, ", ") + ")"}
 }
 
 // sameCode is the one code every failure shares, else E_STORE_UNREACHABLE
@@ -238,25 +296,67 @@ func storeNameOnly(name, folder string) string {
 // `lore store list` shows here) with one entry per clone: the folders of
 // one store share its clone, so it is synced once, under its store name.
 func (a *App) setupStores(ctx context.Context) ([]attach.Store, error) {
+	out, _, err := a.setupStoresShown(ctx)
+	return out, err
+}
+
+// setupStoresShown is setupStores plus each clone's name in the sync's
+// text lines, by the one rule every store line follows (storeshown.go,
+// devco D-279): the store's own name, as `lore store list` names it in
+// the org's repos and outside any repo, "/<folder>" for a folder, and
+// nothing else, whatever this repo's `lore store list` calls it (D-567).
+// A clone listed here by its root is named by the store alone; a clone
+// listed only by a folder (a client repo attaches the client store's
+// folder and the team store's org folder) is named by that folder, as
+// the own-repo sync names it: before, a client repo printed the team
+// store as "acme" (in that repo `acme` is the client folder) where the
+// org's repos printed "acme/org".
+func (a *App) setupStoresShown(ctx context.Context) ([]attach.Store, []string, error) {
 	entries, err := opsstores.ListEntries(ctx, a)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var out []attach.Store
+	var shown []string
 	at := map[string]int{}
 	for _, e := range entries {
 		key := storePlaceKey(attach.Store{URL: e.URL, Branch: e.Branch})
 		name := storeNameOnly(e.Name, e.Folder)
+		label := a.setupEntryShown(e)
 		if i, seen := at[key]; seen {
 			if e.Folder == "" { // the store's own name beats a folder's
 				out[i].Name = store.Source(name)
+				shown[i] = label
 			}
 			continue
 		}
 		at[key] = len(out)
 		out = append(out, attach.Store{Name: store.Source(name), URL: e.URL, Branch: e.Branch, ReadOnly: e.ReadOnly})
+		shown = append(shown, label)
 	}
-	return out, nil
+	return out, shown, nil
+}
+
+// setupEntryShown is one store list entry's name in a sync line
+// (setupStoresShown): a store's root by its own name (orgStoreLabel, else
+// its listed name), a folder by storeShown of its own "<store>/<folder>".
+func (a *App) setupEntryShown(e opsstores.Entry) string {
+	return entryShown(e.Name, e.Folder, orgStoreLabel(a.opts.Home, e.URL))
+}
+
+// entryShown is setupEntryShown for a listed entry name at folder of the
+// store whose own name is own ("" when it is no org's store).
+func entryShown(name, folder, own string) string {
+	if folder == "" || folder == rowfs.FolderRoot {
+		if own != "" {
+			return own
+		}
+		return name
+	}
+	if own == "" {
+		return name
+	}
+	return storeShown(name, own+targetSep+folder)
 }
 
 // orgStoreLabel is the name `lore store list` gives the org store at raw:
@@ -267,8 +367,8 @@ func orgStoreLabel(home, raw string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
-	want, ok := storeKey(raw)
-	if !ok {
+	same := sameStoreAs(raw) // an ssh alias origin included (D-627)
+	if same == nil {
 		return ""
 	}
 	for i := range cfg.Orgs {
@@ -278,7 +378,7 @@ func orgStoreLabel(home, raw string) string {
 			main = &o.Stores[0]
 		}
 		for _, sc := range o.Stores {
-			if k, ok := storeKey(sc.URL); !ok || k != want {
+			if !same(sc.URL) {
 				continue
 			}
 			if main != nil && main.URL == sc.URL {
@@ -329,6 +429,12 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 	// the store's own report gives its state
 	for _, s := range res.Stores {
 		r.Sent, r.Received, r.Merged = r.Sent+s.Sent, r.Received+s.Received, r.Merged+s.Merged
+		// devco D-660: the commits git counted are the clone's, reported
+		// by the folder whose sync moved it (the others saw no change):
+		// without them the line fell back to rows ("received 7" when 3
+		// commits arrived, a sync --setup after a set-url round trip)
+		r.SentCommits, r.ReceivedCommits = max(r.SentCommits, s.SentCommits), max(r.ReceivedCommits, s.ReceivedCommits)
+		r.Pushed = r.Pushed || s.Pushed // one clone pushes once, for whichever folder synced it
 		if s.Unattached {
 			continue
 		}
@@ -340,6 +446,8 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 	if err != nil {
 		return fail(err)
 	}
+	// R-5/R-6/R-18: changes held back on read, named under the store's line (rosterhold.go)
+	r.Problems = append(r.Problems, x.heldSyncLines(ctx)...)
 	switch {
 	case r.Offline:
 		if cause, next, gone := storeGone(detail, one.URL, string(one.Name)); gone {
@@ -352,14 +460,42 @@ func (a *App) syncOneStore(ctx context.Context, one attach.Store) (opssync.Store
 		r.Error = "its remote could not be reached; local changes are kept and sent on the next sync"
 		r.Next = "check the network and your access to " + r.URL + ", then run `lore sync` again (`lore doctor` explains a store it cannot reach)"
 		return r, errs.StoreUnreachable
-	case r.Sent > 0 && r.Received > 0:
+	case (r.Sent > 0 || r.Pushed) && r.Received > 0:
 		r.Status = opssync.StoreStatusBoth
-	case r.Sent > 0:
+	case r.Sent > 0 || r.Pushed:
 		r.Status = opssync.StoreStatusPushed
 	case r.Received > 0:
 		r.Status = opssync.StoreStatusPulled
 	default:
 		r.Status = opssync.StoreStatusUpToDate
+	}
+	return r, ""
+}
+
+// waitingPushReport is the setup sync's report of an org store clone
+// whose waiting commits it pushed (waitingOrgPushes), with the code a
+// failed or offline push exits with.
+func waitingPushReport(url string, p opsstores.Report) (opssync.StoreReport, errs.Code) {
+	r := opssync.StoreReport{Store: p.Store, URL: url, Sent: p.Sent, SentCommits: p.SentCommits, Received: p.Received, ReceivedCommits: p.ReceivedCommits, Offline: p.Offline}
+	switch {
+	case p.Offline:
+		r.Status = opssync.StoreStatusOffline
+		r.Error = "its remote could not be reached; local changes are kept and sent on the next sync"
+		r.Next = "check the network and your access to " + url + ", then run `lore sync` again (`lore doctor` explains a store it cannot reach)"
+		return r, errs.StoreUnreachable
+	case len(p.Problems) > 0:
+		r.Status = opssync.StoreStatusFailed
+		r.Error = strings.Join(p.Problems, "; ")
+		r.Next = "run `lore store push --store " + url + "` to see the cause, then `lore sync` again; `lore doctor` explains a store it cannot reach"
+		return r, errs.StoreUnreachable
+	}
+	if !p.Pushed {
+		r.Status = opssync.StoreStatusUpToDate // D-561: nothing left the machine
+		return r, ""
+	}
+	r.Status, r.Pushed = opssync.StoreStatusPushed, true
+	if r.Received > 0 || r.ReceivedCommits > 0 {
+		r.Status = opssync.StoreStatusBoth // the push merged a teammate's commits first (devco D-684)
 	}
 	return r, ""
 }
@@ -434,19 +570,21 @@ func chainHint(e *errs.Error) string {
 }
 
 // syncStoreLines is one store's line of the sync report, then its
-// problems and, for a store that failed, its next step.
-func syncStoreLines(r opssync.StoreReport) []string {
-	head := "store " + r.Store + ": "
+// problems and, for a store that failed, its next step. name is the
+// store's name in the line (setupStoresShown); "" prints r.Store.
+func syncStoreLines(r opssync.StoreReport, name string) []string {
+	if name == "" {
+		name = r.Store
+	}
+	head := "store " + name + ": "
 	var line string
 	switch r.Status {
 	case opssync.StoreStatusFailed:
 		line = head + "FAILED: " + r.Error
 	case opssync.StoreStatusOffline:
 		line = head + "offline: " + r.Error
-	case opssync.StoreStatusUpToDate:
-		line = head + "up to date"
 	default:
-		line = fmt.Sprintf("%s%s (sent %d, received %d, merged %d)", head, r.Status, r.Sent, r.Received, r.Merged)
+		line = storeSyncLine(name, r.Status, syncCounts{r.Sent, r.SentCommits, r.Received, r.ReceivedCommits, r.Merged, r.Refused}, r.Pushed)
 	}
 	if r.Held != "" {
 		line = head + r.Held

@@ -9,7 +9,8 @@ package journeys
 // status` works from there as `lore sync` does. Ann follows the move on
 // her machine with set-url, which leaves the org's lore-org.yaml to an
 // admin; Lee (the admin) runs set-url from his home folder, which moves
-// the org's file and names the old clone left behind.
+// the org's file. Each one's old clone moves to the new address's folder
+// (D-515).
 //
 // Named TestJourneyTeamLead… so the teamlead gate step runs it.
 
@@ -72,24 +73,24 @@ func TestJourneyTeamLeadStoreMoved(t *testing.T) {
 		// keeps her move instead of copying the old url back
 		tt.lore(tlAnn, "org", "refresh", tlOrg).OK(t).Says(t, "kept "+tt.store.SSHURL()+" → "+moved.SSHURL())
 		ann.Lore(annCode, "sync").OK(t)
-		// G-19: store doctor names the clone left at the old address
-		tt.lore(tlAnn, "store", "doctor").OK(t).Says(t, "the old clone", "lore store forget --url "+tt.store.SSHURL()).
-			Never(t, "v0.1.17 org stores")
+		// D-515 (was G-19's forget hint): the old clone moved to the new
+		// address's folder, so store doctor has no clone left to name
+		tt.lore(tlAnn, "store", "doctor").OK(t).Never(t, "the old clone", "v0.1.17 org stores")
+		if _, err := os.Stat(ann.LorePath("stores", "acme-co", "lore-team")); !os.IsNotExist(err) {
+			t.Errorf("set-url left Ann's old clone: %v", err)
+		}
 	})
 
 	w.Step("day2/the-admin-moves-it-from-home", func() {
 		// H-12: it refused outside a repo ("it edits .lore/stores.yaml")
 		r := lee.Lore(lee.Home, "store", "set-url", tlOrg, moved.SSHURL(), "--yes").OK(t)
-		r.Says(t, "is now at "+moved.SSHURL(), "lore-org.yaml of "+tlOrg+" now names "+moved.SSHURL(), "the old clone", "lore store forget --url "+tt.store.SSHURL()).
-			Never(t, "left as it is")
+		// D-515: the old clone moves to the new address's folder (it was
+		// left there with a `lore store forget` hint)
+		r.Says(t, "is now at "+moved.SSHURL(), "lore-org.yaml of "+tlOrg+" now names "+moved.SSHURL(), "moved to "+lee.LorePath("stores", "acme-co", "team-notes")).
+			Never(t, "left as it is", "lore store forget")
 		lee.Lore(filepath.Join(lee.Home, "code"), "sync").OK(t)
-		old := lee.LorePath("stores", "acme-co", "lore-team")
-		if _, err := os.Stat(old); err != nil {
-			t.Fatalf("the old clone the line names is not there: %v", err)
-		}
-		lee.Lore(lee.Home, "store", "forget", "--url", tt.store.SSHURL(), "--yes").OK(t)
-		if _, err := os.Stat(old); !os.IsNotExist(err) {
-			t.Errorf("forget left the old clone %s: %v", filepath.Base(old), err)
+		if _, err := os.Stat(lee.LorePath("stores", "acme-co", "lore-team")); !os.IsNotExist(err) {
+			t.Errorf("set-url left the old clone: %v", err)
 		}
 	})
 }

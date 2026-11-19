@@ -135,3 +135,56 @@ func TestOrgRenameKeepsCommentsAndJSON(t *testing.T) {
 		t.Fatalf("rename there and back:\n%s", got)
 	}
 }
+
+// devco T-19 / T-21: a setup naming the org follows the rename, so the
+// config stays valid and the setup keeps resolving to its org; the output
+// names the setup still called after the old label (with the rename
+// command) and why the store clone folders keep their names.
+func TestOrgRenameMovesSetups(t *testing.T) {
+	t.Setenv("LORE_ORG", "")
+	dir := t.TempDir()
+	home := filepath.Join(t.TempDir(), ".lore")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cfg := "orgs:\n  - name: initech\n  - name: other\nsetups:\n  - name: initech\n    kind: member\n    org: initech\n    folders: [\"~/code/**\"]\n  - name: side\n    kind: member\n    org: other\n"
+	if err := os.WriteFile(configPath(home), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := orgHostAt(t, dir, home).Rename(context.Background(), opsorgcmd.RenameIn{Old: "initech", New: "initrode"})
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	b, _ := os.ReadFile(configPath(home))
+	if strings.Contains(string(b), "org: initech") || !strings.Contains(string(b), "org: initrode") || !strings.Contains(string(b), "org: other") {
+		t.Fatalf("setups[].org not moved (or the other setup touched):\n%s", b)
+	}
+	if len(out.Setups) != 1 || out.Setups[0] != "initech" {
+		t.Fatalf("setups moved = %v, want [initech]", out.Setups)
+	}
+	text := out.Text()
+	for _, want := range []string{"1 setup(s) now name org initrode: initech", "lore setup rename --name initech --to initrode", "a clone's folder is its store url's path"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("rename output lacks %q:\n%s", want, text)
+		}
+	}
+}
+
+// devco T-22: only an admin of the org retires its stores; a member is
+// refused with the cause and the admin's command, before any store is read.
+func TestOrgStoreRemoveRefusesMember(t *testing.T) {
+	t.Setenv("LORE_ORG", "")
+	dir := t.TempDir()
+	home := filepath.Join(t.TempDir(), ".lore")
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cfg := "orgs:\n  - name: initech\n    stores:\n      - url: git@git.example.test:initech/team.git\n        org_folder: org\n      - url: git@git.example.test:initech/clientco.git\nsetups:\n  - name: work\n    kind: member\n    org: initech\n"
+	if err := os.WriteFile(configPath(home), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := orgHostAt(t, dir, home).RemoveStore(context.Background(), opsorgcmd.StoreRemoveIn{Org: "initech", URL: "git@git.example.test:initech/clientco.git"}, true)
+	if errs.CodeOf(err) != errs.Refused || !strings.Contains(err.Error(), "only an admin of initech") {
+		t.Fatalf("a member's retire: %v, want E_REFUSED naming the admin rule", err)
+	}
+}

@@ -59,15 +59,72 @@ func (h standaloneCoord) TaskReassign(ctx context.Context, in opscoord.ReassignI
 		return opscoord.Report{}, err
 	}
 	by := w.actorID
-	if _, err = coord.OverrideChecked(ctx, w.env(ctx), in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
+	gone := h.goneActors(ctx)
+	env := w.env(ctx)
+	if err = w.requireOverridePush(ctx, env, in.ID, in.Push, pushAsk{what: "a reassign of a claimed task", rerun: reassignRerun(in)}); err != nil {
+		return opscoord.Report{}, err
+	}
+	removed, err := coord.OverrideChecked(ctx, env, in.ID, coord.OverrideReassign, func(d coord.Doc, now time.Time) error {
 		prevLead, prevAll := d.Str(fieldTaskLead), d.Strs(schema.FieldTaskAssignees)
 		d.SetStr(fieldTaskLead, to)
 		d[schema.FieldTaskAssignees] = canonjson.Array(canonjson.String(to))
+		dropGoneWatchers(d, gone)
 		return appendReassignHistory(d, by, now, prevLead, prevAll, to)
-	}); err != nil {
-		return opscoord.Report{}, coordErr(err)
+	})
+	if err != nil {
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{markOK + " " + in.ID + " reassigned to " + in.Assign}}, nil
+	lines := []string{markOK + " " + in.ID + " reassigned to " + in.Assign}
+	if removed != nil {
+		// devco:D-608: the claim it dropped left the same place a release
+		// names.
+		lines = append(lines, "  took "+holderName(*removed)+"'s claim off "+w.claimPlace(env.Signals.Ref)+"; the task row itself waits for your next lore sync")
+	}
+	return opscoord.Report{Lines: lines}, nil
+}
+
+// goneActors are the actor ids of the org roster that are no longer active
+// (left, archived, deactivated); none when there is no roster to read
+// (the reassign itself does not depend on it).
+func (h standaloneCoord) goneActors(ctx context.Context) map[string]bool {
+	r, err := h.a.coordRoster(ctx)
+	if err != nil {
+		return nil
+	}
+	actors, err := h.a.RosterActors(ctx, r.src)
+	if err != nil {
+		return nil
+	}
+	gone := map[string]bool{}
+	for _, x := range actors {
+		if !x.Active {
+			gone[x.ID] = true
+		}
+	}
+	return gone
+}
+
+// dropGoneWatchers takes people who left off d's watchers (N-11: after
+// `task reassign --from @leaver` the leaver still watched the task and
+// was told of every change); null when no watcher is left.
+func dropGoneWatchers(d coord.Doc, gone map[string]bool) {
+	if len(gone) == 0 {
+		return
+	}
+	cur := d.Strs(schema.FieldTaskWatchers)
+	keep := slices.DeleteFunc(slices.Clone(cur), func(id string) bool { return gone[id] })
+	if len(keep) == len(cur) {
+		return
+	}
+	if len(keep) == 0 {
+		d[schema.FieldTaskWatchers] = canonjson.Null()
+		return
+	}
+	vals := make([]canonjson.Value, len(keep))
+	for i, id := range keep {
+		vals[i] = canonjson.String(id)
+	}
+	d[schema.FieldTaskWatchers] = canonjson.Array(vals...)
 }
 
 // TaskReassignPlan implements opscoord.Host: the open tasks (todo or in
@@ -99,8 +156,13 @@ func (h standaloneCoord) TaskReassignPlan(ctx context.Context, in opscoord.Reass
 // the new assignee's actor id on the repo roster.
 func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.ReassignIn) (*coordWorld, string, error) {
 	if strings.TrimSpace(in.Assign) == "" {
+		// devco:D-670: the id the person gave is printed, not "<id>"
+		id := "<id>"
+		if strings.TrimSpace(in.ID) != "" {
+			id = in.ID
+		}
 		return nil, "", errs.New(errs.InvalidInput, "--assign is required: the new assignee").
-			WithHint(`lore task reassign --id <id> --assign "@handle" (or --from "@handle" for every open task of a person)`)
+			WithHint(`lore task reassign --id ` + id + ` --assign "@handle" (or --from "@handle" for every open task of a person)`)
 	}
 	w, err := h.openWorld(ctx)
 	if err != nil {
@@ -112,11 +174,35 @@ func (h standaloneCoord) reassignCaller(ctx context.Context, in opscoord.Reassig
 	if err = h.a.RosterAssignable(ctx, in.Assign); err != nil {
 		return nil, "", err
 	}
+	if err = h.refuseTeamAssign(ctx, in); err != nil {
+		return nil, "", err
+	}
 	to, err := h.resolveActor(ctx, in.Assign)
 	if err != nil {
 		return nil, "", err
 	}
 	return w, to, nil
+}
+
+// refuseTeamAssign answers a reassign to a team with the command that
+// assigns one (task edit --assign @team sets the task's team). devco:T-7:
+// the handle was looked up as a person only, and "no one is @web on the
+// roster" hinted that the team run lore actor register, which no team can.
+func (h standaloneCoord) refuseTeamAssign(ctx context.Context, in opscoord.ReassignIn) error {
+	v := strings.TrimSpace(in.Assign)
+	if !strings.HasPrefix(v, "@") {
+		return nil
+	}
+	as, err := standaloneTeam(h).ResolveHandle(ctx, v, true)
+	if err != nil || as.TeamID == "" {
+		return nil // a person, or unknown: the person lookup answers
+	}
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		id = "<id>"
+	}
+	return errs.New(errs.InvalidInput, v+" is a team: task reassign hands a task to a person").
+		WithHint("give the task to the team with lore task edit --id " + id + " --assign " + v + " (that sets its team), or name a person: lore task reassign --id " + id + " --assign @<person>")
 }
 
 // resolveActor is @handle (a person on the repo roster) as an actor id; a
@@ -227,19 +313,41 @@ func (h standaloneCoord) TaskMerged(ctx context.Context, in opscoord.MergedIn) (
 	at := h.a.Now().UTC()
 	if _, err = coord.Update(ctx, env, in.ID, func(d coord.Doc, _ time.Time) error {
 		if d.Status() != schema.TaskStatusDone {
-			return errs.New(errs.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", in.ID, d.Status()))
+			return notMergeable(in.ID, d.Status())
 		}
 		if d.Str(fieldMergedAt) == "" {
 			d.SetTime(fieldMergedAt, at)
 		}
 		return nil
 	}); err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
 	return opscoord.Report{Lines: []string{fmt.Sprintf("%s %s merged (marked by hand, %s)", markOK, in.ID, at.Format(stateClock))}}, nil
 }
 
 // ---- hold claim / release ----
+
+// holdRerun is the `hold claim` the person ran, without --push: the
+// command a push refusal prints with --push appended (devco:D-669: it
+// printed a task step with a placeholder id instead).
+func holdRerun(in opscoord.HoldClaimIn) []string {
+	argv := []string{"hold", "claim", "--name", in.Name}
+	if in.TTL > 0 {
+		argv = append(argv, "--ttl", in.TTL.String())
+	}
+	argv = withFlag(argv, "--store", in.Store) // devco:D-672: a hold from home names its store
+	return withFlag(argv, "--on", in.On)
+}
+
+// reassignRerun is the `task reassign` the person ran, without --push: a
+// --from batch again (it re-runs every task of that person), else the
+// one task.
+func reassignRerun(in opscoord.ReassignIn) []string {
+	if in.From != "" {
+		return withFlag([]string{"task", "reassign", "--from", in.From}, "--assign", in.Assign)
+	}
+	return withFlag([]string{"task", "reassign", "--id", in.ID}, "--assign", in.Assign)
+}
 
 // Hold places (§7.2; CLI_REFERENCE 3.3 --on).
 const (
@@ -257,17 +365,16 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 	if in.On != "" && in.On != holdOnProject {
 		return opscoord.Report{}, errs.New(errs.InvalidInput, "--on is project or machine, not "+in.On)
 	}
-	w, err := h.openWorld(ctx)
+	// devco:D-672: --store <org>[/<folder>] (or no code repo here) holds
+	// it on that org store folder's signals ref
+	w, err := h.holdWorld(ctx, holdVerbClaim, in.Name, in.Store, " --push")
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.forHolds(ctx); err != nil {
+	if err = w.requirePushAsked(in.Push, pushAsk{what: "a hold", rerun: holdRerun(in)}); err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.requirePushAsked(in.Push, "a hold"); err != nil {
-		return opscoord.Report{}, err
-	}
-	st := w.signalsStore()
+	st := w.signalsStore(ctx)
 	d := in.TTL
 	if d <= 0 {
 		d = w.lease.TTL
@@ -286,28 +393,26 @@ func (h standaloneCoord) HoldClaim(ctx context.Context, in opscoord.HoldClaimIn)
 		return signals.Change{Put: map[string]signals.Signal{signals.ResourcePath(w.folder, in.Name): s}}, nil
 	})
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{fmt.Sprintf("%s holding %s until %s", markOK, in.Name, held.Expires.UTC().Format(time.RFC3339))}}, nil
+	// devco:D-608: a hold names where it went, as a claim does.
+	return opscoord.Report{Lines: []string{fmt.Sprintf("%s holding %s until %s on %s", markOK, in.Name, held.Expires.UTC().Format(time.RFC3339), w.claimPlace(w.spot.ref))}}, nil
 }
 
 // HoldRelease implements opscoord.Host: remove your own hold.
 func (h standaloneCoord) HoldRelease(ctx context.Context, in opscoord.HoldReleaseIn) (opscoord.Report, error) {
-	w, err := h.openWorld(ctx)
+	w, err := h.holdWorld(ctx, holdVerbRelease, in.Name, in.Store, "")
 	if err != nil {
 		return opscoord.Report{}, err
 	}
-	if err = w.forHolds(ctx); err != nil {
-		return opscoord.Report{}, err
-	}
-	_, err = w.signalsStore().Write(ctx, func(v signals.View) (signals.Change, error) {
+	_, err = w.signalsStore(ctx).Write(ctx, func(v signals.View) (signals.Change, error) {
 		p, derr := signals.DecideUnhold(v, w.caller(), w.folder, in.Name)
 		return signals.Change{Delete: []string{p}}, derr
 	})
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
-	return opscoord.Report{Lines: []string{markOK + " released " + in.Name}}, nil
+	return opscoord.Report{Lines: []string{markOK + " released " + in.Name + ": the hold is off " + w.claimPlace(w.spot.ref)}}, nil
 }
 
 // ---- gate request / approve ----
@@ -331,14 +436,14 @@ func (h standaloneCoord) GateRequest(ctx context.Context, in opscoord.GateIn) (o
 	env := w.env(ctx)
 	v, err := env.Signals.Read(ctx)
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
 	p := signals.ClaimPath(w.folder, in.ID)
 	sig, claimed := v.Board[p]
 	_, hadClaim := w.held().Get(w.session(), in.ID)
 	if (claimed && sig.Holder == w.actorID && sig.Session == w.session()) || hadClaim {
 		if _, err = coord.HolderWrite(ctx, env, in.ID, false, coord.RequestGate); err != nil {
-			return opscoord.Report{}, coordErr(err)
+			return opscoord.Report{}, w.coordErr(err)
 		}
 		return opscoord.Report{Lines: gateRequested(in.ID)}, nil
 	}
@@ -410,7 +515,7 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 		person = *w.who.Owner
 	}
 	if person.Kind != identity.KindHuman || person.Step == identity.StepEnv || person.Step == identity.StepFlag {
-		return opscoord.Report{}, errs.New(errs.InvalidInput, "only a person approves a gate (TEAM-028); you are "+w.who.StableKey).
+		return opscoord.Report{}, errs.New(errs.InvalidInput, "only a person approves a gate; you are "+w.who.StableKey).
 			WithHint("set your identity with `lore identity set` and approve from your own shell")
 	}
 	approver := w.personID()
@@ -419,7 +524,7 @@ func (h standaloneCoord) GateApprove(ctx context.Context, in opscoord.GateIn) (o
 	}
 	ap, err := coord.Approve(ctx, w.env(ctx), coord.ApproveRequest{ID: in.ID, ApproverID: approver})
 	if err != nil {
-		return opscoord.Report{}, coordErr(err)
+		return opscoord.Report{}, w.coordErr(err)
 	}
 	return opscoord.Report{Lines: []string{fmt.Sprintf("%s %s approved by %s (%s), hash %s…", markOK, in.ID, w.who.DisplayName, stepName(w.who.Step), ap.Hash[:min(len(ap.Hash), gateHashShown)])}}, nil
 }
@@ -453,4 +558,16 @@ func (h standaloneCoord) checkApprover(ctx context.Context, id, actorID string) 
 			WithHint("ask one of: " + strings.Join(approvers, ", "))
 	}
 	return nil
+}
+
+// notMergeable is the refusal of task merged on a task that is not done,
+// with the next step for its status: an open task is finished first, a
+// cancelled one never shipped code (L-16: the cause alone left the person
+// without a step).
+func notMergeable(id, status string) *errs.Error {
+	e := errs.New(errs.InvalidInput, fmt.Sprintf("%s is %s; only a done task can be merged", id, status))
+	if status == schema.TaskStatusCancelled {
+		return e.WithHint("a cancelled task has no code to merge; lore task show --id " + id + " shows why it was cancelled")
+	}
+	return e.WithHint("finish it first with lore task done --id " + id + ", then re-run lore task merged --id " + id)
 }

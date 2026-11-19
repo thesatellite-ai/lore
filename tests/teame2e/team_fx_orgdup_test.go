@@ -78,8 +78,14 @@ func newOrgRace(t *testing.T, caps ...th.Cap) *orgRace {
 // with one project row for org/, and @handle commands work from both clones.
 func TestRosterFolderCreatedFromStaleClonesHasOneProjectRow(t *testing.T) {
 	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"))
+	// A store write leaves the machine with lore sync only (owner rule
+	// U-2, devco D-224): dev1 registers and syncs, which creates org/ on
+	// the store; dev2 registers from a store clone that does not have it
+	// yet, and dev2's sync merges the two creations.
 	r.dev1.MustLore("actor", "register")
+	r.dev1.MustLore("sync")
 	r.dev2.MustLore("actor", "register")
+	r.dev2.MustLore("sync")
 
 	rows := orgFolderProjectRows(r.store)
 	if len(rows) != 1 {
@@ -100,6 +106,7 @@ func TestRosterFolderCreatedFromStaleClonesHasOneProjectRow(t *testing.T) {
 func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"))
 	r.dev1.MustLore("actor", "register")
+	r.dev1.MustLore("sync") // the register reaches the store with lore sync (U-2, devco D-224)
 	rows := orgFolderProjectRows(r.store)
 	if len(rows) != 1 {
 		t.Fatalf("test premise: one row after the first register: %v", rows)
@@ -119,6 +126,10 @@ func TestRosterFolderWithOldDuplicateProjectRowsStillResolves(t *testing.T) {
 
 	r.dev2.MustLore("sync")
 	r.dev2.MustLore("actor", "register").Never(t, "E_AMBIGUOUS_PROJECT")
+	// until dev2 syncs, dev1's assign names both steps (devco D-224)
+	r.dev1.Lore("task", "add", "too early", "--to", orgNorthwind, "--assign", "@dev2").
+		Fails(t, 27, "E_NOT_FOUND", "they run `lore actor register --setup <setup>` and `lore sync --setup <setup>`, then `lore sync` here")
+	r.dev2.MustLore("sync")
 	r.dev2.MustLore("actor", "list").Says(t, strayID).Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev1.MustLore("task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@dev2").Never(t, "E_AMBIGUOUS_PROJECT")
 	r.dev2.MustLore("task", "add", "send the invoice", "--to", orgNorthwind, "--assign", "@dev1").Never(t, "E_AMBIGUOUS_PROJECT")
@@ -180,6 +191,7 @@ func TestUnknownHandleRefusalLeavesTheStoreUntouched(t *testing.T) {
 func TestRosterMissFetchesFreshBeforeRefusing(t *testing.T) {
 	r := newOrgRace(t, th.Flag("to", "task", "add"), th.Flag("assign", "task", "add"))
 	r.dev1.MustLore("actor", "register") // after dev2's last fetch (1h cache)
+	r.dev1.MustLore("sync")              // and sent: a store write waits for lore sync (U-2, devco D-224)
 	r.dev2.MustLore("task", "add", "review the invoice", "--to", orgNorthwind, "--assign", "@dev1").Never(t, "E_NOT_FOUND")
 	r.dev2.MustLore("actor", "register")
 

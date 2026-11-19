@@ -23,6 +23,9 @@ setup personal (solo) ─ ~/work/personal/**
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
 
+repos in the setups' folders: 2 with lore data (1 checked above), 0 without lore data
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
+
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a670ae8548ed05bf57ad29ad0759504 --role admin)
@@ -43,6 +46,10 @@ setup personal (solo) ─ ~/work/personal/**
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
+
+repos in the setups' folders: 2 with lore data (0 checked above), 0 without lore data
+  ~/work/agency/site  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
@@ -73,6 +80,9 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
   ℹ store.private  agency: gh is not logged in, so lore cannot check whether agency/notes is private
       fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
       repair: lore setup repair --name agency
+
+repos in the setups' folders: 2 with lore data (1 checked above), 0 without lore data
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a670ae8548ed05bf57ad29ad0759504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh

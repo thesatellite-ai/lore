@@ -67,11 +67,31 @@ func (f signalsFixture) store(t *testing.T, remote gitremote.Remote) *signals.St
 		Autopush: remote != nil}
 }
 
-// collect runs signalsRows and returns its warnings and reports.
+// collect runs signalsRows (pushes asked for) and returns its warnings and reports.
 func collect(t *testing.T, st *signals.Store) (warns, reports []string) {
 	t.Helper()
-	signalsRows(background(), st, func(s string) { warns = append(warns, s) }, func(s string) { reports = append(reports, s) })
+	signalsRows(background(), st, true, func(s string) { warns = append(warns, s) }, func(s string) { reports = append(reports, s) })
 	return warns, reports
+}
+
+// TestDoctorSignalsProbePushesOnlyWhenAskedD598: doctor's atomic probe is
+// a push (a no-op one) to the code remote, and doctor takes no --push; it
+// ran whenever autopush was on by default. It runs only when the person
+// turned pushes on (live.autopush: true, LORE_PUSH_CLAIMS=1) (devco D-598).
+func TestDoctorSignalsProbePushesOnlyWhenAskedD598(t *testing.T) {
+	t.Parallel()
+	for _, asked := range []bool{false, true} {
+		f := newSignalsFixture(t, 1, 0, true)
+		r, err := gitref.Open(background(), f.repo, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fr := gitremote.NewFaultRemote(&gitremote.Git{Repo: r, Name: "origin"})
+		signalsRows(background(), f.store(t, fr), asked, func(string) {}, func(string) {})
+		if got := fr.Pushes() > 0; got != asked {
+			t.Fatalf("pushes asked=%v: pushed %d time(s)", asked, fr.Pushes())
+		}
+	}
 }
 
 // TestDoctorSignalsRows: a small fresh board is quiet; more than

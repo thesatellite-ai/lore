@@ -54,6 +54,14 @@ const (
 	// closed) until the person re-links it here or, for a copy that is a
 	// different project, gives it a new id (`lore project reid`).
 	StepMovedLink Step = 8
+	// StepStore is a remote that is the url of a store an entry attaches:
+	// the repo is that store's clone, so it belongs to that entry whatever
+	// own: or repos: pattern also matches its remote (devco D-686: the ops
+	// store's clone, github.com/<owner>/lore-ops, matched the company's own
+	// pattern github.com/<owner>/* and whoami there named the company).
+	// Checked after the store links (a store clone has none) and before the
+	// patterns; one entry only: a store two entries attach falls through.
+	StepStore Step = 9
 )
 
 // String is the short name printed after "matched by:".
@@ -73,6 +81,8 @@ func (s Step) String() string {
 		return "setup"
 	case StepMovedLink:
 		return "store link at an old remote"
+	case StepStore:
+		return "store url"
 	default:
 		return "nothing matched"
 	}
@@ -134,6 +144,14 @@ type Inputs struct {
 	// Setup is the active setup's org hint (ONBOARDING_DESIGN 3.3/3.4);
 	// zero when no setup is active or it names no org.
 	Setup SetupHint
+	// OwnData reports that the repo's committed .lore/data was written as
+	// an org's own repo: an actor row in it holds more than the client
+	// projection {id, display name, kind}, which lore never writes into a
+	// client repo. Why (devco T-17): an own repo the host moved to another
+	// owner matches no own: pattern any more; without this the fail-closed
+	// default called it a client repo, refused every write with a wrong
+	// cause and blocked plain code commits on its own actor rows.
+	OwnData bool
 }
 
 // SetupHint is the org of the active setup (member/admin) and why that
@@ -145,6 +163,12 @@ type SetupHint struct {
 	Org string
 	// Why says how the setup was chosen ("folder ~/www/projects/agency/**").
 	Why string
+	// StoreClone: the folder is a clone of this org's own store (a store
+	// checkout, no code repo), and the setup was chosen by that. The
+	// store's org then decides right after LORE_ORG, above the code-repo
+	// rules (devco D-693): an ops org's store under the company's own:
+	// pattern is still the ops org's.
+	StoreClone bool
 }
 
 // SetupMismatch is set when rules 1–5 resolve another org than the active
@@ -228,6 +252,9 @@ func Resolve(in Inputs) (Result, error) {
 	// <staging entry>` finds the folder linked on the staging branch
 	// (cookbook 13). A LinkSource may therefore return staging links.
 	var links, known []Link
+	// D-428: a recorded own link of a repo the entry lists under repos: is
+	// a client link (one rule for every path: classify.go).
+	in.Links.Links, in.Links.Moved = clampLinks(cfg, in.Links.Links), clampLinks(cfg, in.Links.Moved)
 	for _, l := range in.Links.Links {
 		if cfg.FindOrg(l.Entry) == nil {
 			continue
@@ -264,6 +291,21 @@ func Resolve(in Inputs) (Result, error) {
 		choose(o, StepEnv, "LORE_ORG="+in.EnvOrg, explicitRole(o, links, in.Remotes))
 	} else {
 		trace(StepEnv, OutcomeMiss, "LORE_ORG is not set")
+	}
+
+	// ── A store clone: the org whose store it is (devco D-693) ─────────
+	// A store checkout is no code repo: links, own:/repos: patterns and a
+	// committed org.yaml name code repos, so the org whose store the clone
+	// is decides there, as the setup step chose it.
+	// storeCloneDecided keeps the setup hint block below from tracing
+	// StepSetup a second time ("not reached") after this rule hit it.
+	storeCloneDecided := false
+	if hint := in.Setup; !decided && hint.StoreClone && hint.Org != "" {
+		if o := cfg.FindOrg(hint.Org); o != nil {
+			trace(StepSetup, OutcomeHit, fmt.Sprintf("setup %s (%s): this folder is a clone of %s's store", hint.Name, hint.Why, o.Name))
+			choose(o, StepSetup, "store clone of "+o.Name+" (setup "+hint.Name+")", RoleOwn)
+			storeCloneDecided = true
+		}
 	}
 
 	// ── Rule 2: repo_orgs (lore org use) ───────────────────────────────
@@ -344,6 +386,16 @@ func Resolve(in Inputs) (Result, error) {
 		choose(o, StepLink, fmt.Sprintf("link in %s, project id + remote", describeLinks(ls)), role)
 	}
 
+	// ── A store's own clone (D-686) ────────────────────────────────────
+	// Traced only when it decides, so the F10 trace keeps its six lines
+	// for every code repo.
+	if !decided {
+		if o, url, ok := storeOfRemotes(cfg, staging, in.Remotes); ok {
+			trace(StepStore, OutcomeHit, fmt.Sprintf("%s attaches the store %s, this clone's remote", o.Name, url))
+			choose(o, StepStore, fmt.Sprintf("store url %s of %s (this is its clone)", url, o.Name), RoleOwn)
+		}
+	}
+
 	// ── Rule 5: own: / repos: patterns ─────────────────────────────────
 	if decided {
 		notReached(StepPattern)
@@ -355,10 +407,8 @@ func Resolve(in Inputs) (Result, error) {
 			if staging[o.Name] {
 				continue
 			}
-			if p := firstMatch(o.Repos, in.Remotes); p != "" {
-				hits[o.Name], hitPattern[o.Name] = RoleClient, p // fail closed: client wins over own
-			} else if p := firstMatch(o.Own, in.Remotes); p != "" {
-				hits[o.Name], hitPattern[o.Name] = RoleOwn, p
+			if c := ClassifyRemote(o, in.Remotes); c.Role != RoleNone {
+				hits[o.Name], hitPattern[o.Name] = c.Role, c.Pattern // fail closed: client wins over own
 			}
 		}
 		names := sortedKeys(hits)
@@ -405,7 +455,7 @@ func Resolve(in Inputs) (Result, error) {
 	// Below every F10 rule: a store link or a pattern naming another org
 	// stays the truth (fail closed: a client repo inside a setup's folder
 	// keeps its leak guards), and the clash is recorded as a mismatch.
-	if hint := in.Setup; hint.Org != "" {
+	if hint := in.Setup; hint.Org != "" && !storeCloneDecided {
 		o := cfg.FindOrg(hint.Org)
 		switch {
 		case decided:
@@ -419,6 +469,19 @@ func Resolve(in Inputs) (Result, error) {
 			trace(StepSetup, OutcomeHit, fmt.Sprintf("setup %s (%s) is org %s", hint.Name, hint.Why, hint.Org))
 			choose(o, StepSetup, "setup "+hint.Name+" ("+hint.Why+")", explicitRole(o, links, in.Remotes))
 		}
+	}
+
+	// ── Moved own repo (devco T-17) ────────────────────────────────────
+	// Client only by the fail-closed default (no client link, no repos:
+	// pattern, no moved client link), yet the repo's own lore data was
+	// written as this org's own repo: its remote moved away from the own:
+	// patterns. It stays an own repo until a person decides, and the move
+	// is named with both ways out.
+	if decided && r.Role == RoleClient && in.OwnData && in.ProjectID != "" && r.MovedLink == nil &&
+		!ClientByMatch(r.Org, links, in.Remotes) && len(in.Remotes) > 0 {
+		r.Role = RoleOwn
+		r.MatchedBy += "; own repo by its lore data (its remote matches no own: pattern)"
+		r.Warnings = append(r.Warnings, MovedOwnWarning(r.Org, in.Remotes))
 	}
 
 	// ── Rule 6: none ───────────────────────────────────────────────────
@@ -452,6 +515,26 @@ func Resolve(in Inputs) (Result, error) {
 		}
 	}
 	return r, nil
+}
+
+// MovedOwnWarning names an own repo whose remote left the org's own:
+// patterns (devco T-17): what moved, why lore still treats it as own, and
+// the two ways out with every flag named.
+func MovedOwnWarning(o *orgconf.Org, remotes []string) string {
+	pattern := ownerPattern(remotes[0])
+	return fmt.Sprintf("this repo's remote %s matches none of %s's own: patterns (%s), yet its lore data was written as %s's own repo: it moved on the git host. "+
+		"lore keeps it an own repo until someone decides: if %s moved it, an admin adds %s under own: in %s in the org's store and runs `lore org refresh --org %s`; "+
+		"if it now belongs to a client, run `lore org link --org %s --project <folder> --yes` here",
+		strings.Join(remotes, ", "), o.Name, listOrNone(o.Own), o.Name, o.Name, pattern, orgconf.OrgFileName, o.Name, o.Name)
+}
+
+// ownerPattern is the own: pattern covering every repo of remote's owner
+// ("git.host/owner/*"), or the remote itself when it has no owner part.
+func ownerPattern(remote string) string {
+	if i := strings.LastIndex(remote, "/"); i > 0 {
+		return remote[:i] + "/*"
+	}
+	return remote
 }
 
 // movedClientLink is the first client link (non-staging, known entry) of
@@ -546,10 +629,7 @@ func explicitRole(o *orgconf.Org, links []Link, remotes []string) Role {
 		}
 		return RoleClient
 	}
-	if matchesAny(o.Repos, remotes) {
-		return RoleClient
-	}
-	if matchesAny(o.Own, remotes) {
+	if ClassifyRemote(o, remotes).Role == RoleOwn {
 		return RoleOwn
 	}
 	return RoleClient
@@ -675,7 +755,9 @@ func allOwn(links []Link) bool {
 func describeLinks(ls []Link) string {
 	parts := make([]string, 0, len(ls))
 	for _, l := range ls {
-		p := l.StoreURL + " " + l.Folder + "/"
+		// a store at a path on this machine is keyed "_local/<path>":
+		// shown as the path (D-564: whoami said "link in _local/private/…")
+		p := repourl.ShownStore(l.StoreURL) + " " + l.Folder + "/"
 		if l.Default {
 			p += " (default)"
 		}
@@ -723,4 +805,29 @@ func nonEmpty(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// storeOfRemotes is the one entry (staging entries skipped) that attaches a
+// store whose url is one of remotes, and that url as the entry spells it;
+// ok is false when none does or more than one does (the patterns decide).
+func storeOfRemotes(cfg *orgconf.Config, staging map[string]bool, remotes []string) (*orgconf.Org, string, bool) {
+	var hit *orgconf.Org
+	var url string
+	for i := range cfg.Orgs {
+		o := &cfg.Orgs[i]
+		if staging[o.Name] {
+			continue
+		}
+		for _, sc := range o.Stores {
+			n, err := repourl.Normalize(sc.URL)
+			if err != nil || !anyIn([]string{n}, remotes) {
+				continue
+			}
+			if hit != nil && hit.Name != o.Name {
+				return nil, "", false
+			}
+			hit, url = o, sc.URL
+		}
+	}
+	return hit, url, hit != nil
 }

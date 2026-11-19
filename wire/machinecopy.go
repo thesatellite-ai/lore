@@ -42,6 +42,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/validate"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
@@ -113,7 +114,7 @@ func (a *App) migrateMachineLocal(ctx context.Context, dryRun bool) ([]string, i
 //   - this machine's setups name folders (`lore setup list`) and none
 //     holds the checkout: a scratch copy outside the person's code.
 func (a *App) notOwnCheckout(ctx context.Context, st *state) string {
-	top := resolvedPath(st.repoTop)
+	top := fspath.Canonical(st.repoTop)
 	if meta, ok, err := rowfs.ReadRepoMeta(st.repoTop); err == nil && ok && meta.RepoID != "" {
 		if rows, lerr := st.eng.List(ctx, store.SourceMachine, schema.TableKnownRepos); lerr == nil {
 			for _, r := range rows {
@@ -247,7 +248,7 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 	}
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
-		return 0, nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return 0, nil, v017ReadError(string(def.Name), err)
 	}
 	defer func() { _ = rows.Close() }() // read-only cursor
 	type oldRow struct {
@@ -259,11 +260,11 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 	for rows.Next() {
 		var doc string
 		if err = rows.Scan(&doc); err != nil {
-			return 0, nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+			return 0, nil, v017ReadError(string(def.Name), err)
 		}
 		var cells map[string]json.RawMessage
 		if err = json.Unmarshal([]byte(doc), &cells); err != nil {
-			return 0, nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+			return 0, nil, v017ReadError(string(def.Name), err)
 		}
 		var r oldRow
 		if err = json.Unmarshal(cells[v017IDColumn], &r.id); err != nil {
@@ -283,7 +284,7 @@ func copyMachineTable(ctx context.Context, eng *engine.Engine, db *sql.DB, def s
 		all = append(all, r)
 	}
 	if err = rows.Err(); err != nil {
-		return 0, nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return 0, nil, v017ReadError(string(def.Name), err)
 	}
 	type toCopy struct {
 		at     int // index in all: the skip notes stay in lore.db's row order
@@ -381,9 +382,33 @@ func v017SelectRows(def schema.TableDef, cols map[string]bool) (string, []schema
 			return "", nil, errs.New(errs.InvalidIdentifier, "migrate: column name "+f.Name)
 		}
 		fields = append(fields, f)
-		pairs = append(pairs, "'"+f.Name+`', "`+f.Name+`"`)
+		pairs = append(pairs, "'"+f.Name+"', "+v017CellText(f.Name))
 	}
 	return "SELECT json_object(" + strings.Join(pairs, ", ") + `) FROM "` + string(def.Name) + `" ORDER BY id`, fields, nil
+}
+
+// v017CellText is the json_object value of lore.db's column: a cell stored as
+// a BLOB is read as its text. A 0.1.18-dev build wrote some JSON columns
+// (tasks.blocked_by) as BLOBs holding the same JSON text 0.1.17 stored as
+// TEXT, and json_object refuses a BLOB, so the whole migration failed on
+// one cell (devco:M-1).
+func v017CellText(col string) string {
+	q := `"` + col + `"`
+	return `CASE WHEN typeof(` + q + `) = 'blob' THEN CAST(` + q + ` AS TEXT) ELSE ` + q + ` END`
+}
+
+// v017ReadHint is the way forward from a lore.db that cannot be read: the
+// team's rows are in the row files, lore.db only adds edits a v0.1.17
+// lore never wrote there, so moving it aside lets the migration run.
+const v017ReadHint = "the team's rows are in .lore/data; " + v017LoreDB + " is this checkout's lore 0.1.17 database and only adds edits that never reached them. " +
+	"To migrate without it: mv " + v017LoreDB + " " + v017LoreDB + ".old, then lore migrate run (those edits stay in the moved file)"
+
+// v017ReadError is a failed read of one table of lore.db. It names the
+// table and SQLite's reason, and its hint is a step other than the run
+// that failed (devco:M-1: a bare "read .lore/lore.db" named neither, and
+// lore doctor sent the person back to the same lore migrate run).
+func v017ReadError(table string, err error) *errs.Error {
+	return errs.Wrap(errs.Internal, "read the "+table+" table of "+v017LoreDB+": "+err.Error(), err).WithHint(v017ReadHint)
 }
 
 // v017Columns returns the column names of lore.db's table (none when the
@@ -391,19 +416,19 @@ func v017SelectRows(def schema.TableDef, cols map[string]bool) (string, []schema
 func v017Columns(ctx context.Context, db *sql.DB, table string) (map[string]bool, error) {
 	rows, err := db.QueryContext(ctx, "SELECT name FROM pragma_table_info(?)", table)
 	if err != nil {
-		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return nil, v017ReadError(table, err)
 	}
 	defer func() { _ = rows.Close() }() // read-only cursor
 	cols := map[string]bool{}
 	for rows.Next() {
 		var c string
 		if err = rows.Scan(&c); err != nil {
-			return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+			return nil, v017ReadError(table, err)
 		}
 		cols[c] = true
 	}
 	if err = rows.Err(); err != nil {
-		return nil, errs.Wrap(errs.Internal, "read "+v017LoreDB, err)
+		return nil, v017ReadError(table, err)
 	}
 	return cols, nil
 }

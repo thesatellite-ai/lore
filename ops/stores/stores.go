@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/repourl"
@@ -114,12 +115,16 @@ type Entry struct {
 	// (SOURCE_OF_TRUTH row 7; store.list only, AddressNoter): "" when it
 	// has one.
 	Address string `json:"address,omitempty"`
+	// Audience is "admins" for an org store only the org's admins use
+	// (lore-org.yaml audience: admins, D-442; store.list only), "" for
+	// every other store.
+	Audience string `json:"audience,omitempty"`
 }
 
 // InitIn is the input of store.init.
 type InitIn struct {
 	Name       string `json:"name" arg:"0" desc:"the store's name in this repo (me = your personal store)"`
-	URL        string `json:"url,omitempty" arg:"1" desc:"git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)"`
+	URL        string `json:"url,omitempty" arg:"1" desc:"git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me); a new git store's first commit (its marker) is pushed there at once, which is what creates the store"`
 	Visibility string `json:"visibility,omitempty" flag:"visibility" desc:"internal (default) or shareable: whether its rows may reach client repos"`
 	// RepoOptional (callers only, never the CLI): the store is made for
 	// this machine, not for the repo the command runs in. The setup page's
@@ -139,6 +144,10 @@ type InitOut struct {
 	ID       string `json:"id"`
 	// Already is true when the url was already a 0.1.18 store.
 	Already bool `json:"already,omitempty"`
+	// Pushed is true when the new store's first commit (its marker) was
+	// pushed to the git url. Publishing the store is what a git url asks
+	// for, so it takes no --push; the output says it (devco D-613).
+	Pushed bool `json:"pushed,omitempty"`
 	// Following names the setups that were on the default local folder
 	// ~/.lore/stores/_me and now follow personal.store (store init me with
 	// another url): a person has one personal store `me`.
@@ -175,6 +184,39 @@ type ListIn struct {
 type ListOut struct {
 	Stores []Entry `json:"stores"`
 	Count  int     `json:"count"`
+	// Hint names the setups whose org stores this list leaves out, when
+	// the folder is under none of them (devco D-554: `store list` in the
+	// home folder said "count: 1" while two setups had stores).
+	Hint string `json:"hint,omitempty"`
+}
+
+// setupsHint is store.list's hint when it lists no org store but setups
+// bring some: the --setup form of the list for each ("" otherwise).
+func setupsHint(ctx context.Context, m Manager, got []Entry) string {
+	for _, e := range got {
+		if e.Source == SourceOrg {
+			return ""
+		}
+	}
+	sh, ok := upgrade.As[SetupHinter](m)
+	if !ok {
+		return ""
+	}
+	names := sh.OrgSetupNames(ctx)
+	if len(names) == 0 {
+		return ""
+	}
+	cmds := make([]string, len(names))
+	for i, n := range names {
+		cmds[i] = "lore store list --setup " + n
+	}
+	return "no setup covers this folder, so no org store is listed; " + strings.Join(cmds, " or ") + " lists that setup's stores"
+}
+
+// SetupHinter is the Manager's list of the setups that bring org stores
+// (each by name), for store.list's hint outside every setup.
+type SetupHinter interface {
+	OrgSetupNames(ctx context.Context) []string
 }
 
 // VisibilityIn is the input of store.visibility.
@@ -282,7 +324,7 @@ func Ops(m Manager) []op.Entry {
 	// The v0.1.17 clone commands (show, open, forget, doctor) come last (clones.go).
 	return append([]op.Entry{
 		op.Define(op.Spec{
-			Name: OpInit, Summary: "Make a git repo or folder a lore store and attach it (me = your personal store)",
+			Name: OpInit, Summary: "Make a git repo or folder a lore store and attach it (me = your personal store); a git url gets the store's first commit pushed",
 			Permission: op.PermAdmin, Access: op.AccessRead, Errors: storeErrors,
 			// CFG7: attaching in a client repo writes the url into a file
 			// the client reads, so it asks first (the composition root).
@@ -348,7 +390,7 @@ func Ops(m Manager) []op.Entry {
 		}, func(ctx context.Context, in RemoveIn) (RemoveOut, error) {
 			if in.Name == PersonalName {
 				return RemoveOut{}, errs.New(errs.InvalidInput, "store remove: `me` is not attached by this repo").
-					WithHint("it is personal.store in ~/.lore/config.yaml; edit that line to change it")
+					WithHint("it is personal.store in " + lorehome.Shown() + "/config.yaml; edit that line to change it")
 			}
 			// A folder entry is named <store>/<folder> (the name --to and
 			// store list use); only its store part is a store name.
@@ -448,7 +490,7 @@ func Ops(m Manager) []op.Entry {
 				got[i].Name, got[i].URL = repourl.Mask(got[i].Name), repourl.Mask(got[i].URL)
 				got[i].Address = repourl.MaskText(got[i].Address)
 			}
-			return ListOut{Stores: got, Count: len(got)}, nil
+			return ListOut{Stores: got, Count: len(got), Hint: setupsHint(ctx, m, got)}, nil
 		}),
 		// Flow (CFG4): validate → read the current visibility → same: done
 		// → shareable and not yet confirmed: E_NEEDS_CONFIRM (going back
@@ -517,6 +559,7 @@ func Ops(m Manager) []op.Entry {
 		adoptOp(m),
 		setURLOp(m),
 		useOp(m),
+		trustOp(m),
 	}, append(append(cloneOps(m), pushOps(m)...), pushNowOp(m))...)
 }
 
@@ -613,6 +656,9 @@ type Syncer interface {
 // SyncOut is what `lore sync` reports for the 0.1.18 stores.
 type SyncOut struct {
 	Stores []Report `json:"stores"`
+	// Notes are lines a sync adds after the stores (branch layers it
+	// landed or moved to the trash, BRANCH_LAYERS 9, 10).
+	Notes []string `json:"notes,omitempty"`
 }
 
 // Report is one store's sync result.
@@ -620,6 +666,11 @@ type Report struct {
 	Store    string `json:"store"`
 	Sent     int    `json:"sent"`
 	Received int    `json:"received"`
+	// SentCommits / ReceivedCommits are the commits the sync pushed and
+	// brought in, counted by git (store.SyncReport.Commits, CommitsIn):
+	// Sent and Received count rows (devco D-648).
+	SentCommits     int `json:"sent_commits,omitempty"`
+	ReceivedCommits int `json:"received_commits,omitempty"`
 	// Merged counts rows merged field by field because both sides changed.
 	Merged int `json:"merged"`
 	// Refused counts rows the sync could not apply (each is listed in
@@ -643,6 +694,10 @@ type Report struct {
 	// with --to <org>/<folder>): reported under that folder's name, never
 	// added to another folder's counts (bug hunt W-5).
 	Unattached bool `json:"unattached,omitempty"`
+	// Pushed is true when this sync pushed local commits of the store
+	// (store.SyncReport.Pushed), so a push of commits with no row (a
+	// store link, the org file) is not reported as nothing sent.
+	Pushed bool `json:"pushed,omitempty"`
 }
 
 // folderSync is one synced store's name and report, for attributeFolders.
@@ -753,7 +808,7 @@ func SyncAll(ctx context.Context, s Syncer, only string) (SyncOut, error) {
 	pushRefused := true // every refusal is a push the remote refused (not a merge refusal)
 	for _, d := range done {
 		n, rep := d.name, d.rep
-		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail}
+		r := Report{Store: string(n), Sent: rep.Sent, Received: rep.Received, SentCommits: rep.Commits, ReceivedCommits: rep.CommitsIn, Merged: len(rep.Merged), Offline: rep.Offline, OfflineDetail: rep.OfflineDetail, Pushed: rep.Pushed}
 		var held []store.Refusal
 		for _, x := range rep.Refused {
 			if x.Held {

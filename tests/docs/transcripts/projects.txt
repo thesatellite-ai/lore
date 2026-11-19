@@ -7,6 +7,8 @@ Project: prj_7a670ae8548ed05bf57ad29ad0759504
   name:    website
   origin:  https://github.com/client/website
   created: 2026-11-02 10:00:00Z
+  repos:   1
+  members: 0
 
 Repos:
   rep_2ad3618e878ebbf527d34d446ef4f891  website
@@ -42,7 +44,7 @@ alice (work/website)$ lore rule list --repo shop
 rul_05e99e22e9e86e96fe4daa7777994603 [must/always] Run the tests before you push.
 rul_c0f3c11a5724b0cfd74b256190d9b5b8 [must/always] Buttons are blue.
 alice (work/website)$ lore rule list --repo blog
-ERROR: [E_NOT_FOUND] wire: no repo "blog" in this project
+ERROR: [E_NOT_FOUND] no repo "blog" in this project
   hint: run `lore repo list` to see the mount names
 (exit 27)
 
@@ -100,8 +102,6 @@ alice (work/website)$ git add -A && git commit -qm 'lore: repo address' && git p
 ### fork
 alice (work)$ git clone -q https://github.com/alice/website website-fork
 alice (work/website-fork)$ git remote add upstream https://github.com/client/website-v2 && git remote set-url origin https://github.com/client/website-v2 && lore repo fork
-lore repo fork: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website-fork/.git/config; hook blocks in ~/work/website-fork/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_INVALID_INPUT] this clone's remote github.com/client/website-v2 is a confirmed address of rep_2ad3618e878ebbf527d34d446ef4f891, so it is that repo, not a fork
   hint: change the remote to the fork's address first (git remote set-url origin <fork url>)
 (exit 20)
@@ -127,8 +127,8 @@ alice (work/api)$ lore store add --name client2 --url file://$HOME/stores/client
 ✓ attached store client2 (whole store, folder backend, internal) in .lore/stores.yaml; commit it to share
 alice (work/app)$ lore store list
 stores:
-  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS
-  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok     
+  NAME     URL                                                                         FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH  ADDRESS  AUDIENCE
+  client2  file://~/stores/client2          false              false     stores.yaml  internal    ok              
 count: 1
 
 ### shared notes
@@ -204,7 +204,7 @@ Upgraded 2 rows
   mode-b: rules/rul_d191616cfa49f94ede5d5148b8b045c2 → store shared (~/.lore/stores/infra)
   mode-b: .lore/stores.yaml: add store shared file://~/.lore/stores/infra
   mode-b: .lore/lore.yaml → .lore/lore.yaml.migrated (kept)
-team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
+team lock: none (this machine's migration lock only; nothing written to the remote for it); `--team-lock --push` also holds refs/lore/signals on the remote while the run lasts, so a teammate cannot migrate at the same time
 backup: refs/lore-backup/migrate/2026-11-02 (local only, never pushed)
 undo: none for a shared-database conversion (`lore migrate rollback` refuses it); the shared lore.db was not changed
 alice (work/infra)$ ls .lore; cat .lore/stores.yaml
@@ -258,6 +258,6 @@ min_lore_version: 0.1.18
 
 ### errors
 alice (work)$ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)

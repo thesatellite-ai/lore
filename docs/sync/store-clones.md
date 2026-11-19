@@ -14,6 +14,8 @@ You want this page when you open `~/.lore/stores/` and wonder what each folder i
 
 When lore first needs a git store it clones it to `~/.lore/stores/<owner>/<repo>`, named after the store's address (`git@github.com:acme/notes` → `~/.lore/stores/acme/notes`). The host and any ssh alias never appear in the path. A store pinned to another branch is its own clone at `<repo>@<branch>`; two stores whose addresses end in the same owner and repo on different hosts get `<repo>~2` for the second. Your personal store, when it is a plain folder rather than a git repo, is `~/.lore/stores/_me` (no git host allows an owner name that starts with `_`, so it never clashes with an owner folder).
 
+A store is one store however its address is spelled: `git@github.com:acme/notes.git`, `https://github.com/acme/notes` and `git@work-gh:acme/notes.git`, where your `~/.ssh/config` has `Host work-gh` with `HostName github.com`, all name the same store. lore reads the ssh config file (no ssh process, no network) to tell what an alias stands for, so a clone whose origin uses your alias is still your org's store: reads at its top label rows with the org's name, and a read in one of its folders lists that folder and the org's rows. A HostName that is only another route to the same host (`github.com` → `ssh.github.com`, for port 443) is not taken for an alias, and an alias whose HostName is a provider's port-443 route (`ssh.github.com`, `altssh.gitlab.com`, `altssh.bitbucket.org`) stands for the provider itself (`github.com`, `gitlab.com`, `bitbucket.org`), so the shared config gets the provider's address; the same holds for an address typed on the route host itself (`git@ssh.github.com:acme/notes.git`). An alias host your ssh config does not name, such as one git reaches through a `url.<base>.insteadOf` rule, counts as the same store when it is a single name with no dot and the repository path is the same (also when your ssh config sends the store's host to its port-443 route): the same rule decides which clone folder lore uses, which org a clone belongs to and which org folder a read in it lists.
+
 The first time lore clones or writes to the store it prints what it set up, including your git identity for that clone:
 
 <!-- example: files#a-git-store -->
@@ -21,7 +23,7 @@ The first time lore clones or writes to the store it prints what it set up, incl
 # alice, in website
 $ lore store init --name notes --url git@github.com:acme/notes
 lore store init: store clone ~/.lore/stores/acme/notes: git user set to alice <alice@agency.example> (your lore identity)
-✓ created store notes (sto_7a67…9504) at git@github.com:acme/notes; recorded in .lore/stores.yaml; commit it to share
+✓ created store notes (sto_7a67…9504) on git@github.com:acme/notes: pushed its first commit (the store marker); recorded in .lore/stores.yaml; commit it to share
 $ lore task add --title 'Renew the TLS certificate' --to notes --no-live
 lore: committed locally to store notes; lore sync sends it
 lore: wrote 4 row file(s) in ~/.lore/stores/acme/notes/_store (store notes)
@@ -35,7 +37,7 @@ lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json (stor
 ```
 <!-- /example -->
 
-Every write names the files it changed, and every push names the store, the commit and the branch.
+Every write names the files it changed, and every push names the store, the commit and the branch. In a store clone the lines name exactly the files the write's commits hold: a row written again with the same content is not named, a file committed beside the rows (a folder's `_meta.json` on its first write) is, and a file a move took away reads `lore: removed <file>`.
 
 ## Step 2 — What is inside
 
@@ -122,14 +124,14 @@ This folder is a lore store: notes, rules, decisions, tasks and the other record
 $ git log --format='%an <%ae>  %s'
 alice <alice@agency.example>  lore: memory add mem_54fe…28f2
 alice <alice@agency.example>  lore: machine register mch_c0f3…b5b8
-alice <alice@agency.example>  lore: task add: Renew the TLS certificate (3 rows)
+alice <alice@agency.example>  lore: task add tsk_2ad3…f891 (2 rows + actor act_05e9…4603)
 alice <alice@agency.example>  lore: store init
 ```
 <!-- /example -->
 
 | Path in the clone | What it is |
 |---|---|
-| `lore-store.yaml` | the marker that makes the repo a store: its permanent id (`sto_…`), its visibility and the layout version (`lore_store: 4`). lore never treats a folder with this file as a code repo: no `.lore/data`, no folder rules, and `cd ~/.lore/stores/acme/notes/<folder> && lore task list` works on that folder |
+| `lore-store.yaml` | the marker that makes the repo a store: its permanent id (`sto_…`), its visibility and the layout version (`lore_store: 4`). lore never treats a folder with this file as a code repo: no `.lore/data`, no folder rules, `lore init`, a writing `lore render` (`--dry-run` previews the folder) and `lore org link`/`unlink` refuse there and write nothing ("this is the clone of store acme (folder web) …; lore init is for code repos: nothing written"), `lore setup list` says "This folder: the clone of store acme (folder web), a lore store, not a code repo", and `cd ~/.lore/stores/acme/notes/<folder> && lore task list` works on that folder. At the clone's top a read (`task list`, `rule list`, `decision list`, `memory list`, `search`, `sql`) covers every folder of the store, each row labelled `<org>/<folder>`; inside a folder `--store <org>` covers every folder of the org's stores, `--all-repos` every folder of this store, `--store <org>/<folder>` or `--project <folder>` another folder. `task edit --assign @handle` in a folder finds the org's roster, and `project member list` there lists that folder's project; `lore show --id <id>` (and every command naming a row by id) finds the row in any folder of the store or the org, read for that one command; `project list` gives each folder's row count; `task next` ranks the store's tasks (inside a folder that folder's, at the top every folder's; from anywhere `lore task next --store <org>` or `--setup <setup>`, and from the home folder plain `lore task next` when the machine has one org setup), and `task claim`, `release` and `heartbeat` work on its signals ref; `inbox` and `mission status` need a code repo linked to the folder (`lore org link --org <org> --project <folder>`) |
 | `README.md` | what the folders are and how to browse and edit them; lore writes it once, with its next commit in the store, and never overwrites your version. `lore doctor` notes a store without one (`store_readme`) |
 | `_store/<table>/<id>.json` | the store's own rows (people and machines, notes written to the whole store). A folder name may never start with `_`, so `_store` is never a project |
 | `<folder>/<table>/<id>.json` | the rows of one project or client folder (`acme/tasks/tsk_….json`), with `<folder>/_meta.json` (the folder's id and repo links). Folders can nest (`team/web/tasks/`). A folder may not be named like a kind of row (`tasks`, `memories`, …) nor start with `_` or `.` |
@@ -155,16 +157,16 @@ lore-store.yaml
 
 # alice, in website
 $ lore sync
-lore: pushed store notes: commit 9b40ce7 to branch main
-store notes: sent 5, received 0, merged 0, refused 0
+lore: pushed store notes: commit 9b40ce7 to branch main (6 commits, 5 row files)
+store notes: pushed (sent 6, received 0, merged 0, refused 0); rows: 5 sent
 $ lore store use --path ~/code/notes --yes
 ✓ store notes now uses your clone ~/code/notes (recorded on this machine only)
   before: ~/.lore/stores/acme/notes
   lore's earlier clone ~/.lore/stores/acme/notes is no longer used and stays on disk; remove it when you no longer need it
 $ lore store list
 stores:
-  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS
-  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy  
+  NAME   URL                        FOLDER  READ_ONLY  BRANCH  PERSONAL  SOURCE       VISIBILITY  REACH       ADDRESS  AUDIENCE
+  notes  git@github.com:acme/notes          false      main    false     stores.yaml  internal    local_copy           
 count: 1
 $ lore path --id tsk_2ad3…f891
 ~/code/notes/_store/tasks/tsk_2ad3…f891.json
@@ -177,6 +179,8 @@ $ lore store use --default notes --yes
 ## What lore never does in a store clone
 
 - **A read never pushes and never sets up git.** A command that only reads (`list`, `show`, `search`, `where`, `doctor`) may fetch the store and fast-forward lore's clone, but it never pushes; when commits wait, it says `N local commit(s) wait to be pushed; a read never pushes: run lore sync`. It never installs the merge driver, hooks or your clone identity either; at most it prints one line naming the command that will (`lore sync`, `lore fix`, or the next write).
+- **A read in a new folder writes nothing.** A folder's project row is made by the first write in it (in that write's run, committed as `lore: project add prj_…: <folder>`). Every read before it (a list, `lore search`, `lore context`, `lore sql`, `lore whoami`, `lore doctor`) and every preview (`--dry-run` of any command, `lore render --check`, `--report`, `--trend`) leaves the clone exactly as it was: no commit, no file, no push.
+- **A read at the clone's root reads every folder.** The root of a store clone holds every folder's rows and is no project's folder, so a list or search there with no `--project` (`lore pattern list`, `lore tag list`, `lore repo list`, `lore link list`, the other kinds too) shows every folder's rows, as `lore memory list` does, and never makes a project row (`lore repo list` there, and under `--setup` from any folder, lists the repos recorded in every folder of the org's stores). `lore project show` with no name refuses there, saying the folder is the root of a store, and names the way out (`lore project show --id <name>`, `--store <store>`, `lore setup check --setup <name>`).
 - **It never touches your global git config.** The identity, merge driver and hook lore needs are written into the clone's own `.git/config`, `.git/info/attributes` and `.git/hooks/pre-commit`, each announced the first time ([Plain git in the store](editing-by-hand.md#plain-git-in-the-store)).
 - **The clone's git identity is always a person.** lore writes your name and email (in an org store, your identity in that org) as the clone's `user.name` and `user.email`, never an agent's. When an agent writes for you, the agent is named in a `Lore-Agent:` trailer of lore's commit, not in its author. `lore doctor` flags a clone whose identity is not yours (`store_identity`) with the exact command, and `lore fix` corrects it.
 - **It never deletes a file of yours.** Files that are not rows are reported by `lore doctor` (`store_files`) and left alone.

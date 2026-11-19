@@ -5,6 +5,7 @@
 package playbook
 
 import (
+	"cmp"
 	"context"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"github.com/thesatellite-ai/lore/ops/internal/creator"
@@ -135,9 +136,13 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if err != nil {
 		return content.WriteOut{}, err
 	}
+	keyID, prev, found, err := o.c.Keyed(ctx, in.Key, project)
+	if found || err != nil {
+		return prev, err // D-439: a retry with the same --key writes nothing
+	}
 	fields, err := content.Texts(Noun, map[string]string{
 		content.FieldName: in.Title, fieldDescription: desc, content.FieldBody: body,
-		content.FieldSourceKind: content.DefaultSource,
+		content.FieldSourceKind: cmp.Or(strings.TrimSpace(in.Source), content.DefaultSource), content.FieldSourceRef: in.SourceRef,
 	})
 	if err != nil {
 		return content.WriteOut{}, err
@@ -145,13 +150,14 @@ func (o ops) add(ctx context.Context, in AddIn) (content.WriteOut, error) {
 	if fields[content.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return content.WriteOut{}, err
 	}
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.c.Env); v != nil {
 		fields[content.FieldCreatedBy] = v // the calling actor, never caller-set (INTEG-AUDIT-1)
 	}
 	if fields[content.FieldTrust], err = content.Trust(); err != nil {
 		return content.WriteOut{}, err
 	}
-	return o.c.Create(ctx, in.To, fields)
+	return o.c.CreateAs(ctx, in.To, keyID, fields)
 }
 
 // list returns the live playbooks; archived ones only with --archived

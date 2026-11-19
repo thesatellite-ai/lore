@@ -30,6 +30,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/logic/teamprofile"
@@ -45,10 +46,6 @@ const (
 	// skipNoOrgEntry: the setup names an org this machine has no orgs[]
 	// entry for yet (the setup page before the team step is saved).
 	skipNoOrgEntry = "the org is not set up on this machine yet"
-	// skipNoRosterStore follows the org's name: its orgs[] entry marks no
-	// store as holding the org folder (org_folder), so there is no roster
-	// to read here.
-	skipNoRosterStore = " lists no store holding its roster (org_folder in ~/.lore/config.yaml; lore org refresh fills it from the team's store)"
 	// skipNotOnRoster: identity.period needs the roster row identity.roster
 	// did not find.
 	skipNotOnRoster = "not on the roster; identity.roster says why"
@@ -132,7 +129,7 @@ func (sp setupProber) readRoster(ctx context.Context, org string, emails []strin
 		// An entry that names no store holding the org folder has no roster
 		// this machine can read (a member entry written before its store
 		// was known): nothing to check, as before the roster was read.
-		look.skip = "org " + org + skipNoRosterStore
+		look.skip = "org " + org + " lists no store holding its roster (org_folder in " + lorehome.Shown() + "/" + ConfigFile + "; lore org refresh fills it from the team's store)"
 		return look
 	}
 	x, err := openOrgFolderApp(ctx, sp.a.opts, org, one)

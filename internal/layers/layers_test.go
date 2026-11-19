@@ -63,8 +63,13 @@ const appDir = "app"
 
 var appImporters = map[string]bool{"cmd": true, appDir: true}
 
-// internalDir holds test-only helpers (this package); nothing imports it.
+// internalDir holds test-only helpers (this package and internal/testtime);
+// only the test suites under tests/ (test-only themselves) may import it,
+// never product code.
 const internalDir = "internal"
+
+// testsDir is the folder of the test suites and their harness packages.
+const testsDir = "tests"
 
 // forbidden import prefixes: the old modules being emptied and ent, which
 // the new core never uses (no code generation).
@@ -161,6 +166,9 @@ func violations(p pkg) []string {
 			continue
 		}
 		if itop == internalDir {
+			if top == testsDir {
+				continue // a test harness may use the test-only helpers (D-410: internal/testtime)
+			}
 			out = append(out, p.ImportPath+" imports test-only "+imp)
 			continue
 		}

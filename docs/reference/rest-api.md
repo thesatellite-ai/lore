@@ -1,6 +1,6 @@
 # Local REST API
 
-**In short:** `lore api` serves every lore command as an HTTP route on your own machine, so a tool that cannot run a shell command can still read and write your notes. It listens on `127.0.0.1` only, and every request needs the token lore keeps in `~/.lore/api-token`. A route runs the same operation as the command, with the same checks, errors and audit entry.
+**In short:** `lore api` serves every lore command as an HTTP route on your own machine, so a tool that cannot run a shell command can still read and write your notes. It listens on `127.0.0.1` only, answers only a request addressed to `localhost`, `127.0.0.1` or `[::1]` (any other `Host` header, such as a web page that points its own name at your machine, gets a plain 403 before anything else runs), and every request needs the token lore keeps in `~/.lore/api-token`. A route runs the same operation as the command, with the same checks, errors and audit entry.
 
 ## What it is and when you want it
 
@@ -137,6 +137,7 @@ DELETE GET POST /v1/rules
 POST /v1/rules/archive
 POST /v1/rules/search
 DELETE GET PATCH /v1/rules/{id}
+POST /v1/rules/{id}/approve
 POST /v1/rules/{id}/archive
 POST /v1/rules/{id}/unarchive
 ```
@@ -176,7 +177,7 @@ ERROR: [E_NOT_FOUND] docs: api-docs/cli-commands.md does not exist
 - A missing or unusable token file refuses every request, also on a running server; `lore api token rotate` fixes it.
 - A store moved while the server runs (`lore store set-url`, from the CLI or through the API) needs no restart: before each request the server checks the files that say where stores live (`~/.lore/config.yaml`, the clone and address records under `~/.lore/state/`, the repo's `.lore/stores.yaml`) and reopens its stores when one changed.
 - A `GET` takes query parameters only and refuses a body; a `POST` or `PATCH` takes a JSON body only and refuses query parameters. A request body over 4 MB is refused.
-- Every request is made as the person the server resolved when it started. Start a separate `lore api` (on another port) for another setup or another repo.
+- Every request is made as the person the server resolves for the folder it was started in. A setup or org saved in `~/.lore/config.yaml` while it runs (a `lore setup apply` on the CLI, say) is used from the next request, no restart needed. Start a separate `lore api` (on another port) for another setup or another repo.
 - `lore spec docs` needs the page with its marker blocks; it never creates `cli-commands.md` from nothing.
 
 ## Related

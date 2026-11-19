@@ -96,8 +96,10 @@ func TestLinkNaturalIDMatchesV017(t *testing.T) {
 		t.Fatalf("list text\n got %q\nwant %q", got, want)
 	}
 	show := h.Must("commit.show", `{"id":"`+v017SHA+`"}`)
-	if got, want := opstest.Text(show), "Commit "+v017SHA+" — 1 linked entities:\n  tasks/"+v017Task+"\n"; got != want {
-		t.Fatalf("show text\n got %q\nwant %q", got, want)
+	// v0.1.17's lines, then (devco Q-9) the note that this made-up sha
+	// is no commit of the harness repo
+	if got, want := opstest.Text(show), "Commit "+v017SHA+" — 1 linked entities:\n  tasks/"+v017Task+"\n"; !strings.HasPrefix(got, want) || !strings.Contains(got, "note: commit "+v017SHA+" does not exist in this repository") {
+		t.Fatalf("show text\n got %q\nwant %q and the missing-commit note", got, want)
 	}
 	// v0.1.17's refusal of the same link, same words.
 	msg := h.Fails("link.add", `{"entity":"`+v017Task+`","commit":"`+v017SHA+`"}`, errs.InvalidInput)

@@ -132,6 +132,9 @@ func TestTeD_RepoRoleMatrix(t *testing.T) {
 func TestTeD_RepoRoleUnreachableStoreFailsClosed(t *testing.T) {
 	o := newOrgWorld(t, th.Flag("to", "rule", "add"), th.Flag("to", "memory", "add"))
 	o.tools.MustLore("memory", "add", "--body", teDInternalNote, "--to", orgNorthwind+"/"+folderOrg)
+	// the store write is committed locally until lore sync (U-2): send it
+	// before the clone goes, or the internal note is gone with it
+	o.tools.MustLore("sync")
 	o.alice.RemoveStoreClones(t)
 	if err := os.RemoveAll(o.alice.LorePath("cache")); err != nil {
 		t.Fatal(err)

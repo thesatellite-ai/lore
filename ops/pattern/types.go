@@ -1,6 +1,7 @@
 package pattern
 
 import (
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/content"
 	"github.com/thesatellite-ai/lore/ops/internal/wheredel"
 
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -29,6 +31,13 @@ const (
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
+	// Source is the source_kind (D-488: every add takes --source with
+	// --source-ref; this one wrote "manual" always).
+	Source string `json:"source,omitempty" flag:"source" desc:"source_kind (default manual)"`
 
 	Title string `json:"title" flag:"title" desc:"title (required)"`
 	Body  string `json:"body,omitempty" flag:"body" desc:"body" ui:"widget=markdown"`

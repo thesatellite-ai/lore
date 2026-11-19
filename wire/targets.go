@@ -102,9 +102,9 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 	if recorded {
 		return "", "", this, nil // a recorded target is attached from stores.yaml
 	}
-	for _, s := range a.orgStoresHere(ctx) {
+	for _, s := range a.attachedAtOpen(ctx) {
 		if s.Name == name {
-			return "", "", this, nil // the org brings it (the company folder): attached at open
+			return "", "", this, nil // the org brings it (the company folder), or the store folder here: attached at open
 		}
 	}
 	src, found, fromOrg, err := a.baseStore(ctx, base)
@@ -195,18 +195,20 @@ func (a *App) coveringAttachment(ctx context.Context, src attach.Store, folderNa
 	if err != nil {
 		return "", false, nil // an unparsable url covers nothing; the open reports it
 	}
-	top, err := a.repoTop(ctx)
+	top, ok, err := a.targetsTop(ctx)
 	if err != nil {
 		return "", false, err
 	}
-	cfg, err := readStoresFile(top)
-	if err != nil {
-		return "", false, err
+	var cfg attach.Config
+	if ok {
+		if cfg, err = readStoresFile(top); err != nil {
+			return "", false, err
+		}
 	}
 	a.mu.Lock()
 	extra := slices.Clone(a.extra)
 	a.mu.Unlock()
-	for _, s := range slices.Concat(cfg.Stores, a.orgStoresHere(ctx), extra) {
+	for _, s := range slices.Concat(cfg.Stores, a.attachedAtOpen(ctx), extra) {
 		if got, lerr := attachLocation(s, s.Folder); lerr == nil && got == want {
 			return s.Name, true, nil
 		}
@@ -267,8 +269,8 @@ func (a *App) baseStore(ctx context.Context, name string) (src attach.Store, fou
 // recordedTarget reports whether stores.yaml already lists the folder
 // target name (recorded by an earlier confirmed write).
 func (a *App) recordedTarget(ctx context.Context, name store.Source) (bool, error) {
-	top, err := a.repoTop(ctx)
-	if err != nil {
+	top, ok, err := a.targetsTop(ctx)
+	if err != nil || !ok {
 		return false, err
 	}
 	cfg, err := readStoresFile(top)
@@ -283,14 +285,52 @@ func (a *App) recordedTarget(ctx context.Context, name store.Source) (bool, erro
 	return false, nil
 }
 
+// attachedAtOpen are the stores the open attaches besides stores.yaml
+// and the `--to` targets: in a code repo the org's stores; in a store
+// checkout the store folder the command runs in and its company folder
+// (open.go), never the org's other stores. Why (devco D-693): judged by
+// the org's stores, `--to acme/org` at a store clone's top counted as
+// attached, was never attached, and failed "no store named acme/org".
+func (a *App) attachedAtOpen(ctx context.Context) []attach.Store {
+	sc, in := storeHere(a.opts.RepoDir)
+	if !in {
+		return a.orgStoresHere(ctx)
+	}
+	one, err := storeHereEntry(a.opts.Home, sc)
+	if err != nil {
+		return nil // the open reports it
+	}
+	out := []attach.Store{one}
+	if one.Folder != "" {
+		out = append(out, cloneCompanyFolder(cloneOrgEntry(a.opts.Home, one.URL), one)...)
+	}
+	return out
+}
+
 // orgStoresHere is orgStores for this App's repo (an unknown top renames
 // nothing).
 func (a *App) orgStoresHere(ctx context.Context) []attach.Store {
-	top, err := a.repoTop(ctx)
-	if err != nil {
+	top, ok, err := a.targetsTop(ctx)
+	if err != nil || !ok {
 		top = ""
 	}
 	return orgStores(ctx, a.opts, top)
+}
+
+// targetsTop is the code repo whose stores.yaml a `--to` target is looked
+// up in; ok is false inside a store checkout, which is no code repo and
+// has no stores.yaml (storehere.go). Why (devco D-693): asking repoTop
+// there answered E_NOT_A_STORE, and every `--to <org>/<folder>` write in
+// a store clone (its top or a folder) was refused before it ran.
+func (a *App) targetsTop(ctx context.Context) (string, bool, error) {
+	if inStore(a.opts.RepoDir) {
+		return "", false, nil
+	}
+	top, err := a.repoTop(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	return top, true, nil
 }
 
 // unattachedNote tells the person that a write to `--to <store>/<folder>`

@@ -25,11 +25,14 @@ package stores
 // build without it answers E_UNSUPPORTED.
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -69,8 +72,14 @@ type ShowIn struct {
 	Links bool   `json:"links,omitempty" flag:"links" desc:"also print the cached link index of every entry"`
 }
 
-// DoctorIn is the (empty) input of store.doctor.
-type DoctorIn struct{}
+// DoctorIn is the input of store.doctor.
+type DoctorIn struct {
+	// Store keeps the report to one store, as every other store command
+	// names one (devco D-633: `store doctor --store <org>` was "unknown
+	// flag"): the store of that name and its folders (<name>/<folder>),
+	// matched by name or url, and the clones of those stores.
+	Store string `json:"store,omitempty" flag:"store" desc:"only this store and its folders (an org's name, me, team, a .lore/stores.yaml name or a store url); default every store"`
+}
 
 // OpenIn is the input of store.open.
 type OpenIn struct {
@@ -108,6 +117,10 @@ type CloneView struct {
 	Unpushed      []string    `json:"unpushed"`
 	Links         []CloneLink `json:"links,omitempty"`
 	Problems      []string    `json:"problems"`
+	// Warnings need a decision but break nothing (devco D-483: a branch in
+	// the clone the store does not hold, with how to push or delete it);
+	// store doctor prints them and still exits 0.
+	Warnings []string `json:"warnings,omitempty"`
 	// Shown is URL as printed (redacted when output must name nothing).
 	Shown string `json:"-"`
 }
@@ -118,6 +131,15 @@ type CloneView struct {
 // of ~/.lore/config.yaml.
 type StoreChecker interface {
 	CheckStores(ctx context.Context) []StoreCheck
+}
+
+// DoctorScoper is the optional host side of store.doctor that names the
+// orgs a run is kept to: the org of a setup the command names (--setup,
+// LORE_SETUP). Why (devco D-687): `store doctor --setup <company>` also
+// listed another setup's store clone (the ops store) with its warning, a
+// store that setup never uses. nil keeps every org store's clone.
+type DoctorScoper interface {
+	DoctorOrgScope(ctx context.Context) []string
 }
 
 // StoreCheck is one store's health as store.doctor reports it.
@@ -179,9 +201,36 @@ type ClonesOut struct {
 	// Here are the debug lines of this repo's links (show --links).
 	Here []string `json:"here,omitempty"`
 	// Push is one store's settings (store show <store>).
-	Push   PushView `json:"push,omitzero"`
+	Push PushView `json:"push,omitzero"`
+	// Summary counts store doctor's stores by outcome (store.doctor only).
+	Summary DoctorSummary `json:"summary,omitzero"`
+	// Error is the failure store doctor exits with after printing every
+	// store (devco D-483), "" when no store failed: --json is one
+	// document that still says why it failed.
+	Error  string `json:"error,omitempty"`
 	doctor bool
+	// only is the --store filter of store doctor ("" none): with it a
+	// first section that kept no store is left out, so the report never
+	// says "stores this repo and machine use: none" and then checks the
+	// named store's clone (devco D-687).
+	only string
+	fail error
 }
+
+// DoctorSummary is store doctor's last line: how many stores it checked
+// and how many came out ok, with a warning, or failing.
+type DoctorSummary struct {
+	Checked int `json:"checked"`
+	OK      int `json:"ok"`
+	Warn    int `json:"warn"`
+	Fail    int `json:"fail"`
+}
+
+// Failure implements op.Failer (devco D-483): store doctor prints every
+// store's lines and the summary, then fails when a store failed. As a
+// plain op error the run printed only the error line and none of the
+// other checks.
+func (o ClonesOut) Failure() error { return o.fail }
 
 // OpenOut is the output of store.open.
 type OpenOut struct {
@@ -230,55 +279,120 @@ func (o ForgetOut) Text() string {
 const (
 	doctorUsedHead   = "stores this repo and machine use:"
 	doctorNoneUsed   = "  none (no .lore/stores.yaml entry, no org store, no personal store)"
-	doctorOrgHead    = "clones of the org stores in ~/.lore/config.yaml (orgs[].stores):" // G-19: a fresh setup's stores were filed under "v0.1.17 org stores"
 	doctorNoOrgStore = "  none"
 )
+
+// Store doctor's line marks (the ✓ ⚠ ✗ of `lore doctor --all`) and the
+// prefixes of the lines under a store.
+const (
+	doctorMarkOK   = "✓"
+	doctorMarkWarn = "⚠"
+	doctorMarkFail = "✗"
+	doctorFailLine = "    fail: "
+	doctorWarnLine = "    warn: "
+)
+
+// doctorMark is a store's mark: ✗ with a problem, ⚠ with only warnings.
+func doctorMark(problems, warnings []string) string {
+	switch {
+	case len(problems) > 0:
+		return doctorMarkFail
+	case len(warnings) > 0:
+		return doctorMarkWarn
+	}
+	return doctorMarkOK
+}
+
+// summarize counts o's stores by outcome (both sections).
+func summarize(o ClonesOut) DoctorSummary {
+	var s DoctorSummary
+	count := func(problems, warnings []string) {
+		s.Checked++
+		switch doctorMark(problems, warnings) {
+		case doctorMarkFail:
+			s.Fail++
+		case doctorMarkWarn:
+			s.Warn++
+		default:
+			s.OK++
+		}
+	}
+	for _, c := range o.Checked {
+		count(c.Problems, nil)
+	}
+	for _, v := range o.Stores {
+		count(v.Problems, v.Warnings)
+	}
+	return s
+}
+
+// Text is the summary line.
+func (s DoctorSummary) Text() string {
+	if s.Checked == 0 {
+		return "summary: no store to check"
+	}
+	return fmt.Sprintf("summary: %d store(s) checked: %d ok, %d warn, %d fail", s.Checked, s.OK, s.Warn, s.Fail)
+}
+
+// doctorOrgHead heads the org stores section, naming config.yaml in the
+// home this run uses (devco D-423: under LORE_HOME it said ~/.lore). G-19:
+// a fresh setup's stores were filed under "v0.1.17 org stores".
+func doctorOrgHead() string {
+	return "clones of the org stores in " + configFileShown() + " (orgs[].stores):"
+}
 
 // Text prints store.show (or store.doctor) as v0.1.17 did.
 func (o ClonesOut) Text() string {
 	var b strings.Builder
 	if o.doctor {
-		b.WriteString(doctorUsedHead + "\n")
-		if len(o.Checked) == 0 {
+		if len(o.Checked) > 0 || o.only == "" {
+			b.WriteString(doctorUsedHead + "\n")
+		}
+		if len(o.Checked) == 0 && o.only == "" {
 			b.WriteString(doctorNoneUsed + "\n")
 		}
 		for _, c := range o.Checked {
-			mark := "✓"
-			if len(c.Problems) > 0 {
-				mark = "!"
-			}
-			fmt.Fprintf(&b, "%s %s (%s, %s) %s\n", mark, c.Store, c.Source, c.Kind, c.Shown)
+			fmt.Fprintf(&b, "%s %s (%s, %s) %s\n", doctorMark(c.Problems, nil), c.Store, c.Source, c.Kind, c.Shown)
 			for _, p := range c.Problems {
-				b.WriteString("    " + p + "\n")
+				b.WriteString(doctorFailLine + p + "\n")
 			}
 			for _, n := range c.Notes {
 				b.WriteString("    " + n + "\n")
 			}
 		}
-		b.WriteString(doctorOrgHead + "\n")
+		b.WriteString(doctorOrgHead() + "\n")
 		if len(o.Stores) == 0 {
 			b.WriteString(doctorNoOrgStore + "\n")
 		}
 		for _, v := range o.Stores {
-			mark := "✓"
-			if len(v.Problems) > 0 {
-				mark = "!"
-			}
-			fmt.Fprintf(&b, "%s %s  (entries %s; branches %s)\n", mark, v.Shown, strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
+			fmt.Fprintf(&b, "%s %s  (entries %s; branches %s)\n", doctorMark(v.Problems, v.Warnings), v.Shown, strings.Join(v.Entries, ", "), strings.Join(v.Branches, ", "))
 			for _, p := range v.Problems {
-				b.WriteString("    " + p + "\n")
+				b.WriteString(doctorFailLine + p + "\n")
+			}
+			for _, w := range v.Warnings {
+				b.WriteString(doctorWarnLine + w + "\n")
 			}
 		}
+		b.WriteString(o.Summary.Text() + "\n")
 		return b.String()
 	}
 	if o.Push.Store != "" {
-		return o.Push.Text()
+		b.WriteString(o.Push.Text())
+		// devco D-571: the unpushed count also when it is 0, but only from a
+		// clone this machine read (the push view's count hides a read error).
+		if len(o.Stores) == 1 && o.Stores[0].Cloned && o.Push.Unpushed == 0 && len(o.Stores[0].Unpushed) == 0 {
+			b.WriteString("  waiting   nothing: every local commit is pushed\n")
+		}
+		for _, v := range o.Stores {
+			writeCloneLines(&b, v)
+		}
+		return b.String()
 	}
 	for _, h := range o.Here {
 		b.WriteString(h + "\n")
 	}
 	if len(o.Stores) == 0 {
-		b.WriteString("no stores configured (orgs[].stores in ~/.lore/config.yaml)\n")
+		b.WriteString("no stores configured (orgs[].stores in " + lorehome.Shown() + "/config.yaml)\n")
 		return b.String()
 	}
 	for _, v := range o.Stores {
@@ -291,14 +405,7 @@ func (o ClonesOut) Text() string {
 			b.WriteString("  clone     not cloned yet (the next command that needs it clones it)\n")
 			continue
 		}
-		fetched := fetchedNever
-		if v.LastFetch != "" {
-			fetched = v.LastFetch
-		}
-		fmt.Fprintf(&b, "  clone     %s   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
-		if len(v.Unpushed) > 0 {
-			fmt.Fprintf(&b, "  unpushed  %s\n", strings.Join(v.Unpushed, ", "))
-		}
+		writeCloneLines(&b, v)
 		for _, l := range v.Links {
 			d, own := "", ""
 			if l.Default {
@@ -313,9 +420,56 @@ func (o ClonesOut) Text() string {
 	return b.String()
 }
 
+// writeCloneLines are a cloned store's clone and unpushed lines.
+func writeCloneLines(b *strings.Builder, v CloneView) {
+	if !v.Cloned {
+		b.WriteString("  clone     not cloned yet (the next command that needs it clones it)\n")
+		return
+	}
+	fetched := fetchedNever
+	if v.LastFetch != "" {
+		fetched = v.LastFetch
+	}
+	fmt.Fprintf(b, "  clone     %s   default branch %s   last fetch %s\n", v.Clone, v.DefaultBranch, fetched)
+	if len(v.Unpushed) > 0 {
+		fmt.Fprintf(b, "  unpushed  %s\n", strings.Join(v.Unpushed, ", "))
+	}
+}
+
 // cloneErrors are the codes of the clone commands.
 var cloneErrors = []errs.Code{errs.InvalidInput, errs.NotFound, errs.ConfigInvalid, errs.StoreUnreachable,
 	errs.NotAStore, errs.Unsupported, errs.Refused, errs.StoreReadOnly, errs.StoreScheme, errs.Internal}
+
+// StoreCloneFinder is the optional Manager upgrade that finds the clone
+// view of one named store (store show --store <name>, devco D-571).
+type StoreCloneFinder interface {
+	StoreClone(ctx context.Context, name string) (CloneView, bool)
+}
+
+// namedStoreShow is store show --store <name>: the push settings, plus
+// (devco D-571) the store's url, clone, last fetch, unpushed commits and
+// folders, as the no-argument show prints them. Before, a named store
+// printed only "push manual, compact off, epoch 0". Display only: a part
+// the build or the store cannot give is left out, never an error.
+func namedStoreShow(ctx context.Context, m Manager, name string, v PushView) ClonesOut {
+	out := ClonesOut{Push: v}
+	if f, ok := upgrade.As[StoreCloneFinder](m); ok {
+		if cv, found := f.StoreClone(ctx, name); found {
+			out.Stores = []CloneView{cv}
+			if out.Push.URL == "" {
+				out.Push.URL = cmp.Or(cv.Shown, cv.URL)
+			}
+		}
+	}
+	if fl, ok := upgrade.As[FolderLister](m); ok && !v.Folder {
+		if fo, err := fl.ListFolders(ctx, name); err == nil {
+			for _, r := range fo.Folders {
+				out.Push.Folders = append(out.Push.Folders, r.Folder)
+			}
+		}
+	}
+	return out
+}
 
 // cloner is m's Cloner, or E_UNSUPPORTED naming the command.
 func cloner(m Manager, cmd string) (Cloner, error) {
@@ -335,7 +489,7 @@ func cloner(m Manager, cmd string) (Cloner, error) {
 func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, error) {
 	name := strings.TrimSpace(raw)
 	snake := row.ValidName(name)
-	if IsStoreURL(name) || (!snake && orgconf.ValidateStoreShortName(name) != nil) {
+	if IsStoreURL(name) || (!snake && orgconf.ValidateStoreShortName(name) != nil && !orgStoreSpelling(name)) {
 		return Entry{}, false, nil
 	}
 	var list []Entry
@@ -352,11 +506,44 @@ func storeNamed(ctx context.Context, m Manager, cmd, raw string) (Entry, bool, e
 			return e, true, nil
 		}
 	}
+	base, _, _ := strings.Cut(name, "/")
+	if on, ok := upgrade.As[OutsideNamer](m); ok && storeNameShaped(base) {
+		// D-516: outside a repo an org entry, <org>/<store> or a setup;
+		// D-540: or an org store's short name (lore-ops is no snake_case
+		// name, so the snake check alone sent it on as a path)
+		e, found, err := on.OutsideStoreNamed(ctx, cmd, name)
+		if err != nil || found {
+			return e, found, err
+		}
+	}
 	if !snake {
 		return Entry{}, false, nil // not a store name lore knows: a path or url as given
 	}
 	return Entry{}, false, errs.New(errs.NotFound, "store "+cmd+": no store named "+name+" in this repo").
 		WithHint("run `lore store list`, or give the store url (" + storeURLForm[cmd] + ")")
+}
+
+// storeNameShaped reports whether s is spelled like a stores.yaml name
+// (snake_case) or an org store's short name (lore-ops).
+func storeNameShaped(s string) bool {
+	return row.ValidName(s) || orgconf.ValidateStoreShortName(s) == nil
+}
+
+// orgStoreSpelling reports whether name is <org>/<store> (D-540: `store
+// push --store acme/lore-ops` was taken for a folder path, "not a git
+// store", since the slash made it no name).
+func orgStoreSpelling(name string) bool {
+	org, st, ok := strings.Cut(name, "/")
+	return ok && storeNameShaped(org) && storeNameShaped(st)
+}
+
+// OutsideNamer is the optional Manager upgrade that resolves a store name
+// outside every repo, where no .lore/stores.yaml names anything (devco
+// D-516: `store push --store <org>` from the home folder refused the org
+// entry's name). found is false inside a repo; outside one a name no org
+// entry or setup has is E_NOT_FOUND naming the ones that exist.
+type OutsideNamer interface {
+	OutsideStoreNamed(ctx context.Context, cmd, name string) (e Entry, found bool, err error)
 }
 
 // storeURLForm is the url form of each command storeNamed serves, with
@@ -384,7 +571,7 @@ func cloneOps(m Manager) []op.Entry {
 				if err != nil {
 					return ClonesOut{}, err
 				}
-				return withEmptyLists(ClonesOut{Push: v}), nil
+				return withEmptyLists(namedStoreShow(ctx, m, name, v)), nil
 			}
 			c, err := cloner(m, "show")
 			if err != nil {
@@ -394,7 +581,7 @@ func cloneOps(m Manager) []op.Entry {
 			return withEmptyLists(out), err
 		}),
 		op.Define(op.Spec{
-			Name: OpOpen, Summary: "Print the store's own clone of a branch to browse (~/.lore/stores/<owner>/<repo>, or <repo>@<branch>), fetched first",
+			Name: OpOpen, Summary: "Print the store's own clone of a branch to browse (" + lorehome.Shown() + "/stores/<owner>/<repo>, or <repo>@<branch>), fetched first",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
 			Examples: []op.Example{{Title: "browse a store", CLI: "lore store open --url git@github.com:agency/notes", Want: "✓"}},
 		}, func(ctx context.Context, in OpenIn) (OpenOut, error) {
@@ -441,7 +628,7 @@ func cloneOps(m Manager) []op.Entry {
 			Name: OpDoctor, Summary: "Check every store this repo and machine use (stores.yaml, the org, the personal store) and the v0.1.17 org stores: reachable, unpushed commits and their age, refused pushes, the clone folders",
 			Permission: op.PermRead, Access: op.AccessRead, Errors: cloneErrors, Local: true,
 			Examples: []op.Example{{Title: "check", CLI: "lore store doctor", Want: ""}},
-		}, func(ctx context.Context, _ DoctorIn) (ClonesOut, error) {
+		}, func(ctx context.Context, in DoctorIn) (ClonesOut, error) {
 			c, err := cloner(m, "doctor")
 			if err != nil {
 				return ClonesOut{}, err
@@ -453,15 +640,84 @@ func cloneOps(m Manager) []op.Entry {
 			if sc, ok := upgrade.As[StoreChecker](m); ok {
 				out.Checked = sc.CheckStores(ctx)
 			}
+			if ds, ok := upgrade.As[DoctorScoper](m); ok {
+				out = orgScoped(out, ds.DoctorOrgScope(ctx))
+			}
+			if out, err = onlyStore(out, in.Store); err != nil {
+				return ClonesOut{}, err
+			}
+			out.only = strings.TrimSpace(in.Store)
 			out = withEmptyLists(out)
 			out.doctor = true
-			return out, doctorVerdict(out)
+			out.Summary = summarize(out)
+			// devco D-483: a failing store never hides the others' lines;
+			// the run prints in full, then fails (op.Failer).
+			if out.fail = doctorVerdict(out); out.fail != nil {
+				out.Error = errs.EnvelopeOf(out.fail).Error.Message
+			}
+			return out, nil
 		}),
 	}
 }
 
-// doctorVerdict is nil when no store has a problem, else an error naming
-// each problem (P3-CFG-2: the op error carries what v0.1.17 printed
+// orgScoped keeps the org-store section of out to the clones of orgs (an
+// entry of one of them, or the url of a store the first section checks);
+// nil orgs keeps every clone (DoctorScoper, devco D-687).
+func orgScoped(out ClonesOut, orgs []string) ClonesOut {
+	if len(orgs) == 0 {
+		return out
+	}
+	urls := map[string]bool{}
+	for _, c := range out.Checked {
+		urls[c.URL] = true
+	}
+	var clones []CloneView
+	for _, v := range out.Stores {
+		if urls[v.URL] || slices.ContainsFunc(v.Entries, func(e string) bool { return slices.Contains(orgs, e) }) {
+			clones = append(clones, v)
+		}
+	}
+	out.Stores = clones
+	return out
+}
+
+// onlyStore keeps out to the store name names (store doctor --store,
+// devco D-633): the checked stores called name or <name>/<folder>, or
+// whose url is name, and the clones of those stores' urls (or whose
+// entries name it). "" keeps everything; a name nothing matches is
+// refused with the names doctor knows, never an empty report.
+func onlyStore(out ClonesOut, name string) (ClonesOut, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return out, nil
+	}
+	match := func(s string) bool { return s == name || strings.HasPrefix(s, name+"/") }
+	urls := map[string]bool{name: true}
+	var checked []StoreCheck
+	var known []string
+	for _, c := range out.Checked {
+		known = append(known, c.Store)
+		if match(c.Store) || c.URL == name {
+			checked = append(checked, c)
+			urls[c.URL] = true
+		}
+	}
+	var clones []CloneView
+	for _, v := range out.Stores {
+		if urls[v.URL] || slices.ContainsFunc(v.Entries, match) {
+			clones = append(clones, v)
+		}
+	}
+	if len(checked) == 0 && len(clones) == 0 {
+		return ClonesOut{}, errs.New(errs.NotFound, "store doctor: no store named "+name+" is used here").
+			WithHint("lore store doctor checks every store; the stores it knows: " + cmp.Or(strings.Join(known, ", "), "none"))
+	}
+	out.Checked, out.Stores = checked, clones
+	return out, nil
+}
+
+// doctorVerdict is nil when no store has a problem (a warning is no
+// failure, devco D-483), else an error naming each problem (P3-CFG-2: the op error carries what v0.1.17 printed
 // before failing, so --json still shows every problem). A store whose
 // remote did not answer makes it E_STORE_UNREACHABLE (the offline exit),
 // not E_INVALID_INPUT: nothing the person typed was wrong (B3-12).
@@ -493,7 +749,7 @@ func doctorVerdict(out ClonesOut) error {
 			n++
 		}
 	}
-	hint := "fix each problem, then run `lore store doctor` again"
+	hint := "fix each fail line above, then run `lore store doctor` again"
 	if code == errs.StoreUnreachable {
 		hint = "lore keeps working offline: commits wait in the local clone and go out once the store answers; " + hint
 	}

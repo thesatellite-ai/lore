@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/tests/fakeexec"
 )
@@ -90,7 +91,7 @@ func bareRepo(t *testing.T, path string, files ...string) {
 
 func ctxT(t *testing.T) context.Context {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), testtime.Scale(30*time.Second))
 	t.Cleanup(cancel)
 	return ctx
 }

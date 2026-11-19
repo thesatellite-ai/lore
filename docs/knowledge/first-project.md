@@ -107,7 +107,7 @@ rul_162d…9666 [must/always] Run the tests before you push
 ```console
 # alice, in website
 $ lore render
-✓ .lore/LORE.md (2693 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
+✓ .lore/LORE.md (3052 bytes, budget 16000 codex; 1 full + 0 line rules, 0 + 0 hotfixes, 1 topic)
 ✓ .lore/LORE.full.md (344 bytes, every pinned entry in full; not imported)
 = ~/work/website/AGENTS.md (pointer present)
 $ cat AGENTS.md
@@ -167,7 +167,7 @@ Notes:
   -   alice on devbox: lore dev (last save 2026-11-02)
   - org_source: if this repo is your org's, join the org on this machine: lore setup join --invite <your org's store url> (the line your admin's `lore member add` printed; on a machine that already joined, `lore setup list` shows the store)
 Context (information, nothing to fix):
-  - context: .lore/LORE.md 2693 of 16000 bytes (16%, profile codex); warn at 80%
+  - context: .lore/LORE.md 3052 of 16000 bytes (19%, profile codex); warn at 80%
 ```
 <!-- /example -->
 
@@ -184,7 +184,7 @@ memories  0
 ```
 <!-- /example -->
 
-`lore sql` reads every table of the repo, one row kind per table (`rules`, `memories`, `decisions`, `tasks` and the rest), with sensitive values masked. `--format csv` or `--format json` gives output a script can read, `--include-deleted` also reads rows in the trash, and `--timeout` stops a slow query (10 seconds by default). It never writes: anything but one `SELECT`, `WITH` or `VALUES` statement is refused with `E_SQL_REFUSED`, because a change must go through a lore command so it reaches git. In a repo with stores, each `<table>_all` view (`memories_all`, `rules_all` and the rest) starts with a `source` column naming the store; two `.lore/stores.yaml` entries on one place keep both names there, so a query over both sees each row twice (see [Your stores › Pitfalls](../sync/stores.md#pitfalls)).
+`lore sql` reads every table of the repo, one row kind per table (`rules`, `memories`, `decisions`, `tasks` and the rest), with sensitive values masked; a text value that looks like a secret (a token in a hand-made row, or one typed into the query) prints as `[redacted <rule> sha256:…]` unless you pass `--show-sensitive`, which asks first. `--format csv` or `--format json` gives output a script can read, `--include-deleted` also reads rows in the trash, and `--timeout` stops a slow query (10 seconds by default). It never writes: anything but one `SELECT`, `WITH` or `VALUES` statement is refused with `E_SQL_REFUSED`, because a change must go through a lore command so it reaches git. In a repo with stores, each `<table>_all` view (`memories_all`, `rules_all` and the rest) starts with a `source` column naming the folder the row lives in, as `lore search` and the lists print it, then a `place` column with the same label: a store attached at its folder `web` under the name `acme` has `source` and `place` `acme/web` (search shows `[acme/web]`), the same name whether you query from a repo linked to that folder, from the store clone or from your home folder; the repo's own rows have `source` and `place` `repo`. A kind with its own field named `place` keeps that field, and its view has no `place` label. A store attached whole (no folder, such as the org's company store) adds every folder of it, each as `<store>/<folder>` (the lists and `lore search` read the same folders), and every place is one source: two names on one place (two `.lore/stores.yaml` entries, or an org store and a link over the same folder) read it once, under the first name (see [Your stores › Pitfalls](../sync/stores.md#pitfalls)).
 
 <!-- example: start#sql-more -->
 ```console
@@ -213,7 +213,7 @@ To turn completion on for every new shell, add `source <(lore completion bash)` 
 
 ## Pitfalls
 
-- **Run lore inside the repo.** Any folder of the checkout works. Outside a git checkout a command stops with `E_NOT_A_STORE` ("the folder is not inside a git work tree"); in a git repo lore was never set up in, it stops with "lore isn't set up in … (no .lore folder)" and the hint to run `lore init`. In a checkout of a lore repo that only lacks `.lore/` here (a worktree or bisect step at a commit from before lore was added, or a sparse checkout that leaves `.lore/` out), it names the branch to switch to (`git switch main`) or the sparse fix (`git sparse-checkout add .lore`) instead, since `lore init` there would make a second project. When `.lore/` was deleted (from the work tree, or by a commit on the branch), it says so and names the `git checkout` that puts it back.
+- **Run lore inside the repo.** Any folder of the checkout works. Outside a git checkout a command stops with `E_NOT_A_STORE` ("the folder is not inside a git work tree"); in a git repo lore was never set up in, it stops with "lore isn't set up in … (no .lore folder)" and the hint to run `lore init`. In a checkout of a lore repo that only lacks `.lore/` here (a worktree or bisect step at a commit from before lore was added, or a sparse checkout that leaves `.lore/` out), it names the branch to switch to (`git switch main`) or the sparse fix (`git sparse-checkout add .lore`) instead, since `lore init` there would make a second project. When `.lore/` was deleted (from the work tree, or by a commit on the branch), it says so and names the `git checkout` that puts it back. Every one of these refusals, on a read or a write, is `E_NOT_A_STORE` (exit 19), so a script sees one code for one cause.
 - **Render after you change rules.** The coding tool reads `.lore/LORE.md`, not the database. A new rule shows up only after the next `lore render`. Running it twice is safe: the second run says `(unchanged)` and `(pointer present)`.
 - <!-- ds:block id=render-pins-buj9dujv --> **Only the strongest notes are pinned.** `lore render` pins `must` rules and `critical` or `high` hotfixes. Memories, decisions and `should` rules are found with `lore search` when the tool needs them. See [Render](render-and-agent-files.md).
 - **Commit `.lore/data`.** lore tells you after each change how many files are not committed. If you never commit them, your teammates and your next clone never see the notes.

@@ -329,6 +329,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	fields, err := work.Texts(Noun, map[string]string{
 		work.FieldTitle: title, work.FieldBody: in.Body,
 		fieldPriority: priority, fieldCommitment: commitment, fieldRole: in.Role, work.FieldKey: in.Key,
+		schema.FieldTaskSourceKind: strings.TrimSpace(in.Source), schema.FieldTaskSourceRef: strings.TrimSpace(in.SourceRef),
 	})
 	if err != nil {
 		return AddOut{}, err
@@ -370,6 +371,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		if fields[fieldParent], err = parentRef(par.id); err != nil {
 			return AddOut{}, err
 		}
+		if in.rank != "" {
+			par.rank = in.rank // task split's own rank chain (staged siblings are not read back)
+		}
 		if fields[fieldRank], err = value.TextOf(par.rank); err != nil {
 			return AddOut{}, err
 		}
@@ -379,10 +383,15 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		// lands in ONE engine batch with the task (and the caller's actor
 		// row), so an add refused later (a bad --mission, a ref the engine
 		// refuses, a secret) leaves no default list behind; the staged list
-		// resolves as the task's tasklist_id (engine stagedLive).
-		sctx := engine.Staging(ctx)
-		defer engine.Discard(sctx) // no-op once committed
-		ctx, staged = sctx, sctx
+		// resolves as the task's tasklist_id (engine stagedLive). A caller
+		// that already stages a batch (task split: every child in one
+		// commit) is joined, not nested: a nested stage would replace the
+		// caller's and commit this task on its own.
+		if !engine.InStage(ctx) {
+			sctx := engine.Staging(ctx)
+			defer engine.Discard(sctx) // no-op once committed
+			ctx, staged = sctx, sctx
+		}
 		listTo, terr := o.routedTarget(ctx, in.To)
 		if terr != nil {
 			return AddOut{}, terr
@@ -434,6 +443,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	// v0.1.17 stamped created_by_actor_id with the current identity; it is
 	// the calling actor, never caller-set (INTEG-AUDIT-1: no --created-by).
+	ctx = creator.Want(ctx) // D-439: the engine fills the column when the actor row is not cached yet
 	if v := creator.Ref(ctx, o.env); v != nil {
 		fields[work.FieldCreatedBy] = v
 	}
@@ -470,6 +480,9 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 		if _, perr = o.hist().Update(ctx, *par.reopen, patch); perr != nil {
 			return AddOut{}, perr
 		}
+	}
+	if ctx, err = o.importedState(ctx, in, fields); err != nil {
+		return AddOut{}, err
 	}
 	src, w, err := work.Create(ctx, o.env, in.To, table, fields)
 	if err != nil {
@@ -578,6 +591,10 @@ func (o ops) setDates(ctx context.Context, target store.Source, fields map[strin
 // byKey finds the live task added with --key in the same project and
 // mission (v0.1.17 findByKey).
 func (o ops) byKey(ctx context.Context, project, mission, key string) (work.Sourced, bool, error) {
+	if idx := keyIndexOf(ctx); idx != nil { // an import: listed once (keyindex.go)
+		s, ok := idx.byKey[taskKey(project, mission, key)]
+		return s, ok, nil
+	}
 	all, err := work.ListAll(ctx, o.env, table, "")
 	if err != nil {
 		return work.Sourced{}, false, err
@@ -654,23 +671,60 @@ func defaultListLine(id string) string {
 	return "  on tasklist " + id + " \"" + DefaultTasklistTitle + "\" (the default; --tasklist picks another)\n"
 }
 
+// defaultTasklistKey is the key part of the default list's natural id
+// (with the project id and the store): ids.Natural(tlt, key, project, store).
+const defaultTasklistKey = "default-tasklist"
+
+// DefaultTasklistID is the natural id of a project's default task list
+// in store src (devco:M-2): every clone that creates the list writes this
+// same id, so two people's first `task add` made before either synced
+// converge on one row at sync instead of leaving one "default" list per
+// person. Each store keeps its own default list (a ref never crosses
+// stores), so the store is part of the key.
+func DefaultTasklistID(project ids.ID[ids.Project], src store.Source) (ids.AnyID, error) {
+	id, err := ids.Natural(ids.PrefixTaskList, defaultTasklistKey, project.String(), string(src))
+	if err != nil {
+		return ids.AnyID{}, errs.Wrap(errs.Internal, "task: default tasklist id", err)
+	}
+	return id, nil
+}
+
 // defaultTasklist returns the project's "default" task list in the target
 // store, creating it on demand (v0.1.17 defaultTasklist); created says it
-// was made now.
+// was made now. When several exist (lists made by older builds, one per
+// person) every clone picks the same one: the natural-id list, else the
+// one with the lowest id (devco:M-2).
 func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[ids.Project]) (id string, created bool, err error) {
 	src := store.Source(target)
 	if src == "" {
 		src = store.SourceRepo
+	}
+	natural, err := DefaultTasklistID(project, src)
+	if err != nil {
+		return "", false, err
 	}
 	rows, err := o.env.List(ctx, src, schema.TableTasklists)
 	if err != nil {
 		return "", false, err
 	}
 	slices.SortFunc(rows, func(a, b row.Row) int { return strings.Compare(a.ID.String(), b.ID.String()) })
+	first, naturalTaken := "", false
 	for _, r := range rows {
-		if !r.Deleted && work.Field(r, work.FieldProject) == project.String() && work.Field(r, work.FieldTitle) == DefaultTasklistTitle {
+		if r.ID.String() == natural.String() {
+			naturalTaken = true // a deleted natural list cannot be created again
+		}
+		if r.Deleted || work.Field(r, work.FieldProject) != project.String() || work.Field(r, work.FieldTitle) != DefaultTasklistTitle {
+			continue
+		}
+		if r.ID.String() == natural.String() {
 			return r.ID.String(), false, nil
 		}
+		if first == "" {
+			first = r.ID.String()
+		}
+	}
+	if first != "" {
+		return first, false, nil
 	}
 	fields, err := work.Texts(Noun, map[string]string{work.FieldTitle: DefaultTasklistTitle, fieldStatusStr: DefaultTasklistStatus})
 	if err != nil {
@@ -678,6 +732,17 @@ func (o ops) defaultTasklist(ctx context.Context, target string, project ids.ID[
 	}
 	if fields[work.FieldProject], err = value.RefOf(project.Any()); err != nil {
 		return "", false, err
+	}
+	if c, ok := o.env.(IDCreator); ok && !naturalTaken {
+		w, err := c.CreateWithID(ctx, store.Source(target), schema.TableTasklists, natural, fields)
+		if err == nil {
+			return w.Row.ID.String(), true, nil
+		}
+		// E_STALE: a row with the natural id exists but is not listed (in
+		// the trash): a list with a fresh id takes its place.
+		if errs.CodeOf(err) != errs.Stale {
+			return "", false, err
+		}
 	}
 	w, err := o.env.Create(ctx, store.Source(target), schema.TableTasklists, fields)
 	if err != nil {
@@ -1138,6 +1203,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if err != nil {
 		return ShowOut{}, err
 	}
+	ctx = withShowTree(ctx) // showforest.go: the tree is read once for the show
 	full := fullOf(work.LabelerOf(o.env), src, r)
 	mb := metashow.Row(ctx, o.env, r) // METADATA 3.17: metadata on every read
 	full.Meta, full.MetaMasked = mb.Meta, mb.MetaMasked
@@ -1212,17 +1278,45 @@ const fromRepo = "repo"
 // globex is northwind/globex). A source no attached store answers to is
 // v0.1.17's refusal; an id the source does not hold is E_NOT_FOUND.
 func (o ops) getFrom(ctx context.Context, from string, id ids.AnyID) (store.Source, row.Row, error) {
-	src, ok := o.sourceNamed(from)
-	if !ok {
+	srcs := o.sourcesNamed(from)
+	if len(srcs) == 0 {
 		name, _, _ := strings.Cut(from, "/")
 		return "", row.Row{}, errs.New(errs.InvalidInput, "--from "+from+": no org entry named "+name).
 			WithHint("use repo, an org entry name, or <org>/<folder>")
 	}
-	got, r, err := o.env.Get(ctx, engine.Ref{Store: src, Table: table, ID: id})
-	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return "", row.Row{}, errs.New(errs.NotFound, Noun+" "+work.Quote(id.String())+" not found in "+from)
+	for _, src := range srcs {
+		got, r, err := o.env.Get(ctx, engine.Ref{Store: src, Table: table, ID: id})
+		if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
+			continue
+		}
+		return got, r, err
 	}
-	return got, r, err
+	return "", row.Row{}, errs.New(errs.NotFound, Noun+" "+work.Quote(id.String())+" not found in "+from)
+}
+
+// sourcesNamed maps a --from value to the attached stores it names, in
+// order: the store of that name or label (Labeler), then, for an org
+// (`--from <org>`, `--store <org>` read from any folder, devco D-507),
+// every attached folder <org>/<folder> of it, since an org's root holds
+// none of its folders' rows; "repo" is the repo store alone.
+func (o ops) sourcesNamed(from string) []store.Source {
+	var out []store.Source
+	if src, ok := o.sourceNamed(from); ok {
+		if src == store.SourceRepo {
+			return []store.Source{src}
+		}
+		out = append(out, src)
+	}
+	lab := work.LabelerOf(o.env)
+	for _, s := range o.env.Stores() {
+		if slices.Contains(out, s) {
+			continue
+		}
+		if strings.HasPrefix(string(s), from+"/") || (lab != nil && strings.HasPrefix(lab.StoreLabel(s), from+"/")) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // sourceNamed maps a --from value to the attached store it names: its
@@ -1289,6 +1383,26 @@ func (o ops) actorName(ctx context.Context, id string) string {
 		}
 	}
 	return work.Field(r, fieldDisplay)
+}
+
+// actorShown is how a one-line message names an actor recorded by id: its
+// handle, else its display name (actorName), the id only when no store
+// knows it; a text that is not an actor id (a holder label such as
+// "alice", or "someone") is returned as is. The coordination messages
+// name a holder the same way (wire coordWorld.actorShown).
+//
+// Why (devco:D-620): "tsk_… was already done by act_…" made the reader
+// look the id up.
+func (o ops) actorShown(ctx context.Context, id string) string {
+	if !strings.HasPrefix(id, string(ids.PrefixActor)+"_") {
+		return id
+	}
+	if r, ok := o.actorRow(ctx, id); ok {
+		if h := work.Field(r, schema.FieldActorHandle); h != "" {
+			return h
+		}
+	}
+	return o.actorName(ctx, id)
 }
 
 // edit patches the fields whose flags were given.
@@ -1512,11 +1626,14 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 	if err != nil {
 		return DoneOut{}, err
 	}
+	if in.Commit, err = o.resolveDoneCommit(ctx, id.String(), in.Commit); err != nil {
+		return DoneOut{}, err
+	}
 	// G-10: a task is finished once. A second done (no --commit / --pr to
 	// record) changes nothing and names who finished it.
 	if in.Commit == "" && in.PR == 0 {
 		if src, cur, gerr := o.getSource(ctx, in.From, id); gerr == nil && work.Field(cur, work.FieldStatus) == schema.TaskStatusDone {
-			return alreadyDoneOut(id.String(), string(src), work.Field(cur, fieldDoneBy), work.Field(cur, work.FieldCompleted)), nil
+			return alreadyDoneOut(id.String(), string(src), o.actorShown(ctx, work.Field(cur, fieldDoneBy)), work.Field(cur, work.FieldCompleted)), nil // devco:D-620: the name, not the act_ id
 		}
 	}
 	// TASK 6.7: open sub-tasks refuse (E_OPEN_CHILDREN) unless --children
@@ -1530,7 +1647,7 @@ func (o ops) done(ctx context.Context, in DoneIn) (DoneOut, error) {
 		if in.Commit, err = hc.CloseHeldDone(ctx, id.String(), in.Commit, in.PR); err != nil {
 			var ad *AlreadyDoneError
 			if errors.As(err, &ad) {
-				return alreadyDoneOut(id.String(), "", ad.By, ad.At.UTC().Format(time.RFC3339)), nil
+				return alreadyDoneOut(id.String(), "", o.actorShown(ctx, ad.By), ad.At.UTC().Format(time.RFC3339)), nil
 			}
 			return DoneOut{}, err
 		}
@@ -2008,8 +2125,14 @@ func (o ops) actorRef(ctx context.Context, raw string) (string, error) {
 		return "", errs.New(errs.InvalidInput, "actor "+work.Quote(ref)+" is ambiguous: "+strings.Join(slices.Compact(byName), ", ")).
 			WithHint("pass the actor id")
 	}
-	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).
-		WithHint("pass an actor id (act_*), " + actorMe + ", an @handle or email on the roster, a stable_key or a display name")
+	hint := "pass an actor id (act_*), " + actorMe + ", an @handle or email on the roster, a stable_key or a display name"
+	if strings.Contains(ref, "@") && !strings.HasPrefix(ref, "@") {
+		// devco:J-14: an email nobody has here is often one a person added
+		// since this machine's last sync (an email change); the hint named
+		// no sync, and after one the same command worked.
+		hint = "no one on the roster here has that email; if it is new (an email change), the roster here may be older than the store: run `lore sync`, then retry; or " + hint
+	}
+	return "", errs.New(errs.NotFound, "no actor "+work.Quote(ref)).WithHint(hint)
 }
 
 // repoByName prefixes a search's wanted repo when --repo names no repo of

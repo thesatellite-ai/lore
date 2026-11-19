@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -94,6 +95,21 @@ func (m *fakeMirror) Keep(_ context.Context, es []store.MirrorEntry) error {
 	return nil
 }
 
+// forgetGoodRows drops what this process remembers about f's files, as a
+// new process would start. Only f's entries: goodRows is process-wide, and
+// clearing all of it from one parallel test made another parallel test
+// re-read a file it had made unreadable (D-363).
+func forgetGoodRows(f *Folder) {
+	prefix := f.dataDir + string(filepath.Separator)
+	goodRows.mu.Lock()
+	defer goodRows.mu.Unlock()
+	for k := range goodRows.by {
+		if strings.HasPrefix(k, prefix) {
+			delete(goodRows.by, k)
+		}
+	}
+}
+
 // TestMirroredListOpensNoRowFile guards the warm list (perf3): a table
 // whose files git reports clean under the blob ids the mirror holds is
 // listed with no row file touched; a file under another blob id (a
@@ -116,9 +132,7 @@ func TestMirroredListOpensNoRowFile(t *testing.T) {
 	if err != nil || !ok || len(rows) != 2 || m.kept != 2 {
 		t.Fatalf("cold list = %d rows ok=%v kept=%d %v", len(rows), ok, m.kept, err)
 	}
-	goodRows.mu.Lock()
-	clear(goodRows.by) // a new process: only the mirror remembers
-	goodRows.mu.Unlock()
+	forgetGoodRows(f) // a new process: only the mirror remembers
 	dir := filepath.Join(f.dataDir, string(memories))
 	if err := os.Chmod(dir, 0); err != nil {
 		t.Fatal(err)

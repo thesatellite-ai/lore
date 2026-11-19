@@ -2,10 +2,9 @@ package scope
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/foldercase"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/dirscope"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -32,6 +31,17 @@ type Env interface {
 // Without it, repo and dir scopes are refused (fail closed).
 type RepoIdentifier interface {
 	RepoIdentity(ctx context.Context) (repoID string, ok bool)
+}
+
+// RepoIdentityEnsurer is the optional Env upgrade that gives the checkout
+// its permanent repo id when it has none: the id derived from the project
+// and the primary address (or root commit), so every clone that mints it
+// writes the same _meta.json and repos row. A repo or dir scope write uses
+// it instead of refusing (devco:M-4: a migrated clone got the id only from
+// a sync that found rows waiting for a commit, so most clones refused with
+// a `lore init` hint that answered "nothing to do").
+type RepoIdentityEnsurer interface {
+	EnsureOwnRepoIdentity(ctx context.Context) (repoID string, err error)
 }
 
 // RepoTopper is the optional Env upgrade that gives the code repository's
@@ -146,8 +156,18 @@ func ownRepo(ctx context.Context, env Env) (string, error) {
 		return "", errs.New(errs.Unsupported, "repo and folder scopes need this checkout's repo identity, which this setup lacks")
 	}
 	rid, known := ri.RepoIdentity(ctx)
-	if !known {
-		return "", errs.New(errs.InvalidInput, "this checkout has no repo identity yet").WithHint("run `lore init` in the repo first")
+	if known {
+		return rid, nil
+	}
+	en, ok := upgrade.As[RepoIdentityEnsurer](env)
+	if !ok {
+		return "", errs.New(errs.InvalidInput, "this checkout has no repo identity yet (no repo_id in .lore/data/_meta.json)").WithHint("lore sync writes it when this clone has rows waiting for a commit; or give --scope project")
+	}
+	// the write leaves row files for the person's commit anyway, so the
+	// identity files it mints ride in the same commit (I-7)
+	rid, err := en.EnsureOwnRepoIdentity(ctx)
+	if err != nil {
+		return "", errs.Prefix("repo and folder scopes need this checkout's repo identity", err)
 	}
 	return rid, nil
 }
@@ -159,11 +179,22 @@ func checkDir(ctx context.Context, env Env, dir string) (string, error) {
 	if !ok {
 		return "folder " + dir + " was not checked (no repo folder known)", nil
 	}
-	fi, err := os.Stat(filepath.Join(top, filepath.FromSlash(dir)))
-	if err != nil || !fi.IsDir() {
-		return "", errs.New(errs.InvalidInput, "dir scope "+dir+": no such folder in the repo").WithHint("paths are relative to the repo root: " + top)
+	return "", checkDirIn(foldercase.New(foldercase.OS{}, top), top, dir)
+}
+
+// checkDirIn refuses dir unless it is a folder under top spelled exactly
+// as on disk (devco D-414: on a case-insensitive file system a stat of
+// SRC/charts finds src/charts, and the scope stored that way matched no
+// file path).
+func checkDirIn(dirs foldercase.Checker, top, dir string) error {
+	if !dirs.IsDir(dir) {
+		hint := "paths are relative to the repo root: " + top
+		if dirs.Folds() {
+			hint += "; this file system ignores case, so spell each folder name as it is on disk"
+		}
+		return errs.New(errs.InvalidInput, "dir scope "+dir+": no such folder in the repo").WithHint(hint)
 	}
-	return "", nil
+	return nil
 }
 
 // topOf is the repo's top folder, ok false when unknown.
@@ -284,7 +315,8 @@ func CheckOverrides(ctx context.Context, env Env, noun string, table row.Table, 
 	}
 	_, r, err := env.Get(ctx, engine.Ref{Table: table, ID: id})
 	if errs.Has(err, errs.NotFound) || (err == nil && r.Deleted) {
-		return "", errs.New(errs.NotFound, "--overrides "+raw+": no such "+noun)
+		return "", errs.New(errs.NotFound, "--overrides "+raw+": no such "+noun).
+			WithHint("run `lore show --id " + raw + "` to check the id; --overrides names a live " + noun + " at a wider scope")
 	}
 	if err != nil {
 		return "", err
@@ -306,4 +338,26 @@ func Label(p dirscope.Place) string {
 		return string(dirscope.KindRepo)
 	}
 	return "dir:" + p.Path
+}
+
+// RefuseLive refuses --live or --no-live next to --scope global (devco
+// O-4). Both choose where a row of the repo store goes (the live ref, or
+// this branch's .lore/data); a global row is a row of the personal store,
+// which has neither, so the flag would be dropped without a word. Why
+// refuse instead of honouring: no reading of either flag holds for a row
+// that is not in the repo store, and the person meant one of the two.
+func RefuseLive(raw string, live, noLive bool) error {
+	if !live && !noLive {
+		return nil
+	}
+	spec, err := dirscope.Parse(raw)
+	if err != nil || spec.Kind != dirscope.KindGlobal {
+		return nil // ForWrite reports a bad --scope
+	}
+	flag := "--no-live"
+	if live {
+		flag = "--live"
+	}
+	return errs.New(errs.InvalidInput, "--scope global writes to your personal store, which is neither this branch's code nor the live ref, so "+flag+" cannot apply").
+		WithHint("drop " + flag + " to keep it global (it loads in every repo), or drop --scope global to keep it in this repo")
 }

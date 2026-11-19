@@ -82,6 +82,8 @@ var sharedManagers = map[string]bool{secretmgr.OnePass: true, secretmgr.Vault: t
 
 // SecretsListIn is the input of secrets.list.
 type SecretsListIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Holder   string `json:"holder,omitempty" flag:"holder" desc:"only references held by this person, person.machine label or holder id"`
 	Manager  string `json:"manager,omitempty" flag:"manager" desc:"only this manager scheme (gopass, op, aws-secrets, …)"`
 	Unstored bool   `json:"unstored,omitempty" flag:"unstored" desc:"only ${secret:unstored} placeholders"`
@@ -92,6 +94,8 @@ type SecretsListIn struct {
 
 // SecretsShowIn is the input of secrets.show.
 type SecretsShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	ID     string `json:"id" arg:"0" desc:"a secret reference (manager://entry or ${secret:…}) or a row id"`
 	Reveal bool   `json:"reveal,omitempty" flag:"reveal" desc:"read the value from the manager and print it (asks every time; audited)"`
 	Force  bool   `json:"force,omitempty" flag:"force" desc:"reveal without a person's answer (agents; audited as FORCED)"`

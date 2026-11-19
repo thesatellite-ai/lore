@@ -1,9 +1,10 @@
 // Package rowscan re-scans stored rows with the current secret rules
 // (layer L1: logic/scan, model and schema only). It is the one every-row
 // scan of the core: `lore lint` (secret_found) and `lore check leaks
-// --rows` both call Scan, so the two cannot drift apart (SQ12: stored text
-// is not re-scanned on show; lint and check leaks re-scan with the rules
-// of today, so a rule added later finds old rows).
+// --rows` both call Scan, so the two cannot drift apart (SQ12: lint and
+// check leaks re-scan with the rules of today, so a rule added later finds
+// old rows; reads mask a match with lore's own pack, engine readmask.go,
+// devco:R-14). A row's `_o` block is scanned too (devco:R-10).
 //
 // Flow:
 //
@@ -84,6 +85,12 @@ func Scan(sc scan.Scanner, rows map[row.Table][]Row) []Hit {
 					jobs = append(jobs, job{table: t, source: s.Source, id: s.Row.ID, field: f, text: txt})
 				}
 			}
+			// devco:R-10: the provenance block records names a person
+			// chose (a git branch, a folder); a token in one is a leak
+			// like a token in a field, so `_o` is scanned too.
+			for _, txt := range originTexts(s.Row) {
+				jobs = append(jobs, job{table: t, source: s.Source, id: s.Row.ID, field: row.KeyOrigin, text: txt})
+			}
 		}
 	}
 	// A scan's findings depend on the field and the text only, so each
@@ -128,6 +135,14 @@ func Scan(sc scan.Scanner, rows map[row.Table][]Row) []Hit {
 		}
 	}
 	return out
+}
+
+// originTexts is the text of a row's `_o` block (none when absent).
+func originTexts(r row.Row) []string {
+	if r.Origin.IsZero() {
+		return nil
+	}
+	return []string{r.Origin.String()}
 }
 
 // Texts is the scannable text of one field value: a text or JSON value,

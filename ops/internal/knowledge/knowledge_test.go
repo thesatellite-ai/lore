@@ -130,12 +130,28 @@ func (f *fakeEnv) List(_ context.Context, source store.Source, table row.Table) 
 
 func (f *fakeEnv) Stores() []store.Source { return f.order }
 
+// fakeMatch is the fake's full-text match: the text as written, or, for
+// the FTS5 text the shared matcher sends (("gateway" OR "gateways")), any
+// of its quoted words.
+func fakeMatch(body, match string) bool {
+	if !strings.Contains(match, `"`) {
+		return strings.Contains(body, match)
+	}
+	parts := strings.Split(match, `"`)
+	for i := 1; i < len(parts); i += 2 {
+		if strings.Contains(body, parts[i]) {
+			return true
+		}
+	}
+	return false
+}
+
 func (f *fakeEnv) Search(_ context.Context, table row.Table, match string, limit int) ([]Hit, error) {
 	var out []Hit
 	for _, s := range f.order {
 		for _, k := range slices.Sorted(maps.Keys(f.rows[s])) {
 			r := f.rows[s][k]
-			if r.Table == table && !r.Deleted && strings.Contains(Field(r, FieldBody), match) && len(out) < limit {
+			if r.Table == table && !r.Deleted && fakeMatch(Field(r, FieldBody), match) && len(out) < limit {
 				out = append(out, Hit{Source: s, ID: r.ID})
 			}
 		}

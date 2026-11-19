@@ -16,8 +16,10 @@ package git
 //	<clone>/.git/lore/fetch-stamp            when the store was last fetched
 //	<home>/state/store-clones.json           clones that are not at their
 //	                                         default path (D-b): a person's own
-//	                                         clone (`lore store use`) or a
-//	                                         "~2" collision
+//	                                         clone (`lore store use`), a "~2"
+//	                                         collision or a set-url move; a
+//	                                         path under the home is kept
+//	                                         relative to it (devco D-534)
 //
 // The host never appears in a path. Everything lore keeps about a clone
 // lives in its .git/lore/ folder: never in the files a person browses,
@@ -40,6 +42,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -139,7 +142,7 @@ func DefaultCloneDir(home string, r Remote, branch string) (string, error) {
 // creates nothing but the record entry of a new collision.
 func CloneDirFor(home string, r Remote, branch string) (dir string, own bool, err error) {
 	key := CloneKey(r, branch)
-	if e, ok := ReadCloneRecord(home).Clones[key]; ok && e.Path != "" {
+	if e, ok := recordedClone(ReadCloneRecord(home), r, branch); ok {
 		return e.Path, e.Why == WhyOwn, nil
 	}
 	def, err := DefaultCloneDir(home, r, branch)
@@ -161,6 +164,40 @@ func CloneDirFor(home string, r Remote, branch string) (dir string, own bool, er
 		}
 		return dir, false, nil
 	}
+}
+
+// recordedClone is rec's entry for r (pinned to branch when not ""): the
+// one under CloneKey, else one recorded under the key of an ssh alias of
+// r's host (a record written before Norm resolved aliases, D-493: the
+// same repository path on a host SameRepoViaAlias calls the same).
+func recordedClone(rec CloneRecord, r Remote, branch string) (CloneEntry, bool) {
+	if e, ok := rec.Clones[CloneKey(r, branch)]; ok && e.Path != "" {
+		return e, true
+	}
+	if r.isLocal() {
+		return CloneEntry{}, false
+	}
+	_, path, _ := strings.Cut(r.Norm, "/")
+	keys := make([]string, 0, len(rec.Clones))
+	for k := range rec.Clones {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // one answer when several old keys match
+	for _, k := range keys {
+		e := rec.Clones[k]
+		norm, br := k, ""
+		if i := strings.Index(k, branchCloneSep); i >= 0 {
+			norm, br = k[:i], k[i+len(branchCloneSep):]
+		}
+		h, p, _ := strings.Cut(norm, "/")
+		if e.Path == "" || br != branch || p != path || strings.HasPrefix(norm, LocalHost+"/") {
+			continue
+		}
+		if identityHost(h) != h && SameRepoViaAlias(Remote{Norm: norm}, r) {
+			return e, true
+		}
+	}
+	return CloneEntry{}, false
 }
 
 // CloneDirOf is CloneDirFor for a store url in any spelling lore accepts
@@ -225,23 +262,80 @@ func otherStoreAt(dir string, r Remote) bool {
 func SameRepoViaAlias(a, b Remote) bool {
 	ha, pa, _ := strings.Cut(a.Norm, "/")
 	hb, pb, _ := strings.Cut(b.Norm, "/")
-	if pa != pb || ha == hb {
+	if pa != pb {
 		return false
 	}
-	if f := aliasHosts.Load(); f != nil {
-		na, okA := (*f)(ha)
-		nb, okB := (*f)(hb)
-		switch {
-		case okA && strings.EqualFold(na, hb), okB && strings.EqualFold(nb, ha):
-			return true
-		case okA && okB && strings.EqualFold(na, nb):
-			return true // two aliases of one host
-		case okA || okB:
-			return false // the ssh config sends the alias to another host
-		}
+	// a Norm recorded before D-630 may still name a provider's port-443
+	// route host (ssh.github.com): it is the provider's
+	ha, hb = repourl.ProviderSSHHost(ha), repourl.ProviderSSHHost(hb)
+	if ha == hb {
+		return true // one host: Norm already resolved both aliases (identityHost)
+	}
+	// renamedHost, the rule identityHost uses: a host the ssh config
+	// sends only to its own port-443 route (github.com → ssh.github.com) is
+	// not renamed (devco D-628: that line made every unnamed alias, such as
+	// one git reaches by url.<base>.insteadOf, "another host").
+	na, okA := renamedHost(ha)
+	nb, okB := renamedHost(hb)
+	switch {
+	case okA && na == hb, okB && nb == ha:
+		return true
+	case okA && okB && na == nb:
+		return true // two aliases of one host
+	case okA || okB:
+		return false // the ssh config sends the alias to another host
 	}
 	return !strings.Contains(ha, ".") || !strings.Contains(hb, ".")
 }
+
+// identityHost is the host of a store's identity (Remote.Norm) for an ssh
+// url whose host is host: the HostName the person's ssh config renames it
+// to (SetAliasHosts), so `git@work-gh:acme/notes.git` (Host work-gh /
+// HostName github.com) is the same store as `git@github.com:acme/notes.git`
+// and `https://github.com/acme/notes` for every comparison lore makes
+// (org of a clone, clone folder, setup and link matching; D-493). Without
+// a resolver, or when the config does not rename host, host is kept. A
+// HostName that is a subdomain of host (github.com → ssh.github.com, the
+// port-443 route) is a route to the same host, not an alias, and is not
+// taken: the https url of that store names host.
+func identityHost(host string) string {
+	if n, ok := renamedHost(host); ok {
+		return n
+	}
+	// devco D-630: a url typed on a provider's port-443 route host
+	// (git@ssh.github.com:o/r.git) is the provider's repository
+	return repourl.ProviderSSHHost(host)
+}
+
+// renamedHost is the other host the person's ssh config sends host to
+// (SetAliasHosts), lower case; ok is false without a resolver, when the
+// config does not rename host, renames it to itself or to a name that is
+// no host, or only to a subdomain of it (github.com → ssh.github.com, the
+// port-443 route: the same host, not an alias); a known provider's route
+// host is the provider's (repourl.ProviderSSHHost). identityHost and
+// SameRepoViaAlias share it, so a store's identity and the same-store test
+// of a clone's origin read one ssh config line the same way (devco D-628).
+func renamedHost(host string) (string, bool) {
+	f := aliasHosts.Load()
+	if f == nil {
+		return "", false
+	}
+	n, ok := (*f)(host)
+	// a provider's port-443 route is the provider's host (devco D-629:
+	// Host work-gh / HostName ssh.github.com was "another host")
+	n = repourl.ProviderSSHHost(n)
+	if !ok || n == "" || n == host || strings.HasSuffix(n, "."+host) || !hostPattern.MatchString(n) {
+		return "", false
+	}
+	return n, true
+}
+
+// IdentityHost is identityHost for callers outside the backend: the host
+// a code repo's ssh remote is known by once the person's ssh alias is
+// resolved (SetAliasHosts). A code repo's remote and a store url must name
+// one host the same way, or an org's `repos: github.com/<owner>/*` never
+// matches a repo cloned as git@<alias>:<owner>/<repo>.git (devco D-531).
+func IdentityHost(host string) string { return identityHost(strings.ToLower(strings.TrimSpace(host))) }
 
 // AliasHostFunc answers the host ssh connects to for host (its HostName);
 // ok is false when the ssh config does not rename host.
@@ -259,6 +353,51 @@ func SetAliasHosts(f AliasHostFunc) {
 		return
 	}
 	aliasHosts.Store(&f)
+}
+
+// URLRewriteFunc answers a store url as git rewrites it before it connects
+// (url.<base>.insteadOf); raw itself when no rule applies.
+type URLRewriteFunc func(raw string) string
+
+// urlRewrite is the rewriter SameRepoViaRewrite asks (SetURLRewrite).
+var urlRewrite atomic.Pointer[URLRewriteFunc]
+
+// SetURLRewrite installs git's url rewrite SameRepoViaRewrite asks (wire
+// installs one reading the person's git config); nil removes it.
+func SetURLRewrite(f URLRewriteFunc) {
+	if f == nil {
+		urlRewrite.Store(nil)
+		return
+	}
+	urlRewrite.Store(&f)
+}
+
+// SameRepoViaRewrite reports two store urls (raw, as typed or stored) that
+// git itself rewrites to one repository: a url.<base>.insteadOf rule turns
+// at least one of them into the other's target (a mirror, or the canonical
+// host for an alias). It is the same-store signal for an alias the ssh
+// config lore reads does not name, dotted (github.com-work) or not (devco
+// D-680): SameRepoViaAlias trusts only a single-label host without the ssh
+// config. False without a rewriter or when no rule applies.
+func SameRepoViaRewrite(a, b string) bool {
+	f := urlRewrite.Load()
+	if f == nil {
+		return false
+	}
+	ta, tb := strings.TrimSpace(a), strings.TrimSpace(b)
+	wa, wb := (*f)(ta), (*f)(tb)
+	if wa == ta && wb == tb {
+		return false // git sends each where it says: nothing new to compare
+	}
+	ra, ea := RemoteOfRaw(wa)
+	rb, eb := RemoteOfRaw(wb)
+	if ea != nil || eb != nil {
+		return false
+	}
+	if ra.Norm == rb.Norm {
+		return true
+	}
+	return !ra.isLocal() && !rb.isLocal() && SameRepoViaAlias(ra, rb)
 }
 
 // OriginAt is the url of the origin remote in the git config of the clone
@@ -291,13 +430,31 @@ func OriginAt(dir string) string {
 // CloneRecord is <home>/state/store-clones.json: every store clone that is
 // not at its default path, by CloneKey. Machine-local: it names folders
 // of this machine, so it is never synced or shared (D-b).
+//
+// DECISION (devco D-534): a path under the home is written relative to it
+// and a clone at its default path is never recorded, so a lore home that
+// is copied or moved (a preview home made from a copy of ~/.lore) reaches
+// its own clones and never the old home's. Before, set-url wrote
+// `why: moved` with the absolute default path, and every read of the
+// copied home fetched in the original home's clone.
 type CloneRecord struct {
 	Clones map[string]CloneEntry `json:"clones"`
+	// Foreign holds the entries ReadCloneRecord left out: an absolute path
+	// that is another lore home's default place for the same store (a
+	// record copied with its home). Never written back; New warns once.
+	Foreign []ForeignClone `json:"-"`
+}
+
+// ForeignClone is a record entry naming another lore home's clone.
+type ForeignClone struct {
+	Key  string
+	Path string
 }
 
 // CloneEntry is one recorded clone.
 type CloneEntry struct {
-	// Path is the clone folder (absolute).
+	// Path is the clone folder: absolute in memory; in the file, relative
+	// to the home when it is under it.
 	Path string `json:"path"`
 	// Why is WhyOwn, WhyCollision or WhyMoved.
 	Why string `json:"why"`
@@ -312,6 +469,12 @@ func CloneRecordPath(home string) string {
 
 // ReadCloneRecord reads the record; a missing or unreadable file is an
 // empty record (every clone is then at its default path).
+//
+// A relative path is joined to home. An absolute path outside home that is
+// another home's default place for its key (…/stores/<owner>/<repo>, the
+// layout DefaultCloneDir gives under any home) is left out and listed in
+// Foreign: it is the record of the home this one was copied from (D-534).
+// A person's own clone (WhyOwn, `lore store use`) is kept wherever it is.
 func ReadCloneRecord(home string) CloneRecord {
 	r := CloneRecord{Clones: map[string]CloneEntry{}}
 	b, err := os.ReadFile(filepath.Clean(CloneRecordPath(home)))
@@ -321,12 +484,82 @@ func ReadCloneRecord(home string) CloneRecord {
 	if json.Unmarshal(b, &r) != nil || r.Clones == nil {
 		return CloneRecord{Clones: map[string]CloneEntry{}}
 	}
+	for k, e := range r.Clones {
+		if e.Path == "" {
+			continue
+		}
+		if !filepath.IsAbs(filepath.FromSlash(e.Path)) {
+			e.Path = filepath.Join(home, filepath.FromSlash(e.Path))
+			r.Clones[k] = e
+			continue
+		}
+		if e.Why != WhyOwn && foreignDefault(home, k, e.Path) {
+			r.Foreign = append(r.Foreign, ForeignClone{Key: k, Path: e.Path})
+			delete(r.Clones, k)
+		}
+	}
+	sort.Slice(r.Foreign, func(i, j int) bool { return r.Foreign[i].Key < r.Foreign[j].Key })
 	return r
 }
 
-// RecordClone writes key's entry into the record.
+// DefaultCloneDirOfKey is the default clone folder under home of the
+// store a record key (CloneKey) names; ok is false for a key it cannot
+// read.
+func DefaultCloneDirOfKey(home, key string) (string, bool) {
+	norm, branch := key, ""
+	if i := strings.Index(key, branchCloneSep); i >= 0 {
+		norm, branch = key[:i], key[i+len(branchCloneSep):]
+	}
+	if !strings.Contains(norm, "/") {
+		return "", false
+	}
+	dir, err := DefaultCloneDir(home, Remote{Norm: norm}, branch)
+	if err != nil {
+		return "", false
+	}
+	return dir, true
+}
+
+// foreignDefault reports whether p, an absolute path outside home, is the
+// default place of key's clone under some other lore home: it ends with
+// the same stores/<…> tail DefaultCloneDirOfKey gives under home.
+func foreignDefault(home, key, p string) bool {
+	p = filepath.Clean(p)
+	if _, inside := relUnder(home, p); inside {
+		return false
+	}
+	def, ok := DefaultCloneDirOfKey(home, key)
+	if !ok {
+		return false
+	}
+	tail, inside := relUnder(home, def)
+	if !inside {
+		return false
+	}
+	return strings.HasSuffix(p, string(filepath.Separator)+tail)
+}
+
+// relUnder is p relative to dir, and whether p is inside dir (not dir).
+func relUnder(dir, p string) (string, bool) {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(p))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	return rel, true
+}
+
+// RecordClone writes key's entry into the record. A clone that is not a
+// person's own and sits at the default path of key is not recorded (its
+// entry is removed): CloneDirFor finds it there with no record (D-534).
 func RecordClone(home, key string, e CloneEntry, now time.Time) error {
 	r := ReadCloneRecord(home)
+	if def, ok := DefaultCloneDirOfKey(home, key); ok && e.Why != WhyOwn && filepath.Clean(e.Path) == def {
+		if _, had := r.Clones[key]; !had {
+			return nil
+		}
+		delete(r.Clones, key)
+		return writeCloneRecord(home, r)
+	}
 	e.SetAt = now.UTC().Format(time.RFC3339)
 	r.Clones[key] = e
 	return writeCloneRecord(home, r)
@@ -347,7 +580,14 @@ func ForgetCloneRecord(home, key string) error {
 // lost collision entry is found again by CloneDirFor's scan).
 func writeCloneRecord(home string, r CloneRecord) error {
 	p := CloneRecordPath(home)
-	b, err := json.MarshalIndent(r, "", "  ")
+	out := CloneRecord{Clones: make(map[string]CloneEntry, len(r.Clones))}
+	for k, e := range r.Clones {
+		if rel, inside := relUnder(home, e.Path); inside {
+			e.Path = filepath.ToSlash(rel) // relative: the record moves with its home (D-534)
+		}
+		out.Clones[k] = e
+	}
+	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return errs.Wrap(errs.Internal, "git: encode the store clone record", err)
 	}
@@ -566,4 +806,16 @@ func legacyCloneOf(dir string, r Remote) bool {
 	}
 	o, err := RemoteOfRaw(OriginAt(dir))
 	return err == nil && o.Norm == r.Norm
+}
+
+// DropForeignClones removes from the record every entry ReadCloneRecord
+// leaves out as another home's clone (CloneRecord.Foreign) and returns
+// them, so the caller says so once (D-534). Nothing is written when there
+// is none.
+func DropForeignClones(home string) ([]ForeignClone, error) {
+	r := ReadCloneRecord(home)
+	if len(r.Foreign) == 0 {
+		return nil, nil
+	}
+	return r.Foreign, writeCloneRecord(home, r)
 }

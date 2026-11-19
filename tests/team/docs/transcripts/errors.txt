@@ -15,8 +15,16 @@ ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under sto
   hint: point stores: at a repo made with `lore store init --name <name> --url <url>`, or remove the entry from ~/.lore/config.yaml
 (exit 19)
 alice$ lore store doctor
-ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes: unpushed work: refs/heads/main; git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
-  hint: fix each problem, then run `lore store doctor` again
+stores this repo and machine use:
+  none (no .lore/stores.yaml entry, no org store, no personal store)
+clones of the org stores in ~/.lore/config.yaml (orgs[].stores):
+✗ git@github.com:client2/docs  (entries agency; branches main)
+    fail: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+⚠ git@github.com:agency/notes  (entries agency; branches main)
+    warn: unpushed work: refs/heads/main (3 commit(s) the store does not have yet: `lore store push` or `lore sync` sends them; only under push auto does the next write that reaches the store send them too)
+summary: 2 store(s) checked: 0 ok, 1 warn, 1 fail
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+  hint: fix each fail line above, then run `lore store doctor` again
 (exit 20)
 
 ### org ambiguous
@@ -33,40 +41,36 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 alice (work/blog)$ lore memory add --body 'the site deploys from the release branch'
-lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 
 ### link unknown
 bob (work/website)$ lore memory add --body 'the client wants weekly demos'
-lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
   hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
 (exit 18)
 
 ### offline claim
-alice (work/website)$ lore task claim --id tsk_2ad3618e878ebbf527d34d446ef4f891
+alice (work/website)$ lore task claim --id tsk_2ad3618e878ebbf527d34d446ef4f891 --push
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)
 alice (work/website)$ lore memory add --body 'the API keys rotate every 90 days' --to agency || true
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store agency)
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_162df51b7f78b785c97c26b41ea89666.json (store agency/client)
 ✓ mem_162df51b7f78b785c97c26b41ea89666 [agency/client]
   scope: [project]
 alice (work/website)$ lore sync
-lore: pushed store agency/client, agency/org: commit 601d285 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store me/everywhere: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 4, received 0, merged 0, refused 0
-store agency/org: sent 2, received 0, merged 0, refused 0
+lore: pushed store agency (the store clone: folders client, org): commit 601d285 to branch main (5 commits, 5 row files)
+store me: up to date
+store me/everywhere: up to date
+store agency/client: pushed (sent 5, received 0, merged 0, refused 0); rows: 3 sent
+store agency/org: pushed (sent 2, received 0, merged 0, refused 0)
 
 ### store branch missing
 alice (work/website)$ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
-ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
+ERROR: [E_INVALID_INPUT] store branch does not exist: github.com/agency/notes has no branch staging
   hint: the store repo has branches but not this one (an empty repo gets its branch with the first link): to start a separate lore on that branch on purpose, run `lore store init --name <name> --url '<url>?branch=<branch>'`; otherwise check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org>
 (exit 20)
 
@@ -89,6 +93,5 @@ bob (work/portal)$ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: last fetch 15s ago
   - live: 2 live write(s) not pushed yet
   - live: 2 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
-  - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed

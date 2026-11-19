@@ -22,6 +22,8 @@ import (
 // PeriodListIn is the input of actor.period.list.
 type PeriodListIn struct {
 	Actor string `json:"actor" arg:"0" desc:"the person: @handle, act_ id or stable key"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
@@ -172,9 +174,17 @@ func (o ops) periodAdd(ctx context.Context, in PeriodAddIn) (PeriodWriteOut, err
 	}
 	next := teamprofile.Period{ActorID: a.ID, Type: in.Type, StartedOn: start, EndedOn: end, OrgRole: in.OrgRole, EndReason: in.EndReason, Note: in.Note}
 	replaced := false
+	var guessRow *teamprofile.Period // the guess's row the add takes over, nil when it had none
 	if err = teamprofile.CheckPeriods(append(slices.Clone(ps), next)); err != nil {
-		if len(ps) != 1 || !ps[0].Synthesised() || !ps[0].Open() {
+		if len(ps) != 1 || !ps[0].Open() || !rosterGuess(ps[0]) {
 			return PeriodWriteOut{}, err
+		}
+		if next.OrgRole == "" {
+			next.OrgRole = ps[0].OrgRole // org create's "admin" stays with the real stint (devco:D-327)
+		}
+		if !ps[0].Synthesised() {
+			g := ps[0]
+			guessRow = &g
 		}
 		ps, replaced = nil, true
 		if err = teamprofile.CheckPeriods([]teamprofile.Period{next}); err != nil {
@@ -190,7 +200,12 @@ func (o ops) periodAdd(ctx context.Context, in PeriodAddIn) (PeriodWriteOut, err
 	if err != nil {
 		return PeriodWriteOut{}, err
 	}
-	w, err := r.Create(ctx, schema.TableActorPeriods, f)
+	var w row.Row
+	if guessRow != nil {
+		w, err = r.Update(ctx, schema.TableActorPeriods, guessRow.ID, withClears(f, periodOptionalFields()))
+	} else {
+		w, err = r.Create(ctx, schema.TableActorPeriods, f)
+	}
 	if err != nil {
 		return PeriodWriteOut{}, err
 	}
@@ -330,7 +345,8 @@ func findPeriod(ctx context.Context, r profilestore.Roster, ref string) (row.Row
 			return a, ps, i, nil
 		}
 	}
-	return row.Row{}, nil, 0, errs.New(errs.NotFound, "no period "+ref)
+	return row.Row{}, nil, 0, errs.New(errs.NotFound, "no period "+ref).
+		WithHint("run `lore actor period list --actor " + a.ID.String() + "` to see the stints and their apd_ ids")
 }
 
 // periodPatch is the full patch of p's editable fields (an empty optional
@@ -347,4 +363,33 @@ func periodPatch(p teamprofile.Period) (map[string]value.Value, error) {
 		}
 	}
 	return f, nil
+}
+
+// rosterGuess reports whether p is a stint guessed from the roster: read
+// from active/left_at (no row yet), or written from the actor's first day
+// with source "migrated" (materialised from that read, or the admin stint
+// `lore org create` writes for its creator, devco:D-327). Its start is the
+// day lore first saw the person, never their real first day, so recording
+// the real stint replaces it instead of colliding with it.
+func rosterGuess(p teamprofile.Period) bool {
+	return p.Synthesised() || p.Source == schema.PeriodSourceMigrated
+}
+
+// periodOptionalFields are the actor_periods fields a stint may leave
+// empty; a stint that takes over a guess's row clears the ones it has not.
+func periodOptionalFields() []string {
+	return []string{schema.FieldPeriodEndedOn, schema.FieldPeriodOrgRole, schema.FieldPeriodEndReason, schema.FieldPeriodNote, schema.FieldPeriodSource}
+}
+
+// withClears is f with value.Null for each name of optional f leaves out,
+// for an Update that must leave only f's fields set.
+func withClears(f map[string]value.Value, optional []string) map[string]value.Value {
+	out := make(map[string]value.Value, len(f)+len(optional))
+	for _, name := range optional {
+		out[name] = value.Null{}
+	}
+	for k, v := range f {
+		out[k] = v
+	}
+	return out
 }

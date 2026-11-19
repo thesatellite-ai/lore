@@ -17,12 +17,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/sessionmask"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/op"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/surface/docs"
+	"github.com/thesatellite-ai/lore/surface/errmask"
 )
 
 // Server constants (spec 9.7, 12).
@@ -226,7 +228,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener, announce io.Writer,
 		return errs.Wrap(errs.Internal, "rest: announce", err)
 	}
 	srv := &http.Server{
-		Handler:           s.handler,
+		Handler:           guardHost(s.handler), // D-331: loopback Host names only
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
@@ -305,7 +307,7 @@ func authenticate(token string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !bearerMatches(r, want) {
 			refuseBearer(w, errs.New(errs.Unauthorized, "missing or wrong bearer token").
-				WithHint("send Authorization: Bearer <the token in ~/.lore/api-token>"))
+				WithHint("send Authorization: Bearer <the token in "+lorehome.Shown()+"/api-token>"))
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -354,7 +356,7 @@ func WriteError(w http.ResponseWriter, err error) { writeError(w, err) }
 // writeError writes the spec 9.4 error object under its class status.
 func writeError(w http.ResponseWriter, err error) {
 	// Envelope is a fixed struct of strings and ints; Marshal cannot fail.
-	b, mErr := json.Marshal(errs.EnvelopeOf(err))
+	b, mErr := json.Marshal(errmask.Of(err))
 	if mErr != nil {
 		b = []byte(`{"error":{"code":"E_INTERNAL","message":"encode error","exit":1,"class":"generic"}}`)
 	}

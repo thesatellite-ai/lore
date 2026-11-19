@@ -35,8 +35,10 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/adapters/scanner/gitleaks"
 	"github.com/thesatellite-ai/lore/logic/clock"
 	"github.com/thesatellite-ai/lore/logic/orgconf"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
@@ -58,6 +60,11 @@ const HookLive = "live"
 
 // LiveConfig configures LiveHook.
 type LiveConfig struct {
+	// BranchIsolated reports whether the checkout is on an isolated code
+	// branch (branch layers, code-repo mode: BRANCH_LAYERS 4): new rows of
+	// live kinds then stay with the code. cmd/lore passes
+	// wire.App.RepoBranchIsolated; nil keeps every branch shared.
+	BranchIsolated func(ctx context.Context) bool
 	// Home is the lore home (~/.lore), where config.yaml lives.
 	Home string
 	// WorkDir is the folder commands run in (the project is found from it).
@@ -87,6 +94,13 @@ type LiveConfig struct {
 	// address notices and the ask-once question), run at the start of
 	// every sync; cmd/lore passes wire.App.SyncRepoAddresses. nil skips it.
 	RepoAddresses func(ctx context.Context)
+	// PersonalStore is the personal store the active setup configures (the
+	// url `lore whoami` shows on its personal line), "" when none is set
+	// up (devco:D-654): the "not set up: run lore store init --name me"
+	// hint is only true then; with one configured but not attached to the
+	// command, following it made a second personal store. cmd/lore passes
+	// wire.App.PersonalStoreURL; nil keeps the not-set-up hint.
+	PersonalStore func(ctx context.Context) string
 	// Signer is the lore identity (`lore whoami`) that signs live commits
 	// when the repo's git has no user.name/user.email (FLAG4: an existing
 	// git identity always wins, git config is never changed); cmd/lore
@@ -109,6 +123,11 @@ type LiveConfig struct {
 	// (quarantined rows, registries past their key cap; FA-META-11);
 	// cmd/lore passes wire.App.MetaStatusLines. nil prints none.
 	MetaStatus func(ctx context.Context) (quarantined, overCap []string)
+	// ClientRepo reports whether the repo of WorkDir resolves as a client
+	// repo of an org (J-11: a link of a repo with no .lore/ installs the
+	// leak guard there, clientguard.go); cmd/lore passes the org
+	// resolution's role. nil installs nothing.
+	ClientRepo func(ctx context.Context) bool
 }
 
 // Leak check actions (the refusal names them).
@@ -216,7 +235,12 @@ type liveRun struct {
 	// doctor: the run is `lore doctor`, whose report carries the
 	// leak-guard warning itself (doctorGuard): the wiring's notice of it
 	// would print it twice.
-	doctor   bool
+	doctor bool
+	// still: a dry run or a CI-form run (stillRun): its sessions take no
+	// lock, fetch nothing and integrate nothing, so .git stays as it was.
+	still bool
+	// ci: a CI-form run (ciRun): no "lore sync sets up …" wiring note.
+	ci       bool
 	sessions map[string]*liveSession
 	// storeWrites counts the store writes this run asked a liveBackend for
 	// (Write, WriteAudited, WritePurge with at least one change or purged
@@ -288,6 +312,8 @@ func (r *liveRun) session(ctx context.Context, top string) *liveSession {
 			s.agent = r.agent
 			s.read = r.read
 			s.asked = r.asked
+			s.still = r.still
+			s.ci = r.ci
 			s.cache = cache
 			r.addCache(cache)
 		}
@@ -698,7 +724,7 @@ func dryRun(run *Run) bool {
 	if run.Entry == nil {
 		return false
 	}
-	if fixDryRun(run) {
+	if fixDryRun(run) || nextReads(run) {
 		return true
 	}
 	if run.Cmd != nil {
@@ -716,6 +742,30 @@ func dryRun(run *Run) bool {
 	return false
 }
 
+// nextClaimFlag is task next's --claim (opscoord.NextIn.Claim).
+const nextClaimFlag = "claim"
+
+// nextReads reports whether run is a `lore task next` without --claim
+// (devco:D-426): it only shows the next task, so the host runs it as the
+// dry run it is (a read's live session and wiring, nothing written in
+// .git). An input it cannot read is a read, the side that changes less.
+func nextReads(run *Run) bool {
+	if run.Entry.Spec().Name != opscoord.OpTaskNext {
+		return false
+	}
+	if run.Cmd != nil {
+		if f, err := run.Cmd.Flags().GetBool(nextClaimFlag); err == nil {
+			return !f
+		}
+		return !slices.Contains(run.Args, "--"+nextClaimFlag)
+	}
+	if d, ok := run.Decoder.(op.JSONDecoder); ok && len(strings.TrimSpace(string(d.Body))) > 0 {
+		var in opscoord.NextIn
+		return json.Unmarshal(d.Body, &in) != nil || !in.Claim
+	}
+	return true
+}
+
 // fixDryRun reports whether run is `lore fix --dry-run` (CLI flag or REST
 // body); an input it cannot read is a dry run, the side that changes less.
 func fixDryRun(run *Run) bool {
@@ -729,6 +779,13 @@ const fixMigrateFlag = "migrate"
 // cannot read is not (the side that changes less).
 func fixMigrate(run *Run) bool {
 	return fixBoolFlag(run, fixMigrateFlag, func(in opsfix.RunIn) bool { return in.Migrate }, false)
+}
+
+// fixTrackedHooks reports whether run is `lore fix --tracked-hooks`, the
+// explicit yes to write lore's blocks into a hooks folder committed with
+// the repo (D-501); an input it cannot read is not.
+func fixTrackedHooks(run *Run) bool {
+	return fixBoolFlag(run, fixTrackedHooksFlag, func(in opsfix.RunIn) bool { return in.TrackedHooks }, false)
 }
 
 // fixBoolFlag reads one boolean flag of a lore fix run from the command
@@ -839,6 +896,16 @@ func readRun(run *Run) bool {
 	return run.Entry != nil && runWireMode(run) == wireRead
 }
 
+// liveStill reports whether run's live session leaves the clone's .git as
+// it is (no live lock, fetch or integrate; live_still.go): a still run
+// (stillRun), or a roster command that writes only the org store
+// (storeOnlyOps), which reads the repo's live rows as they are and so
+// never waits on a task import in the same clone (T-13: 6-7 s idle, 33 s
+// and an E_STORE_LOCKED line behind an import).
+func liveStill(run *Run) bool {
+	return stillRun(run) || (run.Entry != nil && storeOnly(run.Entry.Spec().Name))
+}
+
 // around is LiveHook's Around (see the file comment).
 func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, error) {
 	spec := run.Entry.Spec()
@@ -846,16 +913,29 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		ctx = context.WithValue(ctx, leakExemptKey{}, true)
 	}
 	if liveDisabled() || skipLiveRun(run) {
+		if liveDisabled() && !skipLiveRun(run) {
+			h.wireWithoutLive(ctx, run) // devco D-224: rows are branch files git merges
+		}
 		return next(ctx)
 	}
-	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun}
+	r := &liveRun{h: h, sessions: map[string]*liveSession{}, agent: run.Caller.Agent != "", read: readRun(run) || dryRun(run), asked: pushAsked[spec.Name], doctor: spec.Name == opsdoctor.OpRun, still: liveStill(run), ci: ciRun(run)}
 	if fetchAlways[spec.Name] {
 		r.kind = live.FetchAlways
 	}
+	if r.still {
+		stillGit(run)
+	}
 	if !r.read {
-		ctx = wire.WithWriteFetch(ctx) // its store clones fetch at orgconf.WriteFetchTTL (M-4)
+		// A write fetches when the fetch is due (orgconf.WriteFetchTTL, M-4):
+		// its refusals (a teammate's claim, gate, closed tasklist, newer
+		// edit, roster change) must see the remote (devco D-233).
+		ctx = wire.WithWriteFetch(ctx)
+		gitleaks.Warm() // the write's secret scan rules load while it queues for the live lock (D-159)
 	}
 	ctx = withRun(ctx, r)
+	if fixTrackedHooks(run) {
+		ctx = withTrackedHooksYes(ctx) // D-501: the one explicit yes to a tracked hooks folder
+	}
 	defer r.finish(ctx)
 	wired := false
 	if root := liveProjectRoot(h.cfg.WorkDir); root != "" {
@@ -871,6 +951,9 @@ func (h *liveHost) around(ctx context.Context, run *Run, next Next) (op.Result, 
 		}
 	}
 	res, err := next(ctx)
+	if !wired && err == nil {
+		h.installClientGuard(ctx, spec.Name) // clientguard.go: a linked client repo with no .lore/ (J-11)
+	}
 	if !wired && err == nil && !leavesWorkRepo(spec.Name) {
 		// The operation made the project (repo.init from the setup page or
 		// `lore repo init`): wire the clone now, as `lore init` does through
@@ -968,7 +1051,7 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 				if s.fetchMissing() {
 					// G-18: the address answers "no repository": the repo
 					// most likely moved; say how to follow it
-					line += "; if the repo moved: git remote set-url " + s.ref.RemoteName + " <new-url>, then lore repo set-url --url <new-url>"
+					line += movedRemoteHint(s.ref.RemoteName, s.remoteURL)
 				}
 				h.line(line)
 			}
@@ -992,4 +1075,16 @@ func (h *liveHost) refuse(ctx context.Context, s *liveSession, spec op.Spec) err
 			WithHint("run `lore upgrade`; reading still works")
 	}
 	return nil
+}
+
+// movedRemoteHint is the "the repo moved" step of a live fetch that found
+// no repository at the remote. A hosted remote also needs lore repo
+// set-url (the repo's recorded address follows the move); a path on this
+// machine is no recorded address, so git remote set-url is the whole move
+// (O-13: lore repo set-url was named for one, and refused it).
+func movedRemoteHint(remote, url string) string {
+	if repourl.IsLocalRemote(url) {
+		return "; if the repo moved: git remote set-url " + remote + " <new-path>, then lore sync"
+	}
+	return "; if the repo moved: git remote set-url " + remote + " <new-url>, then lore repo set-url --url <new-url>"
 }

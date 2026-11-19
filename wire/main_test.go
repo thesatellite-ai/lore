@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
+	"github.com/thesatellite-ai/lore/internal/testenv"
 )
 
 // TestMain first removes the CI variables (ciMarkers) the test process
@@ -28,5 +29,11 @@ func TestMain(m *testing.M) {
 		_ = os.Unsetenv(k)
 	}
 	sqlite.UseEmptyTemplates()
-	os.Exit(m.Run())
+	// the macOS temp-folder shape on every system (devco D-413): $TMPDIR
+	// is a symlink to the real folder, as macOS /var links to
+	// /private/var, so a path compared without model/fspath fails here too
+	cleanup := testenv.LinkTemp("lore-wire-")
+	code := m.Run()
+	cleanup()
+	os.Exit(code)
 }

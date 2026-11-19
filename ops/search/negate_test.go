@@ -53,7 +53,8 @@ func TestSearchNegatedWords(t *testing.T) {
 		{"meta condition and negated word", `{"query":"env:prod -friday"}`, []string{mon}},
 		{"meta condition, word and negated word", `{"query":"env:prod deploy -monday"}`, []string{fri}},
 		{"field condition and negated word", `{"query":"region:eu -zzz"}`, nil}, // resources only: checked below
-		{"trash: negated word drops a trashed row", `{"query":"deploy ritual -friday","include_deleted":true}`, []string{goneMon}},
+		// D-435: the live rows holding only "deploy" are partial matches now
+		{"trash: negated word drops a trashed row", `{"query":"deploy ritual -friday","include_deleted":true}`, []string{mon, xray, call, goneMon}},
 		{"trash: negated word drops every trashed row", `{"query":"deploy -ritual","include_deleted":true}`, all},
 	}
 	for _, c := range cases {

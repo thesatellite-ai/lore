@@ -76,7 +76,7 @@ func TestEditWritesThroughTheWritePath(t *testing.T) {
 		t.Fatalf("row.edit = %+v, want body and title written", out)
 	}
 	shown := showJSON(t, h, `{"id":"`+id+`"}`)
-	if shown.Fields["title"] != "ship it: today # now" || shown.Fields["body"] != "first\nsecond line" {
+	if shown.Fields["title"].String() != "ship it: today # now" || shown.Fields["body"].String() != "first\nsecond line" {
 		t.Fatalf("after the edit: %+v", shown.Fields)
 	}
 	// the same (now stale) view again: its _hlc is older than the row's

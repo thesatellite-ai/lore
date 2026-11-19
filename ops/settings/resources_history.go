@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/ops/task"
 	"github.com/thesatellite-ai/lore/schema"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // Operation names.
@@ -275,6 +277,8 @@ func quarantineLine(q []Quarantined) string {
 
 // ResHistoryIn is the input of resource.history.
 type ResHistoryIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Name  string `json:"id" arg:"0" desc:"the resource (name or res_ id)"`
 	Field string `json:"field,omitempty" flag:"field" desc:"only changes of this field"`
 	Git   bool   `json:"git,omitempty" flag:"git" desc:"also read older versions from git history (beyond the row's last 100 entries)"`
@@ -406,6 +410,8 @@ func shortCommit(c string) string {
 
 // ResReportIn is the input of resource.report.
 type ResReportIn struct {
+	// --store <store> (devco D-499): the read names its store.
+	op.StoreFlag
 	Kind string `json:"kind,omitempty" flag:"kind" desc:"only this kind (name or knd_ id)"`
 	Days int    `json:"days,omitempty" flag:"days" min:"1" desc:"stale when last_checked is older than this many days (default 60)"`
 	// Offboarding (RES 3.22, OV49-R1): one place's resources, or the ones
@@ -433,8 +439,17 @@ type ResReportOut struct {
 	// ("<from> <field> → <to>"); filled only with --project or --meta.
 	Inbound []string `json:"inbound_refs,omitempty"`
 	// Rotate are the secret_ref values (references, never secrets) as a
-	// rotation checklist (3.22).
+	// rotation checklist (3.22), each with the rows that use it:
+	// "<ref> (<kind> <name>.<field>, …)". Only an offboarding report
+	// (--project, --meta) has one: those secrets leave with that place.
+	// devco D-450: every report listed every credential ref under "rotate"
+	// with no reason.
 	Rotate []string `json:"rotate"`
+	// SecretRefs are the same entries for a report that is no offboarding:
+	// where each secret reference is used, nothing to rotate.
+	SecretRefs []string `json:"secret_refs,omitempty"`
+	// Days is the stale window (--days, default 60).
+	Days int `json:"days"`
 	// Notes: last good definition warnings of conflicted kinds (RES 3.13).
 	Notes []string `json:"notes,omitempty"`
 }
@@ -449,6 +464,7 @@ func (o ResReportOut) Text() string {
 	fmt.Fprintf(&b, "resources   %d (%s)\n", o.Total, strings.Join(parts, ", "))
 	fmt.Fprintf(&b, "stale       %d%s\n", len(o.Stale), listTail(o.Stale))
 	fmt.Fprintf(&b, "unchecked   %d%s\n", len(o.Unchecked), listTail(o.Unchecked))
+	b.WriteString("  " + checkSummary(len(o.Stale), len(o.Unchecked), o.Days) + "\n")
 	byCheck := map[string]int{}
 	for _, f := range o.Findings {
 		byCheck[f.Check]++
@@ -466,7 +482,14 @@ func (o ResReportOut) Text() string {
 	if o.Inbound != nil {
 		fmt.Fprintf(&b, "inbound refs %d%s\n", len(o.Inbound), listTail(o.Inbound))
 	}
-	fmt.Fprintf(&b, "rotate      %d%s\n", len(o.Rotate), listTail(o.Rotate))
+	if o.Inbound != nil || len(o.Rotate) > 0 {
+		fmt.Fprintf(&b, "rotate      %d%s\n", len(o.Rotate), listTail(o.Rotate))
+	} else {
+		fmt.Fprintf(&b, "secret refs %d%s\n", len(o.SecretRefs), listTail(o.SecretRefs))
+		if len(o.SecretRefs) > 0 {
+			b.WriteString("  (where each is used; an offboarding report, --project or --meta, lists the ones to rotate)\n")
+		}
+	}
 	for _, n := range o.Notes {
 		b.WriteString(n + "\n")
 	}
@@ -502,6 +525,17 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 	if err != nil {
 		return ResReportOut{}, err
 	}
+	var scopeNote string
+	if !offboard {
+		// a folder's report covers that folder's resources, as its list
+		// does (devco D-586); offboarding reads every store on purpose
+		var left int
+		var leftFrom []store.Source
+		if rows, left, leftFrom = o.inFolderScope(ctx, rows); left > 0 {
+			sc, _ := o.folderScope()
+			scopeNote = sc.noteFor(left, leftFrom, OpResReport)
+		}
+	}
 	kindID := ""
 	if in.Kind != "" {
 		d, kerr := o.kindDefRead(ctx, in.Kind)
@@ -515,8 +549,9 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 		days = defaultStaleDays
 	}
 	cutoff := opclock.Now(o.env).Add(-time.Duration(days) * hoursPerDay * time.Hour)
-	out := ResReportOut{Kinds: []KindCount{}, Stale: []string{}, Unchecked: []string{}, Findings: []LintFinding{}, Links: []GraphLink{}, Rotate: []string{}}
+	out := ResReportOut{Kinds: []KindCount{}, Stale: []string{}, Unchecked: []string{}, Findings: []LintFinding{}, Links: []GraphLink{}, Rotate: []string{}, Days: days}
 	counts := map[string]int{}
+	uses := map[string][]string{} // secret ref -> "<kind> <name>.<field>" of each row using it
 	defs := map[string]kindDef{}
 	var nodes []string
 	for _, r := range rows {
@@ -537,9 +572,10 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 		counts[d.name()]++
 		id, label := r.Row.ID.String(), d.name()+" "+text(r.Row, rName)
 		nodes = append(nodes, id)
-		if lc := text(r.Row, rLastChecked); lc == "" {
+		switch checkStateOf(r.Row, cutoff) { // resource stale's model (D-450)
+		case checkNever:
 			out.Unchecked = append(out.Unchecked, label)
-		} else if t, ok := parseWhen(lc); ok && t.Before(cutoff) {
+		case checkStale:
 			out.Stale = append(out.Stale, label)
 		}
 		stored, derr := d.decode(r)
@@ -548,11 +584,21 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 		}
 		for fid, raw := range stored.vals {
 			if f, ok := d.byID[fid]; ok && text(f.Row, fType) == string(value.KindSecretRef) {
-				if s := display(fromJSONRaw(raw)); s != "" && !slices.Contains(out.Rotate, s) {
-					out.Rotate = append(out.Rotate, s)
+				if s := display(fromJSONRaw(raw)); s != "" {
+					uses[s] = append(uses[s], label+"."+text(f.Row, kName))
 				}
 			}
 		}
+	}
+	refs := make([]string, 0, len(uses))
+	for _, ref := range slices.Sorted(maps.Keys(uses)) {
+		slices.Sort(uses[ref])
+		refs = append(refs, ref+" ("+strings.Join(uses[ref], ", ")+")")
+	}
+	if offboard {
+		out.Rotate = refs
+	} else if len(refs) > 0 {
+		out.SecretRefs = refs
 	}
 	for k, n := range counts {
 		out.Kinds = append(out.Kinds, KindCount{Kind: k, Count: n})
@@ -560,7 +606,6 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 	slices.SortFunc(out.Kinds, func(a, b KindCount) int { return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.Kind, b.Kind)) })
 	slices.Sort(out.Stale)
 	slices.Sort(out.Unchecked)
-	slices.Sort(out.Rotate)
 	lint, err := o.resLint(ctx, ResLintIn{})
 	if err != nil {
 		return ResReportOut{}, err
@@ -580,6 +625,9 @@ func (o ops) resReport(ctx context.Context, in ResReportIn) (ResReportOut, error
 	}
 	if offboard {
 		out.Inbound = o.inboundRefs(ctx, all, nodes)
+	}
+	if scopeNote != "" {
+		out.Notes = append(out.Notes, scopeNote)
 	}
 	return out, nil
 }
@@ -653,7 +701,7 @@ func (o ops) historyOps() []op.Entry {
 		op.Define(op.Spec{Name: OpResHistory, Summary: "Field changes of one resource, newest first, with actor, date and batch (sensitive values masked)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors:   append(slices.Clone(readErrors), errs.Unsupported),
 			Examples: []op.Example{{Title: "one field's history", CLI: "lore resource history --id hub_prod --field os", Want: "os"}}}, o.resHistory),
-		op.Define(op.Spec{Name: OpResReport, Summary: "Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references to rotate", Permission: op.PermRead, Access: op.AccessRead,
+		op.Define(op.Spec{Name: OpResReport, Summary: "Report on the resources in view: counts per kind, stale, unchecked, dangling, quarantined, open links, secret references in use (to rotate when offboarding)", Permission: op.PermRead, Access: op.AccessRead,
 			Errors: append(slices.Clone(readErrors), errs.KindUnknown), Examples: []op.Example{{Title: "resources by kind", CLI: "lore resource report"}}}, o.resReport),
 	}
 }

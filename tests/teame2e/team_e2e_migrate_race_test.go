@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	th "github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -161,7 +162,10 @@ func TestMigrateRaceOneRepo(t *testing.T) {
 	const racers = 4
 	ps := make([]*th.Pending, racers)
 	for i := range ps {
-		ps[i] = c.Prepare("migrate", "run", "--no-push")
+		// --verbose: one "memories/<id>" line per row (owner item C2 made
+		// the default a per-table count with the first five ids; devco
+		// D-224), so each run's rewritten rows can be counted
+		ps[i] = c.Prepare("migrate", "run", "--no-push", "--verbose")
 	}
 	ok, locked := 0, 0
 	rewrote := map[string]int{} // row → how many racing runs rewrote it
@@ -195,7 +199,7 @@ func TestMigrateRaceOneRepo(t *testing.T) {
 	}
 	got := memoryFiles(t, c)
 	assertMigrated(t, "alice", got)
-	c.MustLore("migrate", "run", "--no-push").Never(t, "memories/mem_")
+	c.MustLore("migrate", "run", "--no-push", "--verbose").Never(t, "memories/mem_")
 	if again := memoryFiles(t, c); len(again) != len(got) {
 		t.Fatal("a rerun changed the memories folder")
 	} else {
@@ -232,7 +236,7 @@ func TestMigrateRaceNClones(t *testing.T) {
 	}
 	ps := make([]*th.Pending, len(clones))
 	for i, c := range clones {
-		ps[i] = c.Prepare("migrate", "run", "--team-lock")
+		ps[i] = c.Prepare("migrate", "run", "--team-lock", "--push")
 	}
 	results := w.Simultaneously(ps...)
 	ok := 0
@@ -242,9 +246,9 @@ func TestMigrateRaceNClones(t *testing.T) {
 			continue
 		}
 		// Locked out: once the winner released, a rerun completes (7.8).
-		deadline := time.Now().Add(30 * time.Second)
+		deadline := time.Now().Add(testtime.Scale(30 * time.Second))
 		for {
-			rr := clones[i].Lore("migrate", "run", "--team-lock")
+			rr := clones[i].Lore("migrate", "run", "--team-lock", "--push")
 			if raceOutcome(t, rr) == "ok" {
 				break
 			}

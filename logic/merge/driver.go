@@ -28,6 +28,12 @@ type Driver struct {
 	// OursFirst is Policy.OursFirst for every table (the git merge
 	// driver of a worktree merge).
 	OursFirst bool
+	// TextNewerWins is Policy.TextNewerWins for every table: a text field
+	// both sides changed keeps the newer edit and Result.Replaced names the
+	// value it replaced, never conflict markers in the row (devco O-10: a
+	// force-pushed branch made the git merge driver write markers into a
+	// task title, and every read then showed them).
+	TextNewerWins bool
 }
 
 // Merge implements the git backend's Merger. An empty or whitespace-only
@@ -58,6 +64,7 @@ func (d Driver) Merge(base, ours, theirs []byte) (merged []byte, conflict bool, 
 		}
 	}
 	p.OursFirst = d.OursFirst
+	p.TextNewerWins = p.TextNewerWins || d.TextNewerWins
 	res, err := Rows(p, b, o, t)
 	if err != nil {
 		return nil, false, err
@@ -70,6 +77,37 @@ func (d Driver) Merge(base, ours, theirs []byte) (merged []byte, conflict bool, 
 		return nil, false, err
 	}
 	return out, !res.Clean(), nil
+}
+
+// Clashes names the fields (sorted) whose text both sides changed
+// differently, the ones Merge would mark: what a landing refusal names so
+// the person knows which field to settle (devco V-15). Empty when the
+// rows merge cleanly.
+func (d Driver) Clashes(base, ours, theirs []byte) ([]string, error) {
+	quiet := d
+	quiet.Report, quiet.TextNewerWins = nil, false
+	var res Result
+	quiet.Report = func(r Result) { res = r }
+	if _, _, err := quiet.Merge(base, ours, theirs); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(res.Conflicts))
+	for _, c := range res.Conflicts {
+		out = append(out, c.Field)
+	}
+	return out, nil
+}
+
+// MergeNewerText merges like Merge with Policy.TextNewerWins for every
+// table: a text both sides changed keeps the newer edit and Report names
+// the value it replaced, never conflict markers (the D-219 rule). Two
+// copies of one branch layer merge this way (devco V-12), as the live
+// rows of the shared notes do.
+func (d Driver) MergeNewerText(base, ours, theirs []byte) ([]byte, error) {
+	n := d
+	n.TextNewerWins = true
+	out, _, err := n.Merge(base, ours, theirs)
+	return out, err
 }
 
 // MergePrefer merges like Merge, then settles every conflict with one

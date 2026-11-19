@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -26,7 +27,7 @@ func (e twoStores) List(_ context.Context, src store.Source, _ row.Table) ([]row
 }
 
 // TestListAllOneOrderWhateverStore: rows interleaved across two stores list
-// in one order (by id) whichever store is read first, and a store's own
+// in one order (by creation, then id) whichever store is read first, and a store's own
 // read order does not matter either (a task list showed an open instance
 // and a done one of a series in either order, run to run).
 func TestListAllOneOrderWhateverStore(t *testing.T) {
@@ -59,5 +60,39 @@ func TestListAllOneOrderWhateverStore(t *testing.T) {
 	got, err := ListAll(context.Background(), twoStores{order: []store.Source{b, a}, rows: dup}, schema.TableTasks, "")
 	if err != nil || len(got) != 2 || got[0].Source != b || got[1].Source != a {
 		t.Errorf("one id in two stores: %+v %v, want the repo copy then the team copy", got, err)
+	}
+}
+
+// TestListAllCreationOrderNotIDOrder (devco:D-460): a plain list follows
+// created_at, not the id. A fresh id is a UUIDv7 of the machine's real
+// clock; a recurring task's next instance has a natural id, a hash, that
+// sorted before or after every fresh id by its digits and today's date, so
+// the docs transcript of `lore task list` changed order run to run under a
+// fixed LORE_NOW. Here the hashed id sorts first by id but was made last.
+func TestListAllCreationOrderNotIDOrder(t *testing.T) {
+	at := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
+	mk := func(id string, created time.Time) row.Row {
+		parsed, err := ids.ParseAny(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return row.Row{Table: schema.TableTasks, ID: parsed, CreatedAt: created}
+	}
+	fresh1, fresh2 := "tsk_01a1a5aca7f57659be7320c5f4b70011", "tsk_01a1a5aca7f57659be7320c5f4b70022"
+	instance := "tsk_000ab1965c647ba083639f54d90a7f93" // a natural id whose hash sorts first
+	later := "tsk_d48ab1965c647ba083639f54d90a7f93"    // one whose hash sorts last
+	rows := map[store.Source][]row.Row{store.SourceRepo: {
+		mk(instance, at.Add(3*time.Minute)), mk(fresh2, at.Add(time.Minute)), mk(later, at.Add(2*time.Minute)), mk(fresh1, at),
+	}}
+	got, err := ListAll(context.Background(), twoStores{order: []store.Source{store.SourceRepo}, rows: rows}, schema.TableTasks, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotIDs []string
+	for _, s := range got {
+		gotIDs = append(gotIDs, s.Row.ID.String())
+	}
+	if want := []string{fresh1, fresh2, later, instance}; !slices.Equal(gotIDs, want) {
+		t.Errorf("rows listed %v, want creation order %v", gotIDs, want)
 	}
 }

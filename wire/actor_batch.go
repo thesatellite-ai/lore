@@ -25,19 +25,31 @@ import (
 // store (two clones sharing one bare store clone, side effect 32) both
 // stage the same actor row and the later Commit is store.ErrStale for the
 // whole batch. Nothing of that batch was written (all or none), so it is
-// run once more: ensureActor then reads the row the other process wrote
-// and skips it. A second ErrStale is returned as is (a real conflict, or a
-// keyed create whose key another run stored first: its caller handles it).
+// run again: ensureActor then reads the row the other process wrote and
+// skips it. devco D-470: a first write into a new folder from an agent
+// session stages several such rows (the folder's project row, the
+// person's row, the shared agent row), and with several writers at once
+// one process can lose a different race on each attempt, so a single
+// retry still failed it with E_STALE. Each lost race leaves one row fewer
+// to make, so the batch is run up to actorBatchAttempts times; an ErrStale
+// after that is returned as is (a real conflict, or a keyed create whose
+// key another run stored first: its caller handles it).
 func (a *App) withActorRows(ctx context.Context, st *state, write func(context.Context) (engine.Written, error)) (engine.Written, error) {
 	if engine.InStage(ctx) {
 		return write(ctx)
 	}
 	w, err := a.actorBatchOnce(ctx, st, write)
-	if errors.Is(err, store.ErrStale) {
-		return a.actorBatchOnce(ctx, st, write)
+	for try := 1; try < actorBatchAttempts && errors.Is(err, store.ErrStale); try++ {
+		w, err = a.actorBatchOnce(ctx, st, write)
 	}
 	return w, err
 }
+
+// actorBatchAttempts bounds withActorRows' runs of one batch: one more than
+// the natural-id rows a first write can stage besides its own row (the
+// folder's project row, the owner's row, the agent's row), so every race
+// such a write can lose is retried once.
+const actorBatchAttempts = 4
 
 // actorBatchOnce is one staged attempt of withActorRows.
 func (a *App) actorBatchOnce(ctx context.Context, st *state, write func(context.Context) (engine.Written, error)) (engine.Written, error) {

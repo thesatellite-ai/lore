@@ -11,6 +11,7 @@ package wire
 import (
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/yamlerr"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
@@ -46,7 +47,7 @@ func readLockTimeout(home string) (time.Duration, error) {
 	}
 	d, err := time.ParseDuration(doc.Store.LockTimeout)
 	if err != nil || d <= 0 || d > maxLockTimeout {
-		return 0, errs.New(errs.ConfigInvalid, "~/.lore/"+ConfigFile+": store.lock_timeout "+doc.Store.LockTimeout+" is not a duration between 0 and 10m (e.g. 30s)")
+		return 0, errs.New(errs.ConfigInvalid, lorehome.Shown()+"/"+ConfigFile+": store.lock_timeout "+doc.Store.LockTimeout+" is not a duration between 0 and 10m (e.g. 30s)")
 	}
 	return d, nil
 }

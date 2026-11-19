@@ -25,7 +25,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,9 +44,44 @@ const (
 	ProblemUnpushedUnknown = "cannot list unpushed work: "
 	// ProblemUnreachable is a doctor fetch that could not reach the store.
 	ProblemUnreachable = "unreachable (using the last fetched state)"
-	// ProblemUnpushed prefixes the refs doctor found waiting.
+	// ProblemUnpushed prefixes the refs doctor found waiting. Since
+	// devco D-483 each ref is one warning of its own (UnpushedWarning),
+	// never a problem: work waiting in a clone is not a broken store.
 	ProblemUnpushed = "unpushed work: "
 )
+
+// UnpushedWarning is the doctor warning for one ref of the clone dir the
+// store does not hold (devco D-483). A branch of the store itself (one of
+// storeBranches) or a lore ref is lore's own waiting work: lore pushes it.
+// Any other branch (a backup someone made in the clone) is named with how
+// to push or delete it, so the person decides; lore never drops it.
+//
+// n is how many commits of ref the store's remote does not have (-1 when
+// git could not count them). The line names what really sends them in every
+// push mode (devco:D-563): under push manual or batch no later command
+// pushes on its own, so "the next command pushes them" was wrong there.
+func UnpushedWarning(dir, ref string, n int, storeBranches []string) string {
+	b, isHead := strings.CutPrefix(ref, "refs/heads/")
+	if !isHead || slices.Contains(storeBranches, b) {
+		count := "commits"
+		if n >= 0 {
+			count = fmt.Sprintf("%d commit(s)", n)
+		}
+		return ProblemUnpushed + ref + " (" + count + " the store does not have yet: `lore store push` or `lore sync` sends them; only under push auto does the next write that reaches the store send them too)"
+	}
+	return fmt.Sprintf("%s%s (branch %s is not on the store: push it with `git -C %s push origin %s`, or delete it with `git -C %s branch -D %s`)", ProblemUnpushed, ref, b, dir, b, dir, b)
+}
+
+// UnpushedRef is the ref an UnpushedWarning names; ok=false for any other
+// line.
+func UnpushedRef(warning string) (string, bool) {
+	rest, ok := strings.CutPrefix(warning, ProblemUnpushed)
+	if !ok {
+		return "", false
+	}
+	ref, _, _ := strings.Cut(rest, " ")
+	return ref, ref != ""
+}
 
 // Ref namespaces the unpushed check compares (local, tracking).
 var unpushedPairs = [][2]string{
@@ -82,6 +119,9 @@ type CloneInfo struct {
 	DefaultBranch string
 	Unpushed      []string
 	Problems      []string
+	// Warnings need a decision but break nothing: Doctor's unpushed refs,
+	// one line each (UnpushedWarning).
+	Warnings []string
 }
 
 // CloneLink is one link of a store branch's cached index.
@@ -192,7 +232,10 @@ func (c Clones) Doctor(ctx context.Context, norm, url string, branches []string)
 	info.Problems = append(info.Problems, base.Problems...)
 	if len(base.Unpushed) > 0 {
 		info.Unpushed = base.Unpushed
-		info.Problems = append(info.Problems, ProblemUnpushed+strings.Join(base.Unpushed, ", "))
+		own := append(slices.Clone(branches), base.DefaultBranch)
+		for _, ref := range base.Unpushed {
+			info.Warnings = append(info.Warnings, UnpushedWarning(dir, ref, c.aheadCount(ctx, dir, ref), own))
+		}
 	}
 	return info
 }
@@ -282,4 +325,18 @@ func (c Clones) Links(ctx context.Context, norm, branch string) ([]CloneLink, er
 		out = append(out, CloneLink{Folder: l.folder, ProjectID: l.ProjectID, Remote: l.Remote, Own: l.Own, Default: l.Default})
 	}
 	return out, nil
+}
+
+// aheadCount is how many commits of ref no remote-tracking ref of the
+// clone holds (what a push would send); -1 when git cannot count them.
+func (c Clones) aheadCount(ctx context.Context, dir, ref string) int {
+	out, err := c.git(ctx, "-C", dir, "rev-list", "--count", ref, "--not", "--remotes")
+	if err != nil {
+		return -1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return -1
+	}
+	return n
 }

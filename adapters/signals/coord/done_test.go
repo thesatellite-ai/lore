@@ -3,6 +3,7 @@ package coord
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,5 +104,25 @@ func TestReopenedTaskIsClaimableAgain(t *testing.T) {
 	}
 	if _, ok := v.Board[signals.DonePath(folder, "tsk_1")]; ok {
 		t.Fatal("the claim of the reopened task kept the old done marker")
+	}
+}
+
+// TestClaimOfDoneRowGivesOneRefusal (devco:M-9): a task whose row says
+// done but whose done marker never reached the signals ref is refused
+// with the same AlreadyDoneError (who and when from the row) a marker
+// gives, never the bare "coord: task is not open" text. Before the fix
+// the two paths gave two different refusals, one with the package prefix.
+func TestClaimOfDoneRowGivesOneRefusal(t *testing.T) {
+	ctx := context.Background()
+	wd := newWorld(t)
+	at := t0.Add(-time.Minute)
+	wd.addTask("tsk_1", Doc{keyStatus: str(statusDone), keyDoneBy: str("agent:finisher"), keyCompletedAt: str(at.Format(docTimeLayout))})
+	_, err := Claim(ctx, wd.agent("b").env, "tsk_1", ClaimOptions{})
+	ad, ok := IsAlreadyDone(err)
+	if !ok || ad.By != "agent:finisher" || !ad.At.Equal(at.UTC()) || !errors.Is(err, ErrNotOpen) {
+		t.Fatalf("claim of a done row: err = %v, want AlreadyDoneError by agent:finisher", err)
+	}
+	if strings.Contains(err.Error(), "coord:") {
+		t.Fatalf("refusal leaks the package prefix: %q", err)
 	}
 }

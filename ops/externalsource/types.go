@@ -99,5 +99,8 @@ type Record struct {
 
 // IDIn is the input of enable and disable.
 type IDIn struct {
+	// --store <org>[/<folder>] (alias --to, devco D-615): where the row it
+	// names is, so the write runs from any folder as reads take --store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the external source (its ext_ id, or its name when one source has it)"`
 }

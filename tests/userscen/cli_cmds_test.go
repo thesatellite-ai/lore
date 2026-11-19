@@ -46,6 +46,32 @@ const cliNotAStore = "ERROR: [E_NOT_A_STORE] git: the folder is not inside a git
 // cliNotAStoreHint is E_NOT_A_STORE's next step outside git.
 const cliNotAStoreHint = "cd into a git checkout, or run git init here first"
 
+// cliNoStoreMsg is the refusal of a row read or write outside a repo that
+// names no store, in a folder no org's setup covers (devco D-421): its hint
+// names the store flags, never "git init", and only the flags the command
+// takes (devco D-674: a read taking --store alone is not told "a write:
+// --to").
+const cliNoStoreMsg = "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read"
+
+// cliRefusal reports whether stderr is one of the two outside-repo
+// refusals: the repo one (init, render, policy …) or the row one.
+func cliRefusal(stderr string) (msg, hint string, ok bool) {
+	if stderr == "ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree\n  hint: "+cliNotAStoreHint+"\n" {
+		return "git: the folder is not inside a git work tree", cliNotAStoreHint, true
+	}
+	// the row refusal's hint names the flags of the command (devco D-674;
+	// wire TestNoStoreHintNamesOnlyFlagsTheCommandTakes checks which): its
+	// shape is "name the store with …" or "name a setup with …", --setup,
+	// and the cd way out
+	rest, cut := strings.CutPrefix(stderr, "ERROR: [E_NOT_A_STORE] "+cliNoStoreMsg+"\n  hint: ")
+	rest, cut2 := strings.CutSuffix(rest, "\n")
+	if !cut || !cut2 || strings.Contains(rest, "\n") || !strings.HasSuffix(rest, "or cd into a repo") || !strings.Contains(rest, "--setup <setup>") ||
+		(!strings.HasPrefix(rest, "name the store with ") && !strings.HasPrefix(rest, "name a setup with ")) {
+		return "", "", false
+	}
+	return cliNoStoreMsg, rest, true
+}
+
 // cliSolo is one person's initialised checkout.
 func cliSolo(t *testing.T) (*th.World, *th.Actor, *th.Clone) {
 	t.Helper()
@@ -124,7 +150,7 @@ func TestCLI_ColourMatrix(t *testing.T) {
 	// words.
 	for _, v := range []string{"purple", "", "ALWAYS", "yes"} {
 		r := c.Lore("memory", "list", "--color="+v)
-		r.Fails(t, cliExitUsage, `invalid argument "`+v+`" for "--color" flag`, "must be auto, always or never", "hint: lore memory list --help lists its flags")
+		r.Fails(t, cliExitUsage, `--color must be auto, always or never, not "`+v+`"`, "hint: give --color <value>; lore memory list --help lists its flags")
 		if n := strings.Count(r.Stderr, "[E_INVALID_INPUT]"); n != 1 || strings.Count(r.Stderr, "\n") != 2 || r.Stdout != "" {
 			t.Errorf("--color=%s: want the tagged line and the hint line, got %d tags: %s", v, n, r)
 		}
@@ -142,16 +168,16 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 	dir := cliOutside(t, w, a)
 	needRepo := [][]string{
 		{"init"}, {"init", "--non-interactive", "--name=app"},
-		{"rule", "list"}, {"rule", "add", "Run the tests"}, {"memory", "add", "a note"}, {"task", "list"}, {"task", "next"},
-		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"inbox"}, {"render"},
+		{"rule", "list"}, {"rule", "add", "Run the tests"}, {"memory", "add", "a note"}, {"task", "list"},
+		{"show", "mem_01a1b4a47d1e75c1aa1a0b15f1643889"}, {"search", "run", "tests"}, {"render"},
 		{"sql", "run", "SELECT 1"}, {"sql", "SELECT 1"}, {"lint"}, {"trash"}, {"batch", "list"},
 		{"policy", "show"}, {"vars", "list"}, {"tag", "list"}, {"machine", "list"}, {"land"},
-		{"session", "list"}, // run:tests:q-session-outside
 	}
 	for _, args := range needRepo {
 		r := a.Lore(dir, args...)
-		if r.Code != th.ExitGuard || r.Stderr != cliNotAStore || r.Stdout != "" {
-			t.Errorf("lore %v outside a repo: want exit %d and exactly %q: %s", args, th.ExitGuard, cliNotAStore, r)
+		msg, hint, ok := cliRefusal(r.Stderr)
+		if r.Code != th.ExitGuard || !ok || r.Stdout != "" {
+			t.Errorf("lore %v outside a repo: want exit %d and exactly one of the two refusals: %s", args, th.ExitGuard, r)
 		}
 		if args[0] == "init" {
 			continue // init takes no --json
@@ -163,8 +189,40 @@ func TestCLI_OutsideGitRepo(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 		}
 		if err != nil || jr.Code != th.ExitGuard || doc.Error == nil || doc.Error.Code != "E_NOT_A_STORE" || doc.Error.Exit != th.ExitGuard ||
-			doc.Error.Class != "guard" || doc.Error.Message != "git: the folder is not inside a git work tree" || doc.Error.Hint != cliNotAStoreHint || jr.Stderr != "" {
+			doc.Error.Class != "guard" || doc.Error.Message != msg || doc.Error.Hint != hint || jr.Stderr != "" {
 			t.Errorf("lore %v --json outside a repo: want the E_NOT_A_STORE object (exit 19, class guard) and an empty stderr: %s", args, jr)
+		}
+	}
+	// devco:D-683: task next is no repo-only read (--store <org> and
+	// --setup <setup> rank an org store's queue from anywhere): outside a
+	// repo it runs on the machine's only org setup and says so, or refuses
+	// E_UNSUPPORTED naming both ways, never "--store does not apply"
+	if r := a.Lore(dir, "task", "next"); r.Code == 0 {
+		if !strings.Contains(r.Stderr, "(the only org setup on this machine)") {
+			t.Errorf("lore task next outside a repo answered without naming the setup it ranked: %s", r)
+		}
+	} else if r.Code != 23 || !strings.Contains(r.Stderr, "[E_UNSUPPORTED]") || !strings.Contains(r.Stderr, "lore task next --store <org>") ||
+		!strings.Contains(r.Stderr, "lore task next --setup <setup>") || strings.Contains(r.Stderr, "does not apply") {
+		t.Errorf("lore task next outside a repo: want exit 23 naming --store and --setup, never --store not applying: %s", r)
+	}
+	// Repo-only reads (owner 2026-11-17, devco D-508/D-509): missions, the
+	// inbox and agent sessions live in each code repo, so outside one they
+	// refuse E_UNSUPPORTED (exit 23) saying so and to cd into the repo,
+	// --store not applying; never the store reads' E_NOT_A_STORE.
+	for _, args := range [][]string{{"inbox"}, {"session", "list"}} { // run:tests:q-session-outside
+		r := a.Lore(dir, args...)
+		if r.Code != 23 || r.Stdout != "" || !strings.Contains(r.Stderr, "[E_UNSUPPORTED]") || !strings.Contains(r.Stderr, "in each code repo") ||
+			!strings.Contains(r.Stderr, "cd into the code repo") || !strings.Contains(r.Stderr, "--store does not apply") {
+			t.Errorf("lore %v outside a repo: want exit 23, E_UNSUPPORTED naming the code repo and --store not applying: %s", args, r)
+		}
+		jr := a.Lore(dir, append(args, "--json")...)
+		raw, err := cliOneJSON(jr.Stdout)
+		var doc cliErrorDoc
+		if err == nil {
+			err = json.Unmarshal(raw, &doc)
+		}
+		if err != nil || jr.Code != 23 || doc.Error == nil || doc.Error.Code != "E_UNSUPPORTED" || doc.Error.Exit != 23 || jr.Stderr != "" {
+			t.Errorf("lore %v --json outside a repo: want the E_UNSUPPORTED object (exit 23) and an empty stderr: %s", args, jr)
 		}
 	}
 	// Machine-level commands need no repository.
@@ -432,7 +490,7 @@ func TestCLI_SQLFormatsAndInput(t *testing.T) {
 	}{
 		{[]string{"sql", "run", "   "}, []string{"[E_INVALID_INPUT] sql: a query is required", `hint: lore sql run --query "SELECT name, ip FROM res_server"`}},
 		{[]string{"sql", "run", "SELECT 1", "--format", "xml"}, []string{`[E_INVALID_INPUT] sql: unknown --format "xml"`, "hint: one of table, csv, json"}},
-		{[]string{"sql", "run", "SELECT 1", "--timeout", "-1s"}, []string{"[E_INVALID_INPUT] sql: --timeout must be positive"}},
+		{[]string{"sql", "run", "SELECT 1", "--timeout", "-1s"}, []string{"[E_INVALID_INPUT] --timeout must be more than 0", "positive duration"}},
 		{[]string{"sql", "run", "SELECT 1", "--timeout", "soon"}, []string{"[E_INVALID_INPUT]"}},
 		{[]string{"sql", "run", "SELECT nope FROM rules"}, []string{"[E_INVALID_INPUT]", "no such column: nope"}},
 		{[]string{"sql", "run", "SELECT * FROM no_such_table"}, []string{"[E_INVALID_INPUT]", "no such table"}},

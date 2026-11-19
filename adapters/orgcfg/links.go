@@ -86,6 +86,14 @@ type GitLinks struct {
 	// Route reaches each store as its setup's account (fetch, ls-remote,
 	// push); nil = git as configured.
 	Route Router
+	// Only, when non-nil, names the org entries whose stores Links may read
+	// (fetch, ls-remote, the clone itself); every other entry is skipped
+	// and listed in the detail. Gather sets it from what the repo already
+	// says about its org (scopeOrgs): two orgs on one laptop never touch
+	// each other's stores, so a command in org A's repo makes no call to
+	// org B's remote and never needs B's clone to resolve (devco D-278).
+	// nil reads every entry (no hint: the store links decide).
+	Only map[string]bool
 	// Held reports whether a commit lore makes in the store clone at dir
 	// waits there for a person's `lore sync` (the store's push mode; C5,
 	// B-16) instead of being pushed at once. nil pushes at once (the
@@ -149,10 +157,14 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 		return res, nil
 	}
 	want := setOf(remotes)
-	var unknown, stale, forks, unrelated []string
+	var unknown, stale, forks, unrelated, otherOrgs []string
 	scanned := 0
 	for i := range g.Config.Orgs {
 		o := &g.Config.Orgs[i]
+		if g.Only != nil && !g.Only[o.Name] {
+			otherOrgs = append(otherOrgs, o.Name)
+			continue
+		}
 		links, status, detail, err := g.entryLinks(ctx, o, false)
 		if err != nil {
 			return orgresolve.LinkResult{}, err
@@ -171,7 +183,7 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 			// links of a copy too old to trust are kept apart (Old): reads
 			// attach their folders, nothing decides by them
 			for _, l := range links {
-				if l.ProjectID == projectID && want[l.Remote] {
+				if l.ProjectID == projectID && wantRemote(want, l.Remote) {
 					res.Old = append(res.Old, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
 				}
 			}
@@ -185,7 +197,7 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 			if l.ProjectID != projectID {
 				continue
 			}
-			if !want[l.Remote] {
+			if !wantRemote(want, l.Remote) {
 				forks = append(forks, l.Remote)
 				res.Moved = append(res.Moved, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
 				continue
@@ -206,6 +218,9 @@ func (g *GitLinks) Links(ctx context.Context, projectID string, remotes []string
 	}
 	if len(unrelated) > 0 {
 		details = append(details, "not read (no pattern matches this repo): "+strings.Join(unrelated, "; "))
+	}
+	if len(otherOrgs) > 0 {
+		details = append(details, "not read (another org's stores; this repo names its org): "+strings.Join(otherOrgs, ", "))
 	}
 	if len(stale) > 0 {
 		details = append(details, "offline, using the local copy for "+strings.Join(stale, "; "))
@@ -229,7 +244,7 @@ func (g *GitLinks) EntryLinks(ctx context.Context, o *orgconf.Org, projectID str
 	want := setOf(remotes)
 	var out []orgresolve.Link
 	for _, l := range links {
-		if l.ProjectID == projectID && projectID != "" && want[l.Remote] {
+		if l.ProjectID == projectID && projectID != "" && wantRemote(want, l.Remote) {
 			out = append(out, orgresolve.Link{Entry: l.entry, StoreURL: l.storeNorm, Folder: l.folder, Remote: l.Remote, Own: l.Own, Default: l.Default})
 		}
 	}
@@ -269,6 +284,13 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 	}
 	fetched := g.prefetch(ctx, o, ttl)
 	for _, sc := range o.Stores {
+		if sc.AdminsOnly() {
+			// D-442: no repo links to an admins-only store, so the link
+			// index (and every client-repo check built on it) never reads
+			// it: an admin's guards are a member's guards, and an admins'
+			// store that is offline never makes a repo "unknown".
+			continue
+		}
 		norm, err := repourl.NormalizeStore(sc.URL)
 		if err != nil {
 			return nil, entryUnknown, "", fmt.Errorf("orgcfg: store url %q of %s: %w", sc.URL, o.Name, err)
@@ -305,6 +327,7 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 					old, _ := readLinks(ctx, dir, tip) // best effort: only reads attach by them (LinkResult.Old)
 					for _, l := range old {
 						l.entry, l.storeNorm = o.Name, norm
+						l.Own = orgresolve.EffectiveOwn(o, l.Remote, l.Own) // D-428: a repos: client entry wins
 						stale = append(stale, l)
 					}
 				}
@@ -324,6 +347,10 @@ func (g *GitLinks) entryLinks(ctx context.Context, o *orgconf.Org, allowStaging 
 		}
 		for _, l := range links {
 			l.entry, l.storeNorm = o.Name, norm
+			// D-428: a link recorded as own for a repo the entry lists under
+			// repos: is read as a client link, so every reader (F10, the
+			// write target, relink, unlink) sees one classification.
+			l.Own = orgresolve.EffectiveOwn(o, l.Remote, l.Own)
 			out = append(out, l)
 		}
 	}
@@ -353,8 +380,8 @@ func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Durati
 	seen := map[string]bool{}
 	for _, sc := range o.Stores {
 		norm, err := repourl.NormalizeStore(sc.URL)
-		if err != nil {
-			continue
+		if err != nil || sc.AdminsOnly() {
+			continue // entryLinks never reads an admins-only store (D-442)
 		}
 		dir, _ := cloneDir(g.Home, norm)
 		if seen[dir] {
@@ -394,6 +421,18 @@ func (g *GitLinks) prefetch(ctx context.Context, o *orgconf.Org, ttl time.Durati
 // it is ahead of (or equal to) the tracking ref (it holds writes not pushed
 // yet), else the tracking ref. ok is false when the branch exists nowhere.
 func branchTip(ctx context.Context, dir, branch string) (string, bool) {
+	// The tip is a function of what the two refs hold (gitmemo.go).
+	fp := refFingerprint(dir, branch)
+	if t, ok := memoTip(dir, branch, fp); ok {
+		return t.tip, t.ok
+	}
+	tip, ok := resolveBranchTip(ctx, dir, branch)
+	keepTip(dir, branch, fp, tip, ok)
+	return tip, ok
+}
+
+// resolveBranchTip is branchTip asking git.
+func resolveBranchTip(ctx context.Context, dir, branch string) (string, bool) {
 	resolve := func(ref string) string {
 		out, err := gitRun(ctx, "-C", dir, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 		if err != nil {
@@ -588,8 +627,16 @@ func CloneLinkRemotes(ctx context.Context, dir string) ([]string, error) {
 	var out []string
 	for _, l := range links {
 		if n, nerr := repourl.Normalize(l.Remote); nerr == nil {
-			out = append(out, n)
+			out = append(out, CanonicalRemote(n)) // an alias spelling recorded before D-531
 		}
 	}
 	return sortedUnique(out), nil
+}
+
+// wantRemote reports a link row's remote among the repo's remotes, also
+// when the row recorded the remote under an ssh alias spelling (written
+// before D-531, when Remotes kept the alias host): Remotes now resolves
+// the alias, and the row must still name this repo, not a fork of it.
+func wantRemote(want map[string]bool, remote string) bool {
+	return want[remote] || want[CanonicalRemote(remote)]
 }

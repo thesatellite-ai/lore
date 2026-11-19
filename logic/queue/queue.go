@@ -120,6 +120,10 @@ type Task struct {
 	// Claim is the signals state; ClaimedBy names the holder for reasons.
 	Claim     ClaimState
 	ClaimedBy string
+	// RevokedFromCaller is set when a person revoked the reader's own claim
+	// on this task (devco:S-13): the reason it waits, naming who and when.
+	// The reader may not take it back until a person reassigns it.
+	RevokedFromCaller string
 	// Urgency inputs (TASK 13.2, 6.10): ParentID links the tree (leaves
 	// only, ancestors pass their waits down), Due / MissionTarget feed the
 	// due curves, Proposed / NextTag / InProgress-by-status their terms.
@@ -187,6 +191,9 @@ const (
 	WaitCycle WaitKind = "cycle"
 	// WaitPoison: its claim expired after MaxAttempts attempts; it needs a human.
 	WaitPoison WaitKind = "poison"
+	// WaitRevoked: a person revoked the reader's claim on it; it waits for
+	// a person to reassign it (devco:S-13). Only the revoked actor sees it.
+	WaitRevoked WaitKind = "revoked"
 )
 
 // Result is a ready-queue decision.
@@ -246,6 +253,10 @@ func Next(in Input) Result {
 		}
 		if t.Gated {
 			res.Waiting = append(res.Waiting, Waiting{Task: t, Kind: WaitGate, Reason: fmt.Sprintf("gate needs approval (lore gate approve --id %s)", t.ID)})
+			continue
+		}
+		if t.RevokedFromCaller != "" {
+			res.Waiting = append(res.Waiting, Waiting{Task: t, Kind: WaitRevoked, Reason: t.RevokedFromCaller})
 			continue
 		}
 		switch t.Claim {

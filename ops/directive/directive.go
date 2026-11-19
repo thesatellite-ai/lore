@@ -140,12 +140,16 @@ func splitValues(values []string) []string {
 // errorCodes are the codes the directive operations return.
 var errorCodes = []errs.Code{errs.InvalidInput, errs.ConfigInvalid, errs.BadPath, errs.NotAStore, errs.Internal}
 
+// installErrorCodes are errorCodes plus E_UNSUPPORTED: install refuses in
+// a store clone with the repo-only refusal (devco D-523).
+var installErrorCodes = append(append([]errs.Code{}, errorCodes...), errs.Unsupported)
+
 // Ops returns the directive operations bound to m.
 func Ops(m Manager) []op.Entry {
 	return []op.Entry{
 		op.Define(op.Spec{
 			Name: OpInstall, Summary: "Install (or refresh) the directive block at the top of one or more files",
-			Permission: op.PermWrite, Access: op.AccessRead, Errors: errorCodes, Local: true,
+			Permission: op.PermWrite, Access: op.AccessRead, Errors: installErrorCodes, Local: true,
 			Examples: []op.Example{
 				{Title: "into the repo's tool files", CLI: "lore directive install", Want: "✓"},
 				{Title: "the full form into one file", CLI: "lore directive install --target AGENTS.md --full", Want: "AGENTS.md"},

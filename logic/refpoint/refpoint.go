@@ -163,11 +163,11 @@ func (x *expansion) secret(raw string) string {
 		x.note(Used{Ref: raw, State: StateMasked, Note: "not revealed (add --reveal)"})
 		return Mask
 	case Client:
-		x.note(Used{Ref: raw, State: StateRedacted, Note: "rendered for a client (SQ11)"})
+		x.note(Used{Ref: raw, State: StateRedacted, Note: "rendered for a client"})
 		return Redacted
 	case Render, Private:
 	}
-	x.note(Used{Ref: raw, State: StateKept, Note: "secret references stay as written (SQ11)"})
+	x.note(Used{Ref: raw, State: StateKept, Note: "secret references stay as written"})
 	return raw
 }
 

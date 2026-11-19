@@ -77,13 +77,22 @@ func TestFinSync_DoctorSyncSectionInTeammateClone(t *testing.T) {
 	cc := carol.Clone(bc.Remote, "tool").With("PATH=" + strings.Join([]string{filepath.Join(w.Root, "shim"), filepath.Dir(git), "/usr/bin", "/bin"}, string(os.PathListSeparator)))
 	cc.MustLore("rule", "list")
 
-	// A fresh teammate clone: wired by her first command, everything
-	// committed, healthy.
+	// A fresh teammate clone after a read: a read leaves git as it is, so
+	// the merge driver is missing, a note only (docs/operations/ci.md):
+	// still healthy.
 	res := cc.Lore("doctor", "--json")
 	rep := finSyncDecode(t, res)
+	if res.Code != 0 || rep.Status != "healthy" || rep.Exit != 0 || rep.Sync.MergeDriverOK {
+		t.Fatalf("a fresh teammate clone is healthy, its merge driver not set up yet: %s", res)
+	}
+
+	// After lore sync: wired, everything committed, healthy.
+	cc.MustLore("sync")
+	res = cc.Lore("doctor", "--json")
+	rep = finSyncDecode(t, res)
 	s := rep.Sync
 	if res.Code != 0 || rep.Status != "healthy" || rep.Exit != 0 {
-		t.Fatalf("a fresh teammate clone is healthy: %s", res)
+		t.Fatalf("a synced teammate clone is healthy: %s", res)
 	}
 	if !s.DataDirPresent || !s.InGitRepo || !s.MergeDriverOK || s.DataIgnored || s.TrackedFiles == 0 || s.Uncommitted != 0 || s.OpenConflicts != 0 || len(s.FileErrors) != 0 {
 		t.Fatalf("fresh clone [sync] = %+v", *s)

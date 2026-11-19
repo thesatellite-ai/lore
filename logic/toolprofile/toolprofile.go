@@ -150,8 +150,8 @@ type Profile struct {
 	SkillDir string `yaml:"skill_dir,omitempty" json:"skill_dir,omitempty"`
 	// Detect are other files that show the repo uses the tool when its
 	// pointer file is missing (slash paths relative to the repo root;
-	// path.Match globs allowed in the last element): Cursor's legacy
-	// .cursorrules and its own .cursor/rules/*.mdc. Used only to pick a
+	// fs.Glob patterns): Cursor's legacy .cursorrules and its own
+	// .cursor/rules/*.mdc, Claude Code's .claude/rules/*.md and siblings. Used only to pick a
 	// fresh repo's targets (Resolve, ReasonDetected) and only through a
 	// Probe that is also a Finder; lore never writes these files. Built-in
 	// profiles only for now: it is not a config.yaml key.
@@ -175,7 +175,7 @@ func (p Profile) HasPointerFile() bool { return p.Import != ImportNone && p.Poin
 func Builtins() []Profile {
 	return []Profile{
 		{Name: NameClaudeCode, PointerFile: "CLAUDE.md", Import: ImportAt, Budget: largeBudget, Limit: claudeCodeLimit, PrivateFile: "CLAUDE.local.md",
-			PathRules: PathRules{Dir: ".claude/rules/lore", Style: PathRulesPaths}, SkillDir: skillDirClaudeCode},
+			PathRules: PathRules{Dir: ".claude/rules/lore", Style: PathRulesPaths}, SkillDir: skillDirClaudeCode, Detect: claudeCodeDetect},
 		{Name: NameCodex, PointerFile: "AGENTS.md", Import: ImportRead, Budget: DefaultBudget, Limit: codexLimit, SkillDir: skillDirCodex},
 		{Name: NameCursor, PointerFile: ".cursor/rules/lore.mdc", Import: ImportMDC, Budget: DefaultBudget, PrivateFile: ".cursor/rules/lore-private.mdc",
 			PathRules: PathRules{Dir: ".cursor/rules", Style: PathRulesMDCGlobs}, Detect: []string{".cursorrules", ".cursor/rules/*.mdc"}},
@@ -184,6 +184,16 @@ func Builtins() []Profile {
 		{Name: NameGeneric, Import: ImportNone, Budget: DefaultBudget},
 	}
 }
+
+// claudeCodeDetect are the files of Claude Code's own project folder that
+// show a repo uses it when CLAUDE.md is missing (devco M-7: a team that
+// tracks .claude/rules/*.md but gitignores CLAUDE.md got only AGENTS.md and
+// Cursor wired, so a clone's Claude Code session never loaded LORE.md):
+// rules, slash commands, subagents and skills (code.claude.com/docs/en
+// memory, slash-commands, sub-agents, skills). Not .claude/settings*.json:
+// lore writes its session hooks there itself. lore's own rule folder
+// (.claude/rules/lore/) is one level deeper than the rules pattern.
+var claudeCodeDetect = []string{".claude/rules/*.md", ".claude/commands/*.md", ".claude/agents/*.md", ".claude/skills/*/SKILL.md"}
 
 // nameRe is the shape of a profile name: it is typed after --target and
 // stored in config, so it stays one plain token.

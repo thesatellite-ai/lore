@@ -456,9 +456,11 @@ func TestLinksSkillDangling(t *testing.T) {
 // TestLinksFiles: config.yaml, ~/.claude/CLAUDE.md and two repos' pointer
 // files are links. Config writes land in the dotfiles file and the link
 // stays. The repos' pointer files link to files of the same name in a
-// shared rules folder: render writes lore's pointer block through them
-// (owner item 23) and the links stay; every other write through them (the
-// directive) is refused naming the file and the way out.
+// shared rules folder outside the repos: render leaves them as they are
+// with a note naming the link, its end and `lore context` (devco D-502,
+// owner 2026-11-17, replacing owner item 23's write-through), the shared
+// files stay byte-identical and the links stay; every other write through
+// them (the directive) is refused naming the file and the way out.
 func TestLinksFiles(t *testing.T) {
 	t.Parallel()
 	c := newLinkCase(t, ShapeLinksFiles)
@@ -484,21 +486,26 @@ func TestLinksFiles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("fixture: %s does not resolve: %v", link, err)
 		}
-		if r := c.run(repo+"/init", dir, []string{end}, "init"); r.Code != 0 && !alreadyInit(r) {
+		if r := c.run(repo+"/init", dir, nil, "init"); r.Code != 0 && !alreadyInit(r) {
 			t.Errorf("[%s/init] %s", repo, r)
 		}
 		target := "claude_code"
 		if repo == RepoAgents {
 			target = "codex"
 		}
-		c.ok(repo+"/render", c.run(repo+"/render", dir, []string{end}, "render", "--target", target, "--json"))
-		if b, err := os.ReadFile(end); err != nil || !strings.Contains(string(b), ".lore/LORE.md") {
-			t.Errorf("[%s/render] the shared %s does not hold lore's pointer block (%v):\n%s", repo, end, err, b)
+		// changed nil: checkDisk fails on any byte of the shared folder changed
+		r := c.run(repo+"/render", dir, nil, "render", "--target", target, "--json")
+		c.ok(repo+"/render", r)
+		if out := r.Stdout + r.Stderr; !strings.Contains(out, "pointer skipped") || !strings.Contains(out, "lore context") {
+			t.Errorf("[%s/render] the link out of the repo was not named as skipped: %s", repo, r)
+		}
+		if b, err := os.ReadFile(end); err != nil || strings.Contains(string(b), ".lore/LORE.md") {
+			t.Errorf("[%s/render] the shared %s got lore's pointer block (%v):\n%s", repo, end, err, b)
 		}
 		c.wantErr(repo+"/directive", c.run(repo+"/directive", dir, nil, "directive", "install", "--target", target, "--json"), "E_REFUSED", link)
 	}
 	c.repoSession("plain-git", RepoPlain)
-	c.doctor("after the session")
+	c.doctor("after the session", "CLAUDE.md: it is a symbolic link to")
 }
 
 // TestLinksDirHome: ~/code is a link to another disk. A setup for ~/code/**

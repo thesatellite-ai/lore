@@ -29,3 +29,26 @@ func TestNormalizeStoreLocalPath(t *testing.T) {
 		t.Errorf("CheckFetchable(local path) = %v", err)
 	}
 }
+
+// TestIsLocalRemote (devco:O-13): paths and file:// urls are remotes on
+// this machine; hosted urls and git's scp-like form are not.
+func TestIsLocalRemote(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]bool{
+		"/srv/git/kit.git":               true,
+		"../kit":                         true,
+		"./kit.git":                      true,
+		"kit.git":                        false,
+		"file:///srv/git/kit.git":        true,
+		`C:\git\kit.git`:                 true,
+		"https://git.example.test/a/kit": false,
+		"ssh://git@git.example.test/a/k": false,
+		"git@git.example.test:a/kit.git": false,
+		"git.example.test:a/kit.git":     false,
+		"":                               false,
+	} {
+		if got := IsLocalRemote(in); got != want {
+			t.Errorf("IsLocalRemote(%q) = %v, want %v", in, got, want)
+		}
+	}
+}

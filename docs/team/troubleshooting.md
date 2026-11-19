@@ -8,8 +8,8 @@ First steps for anything odd:
 
 - `lore whoami` (add `--explain`): which org, which identity, which store, and why.
 - `lore explain --id <id>`: every copy of a row, which one won, and its landing decision.
-- `lore doctor`: hooks, fetch settings, live rows waiting, clock skew, stores.
-- `lore store doctor`: every store this repo and machine use (`.lore/stores.yaml`, the org's stores, your personal store `me`): reachable, unpushed commits and how old the oldest is, a refused push, the clone folders; then every v0.1.17 org store (`orgs[].stores` in `~/.lore/config.yaml`). `lore sync status` prints one line per store: ahead and behind its remote, and the last push. When two people edited the same row, the conflict is listed once, under `refused pushes`, for the store folder that holds the row; the store's other folders are listed under `held pushes` as `held: waiting on <folder>'s conflict (<row>)`, because one clone pushes every folder of a store at once. Settle that one row and run `lore sync`; every folder's commits go out together. These lines, `lore sync conflicts` and `lore explain` name a store folder by its own name, with this repo's name for it beside it when they differ (`store acme/web (here: acme)`), as `lore sync` does; a refusal seen in the store's own folder and settled in a code repo (or the other way round) is cleared wherever the push lands.
+- `lore doctor`: hooks, fetch settings, live rows waiting, clock skew (a warning `clock_skew` names a store whose newest commit is stamped more than 5 minutes ahead of this machine's clock, and who made it), stores.
+- `lore store doctor`: every store this repo and machine use (`.lore/stores.yaml`, the org's stores, your personal store `me`): reachable, unpushed commits and how old the oldest is, a refused push, the clone folders; then every v0.1.17 org store (`orgs[].stores` in `~/.lore/config.yaml`). It prints every store, each marked ✓ (ok), ⚠ (a `warn:` line under it) or ✗ (a `fail:` line under it), then a `summary:` line counting them; it exits non-zero only when a store fails, after printing all of them (`--json` carries the same `summary` and the failure in `error`). A branch in a store clone that the store does not hold (a backup someone made there) is a warning naming the branch and the `git -C <clone> push origin <branch>` and `git -C <clone> branch -D <branch>` commands, never a failure. `lore sync status` prints one line per store: ahead and behind its remote, and the last push. When two people edited the same row, the conflict is listed once, under `refused pushes`, for the store folder that holds the row; the store's other folders are listed under `held pushes` as `held: waiting on <folder>'s conflict (<row>)`, because one clone pushes every folder of a store at once. Settle that one row and run `lore sync`; every folder's commits go out together. These lines, `lore sync conflicts` and `lore explain` name a store folder by its own name, with this repo's name for it beside it when they differ (`store acme/web`), as `lore sync` does; a refusal seen in the store's own folder and settled in a code repo (or the other way round) is cleared wherever the push lands.
 - `--trace` on any command (or `LORE_TRACE=1`): every git command lore runs for live rows, with timing; a fetch, push or ls-remote to a store also names the host it reached (`remote git@github-work` when a setup with a host alias owns the store), so a call that went out as the wrong account shows.
 
 For example, the fetch a `lore sync` makes (the time is shown as `<time>` here):
@@ -18,8 +18,8 @@ For example, the fetch a `lore sync` makes (the time is shown as `<time>` here):
 ```console
 # alice, in billing
 $ lore sync --trace 2>&1 | grep -e '^trace: git fetch' -e '^trace: git push' -e '^·'
-trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok)
-trace: git push --porcelain --no-verify -- origin 05513aa29b78:refs/lore/live (<time>, ok)
+trace: git fetch --quiet --no-tags --no-write-fetch-head --refmap= --prune -- origin +refs/lore/*:refs/lore-remote/origin/* +refs/heads/main:refs/remotes/origin/main (<time>, ok, remote github.com)
+trace: git push --porcelain --no-verify -- origin 05513aa29b78:refs/lore/live (<time>, ok, remote github.com)
 · already in sync
 ```
 <!-- /example -->
@@ -31,11 +31,9 @@ Lore fetches once per command; a read reuses that fetch for 5 minutes, a write f
 <!-- example: small-team#assign-across-branches only=2,3 -->
 ```console
 # bob, in billing
-$ lore sync
-lore live: pushed waiting live writes commit cf563f3 to origin refs/lore/live
+$ lore sync && git switch -q -c feat/payments
+lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 lore live: 1 row(s) left live (main holds them)
-lore live: landed on main; this checkout is on feat/payments, so those rows show here after you merge main
-lore live: pushed waiting live writes commit df3a55c to origin refs/lore/live
 
 # alice, in billing
 $ git switch -q -c feat/login && lore task list --mine
@@ -81,13 +79,23 @@ ERROR: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under sto
 
 # alice, in ~
 $ lore store doctor
-ERROR: [E_INVALID_INPUT] 2 store(s) need attention: git@github.com:agency/notes: unpushed work: refs/heads/main; git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
-  hint: fix each problem, then run `lore store doctor` again
+stores this repo and machine use:
+  none (no .lore/stores.yaml entry, no org store, no personal store)
+clones of the org stores in ~/.lore/config.yaml (orgs[].stores):
+✗ git@github.com:client2/docs  (entries agency; branches main)
+    fail: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+⚠ git@github.com:agency/notes  (entries agency; branches main)
+    warn: unpushed work: refs/heads/main (3 commit(s) the store does not have yet: `lore store push` or `lore sync` sends them; only under push auto does the next write that reaches the store send them too)
+summary: 2 store(s) checked: 0 ok, 1 warn, 1 fail
+ERROR: [E_INVALID_INPUT] 1 store(s) need attention: git@github.com:client2/docs: [E_NOT_A_STORE] github.com/client2/docs (branch main) is listed under stores: but is not a lore store (no lore-store.yaml; it holds non-lore files: AGENTS.md, package.json, src/index.ts)
+  hint: fix each fail line above, then run `lore store doctor` again
 (exit 20)
 ```
 <!-- /example -->
 
 Fix: remove the code repo from `stores:`. To make a store, create a new, empty repo and run `lore store init --name <name> --url <url>` on it. A code repo can never be a store.
+
+A repo that has `lore-store.yaml` at its top is never refused this way: files lore does not own that someone pushed into it are skipped, and `lore sync` names them with the commit that added them ([What lore takes from a store](identity-and-stores.md#what-lore-takes-from-a-store-and-from-whom)).
 
 ## `E_ORG_AMBIGUOUS`
 
@@ -109,8 +117,6 @@ ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, 
   hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
 $ lore memory add --body 'the site deploys from the release branch'
-lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/blog/.git/config; hook blocks in ~/work/blog/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_ORG_AMBIGUOUS] the patterns of 2 org entries match this repo (agency, client3) (candidates: agency, client3)
   hint: choose one with `lore org use --entry <entry>` (or LORE_ORG=<entry> for one command, e.g. `lore init` before the project has an id), or narrow the own:/repos: patterns
 (exit 17)
@@ -133,8 +139,6 @@ A **link** tells lore that a store folder holds the agency's private notes for t
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants weekly demos'
-lore memory add: set up git for lore's row files in this clone: merge drivers lore and lore-keep-ours in ~/work/website/.git/config; hook blocks in ~/work/website/.git/hooks (commit-msg, post-checkout, post-commit, post-merge, post-rewrite, pre-commit, pre-push) (`lore where` lists everything lore keeps here)
-lore: the command was refused, so what it changed first is undone (.git/config, .git/hooks/commit-msg, .git/hooks/post-checkout, .git/hooks/post-commit, .git/hooks/post-merge, .git/hooks/post-rewrite, .git/hooks/pre-commit, .git/hooks/pre-push, .git/lore/git-wiring); the next write that goes through sets it up again
 ERROR: [E_LINK_UNKNOWN] lore cannot tell whether this repo is a client repo: cannot read agency: github.com/agency/notes (never fetched)
   hint: retry when the store is reachable, or pass --to repo|<org>|me to choose the target yourself
 (exit 18)
@@ -151,7 +155,7 @@ A staging entry (or a typo in `branch:`) names a store branch that does not exis
 ```console
 # alice, in website
 $ LORE_ORG=agency-stag lore org link --org agency-stag --project client --yes
-ERROR: [E_INVALID_INPUT] orgcfg: store branch does not exist: github.com/agency/notes has no branch staging
+ERROR: [E_INVALID_INPUT] store branch does not exist: github.com/agency/notes has no branch staging
   hint: the store repo has branches but not this one (an empty repo gets its branch with the first link): to start a separate lore on that branch on purpose, run `lore store init --name <name> --url '<url>?branch=<branch>'`; otherwise check the url and the branch the org lists for it with lore store list, and fix lore-org.yaml then lore org refresh --org <org>
 (exit 20)
 ```
@@ -166,17 +170,20 @@ A **claim** is an agent putting its name on a task, like writing your name on a 
 <!-- example: errors#offline-claim only=1 -->
 ```console
 # alice, in website
-$ lore task claim --id tsk_2ad3…f891
+$ lore task claim --id tsk_2ad3…f891 --push
 ERROR: [E_OFFLINE] could not confirm the coordination write (remote unreachable): git fetch: '/srv/git/github.com/agency/notes' does not appear to be a git repository
   hint: coordination writes (claims, releases, holds) must reach the remote so two people never hold the same work, and are never queued; run the command again once the remote is reachable (`lore whoami` shows the store's status)
 (exit 15)
 ```
 <!-- /example -->
 
+`lore actor register` answers `E_OFFLINE` the same way when the org's store cannot be reached: it needs the latest roster (someone who left is refused) and never decides on the local copy.
+
 Fix: reconnect and run the command again. Ordinary writes behave differently:
 
 - A memory or task written while the store is unreachable is committed in the local clone and pushed by a later command ("1 file(s) offline: committed in the local clone, pushed by the next command").
 - Live writes in a code repo wait as "(live, not pushed yet: N waiting)".
+- On a network that times out (a train, captive Wi-Fi), lore tries the remote once per command, never twice, and a try that fails is remembered (`.git/lore/fetch-failed`): until `live.fetch_ttl` has passed (5 minutes by default), later reads and writes make no network call at all and run at local speed. A read still names the local commits that wait to be pushed, and a write to a store that pushes only on `lore sync` (the default) still says it was committed locally. `lore sync` always tries the remote, so run it when you are back online to send what waits at once.
 
 `E_CONTENDED` (exit 11) on the same commands is different: the remote answered every time, but another writer got in first on every retry. Nothing was written; wait a few seconds and run the command again.
 
@@ -198,14 +205,14 @@ A write printed `lore live: landed on main; this checkout is on <branch>, so tho
 
 ## `E_LEAK_BLOCKED`
 
-A **leak** is internal or personal content reaching something the client can read. A commit, a live write to a client repo or a pull request text contains internal content: a row id of another project, a pointer to an internal row, or a run of 8 or more words that also appears in an internal or personal note. The message names the file and line, the matching note, and the two ways out:
+A **leak** is internal or personal content reaching something the client can read. A commit, a live write to a client repo or a pull request text contains internal content: a row id of another project, a pointer to an internal row, or a run of 8 or more words that also appears in an internal or personal note (a text finding says so: `matches internal note mem_… (12 words in a row; the check blocks a verbatim copy of 8 or more words)`, so a shorter copy that passed is below the line, not missed; `--explain` adds the rule and the note's store, named once). The message names the file and line, the matching note, and the two ways out:
 
 <!-- example: agency#leak-blocked only=2 -->
 ```console
 # alice, in website
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words)
+  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```
@@ -218,7 +225,7 @@ ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with t
 - `lore check leaks --explain` shows the rule and the matched words.
 - When the file is a team profile row (`actor_contacts`, `actor_periods`, `project_members`, `roles` or `contact_types` under `.lore/data/`) or an actor file with a profile field, the message says "team profile rows live only in the org store; remove the file". Remove the file from the commit: those rows belong only in the org's store (see [Team profiles](profiles.md#client-repos)).
 
-The same check runs again at push (the `pre-push` hook), on every commit the push would send; there the fix is to rewrite the commits that carry the text (`git commit --amend`, or `git rebase`). Never bypass either check with `git commit --no-verify` or `git push --no-verify` in a client repo: they skip every local check, and only `lore check leaks --ci` in the client's CI (ids, not sentences) is left. If something already reached the client, follow [Cleaning up after a leak](use-cases/leak-cleanup.md).
+The same check runs again at push (the `pre-push` hook), on every commit the push would send; there the fix is to rewrite the commits that carry the text (`git commit --amend`, or `git rebase`). Never bypass either check with `git commit --no-verify` or `git push --no-verify` in a client repo: they skip every local check, and only `lore check leaks --ci` in the client's CI (secrets and ids, not sentences) is left. If something already reached the client, follow [Cleaning up after a leak](use-cases/leak-cleanup.md).
 
 ## `E_META_STORE_UNREADABLE`
 
@@ -249,7 +256,6 @@ $ lore doctor 2>&1 | grep -i -E 'live|refs/lore|push' || true
   - live: last fetch 15s ago
   - live: 2 live write(s) not pushed yet
   - live: 2 row(s) exist only in live (forks, ZIP downloads and shallow clones do not carry refs/lore/*; open rows reach main at live.max_age)
-  - live: 1 row(s) waiting to land; the next live write or `lore sync` lands them
   - live: live ref: 1 commit(s) since the last compaction (epoch 1; automatic past 1000)
   - live: post-commit and pre-push hook blocks installed
 ```
@@ -275,8 +281,9 @@ machine    mch_98c3dece
 agent      none  (no coding agent detected)
 project    prj_162d…9666
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 internal   github.com/agency/notes client/
+reads      agency/client (this repo's link)
 links      known  1 link(s) for this repo (stores of 1 entry scanned)
 personal   me -> ~/.lore/personal
 ```
@@ -286,7 +293,7 @@ personal   me -> ~/.lore/personal
 
 ## `E_INVALID_ID`
 
-The id you typed does not have the shape of a lore id (a prefix, `_`, then 32 hex characters, such as `tsk_…`): usually a typo or an id cut short. Lore says so (exit 20) instead of answering "not found", so a script can tell a bad id from a row that is really gone (`E_NOT_FOUND`). Copy the id again from `list` output.
+The id you typed does not have the shape of a lore id (a prefix, `_`, then 32 hex characters, such as `tsk_…`): usually a typo or an id cut short. Lore says so (exit 20) instead of answering "not found", so a script can tell a bad id from a row that is really gone (`E_NOT_FOUND`). From the home folder or any folder that is no repo it is checked before anything else: `lore show --id mem_bogus` says `"mem_bogus" is not a valid lore id … (mem_<32 hex>)` and `lore memory show --id mem_bogus` says `memory: "mem_bogus" is not a memory id (mem_…): a memory id is mem_ and 32 hex digits (mem_<32 hex>)`, never that the folder is not a git work tree. Inside a repo the command answers in its own order, so a command that refuses for another reason first keeps that refusal (`lore actor delete --id <id>` is always `E_REFUSED`, actors are never deleted). Copy the id again from `list` output.
 
 ## `E_SYMLINK_DB`: a lore file is a symbolic link
 
@@ -325,11 +332,11 @@ The status change is not one `lore actor status` makes, or the person is in the 
 | `lore actor offboard` on someone who already left ("already left on <date>") | nothing to do; `lore actor status --actor <a> --to archived` to archive |
 | `lore actor rejoin` on someone who is active | nothing to do |
 | `lore project member add` for a left or archived person | `lore actor rejoin --actor <a>` first |
-| `lore actor register` or `lore agent start` by a person who left or was archived | ask an admin to run `lore actor rejoin --actor <a> --type …` |
+| `lore actor register` or `lore agent start` by a person who left or was archived (register fetches the org store first, so an offboard pushed a moment ago counts) | ask an admin to run `lore actor rejoin --actor <a> --type …` |
 
 ### `E_PERIOD_OVERLAP`
 
-A date would make two company periods overlap, end a period before it starts, or (offboarding) end the current stint before the day it started; a person also has at most one open stint. Run `lore actor period list --actor <actor>` and pick a date after the last stint ended, or fix a mistyped date with `lore actor period edit --period <apd_id>`.
+A date would make two company periods overlap, end a period before it starts, or (offboarding) end the current stint before the day it started; a person also has at most one open stint. Run `lore actor period list --actor <actor>` and pick a date after the last stint ended, or fix a mistyped date with `lore actor period edit --period <apd_id>`. When offboarding someone who began before they were added (their stint starts on the add day), the refusal names the fix: `lore actor period edit --period <period> --started-on <day>` (the stint's apd_ id, or the person's @handle while they have one stint), then offboard again; `lore member add --started-on <day>` gives the right start at add time.
 
 ### `E_NEEDS_CONFIRM` on offboard, rejoin or `--merge`
 

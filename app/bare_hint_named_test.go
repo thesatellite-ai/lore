@@ -10,7 +10,9 @@ import (
 // line that gives the named form (U-4: --id <id>, --assign "@handle"), not
 // a sentence about an unnamed row id or @handle. Their usage shows the
 // value as optional ([--id <id>]), so the userscen tree walk of bare
-// required leaves no longer reaches them; this test does.
+// required leaves no longer reaches them; this test does. A hint printed
+// where the command was given the value names it, never a placeholder
+// (devco:D-670: reassign with --id printed "--id <id>").
 func TestBareCallHintsNamedForm(t *testing.T) {
 	w := newCLIWorld(t).person()
 	repo := w.initRepo(t)
@@ -20,7 +22,7 @@ func TestBareCallHintsNamedForm(t *testing.T) {
 	}{
 		{[]string{"land", "run"}, []string{"name a row with --id", "hint: lore land run --id <id>"}},
 		{[]string{"resource", "delete"}, []string{"name the resource with --id", "hint: lore resource delete --id <name or res_ id>"}},
-		{[]string{"task", "reassign", "--id", "tsk_01a1d4d2aa887eb2ab289c9947151bb3"}, []string{"--assign is required", `hint: lore task reassign --id <id> --assign "@handle"`}},
+		{[]string{"task", "reassign", "--id", "tsk_01a1d4d2aa887eb2ab289c9947151bb3"}, []string{"--assign is required", `hint: lore task reassign --id tsk_01a1d4d2aa887eb2ab289c9947151bb3 --assign "@handle"`}}, // devco:D-670: the id given, never <id>
 	} {
 		code, stdout, stderr := w.lore(t, repo, tc.args...)
 		if code != 20 || stdout != "" {

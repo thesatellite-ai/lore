@@ -65,7 +65,7 @@ Who sees what:
 4. **Signals are sticky notes by the door.** "`agent-backend` is working on this task until 14:20" changes every few minutes and matters only now. So it lives on another hidden list, `refs/lore/signals`. That list always holds exactly one commit and never builds history.
 5. **Privacy is decided by which repo a row is in.** A hidden ref is hidden, not private: anyone who can clone a repo can download every ref in it. So internal notes never go into the client's repo at all. They go into a **store**, a separate repo only your company can read.
 6. **One org per repo.** Your `~/.lore/config.yaml` lists your orgs (the companies you work for). In each repo lore picks exactly one, by a link in a store or by the repo's URL. It loads that org's identity, store and roster, plus your personal notes for that org. `lore whoami` tells you which one and why.
-7. **Agents claim, renew and finish.** An agent takes a task with `lore task next`. It keeps its lease alive with heartbeats (small "I am still here" messages). It finishes with `lore task done`. If it crashes, the lease runs out and another agent takes the task over. The crashed one can no longer write to it (lore calls this fencing).
+7. **Agents claim, renew and finish.** An agent sees what is next with `lore task next` and takes it with `lore task next --claim --push` (lore pushes a claim to a remote only when asked). It keeps its lease alive with heartbeats (small "I am still here" messages). It finishes with `lore task done`. If it crashes, the lease runs out and another agent takes the task over. The crashed one can no longer write to it (lore calls this fencing).
 
 ## What stays the same
 

@@ -25,7 +25,9 @@ func (p fsProbe) State(rel string) FileState {
 func (p fsProbe) Matches(pattern string) []string { return GlobFiles(p.fs, pattern) }
 
 // TestResolveDetectsCursor: a fresh repo with a legacy .cursorrules or
-// Cursor's own .cursor/rules/*.mdc rules picks the cursor profile, with
+// Cursor's own .cursor/rules/*.mdc rules picks the cursor profile (and
+// Claude Code's own .claude/rules, commands, agents or skills the
+// claude_code profile, devco M-7), with
 // the other tools it uses; lore's own Cursor files are no such sign; a
 // wired repo keeps its targets; a Probe without Finder detects by pointer
 // files only.
@@ -52,6 +54,14 @@ func TestResolveDetectsCursor(t *testing.T) {
 		{"only lore's own private rule", fstest.MapFS{".cursor/rules/lore-private.mdc": file("x")}, NameCodex, ReasonFallback},
 		{"only lore's path and folder rules", fstest.MapFS{".cursor/rules/lore-path-go.mdc": file("x"), ".cursor/rules/lore-dir-api.mdc": file("x")}, NameCodex, ReasonFallback},
 		{"wired AGENTS.md keeps its target", fstest.MapFS{"AGENTS.md": file(wired), ".cursorrules": file("x")}, NameCodex, ReasonWired},
+		// devco M-7: Claude Code's own folder without a CLAUDE.md
+		{"a claude rule beside AGENTS.md and .cursorrules", fstest.MapFS{".claude/rules/style.md": file("x"), "AGENTS.md": file("x"), ".cursorrules": file("x")}, NameClaudeCode + "," + NameCodex + "," + NameCursor, ReasonDetected},
+		{"a claude slash command", fstest.MapFS{".claude/commands/ship.md": file("x")}, NameClaudeCode, ReasonDetected},
+		{"a claude subagent", fstest.MapFS{".claude/agents/reviewer.md": file("x")}, NameClaudeCode, ReasonDetected},
+		{"a claude skill", fstest.MapFS{".claude/skills/deploy/SKILL.md": file("x")}, NameClaudeCode, ReasonDetected},
+		{"only lore's own claude path rules", fstest.MapFS{".claude/rules/lore/lore-path-go.md": file("x")}, NameCodex, ReasonFallback},
+		{"only claude settings (lore writes hooks there)", fstest.MapFS{".claude/settings.json": file("{}"), ".claude/settings.local.json": file("{}")}, NameCodex, ReasonFallback},
+		{"a claude docs folder alone", fstest.MapFS{".claude/docs/README.md": file("x")}, NameCodex, ReasonFallback},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

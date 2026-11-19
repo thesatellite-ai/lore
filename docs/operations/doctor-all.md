@@ -10,7 +10,7 @@ Plain [`lore doctor`](doctor.md) checks the repo you are in: hooks, cache, sync.
 
 You want it after you set up a new machine, after you change `~/.ssh/config` or log in to `gh` as someone else, when a push to a store suddenly fails, and before you ask a teammate why lore "does not work". It writes nothing.
 
-It finds your repos through the setups' folders. On a machine with no setup it checks no repo and says so, with the next steps: `lore doctor` inside one repo, `lore fix --all --dirs <folder> --dry-run` for every repo under a folder, or `lore setup` to make a setup.
+It finds your repos through the setups' folders: the setup checks run over the repos lore knows on this machine, and a `repos in the setups' folders` block after the setups names what else the folders hold, the way `lore fix --all` finds it: each repo on the lore 0.1.17 format with its next step (`cd <repo> && lore fix --migrate`, or `git pull` when a teammate already migrated it), each repo with lore data the checks did not cover (`lore fix --all` checks it), and a count of the repos with no lore data. `lore doctor --all --verbose` also lists the repos it checked and each repo with no lore data; `--json` has them all under `repos_found`. The block is information and never changes the status. On a machine with no setup it checks no repo and says so, with the next steps: `lore doctor` inside one repo, `lore fix --all --dirs <folder> --dry-run` for every repo under a folder, or `lore setup` to make a setup.
 
 ## Before you start
 
@@ -67,6 +67,8 @@ setup personal (solo) ─ ~/work/personal/**
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
+repos in the setups' folders: 2 with lore data (1 checked above), 0 without lore data
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
@@ -106,6 +108,9 @@ setup personal (solo) ─ ~/work/personal/**
       fix: lore actor refresh
   ⚠ folders.exist  not a folder: ~/work/personal
       fix: ~/work/personal is not a folder on this machine; create it, or change the glob with lore setup edit --name personal --folder <glob>
+repos in the setups' folders: 2 with lore data (0 checked above), 0 without lore data
+  ~/work/agency/site  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
@@ -143,6 +148,8 @@ setup agency (admin of agency, default) ─ ~/work/agency/**
   ℹ store.private  agency: gh is not logged in, so lore cannot check whether agency/notes is private
       fix: Optional: install gh and run gh auth login so lore can check that agency/notes is private
       repair: lore setup repair --name agency
+repos in the setups' folders: 2 with lore data (1 checked above), 0 without lore data
+  ~/work/stores  not checked: lore has not run in it on this machine; lore fix --all checks it (or run lore doctor in it)
 This repo, warnings:
   - actor_copies: actor Tomas Weber (act_7a67…9504): the copy in repo has display_name "tomas", its source (agency/org) says "Tomas Weber"; fix: lore actor refresh
   - org_admin_missing: Tomas Weber (act_7a67…9504) created org agency but has no org role (member list shows "-"); the org's creator is its admin; fix: lore doctor --fix (or: lore member edit --who act_7a67…9504 --role admin)
@@ -223,7 +230,11 @@ To run one fix yourself, `lore setup fix --setup <setup> --check <id> --yes` run
 
 ## Which repos it checks
 
-lore records each repo it runs in on this machine. `--all` checks those under each setup's folders, plus the repo you are in. On a machine where lore has not recorded any repo yet, it looks for folders holding `.lore/` under each setup's folders instead, down to `doctor.scan_depth` levels (default 3, at most 10).
+lore records each repo it runs in on this machine. `--all` checks those under each setup's folders, plus the repo you are in. A repo `lore fix --all` (or any lore command) just ran in counts as recorded, even one it migrated from the lore 0.1.17 format that has no repo id until its first sync, so `doctor --all` right after `fix --all` never calls them unchecked for that reason. On a machine where lore has not recorded any repo yet, it looks for folders holding `.lore/` under each setup's folders instead, down to `doctor.scan_depth` levels (default 3, at most 10).
+
+A symlink in a setup's folder that points at a repo elsewhere counts as one of its repos, for `doctor --all` and `lore fix --all` alike (a repo two links reach counts once, and the walk never goes through a link). lore runs in the repo at its real folder, so when no setup's folders hold that folder the setup checks do not cover it; the repos block names the link, the real folder and the command that adds it, keeping the setup's other folders (`not checked: reached through the link ~/fleet/kit; the repo itself is at ~/elsewhere/kit, outside the setups' folders, so the setup checks above do not cover it (lore fix --all still fixes it); to check it with setup fleet: lore setup edit --name fleet --folder '~/fleet/**' --folder '~/elsewhere/kit'`). With `--verbose` a covered linked repo reads `checked (through the link …)`.
+
+A repo of the setups' folders whose `origin` cannot work is a warning that makes the report DEGRADED (exit 1), named in the repos block with its next step: a path remote that is no git repository any more ("origin: no git repository at /srv/git/kit.git (moved or deleted); …: if the repo moved, run `git remote set-url origin <new-url>`, then `lore sync`"), or a host name that does not exist ("origin: cannot reach ssh://git@nohost.example/x/kit.git (no such host: nohost.example); …"). The path is checked on disk, with no network; a host costs one name lookup (an ssh alias is first turned into its `HostName`), and only a definite "no such host" counts, so offline or with a slow DNS server nothing is reported. `lore doctor` and `lore fix` in the repo report the same line under `[sync]`.
 
 Run outside a git repo (in your home folder, say), `lore doctor --all` skips the repo checks and says so in one line, `This repo: not inside a git repo, so the repo checks were skipped (N); run lore doctor in a repo to check it`. Those skips do not change the exit status.
 
@@ -238,7 +249,7 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `setup.name_free` | error | no other setup has this name (setup page only) | pick another name, or `lore setup edit --name <name>` |
 | `identity.email_format` | error | the email is a valid address (for a member or admin setup, the org entry's identity email, `orgs[<org>].identity`) | type the address you use for this work |
 | `identity.invite_email` | error | a member's email is the invite's | use the invite's address, or ask for a new invite |
-| `identity.git_email` | warn | git commits here carry this email (for a member or admin setup, the org entry's identity email) | `git config --global user.email <email>` (shown, never run) |
+| `identity.git_email` | warn | git commits here carry this email (for a member or admin setup, the org entry's identity email); checked outside a repo, where git reads only the global email: a setup with no folders passes (its only commits are store commits, and lore sets each store clone's git user itself), an `includeIf` file that sets this email passes and is named (any condition; a relative include path is read next to the config file that names it), and for a setup with folders each folder must be covered by an `includeIf "gitdir:…"` rule (or sit in a repo that already commits with this email); your global email is never what the fix changes | in a repo: `git -C <repo> config user.email <email>`; else `git config --file ~/.gitconfig-work user.email <email>` plus an `[includeIf "gitdir:<work folder>/"] path = ~/.gitconfig-work` line in `~/.gitconfig` (shown, never run; never `--global`) |
 | `identity.roster` | warn | your email is on the team roster, read from the org store that holds it (the rows `lore actor show` reads); the identity line shows `roster @<handle>` | finish the join step, or `lore actor contact add --actor …` |
 | `identity.period` | warn | you are an active team member, not marked as left: the identity line shows the open period (`employee since 2025-03-01`) | ended stint: ask an admin to run `lore actor rejoin`; no period yet (`no period in <org> yet`): ask an admin to record your first one with `lore actor period add --actor <you> --type employee --started-on <day>` |
 | `identity.top_level` | warn | no old top-level `identity:` is left beside a solo setup's identity (the setup is the one source) | `lore identity migrate --keep setup --setup <name>` (Run it) |
@@ -250,12 +261,12 @@ Each check has a level: an **error** blocks saving its setup step and makes doct
 | `github.gh_account` | warn | `gh` has a login for the account (gh is optional) | `gh auth login --hostname github.com` |
 | `github.gh_matches` | info | which account is `gh`'s active one; informational only, never a warning: lore runs `gh` as the setup's own account, so the active account only matters for `gh` you run by hand (skipped when gh is missing or has no active account) | none needed; for `gh` by hand, `gh auth switch --user <user>` |
 | `github.key_matches` | error | the setup's route logs in as its GitHub account: for ssh the alias (and any recorded key, whose fingerprint still matches the one saved), for https a gh login for the account | an alias that does log in as that account: `lore setup edit --name <setup> --route ssh --host-alias <alias> --ssh-key <key>.pub` (runnable) when its key has a `.pub`, else `--route ssh --host-alias <alias> --no-ssh-key`; for https, `gh auth login` |
-| `github.identity_email` | warn | the setup's identity email (for a member or admin setup, its org entry's identity email) is one of the GitHub account's emails, read with that account's own gh token; skipped with "could not read" when the token lacks the `user:email` scope | pick the account whose emails include it, add the email at github.com/settings/emails, or change the identity email |
+| `github.identity_email` | warn | the setup's identity email (for a member or admin setup, its org entry's identity email, or, before its team or join step, the email its identity step saved) is one of the GitHub account's emails, read with that account's own gh token; skipped with "could not read" when the token lacks the `user:email` scope | pick the account whose emails include it, add the email at github.com/settings/emails, or change the identity email |
 | `store.url` | error | the store url is valid (an ssh url; a token in a url is never stored) | use a url like `git@github.com:you/lore-me.git` |
 | `store.read` | error | you can read the store | `gh repo create <owner>/<repo> --private` (runnable, asks), ask for access, or check the network |
 | `store.write` | error | you can write the store (a dry-run push) | ask the owner for write access, or attach it `--read-only` |
 | `store.marker` | warn | the repo is already a lore store | saving the step runs `lore store init` |
-| `store.private` | error / warn | the repo is private | `gh repo edit <owner>/<repo> --visibility private` (runnable, asks) |
+| `store.private` | error / warn | the repo is private (a store url on github.com, or on a host alias your `~/.ssh/config` maps to github.com, such as `git@github-work:acme/notes.git`) | `gh repo edit <owner>/<repo> --visibility private` (runnable, asks) |
 | `invite.parse` | error | the invite text is a lore invite | copy the whole line starting with `lore-invite:v1:` |
 | `invite.found` | error | the invite row is in the team's store | ask the inviter to invite you again |
 | `invite.status` | error | the invite is still pending | ask the inviter for a new one |

@@ -62,7 +62,7 @@ func TestJourneyNoPushWithoutAsking(t *testing.T) {
 		}
 		quiet("task", "start", "--id", id).OK(t)
 		quiet("task", "claim", "--id", other).Refused(t, "E_REFUSED", "--push", "refs/lore/signals")
-		quiet("task", "next").Refused(t, "E_REFUSED", "--push")
+		quiet("task", "next", "--claim").Refused(t, "E_REFUSED", "--push")
 		quiet("hold", "claim", "staging").Refused(t, "E_REFUSED", "--push")
 		quiet("memory", "add", "the mast is 4m").OK(t)
 		quiet("decision", "add", "--title", "canvas sails", "--body", "lighter than nylon").OK(t)

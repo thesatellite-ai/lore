@@ -12,7 +12,7 @@ None. Without `~/.lore/config.yaml` there is no org (company setup). Your identi
 
 ## The commands
 
-In a repo without a remote, nothing is ever pushed. Tasks are still live by default. Live means they go to a hidden list that is not a branch (the hidden ref `refs/lore/live`). Without a remote that list stays on your machine until the tasks land (are written to `main`'s `.lore/data`):
+In a repo without a remote, nothing is ever pushed. Claims work too: `lore task claim` and `lore task next --claim` (with or without `--push`) take the claim on this repository's own `refs/lore/signals` and say `(local: this repo has no remote, so the claim stays in this repository)`, so a coding agent running the usual claim loop works here unchanged. Tasks are still live by default. Live means they go to a hidden list that is not a branch (the hidden ref `refs/lore/live`). Without a remote that list stays on your machine until the tasks land (are written to `main`'s `.lore/data`):
 
 <!-- example: solo#no-remote -->
 ```console

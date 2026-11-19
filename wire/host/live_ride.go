@@ -45,6 +45,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/adapters/live"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/store"
 )
 
 // EnvRideActive is set by lore while it makes a ride-along commit, so its
@@ -74,12 +75,13 @@ var rideHookLines = map[string][]string{
 }
 
 // rideBlockLines are rideHookLines[hook], guarded when the hooks folder
-// is shared by every repo (sharedHookLines, D-21).
-func rideBlockLines(hook string, shared bool) []string {
+// is shared by every repo (sharedHookLines, D-21), else led by pin
+// (hookbin.go).
+func rideBlockLines(hook string, shared bool, pin string) []string {
 	if shared {
 		return sharedHookLines("", rideHookLines[hook])
 	}
-	return rideHookLines[hook]
+	return withHookPin(pin, rideHookLines[hook])
 }
 
 // rideInProgressMarkers are files in the git dir that mean the user's
@@ -122,25 +124,32 @@ func (l *Live) SyncHookCommand(stdin io.Reader, refresh Refresh, afterCommit fun
 			if os.Getenv(EnvRideActive) != "" {
 				return nil
 			}
+			// One hook run is one command: the store backends remember the
+			// data folder's git status for the rest of it, as they do for an
+			// operation (host.go Run), instead of asking git once per read
+			// (pre-push's leak check, drop check and ride each asked again,
+			// devco:D-420). A write in between still drops the memo.
+			ctx := store.WithReadScope(cmd.Context())
 			switch name {
 			case hookPostCommit:
+				l.h.afterRevert(ctx) // M-6: a revert never deletes a note by itself
 				if !liveDisabled() {
-					l.h.postCommit(cmd.Context())
+					l.h.postCommit(ctx)
 				}
 				if afterCommit != nil {
-					afterCommit(cmd.Context())
+					afterCommit(ctx)
 				}
 			case hookPrePush:
-				return l.h.prePush(cmd.Context(), stdin, args[1:])
+				return l.h.prePush(ctx, stdin, args[1:])
 			case hookPreCommit:
-				if err := l.h.preCommit(cmd.Context()); err != nil {
+				if err := l.h.preCommit(ctx); err != nil {
 					return err
 				}
-				l.h.stageCommitRender(cmd.Context(), commitRender)
+				l.h.stageCommitRender(ctx, commitRender)
 			case hookRefresh:
-				l.h.afterRewrite(cmd.Context(), stdin, args[1:])
-				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(cmd.Context(), l.h.git(), cwd, args[1:]) {
-					refresh(cmd.Context())
+				l.h.afterRewrite(ctx, stdin, args[1:])
+				if cwd, err := os.Getwd(); refresh != nil && err == nil && !refreshDeferred(ctx, l.h.git(), cwd, args[1:]) {
+					refresh(ctx)
 				}
 			}
 			return nil
@@ -286,6 +295,9 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 			if lerr == nil {
 				lerr = prePushDropCheck(ctx, repo, updates) // H-7: a forced push that takes rows away
 			}
+			if lerr == nil {
+				lerr = prePushRevertCheck(ctx, repo, updates) // M-6: a revert that deletes rows nobody deleted
+			}
 			if lerr != nil {
 				if r != nil {
 					r.release()
@@ -309,6 +321,14 @@ func (h *liveHost) prePush(ctx context.Context, stdin io.Reader, args []string) 
 		// live.autopush says (U-2): a push the person asked for (S-1).
 		s.kind = live.FetchAlways
 		s.asked = true
+		if ups := parsePushUpdates(in); len(ups) == 0 {
+			s.branchRefused = branchRefusedLine(ctx, s.repo, s.ref.RemoteName)
+		} else {
+			s.branchRefused = liveDeferLine(ctx, s.repo, ups)
+		}
+	}
+	if s.branchRefused != "" {
+		return nil // the branch push may not go through: no ride-along commit either, the rows keep waiting
 	}
 	branch, items, ok := s.prePushRows(ctx)
 	if !ok || len(items) == 0 {
@@ -405,6 +425,69 @@ func refreshDeferred(ctx context.Context, git gitref.Git, dir string, args []str
 		return false
 	}
 	return historyInProgress(ctx, git, dir)
+}
+
+// liveBranchRefusedLine is said when git sends no branch with the
+// person's push because it refused the current one (%s: the branch, %s:
+// the remote): the waiting live writes stay too (devco:Q-10).
+const liveBranchRefusedLine = "lore: live rows not sent with this push (%s and %s/%s have diverged: git refuses it as non-fast-forward); they wait on this clone's refs/lore/live and go with your next lore sync, or your next git push that goes through (git pull --rebase first)"
+
+// Pre-push lines when git hands the hook a branch whose push is no
+// fast-forward as far as this clone can tell (devco:Q-10 follow-up):
+// the live ref waits, said once.
+const (
+	// liveDeferFetchFirst: the remote tip is not known here. git refuses
+	// the push ("fetch first", a teammate pushed first) unless it is
+	// forced; either way the live rows wait.
+	liveDeferFetchFirst = "lore: live rows not sent with this push (the remote has commits you do not have); they go with your next lore sync"
+	// liveDeferForced: the remote tip is known here and not an ancestor
+	// of what is pushed, which git sends only for a forced push.
+	liveDeferForced = "lore: live rows not sent with this push (a forced push that replaces the remote's commits); they go with your next lore sync"
+)
+
+// liveDeferLine is "" when every branch the push updates is a
+// fast-forward as far as this clone can tell (the remote sha is known
+// here and an ancestor of the pushed sha; a new branch or a delete
+// counts), else the line that says the live ref waits: the only safe
+// time to send refs/lore/live with the person's push is when the branch
+// push can go through.
+func liveDeferLine(ctx context.Context, repo *gitref.Repo, ups []pushUpdate) string {
+	for _, u := range ups {
+		if isZeroOID(u.localSHA) || isZeroOID(u.remoteSHA) {
+			continue
+		}
+		if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"cat-file", "-e", u.remoteSHA + "^{commit}"}}); err != nil {
+			return liveDeferFetchFirst
+		}
+		if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"merge-base", "--is-ancestor", u.remoteSHA, u.localSHA}}); err != nil {
+			return liveDeferForced
+		}
+	}
+	return ""
+}
+
+// branchRefusedLine is the pre-push hook's answer for a push to remote
+// whose input from git is empty (git hands pre-push only the refs it is
+// about to send): "" when the current branch is already on the remote
+// (an up-to-date push: the waiting live writes still go, as the person
+// asked) or nothing records the remote's branch, else
+// liveBranchRefusedLine: the branch refused as non-fast-forward (the
+// remote-tracking ref holds commits it lacks; an ahead branch would be in
+// git's input).
+func branchRefusedLine(ctx context.Context, repo *gitref.Repo, remote string) string {
+	out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"symbolic-ref", "--quiet", "--short", "HEAD"}})
+	branch := strings.TrimSpace(string(out))
+	if err != nil || branch == "" {
+		return "" // a detached HEAD pushes by name: nothing to compare
+	}
+	tracking := "refs/remotes/" + remote + "/" + branch
+	if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--verify", "--quiet", tracking}}); err != nil {
+		return "" // never pushed or fetched here: nothing says git refused it
+	}
+	if _, err := repo.Run(ctx, gitref.Invocation{Args: []string{"merge-base", "--is-ancestor", "HEAD", tracking}}); err == nil {
+		return "" // HEAD is on the remote already: up to date
+	}
+	return fmt.Sprintf(liveBranchRefusedLine, branch, remote, branch)
 }
 
 // rewriteByRebase is post-rewrite's first argument after a rebase (the
@@ -558,9 +641,10 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		return
 	}
 	hooks := []string{hookPostCommit, hookPrePush}
+	pin := hookPinFor(s.top, dir, shared)
 	writes := make([]hookWrite, 0, len(hooks))
 	for _, hook := range hooks {
-		writes = append(writes, hookWrite{name: hook, marker: rideHookMarker, lines: rideBlockLines(hook, shared)})
+		writes = append(writes, hookWrite{name: hook, marker: rideHookMarker, lines: rideBlockLines(hook, shared, pin)})
 	}
 	// stories H-1: never a new or changed file in a hooks folder the repo
 	// commits (husky's .husky) without asking; `lore fix` writes those
@@ -576,7 +660,11 @@ func (s *liveSession) ensureRideHooks(ctx context.Context) {
 		if team[hook] {
 			continue
 		}
-		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared)); err != nil {
+		if err := hookRefused(s.top, dir, hook); err != nil {
+			s.warn("ride-along hooks: " + err.Error()) // D-502: this hook only
+			continue
+		}
+		if err := ensureHookBlock(dir, hook, rideHookMarker, rideBlockLines(hook, shared, pin)); err != nil {
 			s.warn("ride-along hooks: " + err.Error())
 			return
 		}

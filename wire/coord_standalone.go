@@ -27,20 +27,23 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+
 	"github.com/thesatellite-ai/lore/adapters/gitref"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/signals"
 	"github.com/thesatellite-ai/lore/adapters/signals/coord"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/canonjson"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
@@ -244,7 +247,7 @@ func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID,
 		}
 		return []coord.RowWrite{{Table: string(schema.TableComments), ID: cid.String(), Doc: doc}}, nil
 	}); err != nil {
-		return opscoord.Report{}, coordErr(err) // fenced out or offline: nothing written
+		return opscoord.Report{}, w.coordErr(err) // fenced out or offline: nothing written
 	}
 	lines := []string{"✓ note " + cid.String() + " on " + tid.String()}
 	if branch != "" {
@@ -254,18 +257,56 @@ func (w *coordWorld) heldNote(ctx context.Context, env coord.Env, tid ids.AnyID,
 			return opscoord.Report{Lines: lines}, nil
 		}
 	}
+	if branch != "" && w.remote != nil {
+		if commit, ok := w.branchOnRemote(ctx, branch); ok {
+			// pushed by the person (git push): say so instead of "not pushed"
+			lines = append(lines, "  work branch "+branch+" (commit "+gitbackend.Pushed{Commit: commit}.Short()+") is on remote "+w.remoteName+" so a replacement can fetch it")
+			return opscoord.Report{Lines: lines}, nil
+		}
+	}
 	switch {
+	case branch != "" && w.remote != nil && !w.pushesAsked():
+		// devco D-598: nothing reaches a remote unless the person asked
+		lines = append(lines, "  work branch "+branch+" not pushed: lore pushes nothing to a remote unless you ask; push it with: git push "+w.remoteName+" "+branch+" (live.autopush: true in config.yaml or LORE_PUSH_CLAIMS=1 pushes it with each note)")
 	case branch != "":
 		lines = append(lines, "  ! work branch "+branch+" NOT pushed (offline or no remote); a replacement cannot fetch it yet")
 	}
 	return opscoord.Report{Lines: lines}, nil
 }
 
+// pushesAsked reports whether the person asked lore to push coordination
+// on its own: live.autopush: true set in config.yaml (not its default) or
+// LORE_PUSH_CLAIMS=1. `task note` and the heartbeat daemon pushed the code
+// work branch whenever autopush was merely on by default, though neither
+// takes --push (devco D-598: nothing reaches a remote without an explicit
+// push, sync or a setting the person turned on).
+func (w *coordWorld) pushesAsked() bool {
+	return w.autopushChosen || os.Getenv(envPushClaims) == envPushClaimsOn
+}
+
+// branchOnRemote reports whether the work branch's head is already what
+// this clone last saw on the remote (refs/remotes/<remote>/<branch>, as a
+// person's own `git push` leaves it), reading local refs only. A note
+// after the person pushed the branch themselves said "not pushed" and
+// told them to push it again (devco D-598 follow-up).
+func (w *coordWorld) branchOnRemote(ctx context.Context, branch string) (commit string, ok bool) {
+	head, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--verify", "-q", "refs/heads/" + branch}})
+	if err != nil {
+		return "", false
+	}
+	seen, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--verify", "-q", "refs/remotes/" + w.remoteName + "/" + branch}})
+	if err != nil {
+		return "", false
+	}
+	h := strings.TrimSpace(string(head))
+	return h, h != "" && h == strings.TrimSpace(string(seen))
+}
+
 // pushWorkBranch pushes the work branch so a replacement agent can fetch
-// it (§7.4 "Work branch"). Best effort: a failed push is reported, never
-// fatal.
+// it (§7.4 "Work branch"), only when the person asked for pushes
+// (pushesAsked). Best effort: a failed push is reported, never fatal.
 func (w *coordWorld) pushWorkBranch(ctx context.Context, branch string) (commit string, ok bool) {
-	if w.remote == nil || !w.autopush {
+	if w.remote == nil || !w.autopush || !w.pushesAsked() {
 		return "", false
 	}
 	_, err := w.repo.Run(ctx, gitref.Invocation{Args: []string{"push", "--quiet", w.remoteName, "refs/heads/" + branch + ":refs/heads/" + branch},
@@ -360,14 +401,18 @@ func (t standaloneTeam) ResolveHandle(ctx context.Context, handle string, allowT
 		}
 	}
 	if gone, ok := removedTeam(teams, h); ok {
-		return opstask.Assignee{}, removedTeamErr(gone, teams, r.where)
+		return opstask.Assignee{}, removedTeamErr(gone, teams, r.of())
 	}
 	// An org roster's miss keeps its sync hint (the store copy may predate
 	// a teammate's registration, v0.1.17 rosterMissHint); the repo's own
-	// roster has no copy to be stale, so it only says to register.
-	hint := "people join with `lore actor register`"
-	if r.src != store.SourceRepo {
-		hint = r.missHint()
+	// roster names a sync too (devco:S-5: a register in another clone is a
+	// live row kept there until that person's `lore sync`).
+	hint := r.missHint()
+	if active := activeTeamHandles(teams); len(active) > 0 {
+		// devco:J-14: a handle that names nobody may be a team's old
+		// handle (lore team rename); the person-only hint sent the caller
+		// to ask a team to register. Name the teams first.
+		hint = "if @" + h + " was a team, it may have been renamed: the teams now are " + strings.Join(active, ", ") + " (`lore team list`); a person not on the roster yet: " + hint
 	}
 	if near, found := t.a.nearHandle(ctx, r, h); found {
 		hint = nearHandleHint(near, h)
@@ -384,8 +429,14 @@ func (a *App) coordRoster(ctx context.Context) (rosterAt, error) {
 		return r, nil
 	}
 	org, err := a.opts.Org(ctx)
-	if err != nil || org == nil {
+	if err != nil {
 		return r, err
+	}
+	if org == nil {
+		if c, ok := a.cloneRoster(); ok { // a store clone (scope.go, devco D-433)
+			return c, nil
+		}
+		return r, nil
 	}
 	src, folder, ok, err := a.orgRosterSource(ctx, org.Name)
 	if err != nil {
@@ -393,7 +444,7 @@ func (a *App) coordRoster(ctx context.Context) (rosterAt, error) {
 	}
 	if !ok {
 		return r, errs.New(errs.NotImplemented, "org "+org.Name+"'s roster is kept in its org store, which this lore build does not reach for the roster").
-			WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+			WithHint("set org_folder on one of the org's stores in " + lorehome.Shown() + "/config.yaml")
 	}
 	r = newRosterAt(src, org.Name+" "+folder+"/")
 	r.org = org.Name
@@ -453,12 +504,17 @@ func (a *App) localClaims(ctx context.Context) (localBoard, error) {
 	if err != nil {
 		return localBoard{}, errs.Wrap(errs.Internal, "claims: locate the git dir", err)
 	}
-	if rel, rerr := filepath.Rel(top, a.projectDir()); rerr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+	if rel, inside := fspath.Rel(top, a.projectDir()); inside && rel != "." {
 		b.folder = filepath.ToSlash(rel)
 	}
 	remote := strings.TrimSpace(os.Getenv(envLiveRemote))
 	if remote == "" {
 		remote = defaultRemote
+	}
+	if _, rerr := repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "remote." + remote + ".url"}}); rerr != nil {
+		// devco:D-362: no such remote, so this repo's claims are local and
+		// their tracking copy sits under the local namespace (signalsStore).
+		remote = localSignalsRemoteName
 	}
 	st := &signals.Store{
 		Repo: repo, RemoteName: remote, Ref: signals.CodeRepoRef,
@@ -593,11 +649,30 @@ func removedTeam(teams []RosterTeam, h string) (RosterTeam, bool) {
 	return RosterTeam{}, false
 }
 
+// activeTeamHandles lists the @handles of the active teams, sorted, at
+// most maxTeamsNamed of them (then "…").
+func activeTeamHandles(teams []RosterTeam) []string {
+	var out []string
+	for _, x := range teams {
+		if x.Active && x.Handle != "" {
+			out = append(out, rosterHandleMark+x.Handle)
+		}
+	}
+	slices.Sort(out)
+	if len(out) > maxTeamsNamed {
+		out = append(out[:maxTeamsNamed], "…")
+	}
+	return out
+}
+
+// maxTeamsNamed bounds the team handles a miss hint lists.
+const maxTeamsNamed = 6
+
 // removedTeamErr refuses an @handle of a removed team (G-15: the task went
 // to a team nobody sees in lore team list). It names the team list and,
 // when an active team has the same members (the team was recreated under
 // another handle), that team.
-func removedTeamErr(gone RosterTeam, teams []RosterTeam, where string) error {
+func removedTeamErr(gone RosterTeam, teams []RosterTeam, roster string) error {
 	hint := "lore team list shows the teams; lore team add --handle " + rosterHandleMark + gone.Handle + " brings it back"
 	for _, x := range teams {
 		if x.Active && len(x.Members) > 0 && sameMembers(x.Members, gone.Members) {
@@ -605,7 +680,7 @@ func removedTeamErr(gone RosterTeam, teams []RosterTeam, where string) error {
 			break
 		}
 	}
-	return errs.New(errs.NotFound, "team "+rosterHandleMark+gone.Handle+" was removed from the roster in "+where).WithHint(hint)
+	return errs.New(errs.NotFound, "team "+rosterHandleMark+gone.Handle+" was removed from "+roster).WithHint(hint)
 }
 
 // sameMembers reports whether a and b hold the same actor ids.

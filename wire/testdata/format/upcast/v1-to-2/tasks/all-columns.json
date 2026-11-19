@@ -71,6 +71,8 @@
   },
   "repo_id": "rep_01a1a59b891c70b78914000000000020",
   "role": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "source_kind": "fixture café — 日本 <b>&</b> \"q\"\ttab",
+  "source_ref": "fixture café — 日本 <b>&</b> \"q\"\ttab",
   "started_at": "2026-11-04T08:09:56.252002659Z",
   "status": "todo",
   "tag_ids": [

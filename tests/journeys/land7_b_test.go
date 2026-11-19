@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/tests/teame2e/teamharness"
 )
 
@@ -55,6 +56,7 @@ func land7bTimed(t testing.TB, w *World, m *Machine, dir string, budget time.Dur
 	before := len(w.GitCalls(m.Name))
 	start := time.Now()
 	r := m.Lore(dir, args...)
+	budget = testtime.SpeedBar(budget) // D-417: as written at factor 1, stretched on a slower machine
 	if took := time.Since(start); took > budget {
 		t.Errorf("lore %s took %s, budget %s", strings.Join(args, " "), took.Round(time.Millisecond), budget)
 	}

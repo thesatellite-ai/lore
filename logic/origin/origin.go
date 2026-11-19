@@ -7,12 +7,11 @@ package origin
 
 import (
 	"cmp"
-	"path"
 	"path/filepath"
-	"strings"
 
 	"github.com/thesatellite-ai/lore/model/canon"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 )
@@ -32,8 +31,15 @@ const (
 	KeyMoves      = "moves"
 
 	gitBranch = "branch"
-	gitCommit = "commit"
-	gitState  = "state"
+
+	// KeyGitBranch is the branch key inside `_o.git`.
+	KeyGitBranch = gitBranch
+	// RedactedBranch is recorded as `_o.git.branch` when the branch name
+	// matched a secret rule (devco:R-10): the row says it was made on a
+	// branch, never the name.
+	RedactedBranch = "[redacted branch]"
+	gitCommit      = "commit"
+	gitState       = "state"
 
 	importSource = "source"
 	importSrc    = "src"
@@ -220,15 +226,14 @@ func RelDir(repoRoot, workDir string) string {
 	if repoRoot == "" || workDir == "" {
 		return ""
 	}
-	rel, err := filepath.Rel(filepath.Clean(repoRoot), filepath.Clean(workDir))
-	if err != nil {
+	// canonical: the root comes from git (the real folder), the cwd from
+	// $PWD (on macOS /var, a link to /private/var); a plain Rel stored no
+	// work dir there (devco D-413)
+	rel, inside := fspath.Rel(repoRoot, workDir)
+	if !inside || rel == "." {
 		return ""
 	}
-	rel = filepath.ToSlash(rel)
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, "../") || path.IsAbs(rel) {
-		return ""
-	}
-	return rel
+	return filepath.ToSlash(rel)
 }
 
 // Client is what a client repo already holds or can see, the test of
@@ -418,6 +423,38 @@ func Text(o value.JSON, key string) string {
 	for _, m := range ms {
 		if m.Key == key {
 			return textOf(m.Raw)
+		}
+	}
+	return ""
+}
+
+// Branch returns `_o.git.branch`: the code branch the row was born on
+// ("" when the row has no origin, no git block, or was born outside a
+// branch). Why: the --born-branch list filter, `lore trash add
+// --born-branch` and `lore branch adopt` / `branch show` all ask the same
+// question of a row, and a land, an adopt or a revert copies the row
+// whole, so the answer is the same on the branch and after it lands
+// (D-392).
+func Branch(o value.JSON) string {
+	if o.IsZero() {
+		return ""
+	}
+	ms, err := canon.Members(o.Raw())
+	if err != nil {
+		return ""
+	}
+	for _, m := range ms {
+		if m.Key != KeyGit {
+			continue
+		}
+		gs, gerr := canon.Members(m.Raw)
+		if gerr != nil {
+			return ""
+		}
+		for _, g := range gs {
+			if g.Key == gitBranch {
+				return textOf(g.Raw)
+			}
 		}
 	}
 	return ""

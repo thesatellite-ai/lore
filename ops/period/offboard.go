@@ -66,8 +66,12 @@ type OffboardOut struct {
 	Memberships []MemberEnd `json:"memberships"`
 	OpenTasks   []OpenTask  `json:"open_tasks"`
 	// TasksNote says why open tasks could not be listed ("" when they were).
-	TasksNote string     `json:"tasks_note,omitempty"`
-	Agents    []AgentOut `json:"agents"`
+	TasksNote string `json:"tasks_note,omitempty"`
+	// Handover is the one `lore task reassign --from` line that hands
+	// over every open task they lead (N-11: the preview printed a task
+	// edit per task); set when open tasks are listed.
+	Handover string     `json:"handover,omitempty"`
+	Agents   []AgentOut `json:"agents"`
 	// Teams are the @handles of the teams the person is taken off (B2-12:
 	// a removed person no longer shows as a team member).
 	Teams   []string `json:"teams,omitempty"`
@@ -109,9 +113,20 @@ func (o OffboardOut) Preview() string {
 	case len(o.OpenTasks) == 0:
 		b.WriteString(lead + "(none)\n")
 	}
+	led := false
 	for _, t := range o.OpenTasks {
-		fmt.Fprintf(&b, "%s%s  %q  %s  %s  reassign: lore task edit --id %s --assign @<someone>\n", lead, t.ID, t.Title, t.Store, t.How, t.ID)
+		if t.How == TaskOnLead && o.Handover != "" {
+			// N-11: the tasks they lead go over in one reassign --from
+			// (printed once below), not a task edit each.
+			fmt.Fprintf(&b, "%s%s  %q  %s  %s\n", lead, t.ID, t.Title, t.Store, t.How)
+			led = true
+		} else {
+			fmt.Fprintf(&b, "%s%s  %q  %s  %s  reassign: lore task edit --id %s --assign %s\n", lead, t.ID, t.Title, t.Store, t.How, t.ID, handoverTo)
+		}
 		lead = "             "
+	}
+	if led {
+		fmt.Fprintf(&b, "%shand the tasks they lead over (in each repo that holds them): %s\n", lead, o.Handover)
 	}
 	lead = "  agents     "
 	if len(o.Agents) == 0 {
@@ -157,6 +172,9 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 	r, done, err := o.env.Roster(ctx, true)
 	defer done()
 	if err != nil {
+		return OffboardOut{}, err
+	}
+	if err = requireAdmin(ctx, r, actOffboard); err != nil {
 		return OffboardOut{}, err
 	}
 	a, err := r.ResolveActor(ctx, in.Actor)
@@ -206,6 +224,19 @@ func (o ops) offboard(ctx context.Context, in OffboardIn) (OffboardOut, error) {
 	return plan.out, nil
 }
 
+// startHint is the next step when offboard --on is before the open
+// stint's start (devco:T-14): move the start back with actor period
+// edit (the period's apd_ id, or the person while it has no row yet),
+// then offboard again; or pick a later day.
+func startHint(open teamprofile.Period, actor, on string) string {
+	target := actor
+	if !open.Synthesised() {
+		target = open.ID.String()
+	}
+	return "if they started earlier, run lore actor period edit --period " + target + " --started-on " + on +
+		" then offboard again; else pick an --on date on or after the start (lore actor period list --actor " + actor + " shows the stints)"
+}
+
 // offboardPlan is the preview (step 3) and what the confirm writes.
 type offboardPlan struct {
 	out     OffboardOut
@@ -238,7 +269,7 @@ func (o ops) offboardPlan(ctx context.Context, r profilestore.Roster, a row.Row,
 	if open, ok := openPeriod(ps); ok {
 		if on.Before(open.StartedOn) {
 			return offboardPlan{}, errs.New(errs.PeriodOverlap, "--on "+dayText(on)+" is before their stint started on "+dayText(open.StartedOn)).
-				WithHint("lore actor period list --actor " + in.Actor + " shows the stints; pick a date on or after the start")
+				WithHint(startHint(open, in.Actor, dayText(on)))
 		}
 		open.EndedOn, open.EndReason = on, in.Reason
 		if in.Note != "" {
@@ -278,6 +309,9 @@ func (o ops) offboardPlan(ctx context.Context, r profilestore.Roster, a row.Row,
 		}
 	} else {
 		p.out.TasksNote = "not listed by this surface; run `lore task list --assignee " + in.Actor + "` in each repo"
+	}
+	if len(p.out.OpenTasks) > 0 {
+		p.out.Handover = handoverLine(a, in.Actor)
 	}
 	if p.agents, err = ownedAgents(ctx, r, a.ID, true); err != nil {
 		return offboardPlan{}, err
@@ -425,3 +459,41 @@ func endPeriod(ctx context.Context, r profilestore.Roster, stored teamprofile.Pe
 	}
 	return nil
 }
+
+// Placeholder of the person an offboarded person's tasks go to.
+const handoverTo = "@<someone>"
+
+// handoverLine is the reassign that hands every open task of a over, by
+// @handle (it resolves after they left), else as --actor named them.
+func handoverLine(a row.Row, ref string) string {
+	who := strings.TrimSpace(ref)
+	if h := text(a, fieldHandle); h != "" {
+		who = handleMark + h
+	}
+	return "lore task reassign --from " + who + " --assign " + handoverTo + " --yes"
+}
+
+// orgRoleAdmin is the org_role of an admin's stint (ops/team OrgRoleAdmin).
+const orgRoleAdmin = "admin"
+
+// requireAdmin refuses a caller who is not an admin of the org (devco
+// R-6): offboarding ends a teammate's stint, and every teammate's lore
+// holds back a stint change whose author is not an admin
+// (adapters/backend/git authority.go), so a member's offboard would only
+// be refused later, on everyone's machine. A roster with no admin stint
+// at all (an org from before org roles) refuses nobody; `lore doctor
+// --fix` gives its first admin one.
+func requireAdmin(ctx context.Context, r profilestore.Roster, what adminAct) error {
+	return profilestore.RequireAdmin(ctx, r, what.does, what.line)
+}
+
+// adminAct is a roster change only an admin makes: what it does, and the
+// line the admin runs.
+type adminAct struct{ does, line string }
+
+// The admin-only roster changes of this package.
+var (
+	actOffboard = adminAct{"offboard a teammate or remove a member", "lore member remove --who <email|@handle> --yes (or lore actor offboard --actor <@handle> --yes)"}
+	actRejoin   = adminAct{"bring back a person who left", "lore actor rejoin --actor <@handle> --type employee --yes"}
+	actStatus   = adminAct{"change another person's status, or mark anyone left or archived", "lore actor status --actor <@handle> --to <status>"}
+)

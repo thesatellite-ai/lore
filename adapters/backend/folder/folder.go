@@ -145,6 +145,15 @@ func ignoreStateDir(dir string) error {
 	if st, err := os.Lstat(filepath.Join(dir, ".git")); err != nil || st == nil {
 		return nil
 	}
+	return IgnoreState(dir)
+}
+
+// IgnoreState adds the store's state folder to dir's .gitignore, once,
+// whether or not dir is a git work tree yet. Why: lore's own personal
+// folder store (~/.lore/stores/_me) is the one plain folder a person is
+// told may end up in a git repo; with the line there, a `git add -A` of
+// the folder never commits lore's lock (devco N-13).
+func IgnoreState(dir string) error {
 	p := filepath.Join(dir, gitignoreName)
 	b, err := os.ReadFile(filepath.Clean(p))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -242,6 +251,12 @@ func StoreDirMoveLine(name string, c rowfs.LayoutChange) string {
 
 // Marker is the store's lore-store.yaml as read at Open.
 func (b *Backend) Marker() rowfs.Marker { return b.marker }
+
+// RowFolder is the row folder this Backend reads and writes, for a caller
+// that must read a table straight from the files before any cache exists
+// (wire reads the branches.* policy rows before it picks the cache path,
+// devco:D-411).
+func (b *Backend) RowFolder() *rowfs.Folder { return b.folder }
 
 // usable fails after Close or when ctx is done.
 func (b *Backend) usable(ctx context.Context) error {

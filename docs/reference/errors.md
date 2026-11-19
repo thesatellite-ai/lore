@@ -4,14 +4,14 @@
 
 ## How an error looks
 
-The first line starts with `ERROR:` and the code. The line under it, starting with `hint:`, says what to do. Both go to the error output (stderr), and the command ends with a non-zero exit status:
+The first line starts with `ERROR:` and the code. The line under it, starting with `hint:`, says what to do. Both go to the error output (stderr), and the command ends with a non-zero exit status. When an error repeats something you typed (an id, a store name, a config key) and that value looks like a secret, it is shown as `[redacted <rule> sha256:…]` instead, in the CLI, its `--json` error and `lore api` answers alike, so a token pasted into the wrong argument never lands in scrollback or logs:
 
 <!-- example: reference#an-error -->
 ```console
 # alice, in ~
 $ lore rule list
-ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree
-  hint: cd into a git checkout, or run git init here first
+ERROR: [E_NOT_A_STORE] git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read
+  hint: name the store with --store <org>[/<folder>] or a setup with --setup <setup>; lore store list and lore setup list show them, or cd into a repo
 (exit 19)
 ```
 <!-- /example -->
@@ -37,7 +37,7 @@ The [full list](#the-full-list) below links every code with its exit status.
 |---|---|
 | 0 | the command worked |
 | 1 | something unexpected failed: `E_INTERNAL` |
-| 10 | `E_NO_WORK`: `lore task next` found nothing ready to do |
+| 10 | `E_NO_WORK`: `lore task next --claim` found nothing ready to do |
 | 11 | `E_CONTENDED`: there was work, but another agent claimed it first every time; wait a moment and try again |
 | 12 | `E_LOST_CLAIM`: your claim on the task ran out or was taken back; stop working on it |
 | 13 | `E_CANCELLED`: a person cancelled the task while you held it; stop |
@@ -73,8 +73,8 @@ These numbers are a promise: they are never renumbered, only added to. Two comma
 | `E_MIGRATION_INCOMPLETE` | 23 | a `lore migrate run` of v0.1.17 data did not finish; `lore doctor` reports it | run `lore migrate run` again (it resumes where it stopped), or `lore migrate rollback` to undo it; for the repo cache, delete its file under `~/.lore/cache/repo/` (`lore where` names it) and the next command rebuilds it |
 | `E_NETWORK_FS` | 23 | the database sits on a network or cloud-synced drive, where it can break silently | move the project to a local folder (git still shares the notes), or set `LORE_ALLOW_NETWORK_FS=1` |
 | `E_INODE_MISMATCH` | 23 | the database file was replaced while lore had it open. Not raised yet | check what else touches the file |
-| `E_DISK_FULL` | 23 | the disk is full; nothing was changed | free some space or files on that disk (`df -h`, `df -i`) and run the command again |
-| `E_READ_ONLY_FS` | 23 | the database is on a drive that cannot be written. Not raised yet | move the project to a writable folder |
+| `E_DISK_FULL` | 23 | the disk is full; nothing was changed, unless the message says the row is written (the disk filled up between the row file and the cache): then the row is stored | free some space or files on that disk (`df -h`, `df -i`) and run the command again; when the message says the row is written, do not run it again (that would store the row twice): the next command catches the cache up |
+| `E_READ_ONLY_FS` | 23 | lore may not write a file or folder it needs: the message names it. In a lore home that is read-only (a read-only mount, a home restored without write bits) reads still work, from the store copies as they are, without fetching; a command that writes is refused before anything changes, naming the home | the hint names what blocks: `chmod u+rw` the file or `chmod u+rwx` the folder it names; for a read-only home, `chmod -R u+rwX <home>`, or point `LORE_HOME` at a writable folder (a new home has no stores yet: join them there with `lore setup join --invite <invite>`) |
 
 ### Project and identity
 
@@ -133,11 +133,12 @@ lore adds a line to `.gitignore` that takes `.lore/data` back in when it can. Wh
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NOT_FOUND` | 27 | no row with that id | check the id; when your branch is behind main it may have landed there (the hint names `lore sync peek`); when your branch already has main as last fetched, the row may belong to another repo (run the command there) or be newer than that fetch (the same `lore sync peek`). A task or gate command whose `--id` is the task has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
+| `E_NOT_FOUND` | 27 | no row with that id | check the id; when your branch is behind main it may have landed there (the hint names `lore sync peek`); when your branch already has main as last fetched, the row may belong to another repo (run the command there) or be newer than that fetch (the same `lore sync peek`); a row a teammate wrote to a store stays on their machine until their `lore sync` and reaches yours with your `lore sync` (the hint says so). A task or gate command whose `--id` is the task has already fetched once and retried before answering this ([team troubleshooting](../team/troubleshooting.md#e_not_found-on-a-task-id-a-teammate-just-added)) |
 | `E_INTERNAL` | 1 | something failed inside lore | run `lore support-bundle` and file a bug report with it |
+| `E_GIT_MISSING` | 23 | there is no `git` program on `PATH` (an agent sandbox or a minimal CI image); every store and live row goes through git, so every command but `lore version` refuses, and `lore doctor` says broken with one line naming git | install git, or put the folder that holds it on `PATH`, then run the command again |
 | `E_NOT_IMPLEMENTED` | 23 | this option exists but this build cannot do it yet | read the message; it says what to use instead |
 | `E_PORT_IN_USE` | 23 | `lore api` or the setup page cannot listen on the `--port` you gave: another program (or another `lore api`) holds it | pick another `--port`, or `--port 0` for a free one (lore prints the port it picked) |
-| `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo, or `lore migrate rollback` after a shared-database conversion | run it inside a git repo; a shared-database conversion has no rollback (see [the shared-database guide](../sync/shared-database-mode-b.md#pitfalls)) |
+| `E_UNSUPPORTED` | 23 | the command does not work here, for example outside a git repo, or `lore migrate rollback` after a shared-database conversion; a command whose data lives in each code repo (`lore mission status`, `lore inbox`, `lore migrate status/run/rollback/unlock`, `lore org link`, `lore fix`, `lore sync install-action`, and in a store clone `lore directive install`) says so outside one, and that `--store` does not apply (`lore store add/init/remove/set-url` say the same under `E_NOT_A_STORE`; `lore store init --name me` and set-url of an org's store work anywhere) | run it inside a git repo (cd into the code repo it is for); a shared-database conversion has no rollback (see [the shared-database guide](../sync/shared-database-mode-b.md#pitfalls)) |
 | `E_REFUSED` | 23 | a fixed lore rule refuses this; the message names the rule. On coordination commands: an agent with no person behind it (an agent actor whose roster row names no owner) doing a human override such as cancel, reassign or revoke (the `--json` error has `"needs_person": true`; a person's own coding agent acts for them and passes), the WIP limit, a poisoned task, or a task that is no longer open | do what the message says instead; do not retry the same command |
 | `E_NEEDS_CONFIRM` | 26 | the command asks first, and ran with no terminal and no `--yes`; the error carries the question | read the question, then run the command again with `--yes` |
 | `E_POLICY_DENIED` | 23 | a team policy refuses this | read the message for the policy key; `lore policy show` lists them |
@@ -210,9 +211,12 @@ ERROR: [E_HAS_DEPENDENTS] project delete: mem_28f8…03df (memories.project_id),
 |---|---|---|---|
 | `E_STORE_SCHEME` | 20 | a store url uses a scheme lore 0.1.18 has no backend for (`s3://`, `postgres://`, `lore://`); nothing was written | use a git url, the path of a bare git repository on this machine (`/srv/git/notes.git`), or `file:///<absolute path>` for a plain folder |
 | `E_STORE_UNREACHABLE` | 15 | a store with no copy on this machine could not be reached | go online once; after that lore keeps a copy |
-| `E_STORE_READ_ONLY` | 23 | a write to a store this repo attaches read-only | write to another place with `--to`, or attach the store without read-only |
+| `E_STORE_READ_ONLY` | 23 | a write to a store this repo attaches read-only, or to the repo store of a client repo linked by its remote (no `.lore/` of its own: lore writes nothing into it; the message names the repo's remote) | write to another place with `--to` (in a linked repo the hint names the linked folder's `--to`, by the store's short name when that folder is not attached here, such as `--to lore-acme/web`), or attach the store without read-only |
 | `E_STORE_LOCKED` | 23 | another lore process kept the store lock past `store.lock_timeout` | wait and run the command again |
 | `E_STORE_BACKEND` | 23 | a store's settings and its backend do not fit. Not raised by the 0.1.18 core | check the store entry in `.lore/stores.yaml` |
+| `E_DETACHED` | 23 | a write meant for a branch layer ran while the code repo's HEAD is detached (a CI checkout, a bisect), so there is no code branch to keep it with | check out a branch, or run the command with `LORE_LAYER=off` in front to write to the shared notes (an add or edit also takes `--no-layer`) |
+| `E_LAND_CONFLICT` | 23 | `lore branch land` (or its `--dry-run`) found the same text of a row changed on the branch and on the store branch; the message names the row and the field; nothing was landed | keep one side's text with `--take branch --ids <id>` or `--take main --ids <id>` (other fields still merge), or edit one side so they agree, then land again |
+| `E_LAYER_STALE` | 23 | the open branch notes of that name belong to an older branch with the same name | land or drop the old notes first: `lore branch land --branch <b>` or `lore branch drop --branch <b>` |
 
 `lore store set` and `lore store compact` (push modes and history compaction, [How writes reach the remote](../team/identity-and-stores.md#how-writes-reach-the-remote)) answer with these codes:
 
@@ -333,7 +337,7 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 
 | Code | Exit | What it means | What to do |
 |---|---|---|---|
-| `E_NO_WORK` | 10 | `lore task next` found no ready task; the message says why each one is blocked | wait, or unblock a task |
+| `E_NO_WORK` | 10 | `lore task next --claim` found no ready task; the message says why each one is blocked | wait, or unblock a task |
 | `E_CONTENDED` | 11 | ready work exists but every claim lost the race to another agent, or another writer won every attempt to push a coordination write | wait a moment and try again |
 | `E_LOST_CLAIM` | 12 | your claim is no longer on the server (it ran out or was taken back); lore fetched once and retried before answering this, so it is not stale | stop working on this task |
 | `E_CANCELLED` | 13 | a person cancelled the task while you held it | stop working on this task |
@@ -343,18 +347,18 @@ ERROR: [E_REF_SYNTAX] reference ${var:host?port=8080}: unknown option "port" for
 | `E_ORG_AMBIGUOUS` | 17 | two org entries match this repo equally well | choose one with `lore org use --entry <entry>` |
 | `E_ORG_DISAGREES` | 17 | `LORE_ORG` or `lore org use` names another org than the store's link for this repo | name the place with `--to <org>`, or fix the choice with `lore org use` (or unset `LORE_ORG`) |
 | `E_LINK_UNKNOWN` | 18 | the store cannot be reached and no saved link list exists, so lore cannot tell whether this is a client repo | pass `--to`, or try again online (`lore store doctor`) |
-| `E_NOT_A_STORE` | 19 | the folder is not inside a git work tree; or the git repo has no lore data (`lore isn't set up in … (no .lore folder)`): every command but `lore init`, `lore setup` and the link commands refuses there and changes nothing, not even `.git/config`, `.git/hooks` or `.git/info`; or a repo under `stores:` has no `lore-store.yaml`, or holds files that are not lore notes | outside git: cd into a git checkout, or run `git init` first; a repo with no lore data: `lore init` (or the This folder step of `lore setup`) when you want lore there; for a store: make one with `lore store init` in a new, empty repo |
+| `E_NOT_A_STORE` | 19 | the folder is not inside a git work tree; or the git repo has no lore data (`lore isn't set up in … (no .lore folder)`): every command but `lore init`, `lore setup` and the link commands refuses there and changes nothing, not even `.git/config`, `.git/hooks` or `.git/info`; or a repo under `stores:` has no `lore-store.yaml`, or holds files that are not lore notes | outside git: cd into a git checkout, or run `git init` first (in the home folder lore never suggests `git init`: it names the store with `--to <org>/<folder>` (or `--store`; `--to me` for your own) or a setup with `--setup <setup>`); a repo with no lore data: `lore init` (or the This folder step of `lore setup`) when you want lore there, or `lore org link --org <org> --project <folder>` to keep the repo free of lore files (personal notes written with `--to me` are listed and searched there without either); for a store: make one with `lore store init` in a new, empty repo |
 | `E_LEAK_BLOCKED` | 19 | the write would put internal notes where the client can read them, or (`cannot check (…)`) a store the check must read could not be read on this machine; the message names it and its cause, and nothing was written | see `lore check leaks --explain`; for `cannot check`, run `lore sync` once the store is reachable (`lore doctor` names it) and run the command again |
 | `E_CYCLE` | 19 | the `--after` link would make tasks wait on each other in a circle | drop one `--after` link |
 | `E_OLD_LORE` | 19 | this lore is older than the live rows here allow; reading still works | upgrade lore |
 | `E_CONFIG_INVALID` | 20 | `~/.lore/config.yaml` has a mistake | run `lore config check`; it lists every problem |
 
-Two of them for real: `lore task next` in a repo with no open task, and a write while `LORE_ORG` names another org than the repo's store link:
+Two of them for real: `lore task next --claim` in a repo with no open task, and a write while `LORE_ORG` names another org than the repo's store link:
 
 <!-- example: reference#no-work -->
 ```console
 # alice, in landing
-$ lore task next --push
+$ lore task next --claim --push
 ERROR: [E_NO_WORK] nothing ready: no open task matches
   hint: lore task add makes a task; lore task list shows the open ones
 (exit 10)
@@ -403,8 +407,6 @@ A team profile write in a repo without an org answers `E_REFUSED` (profiles live
 | `E_INVITE_REVOKED` | 23 | the invite was revoked | ask the inviter |
 | `E_INVITE_USED` | 23 | the invite was accepted by another person | ask for a new one |
 | `E_INVITE_EMAIL` | 20 | the invite is for another email | use that address, or ask for a new invite |
-| `E_STORE_NO_ACCESS` | 23 | the store refused this account or key (not a network failure). Not raised yet: setup reports the `store.read` check | ask for access, or check the key (`lore doctor --all --setup <name>`) |
-| `E_STORE_NO_WRITE` | 23 | the store can be read but not written. Not raised yet: setup reports the `store.write` check | ask for push access, or attach it `--read-only` |
 | `E_SKILL_LINKED` | 23 | `lore skill install`: the tool's skill folder (or a file in it) is a symbolic link whose target holds an older or hand-edited lore skill, another skill, or nothing; lore does not write through a link unasked | `--link replace` puts lore's own copy where the link was (its target is untouched); `--link update` writes this lore's skill into the target ([more](../knowledge/skill-install.md)) |
 | `E_FIX_REFUSED` | 20 | a check's fix is not runnable, or a value in its command failed the safety check | follow the fix text by hand ([more](../team/setup-errors.md#e_fix_refused-exit-20)) |
 
@@ -465,8 +467,8 @@ $ lore rule list --json
 {
   "error": {
     "code": "E_NOT_A_STORE",
-    "message": "git: the folder is not inside a git work tree",
-    "hint": "cd into a git checkout, or run git init here first",
+    "message": "git: the folder is not inside a git work tree, and no org's setup covers it, so there is no store to read",
+    "hint": "name the store with --store \u003corg\u003e[/\u003cfolder\u003e] or a setup with --setup \u003csetup\u003e; lore store list and lore setup list show them, or cd into a repo",
     "exit": 19,
     "class": "guard",
     "retryable": false,

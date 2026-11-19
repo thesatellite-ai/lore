@@ -415,6 +415,8 @@ func (o ops) checklistRm(ctx context.Context, in ChecklistItemIn) (ChecklistOut,
 // ChecklistListIn is the input of task.checklist.list: the task id plus
 // the shared --limit / --page of every list (op.PageFlags, T-4).
 type ChecklistListIn struct {
+	// --store <store> (devco D-507): the read names its store.
+	op.StoreFlag
 	ID string `json:"id" arg:"0" desc:"the task id (tsk_…)"`
 	op.PageFlags
 }

@@ -19,6 +19,8 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -1141,10 +1143,16 @@ func sortedIDs(m map[ids.ID[ids.MetaKey]]meta.Entry) []ids.ID[ids.MetaKey] {
 // MetaFlags are the one shared metadata flag set (3.2, R13): an add or edit
 // input embeds it (no json tag) and Run binds it to the command's write,
 // so every entity reads --meta, --meta-json and --meta-stdin the same way.
+// It also carries --no-layer: every row an add or edit writes can go into
+// a branch layer, so every add and edit can send it to the shared notes
+// instead (devco:V-5: decision add had no way to; bindInputLive reads it).
 type MetaFlags struct {
 	Meta      []string `json:"meta,omitempty" flag:"meta" desc:"set metadata: key=value, key:type=value, project:key=value (repeatable)"`
 	MetaJSON  []string `json:"meta_json,omitempty" flag:"meta-json" desc:"set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)"`
 	MetaStdin string   `json:"meta_stdin,omitempty" flag:"meta-stdin" desc:"read the value of this key from stdin (keeps it out of shell history)"`
+	// NoLayer writes to the shared notes on a code branch that keeps its
+	// own notes in a store (BRANCH_LAYERS 13).
+	NoLayer bool `json:"no_layer,omitempty" flag:"no-layer" desc:"on a code branch with its own notes (a branch layer), write this row to the shared notes instead"`
 }
 
 // Input field names of MetaFlags (Run reads them from any input).
@@ -1203,15 +1211,21 @@ func (f MetaFlags) Write(table row.Table, id ids.AnyID, unset []string) (MetaWri
 	for _, a := range f.MetaJSON {
 		t, err := meta.ParseWrite(a)
 		if err != nil {
-			return MetaWrite{}, err
+			return MetaWrite{}, metaJSONTermErr(a, err)
 		}
+		from := "the value"
 		switch {
 		case t.Value == metaStdinMark:
 			t.Value, err = readStdin()
+			from = "stdin"
 		case strings.HasPrefix(t.Value, "@"):
+			from = t.Value[1:]
 			t.Value, err = readMetaFile(t.Value[1:])
 		}
 		if err != nil {
+			return MetaWrite{}, err
+		}
+		if err := checkMetaJSON(metaTermKey(t, a), from, t.Value); err != nil {
 			return MetaWrite{}, err
 		}
 		mw.JSON = append(mw.JSON, t)
@@ -1228,6 +1242,52 @@ func (f MetaFlags) Write(table row.Table, id ids.AnyID, unset []string) (MetaWri
 		mw.Set = append(mw.Set, t)
 	}
 	return mw, nil
+}
+
+// metaJSONHint is the --meta-json form every --meta-json error names.
+const metaJSONHint = `--meta-json 'key={"name":"value"}', key=@file.json or key=- for stdin`
+
+// metaJSONTermErr words a --meta-json argument that is not key=<json> in
+// --meta-json's own grammar (devco:L-5: `--meta-json '{bad'` answered with
+// the --meta "has no operator / write key=value" line). A bare JSON text
+// (it starts with { or [) is named as a value with no key.
+func metaJSONTermErr(arg string, err error) error {
+	if s := strings.TrimSpace(arg); strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[") {
+		return errs.New(errs.MetaOp, "--meta-json "+strconv.Quote(arg)+" has no key: it takes key=<json>, not a bare JSON value").WithHint(metaJSONHint)
+	}
+	msg := "is not key=<json>"
+	var e *errs.Error
+	if errors.As(err, &e) {
+		msg += " (" + strings.TrimPrefix(e.Message, "meta: ") + ")"
+	}
+	return errs.New(errs.MetaOp, "--meta-json "+strconv.Quote(arg)+" "+msg).WithHint(metaJSONHint)
+}
+
+// checkMetaJSON refuses a --meta-json value that is not JSON, naming the
+// parser's reason and byte offset (devco:L-5; the shared coercion only
+// says "invalid json"). from is "the value", "stdin" or the file read.
+func checkMetaJSON(key, from, raw string) error {
+	var v json.RawMessage
+	err := json.Unmarshal([]byte(raw), &v)
+	if err == nil {
+		return nil
+	}
+	why := "it ends before the JSON is complete"
+	var se *json.SyntaxError
+	if errors.As(err, &se) && !strings.Contains(se.Error(), "unexpected end") {
+		why = se.Error() + " at byte " + strconv.FormatInt(se.Offset, 10)
+	}
+	return errs.New(errs.MetaValue, "--meta-json "+key+": "+from+" is not valid JSON ("+why+")").WithHint(metaJSONHint)
+}
+
+// metaTermKey is the key a term names as typed: the part of arg before
+// the first '=' (the key, its type or scope words); the parsed key when
+// arg has none.
+func metaTermKey(t meta.Term, arg string) string {
+	if k, _, ok := strings.Cut(arg, "="); ok && k != "" {
+		return k
+	}
+	return t.Key
 }
 
 // readMetaFile reads a --meta-json @file value.

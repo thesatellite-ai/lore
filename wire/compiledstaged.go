@@ -4,7 +4,7 @@ package wire
 // in the commit (mac:firstcommit-staged-binary: a first commit in a new
 // repo staged the Go binary `go build` had just written, and lore said
 // nothing). Committing it is not refused, since some repos ship binaries
-// on purpose and the file was still checked for secrets like any other;
+// on purpose (a binary file is not scanned for secrets, devco:Q-8);
 // the check names each compiled program the commit adds, once, with the
 // way to keep build output out of git.
 //
@@ -78,7 +78,7 @@ func compiledProgramsLine(ctx context.Context, top string, docs map[string][]byt
 		paths = append(paths, f[:strings.LastIndex(f, " (")])
 	}
 	return "this commit adds compiled programs: " + strings.Join(found, ", ") +
-		"; they were checked for secrets and are committed; if they are build output, keep them out of git: add them to .gitignore, then `git rm --cached -- " + strings.Join(paths, " ") + "` and `git commit --amend`"
+		"; they are committed (a binary file is not scanned for secrets); if they are build output, keep them out of git: add them to .gitignore, then `git rm --cached -- " + strings.Join(paths, " ") + "` and `git commit --amend`"
 }
 
 // atHEAD reports whether HEAD of the repo at top holds path (false before

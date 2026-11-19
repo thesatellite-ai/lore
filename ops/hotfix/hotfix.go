@@ -8,6 +8,7 @@ package hotfix
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/ops/internal/addkey"
 	"github.com/thesatellite-ai/lore/ops/internal/auditrec"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ import (
 	kn "github.com/thesatellite-ai/lore/ops/internal/knowledge"
 	"github.com/thesatellite-ai/lore/ops/internal/knscope"
 	"github.com/thesatellite-ai/lore/ops/internal/metashow"
+	"github.com/thesatellite-ai/lore/ops/internal/sourceref"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -119,6 +122,10 @@ func Ops(env kn.Env) []op.Entry {
 type AddIn struct {
 	// MetaFlags: --meta, --meta-json, --meta-stdin (engine binds them, R13).
 	engine.MetaFlags
+	// --source-ref, shared by every add that keeps a source_ref (D-425).
+	sourceref.Flag
+	// --key: a retry with the same key adds nothing (D-439, addkey).
+	addkey.Retry
 
 	Title      string   `json:"title" flag:"title" desc:"short headline (required)"`
 	Body       string   `json:"body,omitempty" flag:"body" desc:"body (required)" ui:"widget=markdown"`
@@ -147,12 +154,15 @@ type AddOut struct {
 	CarriedMeta int `json:"carried_meta,omitempty"`
 	// label is the store's `_label` for the add line (kn.Label; "" for
 	// the repo): v0.1.17 printed route.Label, "[northwind/acme]".
-	label string
+	// Existing is true when --key found the row a previous run added
+	// (nothing written).
+	Existing bool `json:"existing,omitempty"`
+	label    string
 }
 
 // Text prints v0.1.17's add line.
 func (o AddOut) Text() string {
-	return fmt.Sprintf("⚠ %s — %s [%s]%s\n", o.ID, o.Title, o.Severity, kn.LabelSuffix(o.label)) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings)
+	return fmt.Sprintf("⚠ %s — %s [%s]%s\n", o.ID, o.Title, o.Severity, kn.LabelSuffix(o.label)) + carriedLine(o.CarriedMeta) + kn.WarnText(o.Warnings) + kn.ExistingLine(o.Existing)
 }
 
 // carriedLine is the "carried over N keys" note of a --supersedes add.
@@ -403,11 +413,13 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	if err != nil {
 		return AddOut{}, err
 	}
+	var existed bool
 	c := kn.Create{
+		Key: in.Key, Existed: &existed,
 		To: in.To, Project: in.Project, Repo: in.Repo, Supersedes: in.Supersedes, Tags: in.Tags,
 		Meta: in.MetaFlags, NoMeta: in.NoMeta,
 		Texts: map[string]string{
-			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldSeverity: severity, kn.FieldSourceKind: in.Source, schema.FieldSummary: summary,
+			kn.FieldTitle: in.Title, kn.FieldBody: body, fieldSeverity: severity, kn.FieldSourceKind: in.Source, kn.FieldSourceRef: in.SourceRef, schema.FieldSummary: summary,
 		},
 	}
 	// 6.2.3 / D10: --scope picks the store, repo and folder.
@@ -421,7 +433,7 @@ func (o ops) add(ctx context.Context, in AddIn) (AddOut, error) {
 	}
 	// The reply echoes the stored title (after the write path's text
 	// cleanup), so --json shows what show and the row file hold (I-4).
-	return AddOut{ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Severity: severity, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
+	return AddOut{Existing: existed, ID: w.Row.ID.String(), Store: string(src), CarriedMeta: carried, Title: kn.Field(w.Row, kn.FieldTitle), Severity: severity, Warnings: append(kn.Warnings(w), sw...), label: kn.Label(kn.LabelerOf(o.env), src)}, nil
 }
 
 // list returns the hotfixes in scope (archived included, as v0.1.17).
@@ -460,6 +472,31 @@ func (o ops) show(ctx context.Context, in IDIn) (ShowOut, error) {
 	return ShowOut{SchemaVersion: SchemaVersion, Kind: KindShow, Data: withMeta(ctx, o.env, recordOf(kn.LabelerOf(o.env), it.Source, it.Row), it.Row)}, nil
 }
 
+// pinnedSeverity reports whether a hotfix of severity sev is pinned
+// (always written in full into every repo's context: critical, high).
+func pinnedSeverity(sev string) bool {
+	return sev == schema.HotfixSeverityCritical || sev == schema.HotfixSeverityHigh
+}
+
+// keepMember is the --where term that leaves every pinned hotfix out of
+// a bulk form, the member's own way on when it matched company critical
+// or high hotfixes (devco D-659).
+const keepMember = fieldSeverity + ":" + schema.HotfixSeverityLow + "," + schema.HotfixSeverityMedium
+
+// guardCompanyPinned refuses a member's lower severity on a pinned hotfix
+// on company ground (the org folder, a store root, every project folder of
+// the company store): it takes the warning out of what every repo reading
+// it is told, an admin's change like a company must rule (devco D-637,
+// D-681; profilestore.RequireAdminAt). line is
+// the command the admin runs. A bad or missing id passes: edit answers it.
+func (o ops) guardCompanyPinned(ctx context.Context, id, does, line string) error {
+	it, err := kn.Show(ctx, o.env, noun, id)
+	if err != nil || !pinnedSeverity(kn.Field(it.Row, fieldSeverity)) {
+		return nil
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, it.Source, does, line)
+}
+
 // edit patches the given fields.
 func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	if err := kn.OneOf(noun, "severity", in.Severity, schema.HotfixSeverities()); err != nil {
@@ -468,6 +505,11 @@ func (o ops) edit(ctx context.Context, in EditIn) (WriteOut, error) {
 	summary, err := checkSummary(in.Summary)
 	if err != nil {
 		return WriteOut{}, err
+	}
+	if in.Severity != "" && !pinnedSeverity(in.Severity) {
+		if err = o.guardCompanyPinned(ctx, in.ID, "lower the severity of a company critical or high hotfix", "lore hotfix edit --id "+in.ID+" --severity "+in.Severity); err != nil {
+			return WriteOut{}, err
+		}
 	}
 	e := kn.Edit{
 		Texts: map[string]string{
@@ -494,11 +536,14 @@ func (o ops) archive(ctx context.Context, in ArchiveIn) (WriteOut, error) {
 		return WriteOut{}, err
 	}
 	if bulkForm {
-		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table}, in.Where, in.DryRun, kn.Now(o.env))
+		res, werr := wheredel.Archive(ctx, o.env, wheredel.Spec{Noun: noun.Name, Table: noun.Table, Guard: wheredel.CompanyGuard(o.env, noun.Name, "archive", in.Where, keepMember)}, in.Where, in.DryRun, kn.Now(o.env))
 		if werr != nil {
 			return WriteOut{}, werr
 		}
 		return WriteOut{ID: res.Batch, Store: res.Store, Rows: res.Rows, bulk: res.Human}, nil
+	}
+	if err = o.guardCompanyPinned(ctx, in.ID, "archive a company critical or high hotfix", "lore hotfix archive --id "+in.ID); err != nil {
+		return WriteOut{}, err
 	}
 	return o.stamp(ctx, in.ID, kn.Now(o.env), "archived")
 }
@@ -520,6 +565,9 @@ func (o ops) stamp(ctx context.Context, id string, v value.Value, done string) (
 // delete writes the hotfix's tombstone.
 func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // DELETION 2.1 --reason; E_REASON_REQUIRED under delete.require_reason
+	if err := o.guardCompanyPinned(ctx, in.ID, "delete a company critical or high hotfix", "lore hotfix delete --id "+in.ID+" --yes"); err != nil {
+		return WriteOut{}, err
+	}
 	src, w, err := kn.Delete(ctx, o.env, noun, in.ID)
 	if err != nil {
 		return WriteOut{}, err

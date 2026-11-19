@@ -17,6 +17,7 @@ package wire
 // it. Close closes every retired state with the App.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -24,7 +25,21 @@ import (
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/engine/attach"
+	"github.com/thesatellite-ai/lore/store"
 )
+
+// FollowPlaces makes this App check, on each request, whether a place file
+// (config.yaml, the clone and address records, the repo's stores.yaml)
+// changed since its state was opened, and open again from the files as
+// they are now: the watch ServeAsPerson turns on, without its person-only
+// identity. The setup page serves a person through it, so the setup the
+// page itself just saved (a new org, its identity, its stores) is what the
+// page's next call runs as (devco J-16).
+func (a *App) FollowPlaces() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.watchPlaces = true
+}
 
 // placeFiles are the files that say where this machine's stores live, as
 // seen from the repo at top ("" = none).
@@ -85,4 +100,28 @@ func (a *App) refreshMovedStores() {
 	}
 	a.cfgOpened, a.cfg, a.cfgErr = false, nil, nil
 	a.placeFiles, a.placesAt = nil, ""
+}
+
+// reopenForStore retires the App's open state (a request still running
+// may hold it; Close closes it) and opens it again from the place files as
+// they are now, for a write or read into target that the open state does
+// not attach. It serves a step that attaches a store and writes into it in
+// the same request (devco N-1: the setup page's team step wrote the org
+// entry, then its roster write looked in the state opened before).
+func (a *App) reopenForStore(ctx context.Context, target store.Source, write bool) (*state, error) {
+	a.mu.Lock()
+	if a.st != nil {
+		a.retired = append(a.retired, a.st)
+	}
+	a.opened, a.st, a.err = false, nil, nil
+	if a.cfg != nil {
+		a.retired = append(a.retired, a.cfg)
+	}
+	a.cfgOpened, a.cfg, a.cfgErr = false, nil, nil
+	a.placeFiles, a.placesAt = nil, ""
+	a.mu.Unlock()
+	if write {
+		return a.writeStateFor(ctx, target)
+	}
+	return a.state(ctx)
 }

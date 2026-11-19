@@ -7,6 +7,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/logic/repourl"
+	"github.com/thesatellite-ai/lore/model/fspath"
 )
 
 // gitOriginURLKey is the git config key of origin's configured URL. The raw
@@ -27,7 +28,7 @@ func defaultProjectName(ctx context.Context, dir string) string {
 	if n == "" {
 		return strings.ToLower(filepath.Base(dir))
 	}
-	if top := gitTopOf(ctx, dir); top != "" && realPath(top) != realPath(dir) {
+	if top := gitTopOf(ctx, dir); top != "" && fspath.Canonical(top) != fspath.Canonical(dir) {
 		if base := filepath.Base(dir); !strings.EqualFold(base, n) {
 			n += "-" + base
 		}

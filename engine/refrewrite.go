@@ -241,7 +241,7 @@ func (e *Engine) MergeRows(ctx context.Context, w RowWriter, table row.Table, ke
 	}
 	res.Referrers = refs
 	for _, r := range refs {
-		if _, werr := e.writable(r.Store); werr != nil {
+		if _, werr := e.writable(ctx, r.Store); werr != nil {
 			return res, errs.Wrap(errs.ReadOnly, "merge: "+string(r.Table)+" "+r.ID.String()+" names "+drop.String()+" but its store "+string(r.Store)+" is not writable; nothing changed", werr)
 		}
 	}

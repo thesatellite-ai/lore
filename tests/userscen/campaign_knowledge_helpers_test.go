@@ -41,7 +41,7 @@ var campKnowVerbs = map[string][]string{
 	"pii-pattern":      {"add", "disable", "enable", "list"},
 	"playbook":         {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"prompt":           {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
-	"rule":             {"add", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
+	"rule":             {"add", "approve", "archive", "delete", "edit", "list", "search", "show", "unarchive"},
 	"snapshot":         {"add", "archive", "delete", "list", "search", "show", "unarchive"},
 	"suggestion":       {"add", "delete", "edit", "list", "search", "show"},
 	"tastepref":        {"add", "delete", "edit", "list", "search", "show"},

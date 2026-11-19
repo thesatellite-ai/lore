@@ -7,7 +7,7 @@
 //	setup.run ─▶ --agent-hooks ─▶ Host.PlanAgentHooks ─▶ one line per hook
 //	          │                   ─▶ nothing to change | --dry-run: stop
 //	          │                   ─▶ not confirmed: E_NEEDS_CONFIRM (the surface asks)
-//	          │                   ─▶ Host.WriteAgentHooks ─▶ "✓ N settings file(s) written"
+//	          │                   ─▶ Host.WriteAgentHooks ─▶ "✓ N hooks in M settings files written"
 //	          └▶ otherwise ─▶ Host.UpdateSchema(quiet = --schema-only) ─▶ its lines
 //
 // The schema and the settings files are this machine's and the
@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/plural"
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -211,11 +212,21 @@ func agentHooks(ctx context.Context, h Host, in RunIn, yes bool) (RunOut, error)
 		return RunOut{}, err
 	}
 	out := RunOut{Hooks: plans, Lines: make([]string, 0, len(plans)+1)}
+	// devco:S-4: one line per distinct plan line (a tool that is not set up
+	// here has the same line for each of its hooks, printed once), and the
+	// hooks and the files that hold them counted apart.
 	changes := 0
+	files := map[string]bool{}
+	printed := map[string]bool{}
 	for _, p := range plans {
-		out.Lines = append(out.Lines, fmt.Sprintf("%-13s %-28s %s", p.Tool, p.File, p.Note))
+		line := fmt.Sprintf("%-13s %-28s %s", p.Tool, p.File, p.Note)
+		if !printed[line] {
+			printed[line] = true
+			out.Lines = append(out.Lines, line)
+		}
 		if p.Change {
 			changes++
+			files[p.File] = true
 		}
 	}
 	switch {
@@ -227,7 +238,7 @@ func agentHooks(ctx context.Context, h Host, in RunIn, yes bool) (RunOut, error)
 		return out, nil
 	}
 	if !yes {
-		q := fmt.Sprintf("Write %d settings file(s)?", changes)
+		q := fmt.Sprintf("Write %s?", hooksInFiles(changes, len(files)))
 		next := []string{"setup", "--agent-hooks", "--yes"}
 		if in.Remove {
 			next = append(next, "--remove")
@@ -238,9 +249,15 @@ func agentHooks(ctx context.Context, h Host, in RunIn, yes bool) (RunOut, error)
 	if err := h.WriteAgentHooks(ctx, plans, in.Remove); err != nil {
 		return RunOut{}, err
 	}
-	out.Written = changes
-	out.Lines = append(out.Lines, fmt.Sprintf("✓ %d settings file(s) written", changes))
+	out.Written = len(files)
+	out.Lines = append(out.Lines, fmt.Sprintf("✓ %s written", hooksInFiles(changes, len(files))))
 	return out, nil
+}
+
+// hooksInFiles is "4 hooks in 2 settings files" (devco:S-4: the count of
+// hooks was printed as the count of files).
+func hooksInFiles(hooks, files int) string {
+	return plural.Count(hooks, "hook") + " in " + plural.Count(files, "settings file")
 }
 
 // RepoReady is an optional upgrade of Host: whether the folder lore runs

@@ -45,7 +45,7 @@ func SharedOf(o *Org) Shared {
 // map and none are equal; a store's empty branch is the default branch).
 func (a Shared) Equal(b Shared) bool {
 	return slices.EqualFunc(a.Stores, b.Stores, func(x, y Store) bool {
-		return x.URL == y.URL && x.EffectiveBranch() == y.EffectiveBranch() && x.OrgFolder == y.OrgFolder
+		return x.URL == y.URL && x.EffectiveBranch() == y.EffectiveBranch() && x.OrgFolder == y.OrgFolder && x.Audience == y.Audience
 	}) && slices.Equal(a.Own, b.Own) && slices.Equal(a.Repos, b.Repos) &&
 		maps.Equal(a.Defaults.ClientRepos, b.Defaults.ClientRepos)
 }

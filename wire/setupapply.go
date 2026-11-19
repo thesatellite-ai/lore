@@ -20,6 +20,7 @@ package wire
 // written equals what is there, nothing is written and Changed is false.
 
 import (
+	"cmp"
 	"context"
 	"maps"
 	"slices"
@@ -30,6 +31,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/engine"
@@ -64,6 +66,11 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 		return opssetup.ApplyResult{}, errs.New(errs.InvalidInput, "setup apply: the setup has no name").WithHint("answer the kind step first (lore setup plan)")
 	}
 	switch req.Apply {
+	case onboard.ApplyIdentity, onboard.ApplyPersonalStore, onboard.ApplyJoin, onboard.ApplyTeam:
+		// devco D-424: the steps that write stores are the person's own
+		ctx = ap.a.creditPerson(ctx, "setup apply "+string(req.Step), ap.stepPerson(ctx, e, req.Answers), ap.a.notice)
+	}
+	switch req.Apply {
 	case onboard.ApplyNone:
 		return opssetup.ApplyResult{Wrote: []string{}, Setup: e}, nil
 	case onboard.ApplySetupEntry, onboard.ApplyTools, onboard.ApplySecrets, onboard.ApplyFolders:
@@ -79,6 +86,18 @@ func (ap setupApplier) Apply(ctx context.Context, req opssetup.ApplyRequest) (op
 		return ap.applyRoster(ctx, e, req)
 	}
 	return opssetup.ApplyResult{}, errs.New(errs.InvalidInput, "setup apply: unknown apply "+string(req.Apply)).WithHint("lore setup plan lists the steps")
+}
+
+// stepPerson is the name the setup's identity answers give ("" when none
+// does yet): the person a step under a coding agent is credited to.
+func (ap setupApplier) stepPerson(ctx context.Context, e onboard.SetupEntry, step onboard.Answers) string {
+	if n := answerText(step, onboard.QIDName); n != "" {
+		return n
+	}
+	if ans, err := ap.setupAnswers(ctx, e, step); err == nil {
+		return answerText(ans, onboard.QIDName)
+	}
+	return ""
 }
 
 // withStepAnswers is e with what a kind, tools, secrets or folders step's
@@ -342,7 +361,7 @@ func (ap setupApplier) retryJoinIdentity(ctx context.Context, org string, emails
 	if want == have {
 		return nil
 	}
-	_, err = ap.a.SetOrgIdentity(ctx, org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle})
+	_, _, err = ap.a.SetOrgIdentity(ctx, org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle})
 	return err
 }
 
@@ -378,7 +397,7 @@ func (ap setupApplier) applyIdentity(ctx context.Context, e onboard.SetupEntry, 
 				return opssetup.ApplyResult{}, err
 			}
 		}
-		if _, err = ap.a.SetOrgIdentity(ctx, e.Org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle}); err != nil {
+		if _, _, err = ap.a.SetOrgIdentity(ctx, e.Org, opsidentity.Entry{Key: want.Key, Name: want.Name, Handle: want.Handle}); err != nil {
 			return res, err
 		}
 		// The roster actor row is the team's source of the name (row 3):
@@ -472,7 +491,7 @@ func (ap setupApplier) applyPersonalStore(ctx context.Context, e onboard.SetupEn
 		ap.a.notice(prevNote)
 	}
 	if !req.DryRun && choice == onboard.PersonalStoreLocal {
-		ap.a.notice("setup apply personal_store: " + opssetup.LocalPersonalWarning) // H-17
+		ap.a.notice("setup apply personal_store: " + opssetup.LocalPersonalWarningText()) // H-17
 	}
 	if !req.DryRun && initURL != "" {
 		if res, err = ap.initPersonalStore(ctx, res, initURL); err != nil {
@@ -530,16 +549,25 @@ func (ap setupApplier) personalStoreValue(choice, raw string) (value, initURL st
 	return url, url, nil
 }
 
+// pushedFirstCommit is the ApplyResult.Pushed line of a new git store
+// whose marker commit went to url (devco D-613).
+func pushedFirstCommit(url string) string {
+	return url + ": the new store's first commit (its marker), so the store exists there"
+}
+
 // initPersonalStore makes url a store (its marker) once the entry naming
 // it is saved, adding the write to res.
 func (ap setupApplier) initPersonalStore(ctx context.Context, res opssetup.ApplyResult, url string) (opssetup.ApplyResult, error) {
-	already, err := ap.a.InitStoreMarker(ctx, url)
+	made, err := ap.a.InitStoreMarker(ctx, url)
 	if err != nil {
 		return res, err
 	}
-	if !already {
+	if !made.Already {
 		res.Changed = true
 		res.Wrote = append(res.Wrote, url)
+	}
+	if made.Pushed {
+		res.Pushed = append(res.Pushed, pushedFirstCommit(url))
 	}
 	return res, nil
 }
@@ -618,6 +646,18 @@ func (ap setupApplier) withEarlySteps(ctx context.Context, e onboard.SetupEntry)
 	return e, initURL, nil
 }
 
+// joinSigner marks the org store a join step clones as signed by the
+// identity the step answers (devco N-6), as the admin team step does
+// (F-16): the clone is made before orgs[<org>] holds that identity, so the
+// clone kept the global git email (another org's) until lore's first write
+// there, and doctor --all was degraded right after a clean join.
+func joinSigner(ctx context.Context, storeURL, name string, emails []string) context.Context {
+	if len(emails) == 0 {
+		return ctx
+	}
+	return withApplyingSigner(ctx, storeURL, git.Signature{Name: name, Email: emails[0]})
+}
+
 // applyRoster is 4.5 (join) and 4.6 (team) Apply: ops/team writes the org
 // entry and the roster rows (idempotent: a re-run is Already / writes
 // nothing), then the setups[] entry is written with its org (step 6), now
@@ -627,6 +667,11 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	host, ok := ap.a.OrgHost(ctx)
 	if !ok {
 		return opssetup.ApplyResult{}, errs.New(errs.Unsupported, "setup apply: this lore build has no org commands").WithHint("use the lore release binary")
+	}
+	if req.Apply == onboard.ApplyTeam { // a new org: no roster row can name the agent's owner yet
+		if err := ap.a.refuseOwnerlessAgent(ctx, "setup apply "+string(req.Step)); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
 	}
 	ans, err := ap.setupAnswers(ctx, e, req.Answers)
 	if err != nil {
@@ -649,12 +694,22 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	// after the admin setups[] entry below.
 	var teamOrg, teamURL string
 	var push []storepush.Assignment
+	if req.Apply == onboard.ApplyJoin {
+		ctx = team.WithJoinSetup(ctx, e.Name) // a refusal names this setup's identity step (N-4)
+	}
+	// undo takes back what a refused or failed member join wrote to the
+	// home (homeGuard.failed); any other step keeps its error as is
+	undo := func(err error) error { return err }
 	if req.Apply == onboard.ApplyJoin && !strings.HasPrefix(strings.TrimSpace(answerText(ans, onboard.QIDInvite)), onboard.InvitePrefix) {
 		// a member an admin added (`lore member add`): the answer names the
-		// org (an entry here, or its store url), no invite line
+		// org (an entry here, or its store url), no invite line. devco:D-644:
+		// a join refused or failed from here to its setups[] entry leaves
+		// the home as it was (no org entry, clone or access rule left)
+		guard := guardHome(ap.a.opts.Home)
+		undo = guard.failed
 		org, url, oerr := ap.memberOrg(ctx, host, answerText(ans, onboard.QIDInvite), emails, name, handle, req.DryRun)
 		if oerr != nil {
-			return opssetup.ApplyResult{}, oerr
+			return opssetup.ApplyResult{}, undo(oerr)
 		}
 		e.Kind, e.Org = onboard.KindMember, org
 		e.Identity = onboard.SetupIdentity{}
@@ -662,9 +717,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{url, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
 		if err = ap.retryJoinIdentity(ctx, org, emails, name, handle); err != nil {
-			return opssetup.ApplyResult{}, err
+			return opssetup.ApplyResult{}, undo(err)
 		}
-		res, err = team.ApplyJoinMember(withApplyingSetup(ctx, e.Name, org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
+		res, err = team.ApplyJoinMember(joinSigner(withApplyingSetup(ctx, e.Name, org), url, name, emails), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: org}},
 			team.MemberJoinRequest{Org: org, Store: url, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 		if err == nil && res.OrgRole == team.OrgRoleAdmin {
 			// I-17: the org's admin joining from another machine gets an
@@ -678,13 +733,19 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 		}
 		e.Kind, e.Org = onboard.KindMember, inv.Org
 		e.Identity = onboard.SetupIdentity{} // a team setup reads orgs[<org>].identity (3.2); a solo one turned member drops its own
+		// devco D-626: the org entry is checked before anything is written
+		// (retryJoinIdentity below rewrites the entry): a refused join
+		// leaves config.yaml, the entry and the setup as they were.
+		if _, err = team.CheckJoinEntry(ctx, ap.a, inv.Org, inv.Store); err != nil {
+			return opssetup.ApplyResult{}, err
+		}
 		if req.DryRun {
 			return opssetup.ApplyResult{Changed: true, Wrote: []string{inv.Store, configPath(ap.a.opts.Home)}, Setup: e}, nil
 		}
 		if err = ap.retryJoinIdentity(ctx, inv.Org, emails, name, handle); err != nil {
 			return opssetup.ApplyResult{}, err
 		}
-		res, err = team.ApplyJoin(withApplyingSetup(ctx, e.Name, inv.Org), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
+		res, err = team.ApplyJoin(joinSigner(withApplyingSetup(ctx, e.Name, inv.Org), inv.Store, name, emails), team.JoinDeps{Orgs: host, Entries: ap.a, Profiles: orgRosterStore{a: ap.a, org: inv.Org}},
 			team.JoinRequest{Invite: inv, Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	} else {
 		org := pick(ans, onboard.QIDOrg, e.Org)
@@ -724,15 +785,15 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 				Repos: slices.Clone(ans[onboard.QIDRepos].List), Emails: emails, Name: name, Handle: handle, GitHubUser: ghUser})
 	}
 	if err != nil {
-		return opssetup.ApplyResult{}, err
+		return opssetup.ApplyResult{}, undo(err)
 	}
 	e, initURL, err := ap.withEarlySteps(ctx, e)
 	if err != nil {
-		return opssetup.ApplyResult{}, err
+		return opssetup.ApplyResult{}, undo(err)
 	}
 	out, err := ap.putEntry(e, false)
 	if err != nil {
-		return out, err
+		return out, undo(err)
 	}
 	if initURL != "" {
 		if out, err = ap.initPersonalStore(ctx, out, initURL); err != nil {
@@ -742,6 +803,9 @@ func (ap setupApplier) applyRoster(ctx context.Context, e onboard.SetupEntry, re
 	if len(res.Wrote) > 0 || res.Imported || res.Created || res.Rejoined {
 		out.Changed = true
 		out.Wrote = append(out.Wrote, res.Wrote...)
+	}
+	if res.StorePushed {
+		out.Pushed = append(out.Pushed, pushedFirstCommit(teamURL))
 	}
 	// Now that setups[] holds the admin entry, this machine may set the
 	// team store's shared settings (isOrgAdmin).
@@ -877,7 +941,7 @@ func (o orgRosterStore) Roster(ctx context.Context, write bool) (profilestore.Ro
 		}
 		if !found {
 			return nil, noop, errs.New(errs.NotFound, "org "+o.org+" has no store holding its roster").
-				WithHint("set org_folder on one of the org's stores in ~/.lore/config.yaml")
+				WithHint("set org_folder on one of the org's stores in " + lorehome.Shown() + "/config.yaml")
 		}
 		if x, err = openOrgFolderApp(ctx, o.a.opts, o.org, one); err != nil {
 			return nil, noop, err
@@ -953,7 +1017,7 @@ func openOrgFolderApp(ctx context.Context, opts Options, org string, one attach.
 		}
 		e := cfg.FindOrg(org)
 		if e == nil {
-			return nil, errs.New(errs.NotFound, "no org named "+org+" in ~/.lore/"+ConfigFile).WithHint("lore org import --url <store-url> --as " + org)
+			return nil, errs.New(errs.NotFound, "no org named "+org+" in "+lorehome.Shown()+"/"+ConfigFile).WithHint("lore org import --url <store-url> --as " + org)
 		}
 		return &identity.Org{Name: e.Name, Identity: identity.Entry{Key: e.Identity.Key, Name: e.Identity.Name, Handle: e.Identity.Handle}}, nil
 	}
@@ -1052,7 +1116,14 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 		}
 		return answer, o.Store, nil
 	}
-	find := func() string { return orgForStoreURL(ap.a.opts.Home, answer) }
+	// devco:D-644: the entry may name the store in another spelling than
+	// the answer: org import records the canonical url (git@github.com:…)
+	// of an ssh alias answer (git@<alias>:…), so the canonical spelling is
+	// looked up too (orgForStoreURL also takes alias spellings as one store)
+	canon := canonicalTyped(ctx, answer).URL
+	find := func() string {
+		return cmp.Or(orgForStoreURL(ap.a.opts.Home, answer), orgForStoreURL(ap.a.opts.Home, canon))
+	}
 	if org := find(); org != "" || dryRun {
 		return org, answer, nil
 	}
@@ -1062,8 +1133,16 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	// Admit (owner item 19): the member check reads the store's roster
 	// before anything is written there; someone not on it gets the
 	// refusal with no actor row, no commit and no push.
+	// admitted is the entry the import made (the name the store's
+	// lore-org.yaml gives): the org of this join, whatever url spelling
+	// the entry holds (devco D-644).
+	var admitted string
 	admit := func(ctx context.Context, entry string) error {
-		return team.CheckMember(ctx, orgRosterStore{a: ap.a, org: entry}, entry, emails)
+		if err := team.CheckMember(ctx, orgRosterStore{a: ap.a, org: entry}, entry, emails); err != nil {
+			return err
+		}
+		admitted = entry
+		return nil
 	}
 	rep, err := host.Import(ctx, orgcmd.ImportIn{URL: answer, Key: "human:" + emails[0], Name: name, Handle: handle, Admit: admit, SkipRegister: true}, true)
 	if err != nil {
@@ -1072,9 +1151,17 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	if rep.Ask != "" {
 		return "", "", errs.New(errs.Internal, "org.import asked although the join confirmed it: "+rep.Ask)
 	}
-	org := find()
+	org := cmp.Or(admitted, find())
 	if org == "" {
 		return "", "", errs.New(errs.Internal, "setup join: org import of "+answer+" made no org entry")
+	}
+	// devco D-680: the join goes on with the store url the entry this
+	// import made holds (the answer's spelling for the answer's store), so
+	// the join's own entry check never refuses that entry as "another
+	// store" (a refusal that, undone, named an entry that no longer
+	// existed, with an `org rename` hint that failed)
+	if o, oerr := ap.a.TeamOrigin(ctx, org); oerr == nil && o.Store != "" && sameStoreAs(answer) != nil && sameStoreAs(answer)(o.Store) {
+		return org, o.Store, nil
 	}
 	return org, answer, nil
 }

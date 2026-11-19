@@ -6,6 +6,7 @@ package renderhost
 // missing apart; the pointer files are compared with context.targets.
 
 import (
+	"context"
 	"errors"
 	"github.com/thesatellite-ai/lore/store"
 	"os"
@@ -199,7 +200,7 @@ func TestPointerCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	pick := targetPick{sel: sel, targets: []contextTarget{{profile: claude, file: claude.PointerFile, known: true}}}
-	got := pointerCopies(root, pick)
+	got := pointerCopies(context.Background(), root, pick)
 	kinds := map[opsrender.CopyKind]opsrender.CopyFinding{}
 	for _, f := range got {
 		kinds[f.Kind] = f
@@ -215,8 +216,32 @@ func TestPointerCopies(t *testing.T) {
 		t.Error("pointerCopies changed a file")
 	}
 	// Without a context.targets row nothing is compared.
-	if got := pointerCopies(root, targetPick{sel: toolprofile.Selection{Reason: toolprofile.ReasonWired}}); len(got) != 0 {
+	if got := pointerCopies(context.Background(), root, targetPick{sel: toolprofile.Selection{Reason: toolprofile.ReasonWired}}); len(got) != 0 {
 		t.Errorf("no row, findings anyway: %+v", got)
+	}
+}
+
+// TestPointerCopiesGeneratedFile (devco L-13): a listed tool's file that
+// another tool generates is a pointer_generated finding whose fix wires
+// another file, never "lore render", which skips the file again.
+func TestPointerCopiesGeneratedFile(t *testing.T) {
+	root := t.TempDir()
+	reg, err := toolprofile.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude, _ := reg.Lookup(toolprofile.NameClaudeCode)
+	if err := os.WriteFile(filepath.Join(root, claude.PointerFile), []byte("<!-- GENERATED FILE - do not edit directly -->\n# made by a tool\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sel, err := reg.Select([]string{toolprofile.NameClaudeCode}, rootProbe{root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := pointerCopies(context.Background(), root, targetPick{sel: sel, targets: []contextTarget{{profile: claude, file: claude.PointerFile, known: true}}})
+	if len(got) != 1 || got[0].Kind != opsrender.PointerGenerated || got[0].Fix != "lore render --add-target "+toolprofile.NameCodex ||
+		!strings.Contains(got[0].Message, "another tool generates it") {
+		t.Fatalf("generated CLAUDE.md: %+v", got)
 	}
 }
 
@@ -241,5 +266,36 @@ func TestPrivateSourcesOf(t *testing.T) {
 	}
 	if got := p.sourcesOf(privateNoIDPrefix + "me"); got != "me" {
 		t.Fatalf("unknown stem = %q", got)
+	}
+}
+
+// TestPointerCopiesGeneratedFileNamesTheWiredFile (devco J-3 with L-13):
+// a generated CLAUDE.md while AGENTS.md already carries lore's pointer is a
+// note that names AGENTS.md and offers no "wire another file" command.
+func TestPointerCopiesGeneratedFileNamesTheWiredFile(t *testing.T) {
+	root := t.TempDir()
+	reg, err := toolprofile.New(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude, _ := reg.Lookup(toolprofile.NameClaudeCode)
+	codex, _ := reg.Lookup(toolprofile.NameCodex)
+	if err := os.WriteFile(filepath.Join(root, claude.PointerFile), []byte("<!-- GENERATED FILE - do not edit directly -->\n# made by a tool\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, codex.PointerFile), []byte(toolprofile.PointerStartMarker+"\nread .lore/LORE.md\n"+toolprofile.PointerEndMarker+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sel, err := reg.Select([]string{toolprofile.NameClaudeCode, toolprofile.NameCodex}, rootProbe{root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := pointerCopies(context.Background(), root, targetPick{sel: sel, targets: []contextTarget{
+		{profile: claude, file: claude.PointerFile, known: true},
+		{profile: codex, file: codex.PointerFile, known: true},
+	}})
+	if len(got) != 1 || got[0].Kind != opsrender.PointerGenerated || got[0].Fix != "" ||
+		!strings.Contains(got[0].Message, "the pointer is in "+codex.PointerFile) || strings.Contains(got[0].Message, "--add-target") {
+		t.Fatalf("generated CLAUDE.md beside a wired AGENTS.md: %+v", got)
 	}
 }

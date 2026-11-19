@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/adapters/live"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -137,7 +138,7 @@ func TestLiveBackend_ListOfLocallyRewrittenRepoIsQuick(t *testing.T) {
 		t.Fatalf("listed %d rows", len(rows))
 	}
 	t.Logf("full read of 3,000 locally rewritten rows: %s", took.Round(time.Millisecond))
-	if took > 15*time.Second {
+	if took > testtime.SpeedBar(15*time.Second) {
 		t.Fatalf("a full read of 3,000 locally rewritten rows took %s (T-3: each row was read and decoded from git twice)", took)
 	}
 }

@@ -33,10 +33,10 @@ me: push batch every 10m, compact off
   epoch     0
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 alice (work/website)$ lore sync
-lore: pushed store me: commit 601d285 to branch main
-store me: sent 4, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
+store me: pushed (sent 1, received 0, merged 0, refused 0); rows: 4 sent
+store agency/client: up to date
+store agency/org: up to date
 alice (work/website)$ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
 
@@ -78,45 +78,48 @@ agency: push batch every 15m, compact off
   epoch     0
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
-lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit)
+store me: up to date
+store agency/client: up to date
+store agency/org: up to date
 bob (work/website)$ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
+  at        git@github.com:agency/notes
   set in    the store's lore-store.yaml (org agency; set by an org admin)
   epoch     0
+  folders   client, org
   pushed    2026-11-02T10:00:00Z
+  waiting   nothing: every local commit is pushed
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:01:10Z
 
 ### compact
 bob (work/website)$ lore memory add --body 'the client wants the invoice on the 1st' --to agency
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e99e22e9e86e96fe4daa7777994603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency)
-✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 [agency/client]
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e99e22e9e86e96fe4daa7777994603.json (store agency/client)
+✓ mem_05e99e22e9e86e96fe4daa7777994603 [agency/client]
   scope: [project]
 alice (work/website)$ lore store compact --store agency --before 30d --dry-run
-would squash 7 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 7 row file(s); epoch 0 → 1
+would squash 6 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
 alice (work/website)$ lore store compact --store agency --before 30d
-ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 7 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
+ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 6 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
 alice (work/website)$ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
+✓ compacted agency: 6 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
   pushed store agency: commit 05513aa to branch main
 bob (work/website)$ lore sync
-lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
-store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
+store agency/client: pushed (sent 1, received 4, merged 0, refused 0); rows: 0 received
+store agency/org: up to date
 bob (work/website)$ lore memory list
-mem_76bd560aff0771fab8457dbfa9823f10 [retrieved] the client signs off designs on Thursdays [agency/client]
-mem_d4314eba822f1bf5908b2b8ded5f313a [retrieved] staging resets every Sunday night [agency/client]
-mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] the client wants the invoice on the 1st [agency/client]
+mem_c0f3c11a5724b0cfd74b256190d9b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]
+mem_76bd560aff0771fab8457dbfa9823f10 [retrieved] staging resets every Sunday night [agency/client]
+mem_05e99e22e9e86e96fe4daa7777994603 [retrieved] the client wants the invoice on the 1st [agency/client]
 bob (work/website)$ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
-lore: actor register act_05e99e22e9e86e96fe4daa7777994603
+lore: actor register act_d4314eba822f1bf5908b2b8ded5f313a
 lore: snapshot of the store history before 2026-10-03
 
 ### auto compact

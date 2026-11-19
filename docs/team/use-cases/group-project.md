@@ -23,7 +23,7 @@ This marks github.com/client2/api as a CLIENT repo of agency: internal notes def
 and the leak guards turn on for everyone in agency.
   link: project prj_7a67…9504 at github.com/client2/api → github.com/agency/notes@main:client2/ (default=false)
 ✓ github.com/client2/api (prj_7a67…9504) linked to github.com/agency/notes client2/ (created; committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 
 # alice, in app
 $ lore org link --org agency --project client2 --yes
@@ -32,7 +32,7 @@ This marks github.com/client2/app as a CLIENT repo of agency: internal notes def
 and the leak guards turn on for everyone in agency.
   link: project prj_2ad3…f891 at github.com/client2/app → github.com/agency/notes@main:client2/ (default=false)
 ✓ github.com/client2/app (prj_2ad3…f891) linked to github.com/agency/notes client2/ (committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 
 # alice, in infra
 $ lore org link --org agency --project client2 --yes
@@ -41,7 +41,7 @@ This marks github.com/client2/infra as a CLIENT repo of agency: internal notes d
 and the leak guards turn on for everyone in agency.
   link: project prj_162d…9666 at github.com/client2/infra → github.com/agency/notes@main:client2/ (default=false)
 ✓ github.com/client2/infra (prj_162d…9666) linked to github.com/agency/notes client2/ (committed in the local clone; `lore sync` sends it)
-  nothing was written to this repo
+  no tracked file of this repo was written; the leak guard hook (commit-msg) is in this clone's git hooks
 ```
 <!-- /example -->
 
@@ -51,22 +51,23 @@ The first link created `client2/` in the store. The others joined it. Now add a 
 ```console
 # alice, in api
 $ lore mission add --title 'Invite landing page' --to agency/client2 --key invite
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/missions/msn_c0f3…b5b8.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/projects/prj_76bd…3f10.json (store agency)
+lore: committed locally to store agency/client2; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client2/missions/msn_c0f3…b5b8.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/projects/prj_76bd…3f10.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ msn_c0f3…b5b8 — Invite landing page → [agency/client2]
 $ lore task add --title 'send the invite email from the API' --to agency/client2 --mission msn_c0f3…b5b8 --repo api --key invite/backend
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_d431…313a.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/task_lists/tlt_b4f4…a5b0.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_28f8…03df.json (store agency)
+lore: committed locally to store agency/client2; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_d431…313a.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/task_lists/tlt_b4f4…a5b0.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_28f8…03df.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ tsk_28f8…03df — send the invite email from the API [medium] → [agency/client2]
   created tasklist tlt_b4f4…a5b0 "default" for tasks added without --tasklist
 $ lore task add --title 'build the invite page' --to agency/client2 --mission msn_c0f3…b5b8 --repo app --after tsk_28f8…03df --key invite/frontend
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_4c59…6c38.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_3b62…e913.json (store agency)
+lore: committed locally to store agency/client2; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_4c59…6c38.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_3b62…e913.json (store agency/client2)
 ✓ tsk_3b62…e913 — build the invite page [medium] → [agency/client2]
   on tasklist tlt_b4f4…a5b0 "default" (the default; --tasklist picks another)
 $ lore task add --title 'send the invite email from the API' --to agency/client2 --mission msn_c0f3…b5b8 --repo api --key invite/backend

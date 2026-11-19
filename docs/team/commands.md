@@ -39,6 +39,8 @@ Flags:
 ```
 <!-- /help -->
 
+The `reads` row names the store place this folder reads, in the `<org>/<folder>` spelling every command takes: in a repo linked to a folder "`<org>/<folder>` (this repo's link)", inside a folder of a store clone "`<org>/<folder>` (this folder of the store clone)", and in an own repo that is not linked but a resource of the org names, that folder and the `lore org link --org <org> --project <folder> --own` that links it. The `stores` row names the org folder as a place too ("org folder `<org>/<folder>`: roster, teams, company rules").
+
 ### `lore config check`
 
 <!-- help: config check -->
@@ -110,6 +112,26 @@ Flags:
       --remote string    which remote, when the repo has several
       --store string     which of the org's stores (default: the first)
       --yes              answer yes to the confirmation without a terminal
+```
+<!-- /help -->
+
+### `lore org list`
+
+<!-- help: org list -->
+List this machine's org entries: their stores, the setups that use them and each setup's role
+
+```text
+Usage:
+  lore org list
+
+Examples:
+  # every org entry
+  lore org list
+
+Flags:
+      --json        print the result (or the error) as JSON
+      --limit int   at most this many rows (default: all; 50 when --page is given)
+      --page int    page number, from 1 (with --limit)
 ```
 <!-- /help -->
 
@@ -224,9 +246,11 @@ Usage:
 Examples:
   # someone left the team
   lore actor deactivate --handle @carol
+  # stop an agent session (its next write is refused)
+  lore actor deactivate --handle @agent-frontend
 
 Flags:
-      --handle string   the person's @handle (required)
+      --handle string   the person's @handle, an agent's @label, or an act_ id (required)
       --json            print the result (or the error) as JSON
       --read-only       refuse writes (also LORE_READ_ONLY=1)
       --yes             answer yes to the confirmation without a terminal
@@ -258,7 +282,7 @@ Team profiles are in development for lore 0.1.18 (branch `feat/team-profiles`) a
 | `lore project member add` | `lore project member add --project <project> --actor <actor> --role a,b [--on d] [--note t]` | add someone to a project with roles |
 | `lore project member edit` | `lore project member edit --project <project> --actor <actor> --role a,b` | set the current membership's roles |
 | `lore project member remove` | `lore project member remove --project <project> --actor <actor> [--on d] [--reason t]` | end a membership (kept, with its dates) |
-| `lore project member list` | `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | members; `--history` adds ended memberships |
+| `lore project member list` | `lore project member list [--project <project>] [--actor a] [--role r] [--history] [--json]` | members (inside a store clone's project folder, that folder's project by default); `--history` adds ended memberships; with a project, a warning per person of a team the project uses who is no member |
 | `lore role list` | `lore role list [--retired] [--json]` | built-in and added roles |
 | `lore role add` | `lore role add --name <name> [--label t] [--description t]` | add a role |
 | `lore role edit` | `lore role edit --name <name> [--label t] [--description t] [--retire] [--unretire]` | change or retire a role |
@@ -270,7 +294,7 @@ New error codes: `E_CONTACT_TAKEN`, `E_CONTACT_TYPE`, `E_ROLE_UNKNOWN`, `E_STATU
 ### `lore store init`
 
 <!-- help: store init -->
-Make a git repo or folder a lore store and attach it (me = your personal store)
+Make a git repo or folder a lore store and attach it (me = your personal store); a git url gets the store's first commit pushed
 
 ```text
 Usage:
@@ -285,7 +309,7 @@ Examples:
 Flags:
       --json                print the result (or the error) as JSON
       --name string         the store's name in this repo (me = your personal store) (required)
-      --url string          git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me)
+      --url string          git url, a local git repository's path (/path/to/repo.git) or a folder (file:///path/to/folder; optional for me: default file://~/.lore/stores/_me); a new git store's first commit (its marker) is pushed there at once, which is what creates the store
       --visibility string   internal (default) or shareable: whether its rows may reach client repos
       --yes                 answer yes to the confirmation without a terminal
 ```
@@ -419,9 +443,12 @@ Examples:
   lore store doctor
 
 Flags:
-      --json   print the result (or the error) as JSON
+      --json           print the result (or the error) as JSON
+      --store string   only this store and its folders (an org's name, me, team, a .lore/stores.yaml name or a store url); default every store
 ```
 <!-- /help -->
+
+`--store <name>` keeps the check to one store, as every other store command names one: `lore store doctor --store acme` checks acme's stores and their folders (`acme/<folder>`) and their clones; a name no store here answers to is refused (`E_NOT_FOUND`) listing the stores doctor knows. When the named store is none this repo or machine uses, the first section is left out and only its clone is checked. With a setup named (`--setup <name>` or `LORE_SETUP`), the clones section lists only that setup's org stores, never another setup's.
 
 A store whose remote does not answer fails the check with `E_STORE_UNREACHABLE` (exit 15), not `E_INVALID_INPUT`. The line names the store's url (credentials masked) and git's own reason, and tells "cannot reach" (no network: lore keeps working and the commits go out once it answers) from "no git repository at" (a wrong or deleted address: `lore store set-url` fixes it), "cannot read … (permission denied)" (a local folder that exists but this user may not read: the address is right, fix the permissions) and "refused this machine's credentials". A store's unsent commits are a problem only when its push mode sends each write at once (`push now`): under `push manual` (the default) or `push batch` they are the mode working as set, so they are a note (`1 commit(s) not sent yet, the oldest 2m old; push manual: `lore sync` sends them`) and the command exits 0. A folder of a store (`<org>/org`) shares the store's clone and is not counted again.
 
@@ -693,11 +720,12 @@ Examples:
 
 Flags:
       --as-client           check the whole repo as the client would see it (before a hand-over)
-      --ci                  CI mode: ids and structure only, no store access, names nothing internal
+      --ci                  CI mode: secrets in the files (and names) the pushed commits add or change, ids and structure of .lore/data; no store access, names nothing internal
       --commit-msg string   also check this commit message file (the commit-msg hook's $1)
       --explain             print the rule, the source and the matched words of each finding
       --json                print the result (or the error) as JSON
       --rows                re-scan every stored row of every attached store with today's secret rules
+      --since string        with --ci: check the commits after this one (the last commit CI checked); default: the CI's own push range (GitHub Actions event, GitLab before-sha), else the commits since origin/HEAD, else the last 50 commits
       --staged              check the staged files (default unless --commit-msg is given alone)
 ```
 <!-- /help -->
@@ -754,7 +782,8 @@ Flags:
       --max-bytes int       cap the output in bytes (default 16000; hooks: context.hook_cap)
       --meta                also print each returned row's metadata (sensitive values masked)
       --search string       with --internal: only rows whose title or body contains this text
-      --session-start       with --hook: answer SessionStart (in-flight tasks, rows changed since your last session)
+      --session-start       with --hook: answer SessionStart (in a repo with no LORE.md the always-on rules first, then in-flight tasks, rows changed since your last session)
+      --store string        read this store: <org> (every folder of the org), <org>/<folder>, repo, or a store's name (default every attached store) (also --to)
       --table string        with --internal: only this table (rules, memories, decisions, tasks, …)
       --topic string        every row tagged with this topic
       --topics              list the topics with their counts
@@ -853,6 +882,7 @@ Flags:
       --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
       --mission string           mission_id (msn_*) to attach to
+      --no-layer                 on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --no-live                  keep this row with the code (this branch's .lore/data)
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --parent string            the parent task (tsk_…): add as a sub-task, inheriting mission, tasklist, plan, repo, commitment, priority
@@ -869,6 +899,8 @@ Flags:
       --role string              plan role matched by task next --role (e.g. coordinator)
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
       --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --source string            source_kind: where the task came from (manual, agent-proposal, imported, …; empty by default)
+      --source-ref string        where it came from: a free-form provenance pointer (a url, ticket, commit, file:line)
       --tasklist string          tasklist_id (tlt_*); default: the project's default list (created on demand)
       --template string          apply this task template (its name or ttp_ id); the title comes from the template
       --timebox duration         time box, e.g. 60m (active lease time summed across holders)
@@ -924,6 +956,7 @@ Flags:
       --meta-json stringArray         set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string             read the value of this key from stdin (keeps it out of shell history)
       --mission string                attach to mission_id (msn_*)
+      --no-layer                      on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --no-live                       keep this row with the code (this branch's .lore/data)
       --no-parent                     detach: make it a top-level task
       --not-a-secret                  keep a detected secret as a false positive (needs --reason; --yes without a terminal)
@@ -967,6 +1000,7 @@ Flags:
       --all                   show everything: done/cancelled + proposed/someday + deferred
       --all-repos             every repo of the project (the default)
       --assignee string       filter by assignee: actor_id (act_*)
+      --born-branch string    only rows created on this code branch (their origin's git branch; still found after the branch landed)
       --claimed-by string     only tasks claimed right now by @handle (or actor id)
       --columns stringArray   columns of a table: id,title,estimate,tracked,… (any --where key, time|tracked, elapsed, progress, store); +time / +elapsed alone extend the usual line
       --commitment string     filter: accepted | proposed | someday
@@ -1136,6 +1170,7 @@ Flags:
       --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
       --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --no-layer                 on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --plan string              plan_id (pln_*) this mission carries out
       --project string           the project (prj_ id or name; default the repo's one project)
@@ -1245,7 +1280,7 @@ Flags:
       --id string          the task or mission id (tsk_…, msn_…) (required)
       --json               print the result (or the error) as JSON
       --owns stringArray   paths this claim owns (directory prefixes ending in / or exact files)
-      --push               push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
+      --push               push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --strict             refuse instead of warning when --owns overlaps another claim
       --yes                answer yes to the confirmation without a terminal
@@ -1255,25 +1290,27 @@ Flags:
 ### `lore task next`
 
 <!-- help: task next -->
-Claim the next ready task (resume-first, leaves only, dependencies, gates, urgency)
+Show the next ready task and why it is next (resume-first, leaves only, dependencies, gates, urgency); --claim takes it
 
 ```text
 Usage:
   lore task next
 
 Examples:
-  # rank without claiming
-  lore task next --mission msn_<id> --why --dry-run
+  # see what is next (writes nothing)
+  lore task next --mission msn_<id> --why
 
 Flags:
-      --dry-run            rank and explain without claiming (nothing written)
+      --claim              claim the task shown (resume the one you hold); without it task next only shows it and writes nothing
+      --dry-run            rank and explain in the old form, never claiming even with --claim (nothing written)
       --json               print the result (or the error) as JSON
       --mission string     only tasks of this mission
       --owns stringArray   paths the claim owns
-      --push               push the claim to this code repo's remote now (refs/lore/signals); without it a claim there is refused (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
+      --push               with --claim: push the claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a claim is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every claim of the shell or agent)
       --read-only          refuse writes (also LORE_READ_ONLY=1)
       --repo string        only tasks of this repo (a repo name of the group)
       --role string        plan role (e.g. coordinator)
+      --store string       rank the tasks of this org's store, <org> or <org>/<folder>, from any folder (each claim lands on its folder's store signals ref); from the home folder --setup <setup> ranks that setup's org store (also --to)
       --why                explain the urgency score term by term
       --yes                answer yes to the confirmation without a terminal
 ```
@@ -1282,7 +1319,7 @@ Flags:
 ### `lore task heartbeat`
 
 <!-- help: task heartbeat -->
-Renew your claim's lease (alive, not progress)
+Renew your claim's lease (alive, not progress); no --push: it renews only what your pushed claim published, on the same remote
 
 ```text
 Usage:
@@ -1304,7 +1341,7 @@ Flags:
 ### `lore task release`
 
 <!-- help: task release -->
-Give back a claim you hold
+Give back a claim you hold; no --push: it pushes only to clear what your pushed claim published (a claim never pushed is on no remote, and nothing is pushed)
 
 ```text
 Usage:
@@ -1326,7 +1363,7 @@ Flags:
 ### `lore task note`
 
 <!-- help: task note -->
-Record a progress note on a task (pushes your work branch)
+Record a progress note on a task (a live row; your next `lore sync` or `git push` sends it)
 
 ```text
 Usage:
@@ -1337,15 +1374,19 @@ Examples:
   lore task note --id tsk_<id> --text "route + loader done, form next"
 
 Flags:
-      --everywhere         with --to me: file the note under everywhere/ (loads in every repo)
-      --force-org          write even though LORE_ORG or lore org use disagrees with a store link
-      --from string        the source of the id: repo | <org> | <org>/<folder> (also --store)
-      --id string          the task id (tsk_…) (required)
-      --json               print the result (or the error) as JSON
-      --read-only          refuse writes (also LORE_READ_ONLY=1)
-      --text stringArray   the note (several words are joined) (required)
-      --to string          where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
-      --yes                answer yes to the confirmation without a terminal
+      --everywhere               with --to me: file the note under everywhere/ (loads in every repo)
+      --force-org                write even though LORE_ORG or lore org use disagrees with a store link
+      --from string              the source of the id: repo | <org> | <org>/<folder> (also --store)
+      --id string                the task id (tsk_…) (required)
+      --json                     print the result (or the error) as JSON
+      --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --read-only                refuse writes (also LORE_READ_ONLY=1)
+      --reason string            why the detected text is not a secret (with --not-a-secret)
+      --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
+      --secret-unstored          replace every detected secret with ${secret:unstored} and add a store-then-rotate task
+      --text stringArray         the note (several words are joined) (required)
+      --to string                where the row goes: repo | <org> | <org>/<folder> | me | me/<org>
+      --yes                      answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1366,6 +1407,7 @@ Flags:
       --from string   the source of the id: repo | <org> | <org>/<folder> (also --store)
       --id string     the task id (tsk_…) (required)
       --json          print the result (or the error) as JSON
+      --push          push the revoke now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a revoke of a claimed task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)
       --read-only     refuse writes (also LORE_READ_ONLY=1)
       --yes           answer yes to the confirmation without a terminal
 ```
@@ -1390,6 +1432,7 @@ Flags:
       --id string                the task id (tsk_…); leave out with --from
       --json                     print the result (or the error) as JSON
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
+      --push                     push the dropped claim now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a reassign of a claimed or revoked task there is refused (LORE_PUSH_CLAIMS=1 asks for every one)
       --read-only                refuse writes (also LORE_READ_ONLY=1)
       --reason string            why the detected text is not a secret (with --not-a-secret)
       --secret-ref stringArray   replace detected secrets with this vault reference (<manager>://<locator>; repeat once per finding)
@@ -1459,7 +1502,8 @@ Flags:
       --json           print the result (or the error) as JSON
       --name string    the resource to hold (a test suite, a staging slot) (required)
       --on string      project (the project's signals ref, the default) or machine
-      --push           push the hold to this code repo's remote now (refs/lore/signals); without it a hold there is refused (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)
+      --push           push the hold now to the remote that shares it (this code repo's refs/lore/signals, or a linked store's signals ref); without it a hold is refused and nothing is written (LORE_PUSH_CLAIMS=1 asks for every hold of the shell or agent)
+      --store string   hold it on this org store folder's signals ref, <org>/<folder> (or <org> when it has one folder), from any folder; without it the code repo's signals ref (outside a code repo: the store clone here, or the --setup's org store)
       --ttl duration   how long the hold lasts (default: lease.ttl)
       --yes            answer yes to the confirmation without a terminal
 ```
@@ -1468,7 +1512,7 @@ Flags:
 ### `lore hold release`
 
 <!-- help: hold release -->
-Release a resource you hold
+Release a resource you hold; no --push: it pushes only to clear what your pushed hold published (a hold never pushed is on no remote, and nothing is pushed)
 
 ```text
 Usage:
@@ -1479,9 +1523,10 @@ Examples:
   lore hold release --name full-suite
 
 Flags:
-      --json          print the result (or the error) as JSON
-      --name string   the resource to release (required)
-      --yes           answer yes to the confirmation without a terminal
+      --json           print the result (or the error) as JSON
+      --name string    the resource to release (required)
+      --store string   release the hold taken on this org store folder, <org>/<folder> (or <org> when it has one folder), from any folder
+      --yes            answer yes to the confirmation without a terminal
 ```
 <!-- /help -->
 
@@ -1505,6 +1550,7 @@ Flags:
       --meta stringArray         set metadata: key=value, key:type=value, project:key=value (repeatable)
       --meta-json stringArray    set a JSON value: key=<json>, key=@file.json or key=- for stdin (repeatable)
       --meta-stdin string        read the value of this key from stdin (keeps it out of shell history)
+      --no-layer                 on a code branch with its own notes (a branch layer), write this row to the shared notes instead
       --not-a-secret             keep a detected secret as a false positive (needs --reason; --yes without a terminal)
       --project string           the project (prj_ id or name; default the repo's one project)
       --read-only                refuse writes (also LORE_READ_ONLY=1)
@@ -1591,15 +1637,15 @@ All keys live in `~/.lore/config.yaml` (mode 0600; `lore config check` validates
 | `orgs[].agent_details` | `internal` | `client` keeps agent work notes in the client repo |
 | `live.defaults.<kind>` | tasks, missions, handoffs, comments: `true`; rules, decisions, memories: `false` | which kinds are live |
 | `live.max_age` | `7d` | an open live row is copied to `main` this often while it differs |
-| `live.fetch_ttl` | `5m` | a read fetches at most this often, a write at most every 60 seconds; `lore sync` always fetches |
+| `live.fetch_ttl` | `5m` | a read fetches at most this often, a write at most every 60 seconds; `lore sync` always fetches, once per remote |
 | `live.autopush` | `false` | `true` pushes each live write at once; unset, they go on `lore sync` or your own `git push` |
 | `live.compact_after` | `1000` | commits on a live ref before automatic compaction |
 | `live.remote` | `origin` | the remote for `refs/lore/*` |
 | `lease.ttl` | `20m` | how long a claim lasts without a heartbeat |
 | `lease.renew_every` | `5m` | heartbeat interval; also how long a reader must see an unchanged renewal before calling a claim expired |
 | `lease.grace` | `2m` | extra time after `expires` before a claim counts as expired |
-| `lease.push_retries` | `5` | retries of a rejected push |
-| `agents.max_claims_per_agent` | `1` | claims one agent may hold at once |
+| `lease.push_retries` | `5` | fewest retries of a push that lost a race; lore keeps retrying with random waits for about 15 s in all |
+| `agents.max_claims_per_agent` | `1` | claims one agent session may hold at once; a person's claims count per worktree; may only lower the team policy of the same name (`lore policy set --key agents.max_claims_per_agent --value <n>`) |
 | `agents.max_attempts` | `3` | holders a task may have before it becomes `blocked` |
 | `merge_check.adapter` | `none` | `github` asks `gh` whether a done task's pull request merged |
 | `default_branch` | from `origin/HEAD` | override the default branch |

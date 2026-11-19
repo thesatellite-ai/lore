@@ -28,6 +28,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -159,8 +160,43 @@ func noProjectErr(ctx context.Context, top string) error {
 	if r := noCreateOf(ctx); r != nil && r.write {
 		return UntouchedError(ctx, top)
 	}
-	return orBeforeLore(ctx, top, errs.NotAStore, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
-		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
+	return orBeforeLore(ctx, top, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); a read creates nothing there").
+		WithHint(noProjectHint))
+}
+
+// noProjectHint is the next step of a command refused in a git repo
+// with no lore data. `lore init` adds .lore/ and an agent-file pointer,
+// which a repo that must stay free of lore files (a docs or skills repo
+// published as is) cannot take; linking it to an org store folder keeps
+// it clean, and personal notes read there with neither (devco P-4).
+const noProjectHint = "lore init sets this repo up (or the This folder step of `lore setup`); to keep it free of lore files, link it to an org store folder instead: lore org link --org <org> --project <folder> (personal notes, --to me, are listed and searched here without either)"
+
+// ownOrgOf is the org whose own repo the checkout is (the org's stores
+// attach to it and it is no client repo of that org), "" otherwise.
+func ownOrgOf(ctx context.Context, opts Options) string {
+	if opts.ClientRepo != nil {
+		if c := opts.ClientRepo(ctx); c.Org != "" || c.Unlisted != "" {
+			return ""
+		}
+	}
+	for _, s := range rawOrgStores(ctx, opts) {
+		if base, _, _ := strings.Cut(string(s.Name), targetSep); base != "" {
+			return base
+		}
+	}
+	return ""
+}
+
+// withOwnOrgLink is err with the noProjectHint's org link filled in for
+// an own repo of org (devco D-551: the refusal in an own repo not linked
+// to a folder left the org and --own for the reader to guess); err as it
+// is when org is "" or err carries another hint.
+func withOwnOrgLink(err error, org string) error {
+	e, ok := err.(*errs.Error) //nolint:errorlint // only the refusal itself, never one wrapped in another error
+	if org == "" || !ok || e.Hint != noProjectHint {
+		return err
+	}
+	return e.WithHint("lore init sets this repo up (or the This folder step of `lore setup`); to keep it free of lore files, link it to a folder of " + org + "'s store as its own repo: lore org link --org " + org + " --project <folder> --own (lore store folder list --store " + org + " lists the folders); a row read by --id, and every read with --store " + org + ", works here without either")
 }
 
 // doctorNoProjectNote is DoctorChecks' one line for a git repo with no
@@ -239,6 +275,6 @@ func UntouchedRepo(ctx context.Context, dir string) string {
 // checkout of a lore repo that only lacks .lore/ here (a commit from before
 // lore, a sparse cone) gets beforeLoreErr's line instead of "lore init".
 func UntouchedError(ctx context.Context, top string) error {
-	return orBeforeLore(ctx, top, errs.NotAStore, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
-		WithHint("lore init sets this repo up (or the This folder step of `lore setup`)"))
+	return orBeforeLore(ctx, top, errs.New(errs.NotAStore, "lore isn't set up in "+top+" (no .lore folder); lore changes nothing in a repo it isn't set up in").
+		WithHint(noProjectHint))
 }

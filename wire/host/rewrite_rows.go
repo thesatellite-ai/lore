@@ -23,6 +23,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -64,7 +65,9 @@ func (d droppedRow) table() string { return path.Base(path.Dir(d.path)) }
 // gitLines runs git in repo and returns its non-empty output lines (nil on
 // any error).
 func gitLines(ctx context.Context, repo *gitref.Repo, args ...string) []string {
-	out, err := repo.Run(ctx, gitref.Invocation{Args: args})
+	// raw paths, never git's quoted octal form of a non-ASCII folder
+	// name (devco Q-13): a project under such a folder is still matched
+	out, err := repo.Run(ctx, gitref.Invocation{Args: append([]string{"-c", "core.quotePath=false"}, args...)})
 	if err != nil {
 		return nil
 	}
@@ -200,8 +203,10 @@ func rebaseDroppedNotice(ctx context.Context, repo *gitref.Repo) string {
 
 // RewriteRemap moves commit links from rewritten commits to their new
 // shas; pairs are "<old>=<new>" (ops/link link.remap's --pair). cmd/lore
-// runs link.remap through its runner (H-8).
-type RewriteRemap func(ctx context.Context, pairs []string)
+// runs link.remap through its runner (H-8). It returns the ids of the
+// entities whose links moved (none: nothing changed) and prints its own
+// refusal, if any.
+type RewriteRemap func(ctx context.Context, pairs []string) []string
 
 // OnRewrite sets what the post-rewrite hook calls with git's old → new
 // map (nil: links stay on the old shas).
@@ -240,9 +245,84 @@ func (h *liveHost) afterRewrite(ctx context.Context, stdin io.Reader, args []str
 	if err != nil {
 		return
 	}
-	if pairs := rewritePairs(in); len(pairs) > 0 {
-		h.remap(ctx, pairs)
+	pairs := rewritePairs(in)
+	if len(pairs) == 0 {
+		return
 	}
+	byRebase := len(args) >= 2 && args[1] == rewriteByRebase
+	before := dirtyRowPaths(ctx, repo)
+	moved := h.remap(ctx, pairs)
+	if len(moved) == 0 {
+		return
+	}
+	what := fmt.Sprintf("moved %d commit link(s) to the rewritten commits (%s)", len(moved), strings.Join(moved, ", "))
+	if !byRebase {
+		h.line("lore: " + what + "; commit .lore/data with your next change")
+		return
+	}
+	h.line("lore: " + what + "; " + commitRemappedLinks(ctx, repo, before, len(moved)))
+}
+
+// remapCommitSubject is the subject of the commit lore adds after a rebase
+// that moved commit links (devco:Q-5).
+const remapCommitSubject = "chore(lore): move %d commit link(s) to the rebased commits"
+
+// dirtyRowPaths are the row files (any project folder's .lore/data) that
+// git shows as changed or new in the work tree of repo, as top-relative
+// slash paths. A git error answers none.
+func dirtyRowPaths(ctx context.Context, repo *gitref.Repo) map[string]bool {
+	out, err := repo.Run(ctx, gitref.Invocation{Args: []string{"status", "--porcelain=v1", "-z", "--untracked-files=all"}})
+	if err != nil {
+		return nil
+	}
+	paths := map[string]bool{}
+	for _, e := range strings.Split(string(out), "\x00") {
+		if len(e) < 4 {
+			continue
+		}
+		p := e[3:]
+		if strings.HasPrefix(p, rowDataRel+"/") || strings.Contains(p, "/"+rowDataRel+"/") {
+			paths[p] = true
+		}
+	}
+	return paths
+}
+
+// rowDataRel is a project's row files folder, relative to its root.
+const rowDataRel = ".lore/data"
+
+// commitRemappedLinks is devco:Q-5: the link files a rebase's remap just
+// changed (the row files dirty now that were clean before it) go into one
+// commit of their own on the rebased branch, so the rebase ends with a
+// clean tree and the next `git checkout` of another branch works (it
+// refused over the old link's file, changed in the work tree). Files the
+// person had already changed stay out of it, as do git's hooks (it is
+// lore's own data commit, like the ride-along). It returns the second half
+// of the post-rewrite line: the commit made, or why the files wait.
+func commitRemappedLinks(ctx context.Context, repo *gitref.Repo, before map[string]bool, n int) string {
+	var paths []string
+	for p := range dirtyRowPaths(ctx, repo) {
+		if !before[p] {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		return "commit .lore/data with your next change"
+	}
+	slices.Sort(paths)
+	env := []string{EnvRideActive + "=1"}
+	msg := fmt.Sprintf(remapCommitSubject, n)
+	if _, err := repo.Run(ctx, gitref.Invocation{Env: env, Args: append([]string{"add", "--"}, paths...)}); err != nil {
+		return "commit .lore/data with your next change (staging them failed: " + err.Error() + ")"
+	}
+	if _, err := repo.Run(ctx, gitref.Invocation{Env: env, Args: append([]string{"commit", "-q", "--no-verify", "-m", msg, "--"}, paths...)}); err != nil {
+		return "commit .lore/data with your next change (lore's own commit failed: " + err.Error() + ")"
+	}
+	sha, err := repo.Run(ctx, gitref.Invocation{Args: []string{"rev-parse", "--short", "HEAD"}})
+	if err != nil {
+		return "committed them as \"" + msg + "\""
+	}
+	return "committed them as " + strings.TrimSpace(string(sha)) + " \"" + msg + "\" so the work tree stays clean"
 }
 
 // rewritePairs reads post-rewrite's stdin ("<old> <new> [extra]" lines)

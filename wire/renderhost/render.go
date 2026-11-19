@@ -34,8 +34,10 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/fsreason"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/osrename"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/op"
 	opsrender "github.com/thesatellite-ai/lore/ops/render"
 
@@ -94,7 +96,23 @@ type renderResult struct {
 	Memories int `json:"memories"`
 }
 
+// renderCheckNoLore is render --check's one line in a repo with no .lore/
+// folder (devco K-14): nothing there is rendered or over a budget, so the
+// CI check passes, as lore check leaks --ci and lore doctor do there.
+const renderCheckNoLore = "lore render --check: this repo has no .lore folder, so it has no rendered files to check"
+
 func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
+	// K-14: a shared CI template runs render --check in every repo; one
+	// with no lore data passes before anything opens a store (the open
+	// would refuse E_NOT_A_STORE there).
+	if f.check && !f.report && !f.trend {
+		if wd, werr := os.Getwd(); werr == nil {
+			if top := wire.UntouchedRepo(ctx, wd); top != "" {
+				fmt.Fprintf(f.out(), "%s %s\n", h.decor.check(), renderCheckNoLore)
+				return nil
+			}
+		}
+	}
 	// render has no --repo since 0.1.18: the master scope (repo id "").
 	repoID := ""
 	projectID, err := h.projectID(ctx)
@@ -106,6 +124,14 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	}
 	if f.trend { // 6.11: read-only, from render_history
 		return h.renderTrend(ctx, projectID, f)
+	}
+	if !f.check && !f.report {
+		// a render writes its history row and the private render under the
+		// lore home: refused up front there when lore cannot write it
+		// (devco:U-4), as a writing command is
+		if err := wire.RefuseWriteInReadOnlyHome(h.opts.Home); err != nil {
+			return err
+		}
 	}
 
 	root, err := os.Getwd()
@@ -124,6 +150,22 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 	pick, in, body, report, full := p.pick, p.in, p.body, p.report, p.full
 	rules, hotfixes, skips, dirs, dirBodies, dirReps, pathGroups := p.rules, p.hotfixes, p.skips, p.dirs, p.dirBodies, p.dirReps, p.pathGroups
 	report.File = f.outPath
+
+	// D-429, D-481: a repo with no .lore folder that a store links as one
+	// of the org's own repos, or that is a client repo, keeps its notes in
+	// the store folder: it gets the private render (outside the checkout,
+	// imported by the tool's git-excluded local file), never a LORE.md or
+	// a pointer block. One decision (noRepoFileOf) for --report, --scopes,
+	// --dry-run and the write, so the preview never describes a file the
+	// write does not make.
+	if !f.check {
+		if n, ok := h.noRepoFileOf(ctx, root); ok {
+			return h.renderNoRepoFile(ctx, f, n)
+		}
+	}
+	if f.report && !f.scopes {
+		report.Private = h.privateReportOf(ctx, root)
+	}
 
 	if f.report && f.scopes {
 		// 6.2.6: the per-file table; writes nothing.
@@ -234,17 +276,8 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if f.quiet {
 			return nil
 		}
-		// F-2: a linked client repo must never hold lore files, so it gets
-		// no rendered files by design: say so and name what agents use
-		// there, instead of the not-set-up refusal whose hint (lore init)
-		// would put lore files into the client's repo.
-		if h.app != nil {
-			if client, cerr := h.app.ClientRepo(ctx); cerr == nil && client {
-				fmt.Fprintf(f.out(), "%s lore render: nothing written: %s is a client repo, which never holds lore files (no LORE.md, no pointer block); agents read its notes with %s, or through the agent hook\n",
-					h.decor.muted("·"), top, renderClientContextCmd)
-				return nil
-			}
-		}
+		// A client repo or a linked own repo was answered above
+		// (noRepoFileOf); this one is not set up.
 		return wire.UntouchedError(ctx, top)
 	}
 
@@ -257,6 +290,17 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		if !f.quiet {
 			fmt.Fprintf(f.out(), "%s lore render: skipped: %s\n", h.decor.muted("·"), line)
 		}
+		return nil
+	}
+
+	// devco:Q-15: while a rebase, merge, cherry-pick, revert or bisect is
+	// stopped in this work tree, an explicit render leaves the tracked
+	// render and pointer files as they are: a changed tracked file makes
+	// `git rebase --continue` refuse and survives `git merge --abort`.
+	// (The quiet renders have their own rule: rerenderStaleQuiet, and the
+	// hooks skip while history is in progress.)
+	if gop, busy := wire.GitOpRunning(ctx, root); busy && !f.quiet && renderTracked(ctx, root) {
+		fmt.Fprintf(f.out(), "%s lore render: nothing written: %s\n", h.decor.muted("·"), gitOpHeldLine(gop))
 		return nil
 	}
 
@@ -299,18 +343,30 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		unchanged = sha256Hex(existing) == sha256Hex([]byte(body))
 	}
 
-	if unchanged {
+	// devco:S-1: a LORE.md rendered from rows this repo does not have (an
+	// older lore, another machine) is kept, never replaced by an empty
+	// render; its companion LORE.full.md and the render history wait too.
+	orphan, isOrphan := orphanRender{}, false
+	if !unchanged {
+		orphan, isOrphan = h.findOrphanRender(ctx, resolvedOut, f.outPath, body)
+	}
+	switch {
+	case isOrphan:
+		if !f.quiet {
+			fmt.Fprintf(f.out(), "%s %s\n", h.decor.warn("!"), orphan.line())
+		}
+	case unchanged:
 		if !f.quiet {
 			fmt.Fprintf(f.out(), "%s %s (unchanged)\n", h.decor.muted("·"), resolvedOut)
 		}
-	} else {
+	default:
 		if err = atomicWriteFile(resolvedOut, []byte(body), 0o644); err != nil {
 			return wire.WriteError("write", resolvedOut, err, renderWriteHint)
 		}
 		if !f.quiet {
-			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes, %s)\n",
+			fmt.Fprintf(f.out(), "%s %s (%d bytes, budget %d %s; %d full + %d line rules, %d + %d hotfixes%s, %s)\n",
 				h.decor.check(), resolvedOut, len(body), report.Budget, report.Profile,
-				report.MustFull, report.MustLine, report.Critical, report.HighLine, plural.Count(report.Topics, "topic"))
+				report.MustFull, report.MustLine, report.Critical, report.HighLine, highOutNote(len(report.HighOut)), plural.Count(report.Topics, "topic"))
 		}
 	}
 	if report.Over {
@@ -318,18 +374,27 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 			resolvedOut, report.After, report.Budget, report.Profile)))
 	}
 	// CQ2: the full fallback file, next to LORE.md, never imported.
-	if in.Settings.FullFile {
+	if in.Settings.FullFile && !isOrphan {
 		if err = h.writeFullFile(f.out(), fullPath, full, f.quiet); err != nil {
 			return err
 		}
+	}
+
+	// N-7: a teammate's first render must not leave untracked render files
+	// that the owner's commit of the same files makes `git pull` abort on.
+	if err = h.keepRenderLocal(ctx, f.out(), root, f.quiet, resolvedOut, fullPath); err != nil {
+		return err
 	}
 
 	if !f.noPointer {
 		if !f.quiet {
 			h.printTargetPick(f.out(), pick)
 		}
-		if err = h.stitchPointers(f.out(), root, pick.targets, resolvedOut); err != nil {
+		if err = h.stitchRepoPointers(ctx, f.out(), root, pick.targets, resolvedOut); err != nil { // D-500
 			return err
+		}
+		if !f.quiet {
+			h.ignoredPointerLines(ctx, f.out(), root, pick.targets) // devco:S-2
 		}
 	}
 	// 6.7: path-scoped rule files per target; stale lore-path-* files go.
@@ -353,6 +418,9 @@ func (h *Host) runRender(ctx context.Context, f *renderFlags) (err error) {
 		}
 	}
 
+	if isOrphan {
+		return nil // S-1: nothing of this render is recorded or private-rendered until the rows are here
+	}
 	if err := h.persistRenderHistory(ctx, projectID, repoID, resolvedOut, body, renderResult{
 		Rules: len(rules), Hotfixes: len(hotfixes),
 	}, newCutSummary(report, skips)); err != nil {
@@ -492,7 +560,7 @@ func (h *Host) loadToolRegistry(ctx context.Context) (*toolprofile.Registry, err
 	}
 	reg, err := toolprofile.New(profiles)
 	if err != nil {
-		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in ~/.lore/config.yaml", err).WithHint("run `lore config check` for every problem with its location")
+		return nil, errs.Wrap(errs.ConfigInvalid, "context.profiles in "+lorehome.Shown()+"/config.yaml", err).WithHint("run `lore config check` for every problem with its location")
 	}
 	return reg, nil
 }
@@ -604,7 +672,7 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 	for _, p := range pick.sel.Unwired {
 		hint := "lore render --target " + p.Name
 		if pick.sel.Reason == toolprofile.ReasonSetting {
-			hint = "lore policy set --key " + string(policy.KeyContextTargets) + " --value \"<profiles incl. " + p.Name + ">\" --yes"
+			hint = "lore render --add-target " + p.Name // devco:S-4: one step, no profile list to compose
 		}
 		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", h.decor.muted("·"), p.PointerFile, hint)
 	}
@@ -641,7 +709,7 @@ func (h *Host) resolveTargets(ctx context.Context, root string, values []string,
 			sel, selErr := reg.Select(names, rootProbe{root: root})
 			if selErr != nil {
 				return targetPick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(selErr).Error.Message, string(policy.KeyContextTargets)+": "), selErr).
-					WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in ~/.lore/config.yaml")
+					WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
 			}
 			pick.sel = sel
 		} else {
@@ -674,7 +742,7 @@ func (h *Host) resolveTargets(ctx context.Context, root string, values []string,
 		}
 		rel := v
 		if filepath.IsAbs(v) {
-			if r, rerr := filepath.Rel(root, v); rerr == nil && !strings.HasPrefix(r, "..") {
+			if r, inside := fspath.Rel(root, v); inside {
 				rel = r
 			}
 		}
@@ -759,7 +827,7 @@ func (h *Host) stitchPointers(w *strings.Builder, root string, targets []context
 		}
 		key := pt.absAgent // a skipped file stays on its own
 		if pt.skip == "" {
-			key = resolvedOrSelf(pt.writeAt)
+			key = fspath.Canonical(pt.writeAt)
 		}
 		if _, seen := groups[key]; !seen {
 			order = append(order, key)
@@ -767,11 +835,31 @@ func (h *Host) stitchPointers(w *strings.Builder, root string, targets []context
 		groups[key] = append(groups[key], pt)
 	}
 	for _, key := range order {
-		if err := h.stitchPointerFile(w, root, groups[key]); err != nil {
+		if err := h.stitchPointerFile(w, root, groups[key], pointerCarriers(order, groups, key)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// pointerCarriers are the files (as named in the targets) of every group
+// but skip's own that this render gives the pointer: not skipped and not
+// generated by another tool. A generated file's note names them instead
+// of telling the person to wire a file the render already wires (devco
+// J-3: "lore render --add-target codex" was repeated after it was run).
+func pointerCarriers(order []string, groups map[string][]pointerTarget, skip string) []string {
+	var out []string
+	for _, key := range order {
+		lead := groups[key][0]
+		if key == skip || lead.skip != "" {
+			continue
+		}
+		if data, err := os.ReadFile(filepath.Clean(lead.writeAt)); err == nil && toolprofile.GeneratedBanner(string(data)) != "" {
+			continue
+		}
+		out = append(out, lead.t.file)
+	}
+	return out
 }
 
 // pointerTarget is one target's pointer file, resolved: the path named,
@@ -812,15 +900,6 @@ func resolvePointerTarget(root string, t contextTarget, outFile string) (pointer
 	return pointerTarget{t: t, absAgent: absAgent, writeAt: writeAt, isLink: isLink, skip: skip, link: link}, nil
 }
 
-// resolvedOrSelf is p with every link resolved, p itself when it cannot be
-// (a file not written yet): the key two names of one file share.
-func resolvedOrSelf(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return p
-}
-
 // stitchPointerFile ensures the one file of group carries the lore pointer
 // block, bounded by sentinel markers. Idempotent: an existing block is
 // replaced in place; a missing one is placed at the top (after a Cursor
@@ -828,7 +907,10 @@ func resolvedOrSelf(p string) string {
 // @import path is computed RELATIVE to the tool file's directory so the
 // tool resolves it regardless of cwd. The file is named by the member that
 // is not a link when there is one (the file itself).
-func (h *Host) stitchPointerFile(w *strings.Builder, root string, group []pointerTarget) error {
+//
+// carriers are the other files this render gives the pointer
+// (pointerCarriers), named by the note of a file another tool generates.
+func (h *Host) stitchPointerFile(w *strings.Builder, root string, group []pointerTarget, carriers []string) error {
 	lead := group[0]
 	for _, pt := range group {
 		if !pt.isLink {
@@ -872,7 +954,7 @@ func (h *Host) stitchPointerFile(w *strings.Builder, root string, group []pointe
 	if banner := toolprofile.GeneratedBanner(existing); banner != "" {
 		// D-2: another tool generates this file; a stitched pointer is lost
 		// on its next run and the two tools fight over it in every diff.
-		h.pointerSkipped(w, absAgent, generatedSkipReason(banner, lead.t.profile.Name, lead.link.FromRoot))
+		h.pointerSkipped(w, absAgent, generatedSkipReason(banner, lead.t.profile.Name, lead.link.FromRoot, carriers))
 		return nil
 	}
 	if isLink {
@@ -898,12 +980,19 @@ func (h *Host) stitchPointerFile(w *strings.Builder, root string, group []pointe
 
 // generatedSkipReason is the skip note of a pointer file another tool
 // generates (banner: its banner line): where the pointer goes instead.
-func generatedSkipReason(banner, profile, lorePath string) string {
+// carriers are the other files this render gives the pointer: when there
+// are some the note names them and never suggests wiring one again (devco
+// J-3), and says profile still reaches lorePath only through its source.
+func generatedSkipReason(banner, profile, lorePath string, carriers []string) string {
+	head := "its banner says another tool generates it (" + strconv.Quote(banner) + "), which would drop the pointer on its next run"
+	if len(carriers) > 0 {
+		return head + "; the pointer is in " + strings.Join(carriers, ", ") + " instead, and " + profile + " reaches " + lorePath + " only once that tool's source adds a line pointing at it"
+	}
 	other := "lore render --add-target " + toolprofile.NameCodex + " (AGENTS.md)"
 	if profile == toolprofile.NameCodex {
 		other = "lore render --add-target <profile> for another tool file"
 	}
-	return "its banner says another tool generates it (" + strconv.Quote(banner) + "), which would drop the pointer on its next run; add a line pointing at " + lorePath + " to that tool's source, or wire another file: " + other
+	return head + "; add a line pointing at " + lorePath + " to that tool's source, or wire another file: " + other
 }
 
 // sharedPointerLines names each other member of group: a file that is the
@@ -1065,8 +1154,3 @@ func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
-
-// renderClientContextCmd is what render names in a client repo (F-2): the
-// agent's fetch command, which reads the linked internal project's notes
-// without writing a file into the client's tree.
-const renderClientContextCmd = "`lore context --for-file <path>` (or --for-task <id>)"

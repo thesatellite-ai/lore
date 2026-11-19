@@ -25,12 +25,15 @@ package wire
 import (
 	"context"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/actorsource"
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/row"
@@ -225,7 +228,7 @@ func (a *App) followRosterName(ctx context.Context, st *state, src actorsource.S
 		}
 		e := o.Identity
 		e.Name = src.Values.Name
-		if _, err := a.SetOrgIdentity(ctx, o.Name, opsidentity.Entry{Key: e.Key, Name: e.Name, Handle: e.Handle}); err == nil {
+		if _, _, err := a.SetOrgIdentity(ctx, o.Name, opsidentity.Entry{Key: e.Key, Name: e.Name, Handle: e.Handle}); err == nil {
 			st.who.DisplayName = src.Values.Name
 		}
 		return
@@ -346,15 +349,55 @@ func (a *App) actorSourceGet(ctx context.Context, ref engine.Ref) (store.Source,
 
 // ActorNamer is the name function human output uses for actor ids
 // (surface/cli WithActorNamer): the actor's @handle, else its name, from
-// its source store; the id itself when no store names it.
+// its source store, else from an actors row in a folder of the org store
+// clones on this machine (cloneActorName); the id itself when none names it.
 func (a *App) ActorNamer(ctx context.Context) func(string) string {
 	n := a.sourceActorNamer(ctx)
 	return func(actor string) string {
 		if actor == "" {
 			return ""
 		}
-		return n(actor)
+		if name, ok := auditfill.NameOf(actor); ok {
+			return name
+		}
+		if name := n(actor); name != actor {
+			return name
+		}
+		if name := a.cloneActorName(ctx, actor); name != "" {
+			return name
+		}
+		return actor
 	}
+}
+
+// cloneActorName is the @handle, else the name, of actor's live actors row
+// in any folder of the org store clones on this machine; "" when none
+// holds one. devco:D-611: an answer the home folder gives (E_IN_TRASH of a
+// row read straight from a store clone's file, goneRowAnswer) printed
+// "deleted by act_…": that App attaches no store, so its namer named
+// nobody, while trash list in the folder named the person.
+func (a *App) cloneActorName(ctx context.Context, actor string) string {
+	if _, err := ids.Parse[ids.Actor](actor); err != nil {
+		return ""
+	}
+	for _, f := range a.everyOrgFolders(ctx).Folders {
+		if f.Dir == "" {
+			continue
+		}
+		path := filepath.Join(f.Dir, filepath.FromSlash(f.Folder), schema.TableActors, actor+".json")
+		b, err := os.ReadFile(filepath.Clean(path))
+		if err != nil {
+			continue
+		}
+		r, err := row.Decode(b)
+		if err != nil || r.Deleted {
+			continue
+		}
+		if name := actorDisplayName(r, ""); name != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 // sourceActorNamer is the writer-name function of doctor's Team versions

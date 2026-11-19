@@ -21,6 +21,7 @@ package setup
 import (
 	"context"
 	"fmt"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -207,6 +208,11 @@ type ApplyResult struct {
 	// Wrote names each thing written: a config path, "setups[personal]",
 	// a store id, a row id.
 	Wrote []string `json:"wrote"`
+	// Pushed names each remote the step pushed to and what went there
+	// (a new store's first commit); left out when the step pushed nothing.
+	// Why: nothing reaches a remote without the person seeing it (devco
+	// D-613).
+	Pushed []string `json:"pushed,omitempty"`
 	// Setup is the entry after the write (the op saves progress with it).
 	Setup onboard.SetupEntry `json:"setup"`
 }
@@ -311,8 +317,8 @@ type PlanOut struct {
 
 // CheckIn is setup.check's input.
 type CheckIn struct {
-	Setup   string          `json:"setup" arg:"0" desc:"the setup name"`
-	Step    string          `json:"step" flag:"step" desc:"the step id (lore setup plan lists them)"`
+	Setup   string          `json:"setup,omitempty" arg:"0" desc:"the setup name"`
+	Step    string          `json:"step,omitempty" flag:"step" desc:"the step id (lore setup plan lists them)"`
 	Answers onboard.Answers `json:"answers,omitempty" flag:"answers" desc:"the step's answers as a JSON object"`
 }
 
@@ -337,6 +343,9 @@ type ApplyOut struct {
 	Status  onboard.StepStatus `json:"status"`
 	Changed bool               `json:"changed"`
 	Wrote   []string           `json:"wrote"`
+	// Pushed is ApplyResult.Pushed: each remote the step pushed to (a new
+	// store's first commit); left out when it pushed nothing (devco D-613).
+	Pushed []string `json:"pushed,omitempty"`
 	// Checks are the step's results after the save (reused fresh ones keep
 	// their own time), so the page and Summary show what ran: a finished
 	// setup keeps no progress rows to read them from (realmac NEW-5).
@@ -344,6 +353,9 @@ type ApplyOut struct {
 	// Warnings are one-line notices of the save, such as a folder given
 	// more than once and saved once; left out when there is none.
 	Warnings []string `json:"warnings,omitempty"`
+	// OwnOffer is the own: pattern offered to an admin for this repo
+	// (devco D-526) and whether it was added; left out when none.
+	OwnOffer OwnOffer `json:"own_offer,omitzero"`
 }
 
 // FixIn is setup.fix's input.
@@ -374,6 +386,23 @@ type SetupSummary struct {
 	// HealthCell) from cached doctor results or the setup's unfinished
 	// steps; "" when never checked.
 	Health string `json:"health,omitempty"`
+	// Problems are the failing and warning checks Health counts, each with
+	// its fix (devco D-483: a "⚠ 1" with nothing naming the warning; the
+	// same list setup show prints).
+	Problems []onboard.CheckResult `json:"problems,omitempty"`
+	// CheckedAt is when the newest result Health counts was made (RFC 3339;
+	// "" when never checked), so a result from an earlier day is never
+	// shown as if it were current (devco D-605).
+	CheckedAt string `json:"checked_at,omitempty"`
+	// Stale says why the stored results no longer stand (a file their
+	// checks read, such as the global git config or a file it includes,
+	// changed after them); Health and Problems are then empty, and the
+	// text says "not checked since <date>" with the check that refreshes
+	// it (setup check --step identity), so setup list never disagrees with setup check (devco D-605).
+	Stale string `json:"stale,omitempty"`
+	// earlier is CheckedAt's local date when it is not today ("" today):
+	// the text table prints it next to the cell.
+	earlier string
 	// Disabled setups stay listed (greyed on Home) but match nothing.
 	Disabled   bool   `json:"disabled,omitempty"`
 	DisabledAt string `json:"disabled_at,omitempty"`
@@ -441,6 +470,9 @@ type ShowOut struct {
 	// Problems are the failing and warning checks Health counts, each with
 	// its fix (B1-25).
 	Problems []onboard.CheckResult `json:"problems,omitempty"`
+	// CheckedAt and Stale are as in SetupSummary (devco D-605).
+	CheckedAt string `json:"checked_at,omitempty"`
+	Stale     string `json:"stale,omitempty"`
 }
 
 // UseIn is setup.use's input.
@@ -538,6 +570,14 @@ type JoinOut struct {
 	// Org is the org joined when the answer names it (an invite line or
 	// an org name); "" for a store url until the join reads the store.
 	Org string `json:"org,omitempty"`
+	// IdentityNote says why the identity line asks for an address instead
+	// of carrying git's email: that email is another org's identity on
+	// this machine (devco N-4); "" otherwise.
+	IdentityNote string `json:"identity_note,omitempty"`
+	// PrefillNote says where the lines' name and GitHub account came
+	// from: the org's roster entry for the joining email, else global git
+	// and this machine's gh login (devco D-487); "" when neither is set.
+	PrefillNote string `json:"prefill_note,omitempty"`
 }
 
 // Text implements op.Texter: the join lines (the page, when it opens,
@@ -549,8 +589,14 @@ func (o JoinOut) Text() string {
 		b.WriteString("  " + c + "\n")
 	}
 	b.WriteString("Each line checks its step first and says what to fix; lore setup list then shows the setup.\n")
+	if o.IdentityNote != "" {
+		b.WriteString(o.IdentityNote + "\n")
+	}
+	if o.PrefillNote != "" {
+		b.WriteString(o.PrefillNote + "\n")
+	}
 	if slices.ContainsFunc(o.Commands, choosesLocalPersonal) {
-		b.WriteString(LocalPersonalWarning + "\n")
+		b.WriteString(LocalPersonalWarningText() + "\n")
 	}
 	return b.String()
 }
@@ -569,7 +615,7 @@ func choosesLocalPersonal(line string) bool {
 // every member's join lines picked it and nothing said that personal
 // notes then live on one machine only), and how to keep them in a
 // private git repo instead. The personal_store step prints it too.
-const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: push the folder ~/.lore/stores/" + onboard.LocalStoreFolder + " to a private git repo, then lore store set-url --name me --url <private-repo-url>)."
+const LocalPersonalWarning = "Note: personal_store \"local\" keeps your personal notes (--to me) in a folder on this machine only, with no copy anywhere else; a lost or wiped machine loses them. To keep them in a private git repo, answer that line with '{\"personal_store\":\"existing\",\"store_url\":\"<private-repo-url>\"}' instead (or later: make an empty private git repo; lore store set-url --name me --url <private-repo-url> copies the folder <home>/stores/" + onboard.LocalStoreFolder + " into its clone, then lore sync pushes it)."
 
 // RepairIn is setup.repair's input.
 type RepairIn struct {
@@ -642,6 +688,13 @@ type TeamInviteOut struct {
 // inviteSyncFirst is the line TeamInviteOut.Text prints when SyncFirst.
 const inviteSyncFirst = "⚠ the invite is committed in this machine's copy of the org store only: run `lore sync` before you send the line (the join reads the store's remote)\n"
 
+// inviteAccess is the access line every invite prints (devco:J-5): the
+// join reads the roster in the org store and records the accept there,
+// so a contractor meant to see one client store only still needs read and
+// write on the org store; lore has no client-only join, and the line says
+// so before the person is sent a line that would fail on store.read.
+const inviteAccess = "access: %s needs read and write on the org store (the join reads the roster there and records the accept) and on the store of each client project; lore cannot limit a person to a client store alone\n"
+
 // githubPending is TeamInviteOut.GitHubAccess while the person has no
 // access yet (ops/team.GitHubPending, same value).
 const githubPending = "pending"
@@ -678,6 +731,7 @@ func (o TeamInviteOut) Text() string {
 	if o.SyncFirst {
 		b.WriteString(inviteSyncFirst)
 	}
+	fmt.Fprintf(&b, inviteAccess, o.Email)
 	fmt.Fprintf(&b, "Send this to %s (it holds no secret):\n  lore setup join --invite %s\n", o.Email, o.Line)
 	return b.String()
 }
@@ -685,6 +739,8 @@ func (o TeamInviteOut) Text() string {
 // TeamInviteListIn is team.invite.list's input.
 type TeamInviteListIn struct {
 	Status string `json:"status,omitempty" flag:"status" desc:"pending, accepted, revoked or expired"`
+	// --store <org> (devco D-499).
+	metalist.RosterStore
 	// --created-by / --updated-by: the shared writer filters of every
 	// list (INTEG-AUDIT-1; engine.List applies them to the table that
 	// declares this list's noun, schema.Noun).
@@ -721,6 +777,14 @@ type TeamInviteRefIn struct {
 	Ref string `json:"ref" arg:"0" desc:"an inv_ id or the invited email"`
 }
 
+// TeamInviteResendIn is the input of team.invite.resend: a read, so it
+// names the org whose roster holds the invite (--store <org>, devco
+// D-499); revoke keeps TeamInviteRefIn, a write names no store.
+type TeamInviteResendIn struct {
+	Ref string `json:"ref" arg:"0" desc:"an inv_ id or the invited email"`
+	metalist.RosterStore
+}
+
 // TeamInviteRevokeOut is team.invite.revoke's output.
 type TeamInviteRevokeOut struct {
 	ID     string `json:"id"`
@@ -746,4 +810,10 @@ type TeamInviteResendOut struct {
 // without it keeps the plain checks.
 type OrgStoreLister interface {
 	OrgStoreURLs(ctx context.Context, org string) (urls []string, found bool, err error)
+}
+
+// LocalPersonalWarningText is LocalPersonalWarning with the folder in the
+// home this run uses (devco D-423: under LORE_HOME it named ~/.lore).
+func LocalPersonalWarningText() string {
+	return strings.Replace(LocalPersonalWarning, "<home>", lorehome.Shown(), 1)
 }

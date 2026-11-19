@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opsprofile "github.com/thesatellite-ai/lore/ops/profile"
@@ -37,7 +38,7 @@ func (ap setupApplier) renameRosterActor(ctx context.Context, org string, want i
 		return errs.Wrap(errs.Internal, "wire: encode "+profilestore.OpActorEdit+" input", err)
 	}
 	if _, err = runDirect(ctx, edit, op.JSONDecoder{Body: body}); err != nil {
-		return errs.Prefix("setup identity: saved in ~/.lore/"+ConfigFile+", but the "+org+" roster still shows the old name (finish with lore actor edit --actor "+
+		return errs.Prefix("setup identity: saved in "+lorehome.Shown()+"/"+ConfigFile+", but the "+org+" roster still shows the old name (finish with lore actor edit --actor "+
 			want.Key+" --display-name "+strconv.Quote(want.Name)+")", err)
 	}
 	return nil

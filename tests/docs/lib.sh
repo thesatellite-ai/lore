@@ -80,19 +80,30 @@ clean() {
   sed -e "s#$LORE_BIN#/usr/local/bin/lore#g" -e "s#$SHIM/lore#/usr/local/bin/lore#g" -e "s#\b$(hostname)\b#devbox#g" -e 's#\b\(ct_[0-9a-f]\{5\}\)[0-9a-f]\{27\}\b#\1…#g' -e "s#$HOMES/[a-z0-9-]*#~#g" -e "s#$HOSTS#/srv/git/github.com#g" -e "s#$WORLD#/tmp/world#g"
 }
 
+# testtime_secs N: N seconds times the machine factor (tests/lib/testtime.sh, LORE_TEST_TIME_SCALE), as a plain
+# number; a wait for a slow process to finish goes through it, so a slower machine waits longer.
+_testtime_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/testtime.sh"
+testtime_secs() {
+  local s
+  s=$("$_testtime_sh" "$1") || return 2
+  echo "${s%s}"
+}
+
 # _answer OUT feeds a prompt its answer (ANSWER) once the prompt is on the terminal: it
 # waits until the command's output so far (the file OUT, written as the command prints)
 # matches PROMPT (a grep -E pattern; default a "[y/N]"-style question), then types the
 # answer, so the question always comes before the reply whatever the machine's load. A
-# prompt that never shows within ANSWER_TIMEOUT seconds (default 120) is reported in
+# prompt that never shows within ANSWER_TIMEOUT seconds (default 120 times the machine factor) is reported in
 # OUT.noprompt and answered anyway, so the command still ends; _on counts it as a failure.
 # With no ANSWER it sends nothing.
 _answer() {
   [ -n "${ANSWER:-}" ] || return 0
-  local out="$1" waited=0 limit=$(( ${ANSWER_TIMEOUT:-120} * 10 ))
+  local out="$1" waited=0 secs limit
+  secs="${ANSWER_TIMEOUT:-$(testtime_secs 120)}"
+  limit=$(( secs * 10 ))
   until tr -d '\r' < "$out" 2>/dev/null | grep -qE "${PROMPT:-\[[yYnN]/[yYnN]\]}"; do
     if [ "$waited" -ge "$limit" ]; then
-      printf 'no prompt matching %s within %ss\n' "${PROMPT:-[y/N]}" "${ANSWER_TIMEOUT:-120}" > "$out.noprompt"
+      printf 'no prompt matching %s within %ss\n' "${PROMPT:-[y/N]}" "$secs" > "$out.noprompt"
       break
     fi
     sleep 0.1; waited=$((waited + 1))

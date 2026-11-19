@@ -169,3 +169,22 @@ func TestRunFormatsAndTimeout(t *testing.T) {
 		t.Fatalf("format xml: %v", err)
 	}
 }
+
+// TestRunMasksSecretCells (devco R-11): `lore sql "SELECT '<token>'"` (or a
+// hand-made row holding one) prints the rule and hash, not the token;
+// other cells are kept, and --show-sensitive (asked first) prints it.
+func TestRunMasksSecretCells(t *testing.T) {
+	tok := "gh" + "p_" + "aB3dE9fG1hJ2kL8mN4pQ7rS5tU6vW0xY1zC2"
+	res := Result{Columns: []string{"x", "y"}, Rows: [][]value.Value{{txt(t, "key "+tok), txt(t, "plain")}}}
+	out, err := run(context.Background(), &fakeEnv{res: res}, RunIn{Query: "SELECT 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := out.Rows[0].Cells; strings.Contains(got[0].Value, tok) || !strings.HasPrefix(got[0].Value, "key [redacted ") || got[1].Value != "plain" {
+		t.Fatalf("cells %+v", got)
+	}
+	out, err = run(context.Background(), &fakeEnv{res: res}, RunIn{Query: "SELECT 1", ShowSensitive: true})
+	if err != nil || !strings.Contains(out.Rows[0].Cells[0].Value, tok) {
+		t.Fatalf("--show-sensitive: %v %+v", err, out.Rows)
+	}
+}

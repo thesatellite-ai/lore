@@ -59,6 +59,10 @@ type Store struct {
 	// `branch:`); empty follows the store's default branch. Only a git
 	// store has branches (a file:// store with a branch is E_STORE_SCHEME).
 	Branch string `yaml:"branch,omitempty"`
+	// Aliases are other names the store answers to in this process (never
+	// read from or written to stores.yaml): an org store's short name from
+	// lore-org.yaml (engine.WithStoreAlias, devco T-5).
+	Aliases []store.Source `yaml:"-"`
 }
 
 // Config is the whole file. Order matters: it is the stores' precedence

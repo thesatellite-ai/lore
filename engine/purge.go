@@ -9,7 +9,9 @@ package engine
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/thesatellite-ai/lore/logic/auditfill"
 	"github.com/thesatellite-ai/lore/logic/trash"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -51,7 +53,7 @@ func (e *Engine) Purge(ctx context.Context, ref Ref) (Written, error) {
 	if err = refuseActorDelete(cur); err != nil { // BATCH2 #8
 		return Written{}, err
 	}
-	st, err := e.writable(src)
+	st, err := e.writable(ctx, src)
 	if err != nil {
 		return Written{}, err
 	}
@@ -160,7 +162,7 @@ func purgedErr(ctx context.Context, st Attached, table row.Table, id ids.AnyID) 
 			}
 		}
 	}
-	return errs.New(errs.Purged, ""+what+" from store "+string(st.Name)+"; purged rows never come back (DQ4)").
+	return errs.New(errs.Purged, ""+what+" from store "+string(st.Name)+"; purged rows never come back").
 		WithHint("read what it held: lore trash show --id " + id.String() + " --from-history; then write what you still need as a new row (a new id)")
 }
 
@@ -168,6 +170,9 @@ func purgedErr(ctx context.Context, st Attached, table row.Table, id ids.AnyID) 
 // "purged by mira"): the actor's display name from the store's actors
 // rows, else the act_ id when the row cannot be read (never a guess).
 func purgerName(ctx context.Context, st Attached, actor ids.ID[ids.Actor]) string {
+	if name, ok := auditfill.NameOf(actor.String()); ok {
+		return name
+	}
 	sr, err := st.Backend.Get(ctx, schema.TableActors, actor.Any())
 	if err != nil || sr.Deleted {
 		return actor.String()
@@ -353,4 +358,21 @@ func (e *Engine) Resurrected(ctx context.Context) ([]Resurrected, error) {
 		}
 	}
 	return out, nil
+}
+
+// IsPurged reports whether the attached store named source lists id as
+// purged (its _purged.json, or the backend's own list). A caller that
+// found the id's tombstone uses it to tell a purge (E_PURGED: gone for
+// good) from any other delete (devco:D-590: "deleted from <org>/<folder>"
+// with the trash list command). False for a backend that keeps no list.
+func (e *Engine) IsPurged(ctx context.Context, source store.Source, id ids.AnyID) (bool, error) {
+	st, err := e.attached(source)
+	if err != nil {
+		return false, err
+	}
+	set, err := purgedSet(ctx, st)
+	if err != nil {
+		return false, fmt.Errorf("purge list of %s: %w", source, err)
+	}
+	return set[id.String()], nil
 }

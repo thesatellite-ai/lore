@@ -27,6 +27,7 @@ import (
 	"time"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
@@ -49,7 +50,7 @@ func (c *standaloneClones) clonesFor() orgcfg.Clones {
 func (c *standaloneClones) configuredStores() ([]*configuredStore, error) {
 	cfg, _, err := orgcfg.LoadConfig(c.home)
 	if err != nil {
-		return nil, errs.Prefix("read ~/.lore/config.yaml", err)
+		return nil, errs.Prefix("read "+lorehome.Shown()+"/config.yaml", err)
 	}
 	if cfg == nil {
 		return nil, nil
@@ -88,12 +89,15 @@ func appendOnce(xs []string, x string) []string {
 // cloneView is the op's view of one store's clone info.
 func cloneView(cs *configuredStore, info orgcfg.CloneInfo) opsstores.CloneView {
 	v := opsstores.CloneView{URL: cs.url, Shown: repourl.Mask(cs.url), Entries: cs.entries, Branches: cs.branches, Clone: info.Dir,
-		Cloned: info.Cloned, DefaultBranch: info.DefaultBranch, Unpushed: info.Unpushed, Problems: info.Problems}
+		Cloned: info.Cloned, DefaultBranch: info.DefaultBranch, Unpushed: info.Unpushed, Problems: info.Problems, Warnings: info.Warnings}
 	if !info.LastFetch.IsZero() {
 		v.LastFetch = info.LastFetch.Local().Format(time.RFC3339)
 	}
 	for i, p := range v.Problems {
 		v.Problems[i] = repourl.MaskText(p)
+	}
+	for i, w := range v.Warnings {
+		v.Warnings[i] = repourl.MaskText(w)
 	}
 	return v
 }

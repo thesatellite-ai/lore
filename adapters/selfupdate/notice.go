@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
 )
 
@@ -185,7 +186,7 @@ func (n Notice) noticeOrAuto(ctx context.Context, w io.Writer, target string) er
 	if !n.Settings.Notice {
 		return nil
 	}
-	_, werr := fmt.Fprintf(w, "%s %s is available (you have %s). Run: %s upgrade    (turn off: upgrade_notice: false in ~/.lore/config.yaml)\n",
+	_, werr := fmt.Fprintf(w, "%s %s is available (you have %s). Run: %s upgrade    (turn off: upgrade_notice: false in "+lorehome.Shown()+"/config.yaml)\n",
 		BinaryName, want, have, BinaryName)
 	return werr
 }

@@ -122,6 +122,7 @@ alice (work/website)$ lore tasklist add --title 'Launch week' --body 'Everything
 lore: wrote ~/work/website/.lore/data/task_lists/tlt_b4f4765e593d51fd1352985e8af3a5b0.json
 ✓ tlt_b4f4765e593d51fd1352985e8af3a5b0
 alice (work/website)$ lore task add --title 'Check every link on the home page' --tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0
+lore: moved task_lists/tlt_b4f4765e593d51fd1352985e8af3a5b0 to this clone's refs/lore/live with the live row that names it, so teammates can read it; ~/work/website/.lore/data/task_lists/tlt_b4f4765e593d51fd1352985e8af3a5b0.json is no longer in your working folder (it lands with that row)
 lore: wrote tasks/tsk_28f8d32584b2db54ffb146bede5b03df on this clone's refs/lore/live (a live row, not pushed yet; ~/work/website/.lore/data/tasks/tsk_28f8d32584b2db54ffb146bede5b03df.json is unchanged)
 ✓ tsk_28f8d32584b2db54ffb146bede5b03df — Check every link on the home page [medium]
 alice (work/website)$ lore task edit --id tsk_76bd560aff0771fab8457dbfa9823f10 --tasklist tlt_b4f4765e593d51fd1352985e8af3a5b0
@@ -274,7 +275,6 @@ alice (work/website)$ lore sync
 lore live: pushed waiting live writes commit 9b40ce7 to origin refs/lore/live
 lore live: landed on main (05513aa); leaves live once main is fetched
 lore live: 4 row(s) left live (main holds them)
-lore live: pushed waiting live writes commit dfd8dc8 to origin refs/lore/live
 alice (work/website)$ lore task list --status done
 ✓ tsk_162df51b7f78b785c97c26b41ea89666 merged 10:04 (found by: ancestry, 86dbae4)
 ✓ tsk_2ad3618e878ebbf527d34d446ef4f891 Send the invoice reminder before Friday's demo [high] due:2026-11-06

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/thesatellite-ai/lore/internal/opstest"
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // TestAddCommandsNeverReadStdinUnasked pins INTEG-QUESTIONS-3: an add
@@ -43,7 +44,7 @@ func TestAddCommandsNeverReadStdinUnasked(t *testing.T) {
 		}()
 		select {
 		case <-done:
-		case <-time.After(20 * time.Second):
+		case <-time.After(testtime.Scale(20 * time.Second)):
 			t.Fatalf("%s with no input waited on stdin (an open pipe nobody writes)", name)
 		}
 	}

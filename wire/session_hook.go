@@ -30,6 +30,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/toolprofile"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	opsagent "github.com/thesatellite-ai/lore/ops/agent"
 )
 
@@ -100,7 +101,7 @@ func (a *App) RecordSessionHook(ctx context.Context, in opsagent.HookIn, stdin i
 		d = SessionDetails{ActorID: pl.actor, Tool: tool, Signal: SessionSignalHook}
 		if pl.top != "" {
 			d.Repo = filepath.Base(pl.top)
-			if rel, rerr := filepath.Rel(pl.top, pl.cwd); rerr == nil && !strings.HasPrefix(rel, "..") {
+			if rel, inside := fspath.Rel(pl.top, pl.cwd); inside {
 				d.Cwd = filepath.ToSlash(rel)
 			}
 		}

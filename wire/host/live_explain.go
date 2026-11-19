@@ -30,7 +30,7 @@ import (
 
 // ruleDefaultReadThrough names F1's default-branch read-through rule in
 // explain's "wins" line (v0.1.17 live_wire.go wording).
-const ruleDefaultReadThrough = "default-branch read-through (F1)"
+const ruleDefaultReadThrough = "default-branch read-through"
 
 // Explain implements opssync.Env (`lore explain <id>`).
 func (l liveSync) Explain(ctx context.Context, in opssync.ExplainIn) (opssync.ExplainOut, error) {
@@ -257,7 +257,7 @@ func (s *liveSession) findTableInTree(folder, id string) string {
 // findTableAt is the table of id in rev's .lore/data of folder ("" when
 // rev has no such row file; one ls-tree).
 func (s *liveSession) findTableAt(ctx context.Context, rev, folder, id string) string {
-	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"ls-tree", "-r", "--name-only", rev, "--", mainDataPath(folder, "")}})
+	out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", rev, "--", mainDataPath(folder, "")}})
 	if err != nil {
 		return ""
 	}

@@ -20,6 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
@@ -135,9 +136,15 @@ type stepState struct {
 	// done: at load, the entry existed with no progress rows (its summary
 	// ran, 4.11). Fixed at load so a kind-step apply that creates the
 	// entry does not make the half-made setup look finished.
-	done     bool
-	kind     onboard.Kind
-	plan     []onboard.Step
+	done bool
+	kind onboard.Kind
+	plan []onboard.Step
+	// unset: no entry, no saved kind step and no kind answer, so kind is
+	// solo only by default; owners maps every kind whose plan has a step
+	// to that step's kinds, so a step of another kind's plan (join on a
+	// fresh machine, devco:L-1) names that plan, not the solo one.
+	unset    bool
+	owners   map[onboard.StepID][]onboard.Kind
 	progress map[onboard.StepID]onboard.Progress
 	// prior is a finished setup's kept results as they stood before this
 	// apply's write (HealthSource), read before the write changes the
@@ -174,6 +181,15 @@ func (s stepState) step(id string) (onboard.Step, error) {
 		if string(st.ID) == id {
 			return st, nil
 		}
+	}
+	if kinds := s.owners[onboard.StepID(id)]; s.unset && len(kinds) > 0 {
+		k := string(kinds[0])
+		e := errs.New(errs.InvalidInput, "setup "+quote(s.name)+" has no kind yet on this machine, and step "+quote(id)+" is in the "+k+" plan; apply the kind step first: lore setup apply --setup "+s.name+" --step kind --answers '{\"kind\":\""+k+"\"}'")
+		if onboard.StepID(id) == onboard.StepJoin {
+			return onboard.Step{}, e.WithHint("lore setup join --invite \"<the org's store url>\" prints every step of the member plan, filled in").
+				WithNext("lore", "setup", "join", "--invite", "<the org's store url>")
+		}
+		return onboard.Step{}, e.WithNext("lore", "setup", "apply", "--setup", s.name, "--step", string(onboard.StepKind), "--answers", `{"kind":"`+k+`"}`)
 	}
 	return onboard.Step{}, errs.New(errs.InvalidInput, "step "+quote(id)+" is not in the "+string(s.kind)+" plan").
 		WithNext("lore", "setup", "plan", "--kind", string(s.kind))
@@ -223,11 +239,20 @@ func (e engine) load(ctx context.Context, st Store, name string, answers onboard
 		s.kind = answerKind(answers)
 	default:
 		s.kind = onboard.KindSolo
+		s.unset = !s.exists
 	}
 	if !s.exists {
 		s.entry = onboard.SetupEntry{Name: name, Kind: s.kind}
 	}
 	s.plan = e.cat.Plan(s.kind)
+	if s.unset {
+		s.owners = map[onboard.StepID][]onboard.Kind{}
+		for _, k := range onboard.Kinds() {
+			for _, st := range e.cat.Plan(k) {
+				s.owners[st.ID] = append(s.owners[st.ID], k)
+			}
+		}
+	}
 	return s, nil
 }
 
@@ -356,6 +381,28 @@ func (e engine) probeReusing(ctx context.Context, s stepState, step onboard.Step
 	return out, nil
 }
 
+// probeEntry is the setup entry the probes read. A member or admin setup
+// whose entry is not written yet (its join or team step is still ahead)
+// keeps its identity only in the saved identity step; the probes get it as
+// the entry's identity key, so a later step's check (github.identity_email)
+// knows the email the person just saved instead of saying "no identity
+// email yet" (devco D-448). Only the probe's copy changes: the saved entry
+// of a member or admin setup never holds an identity (CFG9).
+func probeEntry(s stepState) onboard.SetupEntry {
+	e := s.entry
+	if s.exists || e.Identity.Key != "" {
+		return e
+	}
+	id := s.progress[onboard.StepIdentity].Answers
+	if email := strings.TrimSpace(id[onboard.QIDEmail].Text); email != "" {
+		e.Identity.Key = humanKeyPrefix + email
+		if e.Identity.Name == "" {
+			e.Identity.Name = strings.TrimSpace(id[onboard.QIDName].Text)
+		}
+	}
+	return e
+}
+
 // ownOrg is onboard.OwnOrg for check id of setup s with answers: the
 // saved org from s, the orgs[] entry from the Store when it can list them
 // (OrgStoreLister), the other setups from config.yaml. Anything that
@@ -427,6 +474,7 @@ func (e engine) probeItems(ctx context.Context, s stepState, items []probeItem, 
 	known := make([]probeItem, 0, len(items))
 	reqs := make([]ProbeRequest, 0, len(items))
 	out := make([]probed, 0, len(items))
+	entry := probeEntry(s)
 	for _, it := range items {
 		c, ok := e.cat.Check(it.check, it.step.ID, s.kind, nil)
 		if !ok {
@@ -439,12 +487,12 @@ func (e engine) probeItems(ctx context.Context, s stepState, items []probeItem, 
 		if tools := pickedTools(answers, s.entry); target == "" && perToolChecks[it.check] && len(tools) > 0 {
 			for _, t := range tools {
 				known = append(known, it)
-				reqs = append(reqs, ProbeRequest{Check: c, Setup: s.entry, Answers: answers, Target: t})
+				reqs = append(reqs, ProbeRequest{Check: c, Setup: entry, Answers: answers, Target: t})
 			}
 			continue
 		}
 		known = append(known, it)
-		reqs = append(reqs, ProbeRequest{Check: c, Setup: s.entry, Answers: answers, Target: target})
+		reqs = append(reqs, ProbeRequest{Check: c, Setup: entry, Answers: answers, Target: target})
 	}
 	got := pr.Probe(ctx, reqs)
 	for i, it := range known {
@@ -782,7 +830,7 @@ func localChoiceDetail(choices []onboard.Choice, cfg onboard.Config, setup strin
 	out := slices.Clone(choices)
 	for i := range out {
 		if out[i].Value == onboard.PersonalStoreLocal {
-			out[i].Detail = onboard.LocalStoreDetail(cfg, setup)
+			out[i].Detail = onboard.LocalStoreDetail(cfg, setup, lorehome.Shown())
 		}
 	}
 	return out
@@ -990,11 +1038,11 @@ func entryValue(step onboard.StepID, q onboard.Question, e onboard.SetupEntry, e
 
 // kindDefault is the 4.1 starting answer of the kind step when nothing
 // else gives one: the plan's kind; a solo setup is named "personal" while
-// that name is free; the first solo setup is the default one.
+// that name is free; the first setup of the machine is the default one (takesDefault).
 func kindDefault(step onboard.StepID, q onboard.Question, kind onboard.Kind, e onboard.SetupEntry, cfg onboard.Config) (onboard.Answer, bool) {
 	if step != onboard.StepKind {
 		if step == onboard.StepFolders && q.ID == onboard.QIDDefault {
-			return boolAnswer(!hasDefault(cfg)), true
+			return boolAnswer(takesDefault(cfg, e.Name)), true
 		}
 		return onboard.Answer{}, false
 	}
@@ -1009,9 +1057,21 @@ func kindDefault(step onboard.StepID, q onboard.Question, kind onboard.Kind, e o
 			return textAnswer(defaultSetupName), true
 		}
 	case onboard.QIDDefault:
-		return boolAnswer(!hasDefault(cfg)), true
+		return boolAnswer(takesDefault(cfg, e.Name)), true
 	}
 	return onboard.Answer{}, false
+}
+
+// takesDefault is the starting answer of "use this setup when no folder
+// matches": only the first setup of the machine starts as the default.
+//
+// Why (devco R-17): the old rule was "no setup is marked default yet", and
+// a team setup is never marked (default is a solo question), so a solo
+// setup made later silently took the default over the team setup the
+// person already used. A person who wants the new one to be the default
+// answers default: true; the old one stays the default otherwise.
+func takesDefault(cfg onboard.Config, name string) bool {
+	return !slices.ContainsFunc(cfg.Setups, func(s onboard.SetupEntry) bool { return s.Default || s.Name != name })
 }
 
 // hasDefault reports whether some setup is the default one already.

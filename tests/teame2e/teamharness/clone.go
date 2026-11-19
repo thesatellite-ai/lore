@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -69,6 +70,24 @@ func (c *Clone) Git(args ...string) string {
 func (c *Clone) TryGit(args ...string) Result {
 	c.A.w.T.Helper()
 	return c.A.w.run(c.Dir, c.A.environ(c.extra), c.A.w.realGit, args...)
+}
+
+// RewriteGit runs git (a forced rebase, an amend) with the committer date
+// a minute after HEAD's, so every commit it rewrites gets a new id.
+//
+// Why: git dates commits to the second. A `rebase --force-rebase` (or an
+// amend with no change) made in the same second as the commits it replays
+// writes byte-identical commits with the same ids, git's post-rewrite hook
+// lists old = new, and lore rightly has no commit link to move: a test
+// expecting "moved 1 commit link(s)" then failed whenever its steps ran
+// inside one second (devco:D-459, flaky under load).
+func (c *Clone) RewriteGit(args ...string) Result {
+	c.A.w.T.Helper()
+	sec, err := strconv.ParseInt(c.Git("log", "-1", "--format=%ct"), 10, 64)
+	if err != nil {
+		c.A.w.T.Fatalf("HEAD's committer date in %s: %v", c.Dir, err)
+	}
+	return c.With("GIT_COMMITTER_DATE=@" + strconv.FormatInt(sec+60, 10) + " +0000").TryGit(args...)
 }
 
 // AdminPush pushes past the protected-main hook (the merge button).

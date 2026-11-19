@@ -14,6 +14,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/internal/testenv"
+	"github.com/thesatellite-ai/lore/model/errs"
 )
 
 // commitFile writes rel in dir, commits it with msg and returns the commit.
@@ -59,8 +60,14 @@ func TestPushDocsAreOnlyWhatTheRemoteLacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	zero := strings.Repeat("0", len(tip))
-	whereSet := func(docs map[string][]byte) string {
+	whereSet := func(sets []map[string][]byte) string {
 		var w []string
+		docs := map[string][]byte{}
+		for _, set := range sets {
+			for where, b := range set {
+				docs[where] = b
+			}
+		}
 		for where, b := range docs {
 			if strings.HasPrefix(where, commitMsgWhere) {
 				w = append(w, "msg:"+strings.TrimSpace(string(b)))
@@ -95,6 +102,49 @@ func TestPushDocsAreOnlyWhatTheRemoteLacks(t *testing.T) {
 	unreadable := strings.Repeat("1", len(tip))
 	if _, err := pushDocs(ctx, repo, "origin", []pushUpdate{{"refs/heads/x", unreadable, "refs/heads/x", zero}}); err == nil {
 		t.Fatal("an unreadable tip must be an error, never an empty list")
+	}
+}
+
+// TestPushOfSeveralCommitsChecksEveryVersion (devco:S-9): a push of
+// several commits that change one row file carries each version of it. A
+// key put in by the newest commit (made with --no-verify) is refused,
+// though an older commit of the same push changed the file too (its clean
+// version used to replace the newer one, so the push went out); a key one
+// commit adds and a later one removes is refused as well, since the push
+// still sends it.
+func TestPushOfSeveralCommitsChecksEveryVersion(t *testing.T) {
+	testenv.SetHome(t, t.TempDir())
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	ctx := context.Background()
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	dir := t.TempDir()
+	gitT(t, dir, "init", "-q", "--bare", "-b", "main", origin)
+	gitT(t, dir, "init", "-q", "-b", "main")
+	gitT(t, dir, "remote", "add", "origin", origin)
+	const row = ".lore/data/memories/mem_01a1dd5c74427dec80871af648c3aaef.json"
+	base := commitFile(t, dir, row, `{"body":"retry the flaky job once"}`+"\n", "lore: memory")
+	gitT(t, dir, "push", "-q", "--no-verify", "origin", "main")
+	gitT(t, dir, "fetch", "-q", "origin")
+	repo, err := gitref.Open(ctx, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, dir, row, `{"body":"retry the flaky job twice"}`+"\n", "tidy memory")
+	keyTip := commitFile(t, dir, row, `{"body":"retry the flaky job twice, prod key `+fakeKey+`"}`+"\n", "tidy memory again")
+	sets, err := pushDocs(ctx, repo, "origin", []pushUpdate{{"refs/heads/main", keyTip, "refs/heads/main", base}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkPushDocs(ctx, leakStub, sets); !errs.Has(err, errs.LeakBlocked) || !strings.Contains(err.Error(), row) {
+		t.Fatalf("a key in the newest of two versions of %s went through: %v", row, err)
+	}
+	cleanTip := commitFile(t, dir, row, `{"body":"retry the flaky job twice"}`+"\n", "drop the key")
+	sets, err = pushDocs(ctx, repo, "origin", []pushUpdate{{"refs/heads/main", cleanTip, "refs/heads/main", base}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkPushDocs(ctx, leakStub, sets); !errs.Has(err, errs.LeakBlocked) {
+		t.Fatalf("a key an earlier commit of the push carries went through: %v", err)
 	}
 }
 

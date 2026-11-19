@@ -3,8 +3,9 @@ package wire
 // roster_misshint_test.go — t-e2e4 (4f6b9a4a): an @handle that is not on
 // the roster is refused with a hint that fits where the roster lives. An
 // org roster is a store copy that may predate a teammate's registration, so
-// its miss says to register and then `lore sync`; a repo's own roster has
-// no copy to be stale, so its miss only says to register.
+// its miss says to register and then `lore sync`; a repo's own roster gets
+// its actor rows as live rows from other clones, so its miss names a sync
+// on both sides too (devco:S-5).
 
 import (
 	"context"
@@ -40,8 +41,9 @@ func orgRepoApp(t *testing.T) *App {
 
 // TestRosterMissHintBySource: task add --assign @ghost and the handle
 // lookup itself (teams allowed or not) refuse with E_NOT_FOUND /
-// E_INVALID_INPUT; on the org roster the hint names `lore sync`, on the
-// repo roster it never does; both name `lore actor register`.
+// E_INVALID_INPUT; both hints name `lore sync` (devco:S-5: on the repo
+// roster too, a register in another clone is a live row kept there until
+// their sync) and `lore actor register`.
 func TestRosterMissHintBySource(t *testing.T) { // the org world sets env: runs in its own child process
 	if isolate.Run(t) {
 		return
@@ -53,7 +55,7 @@ func TestRosterMissHintBySource(t *testing.T) { // the org world sets env: runs 
 		wantSync bool
 	}{
 		{"org roster", orgRepoApp(t), true},
-		{"repo roster", repoApp, false},
+		{"repo roster", repoApp, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			check := func(how string, err error, code errs.Code) {

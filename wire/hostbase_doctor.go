@@ -37,6 +37,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/selfupdate"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/formatgate"
@@ -91,9 +92,12 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	note := func(msg string) { b.Notes = append(b.Notes, msg) }
 	// The base checks below share one read of each store
 	// (engine.WithReadSnapshot, item 41); the fixing one after them gets
-	// its own.
+	// its own. devco D-474: they are reads under --fix too, as in a plain
+	// doctor (D-441): with the fix's write access the stale-link check's
+	// project lookup made a store folder's missing project row, a store
+	// commit no repair asked for. Only the repair below writes.
 	fixCtx := ctx
-	ctx = engine.WithReadSnapshot(ctx)
+	ctx = engine.WithAccess(engine.WithReadSnapshot(ctx), op.AccessRead)
 	b.Sync = a.doctorSync(ctx, warn, note)             // hostbase_doctor_sync.go (E-GAPS-1 G4)
 	waits := a.doctorStoreConflicts(ctx, b.Sync, warn) // doctor_store_conflicts.go (I-1)
 	a.doctorPushModes(ctx, warn, note, waits)          // storepushops.go: each store's push mode
@@ -104,6 +108,7 @@ func (a *App) CoreDoctorBase(ctx context.Context, fix bool) (opsdoctor.Base, err
 	a.doctorSecretRulesOff(ctx, note)
 	a.doctorCIPins(ctx, warn)
 	a.doctorClaudeLocal(ctx, warn)
+	a.doctorAttrOverride(ctx, warn)  // gitattr_override.go: a later .gitattributes line beats lore's block (devco:Q-11)
 	a.doctorStaleLinks(ctx, warn)    // hostbase_doctor_links.go: links on rewritten commits (H-8)
 	a.doctorSignals(ctx, warn, note) // hostbase_doctor_signals.go: expired files only report (a note: they do not change the status)
 	if pin, floorErr := a.doctorVersionPin(ctx); floorErr != "" {
@@ -343,6 +348,29 @@ func lorePathBinaries(path string) []string {
 // writes one import line into it; internal context lives in ~/.lore/render).
 const claudeLocalFile = "CLAUDE.local.md"
 
+// attrBlockMarker is the marker of lore's block in .gitattributes (the
+// wire/host block writer's gitBlockMarker).
+const attrBlockMarker = "lore-sync"
+
+// doctorAttrOverride warns when a line after lore's block in the repo's
+// .gitattributes takes text, eol or merge back for lore's files: git
+// applies the later line, so row files check out with the team's line
+// ends and lore's merge driver may not run (devco:Q-11). The next write
+// (or lore fix) moves lore's block to the end.
+func (a *App) doctorAttrOverride(ctx context.Context, warn func(string)) {
+	top, err := a.repoTop(ctx)
+	if err != nil || top == "" || !HoldsLoreData(top) {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(top, ".gitattributes"))
+	if err != nil {
+		return
+	}
+	if line, over := AttrBlockOverride(string(b), attrBlockMarker); over {
+		warn("gitattributes: `" + line + "` comes after lore's block in .gitattributes and overrides it for lore's files (row files get its line ends, lore's merge driver may not run); `lore fix` (or the next lore write here) moves lore's block to the end, then commit .gitattributes")
+	}
+}
+
 // doctorClaudeLocal warns when the checkout's CLAUDE.local.md is a symlink
 // (lore never writes through one), tracked by git (its content would be
 // committed) or holds anything but lore's import lines, each once.
@@ -383,7 +411,7 @@ func claudeLocalProblem(text string) string {
 		case l == "":
 			continue
 		case !strings.HasPrefix(l, claudeImportPrefix):
-			return claudeLocalFile + " holds more than lore's import lines; internal context belongs in ~/.lore/render"
+			return claudeLocalFile + " holds more than lore's import lines; internal context belongs in " + lorehome.Shown() + "/render"
 		case seen[l]:
 			return claudeLocalFile + " holds the import line " + l + " more than once (`lore render` writes it once)"
 		}

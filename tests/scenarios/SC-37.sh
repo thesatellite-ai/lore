@@ -33,12 +33,15 @@ if [ -z "${SC37_DETACHED:-}" ]; then
     # is init, not this shell (and not whatever agent started it).
     (env -i SC37_DETACHED=1 LORE="$LORE" OUT="$OUT" SCRIPT="$0" PATH=/usr/bin:/bin:/usr/local/bin \
         setsid sh -c 'bash "$SCRIPT" >"$OUT/log" 2>&1; echo $? >"$OUT/rc.tmp"; mv "$OUT/rc.tmp" "$OUT/rc"' &)
-    for _ in $(seq 1 240); do
+    # 120 s times the machine factor (tests/lib/testtime.sh), polled every 0.5 s.
+    wait_s=$("$(cd "$(dirname "$0")/../lib" && pwd)/testtime.sh" 120s) || fail "tests/lib/testtime.sh refused the limit"
+    wait_s=${wait_s%s}
+    for _ in $(seq 1 $(( wait_s * 2 ))); do
         [ -f "$OUT/rc" ] && break
         sleep 0.5
     done
     cat "$OUT/log"
-    [ -f "$OUT/rc" ] || fail "the detached run did not finish in 120 s"
+    [ -f "$OUT/rc" ] || fail "the detached run did not finish in $wait_s s"
     exit "$(cat "$OUT/rc")"
 fi
 

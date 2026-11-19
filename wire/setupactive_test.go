@@ -212,17 +212,17 @@ func TestPersonalStoreOverride(t *testing.T) {
 	ctx := context.Background()
 	in := func(name string) context.Context { return op.WithSetup(ctx, name) }
 
-	err := checkPersonalTarget(in("personal"), home, "/srv/x", "me")
+	err := checkPersonalTarget(in("personal"), home, "/srv/x", "me", noTargets)
 	if errs.CodeOf(err) != errs.SetupNoPersonalStore || !strings.Contains(err.Error(), "setup personal has no personal store") {
 		t.Fatalf("--to me under personal_store: none: %v", err)
 	}
-	if err := checkPersonalTarget(in("personal"), home, "/srv/x", "me/drafts"); errs.CodeOf(err) != errs.SetupNoPersonalStore {
+	if err := checkPersonalTarget(in("personal"), home, "/srv/x", "me/drafts", noTargets); errs.CodeOf(err) != errs.SetupNoPersonalStore {
 		t.Fatalf("--to me/<folder>: %v", err)
 	}
-	if err := checkPersonalTarget(in("personal"), home, "/srv/x", "repo"); err != nil {
+	if err := checkPersonalTarget(in("personal"), home, "/srv/x", "repo", noTargets); err != nil {
 		t.Fatalf("--to repo is untouched: %v", err)
 	}
-	if err := checkPersonalTarget(in("agency"), home, "/srv/x", "me"); err != nil {
+	if err := checkPersonalTarget(in("agency"), home, "/srv/x", "me", noTargets); err != nil {
 		t.Fatalf("inherit allows me: %v", err)
 	}
 	if got := effectivePersonalURL(in("personal"), home, "/srv/x", mc); got != "" {
@@ -404,4 +404,32 @@ func setupNames(t *testing.T, home string) string {
 		t.Fatalf("fixture has %d setups, want several", len(names))
 	}
 	return strings.Join(names, ", ")
+}
+
+// noTargets is a placement where no --to writes (outside any repo).
+func noTargets() []string { return nil }
+
+// TestPersonalNoneHintOffersWorkingTargets (devco D-690, owner use pass 4
+// weak 7): `--to me` under personal_store: none offered "--to repo" first
+// even where an own repo linked to a store folder refuses it. The refusal
+// now offers only the targets the placement gives, first one first, and
+// with none it names the placeholder form and setup list, never repo.
+func TestPersonalNoneHintOffersWorkingTargets(t *testing.T) {
+	testenv.SetHome(t, "/home/mira")
+	t.Setenv(opssetup.EnvSetup, "")
+	home := writeSetupsConfig(t, activeConfig)
+	ctx := op.WithSetup(context.Background(), "personal")
+	linked := func() []string { return []string{"--to acme-co/web"} }
+	err := checkPersonalTarget(ctx, home, "/srv/x", "me", linked)
+	if errs.CodeOf(err) != errs.SetupNoPersonalStore {
+		t.Fatalf("linked: %v", err)
+	}
+	hint := hintOf(err)
+	if strings.Contains(err.Error()+hint, "--to repo") || !strings.HasPrefix(hint, "--to acme-co/web, or lore setup edit --name personal --personal-store") {
+		t.Fatalf("linked own repo: %v / hint %q, want only --to acme-co/web then setup edit", err, hint)
+	}
+	err = checkPersonalTarget(ctx, home, "/srv/x", "me", noTargets)
+	if hint = hintOf(err); strings.Contains(hint, "--to repo") || !strings.Contains(hint, "--to <org>/<folder>") {
+		t.Fatalf("no placement: hint %q, want the placeholder form and no repo", hint)
+	}
 }

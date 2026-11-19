@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 )
 
 // The `setups:` list of ~/.lore/config.yaml (ONB 3.1, 3.2): machine-local,
@@ -59,6 +61,17 @@ var setupNameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // ValidSetupName reports whether s is a valid setup name.
 func ValidSetupName(s string) bool { return len(s) <= SetupNameMaxLen && setupNameRe.MatchString(s) }
+
+// ValidOrgName reports whether s is a valid team (org) name: a name both
+// the setups[] rule and the orgs[] entry rule (orgconf: a-z, 0-9, '-' and
+// '.', no reserved or Windows-unsafe names) take, so a-z, 0-9 and '-'
+// starting with a letter. One rule for both
+// names (devco D-451): before, setup "acme-ops" was fine while its org had
+// to be "acmeops". A dashed org's store is attached under the org's name
+// in .lore/stores.yaml, which takes org names (engine validOrgName).
+func ValidOrgName(s string) bool {
+	return ValidSetupName(s) && orgconf.ValidateOrgName(s) == nil
+}
 
 // SetupEntry is one `setups[]` entry (ONB 3.2). Unknown keys inside an
 // entry are kept byte for byte by the wire writer (it edits the node

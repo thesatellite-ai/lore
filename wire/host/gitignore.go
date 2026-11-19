@@ -29,8 +29,10 @@ import (
 	"sync"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/gitfast"
 	"github.com/thesatellite-ai/lore/logic/gitenv"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/op"
 	opslive "github.com/thesatellite-ai/lore/ops/live"
 	"github.com/thesatellite-ai/lore/wire"
 )
@@ -55,7 +57,12 @@ const gitignoreMode = 0o644
 // command runs in.
 func GitignoreHook(workDir string) Hook {
 	var once sync.Once
-	return Hook{Name: HookGitignore, Before: func(ctx context.Context, run *Run) error {
+	var wrote []string // tracked files Before wrote (devco N-5: lore fix names them)
+	return Hook{Name: HookGitignore, Around: func(ctx context.Context, run *Run, next Next) (op.Result, error) {
+		hw := &wire.HostWiring{Rewire: rewireTracked}
+		hw.Note(wrote...)
+		return next(wire.WithHostWiring(ctx, hw))
+	}, Before: func(ctx context.Context, run *Run) error {
 		if !NeedsGitignore(run) || dryRun(run) {
 			return nil // a dry run writes nothing, info/exclude included
 		}
@@ -99,6 +106,7 @@ func GitignoreHook(workDir string) Hook {
 			added, e := ensureGitignore(ctx, root)
 			if len(added) > 0 {
 				announceGitignore(os.Stderr, root, added)
+				wrote = append(wrote, gitignoreName)
 			}
 			if e != nil {
 				err = errs.Wrap(errs.Internal, "update "+gitignoreName, e)
@@ -198,17 +206,20 @@ func gitOutput(ctx context.Context, args ...string) ([]byte, error) {
 		return nil, err
 	}
 	cmd := &exec.Cmd{Path: bin, Args: append([]string{bin}, args...), Env: gitenv.Clean(os.Environ())} // -C names the repo, never a hook GIT_DIR
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	stop := context.AfterFunc(ctx, func() { _ = cmd.Process.Kill() }) // a kill of an exited process has nothing to report
-	defer stop()
-	if err := cmd.Wait(); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), ctx.Err()
+	// gitfast (devco:D-418): a read the Session answers starts no git
+	return gitfast.OutputQuiet(ctx, "", args, nil, nil, func() ([]byte, error) {
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		stop := context.AfterFunc(ctx, func() { _ = cmd.Process.Kill() }) // a kill of an exited process has nothing to report
+		defer stop()
+		if err := cmd.Wait(); err != nil {
+			return nil, err
+		}
+		return out.Bytes(), ctx.Err()
+	})
 }
 
 // projectRoot is the lore project dir works in: the nearest folder at or
@@ -301,8 +312,44 @@ func announceExclude(w io.Writer, root string, added []string, why excludeWhy) {
 	case excludeMigration:
 		reason = "a migration changes no tracked file but .lore/data: " + reason
 	case excludeTeammate:
-		reason = "this project was migrated in another clone, whose commit brings these lines to " + filepath.Join(root, gitignoreName) + "; your git pull is never blocked by them (`lore doctor --fix` adds them here instead)"
+		// devco:M-3: the migration commit carries only .lore/data, so the
+		// note never says it brings these lines; the migrating clone's next
+		// write adds them to .gitignore, for its owner to commit
+		reason = "this project was migrated in another clone; its migration commit holds only .lore/data, and that clone's next lore write adds these lines to " + filepath.Join(root, gitignoreName) + " for its owner to commit; until that commit reaches you they stay here, so your git pull of it is never blocked (`lore doctor --fix` adds them to " + gitignoreName + " here instead; commit it)"
 	}
 	_, _ = fmt.Fprintf(w, "lore: added %s to this clone's .git/info/exclude (never committed) so lore's local files stay out of git status; %s (`lore where` lists everything lore keeps here)\n",
 		strings.Join(added, ", "), reason)
+}
+
+// rewireTracked writes lore's tracked wiring of the project at root now:
+// the .gitignore lines and the .gitattributes merge block, each announced
+// as the hooks announce them. It returns the files (relative to root) it
+// changed. lore fix calls it (wire.HostWiring.Rewire) right after its
+// migrate step raised the project's format, so the run that migrated also
+// leaves the wiring for the same commit (devco N-5). A repo with no lore
+// data, or one still on the 0.1.17 format, gets nothing.
+func rewireTracked(ctx context.Context, root string) []string {
+	if !wire.HoldsLoreData(root) || wire.ProjectFormatOld(root) || os.Getenv(EnvSyncGit) == envOff {
+		return nil
+	}
+	var out []string
+	if added, err := ensureGitignore(ctx, root); err == nil && len(added) > 0 {
+		announceGitignore(os.Stderr, root, added)
+		out = append(out, gitignoreName)
+	}
+	attrs := filepath.Join(root, gitAttributesFile)
+	if err := repoWriteRefused(root, attrs); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "lore: git wiring: "+err.Error()) // D-502: left as it is
+		return out
+	}
+	before, _ := os.ReadFile(filepath.Clean(attrs)) // a missing file reads as empty: the block is then new
+	if err := ensureFileBlock(attrs, gitBlockMarker, gitAttributeLines); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "lore: git wiring: "+err.Error()) // stderr gone: nothing left to report to
+		return out
+	}
+	if after, _ := os.ReadFile(filepath.Clean(attrs)); string(after) != string(before) {
+		_, _ = fmt.Fprintf(os.Stderr, "lore fix: set up git for lore's row files in this clone: lore's merge rules in %s (`lore where` lists everything lore keeps here)\n", attrs)
+		out = append(out, gitAttributesFile)
+	}
+	return out
 }

@@ -325,10 +325,10 @@ func TestEnvBrokenLoreHome(t *testing.T) {
 
 // TestEnvTwoLores: an old lore (0.1.17) earlier on PATH than this one.
 // doctor names which binary a bare `lore` runs, its version, what it
-// shadows and that it is not this binary. The git hooks run `lore` from PATH
-// (what the person and their agents run); they only probe the old one and,
-// as it cannot read 0.1.18 rows, refuse the commit saying so, never run an
-// old command on the new data.
+// shadows and that it is not this binary. The git hooks this binary wrote
+// run this binary (devco P-2: their pin line; the first lore on PATH only
+// once it is gone), so the commit of its 0.1.18 rows goes through and the
+// old lore is never run on the new data.
 func TestEnvTwoLores(t *testing.T) {
 	t.Parallel()
 	m := Build(t, ShapeEnvTwoLores, loreBin)
@@ -355,9 +355,19 @@ func TestEnvTwoLores(t *testing.T) {
 	if out, err := git("add", "-A"); err != nil {
 		t.Fatalf("git add: %v %s", err, out)
 	}
+	// devco P-2: the hook blocks this binary wrote run this binary (the
+	// pin line), not the old lore first on PATH, so the commit of its rows
+	// goes through; before the fix it was refused with "install lore 0.1.18".
+	self, serr := filepath.EvalSymlinks(real) // the pin names the executable itself
+	if serr != nil {
+		t.Fatal(serr)
+	}
+	if pre, rerr := os.ReadFile(filepath.Join(repo, ".git", "hooks", "pre-commit")); rerr != nil || !strings.Contains(string(pre), "if [ -x '"+filepath.ToSlash(self)+"' ]") {
+		t.Errorf("pre-commit does not pin this binary %s: %v\n%s", self, rerr, pre)
+	}
 	out, err := git("commit", "-q", "-m", "first")
-	if err == nil || !strings.Contains(out, "on PATH is older; install lore 0.1.18") {
-		t.Errorf("a commit of 0.1.18 rows with an old lore first on PATH: want a refusal naming the old lore, got err=%v:\n%s", err, out)
+	if err != nil {
+		t.Errorf("a commit of 0.1.18 rows with an old lore first on PATH: the hooks must run the build that wrote them, got err=%v:\n%s", err, out)
 	}
 	calls, _ := os.ReadFile(filepath.Join(m.Dir, "old-lore-calls"))
 	for _, line := range strings.Split(strings.TrimSpace(string(calls)), "\n") {

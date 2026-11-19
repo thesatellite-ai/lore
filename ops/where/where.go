@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 )
@@ -95,6 +96,9 @@ type Entry struct {
 type Out struct {
 	// Home is the lore home.
 	Home string `json:"home"`
+	// HomeSource is where Home came from: LORE_HOME (the variable moved
+	// it) or default (~/.lore).
+	HomeSource string `json:"home_source"`
 	// Readme is the lore home's README.md, the map of what each entry is
 	// ("" until lore wrote it).
 	Readme string `json:"readme,omitempty"`
@@ -120,9 +124,19 @@ var areaTitles = []struct{ area, title string }{
 	{AreaUser, "elsewhere for you"},
 }
 
+// homeLine is the first line: the lore home and where it came from, so a
+// person running two lore builds sees which home this one uses.
+func (o Out) homeLine() string {
+	if o.HomeSource == string(lorehome.FromEnv) {
+		return "lore home: " + o.Home + " (from LORE_HOME)\n\n"
+	}
+	return "lore home: " + o.Home + " (default; set LORE_HOME to an absolute folder to move it)\n\n"
+}
+
 // Text implements op.Texter: one section per area, one line per entry.
 func (o Out) Text() string {
 	var b strings.Builder
+	b.WriteString(o.homeLine())
 	for _, a := range areaTitles {
 		var lines []Entry
 		for _, e := range o.Entries {

@@ -38,6 +38,9 @@ type caches struct {
 	// combined is the one file shared by every attached store past
 	// MaxStoreCaches (CFG3 fallback), nil otherwise.
 	combined *sqlite.Cache
+	// combinedPath is the file of combined ("" without one): the lens
+	// attaches it (lensSources), on a repo's open and a store-only one.
+	combinedPath string
 	// healed are the notices of damaged cache files moved aside and
 	// rebuilt during open (openHealing); the App hands them to
 	// Options.Notice once the open succeeds.
@@ -45,7 +48,7 @@ type caches struct {
 }
 
 // Combined reports whether this repo uses the CFG3 combined cache (for
-// `lore doctor`: "more than 9 store folders: one combined cache").
+// `lore doctor`: "more than MaxStoreCaches store folders: one combined cache").
 func (a *App) Combined() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -59,8 +62,21 @@ func newCaches() *caches {
 	return &caches{by: map[store.Source]*sqlite.Cache{}, paths: map[store.Source]string{}}
 }
 
-// open opens source's cache file at path.
+// open opens source's cache file at path. A path another source already
+// opened shares that source's handle, like the combined cache does: two
+// handles on one file each kept their own list of typed tables, so a kind
+// table one created or dropped was missing from the other's, and its next
+// write failed E_INTERNAL (devco:D-667: a repo linked with `--project org`
+// names the org folder as its own source, at the org store's file).
 func (c *caches) open(ctx context.Context, source store.Source, path string, reg *schema.Registry, exp sqlite.Expander) error {
+	if f := c.openedAt(path); f != nil {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.by[source] = f
+		c.paths[source] = path
+		c.order = append(c.order, source)
+		return nil
+	}
 	f, err := c.openHealing(ctx, path, reg, exp)
 	if err != nil {
 		return wrapOpen(err, "wire: open the cache of store "+string(source))
@@ -70,6 +86,18 @@ func (c *caches) open(ctx context.Context, source store.Source, path string, reg
 	c.by[source] = f
 	c.paths[source] = path
 	c.order = append(c.order, source)
+	return nil
+}
+
+// openedAt is the handle a source already opened at path, nil if none.
+func (c *caches) openedAt(path string) *sqlite.Cache {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for s, p := range c.paths {
+		if p == path {
+			return c.by[s]
+		}
+	}
 	return nil
 }
 
@@ -88,6 +116,7 @@ func (c *caches) openCombined(ctx context.Context, names []store.Source, path st
 		c.order = append(c.order, n)
 	}
 	c.combined = f
+	c.combinedPath = path
 	return nil
 }
 
@@ -262,6 +291,7 @@ func (c *caches) Close() error {
 	c.paths = map[store.Source]string{}
 	c.order = nil
 	c.combined = nil
+	c.combinedPath = ""
 	return errors.Join(all...)
 }
 

@@ -27,6 +27,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/identity"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 )
 
@@ -81,7 +82,7 @@ func personalStoreIdentity(ctx context.Context, home, dir, storeURL string) (per
 		if shared == "" || !sameStore(storeURL, shared, "") || strings.TrimSpace(top.Key) == "" {
 			return personalIdentity{}, false
 		}
-		return personalOf(top, "your identity (identity: in ~/.lore/config.yaml), the owner of this personal store (personal.store)")
+		return personalOf(top, "your identity (identity: in "+lorehome.Shown()+"/config.yaml), the owner of this personal store (personal.store)")
 	}
 	pick := owners[0]
 	if slices.ContainsFunc(owners[1:], func(o owner) bool { return !sameKey(o.id.Key, pick.id.Key) }) {
@@ -102,7 +103,7 @@ func personalStoreIdentity(ctx context.Context, home, dir, storeURL string) (per
 	if pick.e.Kind.HasOrg() && pick.e.Identity.IsZero() {
 		where = "orgs." + pick.e.Org + ".identity"
 	}
-	return personalOf(pick.id, "your identity in setup "+pick.e.Name+" ("+where+" in ~/.lore/config.yaml), the setup whose personal store this is")
+	return personalOf(pick.id, "your identity in setup "+pick.e.Name+" ("+where+" in "+lorehome.Shown()+"/config.yaml), the setup whose personal store this is")
 }
 
 // personalOf is id as a personalIdentity; ok is false when its key holds

@@ -62,6 +62,8 @@ stable:      yes
 
 An **org** is one company's setup in your config: its stores, its people and the repos it owns. At work you usually use a different email than at home. `--org` stores that identity in the company's entry of `~/.lore/config.yaml`, and lore uses it in every repo of that company:
 
+To change only the email (an admin added your new address with `lore actor contact add … --identity`), give `--key` alone: the name and handle the entry has are kept, and the store clone's git user stays your name.
+
 <!-- example: people#identity-per-org only=1,2 -->
 ```console
 # alice, in ~
@@ -79,6 +81,8 @@ source:      org entry (config.yaml orgs[agency].identity)
 stable:      yes
 ```
 <!-- /example -->
+
+A row you write into one of that company's stores carries this identity wherever you run lore: from a repo of no org, `lore memory add --to <store>/<folder>` records you (`created_by`, `updated_by`, and your actor row in that store) as your identity in the org, never the fallback `lore whoami` shows there (your git email or `human:<user>@<host>`, the OS user).
 
 ## Step 4 — Join your company's setup in one command: `lore org import`
 
@@ -98,8 +102,11 @@ Then each new person runs one command with their own email, from any folder: no 
 # bob, in ~
 $ lore org import --url git@github.com:agency/notes --key human:bob@agency.example --name 'Bob Roe' --handle bob --yes
 lore: committed locally to store agency/org; lore sync sends it
+lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_7a67…9504.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3…f891.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/actor_periods/apd_162d…9666.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
 This adds to ~/.lore/config.yaml:
     name: agency
     identity:
@@ -114,7 +121,8 @@ This adds to ~/.lore/config.yaml:
     repos:
         - github.com/client/*
 ✓ added org entry agency
-✓ act_2ad3…f891 Bob Roe (@bob) registered in agency org/
+✓ act_2ad3…f891 Bob Roe (@bob) registered in the roster of agency (agency/org)
+✓ you are agency's admin (org role admin): lore member add --email <their-email> --name "Their Name" adds a teammate
 $ cat ~/.lore/config.yaml
 orgs:
   - name: agency
@@ -130,25 +138,25 @@ orgs:
     repos:
       - github.com/client/*
     source:
-      store: sto_162d…9666
+      store: sto_54fe…28f2
       version: 601d2850ffd0
 
 # bob, in website
 $ lore whoami
 org        agency  (matched by: repos pattern github.com/client/* of agency)
 identity   Bob Roe <human:bob@agency.example>   act_2ad3…f891  @bob  (from: org entry (config.yaml orgs[agency].identity))
-repo       client repo  (guards on)
+repo       client repo  (guards OFF in this clone: no lore commit-msg hook, commits are not checked for internal notes; lore fix here installs it)
 machine    mch_98c3dece
 agent      none  (no coding agent detected)
-project    prj_54fe…28f2
+project    prj_05e9…4603
 remotes    github.com/client/website
-stores     git@github.com:agency/notes on branch main  (org folder org)
+stores     git@github.com:agency/notes on branch main  (org folder agency/org: roster, teams, company rules)
 links      known  0 link(s) for this repo (stores of 1 entry scanned)
 personal   not set
 $ lore sync
-lore: pushed store agency/org: commit 86dbae4 to branch main
-store agency: sent 0, received 0, merged 0, refused 0
-store agency/org: sent 2, received 0, merged 0, refused 0
+lore: pushed store agency/org: commit 86dbae4 to branch main (3 commits, 3 row files)
+store agency: up to date
+store agency/org: pushed (sent 3, received 0, merged 0, refused 0)
 ```
 <!-- /example -->
 
@@ -181,18 +189,18 @@ Alice wrote a note into the client's repo by mistake, where the client can read 
 ```console
 # alice, in website
 $ lore memory add --body 'the client replies faster on WhatsApp than email' --to repo
-lore: wrote ~/work/website/.lore/data/actors/act_05e9…4603.json
-lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
-✓ mem_c0f3…b5b8
+lore: wrote ~/work/website/.lore/data/actors/act_c0f3…b5b8.json
+lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
+✓ mem_76bd…3f10
   scope: [project]
-$ lore move --id mem_c0f3…b5b8 --to agency --yes
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
-lore: wrote ~/work/website/.lore/data/memories/mem_c0f3…b5b8.json
-✓ mem_c0f3…b5b8 moved to store agency (same id; the old copy is tombstoned)
+$ lore move --id mem_76bd…3f10 --to agency --yes
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_76bd…3f10.json (store agency/client)
+lore: wrote ~/work/website/.lore/data/memories/mem_76bd…3f10.json
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
+✓ mem_76bd…3f10 moved to store agency (same id; the old copy is tombstoned)
 $ lore memory list
-mem_c0f3…b5b8 [retrieved] the client replies faster on WhatsApp than email [agency/client]
+mem_76bd…3f10 [retrieved] the client replies faster on WhatsApp than email [agency/client]
 ```
 <!-- /example -->
 
@@ -244,9 +252,39 @@ So when lore's commits show your org name ("Mira Dev") and your own commits in t
 
 When a coding agent writes for you, the commit is still signed as the table above says, never as the agent: the agent is named in a `Lore-Agent:` trailer of the commit message.
 
+## Admins-only stores
+
+An org often has notes only its admins may read: servers, domains, registrar and cloud accounts, where a secret lives. Put them in a store of their own and mark it for admins: `lore org store add --org acme --url git@github.com:acme/ops.git --audience admins --push --yes` (or, for a store the org already lists, `lore org store audience --org acme --url git@github.com:acme/ops.git --audience admins --push --yes`). The store's entry in `lore-org.yaml` gets `audience: admins`; `--audience everyone` removes the key again. Give only the admins access to the repo on the git host: the git host is what keeps the notes private, the key is what keeps members' lore from trying. The org's repo patterns change the same way, with no hand edit of `lore-org.yaml`: `lore org config set --org acme --key repos --add 'github.com/acme/client-*' --push --yes` (a client pattern wins over an own one that matches the same repo; the confirmation and the result print the change, one `+ <pattern>` or `- <pattern>` line per entry added or taken out and the list's size before and after, never the whole list); `lore org config get --org acme` shows them, and names each own pattern that overlaps repos entries and that the repos entries win.
+
+What each person's lore does with it:
+
+- **A member** (no open roster stint with org role admin): the org entry lore copies from `lore-org.yaml` into `~/.lore/config.yaml` leaves the store out, so nothing on the machine clones, fetches, syncs, reads, renders or checks it. Setup, `lore sync`, reads and `lore doctor` show no error for it; doctor and `lore setup check` say once, as information, `acme's store ops is for the org's admins (audience: admins in lore-org.yaml); you are not an admin of acme, so lore does not clone or read it`.
+- **An admin**: the entry lists it like any other store; `lore store list` shows `admins` in its AUDIENCE column; writes go there with `--to ops/<folder>`, reads with `--store ops` or from the setup's folders.
+- **A member made admin** (`lore actor period edit --period @ann --org-role admin`): their next sync (any command that opens the org's store) copies the entry again with the store in it, with no command of their own. An admin whose stint ends loses it the same way; a clone already on disk stays there.
+
+Decisions (devco D-442):
+
+- **The filter sits where lore-org.yaml is copied, not in each reader.** Every reader (setup, sync, doctor, reads, render, the link index, the leak and client checks) works from the org entry, so one copy step that leaves the store out covers them all, including readers added later. Who is an admin is read from the roster in the org store's clone at the commit lore-org.yaml was read at, by the same rule that decides who may change lore-org.yaml.
+- **Client and leak checks never depend on it.** No repo can be linked to an admins-only store (`lore org link --store <it>` is refused): a repo's notes must be readable by everyone who works in the repo, and the link index skips the store on every machine, so whether a repo is own or client is the same for an admin and a member, and an unreachable admins' store never makes a repo "unknown" (guards on).
+- **The org folder's store is never admins-only**: it holds the roster, teams and company rules every member reads; the command refuses it and the reader keeps it for everyone whatever the file says.
+- **An `audience:` value lore does not know** is read as admins-only, so a member never tries a store the file does not plainly open to them; `lore config check` refuses it in `config.yaml`.
+- **An older lore ignores the key** and treats the store as before (every member tries it): upgrade the team before relying on it.
+
+## What lore takes from a store, and from whom
+
+A store is a plain git repo, and everyone who can push to it can commit anything there with git alone. So lore checks what it reads instead of trusting the branch as it stands:
+
+- **The org's `lore-org.yaml` is changed by an admin only.** Its store list, `own:` and `repos:` patterns and defaults decide where lore clones from and pushes to. Every lore reads the file's history and takes a change only from a commit whose git author is an admin of the org in the roster at that commit, the same trusted roster every reader replays for roster changes (an open stint with org role admin that an admin gave; a stint a member edited to admin by hand never counts; for an org made before org roles, the person who created the org). A change by anyone else is held back: lore keeps the version it had, never clones, reads or pushes to a store only that change added, and `lore sync` names it: `lore: org acme: commit 3e07be6 by Kai Lane <kai@example.com> ("tidy") changed org/lore-org.yaml: held back, Kai Lane is not an admin of the org at that commit …`. An admin settles it by making the change with lore (`lore org store add`, `lore store set-url`), or by reverting the commit in the store clone (`git revert <sha>`, then `lore sync`). A change that only moves or reformats the file is taken from anyone, so lore's own layout moves never hold it back. A machine that synced such a change before this check may still hold a clone of the outside repo under `~/.lore/stores`: `lore doctor` names it (`store_trust`: a store clone no org, setup or repo on this machine uses), and `lore fix --yes` removes it when it holds no commit of its own (one that does is named, never removed).
+- **Files lore does not own are skipped, never fatal.** A repo with `lore-store.yaml` at its top stays a lore store whatever else is pushed into it: a stray file, a folder lore does not know, a broken row. lore reads the rest as before, and `lore sync` names each file with the commit and author that added it and the step to drop them (`git -C <clone> rm -r -- <file>`, commit, `lore sync`). Only a repo without `lore-store.yaml` that holds other files (a code repo) is refused with `E_NOT_A_STORE`.
+- **A store a repo's `.lore/stores.yaml` attaches on a host outside your org waits for your yes.** On a machine with an org, a store that the committed file attaches, which is not a store of your org, not under the same host and owner as one, not matched by its `own:` or `repos:` patterns, and that nobody attached on this machine before, is not cloned and its notes never reach your agent's context. `lore sync` names it with the commit that last changed the file; `lore store trust --name <store>` is your yes, recorded on this machine only (`~/.lore/state/trusted-stores.json`), and the next command clones and reads it.
+
+Git authorship is not proof: anyone who can push can set any name and email on a commit. These checks raise the bar (a change has to claim an admin's identity, and the claim stays in the store's history), but they do not stop someone who forges it. Signed changes are not part of lore yet.
+
+`lore doctor` lists the same three things under the check `store_trust`.
+
 ## How writes reach the remote
 
-Your personal store (`me`), your org's stores and the stores a repo attaches in `.lore/stores.yaml` are git repos that hold only lore notes. By default nothing reaches a store's remote until you ask: every note you write to one is committed on your machine, lore says so once per command and store ("committed locally to store <name>"), and `lore sync` (or `lore store push --store <store>`, from any folder, or a `git push` in the store clone) sends what waits. This holds for every store write: notes, `--to me`, `lore secrets allow`, roster and team writes (`lore member add`, `lore team add`), links and `lore-org.yaml` (`lore org link`, `lore org create`), and store settings (`lore store set`, `lore store visibility`, `lore store folder add`). A command that only works in a code repo (a task edit there) writes nothing to your personal store. A store can instead push by itself (`batch`, or `now` for every write at once), a choice you make in the setup or with `lore store set`, and its old history can be folded into one commit. None of this applies to the code repo (`repo`): you push that one with your code.
+Your personal store (`me`), your org's stores and the stores a repo attaches in `.lore/stores.yaml` are git repos that hold only lore notes. By default nothing reaches a store's remote until you ask: every note you write to one is committed on your machine, lore says so once per command and store ("committed locally to store <name>"), and `lore sync` (or `lore store push --store <store>`, from any folder, or a `git push` in the store clone; outside a repo `<store>` is an org's name, the name of any store an org lists (`lore-ops`, a second store `lore org store add` added), `<org>/<store>` or a setup's name, as `lore store set-url --name` takes it, and `lore store show --store` and `lore store forget --url` take the same names; a name that is none of these is refused naming your orgs, their stores and your setups; the push says how many commits it sent and how many row files they changed, `sent 1 commit (0 row files)` for an org file such as `lore-org.yaml`, and `nothing to send` only when the remote already has every commit; `--json` gives the same numbers as `sent` and `rows`) sends what waits. This holds for every store write: notes, `--to me`, `lore secrets allow`, roster and team writes (`lore member add`, `lore team add`), links and `lore-org.yaml` (`lore org link`, `lore org create`), and store settings (`lore store set`, `lore store visibility`, `lore store folder add`). A command that only works in a code repo (a task edit there) writes nothing to your personal store. A store can instead push by itself (`batch`, or `now` for every write at once), a choice you make in the setup or with `lore store set`, and its old history can be folded into one commit. None of this applies to the code repo (`repo`): you push that one with your code.
 
 ### The three push modes
 
@@ -256,7 +294,9 @@ Your personal store (`me`), your org's stores and the stores a repo attaches in 
 | `batch` | commits on your machine only | when the oldest waiting write is `push_every` (default `5m`) old and you run any lore command that uses the store, on `lore sync`, on commands that need the remote current (`lore sync status`, `lore land`), when your coding tool starts or ends a session, and from the repo's git hooks lore installs (after a commit, before a push) |
 | `now` (your opt-in) | commits and pushes | at once, one commit per write, roster and link writes included |
 
-Each store commit is titled after what you did: the command and, for a kind with a short title (a task, a plan), the title, as in `lore: task add: Ship the beta`; other rows are named by id, as in `lore: memory add mem_01ab…` (with `(N rows)` when the person's actor row or a task list went into the same commit). A note's text never goes into a commit title, so a deleted or purged note is not left readable in `git log`; delete, trash and purge commits name only the command and the id, and a title the secret check flags is replaced by the id. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+Each store commit is titled after what you did, in one form for every kind of record: the command and the record's id, as in `lore: memory add mem_01ab…` or `lore: task add tsk_01cd…` (with `(N rows)` when more of its own rows, such as a task list, went into the same commit). A title names only records the commit holds. A record lore writes on the side of your command is named too: your actor row when your first write registers you (or your agent) is listed, as in `lore: memory add mem_01ab… (+ actor act_02ef…)`, or gets its own commit, `lore: actor register act_02ef…`; a folder's project row, made at the folder's first write, gets its own commit, `lore: project add prj_03aa…`. No text of a record goes into a commit title: not a note's body, not a task's or plan's title, not a folder's or person's name, since a title can hold private words as easily as a body and a commit title stays readable in `git log` after a delete or purge; `lore show --id <id>` gives the record. In `batch` and `manual` mode every write is still a commit on your machine, so a crash loses nothing, and your own reads see the note at once. In `manual` mode `lore sync` sends the waiting commits as they are, each with its own title and author. In `batch` mode they go out as **one** commit, `lore: batch N rows (memories 2, tasks 1)`, with one line per note in its message. Setting `LORE_LIVE_AUTOPUSH=0` still stops the push after a write, in every mode.
+
+Your actor row and your machine profile live in one folder of a store, the folder that holds your row (the org folder, where the roster is), not in every folder you write to. A write in another folder of the same store (`task edit --id … --assign @lee` in `sync/`) commits only that row: one commit, with no `sync/actors/…` or `sync/machines/…` file beside it, since a folder's reads attach the org folder and find you there. A coding agent's first write in a store adds the agent's own row to that same folder, once, as its own commit; later writes carry only their rows. A folder of a store that holds no row of yours yet (a store with no org folder) still gets your actor row with your first write there.
 
 lore has no daemon, timer or background process, and never starts one. A batch goes out only when something runs lore: a command you (or your coding tool) run anyway checks the age of the oldest waiting write and, once it is `push_every` old, pushes the batch inside that command. That push gets a short time limit, so a slow or unreachable remote never holds your command up; what did not go out stays committed for the next command. If nothing runs lore, the batch simply stays on your machine, safe. `lore store show`, `lore sync status` and `lore doctor` show how old the oldest waiting write is, and `lore doctor` warns once it is more than a day old. Run `lore sync` to push it.
 
@@ -290,10 +330,10 @@ me: push batch every 10m, compact off
   epoch     0
   waiting   3 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
 $ lore sync
-lore: pushed store me: commit 601d285 to branch main
-store me: sent 4, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store me: commit 601d285 to branch main (1 commit, 4 row files)
+store me: pushed (sent 1, received 0, merged 0, refused 0); rows: 4 sent
+store agency/client: up to date
+store agency/org: up to date
 $ git fetch -q https://github.com/alice/lore-me main && git log -1 --format=%B FETCH_HEAD
 lore: batch 4 rows (actors 1, machines 1, memories 2)
 actors act_7a67…9504
@@ -337,21 +377,25 @@ agency: push batch every 15m, compact off
   epoch     0
   waiting   1 local commit(s) not pushed yet, the oldest under 1m old (`lore sync` pushes them)
   pushed    2026-08-03T09:00:00Z
-lore: pushed store agency/client (here: agency): commit 86dbae4 to branch main
-store me: sent 0, received 0, merged 0, refused 0
-store agency/client (here: agency): sent 0, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store agency/client: commit 86dbae4 to branch main (1 commit)
+store me: up to date
+store agency/client: up to date
+store agency/org: up to date
 
 # bob, in website
 $ lore sync >/dev/null && lore store show --store agency
 agency: push batch every 15m, compact off
+  at        git@github.com:agency/notes
   set in    the store's lore-store.yaml (org agency; set by an org admin)
   epoch     0
+  folders   client, org
   pushed    2026-11-02T10:00:00Z
+  waiting   nothing: every local commit is pushed
+  clone     ~/.lore/stores/agency/notes   default branch main   last fetch 2026-11-02T10:01:10Z
 ```
 <!-- /example -->
 
-`lore store show --store <store>` prints a store's settings; `--json` gives them under `"push"`. With no store name, `lore store show` lists the stores of your orgs as before.
+`lore store show --store <store>` prints a store's settings and, as `lore store show` with no name does for every store, its url (`at`), its folders, its unpushed commits (`waiting   nothing: every local commit is pushed` when none wait) and this machine's clone with its last fetch; `--json` gives the settings under `"push"` (folders in `"push"."folders"`) and the clone under `"stores"`. With no store name, `lore store show` lists the stores of your orgs as before. `lore org list` lists this machine's org entries: each with its stores (the org folder one and an admins-only one marked), the setups that use it with their role, and a count line.
 
 The values `lore store set` takes:
 
@@ -410,13 +454,13 @@ ERROR: [E_INVALID_INPUT] store set: push_every 30s: must be at least 1m
 ```console
 # alice, in website
 $ lore store compact --store agency --before 30d --dry-run
-would squash 7 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 7 row file(s); epoch 0 → 1
+would squash 6 commit(s) of agency before 2026-10-03 into one snapshot, keep 2 later commit(s) and every one of its 5 row file(s); epoch 0 → 1
 $ lore store compact --store agency --before 30d
-ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 7 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
+ERROR: [E_NEEDS_CONFIRM] store compact agency: rewrite the history of store agency: squash 6 commit(s) before 2026-10-03 into one snapshot (every row is kept; every clone re-fetches at epoch 1)?
   hint: ask the person, then rerun with --yes
 (exit 26)
 $ lore store compact --store agency --before 30d --yes
-✓ compacted agency: 7 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 7 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
+✓ compacted agency: 6 commit(s) before 2026-10-03 are one snapshot, 2 later commit(s) kept, all 5 row file(s) kept; epoch 0 → 1 (old history kept locally in refs/lore/backup/compact-0-86dbae41af28)
   pushed store agency: commit 05513aa to branch main
 ```
 <!-- /example -->
@@ -442,24 +486,23 @@ Nothing to do. On Bob's next sync lore sees the higher epoch, moves his copy ont
 ```console
 # bob, in website
 $ lore memory add --body 'the client wants the invoice on the 1st' --to agency
-lore: committed locally to store agency; lore sync sends it
-lore: wrote ~/.lore/stores/agency/notes/client/actors/act_05e9…4603.json (store agency)
-lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3…b5b8.json (store agency)
-✓ mem_c0f3…b5b8 [agency/client]
+lore: committed locally to store agency/client; lore sync sends it
+lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_05e9…4603.json (store agency/client)
+✓ mem_05e9…4603 [agency/client]
   scope: [project]
 $ lore sync
-lore: pushed store agency/client (here: agency): commit dfd8dc8 to branch main
-store agency/client (here: agency): sent 2, received 0, merged 0, refused 0
-store agency/org: sent 0, received 0, merged 0, refused 0
+lore: pushed store agency/client: commit dfd8dc8 to branch main (1 commit, 1 row file)
+store agency/client: pushed (sent 1, received 4, merged 0, refused 0); rows: 0 received
+store agency/org: up to date
 $ lore memory list
-mem_76bd…3f10 [retrieved] the client signs off designs on Thursdays [agency/client]
-mem_d431…313a [retrieved] staging resets every Sunday night [agency/client]
-mem_c0f3…b5b8 [retrieved] the client wants the invoice on the 1st [agency/client]
+mem_c0f3…b5b8 [retrieved] the client signs off designs on Thursdays [agency/client]
+mem_76bd…3f10 [retrieved] staging resets every Sunday night [agency/client]
+mem_05e9…4603 [retrieved] the client wants the invoice on the 1st [agency/client]
 $ git fetch -q https://github.com/agency/notes main && git log --format=%s FETCH_HEAD
 lore: replay local work onto epoch 1
 lore: compact store history (epoch 1)
 lore: store set agency
-lore: actor register act_05e9…4603
+lore: actor register act_d431…313a
 lore: snapshot of the store history before 2026-10-03
 ```
 <!-- /example -->

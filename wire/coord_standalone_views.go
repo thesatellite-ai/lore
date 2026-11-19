@@ -38,6 +38,7 @@ import (
 	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/logic/queue"
 	"github.com/thesatellite-ai/lore/logic/tasktree"
+	"github.com/thesatellite-ai/lore/logic/trust"
 	"github.com/thesatellite-ai/lore/logic/urgency"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/ids"
@@ -112,8 +113,11 @@ const (
 	inboxMention   = "mention"
 	inboxRecurring = "recurring"
 	inboxMetadata  = "metadata"
-	roleLead       = "lead"
-	roleAssignee   = "assignee"
+	// inboxReview is a rule an agent wrote that no person approved yet
+	// (devco:S-15); like a gate it shows until it is approved or deleted.
+	inboxReview  = "review"
+	roleLead     = "lead"
+	roleAssignee = "assignee"
 	// roleTeam is the part of a member of the task's assigned team; the
 	// inbox line reads "(team @web)".
 	roleTeam = "team"
@@ -143,7 +147,7 @@ func (h standaloneCoord) openView(ctx context.Context) (*coordView, error) {
 	if p, perr := h.a.Project(ctx); perr == nil {
 		cv.project = p.String()
 	}
-	if v, lerr := w.signalsStore().Local(ctx); lerr == nil {
+	if v, lerr := w.signalsStore(ctx).Local(ctx); lerr == nil {
 		cv.board, cv.hasBoard = v, true
 	}
 	if cv.docs, err = (engineRows{a: h.a}).List(ctx); err != nil {
@@ -226,6 +230,19 @@ func (cv *coordView) label(ctx context.Context, id string) string {
 	}
 	cv.labels[id] = l
 	return l
+}
+
+// labelList is a comma-joined list of actor ids (as history writes
+// assignees) as labels: N-11, a watcher's inbox named people by act_ id.
+func (cv *coordView) labelList(ctx context.Context, list string) string {
+	if list == "" {
+		return ""
+	}
+	parts := strings.Split(list, ",")
+	for i, p := range parts {
+		parts[i] = cv.label(ctx, strings.TrimSpace(p))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // syncRoster syncs the org roster's store once per view, so an agent
@@ -437,7 +454,7 @@ func (h standaloneCoord) Inbox(ctx context.Context, in opscoord.InboxIn) (opscoo
 	}
 	shown := []opscoord.InboxItem{}
 	for _, it := range items {
-		if it.At.IsZero() || it.At.After(cut) || it.Kind == inboxExpired || it.Kind == inboxGate || it.Kind == inboxBlocked || it.Kind == inboxConflict {
+		if it.At.IsZero() || it.At.After(cut) || it.Kind == inboxExpired || it.Kind == inboxGate || it.Kind == inboxBlocked || it.Kind == inboxConflict || it.Kind == inboxReview {
 			shown = append(shown, it)
 		}
 	}
@@ -504,7 +521,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 		if open && claimed && !active && ownsIt {
 			wb := "work lost: never pushed"
 			if b := workBranchOf(d, sig); b != "" {
-				wb = "work branch pushed (" + b + ")"
+				wb = cv.workBranchWhere(ctx, d, b) // devco:D-619: from the remote-tracking ref, not the record alone
 			}
 			out = append(out, opscoord.InboxItem{Mission: mission, Kind: inboxExpired, Who: holderName(sig),
 				Text: fmt.Sprintf("%s claimed by %s, lease expired %s ago; %s", id, holderName(sig), agoText(cv.now().Sub(sig.Expires)), wb)})
@@ -525,6 +542,7 @@ func (cv *coordView) inbox(ctx context.Context) []opscoord.InboxItem {
 	out = append(out, cv.watchedItems(ctx, me)...)
 	out = append(out, cv.moreItems(ctx, me)...)
 	out = append(out, cv.metaReviewItems(ctx)...)
+	out = append(out, cv.agentRuleItems(ctx)...)
 	for _, hd := range cv.projectDocs(ctx, schema.TableHandoffs) {
 		if hd.Str(vkToActor) != me || hd.Str(vkStatusStr) != handoffOpen {
 			continue
@@ -587,8 +605,12 @@ func (cv *coordView) watchedItems(ctx context.Context, me string) []opscoord.Inb
 			if err != nil {
 				continue
 			}
+			from, to := e.From, e.To
+			if e.Field == schema.FieldTaskAssignees {
+				from, to = cv.labelList(ctx, from), cv.labelList(ctx, to)
+			}
 			out = append(out, opscoord.InboxItem{Mission: w.Mission, Kind: inboxWatched, Who: cv.label(ctx, e.By),
-				Text: fmt.Sprintf("%s %s: %s %s → %s", w.ID, w.Title, e.Field, orNone(e.From), orNone(e.To)), At: at})
+				Text: fmt.Sprintf("%s %s: %s %s → %s", w.ID, w.Title, e.Field, orNone(from), orNone(to)), At: at})
 		}
 	}
 	return out
@@ -856,6 +878,56 @@ func (cv *coordView) metaReviewItems(ctx context.Context) []opscoord.InboxItem {
 	return []opscoord.InboxItem{{Kind: inboxMetadata, Text: metaReviewText(keys, func(id string) string { return cv.keyAuthor(ctx, id) })}}
 }
 
+// agentRuleItems are the rules an agent wrote or rewrote that no person
+// approved yet (trust_score below trust.Default, devco:S-15), one line
+// each with the two ways out. They are read from the rule rows, which
+// travel in git, so a reviewer's inbox lists an agent's rule from another
+// clone after a sync (the audit log is machine-local and never would).
+// Only a person sees them: an agent cannot approve.
+func (cv *coordView) agentRuleItems(ctx context.Context) []opscoord.InboxItem {
+	if cv.w.isAgent() {
+		return nil
+	}
+	var out []opscoord.InboxItem
+	for _, d := range cv.projectDocs(ctx, schema.TableRules) {
+		if d.Str(ruleFieldArchived) != "" || d.Str(ruleFieldSuperseded) != "" {
+			continue
+		}
+		lit, ok := d[ruleFieldTrust].AsNumber()
+		if !ok {
+			continue // no score: written before trust changed, approved
+		}
+		score, err := strconv.ParseFloat(lit, 64)
+		if err != nil || trust.Approved(score) {
+			continue
+		}
+		id := d.Str(docKeyID)
+		out = append(out, opscoord.InboxItem{Kind: inboxReview, Who: cv.label(ctx, d.Str(docKeyAuthor)), At: d.Time(docKeyUpdatedAt),
+			Text: fmt.Sprintf("%s %s rule %q: %s; lore rule approve --id %s, or lore rule delete --id %s", id, d.Str(ruleFieldSeverity), cutRunes(d.Str(vkBody), ruleReviewCut), trust.ReviewLabel, id, id)})
+	}
+	return out
+}
+
+// Rule fields agentRuleItems reads, and how much of the body a line shows.
+const (
+	ruleFieldTrust      = "trust_score"
+	ruleFieldSeverity   = "severity"
+	ruleFieldArchived   = "archived_at"
+	ruleFieldSuperseded = "superseded_by_id"
+	ruleReviewCut       = 60
+)
+
+// cutRunes is s on one line (runs of white space as one space), cut to at
+// most n characters, "…" marking a cut.
+func cutRunes(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
 // metaReviewText is the review-queue line (METADATA 3.14 sample, v0.1.17
 // text): the count of distinct key names, their distinct authors in
 // first-seen order, each name once, and the command to review them.
@@ -1006,7 +1078,7 @@ func (cv *coordView) missionRow(ctx context.Context, d coord.Doc, ready map[stri
 		if b := workBranchOf(d, s); b == "" {
 			r.Detail = "work lost: never pushed"
 		} else {
-			r.Detail = "work branch " + b
+			r.Detail = cv.workBranchWhere(ctx, d, b) // devco:D-619
 		}
 	case ready[id]:
 		r.State = opscoord.StateReady

@@ -121,7 +121,7 @@ func (o StartOut) Text() string {
 	}
 	where := "registered"
 	if o.Where != "" {
-		where = "registered in " + o.Where
+		where = "registered in the roster of " + o.Where
 	}
 	return fmt.Sprintf("%s %s agent %s (owner %s) %s; %s=%s %s=%s\nexport %s=%s %s=%s\n",
 		successMark, o.ID, o.Label, o.Owner, where, EnvActor, o.Actor, EnvSession, o.Session,

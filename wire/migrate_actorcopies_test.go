@@ -44,7 +44,8 @@ func TestMigrateActorCopies(t *testing.T) {
 		t.Fatalf("before migrate: doctor actor_copies %v %v, want the one stale copy", f, err)
 	}
 
-	dry, n, err := a.migrateActorCopies(ctx, true)
+	dryOut, err := a.migrateActorCopies(ctx, true)
+	dry, n := dryOut.Steps, dryOut.Rows
 	if err != nil || n != 1 || len(dry) != 1 || !strings.Contains(dry[0], "would refresh 1 actor copy") || !strings.Contains(dry[0], "Una Upgrader") {
 		t.Fatalf("dry run: %q %d %v", dry, n, err)
 	}
@@ -52,7 +53,13 @@ func TestMigrateActorCopies(t *testing.T) {
 		t.Fatalf("a dry run refreshed the copy: %v", f)
 	}
 
-	steps, n, err := a.migrateActorCopies(ctx, false)
+	runOut, err := a.migrateActorCopies(ctx, false)
+	steps, n := runOut.Steps, runOut.Rows
+	// devco K-5: the dry run and the real run name the same repo copy, so
+	// the run counts it once with the format rewrite either way
+	if strings.Join(dryOut.Upgraded, ",") != strings.Join(runOut.Upgraded, ",") || len(runOut.Upgraded) != 1 || !strings.HasPrefix(runOut.Upgraded[0], "actors/act_") {
+		t.Fatalf("named copies: dry %v, run %v; want the one repo copy in both", dryOut.Upgraded, runOut.Upgraded)
+	}
 	if err != nil || n != 1 || len(steps) != 1 || !strings.HasPrefix(steps[0], StepActorCopies+": refreshed 1 actor copy") {
 		t.Fatalf("run: %q %d %v", steps, n, err)
 	}
@@ -64,7 +71,8 @@ func TestMigrateActorCopies(t *testing.T) {
 		t.Fatalf("the repo copy reads %q %v, want Una Upgrader", fieldText(r, actorFieldDisplay), err)
 	}
 
-	again, n, err := a.migrateActorCopies(ctx, false)
+	againOut, err := a.migrateActorCopies(ctx, false)
+	again, n := againOut.Steps, againOut.Rows
 	if err != nil || n != 0 || len(again) != 0 {
 		t.Fatalf("second run: %q %d %v, want nothing", again, n, err)
 	}

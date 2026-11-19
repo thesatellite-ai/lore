@@ -17,13 +17,17 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/cache/sqlite"
 	"github.com/thesatellite-ai/lore/adapters/probe"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/model/fspath"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -386,17 +390,41 @@ func (a *App) purgeRow(ctx context.Context, ref engine.Ref) error {
 // (journey solo/month1/folder-renamed); the clone's new folder gets its
 // own row the next time lore runs in it. The row itself stays (machine
 // bookkeeping; a folder back in place is listed again).
+//
+// The repos of the machine's cache use records (~/.lore/cache/uses: every
+// repo a lore command opened) are known too when they hold lore data
+// (O-16): a repo lore fix --all --migrate just upgraded from the 0.1.17
+// format has no repo id until its first sync, so no known_repos row is
+// written for it, and doctor --all said "lore has not run in it on this
+// machine" a second after fix --all ran in it. fix --all reads the same
+// records (FixRepos), so the two agree on which repos lore has run in.
 func (s setupStore) KnownRepos(ctx context.Context) ([]onboard.KnownRepo, error) {
 	all, err := s.a.KnownRepos(ctx)
 	if err != nil {
 		return nil, err
 	}
 	out := all[:0:0]
+	seen := map[string]bool{}
 	for _, r := range all {
 		if _, serr := os.Stat(r.Root); serr != nil && errors.Is(serr, fs.ErrNotExist) {
 			continue
 		}
+		seen[r.Root] = true
 		out = append(out, r)
+	}
+	recs, _ := sqlite.ReadUses(filepath.Join(s.a.opts.Home, cacheDir)) // no records: the rows alone
+	for _, rec := range recs {
+		root := rec.Record.Repo
+		if root == "" {
+			continue
+		}
+		root = fspath.Canonical(root)
+		if seen[root] || !loreFolderAt(root) {
+			continue
+		}
+		seen[root] = true
+		m, _, _ := rowfs.ReadRepoMeta(root) // no repo id yet still lists the repo
+		out = append(out, onboard.KnownRepo{RepoID: m.RepoID, Root: root})
 	}
 	return out, nil
 }
@@ -407,6 +435,6 @@ func (s setupStore) TouchRepo(ctx context.Context, r onboard.KnownRepo) error {
 	if r.LastSeen.IsZero() {
 		r.LastSeen = s.a.opts.Wall()
 	}
-	r.Root = resolvedPath(r.Root)
+	r.Root = fspath.Canonical(r.Root)
 	return s.a.TouchRepo(ctx, r)
 }

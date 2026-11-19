@@ -3,6 +3,7 @@ package wire_test
 import (
 	"context"
 	"errors"
+	opsbranch "github.com/thesatellite-ai/lore/ops/branch"
 	"strings"
 	"testing"
 
@@ -257,6 +258,10 @@ func TestEveryPurgePathRefusesYes(t *testing.T) {
 			// ops/live TestPurgeConfirmAndDryRun and tests/userscen
 			// TestCampaignSync_LivePurgeDryRunAndConfirm walk it.
 			continue
+		case name == opsbranch.OpPurge:
+			// lore branch purge (BRANCH_LAYERS 10): refused before any layer
+			// is looked up, so no store folder is needed here.
+			modes = []string{`{"branch":"feat/x"}`, `{"older_than":"90d"}`}
 		case name == opssetup.OpTrashPurge:
 			// lore setup trash purge --name (owner decision 2026-11-06): a trashed
 			// setup of config.yaml, refused before the lookup, so any name

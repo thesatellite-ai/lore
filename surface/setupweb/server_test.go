@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thesatellite-ai/lore/internal/testtime"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opssetup "github.com/thesatellite-ai/lore/ops/setup"
@@ -412,15 +413,28 @@ func TestSecurityHeaders(t *testing.T) {
 
 // TestPageUsesNoInlineCode: the default page loads nothing from outside
 // this server and carries no inline script or style (the CSP forbids
-// both, so one would be a silently broken page).
+// both, so one would be a silently broken page). A URL may appear only as
+// text or as a plain <a href> the user clicks (the install link, D-419):
+// neither loads anything.
 func TestPageUsesNoInlineCode(t *testing.T) {
 	idx, err := fs.ReadFile(DefaultUI().FS(), fileIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range []string{"<script", "<style", " style=", "http://", "https://"} {
-		if strings.Contains(string(idx), bad) {
+	page := string(idx)
+	for _, bad := range []string{"<script", "<style", " style=", "src=", "srcset=", "@import", "url(", "<iframe", "<img", "<object", "<embed"} {
+		if strings.Contains(page, bad) {
 			t.Errorf("default index.html has %q", bad)
+		}
+	}
+	for _, tag := range strings.Split(page, "<")[1:] {
+		if strings.HasPrefix(tag, "a ") {
+			continue
+		}
+		if strings.Contains(tag, "http://") || strings.Contains(tag, "https://") {
+			if end := strings.IndexByte(tag, '>'); end < 0 || strings.Contains(tag[:end], "http") {
+				t.Errorf("default index.html loads from outside: <%s", tag)
+			}
 		}
 	}
 }
@@ -517,7 +531,7 @@ func TestServeEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(testtime.Scale(10 * time.Second)):
 		t.Fatal("Serve did not stop on close")
 	}
 	mu.Lock()

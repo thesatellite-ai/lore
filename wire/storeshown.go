@@ -7,10 +7,12 @@ package wire
 // which store something happened to (a push, a sync) name the store by
 // its own name, the one `lore store list` gives it from any repo (the
 // org's name for the store holding the org folder, else its short name),
-// plus the folder, and add the repo's name for it when it differs:
+// plus the folder, and nothing else: one label for one place in every
+// line (devco D-567, owner use pass: sync said "store acme/web (here:
+// acme)" where a claim said "store acme/web"):
 //
-//	lore: pushed store client-store/bigco_hub (here: acme): commit …
-//	store client-store/bigco_hub (here: acme): sent 0, received 0, …
+//	lore: pushed store client-store/bigco_hub: commit …
+//	store client-store/bigco_hub: pushed (sent 1, received 0, …
 //
 // `--to acme` keeps working: only what output prints changes.
 
@@ -38,14 +40,14 @@ func storeOwnName(home, url, folder string) string {
 	return own
 }
 
-// storeShown is name as output prints it: own when it is the same name,
-// "own (here: name)" when the repo calls it otherwise, name when the store
-// has no own name.
+// storeShown is name as output prints it: the store's own name when it
+// has one, else name. The repo's attached name is never added (D-567):
+// two labels for one place read as two places.
 func storeShown(name, own string) string {
-	if own == "" || own == name || strings.TrimSuffix(name, targetSep+rowfs.FolderRoot) == own {
+	if own == "" || strings.TrimSuffix(name, targetSep+rowfs.FolderRoot) == own {
 		return name // "agency/." is the store root, which own names already
 	}
-	return own + " (here: " + name + ")"
+	return own
 }
 
 // shownStoreName is storeShown for an attached store this repo's org

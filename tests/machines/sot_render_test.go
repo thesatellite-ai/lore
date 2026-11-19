@@ -11,7 +11,7 @@ package machines
 // removed), and a hand-edited skill copy is named with its install command.
 //
 //	row 10  LORE.md / LORE.full.md   stale after rule add; check and doctor say so; lore render clears it
-//	row 10  two clones               clone B syncs A's live rule; its LORE.md is re-rendered
+//	row 10  two clones               clone B syncs A's live rule; its committed LORE.md stays (K-8), the sync names it and lore render, which clears it
 //	row 11  private render files     a personal-store rule makes the private file stale; sync refreshes it
 //	row 12  tool pointer files       an orphan AGENTS.md is named with the keep fix and left as it is
 //	row 13  installed skill copies   a hand edit is named with lore skill install
@@ -108,8 +108,10 @@ func sotrLoreMD(t *testing.T) {
 }
 
 // sotrTwoClones: clone B renders the same bytes as A; A adds a live rule;
-// B's sync brings the row in and re-renders its LORE.md, so B's check is
-// clean and its LORE.md holds the rule.
+// B's sync brings the row in, keeps the committed LORE.md as it is (a
+// dirty tracked render stops the next git pull: devco:K-8, D-231) and says
+// so with the command; lore render then writes the rule in and B's check
+// and doctor are clean.
 func sotrTwoClones(t *testing.T) {
 	m := Build(t, ShapeFresh, loreBin)
 	const url = "git@github.com:sotorg/sot-render-two.git"
@@ -130,14 +132,25 @@ func sotrTwoClones(t *testing.T) {
 
 	sotOK(t, m, a, "rule", "add", "--body", "sotr rule from a", "--severity", "must", "--live")
 	sotOK(t, m, a, "sync")
-	sotOK(t, m, b, "sync")
+	out := sotOK(t, m, b, "sync")
+	sotrHas(t, "clone B's sync of A's rule", out, ".lore/LORE.md is behind its rows", "it stays as committed so your next git pull works", "lore render")
+	if st := sotGit(t, m, b, "status", "--porcelain"); st != "" {
+		t.Errorf("clone B's sync changed tracked files (K-8):\n%s", st)
+	}
+	if code, out := sotrCheck(t, m, b); code == 0 {
+		t.Errorf("clone B after sync: render --check says current for a render without A's rule\n%s", out)
+	}
+	sotOK(t, m, b, "render")
 	if md, _ := os.ReadFile(filepath.Join(b, ".lore", "LORE.md")); !strings.Contains(string(md), "sotr rule from a") {
-		t.Errorf("clone B after syncing A's rule: LORE.md was not re-rendered:\n%s", md)
+		t.Errorf("clone B after lore render: LORE.md lacks A's rule:\n%s", md)
 	}
 	if code, out := sotrCheck(t, m, b); code != 0 {
-		t.Errorf("clone B after sync: render --check exit %d\n%s", code, out)
+		t.Errorf("clone B after lore render: render --check exit %d\n%s", code, out)
 	}
-	sotrLacks(t, "clone B doctor after sync", sotrDoctor(t, m, b), "rendered_copy")
+	sotrLacks(t, "clone B doctor after lore render", sotrDoctor(t, m, b), "rendered_copy")
+	if out := sotOK(t, m, b, "sync"); strings.Contains(out, "is behind its rows") {
+		t.Errorf("clone B's sync of a current render still says it is behind:\n%s", out)
+	}
 }
 
 // sotrPrivate: a personal-store rule makes the private store file stale

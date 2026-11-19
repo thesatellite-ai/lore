@@ -27,6 +27,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"time"
+
+	"github.com/thesatellite-ai/lore/internal/testtime"
 )
 
 // Invite fixture names.
@@ -39,9 +41,11 @@ const (
 	inviteRepo = "lore-team"
 	// hubFolders is the hub setup's folder glob: nowhere the member's start folder is.
 	hubFolders = "~/hubwork/**"
-	// inviteTimeout bounds the whole fixture (each lore call probes the fakes).
-	inviteTimeout = 3 * time.Minute
 )
+
+// inviteTimeout bounds the whole fixture (each lore call probes the fakes),
+// times the machine factor (internal/testtime).
+var inviteTimeout = testtime.Scale(3 * time.Minute)
 
 // reInviteLine is the invite token `lore team invite` prints after
 // "lore setup join --invite" (the named form every printed command uses

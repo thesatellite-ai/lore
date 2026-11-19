@@ -82,21 +82,19 @@ func (a *App) refuseStoresFileOutsideRepo(ctx context.Context, name string) erro
 	if !opsstores.WritesStoresFile(name) && name != opsstores.OpRemove {
 		return nil
 	}
+	// devco D-523: the repo-only refusal (repoonly.go), as the repo-only
+	// reads and writes say it; before, its own words named neither cd
+	// into the code repo as the class does nor that --store does not apply
 	if sc, in := storeHere(a.opts.RepoDir); in {
-		verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
-		return errs.New(errs.NotAStore, verb+": it edits a repo's .lore/stores.yaml, and "+sc.top+" is a lore store, not a code repo").
-			WithHint("cd into the code repo that should attach the store")
+		return errRepoOnlyAs(errs.NotAStore, storesYAMLRepoOnly, sc.shown+" is a lore store clone, not a code repo")
 	}
 	if insideWorkTree(ctx, a.opts.RepoDir) {
 		return nil
 	}
-	verb := "store " + strings.ReplaceAll(strings.TrimPrefix(name, storeOpPrefix), "_", "-")
-	return errs.New(errs.NotAStore, verb+": it edits a repo's .lore/stores.yaml, and "+a.opts.RepoDir+" is not inside a git repo").
-		WithHint("cd into the repo that should attach the store; outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)")
+	r := storesYAMLRepoOnly
+	r.also = "outside a repo, `lore store folder add --store team --folder <folder>` and `lore store list` work from the setup alone (`lore store init --name me` makes the personal store)"
+	return errRepoOnlyAs(errs.NotAStore, r, a.opts.RepoDir+" is not inside a code repo")
 }
-
-// storeOpPrefix starts every store operation name.
-const storeOpPrefix = "store."
 
 // runSetupOnly runs a store operation on the machine-only engine (this
 // machine's policies, the caller's confirm), with this App as its Manager.
@@ -155,6 +153,13 @@ func (a *App) lookupStore(ctx context.Context, verb, name string) (attach.Store,
 	}
 	if !found {
 		if top == "" && name != attach.ReservedMe {
+			// D-516: an org entry, <org>/<store> or a setup's name
+			if s, ok, oerr := a.outsideStoreAt(ctx, name); oerr != nil || ok {
+				if oerr != nil {
+					return attach.Store{}, oerr
+				}
+				return a.orgStoreAt(ctx, verb, s.URL)
+			}
 			return attach.Store{}, a.needsRepoErr(ctx, verb, name)
 		}
 		return attach.Store{}, errs.New(errs.NotFound, verb+": no store named "+name+" is attached").
@@ -264,10 +269,18 @@ func (a *App) ListFolders(ctx context.Context, name string) (opsstores.FolderLis
 	var stores []one
 	if name != "" {
 		src, err := a.lookupStore(ctx, verb, name)
-		if err != nil {
+		switch org := a.orgConfigStores(name); {
+		case err != nil && len(org) > 0:
+			// an org of the home's setup, named from any folder (D-471):
+			// every store of the org
+			for _, s := range org {
+				stores = append(stores, one{name, s})
+			}
+		case err != nil:
 			return opsstores.FolderListOut{}, err
+		default:
+			stores = append(stores, one{a.storeLabel(name, src), src})
 		}
-		stores = append(stores, one{a.storeLabel(name, src), src})
 	} else {
 		seen := map[string]bool{}
 		used := map[string]bool{}

@@ -15,6 +15,7 @@ func (a *App) MoveWith(ctx context.Context, ref engine.Ref, to store.Source, opt
 	if err != nil {
 		return engine.Written{}, err
 	}
+	to = st.eng.StoreName(to)
 	if uerr := a.unreachableGuard(ctx, st, explicitTarget(to)); uerr != nil {
 		return engine.Written{}, uerr
 	}

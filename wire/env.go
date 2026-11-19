@@ -35,35 +35,57 @@ func (a *App) AuditSecret(ctx context.Context, action engine.Action, s engine.Se
 	return st.eng.AuditSecret(ctx, action, s)
 }
 
-// Create implements opsmemory.Env.
-func (a *App) Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error) {
-	st, err := a.writeStateFor(ctx, target)
+// createFrame is the part of a create that comes before the write: the
+// store a row with no --to lands in (DefaultTarget), the write gate of
+// that store, the repo guard and the target check. Create and
+// CreateWithID share it, so a keyed add (`--key`, devco D-439) is routed
+// and guarded exactly like a plain one.
+func (a *App) createFrame(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (*state, store.Source, error) {
+	st, err := a.state(ctx)
 	if err != nil {
-		return engine.Written{}, err
+		return nil, "", err
 	}
+	target = st.eng.StoreName(target) // devco T-5: an org store's own name answers for it
 	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
-		return engine.Written{}, uerr
+		return nil, "", uerr
 	}
 	q, err := a.writeQuery(ctx, st, table, fields)
 	if err != nil {
-		return engine.Written{}, err
+		return nil, "", err
 	}
 	if target == "" && a.opts.DefaultTarget != nil {
-		to, derr := a.opts.DefaultTarget(ctx, q)
+		to, derr := a.routedDefault(ctx, q)
 		if derr != nil {
-			return engine.Written{}, derr
+			return nil, "", derr
 		}
 		if to != store.SourceRepo {
 			target = to
 		}
 	}
+	if st, err = a.writeStateFor(ctx, target); err != nil {
+		return nil, "", err
+	}
 	if target == "" || target == store.SourceRepo {
 		if gerr := a.guard(ctx, q, target == store.SourceRepo); gerr != nil {
-			return engine.Written{}, gerr
+			return nil, "", gerr
 		}
 	}
 	if ferr := a.checkTarget(target); ferr != nil {
-		return engine.Written{}, ferr
+		return nil, "", ferr
+	}
+	return st, target, nil
+}
+
+// Create implements opsmemory.Env.
+//
+// devco:T-4: where a row with no --to goes is decided before the write
+// gate (writeStateFor), so the gate asks about the store the row really
+// lands in: in a linked client repo still on the 0.1.17 format a memory
+// routed to the org's client folder is not refused for the repo's format.
+func (a *App) Create(ctx context.Context, target store.Source, table row.Table, fields map[string]value.Value) (engine.Written, error) {
+	st, target, err := a.createFrame(ctx, target, table, fields)
+	if err != nil {
+		return engine.Written{}, err
 	}
 	// A machine-local row (this machine's session row) writes no actor row
 	// (ensureActor skips the machine store, P3-LOCAL-1), so it needs no
@@ -216,7 +238,38 @@ func (a *App) List(ctx context.Context, source store.Source, table row.Table) ([
 	if err != nil {
 		return nil, err
 	}
+	if source == store.SourceRepo && a.noRepoStoreHere(ctx, eng) {
+		if access, known := engine.AccessOf(ctx); known && access == op.AccessRead {
+			// devco D-631: a read under a setup from a plain folder has no
+			// repo store, so it has no repo rows; the setup's stores are
+			// read beside it (repo list, context's render sources). A
+			// write still gets the engine's refusal.
+			return nil, nil
+		}
+	}
 	return eng.List(ctx, source, table)
+}
+
+// noRepoStoreHere reports a store-only open (runOnDefaultStore: a read
+// under a setup from a plain folder) where no attached store answers for
+// the repo store: there is no "this repo" to read rows or a project of.
+func (a *App) noRepoStoreHere(ctx context.Context, eng *engine.Engine) bool {
+	st, err := a.state(ctx)
+	return err == nil && st.storeOnly && st.here == "" && !eng.AnswersRepo()
+}
+
+// SetupReadStores is every attached store when the open is a read under
+// a setup from a plain folder (noRepoStoreHere), ok false anywhere else.
+// devco D-632: `lore context --setup <setup>` reads the setup's stores as
+// its scope, as search and the lists do there; its render sources (the
+// repo store plus the shareable ones) found none of them, so --topics
+// said "(no rows yet)".
+func (a *App) SetupReadStores(ctx context.Context) ([]store.Source, bool) {
+	eng, err := a.Engine(ctx)
+	if err != nil || !a.noRepoStoreHere(ctx, eng) {
+		return nil, false
+	}
+	return engine.ReadStoresOf(eng), true
 }
 
 // Stores implements opsmemory.Env: the attached stores, or none before
@@ -299,6 +352,17 @@ func (a *App) Project(ctx context.Context) (ids.ID[ids.Project], error) {
 	}
 	if st, serr := a.state(ctx); serr == nil && st.here != "" {
 		return a.folderProject(ctx, st, st.here) // inside a store folder: its project (storehere.go)
+	}
+	if a.noRepoStoreHere(ctx, eng) {
+		// devco D-631: a read under a setup from a plain folder opens the
+		// setup's stores alone (runOnDefaultStore), none of them the repo
+		// store, so "this repo's project" is nobody's: the place has no
+		// project, and a read that filters by it reads every project's rows
+		// (engine.EveryProject), as rule and memory list do. Before it every
+		// content list (playbook, pattern, handoff, …), link, tag and repo
+		// list failed "no store named repo is attached".
+		return ids.ID[ids.Project]{}, errs.Wrap(errs.NotFound, "this place is no repo and no store folder, so it has no project row yet, and a read never makes one", engine.ErrNoPlaceProject).
+			WithHint("name a folder with --store <org>/<folder> to read one project's rows")
 	}
 	rows, err := eng.List(ctx, store.SourceRepo, schema.TableProjects)
 	if err != nil {
@@ -388,7 +452,11 @@ func (a *App) projectInAStore(ctx context.Context, eng *engine.Engine) (ids.ID[i
 
 // guard asks Options.GuardRepoWrite about a create in the repo store.
 func (a *App) guard(ctx context.Context, q WriteQuery, explicit bool) error {
-	if a.opts.GuardRepoWrite == nil {
+	if a.opts.GuardRepoWrite == nil || inStore(a.opts.RepoDir) {
+		// a store checkout's "repo store" is the store folder it runs in,
+		// no code repo: the repo guards (F14 routing, client leak guards)
+		// have nothing to guard there (devco D-693: once the clone resolved
+		// its store's org they refused every plain write in it)
 		return nil
 	}
 	return a.opts.GuardRepoWrite(ctx, q, explicit)
@@ -437,9 +505,23 @@ func (a *App) RepoID(ctx context.Context, mountOrID string) (ids.ID[ids.Repo], e
 			return ids.As[ids.Repo](r.ID)
 		}
 	}
+	// devco D-491: in a store folder `--repo org` names a folder (a
+	// project of the store), which --project resolves; say so instead of
+	// a bare "no repo".
+	if prj, perr := eng.List(ctx, store.SourceRepo, schema.TableProjects); perr == nil {
+		for _, r := range prj {
+			if !r.Deleted && (r.ID.String() == mountOrID || textField(r, projectNameField) == mountOrID) {
+				return ids.ID[ids.Repo]{}, errs.New(errs.NotFound, "wire: "+strconv.Quote(mountOrID)+" is a project (a store folder), not a repo; --repo names a code repo mounted in this project").
+					WithHint("name the project with --project " + mountOrID + "; `lore repo list` shows the repos")
+			}
+		}
+	}
 	return ids.ID[ids.Repo]{}, errs.New(errs.NotFound, "wire: no repo "+strconv.Quote(mountOrID)+" in this project").
 		WithHint("run `lore repo list` to see the mount names")
 }
+
+// projectNameField is the projects field a --project name matches.
+const projectNameField = "name"
 
 // GroupRepoID resolves `--repo <name>` for a write whose target is to.
 //
@@ -669,6 +751,7 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 	if err != nil {
 		return engine.Written{}, err
 	}
+	to = st.eng.StoreName(to)
 	if uerr := a.unreachableGuard(ctx, st, explicitTarget(to)); uerr != nil {
 		return engine.Written{}, uerr
 	}
@@ -694,16 +777,14 @@ func (a *App) Move(ctx context.Context, ref engine.Ref, to store.Source) (engine
 // key+scope, a var name, a kind name) after a soft delete, because the
 // tombstone keeps the natural id forever (DQ) and a plain Create would
 // collide with it; they pass a fresh random id instead.
+//
+// The write gate asks about target, the store the row lands in (devco:T-4:
+// task add's default task list in a linked client repo goes to the org's
+// client folder, and the repo's 0.1.17 format refused it).
 func (a *App) CreateWithID(ctx context.Context, target store.Source, table row.Table, id ids.AnyID, fields map[string]value.Value) (engine.Written, error) {
-	st, err := a.writeState(ctx)
+	st, target, err := a.createFrame(ctx, target, table, fields)
 	if err != nil {
 		return engine.Written{}, err
-	}
-	if uerr := a.unreachableGuard(ctx, st, target); uerr != nil {
-		return engine.Written{}, uerr
-	}
-	if ferr := a.checkTarget(target); ferr != nil {
-		return engine.Written{}, ferr
 	}
 	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) { // G-ENGINE-2
 		if aerr := a.ensureActor(ctx, st, target); aerr != nil {

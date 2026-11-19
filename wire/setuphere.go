@@ -18,8 +18,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/onboard"
@@ -48,6 +51,16 @@ func (a *App) SetupHere(ctx context.Context) (onboard.Here, error) {
 	if err != nil {
 		return onboard.Here{}, err
 	}
+	// devco D-682: a store clone is a git repo but never a code repo: it is
+	// named as the store it is, never offered lore init (storehere.go)
+	if sc, in := storeHere(dir); in {
+		h := onboard.Here{State: onboard.HereStoreClone, Dir: dir, Root: sc.top, Stores: []string{}, Pointers: []string{},
+			StoreName: storeCloneName(home, sc)}
+		if sc.folder != rowfs.FolderRoot {
+			h.StoreFolder = sc.folder
+		}
+		return h, nil
+	}
 	f := onboard.HereFacts{Dir: dir, Root: gitTopLevel(ctx, dir)}
 	f.Git = f.Root != ""
 	f.Lore = f.Git && opssetup.LoreRepoAt(dir)
@@ -71,6 +84,7 @@ func (a *App) SetupHere(ctx context.Context) (onboard.Here, error) {
 		}
 	}
 	f.Stores, f.StoresSource = hereStores(f.Root)
+	f.Stores, f.StoresSource = a.hereOrgStores(ctx, f.Org, f.Stores, f.StoresSource)
 	if id, ierr := resolveIdentity(ctx, a.opts); ierr == nil {
 		f.IdentityName, f.IdentityKey, f.IdentitySource = id.DisplayName, id.StableKey, string(id.Step)
 	}
@@ -120,4 +134,34 @@ func hereStores(root string) ([]string, string) {
 		names = append(names, string(s.Name))
 	}
 	return names, attach.FileName
+}
+
+// hereOrgStores adds the org stores config.yaml attaches in this repo to
+// the stores.yaml ones (devco N-1: in an org's own repo the folder line
+// said "no attached store" while lore store list and whoami listed the
+// org's team store, which no stores.yaml names). A store already listed
+// is not repeated; an org hook that cannot answer adds nothing.
+func (a *App) hereOrgStores(ctx context.Context, org string, names []string, source string) ([]string, string) {
+	if org == "" || a.opts.OrgStores == nil {
+		return names, source
+	}
+	list, err := a.opts.OrgStores(ctx)
+	if err != nil || len(list) == 0 {
+		return names, source
+	}
+	added := false
+	for _, st := range list {
+		if n := string(st.Name); !slices.Contains(names, n) {
+			names = append(names, n)
+			added = true
+		}
+	}
+	if !added {
+		return names, source
+	}
+	from := lorehome.Shown() + "/" + ConfigFile + " (org " + org + ")"
+	if source == "" {
+		return names, from
+	}
+	return names, source + " and " + from
 }

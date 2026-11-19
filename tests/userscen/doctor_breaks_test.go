@@ -189,7 +189,7 @@ func TestDoctorBreak_BrokenRowFiles(t *testing.T) {
 			rep, res := p.doctor(t)
 			s := rep.Sync
 			if rep.Status != "broken" || s == nil || len(s.FileErrors) != 1 || s.FileErrors[0].Path != rel || s.FileErrors[0].Kind != tc.kind ||
-				s.OpenConflicts != tc.conflicts || !hasLine(rep.Errors, "store repo: "+rel+" is not a usable row file", tc.cause, tc.next, "(every read leaves it out)") {
+				s.OpenConflicts != tc.conflicts || !hasLine(rep.Errors, "this repo: "+rel+" is not a usable row file", tc.cause, tc.next, "(every read leaves it out)") {
 				t.Fatalf("broken row file %q: %s", tc.name, res)
 			}
 			// Reads leave it out, and say so on stderr pointing at doctor.
@@ -219,7 +219,9 @@ func TestDoctorBreak_GitHooksRemovedThenReinstalled(t *testing.T) {
 	off := p.c.With("LORE_SYNC_GIT=0")
 	res := off.Lore("doctor", "--json")
 	rep := doctorDecode(t, res)
-	if rep.Status != "degraded" || !hasLine(rep.Warnings, "live: git hook block missing in post-commit, pre-push", "run `lore fix` (or `lore sync`) to install it; a read never does") {
+	// One line names both removed blocks and one next step (devco:Q-16,
+	// D-326): the leak guard's, whose pre-push block is one of them.
+	if rep.Status != "degraded" || !hasLine(rep.Warnings, "live: leak guard off in this clone", "(pre-push)", "the post-commit hook block is missing too", "run `lore fix` to restore them") {
 		t.Fatalf("missing hook blocks: %s", res)
 	}
 	p.c.MustLore("sync")

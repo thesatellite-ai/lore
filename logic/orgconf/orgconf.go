@@ -155,6 +155,9 @@ type Store struct {
 	// OrgFolder marks the store holding the roster and company rules; "."
 	// is the store root's project.
 	OrgFolder string `yaml:"org_folder,omitempty"`
+	// Audience is who in the org uses the store (audience.go): empty is
+	// every member, AudienceAdmins only the org's admins (D-442).
+	Audience Audience `yaml:"audience,omitempty"`
 }
 
 // EffectiveBranch returns Branch or DefaultStoreBranch.
@@ -464,6 +467,9 @@ func (o *Org) validate() []error {
 			add(fmt.Errorf("%s: same store and branch as stores[%d]", w, j))
 		}
 		stores[key] = i
+		if s.Audience != AudienceEveryone && s.Audience != AudienceAdmins {
+			add(fmt.Errorf("%s.audience %q: use %q or leave it out (every member)", w, s.Audience, AudienceAdmins))
+		}
 		if s.OrgFolder != "" {
 			orgFolders++
 			if s.OrgFolder != OrgFolderRoot {
@@ -578,7 +584,7 @@ var tableNames = sync.OnceValue(func() map[string]bool {
 // ValidateHumanKey checks a person's identity key: human:<email> (TEAM-029).
 func ValidateHumanKey(key string) error {
 	if !strings.HasPrefix(key, humanKeyPrefix) {
-		return fmt.Errorf("must be %s<your email in that org> (TEAM-029)", humanKeyPrefix)
+		return fmt.Errorf("must be %s<your email in that org>", humanKeyPrefix)
 	}
 	email := strings.TrimPrefix(key, humanKeyPrefix)
 	at := strings.LastIndex(email, "@")

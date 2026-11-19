@@ -31,6 +31,7 @@ import (
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/model/ids"
 	opsinfra "github.com/thesatellite-ai/lore/ops/infra"
+	opsstores "github.com/thesatellite-ai/lore/ops/stores"
 	"github.com/thesatellite-ai/lore/store"
 )
 
@@ -47,6 +48,10 @@ type orgFolder struct {
 	Org    string
 	URL    string
 	Branch string
+	// Dir is the store's local checkout the folder was read from.
+	Dir string
+	// Rows counts the folder's row files (display only).
+	Rows int
 }
 
 // orgFolderScan is what one walk of the org's stores found: the folders,
@@ -61,12 +66,26 @@ type orgFolderScan struct {
 // orgFolders walks every store of the org entries this command sees. No
 // org (a solo setup, a repo with no org) is an empty scan.
 func (a *App) orgFolders(ctx context.Context) orgFolderScan {
+	if sc, in := storeHere(a.opts.RepoDir); in {
+		// a store clone is under no setup's folders: its org is the one
+		// whose stores include it (D-444, D-445, D-458)
+		return a.cloneFolderScan(ctx, sc)
+	}
 	scan := orgFolderScan{Unread: map[string]error{}}
 	entries, err := a.OrgStoreEntries(ctx)
 	if err != nil {
 		scan.Unread[orgStoresLabel] = err
 		return scan
 	}
+	return a.foldersOf(ctx, entries)
+}
+
+// foldersOf walks the stores entries name (each once by placeKey): the
+// folders of each, and each store it could not read. orgFolders feeds it
+// the org stores of this folder's setup; a store clone's read scope
+// (scope.go) the stores of the clone's own org.
+func (a *App) foldersOf(ctx context.Context, entries []opsstores.Entry) orgFolderScan {
+	scan := orgFolderScan{Unread: map[string]error{}}
 	orgOfAny := a.storeOrgs()
 	seen := map[string]bool{}
 	for _, e := range entries {
@@ -93,10 +112,29 @@ func (a *App) orgFolders(ctx context.Context) orgFolderScan {
 				continue // a folder whose _meta.json names no project id is not a project
 			}
 			sk, _ := storeKey(e.URL)
-			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch})
+			scan.Folders = append(scan.Folders, orgFolder{Label: label, Folder: r.Folder, ID: id, Org: orgOfAny[sk], URL: e.URL, Branch: e.Branch, Dir: dir, Rows: r.Rows})
 		}
 	}
 	return scan
+}
+
+// everyOrgFolders walks the stores of every org entry of the config, not
+// only the one this folder's setup covers: a row id is unique, so a read
+// or edit by id from the home folder (no setup covers it) still finds the
+// folder holding the row (devco D-553). An empty scan when the config
+// names no org.
+func (a *App) everyOrgFolders(ctx context.Context) orgFolderScan {
+	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
+	if err != nil || cfg == nil {
+		return orgFolderScan{Unread: map[string]error{}}
+	}
+	var entries []opsstores.Entry
+	for _, o := range cfg.Orgs {
+		for _, sc := range o.Stores {
+			entries = append(entries, opsstores.Entry{Name: o.Name, URL: sc.URL, Branch: sc.Branch, Source: opsstores.SourceOrg})
+		}
+	}
+	return a.foldersOf(ctx, entries)
 }
 
 // orgFolderStores maps the store key of each store that holds an org's
@@ -175,7 +213,7 @@ func (a *App) OrgFolderProjects(ctx context.Context) ([]opsinfra.FolderProject, 
 	scan := a.orgFolders(ctx)
 	out := make([]opsinfra.FolderProject, 0, len(scan.Folders))
 	for _, f := range scan.Folders {
-		out = append(out, opsinfra.FolderProject{ID: f.ID.String(), Name: f.Folder,
+		out = append(out, opsinfra.FolderProject{ID: f.ID.String(), Name: f.Folder, Rows: f.Rows,
 			Source: store.SourceRef{Store: f.Label, Folder: f.Folder, FolderID: f.ID}})
 	}
 	var notes []string

@@ -29,19 +29,7 @@ type folderIDOf interface {
 // yet, is described by its name alone; an unreadable _meta.json leaves
 // folder_id out rather than failing a read.
 func (a *App) DescribeSource(name store.Source) store.SourceRef {
-	ref := store.SourceRef{Store: string(name)}
-	if s, f, ok := strings.Cut(string(name), targetSep); ok {
-		ref.Store, ref.Folder = s, f
-	}
-	a.mu.Lock()
-	var b store.Backend
-	if a.st != nil {
-		b = a.st.byName[name]
-		if f := strings.Trim(a.st.folders[name], "/"); f != "" && f != rowfs.FolderRoot {
-			ref.Folder = f
-		}
-	}
-	a.mu.Unlock()
+	ref, b := a.sourcePlace(name)
 	if b == nil {
 		return ref
 	}
@@ -55,4 +43,24 @@ func (a *App) DescribeSource(name store.Source) store.SourceRef {
 		}
 	}
 	return ref
+}
+
+// sourcePlace is the store and folder of the attached store name (the
+// names-only part of DescribeSource, no file read) and its backend (nil
+// when this App does not know the name or is not opened yet).
+func (a *App) sourcePlace(name store.Source) (store.SourceRef, store.Backend) {
+	ref := store.SourceRef{Store: string(name)}
+	if s, f, ok := strings.Cut(string(name), targetSep); ok {
+		ref.Store, ref.Folder = s, f
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var b store.Backend
+	if a.st != nil {
+		b = a.st.byName[name]
+		if f := strings.Trim(a.st.folders[name], "/"); f != "" && f != rowfs.FolderRoot {
+			ref.Folder = f
+		}
+	}
+	return ref, b
 }

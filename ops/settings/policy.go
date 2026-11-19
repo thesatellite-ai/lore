@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/estimate"
 	"github.com/thesatellite-ai/lore/logic/policy"
@@ -14,6 +15,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/ids"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -41,6 +43,8 @@ const sourceDefault = "default"
 
 // PolicyShowIn is the input of policy.show.
 type PolicyShowIn struct {
+	// --store <store> (devco D-506): the read names its store.
+	op.StoreFlag
 	Key string `json:"id,omitempty" arg:"0" desc:"a key or a key prefix (default every key)"`
 }
 
@@ -108,10 +112,10 @@ func (o ops) policyOps() []op.Entry {
 			}}, o.policyShow),
 		op.Define(op.Spec{Name: OpPolicySet, Summary: "Set a policy rule at a level (may only tighten a higher level)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: writeErrors, Confirm: op.ConfirmRule{Always: true}, RESTNoun: policyREST,
-			Examples: []op.Example{{Title: "keep the trash a year", CLI: "lore policy set --key trash.retention_days --value 365 --yes", Want: "pol_"}}}, o.policySet),
+			Examples: []op.Example{{Title: "keep the trash a year", CLI: "lore policy set --key trash.retention_days --value 365 --yes", Want: "pol_"}}}, o.policySet).Asks(o.policySetQuestion),
 		op.Define(op.Spec{Name: OpPolicyUnset, Summary: "Remove a policy rule's row at a level (the next level up applies again)", Permission: op.PermWrite,
 			Access: op.AccessWrite, Errors: append(slices.Clone(writeErrors), errs.ReasonRequired), Confirm: op.ConfirmRule{Always: true}, RESTNoun: policyREST,
-			Examples: []op.Example{{Title: "back to the level above (or the default)", CLI: "lore policy unset --key trash.retention_days --yes", Want: ""}}}, o.policyUnset),
+			Examples: []op.Example{{Title: "back to the level above (or the default)", CLI: "lore policy unset --key trash.retention_days --yes", Want: ""}}}, o.policyUnset).Asks(o.policyUnsetQuestion),
 	}
 }
 
@@ -161,10 +165,10 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 		r := PolicyRule{Key: string(d.Key), Value: display(eff.Value), Source: sourceDefault, Doc: d.Doc}
 		switch {
 		case eff.Level == policy.LevelMachine:
-			r.Level, r.Source = string(eff.Level), "machine (~/.lore/config.yaml policies)"
+			r.Level, r.Source = string(eff.Level), "machine ("+lorehome.Shown()+"/config.yaml policies)"
 		case !eff.IsDefault:
 			r.Level, r.Row, r.Store = string(eff.Level), eff.Source.String(), string(where[eff.Source])
-			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, place(where[eff.Source]), short(eff.Source))
+			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, o.place(where[eff.Source]), short(eff.Source))
 		}
 		out.Data = append(out.Data, r)
 	}
@@ -235,6 +239,23 @@ type MachinePolicySource interface {
 // holds no rows and so never blocks a policy set).
 func rankOf(l policy.Level) int { return slices.Index(policy.Levels(), l) }
 
+// policyAdminDoes is what only an admin does, in the refusal of a member's
+// policy write to company ground (devco D-637, D-681: every folder of the
+// company store, not only its org folder).
+const policyAdminDoes = "change a policy of a company folder (it applies to every repo that reads the folder)"
+
+// requirePolicyAdmin is the role check of a policy write of key to target:
+// company ground takes it from an admin of the org only
+// (profilestore.RequireAdminAt), except the keys policy.MemberWritable
+// names (a teammate's own branch choice, which lore branch share|isolate
+// write for members; devco D-681). line is the command the admin runs.
+func (o ops) requirePolicyAdmin(ctx context.Context, target store.Source, key policy.Key, line string) error {
+	if policy.MemberWritable(key) {
+		return nil
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, line)
+}
+
 func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	d, ok := policy.Lookup(policy.Key(in.Key))
 	if !ok {
@@ -243,6 +264,9 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	target := targetOf(in.To)
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: a personal store holds no team rules").WithHint("--to repo, --to <store> or --to <store>/<folder>")
+	}
+	if err := o.requirePolicyAdmin(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
+		return RowOut{}, err
 	}
 	if d.Key == policy.KeyContextTargets {
 		// Q-R2-3: only known tool profiles (built-ins + the user's own).
@@ -287,7 +311,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	}
 	if eff, _ := set.Get(d.Key); !eff.Source.IsZero() {
 		return RowOut{}, errs.New(errs.PolicyDenied, fmt.Sprintf("%s: %s sets %s, so %s may only set a value at least as strict",
-			in.Key, place(where[eff.Source]), display(eff.Value), place(target))).
+			in.Key, o.place(where[eff.Source]), display(eff.Value), o.place(target))).
 			WithHint(policyDeniedHint(in.Key, display(eff.Value), where[eff.Source]))
 	}
 	note, err := o.unitNote(ctx, d.Key, entries, v)
@@ -323,7 +347,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), place(target), short(w.Row.ID)) + note}, nil
+		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), o.place(target), short(w.Row.ID)) + note}, nil
 }
 
 // budgetNote is the warning line for a context.budget.<profile> value
@@ -403,20 +427,23 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 		return RowOut{}, errs.New(errs.InvalidInput, "unknown policy key "+quote(in.Key)).WithHint("lore policy show lists the keys")
 	}
 	target := targetOf(in.To)
+	if err := o.requirePolicyAdmin(ctx, target, policy.Key(in.Key), policyCommand("unset", in.Key, "", in.To)); err != nil {
+		return RowOut{}, err
+	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TablePolicies)
 	if err != nil {
 		return RowOut{}, err
 	}
 	hit := where2(rows, in.Key)
 	if hit == nil {
-		return RowOut{}, errs.New(errs.NotFound, in.Key+" is not set in "+place(target)).WithHint("lore policy show --id " + in.Key + " shows where it is set")
+		return RowOut{}, errs.New(errs.NotFound, in.Key+" is not set in "+o.place(target)).WithHint("lore policy show --id " + in.Key + " shows where it is set")
 	}
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // E_REASON_REQUIRED under delete.require_reason
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: target, Table: schema.TablePolicies, ID: hit.Row.ID}); err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: hit.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("✓ %s unset in %s (%s); the next level up or the default applies\n", in.Key, place(target), short(hit.Row.ID))}, nil
+		Human: fmt.Sprintf("✓ %s unset in %s (%s); the next level up or the default applies\n", in.Key, o.place(target), short(hit.Row.ID))}, nil
 }
 
 // policyDeniedHint is the way out of a looser value under a stricter
