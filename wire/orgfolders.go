@@ -159,17 +159,33 @@ func (a *App) orgFolderStores() map[string]string {
 }
 
 // storeOrgs maps the store key of every store of every configured org to
-// the org's name: which org a store belongs to, whatever its role.
+// the org's name: which org a store belongs to, whatever its role. A store
+// two org entries list (the ops org's store, also kept as an admins store
+// in the company's entry) belongs to the entry holding its org folder
+// there (the first such), else to the last entry listing it
+// (storeOwnerOrg is the same rule for one store).
+//
+// Why one map (devco:D-696): a row found by id is named by this org
+// (orgFolderStore) and its setup was picked by another rule (the first
+// entry listing the store), so `task claim --id` of an ops row from the
+// home folder ran under the company's setup and refused "no store named
+// <ops org>". Every "which org holds this store" answer reads this map.
 func (a *App) storeOrgs() map[string]string {
 	out := map[string]string{}
 	cfg, _, err := orgcfg.LoadConfig(a.opts.Home)
 	if err != nil || cfg == nil {
 		return out
 	}
+	holdsOrgFolder := map[string]bool{}
 	for _, o := range cfg.Orgs {
 		for _, sc := range o.Stores {
-			if k, ok := storeKey(sc.URL); ok {
-				out[k] = o.Name
+			k, ok := storeKey(sc.URL)
+			if !ok || holdsOrgFolder[k] {
+				continue
+			}
+			out[k] = o.Name
+			if sc.OrgFolder != "" {
+				holdsOrgFolder[k] = true
 			}
 		}
 	}

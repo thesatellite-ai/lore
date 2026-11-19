@@ -35,6 +35,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/onboard"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/storepush"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/store"
@@ -81,23 +82,27 @@ func orgOfClone(home, dir string) string {
 	}
 	dir = filepath.Clean(dir)
 	origin, oerr := gitbackend.RemoteOfRaw(gitbackend.OriginAt(dir))
-	for _, o := range cfg.Orgs {
-		for _, s := range o.Stores {
-			r, rerr := gitbackend.RemoteOfRaw(s.URL)
-			if rerr != nil {
-				continue
-			}
-			if oerr == nil && (origin.Norm == r.Norm || gitbackend.SameRepoViaAlias(origin, r)) { // D-627: an alias origin
-				return o.Name
-			}
-			for _, b := range []string{"", s.Branch} {
-				if d, _, derr := gitbackend.CloneDirFor(home, r, b); derr == nil && filepath.Clean(d) == dir {
-					return o.Name
-				}
+	// the org whose store this is when two entries list it (storeOwnerOrg,
+	// devco:D-696)
+	o := storeOwnerOrg(cfg.Orgs, func(sc orgconf.Store) bool {
+		r, rerr := gitbackend.RemoteOfRaw(sc.URL)
+		if rerr != nil {
+			return false
+		}
+		if oerr == nil && (origin.Norm == r.Norm || gitbackend.SameRepoViaAlias(origin, r)) { // D-627: an alias origin
+			return true
+		}
+		for _, b := range []string{"", sc.Branch} {
+			if d, _, derr := gitbackend.CloneDirFor(home, r, b); derr == nil && filepath.Clean(d) == dir {
+				return true
 			}
 		}
+		return false
+	})
+	if o == nil {
+		return ""
 	}
-	return ""
+	return o.Name
 }
 
 // orgOfURL names the configured org that lists the store url; "".
@@ -110,16 +115,13 @@ func orgOfURL(home, raw string) string {
 	if same == nil {
 		return ""
 	}
-	for _, o := range cfg.Orgs {
-		for _, s := range o.Stores {
-			// One store identity (sameStoreAs: host/path, an ssh alias
-			// resolved or routed by insteadOf): a clone whose origin is
-			// git@<alias>:org/repo or the https url is still the org's
-			// store (D-493, D-627).
-			if same(s.URL) {
-				return o.Name
-			}
-		}
+	// One store identity (sameStoreAs: host/path, an ssh alias resolved or
+	// routed by insteadOf): a clone whose origin is git@<alias>:org/repo or
+	// the https url is still the org's store (D-493, D-627). A store two
+	// entries list is the org whose org folder it holds (storeOwnerOrg,
+	// devco:D-696), as every other "whose store is this" answer says.
+	if o := storeOwnerOrg(cfg.Orgs, func(sc orgconf.Store) bool { return same(sc.URL) }); o != nil {
+		return o.Name
 	}
 	return ""
 }

@@ -157,13 +157,14 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 	if named, found := look.holderNamed(to); found {
 		h = named // an id live in two folders: the one --store names
 	}
+	byRow := false // to is the place holding the row, not one the person typed
 	if ok {
 		switch {
 		case to == "":
 			// ids are unique across the org's stores: a read by id finds
 			// its row as an edit by id does (devco D-550, D-553), with no
 			// --store and no setup covering this folder
-			to, useDefault = string(h.Name), false
+			to, useDefault, byRow = string(h.Name), false, true
 		case string(h.Name) == to:
 		case write:
 			holder = append(holder, h)
@@ -185,6 +186,9 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 		return op.Result{}, false, nil
 	}
 	target, created, err := a.outsideTarget(ctx, to, write, write && (c.Yes || createAsked(in)))
+	if err != nil && byRow && errs.CodeOf(err) == errs.NotFound {
+		return op.Result{}, true, a.rowStoreUnreachedErr(rowIDOf(in), to)
+	}
 	if err != nil {
 		return op.Result{}, true, err
 	}
@@ -716,6 +720,25 @@ func (l *rowLookup) answer(to string) error {
 	return nil
 }
 
+// rowStoreUnreachedErr is the refusal when the row an id command names was
+// found in place (<org>/<folder>) but no setup of this machine attaches
+// that store here. Why (devco:D-696): outsideTarget's own refusal talks
+// about "the stores --to takes here", and the person never typed --to;
+// this names the row's place and the --setup that reaches it.
+func (a *App) rowStoreUnreachedErr(id, place string) error {
+	base, _, _ := strings.Cut(place, targetSep)
+	setup := a.setupOfOrg(base)
+	hint := "add --setup " + setup + " to the same command (the setup of org " + base + ")"
+	if setup == "" {
+		hint = "add --setup <setup> to the same command, naming a setup of org " + base + "; lore setup list shows the setups"
+	}
+	return errs.New(errs.NotFound, "row "+id+" is in "+place+", a store no setup attaches here").WithHint(hint)
+}
+
+// onIDField is the input field comment, tag and reminder writes name the
+// row they are put on by (--on-id).
+const onIDField = "on_id"
+
 // trashTargetField is the input field trash restore and trash purge name
 // their row by (ops/trash TargetIn, PurgeIn).
 const trashTargetField = "target"
@@ -815,7 +838,11 @@ func (a *App) orgHoldingRow(ctx context.Context, in op.Input) string {
 }
 
 // orgOfRow is orgHoldingRow for row id itself ("" for none): the org of
-// the home's org config whose store clone holds it.
+// the home's org config whose store clone holds it. The org of that store
+// is storeOrgs' answer, the same org the row's place is named by
+// (orgFolderStore), so the setup picked for it attaches the store under
+// that name (devco:D-696: a store two org entries list was the first
+// entry's here and the last one's there).
 func (a *App) orgOfRow(ctx context.Context, id string) string {
 	if id == "" {
 		return ""
@@ -824,6 +851,7 @@ func (a *App) orgOfRow(ctx context.Context, id string) string {
 	if err != nil || cfg == nil {
 		return ""
 	}
+	owners := a.storeOrgs()
 	for i := range cfg.Orgs {
 		for _, s := range a.orgConfigStores(cfg.Orgs[i].Name) {
 			dir, derr := a.storeDir(ctx, s)
@@ -831,6 +859,9 @@ func (a *App) orgOfRow(ctx context.Context, id string) string {
 				continue
 			}
 			if hits, _ := filepath.Glob(filepath.Join(dir, "*", "*", id+".json")); len(hits) > 0 {
+				if k, ok := storeKey(s.URL); ok && owners[k] != "" {
+					return owners[k]
+				}
 				return cfg.Orgs[i].Name
 			}
 		}
@@ -838,14 +869,24 @@ func (a *App) orgOfRow(ctx context.Context, id string) string {
 	return ""
 }
 
-// rowIDOf is the row id an input names (--id, or trash restore's target);
-// "" when none, or when it is a pattern rather than one id.
+// rowIDOf is the row id an input names (--id, or trash restore's target;
+// else the row a comment, tag or reminder is put on, --on-id); "" when
+// none, or when it is a pattern rather than one id. Why --on-id (devco:
+// D-696): `comment add --on-id <task>` from the home folder refused "not
+// inside a git work tree" while every --id command there found the row's
+// store; the comment belongs beside its row, so it finds it the same way.
 func rowIDOf(in op.Input) string {
-	id := ""
+	id, on := "", ""
 	for _, tv := range in.Texts() {
-		if tv.Field == idField || tv.Field == trashTargetField {
+		switch tv.Field {
+		case idField, trashTargetField:
 			id = strings.TrimSpace(tv.Text)
+		case onIDField:
+			on = strings.TrimSpace(tv.Text)
 		}
+	}
+	if id == "" {
+		id = on
 	}
 	if strings.ContainsAny(id, `/\*?[`) {
 		return ""

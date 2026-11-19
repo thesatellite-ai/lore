@@ -189,7 +189,7 @@ In every repo lore picks **at most one org**, by the first rule that answers:
  6. nothing matched                  no org: your fallback identity, everywhere/ notes only
 ```
 
-A store's own clone (its remote is the url of a store exactly one entry attaches) belongs to that entry before rule 5: the clone of an ops store kept under the company's GitHub owner is the ops org's, even though the company's `own:` pattern matches its url (`matched by: store url … of <org> (this is its clone)`).
+A store's own clone (its remote is the url of a store exactly one entry attaches) belongs to that entry before rule 5: the clone of an ops store kept under the company's GitHub owner is the ops org's, even though the company's `own:` pattern matches its url (`matched by: store url … of <org> (this is its clone)`). When two entries list one store (the ops org's store, also kept as an admins store in the company's entry), it belongs to the entry whose org folder is in it, else to the last entry listing it; every answer uses that one rule: `whoami` in its clone, the name of a row found there by id, and the setup a command naming that row by id runs under from the home folder (`lore task claim --id <id> --push` (an ops task), `task release`, `show`, `edit`, `done`, `delete`, `comment add --on-id`), so the line `task next --setup <ops setup>` prints works there as printed. If no setup of this machine attaches the store holding the row, the refusal names where the row is and the `--setup <setup>` to add, never `--to`.
 
 If two entries match at the same rule, that is an error (`E_ORG_AMBIGUOUS`): lore never guesses. `lore whoami` prints the result and the rule that decided it. `lore whoami --explain` prints every rule with hit or miss.
 
