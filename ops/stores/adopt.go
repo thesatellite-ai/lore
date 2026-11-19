@@ -49,6 +49,21 @@ type AdoptIn struct {
 	// reviews and commits. Without it the repo is never changed.
 	RemoveSource bool `json:"remove_source,omitempty" flag:"remove-source" desc:"after the store commit, delete the adopted row files from the repo's .lore/data (an ordinary diff you commit)"`
 	DryRun       bool `json:"dry_run,omitempty" flag:"dry-run" desc:"count what would be written; change nothing"`
+	// Move is the whole "move this repo's notes into the store" job in one
+	// command (devco D-713): the adoption, --remove-source (the row files
+	// and the adopted rows' copies on the repo's live ref), and the link of
+	// this repo to the folder (lore org link), leaving one repo diff lore's
+	// own hook takes; it prints the git command left, or runs it with
+	// --commit. Without it each step was its own command (adopt, org link,
+	// a row move per live row, LORE_ALLOW_ROW_DROP).
+	Move bool `json:"move,omitempty" flag:"move" desc:"move the repo's notes into the folder in one go: adopt, remove the source (row files and live copies), link this repo to the folder; prints the git command left (or runs it with --commit)"`
+	// Own links the repo as one of the org's own repos (--move only), as
+	// `lore org link --own` does.
+	Own bool `json:"own,omitempty" flag:"own" desc:"with --move: the repo is one of the org's own repos (lore org link --own)"`
+	// Commit makes the repo commit of the removal itself, through the
+	// repo's hooks, instead of printing the git command (--move or
+	// --remove-source). It refuses when other changes are staged.
+	Commit bool `json:"commit,omitempty" flag:"commit" desc:"with --move or --remove-source: commit the removal in the repo (through its hooks) instead of printing the git command"`
 }
 
 // AdoptOut is the output of store.adopt.
@@ -88,8 +103,22 @@ type AdoptOut struct {
 	// The mapped row is not written; the adopted rows name act_B.
 	Actors []string `json:"actors,omitempty"`
 	// Removed counts the row files --remove-source deleted from the repo.
-	Removed int  `json:"removed,omitempty"`
-	DryRun  bool `json:"dry_run,omitempty"`
+	Removed int `json:"removed,omitempty"`
+	// LiveRemoved counts the adopted rows --remove-source took off the
+	// repo's live ref (refs/lore/live) (devco D-716: left there, each id was
+	// "two live rows with one id" once the repo read the folder); LiveKept
+	// names the ones that changed meanwhile and stay (rerun to take them).
+	LiveRemoved int      `json:"live_removed,omitempty"`
+	LiveKept    []string `json:"live_kept,omitempty"`
+	// Link is what --move's `lore org link` of the repo to the folder says
+	// (its plan on a dry run).
+	Link []string `json:"link,omitempty"`
+	// Next are the commands left to run, exactly as they run (the repo
+	// commit of the removal when --commit was not given).
+	Next []string `json:"next,omitempty"`
+	// Commit is the repo commit --commit made ("" when none).
+	Commit string `json:"commit,omitempty"`
+	DryRun bool   `json:"dry_run,omitempty"`
 	// Push is the store's push mode ("" for a folder store); Pushed is
 	// true when the commit reached the remote now; Note says otherwise why.
 	Push   string `json:"push,omitempty"`
@@ -113,7 +142,10 @@ type Adopter interface {
 }
 
 // adoptErrors are the codes of store.adopt.
-var adoptErrors = append(append([]errs.Code{}, visibilityErrors...), errs.Refused, errs.PolicyDenied, errs.NotProjectRoot, errs.Stale)
+// --move's link adds the codes of `lore org link` (an offline or
+// ambiguous org, an org that disagrees with the repo's).
+var adoptErrors = append(append([]errs.Code{}, visibilityErrors...), errs.Refused, errs.PolicyDenied, errs.NotProjectRoot, errs.Stale,
+	errs.Offline, errs.OrgAmbiguous, errs.OrgDisagrees, errs.Unsupported)
 
 // SplitTarget splits "<store>/<folder>" at its last slash (a store url
 // holds slashes, a folder name never does). A bare "<folder>" has no
@@ -140,10 +172,22 @@ func adoptOp(m Manager) op.Entry {
 		Confirm: op.ConfirmRule{MayAsk: true},
 		Examples: []op.Example{
 			{Title: "see what would move", CLI: "lore store adopt --target team/client_north --from ~/code/north-app --dry-run", Want: "would adopt"},
-			{Title: "move the repo you are in", CLI: "lore store adopt --target team/client_north --yes", Want: "adopted"},
+			{Title: "copy the repo you are in", CLI: "lore store adopt --target team/client_north --yes", Want: "adopted"},
+			{Title: "move the repo you are in, end to end, and commit it", CLI: "lore store adopt --target team/client_north --move --commit --yes", Want: "adopted"},
 		},
 	}, func(ctx context.Context, in AdoptIn) (AdoptOut, error) {
 		in.Target, in.From = strings.TrimSpace(in.Target), strings.TrimSpace(in.From)
+		if in.Move {
+			in.RemoveSource = true // a move removes the source; --move says it all
+		}
+		if in.Own && !in.Move {
+			return AdoptOut{}, errs.New(errs.InvalidInput, verb+": --own says how --move links the repo; it does nothing without --move").
+				WithHint("lore store adopt --target " + in.Target + " --move --own")
+		}
+		if in.Commit && !in.RemoveSource {
+			return AdoptOut{}, errs.New(errs.InvalidInput, verb+": --commit commits the removal of the adopted row files; without --move or --remove-source the repo is not changed").
+				WithHint("lore store adopt --target " + in.Target + " --move --commit")
+		}
 		st, folder, err := SplitTarget(verb, in.Target)
 		if err != nil {
 			return AdoptOut{}, err
@@ -168,12 +212,13 @@ func adoptOp(m Manager) op.Entry {
 		if err != nil || in.DryRun {
 			return p, err
 		}
-		if p.Written == 0 && (!in.RemoveSource || p.Removed == 0) {
-			p.DryRun, p.Removed = false, 0 // nothing to write or remove: the run is this answer
+		if p.Written == 0 && (!in.RemoveSource || p.Removed == 0 && p.LiveRemoved == 0) && !in.Move {
+			p.DryRun, p.Removed, p.LiveRemoved = false, 0, 0 // nothing to write or remove: the run is this answer
+			p.Next = nil
 			return p, nil
 		}
 		if !engine.Confirmed(ctx) {
-			q := adoptQuestion(p, in.RemoveSource)
+			q := adoptQuestion(p, in)
 			return AdoptOut{}, errs.New(errs.NeedsConfirm, verb+" "+in.Target+": "+q).
 				WithQuestion(q).WithHint("ask the person, then rerun with --yes")
 		}
@@ -181,14 +226,37 @@ func adoptOp(m Manager) op.Entry {
 	})
 }
 
+// AdoptCommitCommand is the repo commit of an adoption's removal, as
+// adopt prints it and --commit runs it: the row files only (`add -A
+// .lore/data`), a message naming where the rows went. One spelling for the
+// printed line, the JSON next step and the run, so what is printed is what
+// works.
+func AdoptCommitCommand(top, place string) string {
+	return "git -C " + top + " add -A .lore/data && git -C " + top + " commit -m \"" + AdoptCommitMessage(place) + "\""
+}
+
+// AdoptCommitMessage is the subject of that repo commit.
+func AdoptCommitMessage(place string) string { return "lore: move the notes to " + place }
+
 // adoptQuestion is the confirmation: what is written where, and how.
-func adoptQuestion(p AdoptOut, remove bool) string {
-	del := "delete " + plural(p.Removed, "adopted row file") + " from " + p.From + "/.lore/data (you review and commit that)"
+func adoptQuestion(p AdoptOut, in AdoptIn) string {
+	del := "delete " + plural(p.Removed, "adopted row file") + " from " + p.From + "/.lore/data"
+	if p.LiveRemoved > 0 {
+		del += " and take " + plural(p.LiveRemoved, "adopted row") + " off its live ref"
+	}
+	if in.Commit {
+		del += ", committed in the repo"
+	} else {
+		del += " (you review and commit that)"
+	}
+	if in.Move {
+		del += ", and link the repo to " + p.Store + "/" + p.Folder
+	}
 	if p.Written == 0 {
 		return p.Store + "/" + p.Folder + " already holds every row of " + p.From + " (no store commit); " + del + "?"
 	}
 	q := "copy " + plural(p.Written, "row") + " of " + p.From + " into " + p.Store + "/" + p.Folder + " (" + p.ProjectID + ")? one store commit, " + pushPhrase(p.Push)
-	if remove {
+	if in.RemoveSource {
 		q += "; then " + del
 	}
 	return q
@@ -235,10 +303,30 @@ func (o AdoptOut) Text() string {
 	for _, l := range o.Left {
 		b.WriteString("  left in the repo: " + l + "\n")
 	}
-	if o.Removed > 0 && o.DryRun {
+	switch {
+	case o.LiveRemoved > 0 && o.DryRun:
+		b.WriteString("  would take " + plural(o.LiveRemoved, "adopted row") + " off the repo's live ref (refs/lore/live)\n")
+	case o.LiveRemoved > 0:
+		b.WriteString("  took " + plural(o.LiveRemoved, "adopted row") + " off the repo's live ref (refs/lore/live): they live in " + o.Store + "/" + o.Folder + " now\n")
+	}
+	for _, k := range o.LiveKept {
+		b.WriteString("  left on the live ref (changed while it moved; rerun the same command to take it): " + k + "\n")
+	}
+	switch {
+	case o.Removed > 0 && o.DryRun:
 		b.WriteString("  would remove " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data (--remove-source)\n")
-	} else if o.Removed > 0 {
-		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (git -C " + o.From + " add -A .lore/data && git -C " + o.From + " commit -m \"lore: move the notes to " + o.Store + "/" + o.Folder + "\"); lore's hook knows the rows live there now\n")
+	case o.Removed > 0 && o.Commit != "":
+		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data and committed it (" + o.Commit + "); push it with the repo as usual\n")
+	case o.Removed > 0:
+		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (" + AdoptCommitCommand(o.From, o.Store+"/"+o.Folder) + "); lore's hook knows the rows live there now\n")
+	}
+	for _, l := range o.Link {
+		b.WriteString("  link: " + strings.TrimPrefix(strings.TrimSpace(l), "link: ") + "\n")
+	}
+	if o.DryRun {
+		for _, c := range o.Next {
+			b.WriteString("  then the repo commit: " + c + "\n")
+		}
 	}
 	if o.Note != "" {
 		b.WriteString("  " + o.Note + "\n")
