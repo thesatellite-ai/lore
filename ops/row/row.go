@@ -241,6 +241,10 @@ type ShowOut struct {
 	ID    string `json:"id"`
 	Table string `json:"table"`
 	Store string `json:"store"`
+	// Place is Store as the header line prints it: "<store>/<folder>" for
+	// a store attached at a folder (placeLabel). Text only; --json keeps
+	// Store, the name --store takes.
+	Place string `json:"-"`
 	// Fields are the row's fields; a list field (watchers, assignees,
 	// tag_ids) stays a JSON array (D-455).
 	Fields showfield.Map     `json:"fields"`
@@ -364,7 +368,7 @@ func (o ops) show(ctx context.Context, in ShowIn) (ShowOut, error) {
 	if r.Deleted { // DELETION 3.2 / INTEG-TRASH-4: a deleted row is never shown as an empty live one
 		return ShowOut{}, o.gone(ctx, engine.Ref{Store: src, Table: r.Table, ID: id})
 	}
-	out := ShowOut{ID: r.ID.String(), Table: string(r.Table), Store: string(src), Fields: showfield.Map{},
+	out := ShowOut{ID: r.ID.String(), Table: string(r.Table), Store: string(src), Place: o.placeLabel(src), Fields: showfield.Map{},
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: auditrec.Of(r).CreatedBy, UpdatedBy: auditrec.Of(r).UpdatedBy}
 	def, _ := o.env.TableSchema(ctx, r.Table)
 	for k, v := range r.Fields {
@@ -575,6 +579,23 @@ func (o ops) storeNamed(ctx context.Context, s string) Named {
 	return n
 }
 
+// placeLabel is src as the other read lines name it (search, lists, the
+// sql source column): "<store>/<folder>" for a store attached at a folder,
+// else src. devco D-685: in an org-linked repo the org store is attached
+// under the bare org name, and show's header said "policies  acme" where
+// every list said acme/web.
+func (o ops) placeLabel(src store.Source) string {
+	d, ok := upgrade.As[store.SourceDescriber](o.env)
+	if !ok || src == store.SourceRepo {
+		return string(src)
+	}
+	ref := d.DescribeSource(src)
+	if ref.Folder != "" && !strings.Contains(ref.Store, "/") {
+		return ref.Store + "/" + ref.Folder
+	}
+	return string(src)
+}
+
 // named looks id up now and labels it with the first non-empty field
 // (PROV 2: names are looked up at read time, never stored).
 func (o ops) named(ctx context.Context, id string, fields ...string) Named {
@@ -632,7 +653,11 @@ func (o ShowOut) Text() string {
 	if title == "" {
 		title = o.Fields["name"].String()
 	}
-	b.WriteString(o.ID + "  " + o.Table + "  " + o.Store)
+	place := o.Place
+	if place == "" {
+		place = o.Store
+	}
+	b.WriteString(o.ID + "  " + o.Table + "  " + place)
 	if title != "" {
 		b.WriteString("  \"" + title + "\"")
 	}

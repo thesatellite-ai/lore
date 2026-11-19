@@ -1014,20 +1014,30 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	for i, h := range live {
 		parts[i] = string(h.src)
 	}
+	return copyHit{}, AmbiguousIDErr(id.String(), parts)
+}
+
+// AmbiguousIDErr is the E_AMBIGUOUS_ID refusal of an id held live in two
+// or more places (in precedence order, at least two): every place by name,
+// a `lore show --id … --store <place>` read for each, and the row move
+// that settles copies of one row. One wording for every lookup by id: the
+// engine's (pickCopy) and the outside-a-repo folder scan (wire), which
+// before devco D-689 answered the first folder holding the id.
+func AmbiguousIDErr(id string, places []string) error {
 	// B1-5: the old hint ("name the store with --to") named a flag show,
 	// edit and migrate run do not take. row move does, and settles it: a
 	// move into a store that already holds the row only leaves a tombstone
 	// where the other copy was (Move, interrupted-move rule).
-	keep := parts[len(parts)-1]
+	keep := places[len(places)-1]
 	// devco D-689: an id that repeats across folders (a natural id an older
 	// lore derived without the folder) is two rows, not two copies; the
 	// hint first says how to read each one, by its place
-	reads := make([]string, len(parts))
-	for i, p := range parts {
-		reads[i] = "`lore show --id " + id.String() + " --store " + p + "`"
+	reads := make([]string, len(places))
+	for i, p := range places {
+		reads[i] = "`lore show --id " + id + " --store " + p + "`"
 	}
-	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")+": two live rows with one id").
-		WithHint("read each with " + strings.Join(reads, " or ") + "; if they are copies of one row, `lore row move --id " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+	return errs.New(errs.AmbiguousID, id+" is in "+strings.Join(places, " and ")+": two live rows with one id").
+		WithHint("read each with " + strings.Join(reads, " or ") + "; if they are copies of one row, `lore row move --id " + id + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
 }
 
 // newestCopy is the copy an unqualified actor ref means when several

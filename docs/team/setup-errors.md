@@ -55,6 +55,8 @@ ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (persona
   hint: --to repo, or lore setup edit --name personal --personal-store <url>
 ```
 
+Outside a repo (the home folder with `--setup <name>`, or a store clone folder, whose setup is the one of the store's org) the same refusal gives the placeholder form: `--to <org>/<folder> (lore setup list names the folders)`.
+
 **Fix:** write to the repo or the org store instead, or give the setup a personal store: `lore setup edit --name personal --personal-store git@github.com:tomas/lore-me.git` (or `inherit` for the top-level `personal.store`).
 
 ### `E_SETUP_STEP_FAILED` (exit 23)
