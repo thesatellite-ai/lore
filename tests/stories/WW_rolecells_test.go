@@ -368,7 +368,31 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		if after := wrcHead(t, m); after != before {
 			t.Fatalf("devco:D-717 cell bulk move: a refused move committed (%s -> %s)", before, after)
 		}
+
+		// an edit from the masked read (use pass 5 leftover): the admin
+		// saves the note's Markdown view with a change elsewhere in the
+		// body; the store keeps the key under the mask, no commit of the
+		// store clone ever holds the mask, and the output never the key
+		view := m.Lore(wc.Dir, "row", "markdown", "--id", notes[0]).OK(t).Says(t, "[redacted ").Never(t, keyA).Stdout
+		m.Lore(wc.Dir, "row", "edit", "--id", notes[0], "--markdown", strings.Replace(view, "moved key", "kept key", 1)).OK(t).Never(t, keyA)
+		clone := filepath.Join(m.Home, ".lore", "stores", "acme-co", "lore-team")
+		log, err := exec.Command("git", "-C", clone, "log", "-p", "-3").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(log), "kept key "+keyA) || strings.Contains(string(log), "kept key [redacted") {
+			t.Fatalf("devco:D-717 cell masked edit: the store commit does not keep the key under the mask:\n%s", wrcNoKeys(string(log), keyA, keyB))
+		}
+		m.Lore(wc.Dir, "trash", "list").OK(t).Never(t, keyA, keyB)
 	})
+}
+
+// wrcNoKeys is s with the fixture keys cut out, for a failure message.
+func wrcNoKeys(s string, keys ...string) string {
+	for _, k := range keys {
+		s = strings.ReplaceAll(s, k, "<key>")
+	}
+	return s
 }
 
 // wrcMemID / wrcAllowID find a memory id and an allow entry id in output.

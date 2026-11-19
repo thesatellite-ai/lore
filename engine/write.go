@@ -269,7 +269,13 @@ func (e *Engine) Update(ctx context.Context, ref Ref, patch map[string]value.Val
 	if err != nil {
 		return Written{}, err
 	}
-	return e.updateFrom(ctx, src, cur, patch)
+	// a field saved from a masked read keeps the stored value under each
+	// mask (devco:D-717, maskedit.go): the mask is never stored over it
+	patch, kept, err := e.keepMaskedSpans(ctx, src, cur, patch)
+	if err != nil {
+		return Written{}, err
+	}
+	return e.updateFrom(withKeptSpans(ctx, kept), src, cur, patch)
 }
 
 // updateFrom is Update of the row cur of store src: Update reads cur
