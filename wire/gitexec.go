@@ -23,6 +23,11 @@ type gitRun struct {
 	env   []string // extra KEY=VALUE entries on top of the process's environment (see gitEnv)
 	args  []string // git arguments, one argv entry each
 	stdin []byte   // fed to git's standard input (nil: none)
+	// outInErr adds git's trimmed stdout to a failure's text, for a
+	// command whose verdict is on stdout: `git push --porcelain` prints
+	// "[rejected] (fetch first)" there and only "failed to push some refs"
+	// on stderr, so a caller reading the error would miss the rejection.
+	outInErr bool
 }
 
 // output runs g and returns its stdout. A failure is E_INTERNAL carrying
@@ -67,7 +72,11 @@ func (g gitRun) output(ctx context.Context) ([]byte, error) {
 		if len(g.args) > 0 {
 			sub = g.args[0]
 		}
-		return nil, errs.Wrap(errs.Internal, "wire: git "+sub+": "+strings.TrimSpace(stderr.String()), rerr)
+		msg := strings.TrimSpace(stderr.String())
+		if g.outInErr {
+			msg = strings.TrimSpace(msg + "\n" + strings.TrimSpace(stdout.String()))
+		}
+		return nil, errs.Wrap(errs.Internal, "wire: git "+sub+": "+msg, rerr)
 	}
 	return stdout.Bytes(), nil
 }

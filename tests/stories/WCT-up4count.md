@@ -16,7 +16,7 @@
 ## What must hold
 
 - `sent N` on the store line is the commits `git rev-list` counts on the store remote between before and after the sync, `received N` the commits the remote held that the clone did not (Ben's), in every place, and the `lore: pushed store …` line is printed in every place.
-- After each set-url: the old repo is unchanged until an explicit push (set-url and a read push nothing); that push prints `at its old address <old url> too` and leaves the old and new repos' `main` equal; the next push says nothing of the old address; Ben's next sync makes his config name the new address and his clone of the new repo equal to its `main`.
+- After each set-url: the old repo is unchanged until an explicit push (set-url and a read push nothing); that push prints one line naming the old repo with git's count there (`forwarded N commits to the old address <old url> (branch main, now at commit …)`), and after a take-in of a teammate's commits one more naming the new repo (`forwarded N commits to the new address <new url> …`) and leaves the old and new repos' `main` equal; the next push says nothing of the old address; Ben's next sync makes his config name the new address and his clone of the new repo equal to its `main`.
 - The `lore: wrote …` / `lore: removed …` lines of a write name exactly the files its commits hold: never a row rewritten with the same bytes, and a folder's new `_meta.json` by name.
 
 ## Findings it guards

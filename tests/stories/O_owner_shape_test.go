@@ -615,7 +615,7 @@ func TestStoryOOwnerShape(t *testing.T) {
 		oCheck(t, "D-699/seturl-says-who-follows", strings.Contains(r.Out(), "also sends the move to the old address "+team2.SSHURL()) && !strings.Contains(r.Out(), "every teammate's lore follows it after their next sync"),
 			"set-url to a new repo while the old one exists: want the line saying the old address gets the move too, got:\n%s", r)
 		r = ada.Lore(ada.Home, "sync", "--setup", oSetup).OK(t)
-		oCheck(t, "D-699/old-address-gets-the-move", strings.Contains(r.Stderr, "at its old address "+team2.SSHURL()+" too") && wqGit(t, team2.Dir, "rev-parse", "main") == wqGit(t, fresh.Dir, "rev-parse", "main"),
+		oCheck(t, "D-699/old-address-gets-the-move", regexp.MustCompile(`forwarded \d+ commits? to the old address `+regexp.QuoteMeta(team2.SSHURL())).MatchString(r.Stderr) && wqGit(t, team2.Dir, "rev-parse", "main") == wqGit(t, fresh.Dir, "rev-parse", "main"),
 			"lore sync --setup %s after set-url: want the move pushed to the old address too, got:\n%s", oSetup, r)
 		oCheck(t, "D-698/sent-counts-commits", !strings.Contains(r.Stdout, "pushed (sent 0") && (!strings.Contains(r.Stdout, "with no note rows") || strings.Contains(r.Stdout, " local commit with no note rows") || strings.Contains(r.Stdout, " local commits with no note rows")),
 			"lore sync --setup %s: a push line said sent 0 or the no-note-rows note named no commits:\n%s", oSetup, r)
