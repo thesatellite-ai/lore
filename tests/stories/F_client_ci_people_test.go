@@ -242,6 +242,18 @@ func TestStoryFPeople(t *testing.T) {
 			journeys.Join(t, m, c.Dir, fJoinSetup, line, p, []string{fFolders})
 			people[p.Email], clones[p.Email] = m, c
 		}
+		// devco D-694: a member adds notes only in the folder of a team
+		// they are on; both work on @platform, the team of fabrikam/platform
+		cto.LoreIn(platform, "team", "add", "--handle", "@platform", "--members", fNewhire.Email+","+fLeaver.Email, "--yes").OK(t)
+		cto.LoreIn(platform, "sync").OK(t)
+		for _, p := range []journeys.Person{fNewhire, fLeaver} {
+			people[p.Email].LoreIn(clones[p.Email], "sync").OK(t)
+		}
+		// the leaver works in the team's folder, so it is attached on their
+		// machine (a write to a folder not attached yet fetches the store
+		// first, and would learn of the removal of week 3)
+		people[fLeaver.Email].LoreIn(clones[fLeaver.Email], "memory", "add", "billing retries back off to one hour", "--to", fOrg+"/platform", "--yes").OK(t)
+		people[fLeaver.Email].LoreIn(clones[fLeaver.Email], "sync").OK(t)
 		people[fNewhire.Email].LoreIn(clones[fNewhire.Email], "rule", "list").OK(t).Says(t, rule)
 	})
 
@@ -276,10 +288,17 @@ func TestStoryFPeople(t *testing.T) {
 
 	s.Step("week3/the-leavers-unsynced-write-is-not-pushed", func() {
 		// D-85: what the leaver writes after the removal stays on their
-		// machine; their next sync says why and sends nothing.
+		// machine; their next sync says why and sends nothing. devco
+		// D-694: org/ is no team's folder, so the leaver (a member) is
+		// refused a note there before anything is written, with the line
+		// an admin runs; the note in their team's folder and their personal
+		// note stay local.
 		lv, lc := people[fLeaver.Email], clones[fLeaver.Email]
 		before := s.RefsOf(store)
-		lv.LoreIn(lc, "memory", "add", "a note after leaving", "--to", orgStore, "--yes").OK(t)
+		lv.LoreIn(lc, "memory", "add", "a note after leaving", "--to", orgStore, "--yes").
+			Refused(t, "E_REFUSED", "only an admin of the org", "folder of a team they are on", "nothing was written", "ask an admin of "+fOrg+" ("+fCTO.Name, "to run:")
+		lv.LoreIn(lc, "memory", "add", "a note after leaving", "--to", fOrg+"/platform", "--yes").OK(t)
+		lv.LoreIn(lc, "memory", "add", "a personal note after leaving", "--to", "me", "--yes").OK(t)
 		lv.LoreIn(lc, "sync").Says(t, "marked as left", "kept on this machine")
 		s.NoPushSince(t, store, before, "a removed member's sync")
 	})
@@ -300,7 +319,7 @@ func TestStoryFPeople(t *testing.T) {
 				t.Fatal(err)
 			}
 		}()
-		nh.LoreIn(nc, "memory", "add", "a note after access went", "--to", orgStore, "--yes").OK(t).Says(t, "committed locally").Never(t, "check the store's address")
+		nh.LoreIn(nc, "memory", "add", "a note after access went", "--to", fOrg+"/platform", "--yes").OK(t).Says(t, "committed locally").Never(t, "check the store's address")
 		nh.LoreIn(nc, "doctor").Says(t, "access was most likely removed", "Do not run lore store init").Never(t, "not a lore store yet")
 	})
 

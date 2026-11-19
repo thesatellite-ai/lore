@@ -5,7 +5,7 @@ Lore 0.1.18 work (design: branch layers spec). Replayed by `TestStoryBL1SharedLa
 ## Who
 
 - An org admin who links a client's code repo to a folder of a client store, and works there on code branches.
-- A developer who joins and works on the same branch; a third person who stays on `main`.
+- A developer who joins and works on the same branch; a third person who stays on `main`. Each person who joins is put on the team `@client_app` by the admin (a member adds rules and notes only in the folder of a team they are on).
 - CI: a runner with a fresh checkout of the code repo and no lore config at all.
 - Repos, generated: the client's code repo with no lore data, the admin's own repo, a team store and a client store (bare remotes on disk). Every name, email and url is made up.
 

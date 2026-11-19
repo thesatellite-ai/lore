@@ -1,6 +1,6 @@
 # WCT — what a sync and a write say they moved is what git moved
 
-**Who.** Ada (made-up names) is the admin of the org `acme`; her team store is `github.com/acme-co/lore-team`, her own repo `~/code/platform` and a client's repo `github.com/client-co/shop` (cloned three times: linked in the setup's folders, linked outside them, and not linked). Ben joins from his own laptop with an invite and pushes first.
+**Who.** Ada (made-up names) is the admin of the org `acme`; her team store is `github.com/acme-co/lore-team`, her own repo `~/code/platform` and a client's repo `github.com/client-co/shop` (cloned three times: linked in the setup's folders, linked outside them, and not linked). Ben joins from his own laptop with an invite and pushes first; Ada puts him on the team `@platform`, so `acme/platform` is a folder he may add to (a member adds only in the folder of a team they are on).
 
 **Why.** Owner use pass 4: `lore sync` in a linked client repo after a teammate's push printed counts that did not match git (the merge commit the sync made was counted as received and as sent), and `memory add --to <org>/<folder>` from the home folder said "wrote 4 row file(s)" over a commit of 1 file (rows rewritten with the same bytes were counted; a folder's new `_meta.json` was never named).
 
