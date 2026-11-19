@@ -244,6 +244,18 @@ func rankOf(l policy.Level) int { return slices.Index(policy.Levels(), l) }
 // company store, not only its org folder).
 const policyAdminDoes = "change a policy of a company folder (it applies to every repo that reads the folder)"
 
+// requirePolicyAdmin is the role check of a policy write of key to target:
+// company ground takes it from an admin of the org only
+// (profilestore.RequireAdminAt), except the keys policy.MemberWritable
+// names (a teammate's own branch choice, which lore branch share|isolate
+// write for members; devco D-681). line is the command the admin runs.
+func (o ops) requirePolicyAdmin(ctx context.Context, target store.Source, key policy.Key, line string) error {
+	if policy.MemberWritable(key) {
+		return nil
+	}
+	return profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, line)
+}
+
 func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	d, ok := policy.Lookup(policy.Key(in.Key))
 	if !ok {
@@ -253,7 +265,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	if string(target) == storeMe {
 		return RowOut{}, errs.New(errs.InvalidInput, "--to me: a personal store holds no team rules").WithHint("--to repo, --to <store> or --to <store>/<folder>")
 	}
-	if err := profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
+	if err := o.requirePolicyAdmin(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
 		return RowOut{}, err
 	}
 	if d.Key == policy.KeyContextTargets {
@@ -415,7 +427,7 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 		return RowOut{}, errs.New(errs.InvalidInput, "unknown policy key "+quote(in.Key)).WithHint("lore policy show lists the keys")
 	}
 	target := targetOf(in.To)
-	if err := profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, policyCommand("unset", in.Key, "", in.To)); err != nil {
+	if err := o.requirePolicyAdmin(ctx, target, policy.Key(in.Key), policyCommand("unset", in.Key, "", in.To)); err != nil {
 		return RowOut{}, err
 	}
 	rows, err := liveRows(ctx, o.env, []store.Source{target}, schema.TablePolicies)
