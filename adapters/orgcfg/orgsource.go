@@ -66,13 +66,17 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 	}
 	candidates := []string{fallbackOrgFolder, orgconf.OrgFolderRoot}
 	storeID := ""
+	names := OrgStoreNote{Store: norm}
 	if raw, merr := gitRun(ctx, "-C", dir, "cat-file", "blob", tip+":"+storeMarkerFile); merr == nil {
 		var mk struct {
 			ID        string `yaml:"id"`
 			OrgFolder string `yaml:"org_folder"`
+			Org       string `yaml:"org"`
+			OrgStore  string `yaml:"org_store"`
 		}
 		if yaml.Unmarshal([]byte(raw), &mk) == nil {
 			storeID = mk.ID
+			names = OrgStoreNote{Store: norm, Org: mk.Org, MainStore: mk.OrgStore}
 			if mk.OrgFolder != "" {
 				candidates = append([]string{mk.OrgFolder}, candidates...)
 			}
@@ -86,8 +90,37 @@ func (g *GitLinks) suggestionAt(ctx context.Context, dir, norm, branch string) (
 			}
 		}
 	}
-	return Suggestion{}, fmt.Errorf("%w: %s@%s", ErrNoOrgFile, norm, branch)
+	// devco:D-721: a lore store with no lore-org.yaml is not an org's main
+	// store; its marker may name the org and main store it belongs to
+	// (org store add writes them), which the join follows.
+	return Suggestion{}, &OrgStoreNoteError{Note: names, Branch: branch}
 }
+
+// OrgStoreNote is what a lore store that holds no lore-org.yaml says about
+// the org it belongs to: lore-store.yaml's org: and org_store: keys,
+// written by `lore org store add` into each of the org's other stores.
+// Org and MainStore are "" in a store that names no org.
+type OrgStoreNote struct {
+	Store     string // the store read (normalised url)
+	Org       string // the org's name, as its admin named it
+	MainStore string // the org's main store url (the one with lore-org.yaml)
+}
+
+// OrgStoreNoteError is ErrNoOrgFile for a store that is a lore store: it
+// carries the store's note on its org so a join can follow it to the main
+// store, or say which url to join with (devco:D-721).
+type OrgStoreNoteError struct {
+	Note   OrgStoreNote
+	Branch string
+}
+
+// Error implements error.
+func (e *OrgStoreNoteError) Error() string {
+	return fmt.Sprintf("%s: %s@%s", ErrNoOrgFile, e.Note.Store, e.Branch)
+}
+
+// Unwrap keeps errors.Is(err, ErrNoOrgFile) true for every caller.
+func (e *OrgStoreNoteError) Unwrap() error { return ErrNoOrgFile }
 
 // readSuggestionFile reads the lore-org.yaml at p in tip (folder its org
 // folder); found is false when tip has no file there.
