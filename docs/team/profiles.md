@@ -178,6 +178,7 @@ lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json 
 $ lore actor contact remove --id acn_76bd…3f10 --reason 'account closed'
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/actor_contacts/acn_76bd…3f10.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
 ✓ acn_76bd…3f10 linkedin mira-patel removed from Mira Patel (@mira) in the roster of agency (agency/org) (restorable from the trash)
 $ lore actor contact list --actor @mira --identity
 acn_2ad3…f891 Mira Patel (@mira)       email     mira@agency.example          work       primary, identity mailto:mira@agency.example
@@ -479,6 +480,7 @@ $ lore task add --title 'move the invoice export to the new API' --to agency --a
 lore: committed locally to store agency/acme-hub; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/task_lists/tlt_d191…45c2.json (store agency/acme-hub)
 lore: wrote ~/.lore/stores/agency/notes/acme-hub/tasks/tsk_b4d3…11aa.json (store agency/acme-hub)
+lore: wrote ~/.lore/stores/agency/notes/acme-hub/_meta.json (store agency/acme-hub)
 ✓ tsk_b4d3…11aa — move the invoice export to the new API [medium] → [agency/acme-hub]
   created tasklist tlt_d191…45c2 "default" for tasks added without --tasklist
 $ lore actor offboard --actor @mira --reason 'moved abroad'
@@ -596,6 +598,7 @@ lore: committed locally to store acme/org; lore sync sends it
 lore: wrote ~/.lore/stores/acme/lore-notes/org/projects/prj_67e2…291e.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actors/act_8567…366f.json (store acme/org)
 lore: wrote ~/.lore/stores/acme/lore-notes/org/actor_periods/apd_71f0…c07d.json (store acme/org)
+lore: wrote ~/.lore/stores/acme/lore-notes/org/_meta.json (store acme/org)
 This writes org/lore-org.yaml into the store (no identity) and adds to ~/.lore/config.yaml:
     name: acme
     identity:

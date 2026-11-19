@@ -98,6 +98,11 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		return store.SyncReport{}, err
 	}
 	pushedOver, pushed := "", false
+	// arrived is the remote tip the last merge took in: the commits that
+	// came from the remote are the ones it holds and before does not
+	// (devco D-684: counted as before..after, the merge commit this clone
+	// made was counted as received and as sent)
+	arrived := ""
 	// B3-29: the tracking tip before the fetch, to tell a remote that was
 	// deleted and made again from one that never had the branch.
 	tracked, err := b.resolve(ctx, b.work, trackingRefNS+b.branch)
@@ -145,6 +150,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 		if merr != nil {
 			return rep, merr
 		}
+		arrived = remote
 		rep.Merged = appendNew(rep.Merged, merged)
 		if len(refused) > 0 {
 			rep.Refused = append(rep.Refused, refused...)
@@ -232,7 +238,7 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 	// onto; a push of branch layers alone adds the rows those layers
 	// carried, never every row of the folder (devco:V-13: pushedOver stays
 	// "" when only layers moved, and count read that as a first push)
-	rep, err = b.count(ctx, rep, before, pushedOver, pushed)
+	rep, err = b.count(ctx, rep, before, arrived, pushedOver, pushed)
 	if err != nil || len(layers.Pushed) == 0 {
 		return rep, err
 	}
@@ -289,8 +295,11 @@ func (b *Backend) refusedRows(ctx context.Context, remote, tip, reason string) [
 }
 
 // count fills Received (rows changed between the local tip before the sync
-// and now) and Sent (rows the pushed commit added over the remote tip).
-func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushedOver string, pushed bool) (store.SyncReport, error) {
+// and now) and Sent (rows the pushed commit added over the remote tip), and
+// the commits git moved: Commits over the remote tip the push went onto,
+// CommitsIn the commits of arrived (the remote tip merged; "" is the local
+// tip now) that the local tip before the sync did not hold.
+func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, arrived, pushedOver string, pushed bool) (store.SyncReport, error) {
 	after, err := b.head(ctx)
 	if err != nil {
 		return rep, err
@@ -315,13 +324,15 @@ func (b *Backend) count(ctx context.Context, rep store.SyncReport, before, pushe
 			return rep, err
 		}
 	}
+	if arrived == "" {
+		arrived = after // no merge of a remote tip this sync (a partial send): what the local tip took in
+	}
 	if before != "" && before != after {
-		// devco D-648: what arrived, counted by git (a merge commit too)
-		if rep.CommitsIn, err = b.countCommits(ctx, before, after); err != nil {
+		// devco D-648, D-684: what arrived, counted by git over the remote
+		// tip merged, so the merge commit this clone made (it is sent) and
+		// this clone's own commits are never counted as received
+		if rep.CommitsIn, err = b.countCommits(ctx, before, arrived); err != nil {
 			return rep, err
-		}
-		if pushed && rep.CommitsIn >= rep.Commits {
-			rep.CommitsIn -= rep.Commits // this sync's own pushed commits did not arrive
 		}
 	}
 	for f, n := range received {
@@ -599,7 +610,7 @@ const partialSubject = "lore: send the rows that did not clash; clashing rows wa
 // remote while the local branch kept its commits: Received as count,
 // Sent the rows sent carried.
 func (b *Backend) countSent(ctx context.Context, rep store.SyncReport, before, remote, sent string) (store.SyncReport, error) {
-	rep, err := b.count(ctx, rep, before, "", false)
+	rep, err := b.count(ctx, rep, before, "", "", false)
 	if err != nil {
 		return rep, err
 	}

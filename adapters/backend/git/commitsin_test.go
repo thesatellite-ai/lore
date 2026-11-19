@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/thesatellite-ai/lore/model/hlc"
@@ -39,5 +40,37 @@ func TestSyncCountsCommitsThatArriveD648(t *testing.T) {
 	}
 	if rep, err = b.Sync(ctx); err != nil || rep.CommitsIn != 0 {
 		t.Fatalf("b: Sync with nothing new = %+v, %v; want 0 commits in", rep, err)
+	}
+}
+
+// TestSyncCountsMergedPullOnceD684 (devco D-684): a teammate pushed 2
+// commits, this clone holds 3 of its own; its sync merges (one merge
+// commit) and pushes. Received is the teammate's 2 commits, never the merge
+// commit this clone made (it was counted as received and as sent: "received
+// 3"); Sent is every commit that reached the remote, the merge included.
+func TestSyncCountsMergedPullOnceD684(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	b := clone(t, remote, WithMerger(newestMerger{}))
+	g := newGen(t)
+	for range 2 {
+		write(t, b, store.Change{Row: g.row(newID(t), "teammate row", hlc.HLC{})})
+	}
+	if _, err := b.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		write(t, a, store.Change{Row: g.row(newID(t), "own row", hlc.HLC{})})
+	}
+	tipBefore := gitT(t, remote, "rev-parse", "main")
+	rep, err := a.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	went := gitT(t, remote, "rev-list", "--count", tipBefore+"..main")
+	if rep.CommitsIn != 2 || strconv.Itoa(rep.Commits) != went {
+		t.Fatalf("a: Sync = commits in %d, out %d; want 2 in (the teammate's), out %s (git rev-list on the remote)", rep.CommitsIn, rep.Commits, went)
 	}
 }

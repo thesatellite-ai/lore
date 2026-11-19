@@ -37,7 +37,7 @@ lore: wrote ~/.lore/stores/acme/notes/_store/memories/mem_54fe…28f2.json (stor
 ```
 <!-- /example -->
 
-Every write names the files it changed, and every push names the store, the commit and the branch.
+Every write names the files it changed, and every push names the store, the commit and the branch. In a store clone the lines name exactly the files the write's commits hold: a row written again with the same content is not named, a file committed beside the rows (a folder's `_meta.json` on its first write) is, and a file a move took away reads `lore: removed <file>`.
 
 ## Step 2 — What is inside
 

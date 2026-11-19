@@ -54,12 +54,14 @@ $ lore mission add --title 'Invite landing page' --to agency/client2 --key invit
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/missions/msn_c0f3…b5b8.json (store agency/client2)
 lore: wrote ~/.lore/stores/agency/notes/client2/projects/prj_76bd…3f10.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ msn_c0f3…b5b8 — Invite landing page → [agency/client2]
 $ lore task add --title 'send the invite email from the API' --to agency/client2 --mission msn_c0f3…b5b8 --repo api --key invite/backend
 lore: committed locally to store agency/client2; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client2/repos/rep_d431…313a.json (store agency/client2)
 lore: wrote ~/.lore/stores/agency/notes/client2/task_lists/tlt_b4f4…a5b0.json (store agency/client2)
 lore: wrote ~/.lore/stores/agency/notes/client2/tasks/tsk_28f8…03df.json (store agency/client2)
+lore: wrote ~/.lore/stores/agency/notes/client2/_meta.json (store agency/client2)
 ✓ tsk_28f8…03df — send the invite email from the API [medium] → [agency/client2]
   created tasklist tlt_b4f4…a5b0 "default" for tasks added without --tasklist
 $ lore task add --title 'build the invite page' --to agency/client2 --mission msn_c0f3…b5b8 --repo app --after tsk_28f8…03df --key invite/frontend

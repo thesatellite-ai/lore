@@ -64,6 +64,7 @@ lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes@staging/client/actors/act_162d…9666.json (store agency-stag/client)
 lore: wrote ~/.lore/stores/agency/notes@staging/client/task_lists/tlt_54fe…28f2.json (store agency-stag/client)
 lore: wrote ~/.lore/stores/agency/notes@staging/client/tasks/tsk_05e9…4603.json (store agency-stag/client)
+lore: wrote ~/.lore/stores/agency/notes@staging/client/_meta.json (store agency-stag/client)
 ✓ tsk_05e9…4603 — seed staging with demo data [medium] → [agency-stag/client]
   created tasklist tlt_54fe…28f2 "default" for tasks added without --tasklist
 $ lore task list

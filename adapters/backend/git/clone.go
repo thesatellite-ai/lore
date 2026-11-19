@@ -859,12 +859,28 @@ func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.
 		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", b.cfg.withTrailers(msg, trailers...)}, env: env})
 	}
 	if err == nil {
+		b.noteCommitted(ctx)
 		return nil
 	}
 	undoErr := applied.Undo()
 	restage := append([]string{"add", "-A", "--"}, applied.Paths...)
 	_, stageErr := b.git.run(ctx, call{dir: b.work, args: restage})
 	return errs.Wrap(errs.Internal, "git: commit the batch", errors.Join(err, undoErr, stageErr))
+}
+
+// noteCommitted reports the files the commit just made holds
+// (store.NoteCommitted, devco D-691): a row rewritten unchanged is not in
+// it, a folder's new _meta.json is. A failed listing reports nothing (the
+// commit stands; only the write lines fall back to the rows written).
+func (b *Backend) noteCommitted(ctx context.Context) {
+	if !store.WantsCommitted(ctx) {
+		return
+	}
+	out, err := b.git.run(ctx, call{dir: b.work, args: []string{"diff-tree", "--root", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z", "HEAD"}})
+	if err != nil {
+		return
+	}
+	store.NoteCommitted(ctx, b.work, splitZ(out))
 }
 
 // commitIDPattern is a full sha-1 or sha-256 commit id: the only cursor

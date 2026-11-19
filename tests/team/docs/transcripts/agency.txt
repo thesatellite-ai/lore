@@ -29,6 +29,7 @@ alice (work/website)$ lore actor register
 lore: committed locally to store agency/org; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/org/projects/prj_54fe984c9b495744c0217776765a28f2.json (store agency/org)
 lore: wrote ~/.lore/stores/agency/notes/org/actors/act_2ad3618e878ebbf527d34d446ef4f891.json (store agency/org)
+lore: wrote ~/.lore/stores/agency/notes/org/_meta.json (store agency/org)
 ✓ act_2ad3618e878ebbf527d34d446ef4f891 Alice Doe (@alice) registered in the roster of agency (agency/org)
 alice (work/website)$ lore sync
 lore: pushed store agency/org: commit 601d285 to branch main (3 commits, 2 row files)
@@ -79,6 +80,7 @@ personal   me -> ~/.lore/personal
 alice (work/website)$ lore memory add --body 'they approve estimates faster when we send them on WhatsApp first'
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_c0f3c11a5724b0cfd74b256190d9b5b8.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_c0f3c11a5724b0cfd74b256190d9b5b8 [agency/client]
   filed: defaults.client_repos.memory = agency (personal config) → the linked project client/
   scope: [project]
@@ -99,6 +101,7 @@ lore: pushed store agency/client: commit 9b40ce7 to branch main (2 commits, 1 ro
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/.lore/stores/agency/notes/client/task_lists/tlt_d4314eba822f1bf5908b2b8ded5f313a.json (store agency/client)
 lore: wrote ~/.lore/stores/agency/notes/client/tasks/tsk_b4f4765e593d51fd1352985e8af3a5b0.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ tsk_b4f4765e593d51fd1352985e8af3a5b0 — send invoice reminder before demo [medium] → [agency/client]
   created tasklist tlt_d4314eba822f1bf5908b2b8ded5f313a "default" for tasks added without --tasklist
 lore: pushed store agency/client: commit 05513aa to branch main (1 commit, 2 row files)
@@ -177,6 +180,7 @@ Move it? [y/N] y
 lore: committed locally to store agency/client; lore sync sends it
 lore: wrote ~/work/website/.lore/data/memories/mem_f147dd95f1aaf742dd4f5214843a5139.json
 lore: wrote ~/.lore/stores/agency/notes/client/memories/mem_f147dd95f1aaf742dd4f5214843a5139.json (store agency/client)
+lore: wrote ~/.lore/stores/agency/notes/client/_meta.json (store agency/client)
 ✓ mem_f147dd95f1aaf742dd4f5214843a5139 moved to store repo (same id; the old copy is tombstoned)
 alice (work/website)$ git status --short
 ?? .lore/data/memories/
