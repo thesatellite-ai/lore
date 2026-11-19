@@ -217,3 +217,27 @@ func knownList(what string, names []string) string {
 	}
 	return " (" + what + ": " + strings.Join(names, ", ") + ")"
 }
+
+var _ profilestore.OrgRosterer = (*App)(nil)
+
+// RosterOfOrg implements profilestore.OrgRosterer: the roster of the org
+// named org opened as a read naming it does (rosterPinFor, then Roster on
+// the pinned ctx). The role check judges a folder of another org's store
+// (the ops setup's "acmeops/infra" from a company repo) by that store's
+// own roster, not the company's (devco D-681). ok is false when the org
+// keeps no roster this machine reaches.
+func (a *App) RosterOfOrg(ctx context.Context, org string) (profilestore.Roster, func(), bool, error) {
+	noop := func() {}
+	p, err := a.rosterPinFor(ctx, org)
+	if errs.Has(err, errs.NotFound) {
+		return nil, noop, false, nil
+	}
+	if err != nil {
+		return nil, noop, false, err
+	}
+	r, done, err := a.Roster(context.WithValue(ctx, rosterPinKey{}, p), false)
+	if err != nil {
+		return nil, noop, false, err
+	}
+	return r, done, true, nil
+}

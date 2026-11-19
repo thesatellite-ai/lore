@@ -23,6 +23,7 @@
 11. (`TestStoryWUBudgetWarn`, D-636, D-637) Ada links `web` to `acme/web` with `--own`, adds a long must rule to `acme/org`, sets `context.budget.internal` to 1000 in `acme/web`; Mo joins as a member. Each `lore sync` WARN line's fixes are run exactly as printed in `web`; Mo then tries to demote, archive and delete the company rule and to set a policy in `acme/org`.
 12. (`TestStoryWUClaimPushOnlyWhenAsked`, D-639) A `task release` after the refused claim, and `task release --help`.
 13. (`TestStoryWUClaimPushOnlyWhenAsked`, D-669) `lore hold claim --name ci-suite` with no `--push`; then the claim's refusal, and the command it printed, run exactly as printed.
+14. (`TestStoryWUOpsFolderGround`, D-681) Ada also runs the ops setup `acmeops` (store `github.com/acme-co/lore-ops`, under the company's own pattern) with folder `infra`; Mo is a member of both rosters. In the ops store clone's `infra` folder Mo is refused a demotion and a pin of an `acmeops/infra` must rule, naming the `acmeops/org` roster; Ada may. Then one cell per (org folder, project folder, ops folder) × (pin set, policy set, rule edit --severity, rule delete --where): Mo is refused with "ask an admin of <org> (Ada Admin)", and Ada runs the printed line as printed.
 
 ## What must hold
 
@@ -50,3 +51,4 @@
 - `devco:D-636`, `devco:D-637`, `devco:D-639` (REGRESSIONS.md).
 - `devco:D-666` (REGRESSIONS.md).
 - `devco:D-669`, `devco:D-670` (REGRESSIONS.md).
+- `devco:D-681` (REGRESSIONS.md).

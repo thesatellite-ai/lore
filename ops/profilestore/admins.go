@@ -8,7 +8,7 @@ package profilestore
 //	op ──▶ src: the repo, the personal store? ──yes──▶ anyone may write
 //	          │ no
 //	          ▼
-//	       env.Roster(read) ──▶ CompanyGround(level of src, src, roster's org)?
+//	       roster of src's own org (else env.Roster) ──▶ CompanyGround(level of src, src, roster's org)?
 //	          │ no (another store: a client's, a solo store) ──▶ anyone may write
 //	          ▼ yes (the org folder, a store root, or any project folder
 //	                 of the roster's own store)
@@ -220,11 +220,45 @@ func mayBeGround(src store.Source, lv policy.Level) bool {
 	return src != store.SourceRepo && string(src) != personalStore
 }
 
-// openRoster opens the Env's org roster for a role check; ok is false when
-// none is readable (no Store upgrade, no org, the repo's own roster):
-// with no roster there are no roles to follow (a solo store, a machine
-// with no org), and refusing would lock its owner out of their own rules.
-func openRoster(ctx context.Context, env PlaceEnv) (Roster, func(), bool) {
+// OrgRosterer is the Env upgrade that opens the roster of the org named
+// org (wire.App RosterOfOrg): ok is false when that org keeps no roster
+// this machine reaches. The role check judges a folder by its own store's
+// roster (devco D-681): from a company repo the Env's roster is the
+// company's, so a folder of another org's store (the ops setup's
+// "acmeops/infra") was never company ground of it and every member of the
+// ops setup could lower its must rules.
+type OrgRosterer interface {
+	RosterOfOrg(ctx context.Context, org string) (r Roster, done func(), ok bool, err error)
+}
+
+// openRoster opens the roster src is judged by (devco D-681): the Env's
+// org roster when it is src's own org's, else the roster of src's own
+// store's org when that org keeps one (OrgRosterer), else the Env's. ok is
+// false when none is readable (no Store upgrade, no org, the repo's own
+// roster): with no roster there are no roles to follow (a solo store, a
+// machine with no org), and refusing would lock its owner out of their
+// own rules.
+func openRoster(ctx context.Context, env PlaceEnv, src store.Source) (Roster, func(), bool) {
+	r, done, ok := openEnvRoster(ctx, env)
+	org := orgOf(src)
+	if org == "" || (ok && orgOf(r.Source()) == org) {
+		return r, done, ok
+	}
+	if or, has := upgrade.As[OrgRosterer](env); has {
+		own, ownDone, found, err := or.RosterOfOrg(ctx, org)
+		if err == nil && found && own != nil && own.Source() != store.SourceRepo {
+			done()
+			return own, ownDone, true
+		}
+		if ownDone != nil {
+			ownDone()
+		}
+	}
+	return r, done, ok
+}
+
+// openEnvRoster opens the Env's org roster (Store upgrade).
+func openEnvRoster(ctx context.Context, env PlaceEnv) (Roster, func(), bool) {
 	s, ok := upgrade.As[Store](env)
 	if !ok {
 		return nil, func() {}, false
@@ -238,15 +272,16 @@ func openRoster(ctx context.Context, env PlaceEnv) (Roster, func(), bool) {
 }
 
 // RequireAdminAt refuses a member's change to company ground (devco
-// D-637, D-681): when src is CompanyGround of the Env's roster, the caller
-// must be an admin of it (RequireAdmin). Anything else passes, and so does
-// a roster that cannot be opened (openRoster).
+// D-637, D-681): when src is CompanyGround of the roster src is judged by
+// (openRoster: its own store's when it has one), the caller must be an
+// admin of it (RequireAdmin). Anything else passes, and so does a roster
+// that cannot be opened.
 func RequireAdminAt(ctx context.Context, env PlaceEnv, src store.Source, does, line string) error {
 	src, lv := placeOf(ctx, env, src)
 	if !mayBeGround(src, lv) {
 		return nil
 	}
-	r, done, ok := openRoster(ctx, env)
+	r, done, ok := openRoster(ctx, env, src)
 	defer done()
 	if !ok || !CompanyGround(lv, src, orgOf(r.Source())) {
 		return nil
