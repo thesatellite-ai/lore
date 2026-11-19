@@ -7,7 +7,10 @@ package wire
 // identity in the store's org; for a personal store the identity of the
 // setup that owns it, whatever setup the folder uses, item 39; else your
 // lore identity) is a warning: a
-// hand commit there would carry the wrong email. The fix is the exact
+// hand commit there would carry the wrong email. In a store an org
+// identity signs, user.name counts too (devco D-714: lore signs every
+// commit there with the identity's name and email, so a git handle beside
+// the org email made hand commits differ from lore's). The fix is the exact
 // `git -C <clone> config …` line; `lore doctor --fix` writes it into the
 // clone's .git/config (never the global git config).
 
@@ -51,7 +54,7 @@ func (a *App) DoctorStoreIdentities(ctx context.Context, fix bool) ([]DoctorFind
 		got := effectiveGitConfig(ctx, dir, gitbackend.ConfigUserEmail)
 		gotName := effectiveGitConfig(ctx, dir, gitbackend.ConfigUserName)
 		agent := agentSignature(gotName, got)
-		if !agent && cloneIdentityAccepted(got, want.Email, accept, org) {
+		if !agent && cloneIdentityMatches(gotName, got, want, accept, org) {
 			continue
 		}
 		shown := got
@@ -59,6 +62,12 @@ func (a *App) DoctorStoreIdentities(ctx context.Context, fix bool) ([]DoctorFind
 			shown = "no email"
 		}
 		msg := "the store clone " + dir + " commits as " + shown + " (git config user.email there), not as " + want.Email + ", " + want.Why + "; a commit made by hand there would carry " + shown
+		if org {
+			// both sides named: an org store's commits carry the identity's
+			// name and email, so either one differing is the finding
+			shown = cloneIdentityShown(gotName, got)
+			msg = "the store clone " + dir + " commits as " + shown + " (git config user.name/user.email there), not as " + want.Name + " <" + want.Email + ">, " + want.Why + "; a commit made by hand there would carry " + shown + " while lore's own commits carry " + want.Name + " <" + want.Email + ">"
+		}
 		if agent {
 			msg = "the store clone " + dir + " commits as the agent identity " + gotName + " <" + got + "> (git config user.name/user.email there); a git identity in a clone is the person's (" + want.Name + " <" + want.Email + ">, " + want.Why + "), the agent goes into commit trailers only"
 		}
@@ -104,6 +113,30 @@ func cloneIdentityAccepted(got, want string, mine []string, org bool) bool {
 		return true
 	}
 	return !org && slices.Contains(mine, got)
+}
+
+// cloneIdentityMatches reports whether a clone whose git identity is
+// gotName <gotEmail> commits as doctor expects: the email is accepted
+// (cloneIdentityAccepted) and, in a store an org identity signs, the name
+// is the identity's too (devco D-714: lore signs every commit there with
+// both; WW rule (a)). Elsewhere a person's own name stays theirs.
+func cloneIdentityMatches(gotName, gotEmail string, want gitbackend.CloneIdentity, accept []string, org bool) bool {
+	if org && strings.TrimSpace(gotName) != strings.TrimSpace(want.Name) {
+		return false
+	}
+	return cloneIdentityAccepted(gotEmail, want.Email, accept, org)
+}
+
+// cloneIdentityShown is a clone's git identity as a finding names it:
+// "name <email>", with "no name" / "no email" for an unset side.
+func cloneIdentityShown(name, email string) string {
+	if name == "" {
+		name = "no name"
+	}
+	if email == "" {
+		email = "no email"
+	}
+	return name + " <" + email + ">"
 }
 
 // storeIdentityFix is the exact commands that give the clone at dir the

@@ -147,8 +147,11 @@ func TestOrgCommitSignerOneAuthorForEveryOp(t *testing.T) {
 			t.Fatalf("identity %+v: email %q", id, ref.Email)
 		}
 	}
-	if sig := storeSignature(&orgconf.Org{Name: "acme"}); sig.Name != fallbackStoreName {
-		t.Fatalf("an org without an identity signs %q, want lore's last resort", sig.Name)
+	// devco D-714: an org without an identity names no signer here, so
+	// orgcfg signs with the store clone's git identity, as the backend
+	// does there (FLAG4), never lore@localhost while git knows the person
+	if sig := storeSignature(&orgconf.Org{Name: "acme"}); sig.Name != "" || sig.Email != "" || sig.When.IsZero() {
+		t.Fatalf("an org without an identity signs %q <%s>, want no name and email (the clone's git identity signs) and a time", sig.Name, sig.Email)
 	}
 }
 

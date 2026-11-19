@@ -46,10 +46,6 @@ const (
 	// other natural id (v0.1.17 stores_project.go), so a link and another
 	// clone's first write to the folder name the same project.
 	storeFolderIDDomain = "store-folder-project"
-	// fallbackStoreName / fallbackStoreEmail sign a store commit when the
-	// entry has no identity (v0.1.17's last resort).
-	fallbackStoreName  = "lore"
-	fallbackStoreEmail = "lore@localhost"
 	// configKeyRepoOrgs is config.yaml's repo_orgs mapping (F10 rule 2).
 	configKeyRepoOrgs = "repo_orgs"
 	// orgFileName is the committed org choice under .lore/.
@@ -419,14 +415,17 @@ func repoUntouchedLine(ctx context.Context, dir string) string {
 // storeSignature is the author of an org-file commit (link, unlink, org
 // config, org store add/remove/audience, set-url): the org identity, the
 // same one every other commit in the org's stores carries
-// (orgCommitSigner, D-714; §6.5: never a personal git email), else lore's
-// last resort.
+// (orgCommitSigner, D-714; §6.5: never a personal git email). An org with
+// no identity gets a signature with no name or email: orgcfg then signs
+// with the store clone's git identity, as the git backend does in that
+// store (FLAG4, commitSignature), so no store commit names lore@localhost
+// while git knows the person.
 func storeSignature(o *orgconf.Org) gitref.Signature {
 	when := time.Now()
 	if sig, ok := orgCommitSigner(o); ok {
 		return gitref.Signature{Name: sig.Name, Email: sig.Email, When: when}
 	}
-	return gitref.Signature{Name: fallbackStoreName, Email: fallbackStoreEmail, When: when}
+	return gitref.Signature{When: when}
 }
 
 // storeFolderProjectID is the prj_ id of a store folder a link creates
