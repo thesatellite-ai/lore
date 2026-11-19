@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -66,14 +67,48 @@ func TestNearCommands(t *testing.T) {
 	add(memory, "list")
 	add(root, "doctor")
 	for word, want := range map[string]string{"status": "lore migrate status", "memroy": "lore memory", "doctr": "lore doctor"} {
-		if got := nearCommands(root, word); len(got) != 1 || got[0] != want {
+		if got := nearCommands(root, word, ""); len(got) != 1 || got[0] != want {
 			t.Errorf("%q: %q (want %q)", word, got, want)
 		}
 	}
-	if got := nearCommands(memory, "lst"); len(got) != 1 || got[0] != "lore memory list" {
+	if got := nearCommands(memory, "lst", ""); len(got) != 1 || got[0] != "lore memory list" {
 		t.Errorf("memory lst: %q", got)
 	}
-	if got := nearCommands(root, "zznosuchword"); len(got) != 0 {
+	if got := nearCommands(root, "zznosuchword", ""); len(got) != 0 {
 		t.Errorf("no near command: %q", got)
+	}
+}
+
+// TestUnknownCommandBeforeFlag: devco:D-702, `lore delete --id mem_…` named
+// the flag ("unknown flag: --id") although the command word is the
+// mistake; it is now refused like plain `lore delete`, and the guesses
+// lead with the id's noun, then the common nouns, not the alphabet.
+func TestUnknownCommandBeforeFlag(t *testing.T) {
+	f := newFake(t)
+	build := func(args []string) *cobra.Command {
+		root := Build(f.reg, f, WithArgs(args))
+		for _, noun := range []string{"actor", "architecturenote", "behaviour", "memory", "rule", "decision"} {
+			g := child(root, noun)
+			if g == nil {
+				g = &cobra.Command{Use: noun, Annotations: map[string]string{annotationOwner: annotationValue}}
+				root.AddCommand(g)
+			}
+			g.AddCommand(&cobra.Command{Use: "delete", Annotations: map[string]string{annotationOwner: annotationValue}, Run: func(*cobra.Command, []string) {}})
+		}
+		return root
+	}
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"delete", "--id", "mem_01a1e08a7cad7af8b79c9d1fa3b8933b"}, "did you mean lore memory delete or lore rule delete or lore decision delete?"},
+		{[]string{"delete", "--id=dec_01a1e08a7cad7af8b79c9d1fa3b8933b"}, "did you mean lore decision delete or lore memory delete or lore rule delete?"},
+		{[]string{"delete"}, "did you mean lore memory delete or lore rule delete or lore decision delete?"},
+		{[]string{"memory", "nope", "--id", "x"}, `unknown command "nope" for "lore memory"`},
+	} {
+		r := execute(build(c.args), "", c.args...)
+		if r.exit != ExitUsage || !strings.Contains(r.stderr, "unknown command") || !strings.Contains(r.stderr, c.want) {
+			t.Errorf("%v: exit %d stderr %q; want unknown command and %q", c.args, r.exit, r.stderr, c.want)
+		}
 	}
 }

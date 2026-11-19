@@ -131,6 +131,7 @@ A flag that takes a value takes the next word, so a value that is another flag o
 
 - `--json` is not on every command; when a command does not take it, lore stops with `unknown flag: --json`.
 - `--color` is spelled the American way; `--colour` is an unknown flag.
+- A command word lore does not have is named before any flag after it: typing lore delete --id mem_… (there is no top-level delete) says `unknown command "delete" for "lore"` with `did you mean lore memory delete or lore rule delete or lore decision delete?` (the commands of the id's kind first, then memory, rule, decision and task), never `unknown flag: --id`.
 - `--everywhere` on `rule add`, `memory add` and the other add commands is an unknown flag in 0.1.18; drop it, `--to me` alone already shows the row in every repo.
 - `--repo` only scopes a command inside a multi-repo project. To run a command on another checkout, run it inside that checkout.
 

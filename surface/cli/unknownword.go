@@ -39,7 +39,7 @@ func unknownWord(cmd *cobra.Command, cfg config, word string) error {
 		// C-13: every refusal names a next step: the commands of that
 		// name deeper down (`lore status` → `lore migrate status`), else
 		// the near spellings, and always where the commands are listed.
-		if near := nearCommands(cmd, word); len(near) > 0 {
+		if near := nearCommands(cmd, word, idNoun(cfg.args)); len(near) > 0 {
 			e = e.WithHint("did you mean " + strings.Join(near, " or ") + "? " + help)
 		} else {
 			e = e.WithHint(help)
@@ -56,8 +56,9 @@ var wordGuesses = map[string]string{
 
 // nearCommands lists, by path, the visible commands under g named word
 // (at any depth), else the direct subcommands cobra finds spelled close to
-// it; at most maxIDCommands.
-func nearCommands(g *cobra.Command, word string) []string {
+// it; at most maxIDCommands. The commands of noun first (the noun of a row
+// id typed with the word, "" for none) lead, then the common nouns.
+func nearCommands(g *cobra.Command, word, first string) []string {
 	var out []string
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
@@ -72,6 +73,10 @@ func nearCommands(g *cobra.Command, word string) []string {
 		}
 	}
 	walk(g)
+	// devco:D-702: the commands most people mean come first, so `lore
+	// delete` names lore memory delete and lore rule delete, not the
+	// first three nouns of the alphabet (actor, architecturenote, …).
+	slices.SortStableFunc(out, func(a, b string) int { return nounRank(a, first) - nounRank(b, first) })
 	if len(out) == 0 {
 		if g.SuggestionsMinimumDistance <= 0 {
 			g.SuggestionsMinimumDistance = 2
@@ -81,6 +86,56 @@ func nearCommands(g *cobra.Command, word string) []string {
 		}
 	}
 	return out[:min(len(out), maxIDCommands)]
+}
+
+// commonNouns are the nouns people work with every day, in the order a
+// did-you-mean list offers them before every other noun.
+var commonNouns = []string{"memory", "rule", "decision", "task"}
+
+// nounRank orders a command path for a did-you-mean list: the noun first
+// before all, then a common noun by its place in commonNouns, every other
+// noun after them.
+func nounRank(path, first string) int {
+	words := strings.Fields(path)
+	if len(words) < 2 {
+		return len(commonNouns) + 1
+	}
+	if first != "" && words[1] == first {
+		return 0
+	}
+	if i := slices.Index(commonNouns, words[1]); i >= 0 {
+		return i + 1
+	}
+	return len(commonNouns) + 1
+}
+
+// idNouns names the command noun of a row id's table, for the tables
+// people act on by id (`lore delete --id mem_…` → lore memory delete).
+var idNouns = map[ids.Prefix]string{
+	ids.PrefixMemory: "memory", ids.PrefixRule: "rule", ids.PrefixDecision: "decision",
+	ids.PrefixTask: "task", ids.PrefixHotfix: "hotfix", ids.PrefixPattern: "pattern",
+	ids.PrefixPlaybook: "playbook", ids.PrefixPrompt: "prompt", ids.PrefixMission: "mission",
+	ids.PrefixPlan: "plan", ids.PrefixArchitectureNote: "architecturenote", ids.PrefixBehaviour: "behaviour",
+	ids.PrefixCookbookRecipe: "cookbookrecipe", ids.PrefixIncident: "incident", ids.PrefixHandoff: "handoff",
+	ids.PrefixReminder: "reminder", ids.PrefixActor: "actor", ids.PrefixPolicy: "policy",
+	ids.PrefixResource: "resource", ids.PrefixComment: "comment",
+}
+
+// idNoun returns the noun of the first row id among the words typed, ""
+// when none names a table in idNouns.
+func idNoun(args []string) string {
+	for _, a := range args {
+		_, v, ok := strings.Cut(a, "=") // --id=mem_…
+		if !ok {
+			v = a
+		}
+		if id, err := ids.ParseAny(v); err == nil {
+			if n := idNouns[id.Prefix()]; n != "" {
+				return n
+			}
+		}
+	}
+	return ""
 }
 
 // revWord matches a git revision word lore commands take as --id: HEAD,

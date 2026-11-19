@@ -152,9 +152,19 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 		}
 		entries = append(entries, mp...)
 	}
-	set, err := policy.Resolve(entries)
+	// devco:D-701: a read that covers several folders (a setup read from
+	// a plain folder) has no single folder level; each folder resolves on
+	// its own, and a key a folder sets prints once per such folder.
+	base, byFolder, folders := splitByFolder(entries, where, o.readFolders())
+	set, err := policy.Resolve(base)
 	if err != nil {
 		return PolicyOut{}, err
+	}
+	perFolder := make([]policy.Set, len(folders))
+	for i, f := range folders {
+		if perFolder[i], err = policy.Resolve(append(slices.Clone(base), byFolder[f]...)); err != nil {
+			return PolicyOut{}, err
+		}
 	}
 	out := PolicyOut{Data: []PolicyRule{}}
 	for _, d := range policy.Keys() {
@@ -162,18 +172,73 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 			continue
 		}
 		eff, _ := set.Get(d.Key)
-		r := PolicyRule{Key: string(d.Key), Value: display(eff.Value), Source: sourceDefault, Doc: d.Doc}
-		switch {
-		case eff.Level == policy.LevelMachine:
-			r.Level, r.Source = string(eff.Level), "machine ("+lorehome.Shown()+"/config.yaml policies)"
-		case !eff.IsDefault:
-			r.Level, r.Row, r.Store = string(eff.Level), eff.Source.String(), string(where[eff.Source])
-			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, o.place(where[eff.Source]), short(eff.Source))
+		var own []PolicyRule
+		for i := range folders {
+			fe, _ := perFolder[i].Get(d.Key)
+			if fe.Source != eff.Source || display(fe.Value) != display(eff.Value) {
+				own = append(own, o.policyRule(d, fe, where))
+			}
 		}
-		out.Data = append(out.Data, r)
+		r := o.policyRule(d, eff, where)
+		if len(own) > 0 && len(own) < len(folders) {
+			r.Source += otherFoldersNote
+		}
+		if len(folders) == 0 || len(own) < len(folders) {
+			out.Data = append(out.Data, r)
+		}
+		out.Data = append(out.Data, own...)
 	}
 	out.Count = len(out.Data)
 	return out, nil
+}
+
+// otherFoldersNote follows the source of a key's value in policy show when
+// some read folders set their own value: the value holds in the others.
+const otherFoldersNote = ", in every other folder"
+
+// policyRule is the policy show line of key d's effective value eff.
+func (o ops) policyRule(d policy.KeyDef, eff policy.Effective, where map[ids.AnyID]store.Source) PolicyRule {
+	r := PolicyRule{Key: string(d.Key), Value: display(eff.Value), Source: sourceDefault, Doc: d.Doc}
+	switch {
+	case eff.Level == policy.LevelMachine:
+		r.Level, r.Source = string(eff.Level), "machine ("+lorehome.Shown()+"/config.yaml policies)"
+	case !eff.IsDefault:
+		r.Level, r.Row, r.Store = string(eff.Level), eff.Source.String(), string(where[eff.Source])
+		r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, o.place(where[eff.Source]), short(eff.Source))
+	}
+	return r
+}
+
+// readFolders are the read stores whose rows count at the folder level.
+func (o ops) readFolders() []store.Source {
+	var out []store.Source
+	for _, src := range engine.ReadStoresOf(o.env) {
+		if storeLevel(o.env, src) == policy.LevelFolder {
+			out = append(out, src)
+		}
+	}
+	return out
+}
+
+// splitByFolder separates the folder-level entries by their folder when
+// the read covers two folders or more: base holds every other entry (the
+// machine's included), byFolder each folder's own rows, folders the read
+// folders in order. With one folder or none, base is entries unchanged
+// and folders is nil (that folder is the single folder level).
+func splitByFolder(entries []policy.Entry, where map[ids.AnyID]store.Source, read []store.Source) ([]policy.Entry, map[store.Source][]policy.Entry, []store.Source) {
+	if len(read) < 2 {
+		return entries, nil, nil
+	}
+	base := make([]policy.Entry, 0, len(entries))
+	byFolder := map[store.Source][]policy.Entry{}
+	for _, e := range entries {
+		if src, ok := where[e.Source]; ok && e.Level == policy.LevelFolder && slices.Contains(read, src) {
+			byFolder[src] = append(byFolder[src], e)
+			continue
+		}
+		base = append(base, e)
+	}
+	return base, byFolder, read
 }
 
 // policyValue parses CLI text for key d.

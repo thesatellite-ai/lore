@@ -48,3 +48,46 @@ func TestContextReadsInternalStoresInOwnRepo(t *testing.T) {
 		})
 	}
 }
+
+// TestContextTopicsCountWhatContextReads (devco:D-700): `lore context
+// --topics` in a linked repo counted only the render's stores (the linked
+// folder) while --for-prompt and rule list read the org's internal store
+// too; it now counts exactly the rows loadKnowledge reads, and the
+// committed render's index keeps leaving the internal store out.
+func TestContextTopicsCountWhatContextReads(t *testing.T) {
+	ctx := context.Background()
+	for _, client := range []bool{false, true} {
+		h := New(Options{App: internalAppAs(t, client), Home: t.TempDir()})
+		rows, err := h.loadKnowledge(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 0
+		for _, k := range rows {
+			if k.kind == "memory" {
+				want++
+			}
+		}
+		count := func(lines []topicLine) int {
+			n := 0
+			for _, l := range lines {
+				n += l.Counts["memories"]
+			}
+			return n
+		}
+		topics, err := h.contextTopicIndex(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := count(topics); got != want || want != 3 {
+			t.Fatalf("client=%v: --topics counts %d memories, context reads %d (want 3: repo, share, inner)", client, got, want)
+		}
+		rendered, err := h.loadTopicIndex(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := count(rendered); got != 2 {
+			t.Fatalf("client=%v: the committed index counts %d memories, want 2 (the internal store stays out of a committed file)", client, got)
+		}
+	}
+}
