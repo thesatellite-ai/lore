@@ -563,6 +563,16 @@ func teamAdd(ctx context.Context, env profilestore.Store, in TeamAddIn) (TeamWri
 	if err != nil {
 		return TeamWriteOut{}, err
 	}
+	line := "lore team add --handle @" + h
+	if name := strings.TrimSpace(in.Name); name != "" {
+		line += " --name " + shellWord(name)
+	}
+	if ms := splitList(in.Members); len(ms) > 0 {
+		line += " --members " + shellWord(strings.Join(ms, listSep))
+	}
+	if err = requireTeamAdmin(ctx, r, h, line); err != nil {
+		return TeamWriteOut{}, err
+	}
 	actors, err := rosterActors(ctx, r)
 	if err != nil {
 		return TeamWriteOut{}, err
@@ -703,6 +713,9 @@ func teamRemove(ctx context.Context, env profilestore.Store, in TeamRefIn) (Team
 	if err != nil {
 		return TeamWriteOut{}, err
 	}
+	if err = requireTeamAdmin(ctx, r, h, "lore team remove --handle "+teamShown(h)); err != nil {
+		return TeamWriteOut{}, err
+	}
 	cur, ok, err := findTeam(ctx, r, h)
 	if err != nil {
 		return TeamWriteOut{}, err
@@ -745,6 +758,9 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 	r, done, err := env.Roster(ctx, true)
 	defer done()
 	if err != nil {
+		return TeamWriteOut{}, err
+	}
+	if err = requireTeamAdmin(ctx, r, h, "lore team rename --handle "+teamShown(h)+" --to @"+to); err != nil {
 		return TeamWriteOut{}, err
 	}
 	cur, ok, err := findTeam(ctx, r, h)
@@ -813,6 +829,65 @@ func teamRename(ctx context.Context, env profilestore.Store, in TeamRenameIn) (T
 	return out, nil
 }
 
+// requireTeamAdmin refuses a member's team change in an org store before
+// anything is written (devco D-694 rule gap: a member who put themselves
+// on @web could then add rules in acme/web). The write guard refuses the
+// team row too (profilestore TeamDoes); checking here first keeps a
+// rename's or a member add's invite rows from being written ahead of the
+// refused team row, and the refusal carries the exact line an admin runs.
+// A roster that names no admin (an org from before org roles, a solo
+// repo's own roster) lets everyone, as Admins.May does. A contractor is
+// left to the store's own wall (wire contractorgate), whose refusal names
+// their stint: it refuses every write to the org folder, teams included.
+func requireTeamAdmin(ctx context.Context, r profilestore.Roster, h, line string) error {
+	if contractor, err := callerIsContractor(ctx, r); err != nil || contractor {
+		return err
+	}
+	does := profilestore.TeamDoes(h)
+	return profilestore.RequireAdmin(profilestore.WithAsk(ctx, does, line), r, does, line)
+}
+
+// callerIsContractor reports whether r's caller holds an open contractor
+// stint on the roster.
+func callerIsContractor(ctx context.Context, r profilestore.Roster) (bool, error) {
+	me := r.Caller().String()
+	if r.Caller().IsZero() {
+		return false, nil
+	}
+	rows, err := r.List(ctx, schema.TableActorPeriods)
+	if err != nil {
+		return false, err
+	}
+	for _, p := range rows {
+		if !p.Deleted && fieldText(p, schema.FieldPeriodActor) == me && fieldText(p, schema.FieldPeriodEndedOn) == "" &&
+			fieldText(p, schema.FieldPeriodType) == schema.PeriodTypeContractor {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// teamShown is a team ref as a printed --handle takes it: "@web", or a
+// tem_ id as given.
+func teamShown(h string) string {
+	if isTeamID(h) {
+		return h
+	}
+	return "@" + h
+}
+
+// shellWord is s as one shell word: unchanged when it needs no quoting,
+// else single-quoted, so a printed line runs exactly as shown.
+func shellWord(s string) string {
+	if s != "" && strings.IndexFunc(s, func(c rune) bool {
+		return !(c == '@' || c == '_' || c == '-' || c == '.' || c == ',' || c == '/' || c == '+' || c == ':' ||
+			(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // teamRef is a team named by @handle or tem_ id: the id as given, else
 // the checked handle.
 func teamRef(in string) (string, error) {
@@ -833,6 +908,13 @@ func teamMembers(ctx context.Context, env profilestore.Store, in TeamMembersIn, 
 	r, done, err := env.Roster(ctx, true)
 	defer done()
 	if err != nil {
+		return TeamWriteOut{}, err
+	}
+	verb := "add"
+	if !add {
+		verb = "remove"
+	}
+	if err = requireTeamAdmin(ctx, r, h, "lore team member "+verb+" --handle @"+h+" --members "+shellWord(strings.Join(splitList(in.Members), listSep))); err != nil {
 		return TeamWriteOut{}, err
 	}
 	cur, ok, err := findTeam(ctx, r, h)

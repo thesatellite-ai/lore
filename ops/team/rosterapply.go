@@ -1028,6 +1028,13 @@ func (w *writer) membership(ctx context.Context, project string, roles []string)
 // since the invite is skipped and returned in skipped: nobody joins it.
 func (w *writer) joinTeams(ctx context.Context, handles []string) (joined, skipped []string, err error) {
 	me := w.actor.ID.String()
+	// the admin's invite named these teams: the write guard lets the joiner
+	// add only themselves to them (team rows are an admin's change, D-694)
+	named := make([]string, 0, len(handles))
+	for _, h := range handles {
+		named = append(named, strings.TrimPrefix(h, "@"))
+	}
+	ctx = profilestore.WithInviteJoin(ctx, me, named)
 	for _, h := range handles {
 		cur, ok, ferr := findTeam(ctx, w.r, h)
 		if ferr != nil {
