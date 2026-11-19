@@ -188,3 +188,45 @@ func TestResetFoundForAnOldBuildClone(t *testing.T) {
 		t.Fatalf("a push the caller allowed (restore): %+v, %v", rep, err)
 	}
 }
+
+// TestRepointOriginFillsAnEmptyNewRepoD699 (devco D-699): a clone that
+// synced with one repository and is repointed at a new EMPTY one (store
+// set-url's carry) fills it at the next sync; kept, what it knew of the
+// old repository (tracking ref, remote-tip note, push stamp) made the
+// empty new repo look like the old one reset, and the sync was refused.
+// A new repo holding another history is still refused.
+func TestRepointOriginFillsAnEmptyNewRepoD699(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	remote := newRemote(t, true)
+	a := clone(t, remote, WithMerger(newestMerger{}))
+	g := newGen(t)
+	write(t, a, store.Change{Row: g.row(newID(t), "old", hlc.HLC{})})
+	if _, err := a.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(PathsOf(a.Dir()).StateDir, pushStampName), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	empty := filepath.Join(filepath.Dir(remote), "moved.git")
+	gitT(t, filepath.Dir(remote), "init", "--quiet", "--bare", "--initial-branch="+testBranch, empty)
+	if err := RepointOrigin(ctx, a.Dir(), empty); err != nil {
+		t.Fatal(err)
+	}
+	write(t, a, store.Change{Row: g.row(newID(t), "after the move", hlc.HLC{})})
+	if _, err := a.Sync(ctx); err != nil {
+		t.Fatalf("first sync into the new empty repo: %v", err)
+	}
+	if got, want := gitT(t, empty, "rev-parse", testBranch), gitT(t, a.Dir(), "rev-parse", "HEAD"); got != want {
+		t.Fatalf("new repo %s, clone %s: the sync did not fill it", got, want)
+	}
+
+	other := newRemote(t, true)
+	if err := RepointOrigin(ctx, a.Dir(), other); err != nil {
+		t.Fatal(err)
+	}
+	write(t, a, store.Change{Row: g.row(newID(t), "after the second move", hlc.HLC{})})
+	if _, err := a.Sync(ctx); !errors.Is(err, ErrRemoteReset) {
+		t.Fatalf("sync into a repo holding another history after a repoint: %v, want ErrRemoteReset", err)
+	}
+}

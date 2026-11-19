@@ -153,10 +153,13 @@ func (a *App) applyCloneCarry(ctx context.Context, c cloneCarry, raw string) (ta
 	if lerr != nil {
 		return "", "", lerr
 	}
-	_, err = gitRun{dir: c.from, args: []string{"remote", "set-url", "--", gitbackend.RemoteName, origin}}.output(lctx)
+	// D-699: what the clone knew of the old repository's branch goes with
+	// the move, so a new empty repository is filled by the next sync
+	// instead of being taken for the old one reset
+	err = gitbackend.RepointOrigin(lctx, c.from, origin)
 	unlock()
 	if err != nil {
-		return "", "", errs.Wrap(errs.Internal, verb+": point the clone "+c.from+" at "+raw, err)
+		return "", "", errs.Prefix(verb+": ", err)
 	}
 	if c.drop != "" {
 		// The new address's clone was fully pushed when planned; check
