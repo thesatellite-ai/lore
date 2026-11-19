@@ -21,6 +21,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/engine"
 	"github.com/thesatellite-ai/lore/logic/branchlayer"
 	"github.com/thesatellite-ai/lore/logic/merge"
 	"github.com/thesatellite-ai/lore/logic/origin"
@@ -31,6 +32,7 @@ import (
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/op"
 	opsbranch "github.com/thesatellite-ai/lore/ops/branch"
+	"github.com/thesatellite-ai/lore/ops/profilestore"
 	opssettings "github.com/thesatellite-ai/lore/ops/settings"
 	opstrash "github.com/thesatellite-ai/lore/ops/trash"
 	"github.com/thesatellite-ai/lore/store"
@@ -722,12 +724,23 @@ func (a *App) BranchChoose(ctx context.Context, in opsbranch.ChoiceIn, isolate b
 	default:
 		items = append(items, in.Branch)
 	}
+	ch := branchChoice{verb: verb, branch: in.Branch, undo: in.Undo, key: k, items: items, to: string(name), place: profilestore.PlaceTo(ctx, a, name)}
+	// devco D-697: a member's refusal (the policy check, the write guard)
+	// prints this command's own line with the full place, not policy
+	// set's with the name the folder is attached under here.
+	ctx = profilestore.WithAsk(ctx, ch.does(), ch.adminLine())
+	if in.Undo {
+		// devco D-703: the undo commits under its own subject
+		// ("lore: branch share undo pol_…"), not the share's.
+		ctx = store.WithCommitOp(ctx, ch.op()+undoSuffix)
+	}
+	if err = a.confirmChoice(ctx, ch, name); err != nil {
+		return opsbranch.DoneOut{}, err
+	}
 	if len(items) == 0 {
-		err = invokePolicy(withoutLayers(ctx), a, opssettings.OpPolicyUnset,
-			opssettings.PolicyUnsetIn{Key: string(k), To: string(name), Reason: "lore branch " + verb + " --branch " + in.Branch + " --undo"})
+		err = invokePolicy(withoutLayers(ctx), a, opssettings.OpPolicyUnset, ch.unsetIn())
 	} else {
-		err = invokePolicy(withoutLayers(ctx), a, opssettings.OpPolicySet,
-			opssettings.PolicySetIn{Key: string(k), Value: strings.Join(items, ","), To: string(name)})
+		err = invokePolicy(withoutLayers(ctx), a, opssettings.OpPolicySet, ch.setIn())
 	}
 	if err != nil {
 		return opsbranch.DoneOut{}, err
@@ -740,6 +753,121 @@ func (a *App) BranchChoose(ctx context.Context, in opsbranch.ChoiceIn, isolate b
 		line = "✓ removed the " + verb + " choice of " + in.Branch + " in " + lb.key.Folder + " (policy " + string(k) + ")"
 	}
 	return opsbranch.DoneOut{OK: true, Lines: []string{line}}, nil
+}
+
+// undoSuffix names the undo form of a branch choice in its commit
+// subject (store.WithCommitOp: "branch.share.undo").
+const undoSuffix = ".undo"
+
+// branchChoice is one branch share/isolate (or its undo) and the policy
+// write it makes: the key's new list (items, empty = unset the row) at
+// the place the folder is attached under here (to) and its full name
+// (place, profilestore.PlaceTo).
+type branchChoice struct {
+	verb, branch string
+	undo         bool
+	key          policy.Key
+	items        []string
+	to, place    string
+}
+
+// op is the branch verb's operation name (branch.share, branch.isolate).
+func (c branchChoice) op() string {
+	if c.verb == "isolate" {
+		return opsbranch.OpIsolate
+	}
+	return opsbranch.OpShare
+}
+
+// line is the branch command the person typed, answered with --yes.
+func (c branchChoice) line() string {
+	l := "lore branch " + c.verb + " --branch " + c.branch
+	if c.undo {
+		l += " --undo"
+	}
+	return l + " --yes"
+}
+
+// does is what only an admin does, for a member's refusal.
+func (c branchChoice) does() string {
+	what := "make a code branch write to the shared notes"
+	if c.verb == "isolate" {
+		what = "make a code branch keep its own notes"
+	}
+	if c.undo {
+		what = "remove the " + c.verb + " choice of a code branch"
+	}
+	return what + " for everyone in the company folder " + c.place
+}
+
+// adminLine is the line a refused member hands an admin (devco D-697):
+// the branch command in a checkout linked to the folder, or from any
+// folder the policy write it makes, with the full --to <store>/<folder>,
+// so it changes exactly that folder wherever the admin runs it.
+func (c branchChoice) adminLine() string {
+	elsewhere := "lore policy set --key " + string(c.key) + " --value " + strings.Join(c.items, ",") + " --to " + c.place + " --yes"
+	if len(c.items) == 0 {
+		elsewhere = "lore policy unset --key " + string(c.key) + " --to " + c.place + " --yes"
+	}
+	return c.line() + " in a checkout linked to " + c.place + ", or from any folder: " + elsewhere
+}
+
+// setIn and unsetIn are the policy write of the choice.
+func (c branchChoice) setIn() opssettings.PolicySetIn {
+	return opssettings.PolicySetIn{Key: string(c.key), Value: strings.Join(c.items, ","), To: c.to}
+}
+
+func (c branchChoice) unsetIn() opssettings.PolicyUnsetIn {
+	return opssettings.PolicyUnsetIn{Key: string(c.key), To: c.to, Reason: "lore branch " + c.verb + " --branch " + c.branch + " --undo"}
+}
+
+// confirmChoice asks for --yes before an admin's choice on company ground,
+// as policy set does: it applies to everyone in the folder. The policy
+// question is asked (it refuses a member first, before anything is
+// asked, by the same check the write makes) and names this command as the
+// answer. Off company ground, or with --yes, nothing is asked.
+func (a *App) confirmChoice(ctx context.Context, c branchChoice, name store.Source) error {
+	if engine.Confirmed(ctx) || op.Confirmed(ctx) {
+		return nil
+	}
+	if company, _ := profilestore.NewJudge(a).At(ctx, name); !company {
+		return nil
+	}
+	var q string
+	var err error
+	if len(c.items) == 0 {
+		q, err = questionPolicy(withoutLayers(ctx), a, opssettings.OpPolicyUnset, c.unsetIn())
+	} else {
+		q, err = questionPolicy(withoutLayers(ctx), a, opssettings.OpPolicySet, c.setIn())
+	}
+	if err != nil {
+		return err
+	}
+	q, _, _ = strings.Cut(q, opssettings.QuestionRun)
+	q += opssettings.QuestionRun + c.line() + "`"
+	return errs.New(errs.NeedsConfirm, q).WithQuestion(q).WithHint("ask the person, then rerun with --yes: " + c.line())
+}
+
+// questionPolicy is the confirm question policy.set or policy.unset asks
+// for in (its op.Questioner), with every refusal it makes first.
+func questionPolicy[T policyIn](ctx context.Context, a *App, name string, in T) (string, error) {
+	e, ok := a.reg.Lookup(name)
+	if !ok {
+		return "", errs.New(errs.Internal, "branch: "+name+" is not registered")
+	}
+	qr, ok := e.(op.Questioner)
+	if !ok {
+		return "", errs.New(errs.Internal, "branch: "+name+" asks no question")
+	}
+	body, err := json.Marshal(in)
+	if err != nil {
+		return "", errs.Wrap(errs.Internal, "branch: encode the policy", err)
+	}
+	dec, err := e.Decode(op.JSONDecoder{Body: body})
+	if err != nil {
+		return "", err
+	}
+	return qr.Question(ctx, dec)
 }
 
 // policyIn is the input of the policy operation a branch choice runs.

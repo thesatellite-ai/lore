@@ -51,6 +51,12 @@ func (o ops) checkPolicyWrite(ctx context.Context, target store.Source, key poli
 	return o.requirePolicyAdmin(ctx, target, key, line)
 }
 
+// QuestionRun opens the last part of a policy question, the exact
+// command that answers it with --yes: a command that runs a policy write
+// for the person (branch share) asks the same question and puts its own
+// command there.
+const QuestionRun = "; run `"
+
 // policySetQuestion is policy set's confirm question; "" (the generic
 // question) for an unknown key, which the operation itself refuses.
 func (o ops) policySetQuestion(ctx context.Context, in PolicySetIn) (string, error) {
@@ -59,14 +65,14 @@ func (o ops) policySetQuestion(ctx context.Context, in PolicySetIn) (string, err
 		return "", nil
 	}
 	target := targetOf(in.To)
-	if err := o.checkPolicyWrite(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, in.To)); err != nil {
+	if err := o.checkPolicyWrite(ctx, target, d.Key, policyCommand("set", in.Key, in.Value, o.adminTo(ctx, target, in.To))); err != nil {
 		return "", err
 	}
 	old, err := o.policyNow(ctx, d.Key)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("policy set %s in %s: %s -> %s; it applies to %s; run `%s`",
+	return fmt.Sprintf("policy set %s in %s: %s -> %s; it applies to %s"+QuestionRun+"%s`",
 		in.Key, o.policyPlace(target), old, in.Value, policyReach(storeLevel(o.env, target), o.placeLabel(target)), policyCommand("set", in.Key, in.Value, in.To)), nil
 }
 
@@ -77,14 +83,14 @@ func (o ops) policyUnsetQuestion(ctx context.Context, in PolicyUnsetIn) (string,
 		return "", nil
 	}
 	target := targetOf(in.To)
-	if err := o.checkPolicyWrite(ctx, target, d.Key, policyCommand("unset", in.Key, "", in.To)); err != nil {
+	if err := o.checkPolicyWrite(ctx, target, d.Key, policyCommand("unset", in.Key, "", o.adminTo(ctx, target, in.To))); err != nil {
 		return "", err
 	}
 	old, err := o.policyNow(ctx, d.Key)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("policy unset %s in %s (now %s; the next level up or the default applies); it applies to %s; run `%s`",
+	return fmt.Sprintf("policy unset %s in %s (now %s; the next level up or the default applies); it applies to %s"+QuestionRun+"%s`",
 		in.Key, o.policyPlace(target), old, policyReach(storeLevel(o.env, target), o.placeLabel(target)), policyCommand("unset", in.Key, "", in.To)), nil
 }
 

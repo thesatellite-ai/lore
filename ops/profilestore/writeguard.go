@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
-	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
@@ -136,8 +135,7 @@ func refusal(ctx context.Context, r Roster, a Admins, src store.Source, kind str
 	if kind == ChangeAdd {
 		does += " (a member adds rules and notes only in the folder of a team they are on, or in their personal store)"
 	}
-	return errs.New(errs.Refused, "only an admin of the org can "+does+", and you are not one on the roster of "+r.Where()+"; nothing was written").
-		WithHint("ask " + a.Who() + " to run: " + line)
+	return refuseMember(r, a, does, line)
 }
 
 // guardDoes says what a write did when no command named it.

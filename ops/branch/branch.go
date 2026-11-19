@@ -483,8 +483,8 @@ func Ops(env Env) []op.Entry {
 			[]errs.Code{errs.NeedsConfirm}, op.Example{Title: "purge trashed notes older than 90 days", CLI: "lore branch purge --older-than 90d --confirm"}), func(ctx context.Context, in PurgeIn) (PurgeOut, error) { return env.BranchPurge(ctx, in) }),
 		op.Define(w(OpPromote, "Put rows of this branch's own notes into the shared notes now (an urgent rule)",
 			[]errs.Code{errs.LandConflict}, op.Example{Title: "share one rule now", CLI: "lore branch promote --ids rul_0193f2a7c4b77e1d8a3f5b6c7d8e9f00"}), func(ctx context.Context, in PromoteIn) (DoneOut, error) { return env.BranchPromote(ctx, in) }),
-		op.Define(w(OpIsolate, "Make a code branch keep its own notes, for everyone in this project folder",
-			[]errs.Code{errs.PolicyDenied}, op.Example{Title: "isolate a branch a pattern shares", CLI: "lore branch isolate --branch dev-pat"}), func(ctx context.Context, in ChoiceIn) (DoneOut, error) { return env.BranchChoose(ctx, in, true) }),
+		op.Define(mayAsk(w(OpIsolate, "Make a code branch keep its own notes, for everyone in this project folder",
+			[]errs.Code{errs.PolicyDenied, errs.NeedsConfirm}, op.Example{Title: "isolate a branch a pattern shares", CLI: "lore branch isolate --branch dev-pat --yes"})), func(ctx context.Context, in ChoiceIn) (DoneOut, error) { return env.BranchChoose(ctx, in, true) }),
 		op.Define(mayAsk(w(OpAdopt, "Move the shared rows born on a code branch (before branch layers) into that branch's own notes",
 			nil, op.Example{Title: "move old feature-branch notes into its layer", CLI: "lore branch adopt --branch feat/x --dry-run"})), func(ctx context.Context, in AdoptIn) (DoneOut, error) { return env.BranchAdopt(ctx, in) }),
 		op.Define(mayAsk(w(OpInstall, "Add the GitHub workflow that lands a branch's notes when its pull request merges (asks first)",
@@ -493,7 +493,7 @@ func Ops(env Env) []op.Entry {
 		}),
 		op.Define(w(OpRename, "Move a code branch's notes to its new name after git branch -m; pushes to the store's remote at once",
 			[]errs.Code{errs.NameTaken}, op.Example{Title: "follow a renamed branch", CLI: "lore branch rename --from feat/x --to feat/y"}), func(ctx context.Context, in RenameIn) (DoneOut, error) { return env.BranchRename(ctx, in) }),
-		op.Define(w(OpShare, "Make a code branch write to the shared notes, for everyone in this project folder",
-			[]errs.Code{errs.PolicyDenied}, op.Example{Title: "share a long-lived branch", CLI: "lore branch share --branch integration"}), func(ctx context.Context, in ChoiceIn) (DoneOut, error) { return env.BranchChoose(ctx, in, false) }),
+		op.Define(mayAsk(w(OpShare, "Make a code branch write to the shared notes, for everyone in this project folder",
+			[]errs.Code{errs.PolicyDenied, errs.NeedsConfirm}, op.Example{Title: "share a long-lived branch", CLI: "lore branch share --branch integration --yes"})), func(ctx context.Context, in ChoiceIn) (DoneOut, error) { return env.BranchChoose(ctx, in, false) }),
 	}
 }
