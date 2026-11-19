@@ -8,7 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/thesatellite-ai/lore/adapters/backend/git"
+	"github.com/thesatellite-ai/lore/adapters/orgcfg"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 )
 
 // Q-R2-1: storeSigner.owner names the org identity for any spelling of an
@@ -41,10 +45,12 @@ func TestStoreSignerOwnerMatchesOrgStores(t *testing.T) {
 	}
 }
 
-// Q-R2-1: a commit lore makes itself (store marker, migration) in an org
-// store's worktree is signed by the org identity when git's identity there
-// uses another email, and by git when it uses the org's (one author, owner
-// report 2026-11-12); in any other store the git identity wins (FLAG4).
+// Q-R2-1, D-714: a commit lore makes itself (adopt, store marker,
+// migration, folder add/remove) in an org store's worktree is signed by the
+// org identity whatever git's identity there says (another email, or the
+// org email beside another user.name: adopt took that git user.name while
+// org link signed as the org identity); in any other store the git
+// identity wins (FLAG4).
 func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 	t.Parallel()
 	org := OrgSigner{Name: "Northwind", Email: "lore@northwind.invalid", StoreURLs: []string{"git@github.com:northwind/lore.git"}}
@@ -70,8 +76,8 @@ func TestStoreSignerEnvForOrgStoreWorktree(t *testing.T) {
 	if _, err := (gitRun{dir: same, args: []string{"config", "user.email", "lore@northwind.invalid"}}).output(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if env, err = s.envFor(ctx, same); err != nil || len(env) != 0 {
-		t.Fatalf("org store whose git identity uses the org email: env = %v, %v; want none (git signs)", env, err)
+	if env, err = s.envFor(ctx, same); err != nil || !strings.Contains(strings.Join(env, " "), "GIT_AUTHOR_NAME=Northwind") || !strings.Contains(strings.Join(env, " "), "GIT_COMMITTER_NAME=Northwind") {
+		t.Fatalf("devco:D-714 org store whose git user is Git Person with the org email: env = %v, %v; want the org identity", env, err)
 	}
 	env, err = s.envFor(ctx, mk("git@github.com:someone/personal.git"))
 	if err != nil || len(env) != 0 {
@@ -108,5 +114,56 @@ func TestLoreSignatureIsStoreFallback(t *testing.T) {
 				t.Fatalf("email %q, want prefix %q", email, c.email)
 			}
 		})
+	}
+}
+
+// devco:D-714: every store commit of an org has one author, whichever op
+// makes it: the org-file commits (org link, unlink, org config, org store
+// add/remove/audience, set-url: storeSignature) and the backend and wire
+// commits (adopt, writes, merges: OrgSigners → storeSigner) name the same
+// orgs[<org>].identity, also when the identity has no name (storeSignature
+// fell back to the org's label, OrgSigners to the email's local part) or
+// its name carries spaces.
+func TestOrgCommitSignerOneAuthorForEveryOp(t *testing.T) {
+	t.Parallel()
+	for _, id := range []orgconf.OrgIdentity{
+		{Key: "human:ada@acme.test", Name: "Ada Admin"},
+		{Key: "human:ada@acme.test"},
+		{Key: "human:ada@acme.test", Name: " Ada Admin "},
+	} {
+		o := orgconf.Org{Name: "acme", Identity: id, Stores: []orgconf.Store{{URL: "git@github.com:acme-co/lore-team.git"}}}
+		home := t.TempDir()
+		r := &OrgResolution{home: home}
+		writeSignerConfig(t, home, o)
+		signers, err := r.OrgSigners(context.Background())
+		if err != nil || len(signers) != 1 {
+			t.Fatalf("OrgSigners = %v, %v", signers, err)
+		}
+		ref := storeSignature(&o)
+		if ref.Name != signers[0].Name || ref.Email != signers[0].Email {
+			t.Fatalf("identity %+v: org link signs %q <%s>, adopt and writes sign %q <%s>; want one author", id, ref.Name, ref.Email, signers[0].Name, signers[0].Email)
+		}
+		if ref.Email != "ada@acme.test" {
+			t.Fatalf("identity %+v: email %q", id, ref.Email)
+		}
+	}
+	if sig := storeSignature(&orgconf.Org{Name: "acme"}); sig.Name != fallbackStoreName {
+		t.Fatalf("an org without an identity signs %q, want lore's last resort", sig.Name)
+	}
+}
+
+// writeSignerConfig writes ~/.lore/config.yaml under home with the one org o.
+func writeSignerConfig(t *testing.T, home string, o orgconf.Org) {
+	t.Helper()
+	raw, err := yaml.Marshal(orgconf.Config{Orgs: []orgconf.Org{o}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := orgcfg.ConfigPath(home)
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, raw, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

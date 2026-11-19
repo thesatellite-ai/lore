@@ -241,14 +241,14 @@ nothing to prune: every cache file belongs to a repo on this machine or a store 
 
 ## Who signs lore's commits in a store
 
-A commit lore makes in a store clone (a note, a merge, a marker) is signed by the same identity a commit you make by hand in that clone would carry, with one exception for org stores:
+Every commit lore makes in a store clone (a note, a merge, a marker, an adopt, an `org link`, a folder or org config change) follows one rule per store, whichever command makes it:
 
 | Store | Signed by |
 |---|---|
-| an org's store | your git identity for that clone when its email is your identity in the org (`lore whoami`); otherwise the org identity. A personal git email (`@gmail.com` and so on) never signs an org store's commit. |
+| an org's store | your identity in that org (`orgs.<org>.identity` in `~/.lore/config.yaml`, what `lore whoami` shows there), as author and committer, whatever the clone's git `user.name` says. A personal git email (`@gmail.com` and so on) never signs an org store's commit. |
 | any other store (`me`, a `.lore/stores.yaml` store) | your git identity for that clone when git has one (environment, the clone's config, then global and system config); otherwise your lore identity |
 
-So when lore's commits show your org name ("Mira Dev") and your own commits in the clone show your git name ("mira-agency") with the same email, give the clone the git identity you want: git's `includeIf "gitdir:~/.lore/stores/"` in your global config, or `git config user.name` in the clone. lore writes `user.name` and `user.email` into a store clone's own `.git/config` only when it clones the store or finds no `user.email` there, announces it in one line, and later changes only the value it wrote itself ([Plain git in the store](../sync/editing-by-hand.md#plain-git-in-the-store)); it never touches your global git config.
+lore gives an org store's clone that same identity as its own `user.name` and `user.email` (in the clone's `.git/config`, never your global git config) when it clones the store or finds no `user.email` there, announces it in one line, and later changes only the value it wrote itself ([Plain git in the store](../sync/editing-by-hand.md#plain-git-in-the-store)), so a commit you make by hand in the clone carries it too. If you set another `user.name` in the clone (your git handle beside the org email), your hand commits carry that name; lore's own commits still carry your org identity.
 
 When a coding agent writes for you, the commit is still signed as the table above says, never as the agent: the agent is named in a `Lore-Agent:` trailer of the commit message.
 

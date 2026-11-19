@@ -490,14 +490,15 @@ func (s storeSigner) owner(ctx context.Context, raw string) (git.Signature, bool
 
 // envFor is the identity environment of a commit lore makes in the store
 // worktree dir, the backend's rule (adapters/backend/git identity.go): in
-// an org store the org identity, unless dir's git identity uses the same
-// email (git signs, as for a hand edit); else git.IdentityEnv's FLAG4.
+// an org store the org identity, whatever dir's git user says (D-714: adopt
+// let a git user.name with the org email sign while org link signed as the
+// org identity); else git.IdentityEnv's FLAG4.
 func (s storeSigner) envFor(ctx context.Context, dir string) ([]string, error) {
 	origin := ""
 	if out, err := (gitRun{dir: dir, args: []string{"config", "--get", "remote.origin.url"}}).output(ctx); err == nil {
 		origin = strings.TrimSpace(string(out))
 		if sig, ok := s.owner(ctx, origin); ok {
-			if env, ok := git.SignerEnvFor(ctx, dir, sig); ok {
+			if env, ok := git.SignerEnv(sig); ok {
 				return env, nil
 			}
 		}

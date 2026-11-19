@@ -511,13 +511,18 @@ type wwCtx struct {
 
 // wwOverride is the input of a write whose generated one cannot work.
 var wwOverride = map[string]func(c wwCtx) []string{
-	"config.set":         func(wwCtx) []string { return []string{"--key", "live.autopush", "--value", "false"} },
-	"config.unset":       func(wwCtx) []string { return []string{"--key", "live.autopush"} },
-	"repo.set_url":       func(wwCtx) []string { return []string{"--url", "git@github.com:acme-co/renamed.git"} },
-	"store.push":         func(c wwCtx) []string { return []string{"--store", c.org} },
-	"store.set_url":      func(c wwCtx) []string { return []string{"--name", c.org, "--url", c.w.newURLs[c.org]} },
-	"store.forget":       func(c wwCtx) []string { return []string{"--url", c.w.urls[c.org]} },
-	"org.link":           func(c wwCtx) []string { return []string{"--org", c.org, "--project", wFolder} },
+	"config.set":    func(wwCtx) []string { return []string{"--key", "live.autopush", "--value", "false"} },
+	"config.unset":  func(wwCtx) []string { return []string{"--key", "live.autopush"} },
+	"repo.set_url":  func(wwCtx) []string { return []string{"--url", "git@github.com:acme-co/renamed.git"} },
+	"store.push":    func(c wwCtx) []string { return []string{"--store", c.org} },
+	"store.set_url": func(c wwCtx) []string { return []string{"--name", c.org, "--url", c.w.newURLs[c.org]} },
+	"store.forget":  func(c wwCtx) []string { return []string{"--url", c.w.urls[c.org]} },
+	"org.link":      func(c wwCtx) []string { return []string{"--org", c.org, "--project", wFolder} },
+	// devco:D-714: the target is positional, so the generated input named
+	// none and adopt never reached its store commit; it adopts the place's
+	// repo (the v0.1.17 repo holds rows) into the org's folder, and rule (a)
+	// checks that commit's author like every other op's
+	"store.adopt":        func(c wwCtx) []string { return []string{c.org + "/" + wFolder} },
 	"org.refresh":        func(c wwCtx) []string { return []string{"--org", c.org} },
 	"org.use":            func(c wwCtx) []string { return []string{"--org", c.org} },
 	"org.config.set":     func(c wwCtx) []string { return []string{"--org", c.org, "--key", "matrix", "--value", "on"} },
