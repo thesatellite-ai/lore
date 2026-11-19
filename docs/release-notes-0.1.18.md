@@ -33,10 +33,12 @@ The prebuilt binaries (the archives on GitHub Releases, the Homebrew formula and
 
 ## Install
 
-Each of these installs the prebuilt binary for your platform from this release's archives (see License above), with the agent skill.
+Each of these installs the prebuilt binary for your platform from the latest release's archives (see License above). The install scripts also install the agent skill; after Homebrew or a manual download, run `lore skill install --all`.
 
 ```sh
-brew install thesatellite-ai/tap/lore
+brew tap thesatellite-ai/tap
+brew install lore
+lore skill install --all
 ```
 
 or
@@ -51,4 +53,4 @@ On Windows:
 irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
 ```
 
-Or download an archive from [GitHub Releases](https://github.com/thesatellite-ai/lore/releases) and check it against `checksums.txt`. To build from source instead: `go install github.com/thesatellite-ai/lore/cmd/lore@v0.1.18`.
+Or download an archive from [GitHub Releases](https://github.com/thesatellite-ai/lore/releases) (`lore_<os>_<arch>.tar.gz`, `lore_windows_<arch>.zip` on Windows, for amd64 and arm64) and check it against `checksums.txt`; the [README](../README.md#manual-download) shows the commands. To build from source instead: `go install github.com/thesatellite-ai/lore/cmd/lore@v0.1.18`.
