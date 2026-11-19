@@ -28,7 +28,9 @@ One command to install, nothing to run, everything stays on your machine. It shi
   - [lore vs other agent memory tools](#lore-vs-other-agent-memory-tools)
 - [Install](#install)
   - [Install the skill (required)](#install-the-skill-do-this-now--required)
-- [Quick start](#quick-start)
+- [First steps for a new developer](#first-steps-for-a-new-developer)
+  - [Quick start](#quick-start)
+- [Upgrading from 0.1.17](#upgrading-from-0117)
 - [Concepts](#concepts)
 - [Command reference](#command-reference)
   - [Project setup & ops](#project-setup--ops)
@@ -61,7 +63,7 @@ One command to install, nothing to run, everything stays on your machine. It shi
 
 Most agent memory tools bolt a vector database (a search engine that matches by rough meaning, not by exact words) onto your agent and hope it finds the right thing when it is needed. lore takes the opposite bet: **your agent already reads `CLAUDE.md` / `AGENTS.md` at the start of every session** — so lore makes *that file* the memory. `lore render` writes your knowledge to `.lore/LORE.md` and adds an `@import` pointer (one line that says "read that file too") to `CLAUDE.md`, so your hand-written content is kept and recall is just your agent reading the file it already reads. No embeddings, no API keys, no runtime retrieval lottery, and nothing leaves your machine.
 
-- **Local-first & private** — a local cache under `.lore/` plus plain JSON files you commit yourself. No cloud, no account, no telemetry. Nothing leaves your laptop unless you `git push` it.
+- **Local-first & private** — plain JSON files under `.lore/data/` that you commit yourself, plus a local cache under `~/.lore/`. No cloud, no account, no telemetry. Your notes leave your laptop only through git.
 - **Shared through git, per branch** — every shared row (one note) is one small JSON file under `.lore/data/`. Knowledge learned on a feature branch stays on that branch and reaches `main` when the PR merges, exactly like code. No server, no S3, no sync service.
 - **Deterministic recall** — must-follow rules and critical warnings are *pinned* into the rendered file; everything else is one `lore search` away. No embedding drift, no "why didn't it remember that?"
 - **Structured, not a blob** — `rule` (with severity), `decision` (with rationale), `hotfix`, `pattern`, `playbook`, `task`, `run` — each entity is rendered the way it's meant to be read, not dumped as one undifferentiated wall of text.
@@ -93,13 +95,19 @@ If you want a hosted, embeddings-based agent memory, plenty of those exist. If y
 > 1. the **`lore` binary** (the actual CLI/engine), and
 > 2. the **lore skill** (teaches your coding agent *when/how* to call `lore`).
 >
-> The Homebrew and script installers below install **both**. If you install the binary manually, install the skill separately (see [Install the skill](#install-the-skill-do-this-now--required)). The skill without the binary does nothing; the binary without the skill works but your agent won't use it automatically.
+> The install scripts below install **both**. Homebrew and a manual archive install only the binary: run `lore skill install --all` once afterwards (see [Install the skill](#install-the-skill-do-this-now--required)). The skill without the binary does nothing; the binary without the skill works but your agent won't use it automatically.
+
+Every way below installs the latest release (0.1.18 or newer) for macOS, Linux or Windows on amd64 or arm64. Check it with `lore version`.
 
 ### Homebrew (macOS / Linux)
 
 ```sh
-brew install thesatellite-ai/tap/lore
+brew tap thesatellite-ai/tap
+brew install lore
+lore skill install --all     # the agent skill (the formula installs the binary only)
 ```
+
+`brew install thesatellite-ai/tap/lore` does the tap and the install in one line. Upgrade later with `brew upgrade lore` (or `lore upgrade`, which runs it for you).
 
 ### Script (macOS / Linux)
 
@@ -107,21 +115,43 @@ brew install thesatellite-ai/tap/lore
 curl -sL https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.sh | sh
 ```
 
+It downloads the latest release's archive for your platform from [Releases](https://github.com/thesatellite-ai/lore/releases/latest), checks it against the release's `checksums.txt`, installs `lore` to `/usr/local/bin` (asking for `sudo` when that folder is not writable; set `INSTALL_DIR=<folder>` to choose another) and copies the skill to `~/.claude/skills/lore`. Upgrade later with `lore upgrade`.
+
 ### Windows (PowerShell)
 
 ```powershell
 irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
 ```
 
-Or grab a tarball from [Releases](https://github.com/thesatellite-ai/lore/releases) and put `lore` on your `PATH` (the `skills/` folder in the archive is the skill bundle; `BINARY-LICENSE.txt` beside it is the binary's licence, see [License](#license)).
+It installs `lore.exe` to `%LOCALAPPDATA%\lore`, adds that folder to your user `PATH` (open a new terminal afterwards) and copies the skill to `%USERPROFILE%\.claude\skills\lore`. Upgrade later with `lore upgrade`.
+
+### Manual download
+
+Each release has one archive per platform, named `lore_<os>_<arch>.tar.gz` (`lore_windows_<arch>.zip` on Windows), plus `checksums.txt`. For example, on an Apple-silicon Mac:
+
+```sh
+curl -fsSLO https://github.com/thesatellite-ai/lore/releases/latest/download/lore_darwin_arm64.tar.gz
+curl -fsSLO https://github.com/thesatellite-ai/lore/releases/latest/download/checksums.txt
+grep ' lore_darwin_arm64.tar.gz$' checksums.txt | shasum -a 256 -c -   # sha256sum -c on Linux
+tar xzf lore_darwin_arm64.tar.gz
+sudo mv lore /usr/local/bin/      # or any folder on your PATH
+lore skill install --all          # the agent skill
+```
+
+The other names are `lore_darwin_amd64`, `lore_linux_amd64`, `lore_linux_arm64`, `lore_windows_amd64` and `lore_windows_arm64`. The archive also holds this README, the `skills/` folder (the skill bundle) and `BINARY-LICENSE.txt`, the binary's licence (see [License](#license)).
 
 ### Install the skill (do this now — required)
 
 lore needs **both** the binary *and* the lore skill. The skill teaches your coding agent **when and how** to call `lore` (save a note when you correct it, make a decision or say "remember this"; look things up before answering; keep `CLAUDE.md` current). Without it the binary works but your agent won't use it automatically.
 
-The Homebrew and `curl … | sh` / PowerShell installers **already install the skill** to `~/.claude/skills/lore` — you're done, just **restart your coding agent**.
+The `curl … | sh` and PowerShell installers **already install the skill** to `~/.claude/skills/lore`. After Homebrew or a manual download, or to add it for your other coding tools too, run:
 
-Installed the binary some other way? Add the skill with one of:
+```sh
+lore skill install --all     # every coding tool on this machine that has a skill folder
+lore skill status            # which tools have it, and whether it is current
+```
+
+Other ways, without the binary's help:
 
 ```sh
 npx skills add thesatellite-ai/lore          # via skills.sh
@@ -134,32 +164,73 @@ cp -R skills/. ~/.claude/skills/lore/
 
 Then **restart your coding agent** so it loads.
 
-## Quick start
+## First steps for a new developer
+
+**1. Set up this machine (optional, once).** `lore setup` opens a guided page in your browser that asks who you are, which GitHub account you use, where your own notes go and which coding tools you use, and checks each answer. You can skip it: lore works in a repo without it. Every step is also a command (`lore setup plan`, `check`, `apply`), so a script or an agent can do the same. See [Guided setup](docs/team/guided-setup.md).
+
+**2. Join your team (if you have one).** Your admin either adds you (`lore member add`) and gives you the team's store url, or sends you an invite line. Run one of:
+
+```sh
+lore setup join --invite "git@github.com:your-org/team-store.git"   # an admin added you: the store url (or the org's name)
+lore setup join --invite "lore-invite:v1:…"                         # the invite line your admin sent
+```
+
+It prints the setup steps that join and, in a terminal, opens the setup page on the join step. See [Team invites](docs/team/invites.md) and [Getting started with teams](docs/team/getting-started.md).
+
+**3. Start lore in a code repo.** In a repo that does not use lore yet, run `lore init`: it creates `.lore/data` (the notes, committed with your code), `.lore/LORE.md` (what your coding tool reads) and a one-line pointer in `CLAUDE.md` / `AGENTS.md`. In a repo that already uses lore (you cloned it), there is nothing to do: the first lore command builds your local cache from `.lore/data`.
+
+**4. Use it every day.** The quick start below shows the commands you will use most: add and list notes, take tasks, search, sync and render.
+
+### Quick start
 
 ```sh
 cd your-project
 
-lore init                # create the local lore project
+lore init                # create the lore project in this repo
 lore directive install   # add the agent-directive block to CLAUDE.md / AGENTS.md
 
-# capture knowledge
+# capture knowledge, and list it
 lore memory add --body "The client replies faster on WhatsApp than email"
 lore rule add --body "Run the tests before you push"
 lore decision add --title "Payments" --body "We use Stripe for payments"
+lore memory list         # also: lore rule list, lore decision list
+
+# tasks
+lore task add --title "Send the invoice reminder before Friday's demo" --commitment accepted
+lore task next           # which task is next (writes nothing)
+lore task next --claim   # take it: your name goes on it (or: lore task claim --id <id>)
 
 # retrieve it
-lore search --query "whatsapp"           # search across all knowledge
-lore render                      # compile knowledge → .lore/LORE.md + @import pointer in CLAUDE.md
-
+lore search --query "whatsapp"   # search across all knowledge
+lore render                      # compile knowledge → .lore/LORE.md + @import pointer in CLAUDE.md / AGENTS.md
 lore tui                         # browse everything (read-only)
 
 # share it with your team: the knowledge is plain files under .lore/data/
+lore sync                        # import what git brought, send live rows (tasks) to teammates
 git add .lore/data .gitattributes && git commit -m "lore knowledge"
 ```
 
+`--commitment` says whether the task was asked for (`accepted`), is only an idea (`proposed`) or is parked (`someday`); a coding agent must always give it. Every command has `--help`, and `lore --help` lists them all.
+
+## Upgrading from 0.1.17
+
+lore 0.1.18 stores notes in a new format that lore 0.1.17 cannot read, so upgrade in this order:
+
+1. **Every teammate installs 0.1.18 first, on every machine** (`lore upgrade`, `brew upgrade lore`, or run the install script again). 0.1.18 reads repos still on the 0.1.17 format, but refuses to write to them until they are migrated, with a message that names `lore migrate run`.
+2. **Then one person migrates each repo:**
+
+```sh
+cd your-project
+lore migrate run --dry-run   # list the files it would rewrite; changes nothing
+lore migrate run             # rewrite the notes (and the team's stores) in the 0.1.18 format
+git add .lore/data && git commit -m "lore: migrate to 0.1.18" && git push
+```
+
+`lore migrate rollback` undoes the last migration, and `lore migrate status` shows the format of every place. `lore fix --all` lists every repo on this machine still on the 0.1.17 format (add `--migrate` to migrate them all). Run `lore skill install --all` after upgrading so your coding tools get the 0.1.18 skill. A teammate who is still on 0.1.17 after the migration cannot commit lore notes or read the migrated ones until they install 0.1.18 and run `lore fix`; nothing is lost. Details: [Upgrade lore](docs/operations/upgrade.md) and the [0.1.18 release notes](docs/release-notes-0.1.18.md).
+
 ## Concepts
 
-- **Project** — one per repo (created by `lore init`): every note is a small JSON file under `.lore/data/` that you commit with the code, so it travels with it; a local cache under `.lore/` is rebuilt from those files whenever it is missing (see [Team sync through git](#team-sync-through-git)).
+- **Project** — one per repo (created by `lore init`): every note is a small JSON file under `.lore/data/` that you commit with the code, so it travels with it; a local cache under `~/.lore/cache/` is rebuilt from those files whenever it is missing (see [Team sync through git](#team-sync-through-git)).
 - **Entities** — typed knowledge records: `memory`, `rule`, `decision`, `pattern`, `hotfix`, `snapshot`, `playbook`, `prompt`, `task`, `mission`, `plan`, `reminder`, `handoff`, `incident`, `techdoc`, and more.
 - **Scope** — knowledge is scoped to the whole project (`master`) or a specific `--repo`. `add` persists `repo_id`; `list` and `search` filter by it with identical semantics (`--repo`, `--all-repos`, `--master-only`, `--no-inherit`). Real per-repo scoping — no body prefix-tag convention needed. Re-scope an existing row with `edit --rebind-repo <mount>` / `edit --rebind-master`. Bare `--repo` on `edit` is context-only (never mutates scope; warns loudly). For audited body+scope change use `add --supersedes <old_id> --repo <mount>`.
 - **Render** — `lore render` compiles a small **core** of the project's knowledge into a generated file (default `.lore/LORE.md`), kept inside a byte budget: must rules, critical and high hotfixes, the agent's operating rules and an index of topics. It stitches an idempotent `@import` pointer into the file your coding tool reads (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/lore.mdc`, `GEMINI.md`, … chosen with `--target`; otherwise `lore init` picks the tools of the setup that applies to the folder, else the tool files the repo already has, else `AGENTS.md`), so your hand-written content is never clobbered. Use `--no-pointer` to write only the generated file, or `--out` to change its path.
@@ -300,7 +371,7 @@ Lore works for a whole team, several repos, several companies and a crew of codi
 - **Agents do not step on each other.** `lore task next --claim` claims a task (plain `lore task next` only shows which one is next): the agent puts its name on it, like writing your name on a whiteboard job. The claim has a lease, so it runs out after a set time unless the agent keeps saying it is alive, and it is kept on a second hidden ref (`refs/lore/signals`). A crashed agent's task is picked up when its lease runs out, and people approve gates (steps that wait for a person to say yes).
 
 ```bash
-lore task add --title "Send the invoice reminder before Friday's demo" --assign @bob  # live: Bob sees it on his next command
+lore task add --title "Send the invoice reminder before Friday's demo" --commitment accepted --assign @bob  # live: Bob sees it on his next command
 lore org link --org agency --project client                     # once: tie a client repo to an internal project
 lore memory add --body "The client replies faster on WhatsApp than email"  # in a client repo: goes to the store, not the repo
 lore task next --claim --mission msn_01a1… --push         # an agent takes the next ready task (--push: the claim goes to the code remote)
@@ -417,7 +488,7 @@ Safety: lore refuses to run as root (`LORE_ALLOW_ROOT=1` overrides) and refuses 
 
 **Which coding agents does lore support?** Any agent that reads a project-instructions file. lore renders `CLAUDE.md`, `AGENTS.md` (Cursor, Codex, and others), or `.cursorrules` via `lore render --target`. Works alongside Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents.
 
-**Does lore send my code or knowledge to the cloud?** No. Everything lives under `.lore/` in your repo: a local cache plus JSON files. No account, no network calls, no telemetry — knowledge only leaves your machine when you `git push` it yourself.
+**Does lore send my code or knowledge to the cloud?** No. Your notes are JSON files under `.lore/data/` in your repo, and the local cache lives under `~/.lore/` on your machine. No account, no telemetry. lore reaches the network only through git (your own remotes, when you push or sync) and, once a day, to see whether a newer release is out (`upgrade_notice: false` in `~/.lore/config.yaml` turns that off).
 
 **Does it use a model, embeddings, or an API key?** No. Search is local full-text search (it matches the words you type) — fast, always the same answer, and free. There's no vector database and no embedding bill.
 
@@ -443,6 +514,6 @@ See **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** (build, release, Homebrew tap
 
 The source code in this repository is licensed under the [Apache License 2.0](LICENSE) from release 0.1.18 (see [NOTICE](NOTICE)). Releases v0.1.17 and earlier remain under the PolyForm Perimeter License 1.0.0, the license they were published under.
 
-The prebuilt binaries (the archives on [Releases](https://github.com/thesatellite-ai/lore/releases), the Homebrew cask and the `install.sh` / `install.ps1` installers, which download those archives) contain this Apache-2.0 source and also proprietary components, such as the guided setup page. They are free to use, including for commercial work, under `BINARY-LICENSE.txt`, which ships in every archive beside `LICENSE-core-Apache-2.0` and `NOTICE-core` (this repository's licence and notice). The binary licence does not allow reselling the binary, offering it as a hosted service, modifying it, or reverse-engineering its proprietary parts, and it does not limit your Apache-2.0 rights in this source. Building from this source (`go install github.com/thesatellite-ai/lore/cmd/lore@latest` or `task lore:build`) gives a binary under the Apache License 2.0 alone, which serves the plain built-in setup page.
+The prebuilt binaries (the archives on [Releases](https://github.com/thesatellite-ai/lore/releases), the Homebrew formula and the `install.sh` / `install.ps1` installers, which download those archives) contain this Apache-2.0 source and also proprietary components, such as the guided setup page. They are free to use, including for commercial work, under `BINARY-LICENSE.txt`, which ships in every archive beside `LICENSE-core-Apache-2.0` and `NOTICE-core` (this repository's licence and notice). The binary licence does not allow reselling the binary, offering it as a hosted service, modifying it, or reverse-engineering its proprietary parts, and it does not limit your Apache-2.0 rights in this source. Building from this source (`go install github.com/thesatellite-ai/lore/cmd/lore@latest` or `task lore:build`) gives a binary under the Apache License 2.0 alone, which serves the plain built-in setup page.
 
 <sub><strong>lore</strong> — open-source, local-first memory &amp; context management for coding agents. Persistent <code>CLAUDE.md</code> / <code>AGENTS.md</code> memory for Cursor, Windsurf, Cline, GitHub Copilot, Codex and other coding agents. No cloud, no API keys, no embeddings.</sub>
