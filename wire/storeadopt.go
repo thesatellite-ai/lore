@@ -135,10 +135,23 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		out.Push = string(a.storeSettings(gb, place).Push)
 		done()
 	}
+	// D-713: what --move and --commit need is checked before anything is
+	// written (the link's plan, other staged changes)
+	if in.Move {
+		if out.Link, err = a.adoptLink(ctx, src.URL, label, top, folderName, in.Own, false); err != nil {
+			return opsstores.AdoptOut{}, err
+		}
+	}
+	if in.Commit {
+		if err := adoptStagedElsewhere(ctx, top); err != nil {
+			return opsstores.AdoptOut{}, err
+		}
+	}
 	srcRows, left, err := a.adoptSource(ctx, top)
 	if err != nil {
 		return opsstores.AdoptOut{}, err
 	}
+	liveKeys := adoptLiveKeys(srcRows.rows)
 	out.Left = left
 	have, _, err := f.Read(ctx, "")
 	if err != nil {
@@ -157,12 +170,15 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 	for _, k := range slices.Clone(adopted) {
 		adopted = append(adopted, srcRows.links[k.ID.String()]...)
 	}
-	if in.RemoveSource && out.Live > 0 {
-		out.Left = append(out.Left, "refs/lore/live: "+plural(out.Live, "adopted row")+" stay on the live ref (--remove-source deletes row files only, never a git ref)")
-	}
 	if in.DryRun {
 		if in.RemoveSource {
 			out.Removed = countPresent(top, adopted) // what the run would delete
+			if out.LiveRemoved, err = adoptLiveCount(ctx, top, liveKeys); err != nil {
+				return opsstores.AdoptOut{}, err
+			}
+			if out.Removed > 0 {
+				out.Next = []string{opsstores.AdoptCommitCommand(top, label+"/"+folderName)} // the repo commit the run leaves (or makes, --commit)
+			}
 		}
 		return out, nil
 	}
@@ -176,17 +192,38 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		}
 		out.Pushed, out.Note = pushed, note
 	}
+	place := label + "/" + folderName
+	if in.Move {
+		if out.Link, err = a.adoptLink(ctx, src.URL, label, top, folderName, in.Own, true); err != nil {
+			return out, errs.Prefix("the rows are in "+place, err).
+				WithHint("rerun the same command: it writes nothing new and finishes the link")
+		}
+	}
 	if in.RemoveSource {
+		// D-716: the adopted rows leave the repo's live ref too; left there,
+		// each id was two live rows once the repo read the folder
+		var lerr error
+		out.LiveRemoved, out.LiveKept, lerr = a.adoptLiveRemove(ctx, top, liveKeys)
 		removed, rerr := removeAdopted(top, adopted)
 		out.Removed = len(removed)
 		// D-710: the hook commits these deletions (the rows live in the
 		// store now) instead of refusing them as removed by hand
-		if merr := RecordMovedOut(ctx, top, label+"/"+folderName, removed); merr != nil && rerr == nil {
+		if merr := RecordMovedOut(ctx, top, place, removed); merr != nil && rerr == nil {
 			rerr = merr
 		}
+		if rerr == nil {
+			rerr = lerr
+		}
 		if rerr != nil {
-			return out, errs.Prefix(adoptVerb+": the rows are in "+label+"/"+folderName+" but the repo's copies could not all be removed", rerr).
+			return out, errs.Prefix(adoptVerb+": the rows are in "+place+" but the repo's copies could not all be removed", rerr).
 				WithHint("rerun the same command: it writes nothing new and removes what is left")
+		}
+		if out.Removed > 0 && in.Commit {
+			if out.Commit, err = adoptCommit(ctx, top, place); err != nil {
+				return out, err
+			}
+		} else if out.Removed > 0 {
+			out.Next = []string{opsstores.AdoptCommitCommand(top, place)}
 		}
 	}
 	return out, nil

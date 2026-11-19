@@ -84822,6 +84822,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "commit": {
+                    "type": "boolean",
+                    "description": "with --move or --remove-source: commit the removal in the repo (through its hooks) instead of printing the git command"
+                  },
                   "dry_run": {
                     "type": "boolean",
                     "description": "count what would be written; change nothing"
@@ -84829,6 +84833,14 @@
                   "from": {
                     "type": "string",
                     "description": "the repo whose lore data moves (default: the repo this command runs in)"
+                  },
+                  "move": {
+                    "type": "boolean",
+                    "description": "move the repo's notes into the folder in one go: adopt, remove the source (row files and live copies), link this repo to the folder; prints the git command left (or runs it with --commit)"
+                  },
+                  "own": {
+                    "type": "boolean",
+                    "description": "with --move: the repo is one of the org's own repos (lore org link --own)"
                   },
                   "remove_source": {
                     "type": "boolean",
@@ -84865,6 +84877,9 @@
                         "type": "string"
                       }
                     },
+                    "commit": {
+                      "type": "string"
+                    },
                     "conflicts": {
                       "type": "array",
                       "items": {
@@ -84892,11 +84907,32 @@
                         "type": "string"
                       }
                     },
+                    "link": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "live": {
+                      "type": "integer"
+                    },
+                    "live_kept": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "live_removed": {
                       "type": "integer"
                     },
                     "lore_db": {
                       "type": "integer"
+                    },
+                    "next": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "note": {
                       "type": "string"
@@ -84995,7 +85031,7 @@
             }
           },
           "409": {
-            "description": "E_CANCELLED, E_NOT_PROJECT_ROOT, E_POLICY_DENIED, E_REFUSED, E_STALE, E_STORE_READ_ONLY",
+            "description": "E_CANCELLED, E_NOT_PROJECT_ROOT, E_ORG_AMBIGUOUS, E_ORG_DISAGREES, E_POLICY_DENIED, E_REFUSED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
             "content": {
               "application/json": {
                 "schema": {
@@ -85025,7 +85061,7 @@
             }
           },
           "503": {
-            "description": "E_STORE_UNREACHABLE",
+            "description": "E_OFFLINE, E_STORE_UNREACHABLE",
             "content": {
               "application/json": {
                 "schema": {

@@ -8,6 +8,10 @@ package stories
 // refused the commit of that removal ("deletes 204 lore rows by removing
 // the file, not with lore"). Now the command adopt prints commits through
 // the real hooks, the push goes, and the store folder holds every row.
+// devco:D-713, D-716: the whole move of a second repo with open (live)
+// rows is one command, `lore store adopt --move --commit`: the rows leave
+// the repo's live ref and files, the repo is linked to the folder and the
+// commit goes through the hooks; the repo then reads each id once.
 
 import (
 	"strings"
@@ -52,5 +56,51 @@ func TestStoryOAdoptRemoveSourceCommits(t *testing.T) {
 		if out := nc.Git("ls-files", ".lore/data/rules", ".lore/data/memories"); out != "" {
 			t.Errorf("the repo still tracks adopted row files:\n%s", out)
 		}
+	})
+}
+
+func TestStoryOAdoptMoveOneCommand(t *testing.T) {
+	s := New(t, "O")
+	team := s.Remote("github.com/" + oOwner + "/lore-team")
+	platform := s.Seed(s.Remote("github.com/"+oOwner+"/platform"), func(dir string) { PlainRepo(t, dir) })
+	ledger := s.Seed(s.Remote("github.com/"+oOwner+"/ledger-app"), func(dir string) { PlainRepo(t, dir) })
+
+	ada := s.OwnerShaped(OwnerShape{Personal: oAdminPersonal, Org: oAdminOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner}})
+	pc := ada.CloneTo(platform, ada.OrgDir("platform"))
+	oSetupFlow(t, ada, pc.Dir, oSetup, "admin", oAdminOrg, oAlias,
+		map[string]any{"org": oOrg, "store_url": team.SSHURL()}, []string{"~/code/" + oOrg + "/**"})
+	lc := ada.CloneTo(ledger, ada.OrgDir("ledger-app"))
+	const folder = "ledger"
+	place := oOrg + "/" + folder
+	var task string
+
+	s.Step("D-713/a-repo-with-open-live-rows", func() {
+		ada.Lore(lc.Dir, "init", "--non-interactive", "--name=ledger-app").OK(t)
+		ada.Lore(lc.Dir, "rule", "add", "--body", "Run the linter before every push", "--severity", "must", "--to", "repo", "--yes").OK(t)
+		r := ada.Lore(lc.Dir, "task", "add", "reconcile the ledger", "--to", "repo", "--json").OK(t)
+		i := strings.Index(r.Stdout, `"id": "tsk_`)
+		if i < 0 {
+			t.Fatalf("task add printed no id:\n%s", r.Stdout)
+		}
+		task = r.Stdout[i+len(`"id": "`) : i+len(`"id": "`)+36]
+		lc.CommitAll("lore notes")
+		lc.Git("push", "-q", "origin", "HEAD:main")
+		if !strings.Contains(lc.Git("ls-tree", "-r", "--name-only", "refs/lore/live"), task) {
+			t.Fatalf("the open task is not on the live ref: the step would prove nothing")
+		}
+		ada.Lore(pc.Dir, "store", "folder", "add", oOrg, folder).OK(t)
+	})
+
+	s.Step("D-713/one-command-moves-links-and-commits", func() {
+		ada.Lore(lc.Dir, "store", "adopt", "--target", place, "--move", "--commit", "--yes").OK(t).
+			Says(t, "off the repo's live ref", "and committed it (", "link: ")
+		if got := lc.Git("log", "-1", "--format=%s"); got != "lore: move the notes to "+place {
+			t.Fatalf("the repo's last commit is %q", got)
+		}
+		if strings.Contains(lc.Git("ls-tree", "-r", "--name-only", "refs/lore/live"), task) {
+			t.Errorf("the moved task is still on the repo's live ref")
+		}
+		ada.Lore(lc.Dir, "show", "--id", task).OK(t).Never(t, "two live rows", "E_AMBIGUOUS_ID")
+		lc.Git("push", "-q", "origin", "HEAD:main")
 	})
 }

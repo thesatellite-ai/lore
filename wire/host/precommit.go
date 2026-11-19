@@ -87,7 +87,7 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	if err != nil {
 		return nil // not a git checkout (a hook copied around)
 	}
-	changed, junk, err := changedUnder(ctx, repo, root, loreDataPathspec)
+	changed, wholeStaged, junk, err := changedUnderStaged(ctx, repo, root, loreDataPathspec)
 	if err != nil {
 		return errs.Wrap(errs.Internal, "pre-commit: list the changed lore files", err)
 	}
@@ -152,11 +152,14 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 		// commit them now.
 		wire.HookIndexBegin(ctx, root)
 		h.line(leftOutLine(ctx, repo, root, len(changed)))
+	} else if adds := toStage(changed, wholeStaged); len(adds) == 0 {
+		wire.HookIndexBegin(ctx, root) // D-715: all staged already, nothing to add
 	} else if len(changed) > 0 {
 		before := wire.HookIndexBegin(ctx, root) // the index as the person staged it
 		staged := indexEntries(ctx, repo, root)  // L-3: what the person staged themselves
 		inv := gitref.Invocation{Dir: root, Args: []string{"add", "-A", "--", loreDataPathspec}, Env: hookIndexEnv(ctx, repo, root)}
-		if shadowed || junk || len(pending) > 0 {
+		if shadowed || junk || len(pending) > 0 || len(adds) < len(changed) {
+			changed = adds
 			// stage the rest one by one, leaving the shadowed files, OS
 			// clutter and the pending migration out; the list goes on
 			// stdin (thousands of paths overflow a command line)
@@ -193,13 +196,28 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 // junk reports that OS clutter (adapters/dataignore.IsOSJunk) was listed
 // and left out: staging then names the files instead of the folder.
 func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string) (paths []string, junk bool, err error) {
+	paths, _, junk, err = changedUnderStaged(ctx, repo, root, pathspec)
+	return paths, junk, err
+}
+
+// changedUnderStaged is changedUnder plus the paths among them already
+// staged whole: the work tree matches the index ("D " a staged deletion,
+// "M " a staged edit), so there is nothing left to add. devco D-715:
+// naming a staged deletion to `git add` fails ("pathspec did not match
+// any files": the file is in neither the work tree nor the index), so a
+// commit of row files removed and staged by the person (`git add -A
+// .lore/data`, then `LORE_ALLOW_ROW_DROP=1 git commit`) died with
+// E_INTERNAL "pre-commit: stage .lore/data"; the same removal unstaged
+// went through.
+func changedUnderStaged(ctx context.Context, repo *gitref.Repo, root, pathspec string) (paths []string, staged map[string]bool, junk bool, err error) {
+	staged = map[string]bool{}
 	out, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"-c", "core.quotePath=false", "status", "--porcelain", "-z", "--untracked-files=all", "--", pathspec}})
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	top, err := repo.Run(ctx, gitref.Invocation{Dir: root, Args: []string{"rev-parse", "--show-prefix"}})
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	prefix := strings.TrimSpace(string(top)) // root relative to the top, "" or "sub/"
 	fields := strings.Split(string(out), "\x00")
@@ -216,9 +234,25 @@ func changedUnder(ctx context.Context, repo *gitref.Repo, root, pathspec string)
 			junk = true // Finder's .DS_Store, ._name: not lore's, never checked or staged
 			continue
 		}
-		paths = append(paths, strings.TrimPrefix(p, prefix))
+		rel := strings.TrimPrefix(p, prefix)
+		paths = append(paths, rel)
+		if status[1] == ' ' && status[0] != '?' {
+			staged[rel] = true
+		}
 	}
-	return paths, junk, nil
+	return paths, staged, junk, nil
+}
+
+// toStage is changed without the paths already staged whole (staged): the
+// ones `git add` still has work for (see changedUnderStaged).
+func toStage(changed []string, staged map[string]bool) []string {
+	out := make([]string, 0, len(changed))
+	for _, p := range changed {
+		if !staged[p] {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // unstagedCount is how many of paths (relative to root) differ between the

@@ -34,6 +34,32 @@ import (
 // wwDryPlaces are the places of the dry-run cells.
 var wwDryPlaces = []string{"own-linked", "claude-link-out", "v0117", "client", "store-folder", "home-to-acme"}
 
+// wwDryVariants are the extra dry-run cells of an op whose flags change
+// what its run would write (the generated input sets required flags
+// only): each runs in every dry-run place too. store.adopt (devco D-713):
+// --move adopts, takes rows off the live ref, removes row files, links the
+// repo and with --commit commits, so its dry run has the most to leave
+// alone.
+var wwDryVariants = map[string][]func(c wwCtx) []string{
+	"store.adopt": {
+		func(c wwCtx) []string { return []string{"--target", wwDryOrg(c) + "/" + wFolder, "--move"} },
+		func(c wwCtx) []string {
+			return []string{"--target", wwDryOrg(c) + "/" + wFolder, "--move", "--commit", "--yes"}
+		},
+		func(c wwCtx) []string {
+			return []string{"--target", wwDryOrg(c) + "/" + wFolder, "--remove-source", "--commit"}
+		},
+	},
+}
+
+// wwDryOrg is the org a variant cell targets (the matrix org at home).
+func wwDryOrg(c wwCtx) string {
+	if c.org != "" {
+		return c.org
+	}
+	return wOrg
+}
+
 // wwDryFlag is the flag every dry run takes.
 const wwDryFlag = "dry-run"
 
@@ -100,15 +126,20 @@ func TestStoryWWDryRunWritesNothing(t *testing.T) {
 			p := w.places[pn]
 			c := wwCtx{w: w, p: p, org: p.Org, ids: w.ids[p.Org]}
 			for _, o := range ops {
-				args := append(wwInput(o, c, body), "--"+wwDryFlag)
-				before := drySnap(t, m.Home)
-				r := m.Lore(p.Dir, args...)
-				ran++
-				if d := dryDiff(before, drySnap(t, m.Home)); len(d) > 0 {
-					if len(d) > 4 {
-						d = append(d[:4], "…")
+				cells := [][]string{append(wwInput(o, c, body), "--"+wwDryFlag)}
+				for _, v := range wwDryVariants[o.Name] {
+					cells = append(cells, append(append(append([]string{}, o.Path...), v(c)...), "--"+wwDryFlag))
+				}
+				for _, args := range cells {
+					before := drySnap(t, m.Home)
+					r := m.Lore(p.Dir, args...)
+					ran++
+					if d := dryDiff(before, drySnap(t, m.Home)); len(d) > 0 {
+						if len(d) > 4 {
+							d = append(d[:4], "…")
+						}
+						bad = append(bad, pn+": lore "+strings.Join(args, " ")+" (exit "+strconv.Itoa(r.Code)+") changed:\n    "+strings.Join(d, "\n    "))
 					}
-					bad = append(bad, pn+": lore "+strings.Join(args, " ")+" (exit "+strconv.Itoa(r.Code)+") changed:\n    "+strings.Join(d, "\n    "))
 				}
 			}
 		}

@@ -178,7 +178,12 @@ $ git status --short
 
 - The repo is not changed: run it again and it writes nothing (no commit), so it is safe to rerun after a failed push or once the repo got new notes (only rows newer than the folder's copy are written; a row edited or deleted in the folder since is kept).
 - `--dry-run` counts what would move, per table, and what stays in the repo and why.
-- `--remove-source` then deletes the adopted row files from the repo's `.lore/data` as an ordinary diff you review and commit (the project's `_meta.json` and project row stay). adopt prints the two git commands that commit it; lore's pre-commit hook knows those rows now live in the store folder, so it commits the removal (saying where the rows went) instead of refusing it as rows deleted by hand, and `lore doctor` shows it as a note until it is committed. Rows that were only on a lore 0.1.17 live ref stay on that ref.
+- `--remove-source` then deletes the adopted row files from the repo's `.lore/data` as an ordinary diff you review and commit (the project's `_meta.json` and project row stay). adopt prints the two git commands that commit it; lore's pre-commit hook knows those rows now live in the store folder, so it commits the removal (saying where the rows went) instead of refusing it as rows deleted by hand, and `lore doctor` shows it as a note until it is committed. The adopted rows also leave the repo's live ref (`refs/lore/live`, where open work waits), in one live commit the repo's next push carries to every clone, so the repo never reads one id twice once it reads the folder; a row edited on the ref while adopt ran stays there and is named (run the same command again to take it). `--commit` makes that repo commit itself, through the repo's hooks (it refuses while other files are staged).
+- `--move` is the whole move of the repo you run it in, in one command: the adoption, `--remove-source` and `lore org link` of the repo to the folder (`--own` for one of the org's own repos, as org link takes it), then the one git command left, or the commit itself with `--commit`. Everything it needs is checked before anything is written (the link's plan, other staged files), and `--dry-run` lists every step and writes nothing:
+
+```console
+$ lore store adopt --target team/client_east --move --commit --yes
+```
 - A v0.1.17 repo needs no `lore migrate run` first: its rows are read as migrate would write them (format steps, tags folded into `tag_ids`, an agent's live stamp `…/agent` read as a stable actor).
 - Moving a single row is still `lore move --id <id> --to <store>/<folder>`.
 
