@@ -85,11 +85,16 @@ func (a *App) rosterState(ctx context.Context, target store.Source, write bool) 
 	if err != nil {
 		return nil, err
 	}
-	if !slices.Contains(st.eng.Stores(), target) {
+	if !slices.Contains(st.eng.Stores(), target) && !st.storeOnly {
 		// devco N-1: a long-lived App (the setup page, `lore api`) opened
 		// its state before this same request wrote the org entry that
 		// attaches target (the admin setup's team step): open it again
-		// from the files as they are now, once, before refusing.
+		// from the files as they are now, once, before refusing. A
+		// store-only state (openStoreOnlyOn) is never reopened: it is the
+		// one store it was opened on by design, and a full reopen outside
+		// a repo fails and sticks (devco D-694: the write guard's own
+		// roster lookup asks for the repo store, which it lacks, and left
+		// the App answering E_NOT_A_STORE to every later call).
 		if st, err = a.reopenForStore(ctx, target, write); err != nil {
 			return nil, err
 		}
@@ -376,7 +381,9 @@ func (a *App) rosterProject(ctx context.Context, st *state, target store.Source,
 	}
 	fields := map[string]value.Value{rosterFieldName: n}
 	if pid.IsZero() {
-		w, err := st.eng.Create(ctx, target, schema.TableProjects, fields)
+		w, err := a.withAgentRow(ctx, st, target, func(ctx context.Context) (engine.Written, error) {
+			return st.eng.Create(ctx, target, schema.TableProjects, fields)
+		})
 		a.wrote(err)
 		if err != nil {
 			return value.Ref{}, err
@@ -398,7 +405,9 @@ func (a *App) createFolderProject(ctx context.Context, st *state, target store.S
 	// named for it, "lore: project add prj_…: <folder>", never "lore: rule
 	// add prj_…" (a rule that is not in that commit).
 	ctx = store.WithCommitOp(ctx, folderProjectOp)
-	_, err := st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+	_, err := a.withAgentRow(ctx, st, target, func(ctx context.Context) (engine.Written, error) {
+		return st.eng.CreateWithID(ctx, target, schema.TableProjects, pid.Any(), fields)
+	})
 	if errors.Is(err, store.ErrStale) {
 		if _, rerr := st.eng.Refresh(ctx, target); rerr != nil {
 			return value.Ref{}, rerr
@@ -410,6 +419,28 @@ func (a *App) createFolderProject(ctx context.Context, st *state, target store.S
 		return value.Ref{}, err
 	}
 	return value.RefOf(pid.Any())
+}
+
+// withAgentRow runs create, lore's own write of a folder's project row,
+// after an agent caller's actor row is in place (ensureActor, in one batch
+// with the row when it lands in target itself). devco:D-694: the project
+// row is made when a command first resolves the folder's project
+// (memory add --to <org>/<team folder>, before its own write batch), so
+// it was committed stating the agent as its writer before the agent's row
+// existed anywhere; every reader's authority replay then held that gated
+// row back ("claims to be written by …") and the note that pointed at it
+// failed E_NOT_FOUND. A person's own row is not written here: their
+// register write or the roster already holds it.
+func (a *App) withAgentRow(ctx context.Context, st *state, target store.Source, create func(context.Context) (engine.Written, error)) (engine.Written, error) {
+	if actorKindOf(st.who.Kind) != schema.ActorKindAgent {
+		return create(ctx)
+	}
+	return a.withActorRows(ctx, st, func(ctx context.Context) (engine.Written, error) {
+		if err := a.ensureActor(ctx, st, target); err != nil {
+			return engine.Written{}, err
+		}
+		return create(ctx)
+	})
 }
 
 // folderProjectOp names the commit of a folder's project row
@@ -576,9 +607,9 @@ func (a *App) openStoreOnlyOn(ctx context.Context, one attach.Store, here store.
 	if err != nil {
 		return err
 	}
-	st.here = here                     // "" for the roster: its rows name no project folder
-	st.storeOnly = true                // its folders are the read's whole scope (lensFolders)
-	st.eng.SetRedactHook(a.redactTask) // D21, as App.state does
+	st.here = here      // "" for the roster: its rows name no project folder
+	st.storeOnly = true // its folders are the read's whole scope (lensFolders)
+	a.armEngine(st)     // D21 and D-694, as App.state does
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.st != nil {

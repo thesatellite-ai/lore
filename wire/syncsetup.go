@@ -626,7 +626,7 @@ func openStoreApp(ctx context.Context, opts Options, org string, one attach.Stor
 	if err != nil {
 		return nil, err
 	}
-	st.eng.SetRedactHook(x.redactTask) // D21, as App.state does
+	x.armEngine(st) // D21 and D-694, as App.state does
 	x.mu.Lock()
 	x.opened, x.st = true, st
 	x.cfgOpened = true

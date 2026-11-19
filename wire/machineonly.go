@@ -79,7 +79,7 @@ func openMachineOnly(ctx context.Context, opts Options) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.eng.SetRedactHook(m.redactTask) // D21, as App.state does
+	m.armEngine(st) // D21 and D-694, as App.state does
 	m.mu.Lock()
 	m.opened, m.st = true, st
 	m.cfgOpened = true

@@ -24,11 +24,16 @@ func TestJourneyMemberAgentWrites(t *testing.T) {
 	tt := newTLTeam(t)
 	w := tt.w
 	lee := tt.person(tlLee)
-	org := tlOrg + "/org"
+	// D-694: a member adds notes only in a folder of a team they are on
+	// (org/ is the admin's); Ann is on @web, so her agent writes in
+	// acmeteam/web
+	org := tlOrg + "/web"
 
 	w.Step("day1/team-with-a-member", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
-		tt.lore(tlLee, "member", "add", "--email", tlAnn.Email, "--name", tlAnn.Name, "--handle", "ann", "--role", "member", "--yes").OK(t)
+		tt.lore(tlLee, "team", "add", "--handle", "@web", "--members", "@lee").OK(t)
+		tt.lore(tlLee, "member", "add", "--email", tlAnn.Email, "--name", tlAnn.Name, "--handle", "ann", "--role", "member", "--team", "@web", "--yes").OK(t)
+		tt.lore(tlLee, "store", "folder", "add", "--store", tlOrg, "--folder", "web").OK(t)
 		tt.lore(tlLee, "init").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
 		ann := tt.person(tlAnn)
@@ -46,7 +51,8 @@ func TestJourneyMemberAgentWrites(t *testing.T) {
 		jAgentsRun(ann, repo, &jClaude, "s1", "memory", "add", "--body", "zephyr note two", "--to", org).OK(t).Never(t, "E_STALE")
 		jAgentsRun(ann, repo, &jClaude, "s1", "sync").OK(t).Never(t, "held back")
 		tt.lore(tlLee, "sync").OK(t).Never(t, "held back")
-		tt.lore(tlLee, "search", "zephyr").OK(t).Says(t, "zephyr note one", "zephyr note two")
+		// the web folder is not one Lee's repo attaches, so he names it
+		tt.lore(tlLee, "search", "zephyr", "--store", org).OK(t).Says(t, "zephyr note one", "zephyr note two")
 	})
 
 	w.Step("day2/a-migration-takes-in-a-teammates-push", func() {

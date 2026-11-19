@@ -24,14 +24,10 @@ import (
 )
 
 // oNoOrgMemberKey is the member half of the cell: on the owner-shaped
-// machine a member's out-of-team write from a repo no org matches is not
-// judged by the org's roster yet (devco D-694, up5team3 LEFT), so it logs
-// as waiting until the guard covers that open.
+// machine a member's out-of-team write from a repo no org matches is
+// judged by the org store's roster (devco D-694: the store-only open of a
+// folder with no lore project had no write guard).
 const oNoOrgMemberKey = "D-694/member-from-no-org-repo-refused"
-
-func init() {
-	oWaiting[oNoOrgMemberKey] = "devco D-694 (up5team3 LEFT: the role rule skips a member's write from a repo no org matches)"
-}
 
 func TestStoryOOrgStoreWriteFromNoOrgRepo(t *testing.T) {
 	s := New(t, "O")

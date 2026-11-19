@@ -187,6 +187,12 @@ func ApplyJoin(ctx context.Context, d JoinDeps, req JoinRequest) (RosterResult, 
 		return res, nil
 	}
 	w := &writer{r: r, actor: actor, today: today}
+	// The write guard judges a staged write at engine.Commit, with the
+	// stage's ctx: the invite's teams go on sctx itself, so the commit
+	// below lets the joiner add themselves to them (devco D-694: set only
+	// inside joinTeams, the commit's guard never saw it and refused the
+	// joiner's own team write once every App open armed the guard).
+	sctx = profilestore.WithInviteJoin(sctx, w.actor.ID.String(), joinHandles(x.Teams))
 	// TP-12 before any write: a membership the invite would start today
 	// may not begin on (or inside) an ended stint of the same project.
 	if err = w.checkStints(ctx, x.Projects); err != nil {
@@ -1023,18 +1029,25 @@ func (w *writer) membership(ctx context.Context, project string, roles []string)
 
 // accept marks the invite used by this actor (4.5 step 5), last, so a
 // failed run leaves it pending for the re-run.
+// joinHandles are an invite's team handles without "@", as the write
+// guard's WithInviteJoin names them.
+func joinHandles(handles []string) []string {
+	named := make([]string, 0, len(handles))
+	for _, h := range handles {
+		named = append(named, strings.TrimPrefix(h, "@"))
+	}
+	return named
+}
+
 // joinTeams adds the joining person to each team handle of the invite
 // (a re-run finds them in it and writes nothing). A team removed or gone
 // since the invite is skipped and returned in skipped: nobody joins it.
 func (w *writer) joinTeams(ctx context.Context, handles []string) (joined, skipped []string, err error) {
 	me := w.actor.ID.String()
 	// the admin's invite named these teams: the write guard lets the joiner
-	// add only themselves to them (team rows are an admin's change, D-694)
-	named := make([]string, 0, len(handles))
-	for _, h := range handles {
-		named = append(named, strings.TrimPrefix(h, "@"))
-	}
-	ctx = profilestore.WithInviteJoin(ctx, me, named)
+	// add only themselves to them (team rows are an admin's change, D-694);
+	// a staged join's commit carries the same on its own ctx (applyJoin)
+	ctx = profilestore.WithInviteJoin(ctx, me, joinHandles(handles))
 	for _, h := range handles {
 		cur, ok, ferr := findTeam(ctx, w.r, h)
 		if ferr != nil {

@@ -399,7 +399,7 @@ func (a *App) openFolderApp(ctx context.Context, org string, one attach.Store) (
 	if err != nil {
 		return nil, err
 	}
-	st.eng.SetRedactHook(x.redactTask)
+	x.armEngine(st) // D21 and D-694, as App.state does
 	x.mu.Lock()
 	x.opened, x.st = true, st
 	x.cfgOpened = true

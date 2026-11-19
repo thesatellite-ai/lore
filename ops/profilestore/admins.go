@@ -309,22 +309,34 @@ type OrgRosterer interface {
 // machine with no org), and refusing would lock its owner out of their
 // own rules.
 func openRoster(ctx context.Context, env PlaceEnv, src store.Source) (Roster, func(), bool) {
+	r, done, ok, _ := openRosterOf(ctx, env, src)
+	return r, done, ok
+}
+
+// openRosterOf is openRoster with the error of src's own org roster: err
+// is set when that org keeps a roster this machine reaches but reading it
+// failed (OrgRosterer answered an error, not "no roster"), so a caller
+// that must fail closed (the write guard) tells "no roles to follow" from
+// "the roles could not be read".
+func openRosterOf(ctx context.Context, env PlaceEnv, src store.Source) (Roster, func(), bool, error) {
 	r, done, ok := openEnvRoster(ctx, env)
 	org := orgOf(src)
 	if org == "" || (ok && orgOf(r.Source()) == org) {
-		return r, done, ok
+		return r, done, ok, nil
 	}
+	var rerr error
 	if or, has := upgrade.As[OrgRosterer](env); has {
 		own, ownDone, found, err := or.RosterOfOrg(ctx, org)
 		if err == nil && found && own != nil && own.Source() != store.SourceRepo {
 			done()
-			return own, ownDone, true
+			return own, ownDone, true, nil
 		}
 		if ownDone != nil {
 			ownDone()
 		}
+		rerr = err
 	}
-	return r, done, ok
+	return r, done, ok, rerr
 }
 
 // openEnvRoster opens the Env's org roster (Store upgrade).
