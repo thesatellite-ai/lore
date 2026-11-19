@@ -564,7 +564,9 @@ func sameStore(a, b string) bool {
 		if strings.HasPrefix(ra.Norm, local) || strings.HasPrefix(rb.Norm, local) {
 			return false
 		}
-		return gitbackend.SameRepoViaAlias(ra, rb)
+		// git's own url rewrite (insteadOf) is the last word: one target
+		// is one store, also for a dotted alias the ssh config does not name
+		return gitbackend.SameRepoViaAlias(ra, rb) || gitbackend.SameRepoViaRewrite(a, b)
 	}
 	norm := func(s string) string {
 		return strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(s), "/"), gitSuffix)

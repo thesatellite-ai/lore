@@ -14,6 +14,12 @@ package stories
 // git@github.com:…" although no entry existed after the refusal, and the
 // printed `org rename` hint failed; the https spelling joined but saved
 // the github.com spelling instead of the one the person gave.
+//
+// D-680 leftovers: a dotted alias host (oDottedAlias) that no ssh config
+// names and git reaches only by its insteadOf rule joins the same way
+// (git's own rewrite is a same-store signal), and the org's ops store is
+// saved in the member's spelling too (https member: https ops url), so
+// its sync works.
 
 import (
 	"fmt"
@@ -31,11 +37,16 @@ func oMirrorRules(t testing.TB, m *OwnerMachine, mirror, owner, repo string) {
 	t.Helper()
 	var b strings.Builder
 	fmt.Fprintf(&b, "[url %q]\n", mirror)
-	for _, u := range []string{"git@github.com:", "git@" + m.Shape.Alias + ":", "https://github.com/", "ssh://git@github.com/"} {
+	for _, u := range []string{"git@github.com:", "git@" + m.Shape.Alias + ":", "git@" + oDottedAlias + ":", "https://github.com/", "ssh://git@github.com/"} {
 		fmt.Fprintf(&b, "\tinsteadOf = %s%s/%s.git\n", u, owner, repo)
 	}
 	appendFile(t, filepath.Join(m.Home, ".gitconfig"), b.String())
 }
+
+// oDottedAlias is a dotted ssh alias host of github.com (the
+// github.com-work style) that no ssh config names: git reaches it only by
+// the mirror rule (devco D-680 leftover a).
+const oDottedAlias = "github.com-acmework"
 
 // oForgetAlias drops the alias's Host block from ~/.ssh/config: the
 // alias then resolves nowhere lore reads (git still reaches the store
@@ -70,29 +81,38 @@ func TestStoryOMirrorMemberJoin(t *testing.T) {
 		// alias the ssh config resolves the canonical url plus the access
 		// rule that routes it through the alias (brief 3.7)
 		saved string
+		// savedOps is the org's ops store as the entry must hold it: in
+		// the member's spelling (an alias the ssh config resolves keeps
+		// the canonical url, routed by the access rule)
+		savedOps string
 	}{
-		{"alias-ssh-config", "git@" + oAlias + ":" + oOwner + "/lore-team.git", true, "via: git@" + oAlias + ":" + oOwner + "/"},
-		{"alias-no-ssh-config", "git@" + oAlias + ":" + oOwner + "/lore-team.git", false, "url: git@" + oAlias + ":" + oOwner + "/lore-team.git"},
-		{"https", "https://github.com/" + oOwner + "/lore-team.git", true, "url: https://github.com/" + oOwner + "/lore-team.git"},
-		{"ssh-scheme", "ssh://git@github.com/" + oOwner + "/lore-team.git", true, "url: ssh://git@github.com/" + oOwner + "/lore-team.git"},
-		{"canonical", "git@github.com:" + oOwner + "/lore-team.git", true, "url: git@github.com:" + oOwner + "/lore-team.git"},
+		{"alias-ssh-config", "git@" + oAlias + ":" + oOwner + "/lore-team.git", true, "via: git@" + oAlias + ":" + oOwner + "/", "url: git@github.com:" + oOwner + "/lore-ops.git"},
+		{"alias-no-ssh-config", "git@" + oAlias + ":" + oOwner + "/lore-team.git", false, "url: git@" + oAlias + ":" + oOwner + "/lore-team.git", "url: git@" + oAlias + ":" + oOwner + "/lore-ops.git"},
+		{"alias-dotted-no-ssh-config", "git@" + oDottedAlias + ":" + oOwner + "/lore-team.git", false, "url: git@" + oDottedAlias + ":" + oOwner + "/lore-team.git", "url: git@" + oDottedAlias + ":" + oOwner + "/lore-ops.git"},
+		{"https", "https://github.com/" + oOwner + "/lore-team.git", true, "url: https://github.com/" + oOwner + "/lore-team.git", "url: https://github.com/" + oOwner + "/lore-ops.git"},
+		{"ssh-scheme", "ssh://git@github.com/" + oOwner + "/lore-team.git", true, "url: ssh://git@github.com/" + oOwner + "/lore-team.git", "url: ssh://git@github.com/" + oOwner + "/lore-ops.git"},
+		{"canonical", "git@github.com:" + oOwner + "/lore-team.git", true, "url: git@github.com:" + oOwner + "/lore-team.git", "url: git@github.com:" + oOwner + "/lore-ops.git"},
 	}
 	for _, c := range cells {
 		t.Run(c.name, func(t *testing.T) {
 			s := New(t, "O")
 			team := s.Remote("github.com/" + oOwner + "/lore-team")
+			ops := s.Remote("github.com/" + oOwner + "/lore-ops")
 			platform := s.Seed(s.Remote("github.com/"+oOwner+"/platform"), func(dir string) { PlainRepo(t, dir) })
 			web := s.Seed(s.Remote("github.com/"+oOwner+"/web"), func(dir string) { PlainRepo(t, dir) })
 			ada := s.OwnerShaped(OwnerShape{Personal: oAdminPersonal, Org: oAdminOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner}})
 			pc := ada.CloneTo(platform, ada.OrgDir("platform"))
 			oSetupFlow(t, ada, pc.Dir, oSetup, "admin", oAdminOrg, oAlias,
 				map[string]any{"org": oOrg, "store_url": team.SSHURL()}, []string{"~/code/" + oOrg + "/**"})
+			// the org's second store, every member's (D-680 leftover b)
+			ada.LoreIn(pc, "org", "store", "add", "--org", oOrg, "--url", ops.SSHURL(), "--push", "--yes").OK(t)
 			ada.LoreIn(pc, "member", "add", "--email", oMemOrg.Email, "--name", oMemOrg.Name, "--yes").OK(t)
 			ada.LoreIn(pc, "sync").OK(t)
 
 			mo := s.OwnerShaped(OwnerShape{Personal: oMemPersonal, Org: oMemOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner}})
 			mwc := mo.CloneTo(web, mo.OrgDir("web"))
 			oMirrorRules(t, mo, team.Dir, oOwner, "lore-team")
+			oMirrorRules(t, mo, ops.Dir, oOwner, "lore-ops")
 			if !c.sshAlias {
 				oForgetAlias(t, mo)
 			}
@@ -114,6 +134,9 @@ func TestStoryOMirrorMemberJoin(t *testing.T) {
 				}
 				if !strings.Contains(string(cfg), c.saved) {
 					t.Errorf("the org entry does not reach the store the way the person gave it (want %q):\n%s", c.saved, cfg)
+				}
+				if !strings.Contains(string(cfg), c.savedOps) {
+					t.Errorf("the org's ops store is not saved in the member's spelling (want %q):\n%s", c.savedOps, cfg)
 				}
 				oJoin(t, mo, mwc.Dir, oOrg, c.spell).Never(t, "--as ", "already exists", "E_SETUP_ORG_MISMATCH").OK(t)
 				mo.Lore(mwc.Dir, "sync").OK(t)

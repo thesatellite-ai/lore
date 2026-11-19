@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	gitbackend "github.com/thesatellite-ai/lore/adapters/backend/git"
@@ -108,4 +109,31 @@ func TestCheckJoinEntryAliasNoSSHConfig(t *testing.T) {
 			t.Errorf("%s: have=%v err=%v, want the entry's own store", c.store, have, err)
 		}
 	}
+}
+
+// TestCheckJoinEntryDottedAliasViaInsteadOf (devco D-680): a dotted alias
+// host (github.com-work) that the ssh config lore reads does not name and
+// that git reaches only by url.<base>.insteadOf is the entry's store when
+// git rewrites both spellings to one target; it was E_SETUP_ORG_MISMATCH.
+// A dotted host no rule rewrites stays another store.
+func TestCheckJoinEntryDottedAliasViaInsteadOf(t *testing.T) {
+	gitbackend.SetAliasHosts(nil)
+	gitbackend.SetURLRewrite(func(raw string) string {
+		// url."git@github.com:".insteadOf "git@github.com-work:"
+		if rest, ok := strings.CutPrefix(raw, "git@github.com-work:"); ok {
+			return "git@github.com:" + rest
+		}
+		return raw
+	})
+	t.Cleanup(func() { gitbackend.SetURLRewrite(nil) })
+	ctx := context.Background()
+	x := newFixture(t)
+	have, err := CheckJoinEntry(ctx, x.e, "agency", "git@github.com-work:agency/lore-team.git")
+	if err != nil || !have {
+		t.Errorf("dotted alias git rewrites to the store: have=%v err=%v, want the entry's own store", have, err)
+	}
+	_, err = CheckJoinEntry(ctx, x.e, "agency", "git@git.other.example:agency/lore-team.git")
+	wantCode(t, "unrewritten dotted host", err, errs.SetupOrgMismatch)
+	_, err = CheckJoinEntry(ctx, x.e, "agency", "git@github.com-work:other/lore-team.git")
+	wantCode(t, "rewritten, another path", err, errs.SetupOrgMismatch)
 }

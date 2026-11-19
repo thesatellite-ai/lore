@@ -29,6 +29,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/thesatellite-ai/lore/adapters/backend/git"
 	"github.com/thesatellite-ai/lore/adapters/lorehome"
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
@@ -314,15 +315,57 @@ func suggestedStores(ctx context.Context, entry *orgconf.Org, sg orgcfg.Suggesti
 	// An alias the ssh config resolves arrives here canonical, with the
 	// access rule that routes it (canonicalTyped, brief 3.7).
 	if same := sameStoreAs(url); same != nil {
+		file := ""
 		for i := range entry.Stores {
 			if same(entry.Stores[i].URL) {
-				entry.Stores[i].URL = url
+				file, entry.Stores[i].URL = entry.Stores[i].URL, url
+			}
+		}
+		// devco D-680: the org's other stores on the same host (an ops
+		// store) take the same spelling, so a person who reaches GitHub
+		// only over https (or an alias) syncs them too
+		if file != "" && file != url {
+			for i := range entry.Stores {
+				if s, ok := respellSibling(url, file, entry.Stores[i].URL); ok {
+					entry.Stores[i].URL = s
+				}
 			}
 		}
 	}
 	if len(sg.Doc.Defaults.ClientRepos) > 0 {
 		entry.Defaults.ClientRepos = sg.Doc.Defaults.ClientRepos
 	}
+}
+
+// respellSibling is sibling, a store the org file lists next to the one
+// imported by typed (listed there as file), in typed's spelling: typed with
+// its repository path replaced by sibling's. ok only when sibling is on
+// file's host, is not the imported store, and the new spelling is the same
+// store as sibling by lore's own same-store rule (sameStoreAs), so a store
+// on another host or one the spelling cannot reach keeps its own.
+func respellSibling(typed, file, sibling string) (string, bool) {
+	rt, et := git.RemoteOfRaw(typed)
+	rf, ef := git.RemoteOfRaw(file)
+	rs, es := git.RemoteOfRaw(sibling)
+	if et != nil || ef != nil || es != nil || localRemote(rt) || localRemote(rs) || rs.Norm == rf.Norm {
+		return "", false
+	}
+	hf, _, _ := strings.Cut(rf.Norm, "/")
+	hs, ps, _ := strings.Cut(rs.Norm, "/")
+	_, pt, _ := strings.Cut(rt.Norm, "/")
+	if hf != hs || pt == "" || ps == "" {
+		return "", false
+	}
+	at := strings.LastIndex(strings.ToLower(typed), strings.ToLower(pt))
+	from := strings.LastIndex(strings.ToLower(sibling), strings.ToLower(ps))
+	if at < 0 || from < 0 {
+		return "", false
+	}
+	out := typed[:at] + sibling[from:from+len(ps)] + typed[at+len(pt):]
+	if same := sameStoreAs(out); same == nil || !same(sibling) {
+		return "", false
+	}
+	return out, true
 }
 
 // Import implements opsorgcmd.Host.
