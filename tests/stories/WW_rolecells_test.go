@@ -160,7 +160,11 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 
 	s.Step("D-694/bulk-where-and-batch-undo", func() {
 		refused("rule archive --where", "rule", "archive", "--where", "body~=role bulk cell", "--yes")
+		// devco D-712: the bulk move runs the one-row move's role check for
+		// every row it takes, before the question and before any write
+		refused("move --from --where", "move", "--from", inWeb, "--to", inOther, "--where", "body~=role bulk cell", "--yes")
 		admin("rule", "archive", "--where", "body~=role bulk cell", "--yes")
+		admin("move", "--from", inWeb, "--to", inOther, "--where", "body~=role bulk cell", "--yes")
 		// a batch log is the machine's own, so the member's undo is of
 		// their own batch: Mo bulk-deletes two should rules of web (a
 		// free change), Ada restores them and raises them to must; Mo's

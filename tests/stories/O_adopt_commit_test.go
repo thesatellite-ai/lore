@@ -72,11 +72,11 @@ func TestStoryOAdoptMoveOneCommand(t *testing.T) {
 	lc := ada.CloneTo(ledger, ada.OrgDir("ledger-app"))
 	const folder = "ledger"
 	place := oOrg + "/" + folder
-	var task string
+	var task, rule string
 
 	s.Step("D-713/a-repo-with-open-live-rows", func() {
 		ada.Lore(lc.Dir, "init", "--non-interactive", "--name=ledger-app").OK(t)
-		ada.Lore(lc.Dir, "rule", "add", "--body", "Run the linter before every push", "--severity", "must", "--to", "repo", "--yes").OK(t)
+		rule = idAfter(t, ada.Lore(lc.Dir, "rule", "add", "--body", "Run the linter before every push", "--severity", "must", "--to", "repo", "--yes", "--json").OK(t).Stdout, "id", "rul_")
 		r := ada.Lore(lc.Dir, "task", "add", "reconcile the ledger", "--to", "repo", "--json").OK(t)
 		i := strings.Index(r.Stdout, `"id": "tsk_`)
 		if i < 0 {
@@ -101,6 +101,109 @@ func TestStoryOAdoptMoveOneCommand(t *testing.T) {
 			t.Errorf("the moved task is still on the repo's live ref")
 		}
 		ada.Lore(lc.Dir, "show", "--id", task).OK(t).Never(t, "two live rows", "E_AMBIGUOUS_ID")
+	})
+
+	// D-713 (use pass 5): until the repo commit is pushed, the repo's
+	// upstream still holds the moved row files; a bare id names the
+	// folder's copy only, so show, edit and delete work before the push.
+	s.Step("D-713/bare-id-of-a-moved-file-row-before-the-push", func() {
+		ada.Lore(lc.Dir, "show", "--id", rule).OK(t).Says(t, "Run the linter before every push").Never(t, "two live rows", "E_AMBIGUOUS_ID")
+		ada.Lore(lc.Dir, "rule", "edit", "--id", rule, "--body", "Run the linter before every push, always", "--yes").OK(t)
+		ada.Lore(lc.Dir, "show", "--id", rule, "--store", place).OK(t).Says(t, "always")
+		ada.Lore(lc.Dir, "rule", "delete", "--id", rule, "--yes").OK(t)
 		lc.Git("push", "-q", "origin", "HEAD:main")
+		if r := ada.Lore(lc.Dir, "rule", "list", "--json"); strings.Contains(r.Out(), rule) {
+			t.Errorf("the deleted rule is still listed after the push:\n%s", r.Out())
+		}
+	})
+}
+
+// idAfter is the id in out that follows the json key `"<key>": "<prefix>`.
+func idAfter(t *testing.T, out, key, prefix string) string {
+	t.Helper()
+	mark := `"` + key + `": "` + prefix
+	i := strings.Index(out, mark)
+	if i < 0 {
+		t.Fatalf("no %s%s… in:\n%s", key, prefix, out)
+	}
+	rest := out[i+len(`"`+key+`": "`):]
+	return rest[:strings.Index(rest, `"`)]
+}
+
+// TestStoryOAdoptListsNearDuplicates is devco:D-724: the owner adopted a
+// repo into a folder that already held curated rows and got two "portless"
+// rules. adopt --move now lists each near-duplicate (same name, or a body
+// with most words in common) with both ids, the command that compares
+// them and the one that drops one; the dry run lists them too; nothing is
+// merged; and the printed commands run as printed in the repo.
+func TestStoryOAdoptListsNearDuplicates(t *testing.T) {
+	s := New(t, "O")
+	team := s.Remote("github.com/" + oOwner + "/lore-team")
+	platform := s.Seed(s.Remote("github.com/"+oOwner+"/platform"), func(dir string) { PlainRepo(t, dir) })
+	devbox := s.Seed(s.Remote("github.com/"+oOwner+"/devbox-app"), func(dir string) { PlainRepo(t, dir) })
+
+	ada := s.OwnerShaped(OwnerShape{Personal: oAdminPersonal, Org: oAdminOrg, OrgFolder: oOrg, Alias: oAlias, OrgOwners: []string{oOwner}})
+	pc := ada.CloneTo(platform, ada.OrgDir("platform"))
+	oSetupFlow(t, ada, pc.Dir, oSetup, "admin", oAdminOrg, oAlias,
+		map[string]any{"org": oOrg, "store_url": team.SSHURL()}, []string{"~/code/" + oOrg + "/**"})
+	dc := ada.CloneTo(devbox, ada.OrgDir("devbox-app"))
+	const folder = "devbox"
+	place := oOrg + "/" + folder
+	var curated, copied string
+
+	s.Step("D-724/a-curated-folder-and-a-repo-with-the-same-rule", func() {
+		ada.Lore(pc.Dir, "store", "folder", "add", oOrg, folder).OK(t)
+		curated = idAfter(t, ada.Lore(pc.Dir, "rule", "add", "--body", "Use portless for dev URLs.", "--severity", "must", "--to", place, "--yes", "--json").OK(t).Stdout, "id", "rul_")
+		ada.Lore(dc.Dir, "init", "--non-interactive", "--name=devbox-app").OK(t)
+		copied = idAfter(t, ada.Lore(dc.Dir, "rule", "add", "--body", "use portless for dev urls\nso every dev server has a stable name", "--severity", "must", "--to", "repo", "--yes", "--json").OK(t).Stdout, "id", "rul_")
+		ada.Lore(dc.Dir, "rule", "add", "--body", "Run the linter before every push", "--severity", "must", "--to", "repo", "--yes").OK(t)
+		dc.CommitAll("lore notes")
+		dc.Git("push", "-q", "origin", "HEAD:main")
+	})
+
+	var pair, compare, drop string
+	s.Step("D-724/dry-run-lists-the-pair", func() {
+		pair = copied + " ~ " + curated
+		compare = "lore show --id " + copied + " --store " + place + " && lore show --id " + curated + " --store " + place
+		drop = "lore rule delete --id " + curated + " --yes (the folder's), or the moved one: lore rule delete --id " + copied + " --yes"
+		// the dry run reads the moving row in the repo, where it still is
+		// (a cd into its top first: D-724, see the --from step below)
+		dryCompare := " && lore show --id " + copied + " --store repo && lore show --id " + curated + " --store " + place
+		dryDrop := "lore rule delete --id " + curated + " --yes (the folder's), or the moved one: cd "
+		ada.Lore(dc.Dir, "store", "adopt", "--target", place, "--move", "--dry-run").OK(t).
+			Says(t, "would leave 1 near-duplicate", pair, "(same title)", "compare: cd ", dryCompare, dryDrop, " && lore rule delete --id "+copied+" --yes").
+			Never(t, "Run the linter", "once the repo commit is pushed")
+		ada.Lore(dc.Dir, "show", "--id", copied, "--store", "repo").OK(t).Says(t, "so every dev server has a stable name")
+	})
+
+	s.Step("D-724/dry-run-from-another-repo-reads-the-row-where-printed", func() {
+		// run in another repo (--from names the one that moves, no --move):
+		// the moving row's read was --store <folder>, where it is not yet;
+		// now a cd into the moving repo, then --store repo, runs as printed
+		out := ada.Lore(pc.Dir, "store", "adopt", "--target", place, "--from", dc.Dir, "--dry-run").OK(t).
+			Says(t, "would leave 1 near-duplicate", pair, "compare: cd ", " && lore show --id "+copied+" --store repo && lore show --id "+curated+" --store "+place).
+			Never(t, "--id "+copied+" --store "+place).Out()
+		_, rest, _ := strings.Cut(out, "compare: cd ")
+		dir, _, _ := strings.Cut(rest, " && ")
+		ada.Lore(dir, "show", "--id", copied, "--store", "repo").OK(t).Says(t, "so every dev server has a stable name")
+		ada.Lore(dir, "show", "--id", curated, "--store", place).OK(t).Says(t, "Use portless for dev URLs.")
+	})
+
+	s.Step("D-724/move-lists-both-kept-and-the-commands-run-as-printed", func() {
+		ada.Lore(dc.Dir, "store", "adopt", "--target", place, "--move", "--commit", "--yes").OK(t).
+			Says(t, "1 near-duplicate", pair, "both kept", compare, drop)
+		// compare and drop, as printed, before the repo commit is pushed
+		// (a moved row's bare id names the folder's copy: D-713)
+		ada.Lore(dc.Dir, "show", "--id", copied, "--store", place).OK(t).Says(t, "so every dev server has a stable name")
+		ada.Lore(dc.Dir, "show", "--id", curated, "--store", place).OK(t).Says(t, "Use portless for dev URLs.")
+		ada.Lore(dc.Dir, "rule", "delete", "--id", copied, "--yes").OK(t)
+		dc.Git("push", "-q", "origin", "HEAD:main")
+		ada.Lore(dc.Dir, "show", "--id", curated).OK(t)
+		if r := ada.Lore(dc.Dir, "show", "--id", copied); r.Code == 0 && !strings.Contains(r.Out(), "trash") {
+			t.Errorf("the dropped copy still shows as live:\n%s", r.Out())
+		}
+		if r := ada.Lore(dc.Dir, "rule", "list", "--json"); strings.Count(r.Out(), "portless") != 1 {
+			t.Errorf("want one portless rule after dropping the copy:\n%s", r.Out())
+		}
 	})
 }

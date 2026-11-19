@@ -208,6 +208,19 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 		}
 	}
 	also := append(a.companyFolderOf(ctx, target), holder...)
+	// devco D-712: a bulk move's --from folder is attached beside its
+	// target, writable (its tombstones land there), as prepareTarget
+	// attaches it in a repo; from the home folder `lore move --from
+	// <org>/<folder> --to <org>/<folder> --setup <s>` found "no attached
+	// store or folder" for the source while the target resolved
+	if src := bulkMoveSource(e, d); src != "" && write {
+		s, _, serr := a.outsideTarget(ctx, src, true, false)
+		if serr != nil {
+			return op.Result{}, true, serr
+		}
+		s.ReadOnly = false
+		also = append(also, s)
+	}
 	if !write {
 		// `--store <org>` reads every folder of the org's stores (D-431)
 		also = append(also, a.orgWideFolders(ctx, to, target)...)
@@ -233,7 +246,7 @@ func (a *App) runStoreOnly(ctx context.Context, e op.Entry, d op.Decoder, c op.C
 		ctx = context.WithValue(ctx, newFolderKey{}, created)
 	}
 	res, err = eng.Run(ctx, e, d, c)
-	if err == nil && write {
+	if err == nil && write && !previewRun(e, d) { // D-712: a dry run makes no project row
 		a.ensureFolderProject(ctx)
 	}
 	return res, true, err
@@ -926,4 +939,12 @@ func namesPersonalStore(e op.Entry, d op.Decoder) bool {
 		}
 	}
 	return false
+}
+
+// previewRun reports whether d asks e for a preview only (--dry-run,
+// Spec.Previews): what Run does after a write (the folder's project row,
+// the machine profile) is skipped for it, since it wrote nothing (D-712).
+func previewRun(e op.Entry, d op.Decoder) bool {
+	in, err := e.Decode(d)
+	return err == nil && e.Spec().Previews(in)
 }

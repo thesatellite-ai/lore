@@ -50,7 +50,8 @@ A command that takes an id (`lore task done --id tsk_…`) has to find exactly o
    4. your personal store (org folder, then everywhere/)
 
  found in two sources  → E_AMBIGUOUS_ID, name one with --from
- found nowhere, on main → read origin/main too (a row that landed while you were not pulled)
+ found nowhere, on main → read origin/main too (a row that landed while you were not pulled;
+                          never a file a commit of yours removed, such as store adopt --move)
  found nowhere          → E_NOT_FOUND with a `lore sync peek` hint
 ```
 

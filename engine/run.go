@@ -149,6 +149,12 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 
 // needsConfirm applies the spec's ConfirmRule to the decoded input.
 func needsConfirm(spec op.Spec, in op.Input) bool {
+	// A preview (--dry-run, Spec.Previews) writes nothing, so it has
+	// nothing to confirm: `lore move --from … --dry-run` lists what would
+	// move without a question or --yes (devco D-712).
+	if spec.Previews(in) {
+		return false
+	}
 	if spec.Confirm.Always {
 		return true
 	}

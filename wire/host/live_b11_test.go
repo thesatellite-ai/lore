@@ -624,13 +624,13 @@ func TestLiveBackend_UnreadableLiveRowIsAnError(t *testing.T) {
 	}
 }
 
-// TestLiveBackend_ReadThroughEditMaterialises (t-old2, F1): on the default
-// branch, a memory that is on the fetched origin/main but not in this
-// checkout (its delete committed here, or not pulled yet) is read through;
-// an edit that expects exactly that landed copy writes the branch file
-// (Expect "none" on the branch) instead of E_STALE, and an edit from any
-// other version stays stale.
-func TestLiveBackend_ReadThroughEditMaterialises(t *testing.T) {
+// TestLiveBackend_CommittedDeleteIsNotReadThrough (t-old2, F1; devco
+// D-713): on the default branch, a memory this checkout deleted in a
+// commit not pushed yet is still on the fetched origin/main. It was read
+// through (and an edit re-created it here); a removal committed here now
+// reads as removed, as an uncommitted one always did: E_NOT_FOUND, and an
+// edit expecting origin's copy writes nothing to the branch data.
+func TestLiveBackend_CommittedDeleteIsNotReadThrough(t *testing.T) {
 	f := newLiveFixture(t)
 	dir := f.b.top
 	m := ltRow(t, schema.TableMemories, ltMemory, 1, "keep me around", false)
@@ -647,22 +647,12 @@ func TestLiveBackend_ReadThroughEditMaterialises(t *testing.T) {
 	gitT(t, dir, "update-ref", "refs/remotes/origin/main", "HEAD")
 	gitT(t, dir, "rm", "-q", rel)
 	gitT(t, dir, "commit", "-q", "-m", "rm")
-	got, err := f.b.Get(f.ctx, m.Table, m.ID)
-	if err != nil || got.HLC.Compare(m.HLC) != 0 {
-		t.Fatalf("the landed copy is read through: %v", err)
-	}
-	stale := ltRow(t, schema.TableMemories, ltMemory, 3, "stale edit", false)
-	if err := f.b.Write(f.ctx, []store.Change{{Row: stale, Expect: ltRow(t, schema.TableMemories, ltMemory, 9, "x", false).HLC}}); !errors.Is(err, store.ErrStale) {
-		t.Fatalf("an edit from another version stays stale: %v", err)
+	if _, err := f.b.Get(f.ctx, m.Table, m.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("a delete committed here reads origin's copy back: %v", err)
 	}
 	edit := ltRow(t, schema.TableMemories, ltMemory, 2, "archived", false)
-	if err := f.b.Write(f.ctx, []store.Change{{Row: edit, Expect: got.HLC}}); err != nil {
-		t.Fatalf("an edit of the read-through copy writes, not E_STALE: %v", err)
-	}
-	if br, err := f.inner.Get(f.ctx, m.Table, m.ID); err != nil || br.HLC.Compare(edit.HLC) != 0 {
-		t.Fatalf("the edit materialises the row in the branch data: %v", err)
-	}
-	if f.liveHas(t, schema.TableMemories, ltMemory) {
-		t.Fatal("a memory edit stays with the code")
+	_ = f.b.Write(f.ctx, []store.Change{{Row: edit, Expect: m.HLC}}) // refused or not: it must not re-create the row
+	if _, err := f.inner.Get(f.ctx, m.Table, m.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("an edit of origin's copy re-created the deleted row here: %v", err)
 	}
 }

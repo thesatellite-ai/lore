@@ -66690,6 +66690,253 @@
         }
       }
     },
+    "/v1/rows/move": {
+      "post": {
+        "operationId": "row.move.bulk",
+        "summary": "Move any row to another store, keeping its id (the old copy is tombstoned)",
+        "tags": [
+          "row"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "drop_internal": {
+                    "type": "boolean",
+                    "description": "into a client repo: remove the row's internal metadata values instead of refusing"
+                  },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --from: list what would move, write nothing"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "bulk move: every row of this store or folder (\u003cstore\u003e[/\u003cfolder\u003e], repo or me), in one commit at --to and one at --from"
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "any row id (or --from for every row of a store or folder)"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "the target store: repo | me | \u003cstore\u003e[/\u003cfolder\u003e]"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "with --from: only rows matching this filter (field=value, field~=text, created_at\u003c2026-06-01, table=memories; repeatable, all must match)",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "with_children": {
+                    "type": "boolean",
+                    "description": "a task: move its whole subtree too; every sub-task keeps its id and parent"
+                  },
+                  "with_time": {
+                    "type": "string",
+                    "description": "totals | none: per-worker time totals for a task moved into a client repo (default: the time.client_share policy, none)"
+                  },
+                  "yes": {
+                    "type": "boolean",
+                    "description": "repeat after E_NEEDS_CONFIRM once the person said yes"
+                  }
+                },
+                "required": [
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "from"
+                        ]
+                      }
+                    },
+                    "table": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "table",
+                    "to"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "E_BODY_TOO_LARGE, E_INVALID_ID, E_INVALID_INPUT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "E_UNAUTHORIZED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "E_LEAK_BLOCKED, E_META_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "E_NOT_FOUND",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "E_IN_TRASH, E_META_QUARANTINED, E_NOT_IMPLEMENTED, E_STALE, E_STORE_READ_ONLY, E_UNSUPPORTED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "E_NEEDS_CONFIRM",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "E_INTERNAL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/rows/{id}": {
       "get": {
         "operationId": "row.show",
@@ -67587,10 +67834,10 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "any row id",
+            "description": "any row id (or --from for every row of a store or folder)",
             "schema": {
               "type": "string",
-              "description": "any row id"
+              "description": "any row id (or --from for every row of a store or folder)"
             },
             "x-lore-field": "id"
           }
@@ -67606,9 +67853,24 @@
                     "type": "boolean",
                     "description": "into a client repo: remove the row's internal metadata values instead of refusing"
                   },
+                  "dry_run": {
+                    "type": "boolean",
+                    "description": "with --from: list what would move, write nothing"
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "bulk move: every row of this store or folder (\u003cstore\u003e[/\u003cfolder\u003e], repo or me), in one commit at --to and one at --from"
+                  },
                   "to": {
                     "type": "string",
                     "description": "the target store: repo | me | \u003cstore\u003e[/\u003cfolder\u003e]"
+                  },
+                  "where": {
+                    "type": "array",
+                    "description": "with --from: only rows matching this filter (field=value, field~=text, created_at\u003c2026-06-01, table=memories; repeatable, all must match)",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "with_children": {
                     "type": "boolean",
@@ -67645,6 +67907,48 @@
                         "type": "string"
                       }
                     },
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
+                    },
+                    "from": {
+                      "type": "string"
+                    },
                     "id": {
                       "type": "string"
                     },
@@ -67652,6 +67956,31 @@
                       "type": "array",
                       "items": {
                         "type": "string"
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "table",
+                          "from"
+                        ]
                       }
                     },
                     "table": {
@@ -84888,6 +85217,42 @@
                     },
                     "dry_run": {
                       "type": "boolean"
+                    },
+                    "duplicates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "existing": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "percent": {
+                            "type": "integer"
+                          },
+                          "table": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "why": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "table",
+                          "id",
+                          "existing",
+                          "why",
+                          "percent"
+                        ]
+                      }
                     },
                     "folder": {
                       "type": "string"

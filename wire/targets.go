@@ -3,6 +3,7 @@ package wire
 import (
 	"context"
 	"fmt"
+	opsrow "github.com/thesatellite-ai/lore/ops/row"
 	"io"
 	"os"
 	"slices"
@@ -51,9 +52,43 @@ func (a *App) prepareTarget(ctx context.Context, e op.Entry, d op.Decoder, c op.
 		ctx = context.WithValue(ctx, newFolderKey{}, created)
 	}
 	if root != "" {
-		return op.WithTargetAlias(ctx, from, root), aliasDecoder{inner: d, from: from, to: root}, nil
+		ctx, d = op.WithTargetAlias(ctx, from, root), aliasDecoder{inner: d, from: from, to: root}
+	}
+	// devco D-712: the source of `lore move --from <store>/<folder>` is
+	// found the way a --to target is (a folder another attachment covers is
+	// that attachment's name; an org folder not attached is attached for
+	// this run), never created
+	if src := bulkMoveSource(e, d); src != "" {
+		sfrom, sroot, _, serr := a.attachFolderPlace(ctx, src, false)
+		if serr != nil {
+			return ctx, d, serr
+		}
+		if sroot != "" {
+			d = aliasDecoder{inner: d, field: bulkFromField, from: sfrom, to: sroot}
+		}
 	}
 	return ctx, d, nil
+}
+
+// bulkFromField is the json name of row.move's --from (opsrow.BulkFlags).
+const bulkFromField = "from"
+
+// bulkMoveSource is the --from value of a bulk `lore move` ("" for any
+// other op or input).
+func bulkMoveSource(e op.Entry, d op.Decoder) string {
+	if e.Spec().Name != opsrow.OpMove {
+		return ""
+	}
+	in, err := e.Decode(d)
+	if err != nil {
+		return ""
+	}
+	for _, tv := range in.Texts() {
+		if tv.Field == bulkFromField {
+			return strings.TrimSpace(tv.Text)
+		}
+	}
+	return ""
 }
 
 // attachFolderTarget is prepareTarget's attach step (see there). A
@@ -74,6 +109,14 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 		// mission apply names its target in the plan file (BUG-T8)
 		to, _ = in.NamedTarget()
 	}
+	return a.attachFolderPlace(ctx, to, c.Yes || createAsked(in))
+}
+
+// attachFolderPlace is attachFolderTarget for one place value to (a `--to`
+// target, or the `--from` source of a bulk move, D-712): mayCreate allows
+// a folder the store does not have yet (a yes or --create for a target;
+// never for a source, which must hold the rows it moves).
+func (a *App) attachFolderPlace(ctx context.Context, to string, mayCreate bool) (from, root string, created newFolder, err error) {
 	base, folderName, ok := strings.Cut(to, targetSep)
 	if !ok || base == "" || folderName == "" {
 		return "", "", newFolder{}, nil
@@ -140,7 +183,7 @@ func (a *App) attachFolderTarget(ctx context.Context, e op.Entry, d op.Decoder, 
 			return "", "", newFolder{}, err
 		}
 	}
-	if !exists && !c.Yes && !createAsked(in) {
+	if !exists && !mayCreate {
 		return "", "", newFolder{}, a.missingFolder(ctx, src, base, folderName)
 	}
 	if !exists {

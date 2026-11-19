@@ -171,6 +171,17 @@ func TestJourneyAdoptMoveOneCommand(t *testing.T) {
 		if st := two.Status(); strings.Contains(st, ".lore/data") {
 			t.Fatalf("--commit left lore files uncommitted:\n%s", st)
 		}
+		// D-713 (use pass 5): before the repo commit is pushed, origin still
+		// holds the moved row files; a moved rule's bare id names the
+		// folder's copy only, so show and delete work now
+		rules := lee.LoreIn(two, "rule", "list", "--store", place2, "--json").OK(t).Stdout
+		i := strings.Index(rules, `"id": "rul_`)
+		if i < 0 {
+			t.Fatalf("the folder lists no moved rule:\n%s", rules)
+		}
+		rule := rules[i+len(`"id": "`) : i+len(`"id": "`)+36]
+		lee.LoreIn(two, "show", "--id", rule).OK(t).Says(t, "Run the linter").Never(t, "two live rows", "E_AMBIGUOUS_ID")
+		lee.LoreIn(two, "rule", "delete", "--id", rule, "--yes").OK(t)
 		two.Git("push", "-q", "origin", "HEAD:main")
 		lee.Lore(parent, "sync").OK(t)
 		if n := len(tt.store.FilesMatching(mainRef, jAmFolder2+"/tasks/")); n != jAmTasks {

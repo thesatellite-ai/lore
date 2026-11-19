@@ -175,22 +175,39 @@ func TestDeleteWhereFencesClaimedTasks(t *testing.T) {
 const dryRunField = "dry_run"
 
 // TestDryRunNeverAsksUpFront (BUGFIX-26, the class of the memory delete
-// bug): no registered operation with a --dry-run input asks before it runs
-// (Confirm Always, or When on any field), because the engine asks before
-// the op can see that the run writes nothing. Such an op asks in its own
-// write path instead (MayAsk + bulk.Ask), after the dry-run branch.
+// bug): no registered operation with a --dry-run input asks to confirm a
+// dry run. The engine asked before the op could see that the run writes
+// nothing; since devco D-712 the engine's one confirm rule (needsConfirm)
+// skips every preview (Spec.Previews), so an op that asks up front (Confirm
+// Always or When: `lore move`, which gained --from … --dry-run) may take
+// --dry-run too. Each such op is run with dry_run (and the input its dry
+// run needs, dryInputs) without --yes: E_NEEDS_CONFIRM fails it.
 func TestDryRunNeverAsksUpFront(t *testing.T) {
-	h := opstest.New(t)
+	h := opstest.WithStores(t, []string{"me"})
+	h.Must("memory.add", `{"body":"a row for the dry runs"}`)
+	dryInputs := map[string]string{"row.move": `{"from":"repo","to":"me","dry_run":true}`}
+	ran := 0
 	for _, e := range h.App.Registry().Entries() {
 		sp := e.Spec()
 		if !sp.Confirm.Always && sp.Confirm.When == "" {
 			continue
 		}
 		for _, f := range e.InputFields() {
-			if f.Name == dryRunField {
-				t.Errorf("%s asks up front (always %v, when %q) and has --dry-run: a dry run would be asked to confirm", sp.Name, sp.Confirm.Always, sp.Confirm.When)
+			if f.Name != dryRunField {
+				continue
+			}
+			in, ok := dryInputs[sp.Name]
+			if !ok {
+				in = `{"` + dryRunField + `":true}`
+			}
+			ran++
+			if _, err := h.Run(sp.Name, in); errs.Has(err, errs.NeedsConfirm) {
+				t.Errorf("%s asks up front (always %v, when %q) and asked to confirm a dry run: %v", sp.Name, sp.Confirm.Always, sp.Confirm.When, err)
 			}
 		}
+	}
+	if ran == 0 {
+		t.Fatal("no asking op has --dry-run; row.move (lore move --from … --dry-run) should")
 	}
 }
 

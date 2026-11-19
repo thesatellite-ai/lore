@@ -50,6 +50,7 @@ The other kinds (pattern, snapshot, behaviour, architecture note, cookbook recip
 | one note from your branch on `main` before the pull request merges | `lore sync promote --ids <id> --to main` |
 | a finished live note copied onto `main` now | `lore land` |
 | a note out of the repo into a store, keeping its id | `lore row move --id <id> --to <store>` |
+| every note of a folder (or the repo) into another store, one commit per store | `lore move --from <store>/<folder> --to <store>/<folder> --dry-run`, then the printed command |
 
 ## Merging notes: hooks and merge driver, or the CI merge
 

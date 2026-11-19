@@ -174,6 +174,7 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		return opsstores.AdoptOut{}, err
 	}
 	defer scan.close()
+	out.Duplicates = nearDuplicates(changes, have) // D-724: listed, never merged (neardup.go)
 	adopted = append(adopted, mapped...)
 	for _, k := range slices.Clone(adopted) {
 		adopted = append(adopted, srcRows.links[k.ID.String()]...)

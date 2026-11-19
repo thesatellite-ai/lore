@@ -9,6 +9,8 @@ package host
 //
 //	no live copy, not in the work tree ─▶ landedOnDefault: origin/<default>'s
 //	   file, unless HEAD holds it (deleted here on purpose: not read through)
+//	   or the merge base does (a local commit removed it, not pushed yet:
+//	   removedHere, devco D-713)
 //	no live copy, in the work tree     ─▶ landedOver: origin's copy when the
 //	   work tree equals HEAD (nothing local pending), origin changed the
 //	   file since the merge base (it landed after this checkout's last
@@ -65,6 +67,9 @@ func (b *liveBackend) landedCopy(ctx context.Context, s *liveSession, k live.Row
 		raw, inRemote, rerr := s.repo.ReadFile(ctx, remote, file)
 		if rerr != nil || !inRemote {
 			return store.Row{}, false
+		}
+		if s.removedHere(ctx, remote, file) {
+			return store.Row{}, false // this checkout's own commit removed it (not pushed yet)
 		}
 		r, decoded := decodeLanded(raw)
 		if !decoded || r.ID.String() != k.ID {
@@ -124,6 +129,24 @@ func (s *liveSession) landedCursorPart(ctx context.Context) string {
 		return ""
 	}
 	return landedMarkSep + oid
+}
+
+// removedHere reports whether file, which HEAD lacks and the fetched
+// default branch (remote) holds, was removed by a commit of this checkout:
+// the merge base of HEAD and remote holds it, so it was pulled here and a
+// local commit took it out (devco D-713: after `lore store adopt --move
+// --commit`, until that commit is pushed, origin still holds every moved
+// row file; reading it through made each moved id two live rows, "in repo
+// and <org>"). A file the merge base lacks landed after the last pull and
+// still reads through. False when git has no merge base (the read-through
+// stands, as before).
+func (s *liveSession) removedHere(ctx context.Context, remote, file string) bool {
+	base := s.mergeBase(ctx, remote)
+	if base == "" {
+		return false
+	}
+	_, inBase, err := s.repo.ReadFile(ctx, base, file)
+	return err == nil && inBase
 }
 
 // mergeBase is the merge base of HEAD and rev ("" when git cannot say:
@@ -195,7 +218,8 @@ func parseTreeListing(raw []byte) map[string]string {
 
 // landedRows is every row of a live-readable table that landed on the
 // fetched origin/<default>, is not in HEAD (not pulled, and not deleted here
-// on purpose) and is not in have (neither on the branch nor live), so a done
+// on purpose: neither in the work tree nor by a local commit, the merge
+// base holding it) and is not in have (neither on the branch nor live), so a done
 // task that left live stays in lists until the checkout pulls. wanted
 // narrows it to the tables of a one-table read (Read).
 func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[store.Key]bool, wanted func(row.Table) bool) []store.Row {
@@ -207,10 +231,22 @@ func (b *liveBackend) landedRows(ctx context.Context, s *liveSession, have map[s
 	inHead := b.dataPaths(ctx, s, "HEAD")
 	landed := b.dataPaths(ctx, s, remote)
 	paths := make([]string, 0, len(landed))
+	var atBase map[string]string // read once, only when a path is missing from HEAD
+	baseRead := false
 	for p := range landed {
-		if _, held := inHead[p]; !held {
-			paths = append(paths, p)
+		if _, held := inHead[p]; held {
+			continue
 		}
+		if !baseRead {
+			baseRead = true
+			if base := s.mergeBase(ctx, remote); base != "" {
+				atBase = b.dataPaths(ctx, s, base)
+			}
+		}
+		if _, pulled := atBase[p]; pulled {
+			continue // removed by a commit of this checkout (removedHere, D-713)
+		}
+		paths = append(paths, p)
 	}
 	sort.Strings(paths) // stable output
 	var out []store.Row

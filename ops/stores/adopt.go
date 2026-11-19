@@ -98,6 +98,9 @@ type AdoptOut struct {
 	// they are: one row has one successor, the person picks).
 	Relinked  int      `json:"relinked,omitempty"`
 	Conflicts []string `json:"conflicts,omitempty"`
+	// Duplicates are the adopted rows that repeat a row the folder
+	// already held (devco D-724): listed, both kept, never merged.
+	Duplicates []NearDuplicate `json:"duplicates,omitempty"`
 	// Actors names each actor of the repo mapped onto the org roster's
 	// actor of the same identity (stable key): "act_A (human:x) → act_B".
 	// The mapped row is not written; the adopted rows name act_B.
@@ -232,6 +235,7 @@ func adoptOp(m Manager) op.Entry {
 // printed line, the JSON next step and the run, so what is printed is what
 // works.
 func AdoptCommitCommand(top, place string) string {
+	top = cdArg(top) // one shell word also when the repo path holds a space (devco D-724)
 	return "git -C " + top + " add -A .lore/data && git -C " + top + " commit -m \"" + AdoptCommitMessage(place) + "\""
 }
 
@@ -319,6 +323,18 @@ func (o AdoptOut) Text() string {
 		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data and committed it (" + o.Commit + "); push it with the repo as usual\n")
 	case o.Removed > 0:
 		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (" + AdoptCommitCommand(o.From, o.Store+"/"+o.Folder) + "); lore's hook knows the rows live there now\n")
+	}
+	// a moved row's bare id names the folder's copy at once, also before
+	// the repo commit is pushed (devco D-713); a dry run reads the moving
+	// row in its repo, where it still is: a cd into that repo's top first,
+	// since --from names a repo other than the folder the command ran in
+	// (devco D-724)
+	dup := NearDupPrint{Place: o.Store + "/" + o.Folder, Dry: o.DryRun}
+	if o.DryRun {
+		dup.From, dup.RunIn = "repo", o.From
+	}
+	for _, l := range dup.Lines(o.Duplicates) {
+		b.WriteString(l + "\n")
 	}
 	for _, l := range o.Link {
 		b.WriteString("  link: " + strings.TrimPrefix(strings.TrimSpace(l), "link: ") + "\n")

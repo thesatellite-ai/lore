@@ -86,6 +86,11 @@ type MoveOptions struct {
 	// its whole subtree; every child keeps its id and parent_id. Without
 	// it a task moves alone (its children stay where they are).
 	WithChildren bool
+	// SecretRerun is the command a bulk move's secret refusal prints to
+	// repeat (devco D-717): MoveMany screens every row before any write
+	// and names every row holding a finding with the reruns that answer
+	// it. "" prints the flags alone. One-row moves ignore it.
+	SecretRerun string
 }
 
 // WarnMetaDropped names a metadata value --drop-internal removed (MQ11).
@@ -289,7 +294,10 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	// is removed: a refusal above discarded them with the stage, so a
 	// refused move leaves no actor row in to; and the copy is in to before
 	// its source tombstone is staged (a stage writes one store).
-	if pre := absorbStaged(ctx, to); len(pre.changes) > 0 {
+	// devco D-712: in a bulk move (MoveMany) the copy stays in the stage,
+	// written with every other row's copy as one batch at to.
+	bulk := tombStageOf(ctx)
+	if pre := absorbUnlessBulk(ctx, to, bulk); len(pre.changes) > 0 {
 		bc, bev := pre.withDirect(nil, nil)
 		if err = e.writeChanges(ctx, dst, bc, bev); err != nil {
 			return Written{}, err
@@ -310,6 +318,11 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	// Written directly even in a stage (its own commit carries the
 	// trailer; a stage writes one store and the copy is in to already).
 	mctx := store.WithCommitTrailers(unstaged(ctx), MovedToTrailer+": "+e.placeOf(to))
+	fctx := unstaged(ctx)
+	if bulk != nil { // D-712: held with the batch's other tombstones (MoveMany writes them, trailer included)
+		mctx = context.WithValue(ctx, stageKey{}, bulk)
+		fctx = mctx
+	}
 	got, err := e.put(mctx, srcSt, tomb, cur.HLC)
 	if err != nil {
 		return Written{Row: moved}, errs.Prefix(""+cur.ID.String()+" is now in "+string(to)+" but its old copy in "+string(src)+" could not be removed", err).
@@ -317,7 +330,7 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 	}
 	ev := Event{Op: cl.op, Action: ActionDelete, Store: src, Table: cur.Table, ID: cur.ID, HLC: h, Actor: actor}
 	w := Written{Row: moved, Warnings: dropped}
-	aw, err := e.finishW(unstaged(ctx), src, []store.Row{got.doc}, ev)
+	aw, err := e.finishW(fctx, src, []store.Row{got.doc}, ev)
 	w.Warnings = append(w.Warnings, aw...)
 	if err != nil {
 		return w, err
@@ -328,6 +341,15 @@ func (e *Engine) MoveWith(ctx context.Context, ref Ref, to store.Source, opt Mov
 		}
 	}
 	return w, e.moveChildren(ctx, to, kids, opt, &w) // B7: parents first, ids kept
+}
+
+// absorbUnlessBulk is absorbStaged outside a bulk move; inside one
+// (bulk set) the stage keeps its rows for MoveMany's one write.
+func absorbUnlessBulk(ctx context.Context, to store.Source, bulk *stage) stagedStore {
+	if bulk != nil {
+		return stagedStore{}
+	}
+	return absorbStaged(ctx, to)
 }
 
 // internalMeta returns r's metadata without its internal keys' values, for

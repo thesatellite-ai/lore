@@ -32,6 +32,12 @@ const moveSensitiveMask = "•••"
 // sensitive value masked), and, for a client repo, what stays back. A bad
 // id or a missing row is reported here, before anything is asked.
 func (o ops) moveQuestion(ctx context.Context, in MoveIn) (string, error) {
+	if bulk, err := in.bulk(); err != nil || bulk {
+		if err != nil {
+			return "", err
+		}
+		return o.moveManyQuestion(ctx, in)
+	}
 	id, err := ids.ParseAny(strings.TrimSpace(in.ID))
 	if err != nil {
 		return "", lookup.BadID(strings.TrimSpace(in.ID)+" is not a row id", err)
