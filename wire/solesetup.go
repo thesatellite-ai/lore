@@ -8,8 +8,12 @@ package wire
 //	   no --setup, no LORE_SETUP
 //	   exactly one enabled org setup ─▶ ctx carries it (as --setup does),
 //	                                    a notice names it
+//	   a roster op, the default setup is an org setup ─▶ that setup, named
+//	   a roster change, exactly one admin org setup   ─▶ that setup, named
 //	   none, or two or more          ─▶ ctx unchanged: the command's own
-//	                                    refusal names --setup <setup>
+//	                                    refusal names --setup <setup>, the
+//	                                    full command per setup and how to
+//	                                    make one the default (D-704)
 //
 // Why: from the home folder `member add` refused "no org applies to this
 // folder" although the machine had one org setup and every write naming
@@ -23,6 +27,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/onboard"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/op"
 	opscoord "github.com/thesatellite-ai/lore/ops/coord"
@@ -64,9 +69,34 @@ func (a *App) withSoleOrgSetup(ctx context.Context) (context.Context, bool) {
 // sayRoutedSetup is the notice of a command routed to setup name by
 // withSoleOrgSetup: the output names the setup it used.
 func (a *App) sayRoutedSetup(name string) {
+	a.sayRouted(name, "the only org setup on this machine")
+}
+
+// sayRouted is the notice of a command run where no org applies and
+// routed to setup name; why says which rule chose it.
+func (a *App) sayRouted(name, why string) {
 	if a.opts.Notice != nil {
-		a.opts.Notice("setup " + name + " (the only org setup on this machine)")
+		a.opts.Notice("setup " + name + " (" + why + ")")
 	}
+}
+
+// soleAdminSetup is the name of the only enabled org setup of kind admin
+// on this machine, "" when there is none or more than one (devco:D-704).
+func (a *App) soleAdminSetup() string {
+	cfg, err := ReadSetupsConfig(a.opts.Home)
+	if err != nil {
+		return ""
+	}
+	var found []string
+	for _, s := range cfg.Setups {
+		if !s.Disabled && strings.TrimSpace(s.Org) != "" && s.Kind == onboard.KindAdmin {
+			found = append(found, s.Name)
+		}
+	}
+	if len(found) == 1 {
+		return found[0]
+	}
+	return ""
 }
 
 // outsideEveryPlace reports whether dir is no code repo, no store clone:
@@ -108,14 +138,28 @@ func (a *App) routeSoleSetup(ctx context.Context, e op.Entry, d op.Decoder) (con
 	switch {
 	case rerr == nil && res.Entry.Org != "" && next:
 		return op.WithSetup(ctx, res.Active.Name), nil // this folder's org setup names the queue
+	case rerr == nil && res.Entry.Org != "" && roster && res.Active.Why == opssetup.WhyDefault:
+		// devco:D-704: the default setup answers here; say so, as the
+		// other routings do, so the person sees whose roster changed
+		a.sayRouted(res.Active.Name, "the default setup")
+		return op.WithSetup(ctx, res.Active.Name), nil
 	case (rerr != nil || res.Entry.Org != "") && roster:
 		return ctx, nil // an org applies to this folder, or its own refusal comes
 	}
 	if routed, ok := a.withSoleOrgSetup(ctx); ok {
 		return routed, nil
 	}
+	if roster && !e.Spec().OnlyReads() {
+		if name := a.soleAdminSetup(); name != "" {
+			// devco:D-704: only an admin changes the roster, so of two
+			// org setups the one where this person is an admin is the
+			// only one the change can be meant for
+			a.sayRouted(name, "the only org setup where you are an admin")
+			return op.WithSetup(ctx, name), nil
+		}
+	}
 	if !next {
-		return ctx, nil // rosterNowhereErr names --store <org> and --setup <setup>
+		return ctx, nil // rosterNowhereErr names --setup <setup> and the default
 	}
 	where := a.opts.RepoDir
 	if where == "" {

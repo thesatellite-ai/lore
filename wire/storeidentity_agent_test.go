@@ -47,7 +47,7 @@ func TestStoreIdentityUnderAgentIsThePerson(t *testing.T) {
 	if id.Name != "Una Person" || id.Email != "una@example.test" || agentSignature(id.Name, id.Email) {
 		t.Fatalf("clone identity = %+v, want the person", id)
 	}
-	tr := s.agentTrailers()()
+	tr := s.agentTrailers()(ctx)
 	if len(tr) != 1 || !strings.HasPrefix(tr[0], gitcommit.TrailerAgent+": claude_code (agent:auto/claude_code/") {
 		t.Fatalf("trailers = %q, want Lore-Agent naming the agent", tr)
 	}

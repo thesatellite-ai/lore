@@ -68,7 +68,7 @@ func (b *Backend) seedLocked(ctx context.Context, dir, subject string) error {
 	if err != nil {
 		return err
 	}
-	if _, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(subject)}, env: env}); err != nil {
+	if _, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", b.cfg.withTrailers(ctx, subject)}, env: env}); err != nil {
 		return errs.Wrap(errs.Internal, "git: commit the copied store", err)
 	}
 	m, err := rowfs.ReadMarker(b.work)

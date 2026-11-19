@@ -203,7 +203,7 @@ func (b *Backend) commitTaken(ctx context.Context, s RowSides) error {
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"add", "--", s.Path}}); err != nil {
 		return errs.Wrap(errs.Internal, "git: stage the settled row", err)
 	}
-	msg := b.cfg.withTrailers(settleSubject + id.String())
+	msg := b.cfg.withTrailers(ctx, settleSubject+id.String())
 	if _, err := b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "-m", msg, "--", s.Path}, env: env}); err != nil {
 		return errs.Wrap(errs.Internal, "git: commit the settled row", err)
 	}

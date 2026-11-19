@@ -856,7 +856,7 @@ func (b *Backend) commitBatch(ctx context.Context, batch Batch, changes []store.
 			// its own, so its author survives push mode batch (squashOnto)
 			trailers = append(trailers, handEditTrailer)
 		}
-		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", b.cfg.withTrailers(msg, trailers...)}, env: env})
+		_, err = b.git.run(ctx, call{dir: b.work, args: []string{"commit", "--quiet", "--no-verify", "--allow-empty", "-m", b.cfg.withTrailers(ctx, msg, trailers...)}, env: env})
 	}
 	if err == nil {
 		b.noteCommitted(ctx)
