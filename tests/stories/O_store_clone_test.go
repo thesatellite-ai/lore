@@ -22,12 +22,18 @@ package stories
 //	       setup's store) with its warning, and `store doctor --store
 //	       <org>` said "stores this repo and machine use: none" before
 //	       checking that store.
+//	D-696  with the company's entry also listing the ops store, an ops
+//	       task by id from the home folder (the claim line task next
+//	       prints, release, show, edit, done, delete, comment add --on-id)
+//	       ran under the company's setup and refused "no store named
+//	       <ops org> … the stores --to takes here".
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -214,5 +220,51 @@ func TestStoryOStoreCloneIsAStoreClone(t *testing.T) {
 		r = ada.Lore(ada.Home, "store", "doctor", "--store", oOrg)
 		r.Says(t, "lore-team")
 		r.Never(t, "lore-ops", "stores this repo and machine use:\n  none")
+	})
+
+	// devco:D-696 (owner use pass 5 weak 2), on the owner's shape: the ops
+	// org's store sits under the company's GitHub owner and matches the
+	// company's own: pattern. `task next --setup <ops setup>` from the home
+	// folder printed "(or lore task claim --id … --push)", and that line,
+	// run as printed from home, failed "no store named acmeops is set up for
+	// this folder … the stores --to takes here" (task release --id the
+	// same), naming --to, which was never typed. Every id command on the ops
+	// row from home finds the row's own store; none talks about --to.
+	s.Step("D-696/ops-task-by-id-from-home", func() {
+		ada.LoreIn(tc, "task", "add", "--title", "ops queue task", "--to", opsOrg+"/infra", "--yes").OK(t)
+		ada.LoreIn(tc, "sync").OK(t)
+		// the company's entry lists the ops store too (an admins store of
+		// the company before the ops org had a setup of its own)
+		ada.LoreIn(pc, "org", "store", "add", "--org", oOrg, "--url", ops.SSHURL(), "--audience", "admins", "--yes").OK(t)
+		// the same class (D-686): the ops clone still names the ops org
+		w := ada.Lore(opsClone, "whoami")
+		oCheck(t, "D-696/whoami-ops-clone", w.Code == 0 && strings.Contains(w.Out(), "org        "+opsOrg+"  "), "whoami in the ops clone, with the company's entry listing the ops store too:\n%s", w)
+		r := ada.Lore(ada.Home, "task", "next", "--setup", opsSetup)
+		m := oClaimHint.FindStringSubmatch(r.Out())
+		if r.Code != 0 || m == nil {
+			t.Fatalf("task next --setup %s from home prints no claim line:\n%s", opsSetup, r)
+		}
+		args := strings.Fields(m[1])
+		id := args[slices.Index(args, "--id")+1]
+		c := ada.Lore(ada.Home, args...)
+		oCheck(t, "D-696/claim-as-printed", c.Code == 0, "the printed %q run from home failed:\n%s", "lore "+m[1], c)
+		oCheck(t, "D-696/no-unasked-flag", !strings.Contains(c.Out(), "--to"), "the claim from home talks about --to, which was never typed:\n%s", c)
+		c = ada.Lore(ada.Home, "task", "release", "--id", id)
+		oCheck(t, "D-696/release", c.Code == 0 && !strings.Contains(c.Out(), "--to"), "task release --id %s from home failed:\n%s", id, c)
+		// the matrix cell "ops row under the company's owner × id commands
+		// from home": each finds the row in the ops store
+		for _, cmd := range [][]string{
+			{"task", "show", "--id", id},
+			{"task", "note", "--id", id, "--text", "from home"},
+			{"comment", "add", "--on-id", id, "--body", "from home", "--yes"},
+			{"task", "edit", "--id", id, "--title", "ops queue task (edited)", "--yes"},
+			{"task", "edit", "--id", id, "--status", "blocked", "--yes"},
+			{"task", "start", "--id", id, "--yes"},
+			{"task", "done", "--id", id, "--yes"},
+			{"task", "delete", "--id", id, "--yes"},
+		} {
+			c := ada.Lore(ada.Home, cmd...)
+			oCheck(t, "D-696/cell/"+strings.Join(cmd[:2], "-"), c.Code == 0 && !strings.Contains(c.Out(), "--to"), "lore %s from home on the ops task failed:\n%s", strings.Join(cmd, " "), c)
+		}
 	})
 }

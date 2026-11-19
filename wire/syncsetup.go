@@ -30,6 +30,7 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/orgcfg"
 	"github.com/thesatellite-ai/lore/engine/attach"
 	"github.com/thesatellite-ai/lore/logic/gitfault"
+	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 	opsstores "github.com/thesatellite-ai/lore/ops/stores"
@@ -372,21 +373,25 @@ func orgStoreLabel(home, raw string) string {
 	if same == nil {
 		return ""
 	}
-	for i := range cfg.Orgs {
-		o := &cfg.Orgs[i]
-		main := o.OrgFolderStore()
-		if main == nil && len(o.Stores) > 0 {
-			main = &o.Stores[0]
+	// the org whose store this is when two entries list it (storeOwnerOrg,
+	// devco:D-696): the ops org's store is "<ops org>", not the company's
+	// short name for it
+	o := storeOwnerOrg(cfg.Orgs, func(sc orgconf.Store) bool { return same(sc.URL) })
+	if o == nil {
+		return ""
+	}
+	main := o.OrgFolderStore()
+	if main == nil && len(o.Stores) > 0 {
+		main = &o.Stores[0]
+	}
+	for _, sc := range o.Stores {
+		if !same(sc.URL) {
+			continue
 		}
-		for _, sc := range o.Stores {
-			if !same(sc.URL) {
-				continue
-			}
-			if main != nil && main.URL == sc.URL {
-				return o.Name
-			}
-			return sc.ShortName()
+		if main != nil && main.URL == sc.URL {
+			return o.Name
 		}
+		return sc.ShortName()
 	}
 	return ""
 }

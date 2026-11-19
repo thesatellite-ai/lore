@@ -228,16 +228,31 @@ func cloneOrgEntry(home, url string) *orgconf.Org {
 	if same == nil {
 		return nil
 	}
-	for i := range cfg.Orgs {
-		for _, s := range cfg.Orgs[i].Stores {
-			// sameStoreAs: one identity for every spelling of the store, an
-			// ssh alias origin included (D-493, D-627)
-			if same(s.URL) {
-				return &cfg.Orgs[i]
+	// sameStoreAs: one identity for every spelling of the store, an ssh
+	// alias origin included (D-493, D-627)
+	return storeOwnerOrg(cfg.Orgs, func(sc orgconf.Store) bool { return same(sc.URL) })
+}
+
+// storeOwnerOrg is the org entry a store belongs to among orgs (nil for
+// none): the entry holding its org folder in that store, else the last
+// entry listing it. It is storeOrgs' rule for one store, so a store clone,
+// a row found by id and the setup picked for that row all name the same
+// org when two entries list one store (devco:D-696, D-686: the ops org's
+// store kept as an admins store in the company's entry too).
+func storeOwnerOrg(orgs []orgconf.Org, same func(orgconf.Store) bool) *orgconf.Org {
+	var owner *orgconf.Org
+	for i := range orgs {
+		for _, s := range orgs[i].Stores {
+			if !same(s) {
+				continue
 			}
+			if s.OrgFolder != "" {
+				return &orgs[i]
+			}
+			owner = &orgs[i]
 		}
 	}
-	return nil
+	return owner
 }
 
 // cloneCompanyFolder is the org's company folder (the roster, the org's
