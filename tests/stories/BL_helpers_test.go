@@ -46,6 +46,7 @@ type blWorld struct {
 	aapp   *teamharness.Clone // the admin's clone of the client repo
 	people map[string]*journeys.Machine
 	clones map[string]*teamharness.Clone
+	team   bool // the @client_app team exists (blJoin)
 }
 
 // blStart starts the org, adds the client store and links the client repo
@@ -79,6 +80,17 @@ func (w *blWorld) blJoin(p journeys.Person) (*journeys.Machine, *teamharness.Clo
 	journeys.GitHubLogin(t, w.s.World, m, p.Login)
 	c := fCodeClone(w.s, m, w.app, "app")
 	journeys.Join(t, m, c.Dir, blJoinSetup, line, p, []string{blFolders})
+	// devco D-694: a member adds notes only in the folder of a team they
+	// are on; every BL person writes for the team in client_app, so the
+	// admin puts them on @client_app (the team named like the folder)
+	if w.team {
+		w.admin.LoreIn(w.home, "team", "member", "add", "--handle", "@"+blFolder, "--members", p.Email, "--yes").OK(t)
+	} else {
+		w.admin.LoreIn(w.home, "team", "add", "--handle", "@"+blFolder, "--members", p.Email, "--yes").OK(t)
+		w.team = true
+	}
+	w.admin.LoreIn(w.home, "sync").OK(t)
+	m.LoreIn(c, "sync").OK(t)
 	w.people[p.Email], w.clones[p.Email] = m, c
 	return m, c
 }

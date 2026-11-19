@@ -66,7 +66,11 @@ func TestStoryWCTUp4Count(t *testing.T) {
 	bc := bm.Clone(app, "platform")
 	bm.MoveClone(t, bc, filepath.Join(bm.Home, "code", "platform"))
 	journeys.Join(t, bm, bc.Dir, wSetup, line, wqMember, []string{wFolders})
+	// devco D-694: a member adds notes only in the folder of a team they
+	// are on; the teammate writes for @platform, the team of acme/platform
+	m.LoreIn(pc, "team", "add", "--handle", "@platform", "--members", wqMember.Email, "--yes").OK(t)
 	m.Lore(m.Home, "sync", "--setup", wSetup).OK(t)
+	bm.LoreIn(bc, "sync").OK(t)
 
 	clone := storeCloneDir(t, m)
 	places := []struct{ name, dir string }{
