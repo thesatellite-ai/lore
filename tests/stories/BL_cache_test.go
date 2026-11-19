@@ -7,7 +7,9 @@ package stories
 // reads main's cache and keeps no layer cache; an isolated one reads its
 // own; an isolated branch's notes never reach main's cache file; switching
 // a branch share <-> isolate (by hand or by a teammate's pushed choice)
-// moves it on the next command; landed and dropped branches leave no
+// moves it on the next command (a teammate's own share is refused: the
+// mode of a company folder's branch is the admin's, devco D-694); landed
+// and dropped branches leave no
 // cache; doctor lists a stray layer cache and doctor --fix removes it. Every
 // name, email and url is made up.
 
@@ -124,20 +126,35 @@ func TestStoryBL25CacheFollowsTheMode(t *testing.T) {
 		}
 		w.admin.LoreIn(w.aapp, "sync").OK(t)
 	})
-	s.Step("day1/a-teammates-share-reaches-the-cache-on-the-next-command", func() {
+	s.Step("day1/a-teammates-share-is-refused-the-admins-reaches-the-cache-on-the-next-command", func() {
+		// devco D-694 (owner use pass 5, the role rule): a branch's mode in
+		// a company folder is a policy of that folder, for everyone in it:
+		// a member's share is refused with the ask-an-admin hint and
+		// nothing is written; the admin's share reaches the teammate's
+		// cache after a sync, and so does the admin's undo.
 		dev.LoreIn(devApp, "sync").OK(t)
-		dev.LoreIn(devApp, "branch", "share", "--branch", "feat/a").OK(t)
+		before := strings.TrimSpace(w.s.Git(w.notes.Dir, "rev-parse", "HEAD"))
+		dev.LoreIn(devApp, "branch", "share", "--branch", "feat/a", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", "ask an admin of "+blOrg, blAdmin.Name, "nothing was written")
+		dev.LoreIn(devApp, "branch", "isolate", "--branch", "feat/a", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", blAdmin.Name)
 		dev.LoreIn(devApp, "sync").OK(t)
+		if after := strings.TrimSpace(w.s.Git(w.notes.Dir, "rev-parse", "HEAD")); after != before {
+			t.Fatalf("devco:D-694: a member's refused branch share reached the store (%s -> %s)", before, after)
+		}
+		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "feat/a", "--yes").OK(t).Says(t, "shared notes")
 		w.admin.LoreIn(w.aapp, "sync").OK(t)
+		dev.LoreIn(devApp, "sync").OK(t)
+		devApp.Git("switch", "-q", "-c", "feat/a")
+		dev.LoreIn(devApp, "branch", "mode").OK(t).Says(t, "shared", "step 1")
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Never(t, "note of feat-a only")
-		w.admin.LoreIn(w.aapp, "branch", "mode").OK(t).Says(t, "shared", "step 1")
 		if got := w.layerCacheOf("feat/a"); len(got) != 0 {
-			t.Fatalf("feat/a shared by a teammate kept its layer cache: %v", got)
+			t.Fatalf("feat/a shared by the admin kept its layer cache: %v", got)
 		}
 		w.noLeak(t, "note of feat-a only")
-		dev.LoreIn(devApp, "branch", "share", "--branch", "feat/a", "--undo").OK(t)
-		dev.LoreIn(devApp, "sync").OK(t)
+		w.admin.LoreIn(w.aapp, "branch", "share", "--branch", "feat/a", "--undo", "--yes").OK(t)
 		w.admin.LoreIn(w.aapp, "sync").OK(t)
+		dev.LoreIn(devApp, "sync").OK(t)
+		dev.LoreIn(devApp, "branch", "mode").OK(t).Never(t, "step 1")
+		devApp.Git("switch", "-q", "main")
 		w.admin.LoreIn(w.aapp, "memory", "list").OK(t).Says(t, "note of feat-a only")
 	})
 	s.Step("day1/offline-and-stacked-keep-their-own-caches", func() {

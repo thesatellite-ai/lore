@@ -22,7 +22,7 @@
 3. She adds a folder `web` with a memory and a task, links `web`, links the client repo `client-shop` (matched by the prefix pattern), inits and renders the repo that ignores `.lore/` and the one whose `CLAUDE.md` links to `~/notes/CLAUDE.md`, adds a folder and a row to `lore-ops`, and syncs.
 4. She reads from every place (home, each repo, the store clone): nothing is pushed.
 5. GitHub moves `lore-team` and `lore-ops` to `acme-labs`; she runs `lore store set-url` for each from `$HOME`, writes a row and runs `lore store push --store acme` from `$HOME`.
-6. Mo joins with the invite as `acme-member` (org identity, alias), reads in his clone and from `$HOME`, writes, syncs.
+6. Mo joins with the invite as `acme-member` (org identity, alias); Ada puts him on team `@web` (the folder `web`); a memory he adds to `acme/api` (a folder of team `@api`, which he is not on) is refused with the ask-an-admin hint (devco:D-694). He reads in his clone and from `$HOME`, writes, syncs. In his linked web repo Mo's `rule edit --id <the org/ folder's must rule> --body …` and `branch share --branch feat/member-share --yes` are refused with "only an admin of the org … ask an admin of acme (Ada Admin)", his store clone gets no commit, and the rule keeps its text for Ada after both sync (`TestStoryOOwnerShape`, step member/cannot-change-company-must-rule-or-branch-policy).
 7. A second admins-only store nobody wrote to (`lore-vault`) moves; Ada runs set-url for it in her org repo.
 
 ## What must hold
@@ -39,6 +39,7 @@
 
 ## Findings it guards
 
+- `devco:D-694` (REGRESSIONS.md, `TestStoryOOwnerShape`): owner use pass 5 wrong 1 and 2 on the owner-shaped machine: a member rewrote the body of the org/ folder's must rule and wrote a company folder's branch policy with `branch share`; both are refused now and nothing is committed.
 - `devco:D-531` (REGRESSIONS.md, `TestStoryOAliasWhoami`): `whoami` in a repo cloned as `git@<alias>:<owner>/<repo>.git` showed the remote as `<alias>/<owner>/<repo>`, matched no org, fell back to the personal identity and, with `--setup`, offered the alias pattern for the shared own list; it now shows `github.com/<owner>/<repo>`, the org match and the org identity, and never names the alias.
 - `devco:D-684` (REGRESSIONS.md, `TestStoryOAliasLinkedClientAttaches`): a client repo linked with `org link --org <org> --project <folder>` attaches that folder for every remote spelling git reaches github.com by (github.com, an ssh-config alias, a dotted alias only an insteadOf rule routes, https, an alias only the setup's `host_alias` names), outside every setup's folders and inside one: `store list`, `whoami`, `context`, a read, a write and `lore sync` (its push line names `<org>/<folder>`) all go through the attached folder. With the alias named only by `host_alias` (no `~/.ssh/config` entry), `lore sync` attached no store and took the waiting-clone push.
 - `devco:D-530` (REGRESSIONS.md): `setup list` warned `identity.git_email` for a personal global email with an includeIf org identity and advised `git config --global user.email <org email>`; `setup list` and `doctor --all` from `$HOME` now show no such warning and never advise `--global`.
