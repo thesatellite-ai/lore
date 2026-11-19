@@ -484,9 +484,10 @@ func pinnedSeverity(sev string) bool {
 const keepMember = fieldSeverity + ":" + schema.HotfixSeverityLow + "," + schema.HotfixSeverityMedium
 
 // guardCompanyPinned refuses a member's lower severity on a pinned hotfix
-// of a company place (the org folder, a store root): it takes the warning
-// out of what every repo of the org is told, an admin's change like a
-// company must rule (devco D-637; profilestore.RequireAdminAt). line is
+// on company ground (the org folder, a store root, every project folder of
+// the company store): it takes the warning out of what every repo reading
+// it is told, an admin's change like a company must rule (devco D-637,
+// D-681; profilestore.RequireAdminAt). line is
 // the command the admin runs. A bad or missing id passes: edit answers it.
 func (o ops) guardCompanyPinned(ctx context.Context, id, does, line string) error {
 	it, err := kn.Show(ctx, o.env, noun, id)

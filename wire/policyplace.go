@@ -9,7 +9,9 @@ package wire
 //	effective value's level ──▶ the place a raise must go
 //	  org folder             ──▶ --to <org>/org            (company: admins)
 //	  store root             ──▶ --to <the store's name>   (company: admins)
-//	  folder                 ──▶ --to <org>/<folder>       (members too)
+//	  folder                 ──▶ --to <org>/<folder>       (company when the
+//	                             folder is of the org's own store: admins,
+//	                             devco D-681; another store's: members too)
 //	  repo, or the default   ──▶ the repo: no --to in a repo with .lore/,
 //	                             --to <org>/<folder> in a linked repo,
 //	                             --to <store>/<folder> of the link when
@@ -39,16 +41,36 @@ import (
 // print a command then, since no --to it could print would work (devco
 // D-658: it printed the literal `--to <store>` and `--to <store>/<folder>`).
 func (a *App) PolicyPlace(ctx context.Context, key policy.Key) (to string, company bool, ok bool) {
+	to, ok = a.policyPlace(ctx, key)
+	return to, ok && to != "" && a.companyGround(ctx, store.Source(to)), ok
+}
+
+// companyGround reports whether the --to label place names company ground
+// (profilestore.CompanyGround) of this folder's org, the same answer the
+// role check of the write it prints gives (devco D-681: a project folder
+// of the company store is company ground, so a member is never printed a
+// policy write there).
+func (a *App) companyGround(ctx context.Context, place store.Source) bool {
+	ad, _ := a.OrgAdmins(ctx)
+	lv, known := a.StoreLevel(place)
+	if !known {
+		lv = ""
+	}
+	return profilestore.CompanyGround(lv, place, ad.Org)
+}
+
+// policyPlace is PolicyPlace's --to and ok.
+func (a *App) policyPlace(ctx context.Context, key policy.Key) (to string, ok bool) {
 	st, err := a.state(ctx)
 	if err != nil {
-		return "", false, true
+		return "", true
 	}
 	level := policy.LevelRepo
 	if set, perr := st.eng.Policy(ctx, store.SourceRepo); perr == nil {
 		if eff, has := set.Get(key); has && !eff.IsDefault && eff.Level != "" {
 			level = eff.Level
 			if name, found := policyRowStore(ctx, st.eng, eff.Source); found && name != store.SourceRepo {
-				return a.StoreLabel(name), profilestore.CompanyLevel(st.eng.Level(name)), true
+				return a.StoreLabel(name), true
 			}
 		}
 	}
@@ -60,26 +82,26 @@ func (a *App) PolicyPlace(ctx context.Context, key policy.Key) (to string, compa
 	switch level {
 	case policy.LevelOrg:
 		if src, has := aliases[attach.ReservedCompany]; has {
-			return a.StoreLabel(src), true, true
+			return a.StoreLabel(src), true
 		}
 	case policy.LevelStoreRoot:
 		if src, has := onlyStoreAt(st.eng, policy.LevelStoreRoot); has {
-			return a.StoreLabel(src), true, true
+			return a.StoreLabel(src), true
 		}
-		return "", true, false
+		return "", false
 	case policy.LevelFolder:
 		if src, has := aliases[attach.ReservedTeam]; has {
-			return a.StoreLabel(src), false, true
+			return a.StoreLabel(src), true
 		}
 	}
 	if a.LinkedByRemote(ctx) == "" {
-		return "", false, true
+		return "", true
 	}
 	if src, has := aliases[attach.ReservedTeam]; has {
-		return a.StoreLabel(src), false, true
+		return a.StoreLabel(src), true
 	}
 	if src, has := onlyStoreAt(st.eng, policy.LevelFolder); has {
-		return a.StoreLabel(src), false, true
+		return a.StoreLabel(src), true
 	}
 	// devco D-675: the linked folder is not attached here, but the link
 	// still names it, and a write's --to resolves "<store>/<folder>" from
@@ -87,10 +109,10 @@ func (a *App) PolicyPlace(ctx context.Context, key policy.Key) (to string, compa
 	// instead of no command at all
 	if a.opts.RepoLinkTarget != nil {
 		if t := a.opts.RepoLinkTarget(ctx); t != "" {
-			return t, false, true
+			return t, true
 		}
 	}
-	return "", false, false
+	return "", false
 }
 
 // policyRowStore is the attached store whose policies table holds the
