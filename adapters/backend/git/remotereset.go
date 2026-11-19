@@ -78,6 +78,9 @@ func (b *Backend) noteRemoteTip(ctx context.Context, tip string) {
 		}
 		tip = t
 	}
+	// the new address of a repointed clone has been seen (a fetch found the
+	// branch, or a push landed): the clone knows its remote again
+	_ = os.Remove(filepath.Join(PathsOf(b.work).StateDir, repointedName)) // best effort (above)
 	p := remoteTipPath(b.work)
 	if old, err := os.ReadFile(p); err == nil && strings.TrimSpace(string(old)) == tip {
 		return
@@ -239,14 +242,21 @@ func (b *Backend) checkRemoteReset(ctx context.Context, before, remote, h string
 	if h == "" {
 		return nil // nothing of ours to push
 	}
-	if before == "" {
+	repointed := repointedAt(b.work)
+	if repointed {
+		// D-699: set-url pointed the clone at another repository; what it
+		// knew (tracking ref, push stamp) is the old one's, so an empty new
+		// repository is a first push, never a reset (another history at
+		// the new address is still refused below)
+		before = ""
+	} else if before == "" {
 		before = knownRemoteTip(b.work) // the tracking ref may have been pruned by another fetch
 	}
 	why := ""
 	switch {
 	case remote == "" && before != "":
 		why = "its branch " + b.branch + " is gone"
-	case remote == "" && pushedBefore(b.work) && !firstPushAllowed(ctx) && b.remoteHasNoHeads(ctx):
+	case remote == "" && !repointed && pushedBefore(b.work) && !firstPushAllowed(ctx) && b.remoteHasNoHeads(ctx):
 		// L-2: a clone from a build that kept no remote tip, its tracking
 		// ref pruned: lore's push stamp still says it pushed this store
 		// before, so an empty remote now is a reset, not a new store.
@@ -443,4 +453,48 @@ func GuardPushGone(ctx context.Context, dir, branch, h string, noHeads bool) err
 		return b.markedError(ctx, "", h)
 	}
 	return b.checkRemoteReset(ctx, "", "", h)
+}
+
+// repointedName marks a clone whose origin store set-url pointed at
+// another repository (RepointOrigin) that no fetch has yet seen holding
+// the store branch and no push has reached: what the clone knew of a
+// remote (tracking ref, remote tip, push stamp) describes the old one.
+const repointedName = "repointed"
+
+// repointedAt reports whether the clone at dir carries that mark.
+func repointedAt(dir string) bool {
+	_, err := os.Stat(filepath.Join(PathsOf(dir).StateDir, repointedName))
+	return err == nil
+}
+
+// RepointOrigin points the clone at dir at another repository (origin, the
+// spelling lore writes; store set-url's carry) and marks it repointed until
+// a fetch sees the store branch there or a push lands (noteRemoteTip). What
+// the clone knew of the old repository's branch (its tracking ref, the
+// remote-tip note, the push stamp) does not describe the new one; read as
+// if it did, the reset check took a new EMPTY repository for the old one
+// deleted and made again and refused the first sync with `lore store push
+// --restore` (devco D-699). The tracking ref stays: its reflog is what an
+// undone move reads (orgcfg dropNetZeroMove). A reset or rewind mark stays
+// too: only the person clears it. The caller holds the clone's lock.
+func RepointOrigin(ctx context.Context, dir, origin string) error {
+	bin, err := lookGit(DefaultBinary)
+	if err != nil {
+		return err
+	}
+	r := runner{bin: bin, owned: true}
+	if _, err := r.run(ctx, call{dir: dir, args: []string{"remote", "set-url", "--", RemoteName, origin}}); err != nil {
+		return errs.Wrap(errs.Internal, "git: point the clone "+dir+" at "+origin, err)
+	}
+	if err := os.Remove(remoteTipPath(dir)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return errs.FileIO("remove", remoteTipPath(dir), err)
+	}
+	p := filepath.Join(PathsOf(dir).StateDir, repointedName)
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return errs.FileIO("create", filepath.Dir(p), err)
+	}
+	if err := os.WriteFile(p, []byte(origin+"\n"), 0o600); err != nil {
+		return errs.FileIO("write", p, err)
+	}
+	return nil
 }

@@ -79,3 +79,49 @@ func TestJourneyTeamLeadStoreMovedToNewRepo(t *testing.T) {
 		}
 	})
 }
+
+// TestJourneyTeamLeadStoreMovedToEmptyRepo: the admin moves the store to a
+// new EMPTY repo (nothing copied over). The first explicit sync after
+// set-url fills it (devco D-699): before, the clone still held what it knew
+// of the old repo (its tracking ref and remote-tip note), so the empty new
+// repo looked like the old one deleted and made again, and the sync was
+// refused with "lore store push --restore".
+func TestJourneyTeamLeadStoreMovedToEmptyRepo(t *testing.T) {
+	t.Parallel()
+	tt := newTLTeam(t)
+	w := tt.w
+	lee := tt.person(tlLee)
+	var ann *Machine
+	var annCode string
+	empty := w.Remote("github.com/acme-co/team-notes-empty")
+
+	w.Step("day1/team-with-a-member", func() {
+		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
+		tt.lore(tlLee, "sync").OK(t)
+		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email)
+		ann = tt.person(tlAnn)
+		tlJoin(t, ann, tt.repo[tlAnn.Email].Dir, tlTeamSetup, line, tlAnn, []string{tlFolders})
+		annCode = filepath.Join(ann.Home, "code")
+		ann.Lore(annCode, "sync").OK(t)
+		tt.lore(tlLee, "sync").OK(t) // the admin has the member's join before the move
+	})
+
+	w.Step("day2/set-url-to-an-empty-repo-then-sync-fills-it", func() {
+		w.AdvanceDays(1)
+		lee.Lore(lee.Home, "store", "set-url", "--name", tlOrg, "--url", empty.SSHURL(), "--yes").OK(t)
+		s := lee.Lore(filepath.Join(lee.Home, "code"), "sync").OK(t)
+		s.Never(t, "--restore").Says(t, "at its old address "+tt.store.SSHURL()+" too")
+		newHead := w.Git(empty.Dir, "rev-parse", "refs/heads/main")
+		if oldHead := w.Git(tt.store.Dir, "rev-parse", "refs/heads/main"); oldHead != newHead {
+			t.Fatalf("[devco:D-699] old repo main %s, new repo main %s after the first sync", oldHead, newHead)
+		}
+	})
+
+	w.Step("day2/the-teammate-follows-to-the-filled-repo", func() {
+		ann.Lore(annCode, "sync").OK(t)
+		cfg, err := os.ReadFile(ann.LorePath("config.yaml"))
+		if err != nil || !strings.Contains(string(cfg), empty.SSHURL()) {
+			t.Fatalf("[devco:D-699] Ann's config does not follow the move to %s (%v):\n%s", empty.SSHURL(), err, cfg)
+		}
+	})
+}
