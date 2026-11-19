@@ -16,6 +16,11 @@ package host
 //	the deletion anyway
 //	doctor: the same rows, as a warning with the same next steps
 //
+// A row file lore itself removed because its row now lives in a store
+// (`lore store adopt --remove-source`, wire/movedout.go) is no hand
+// delete: the commit takes it, with one line naming the store
+// (devco:D-710).
+//
 // A git error says nothing: this guards a git command, it never breaks one.
 
 import (
@@ -29,6 +34,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/adapters/gitref"
 	"github.com/thesatellite-ai/lore/model/errs"
+	"github.com/thesatellite-ai/lore/wire"
 )
 
 // handDeletedRow is one row file gone from the work tree that HEAD has.
@@ -152,4 +158,49 @@ func handDeletedWarning(rows []handDeletedRow) string {
 		return ""
 	}
 	return countRows(len(rows)) + " deleted by removing the file, not with lore (no trash copy, no audit entry; a commit of it is refused):" + handDeletedList(rows) + "\n  " + handDeletedSteps(rows)
+}
+
+// withoutMovedOut splits rows into the ones removed by hand and the ones
+// lore removed because they now live in a store (wire.MovedOut, D-710);
+// places are the store/folders of the moved ones.
+func withoutMovedOut(ctx context.Context, root string, rows []handDeletedRow) (hand, moved []handDeletedRow, places []string) {
+	if len(rows) == 0 {
+		return nil, nil, nil
+	}
+	marked := wire.MovedOut(ctx, root)
+	at := map[string]string{}
+	for _, r := range rows {
+		if place, ok := marked[r.path]; ok {
+			moved = append(moved, r)
+			at[r.path] = place
+			continue
+		}
+		hand = append(hand, r)
+	}
+	return hand, moved, wire.MovedOutPlaces(at)
+}
+
+// movedOutLine is the hook's line for row files lore removed because
+// their rows live in places now ("" when there are none).
+func movedOutLine(moved []handDeletedRow, places []string) string {
+	if len(moved) == 0 {
+		return ""
+	}
+	return "lore: this commit removes " + countRows(len(moved)) + " from .lore/data that `lore store adopt --remove-source` moved to " + strings.Join(places, ", ") + " (the rows live there now)"
+}
+
+// movedOutDoctorLine is doctor's note for the same rows, with the command
+// that commits the removal from anywhere.
+func movedOutDoctorLine(root string, moved []handDeletedRow, places []string) string {
+	where := strings.Join(places, ", ")
+	return countRows(len(moved)) + " removed from .lore/data by `lore store adopt --remove-source` live in " + where + " now; commit the removal: git -C " + root + " add -A .lore/data && git -C " + root + " commit -m \"lore: move the notes to " + where + "\""
+}
+
+// rowPaths are the paths of rows.
+func rowPaths(rows []handDeletedRow) []string {
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.path
+	}
+	return out
 }

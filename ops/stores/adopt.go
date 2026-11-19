@@ -238,7 +238,7 @@ func (o AdoptOut) Text() string {
 	if o.Removed > 0 && o.DryRun {
 		b.WriteString("  would remove " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data (--remove-source)\n")
 	} else if o.Removed > 0 {
-		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (git -C " + o.From + " add -A .lore/data && git -C " + o.From + " commit)\n")
+		b.WriteString("  removed " + plural(o.Removed, "row file") + " from " + o.From + "/.lore/data: review and commit it (git -C " + o.From + " add -A .lore/data && git -C " + o.From + " commit -m \"lore: move the notes to " + o.Store + "/" + o.Folder + "\"); lore's hook knows the rows live there now\n")
 	}
 	if o.Note != "" {
 		b.WriteString("  " + o.Note + "\n")

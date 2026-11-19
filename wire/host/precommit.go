@@ -119,9 +119,16 @@ func (h *liveHost) preCommit(ctx context.Context) error {
 	}
 	// S-8: a row file removed by hand is refused before anything is
 	// staged (handdelete.go): lore itself never deletes one
-	if herr := handDeleteError(handDeletedRows(ctx, repo, root, changed)); herr != nil {
+	// D-710: rows `lore store adopt --remove-source` moved to a store are
+	// not; the marker keeps only what is still waiting to be committed
+	hand, moved, places := withoutMovedOut(ctx, root, handDeletedRows(ctx, repo, root, changed))
+	wire.PruneMovedOut(ctx, root, rowPaths(moved))
+	if herr := handDeleteError(hand); herr != nil {
 		wire.HookIndexRestore(ctx, root)
 		return herr
+	}
+	if l := movedOutLine(moved, places); l != "" {
+		h.line(l)
 	}
 	reg, err := schema.NewRegistry(schema.Builtin()...)
 	if err != nil {
