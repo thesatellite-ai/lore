@@ -92,6 +92,13 @@ func TestStoryOPersonalStoreClone(t *testing.T) {
 		mwc = mo.CloneTo(web, mo.OrgDir("web"))
 		mpc = mo.CloneTo(platform, mo.OrgDir("platform"))
 		oSetupFlow(t, mo, mwc.Dir, oMSetup, "member", oMemOrg, oAlias, map[string]any{"invite": line}, []string{"~/code/" + oOrg + "/**"})
+		// devco D-694: a member writes in the folder of a team they are
+		// on; Mo is on @web, whose folder is web (Ada syncs first, so the
+		// roster holds the actor his join pushed)
+		mo.LoreIn(mwc, "sync").OK(t)
+		ada.LoreIn(wc, "sync").OK(t)
+		ada.LoreIn(wc, "team", "add", "--handle", "@"+oFolder, "--members", oMemOrg.Email, "--yes").OK(t)
+		ada.LoreIn(wc, "sync").OK(t)
 		mo.LoreIn(mwc, "sync").OK(t)
 		// one setup on the laptop: it covers every folder, store clones too
 		mo.Lore(mo.Home, "setup", "edit", "--name", oMSetup, "--default", "--yes").OK(t)

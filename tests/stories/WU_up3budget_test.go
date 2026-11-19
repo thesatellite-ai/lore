@@ -18,9 +18,10 @@ package stories
 //	       in a linked project-folder repo is refused a demotion, a pin and
 //	       a policy write there, and the warning labels those commands as
 //	       the admin's
-//	D-681/branch: a member's lore branch share|isolate (and policy set of
-//	       branches.shared / branches.isolated) still runs in a company
-//	       folder; branches.main_like and the budget stay the admin's
+//	D-694: a member's lore branch share|isolate (their --undo, and every
+//	       branches.* policy) is refused in a company folder like any
+//	       policy there (the D-681 exemption is reversed); a member adds
+//	       rules only in their own team's folder
 //	D-658: a budget set at the store root names that store in its raise
 //	       (never the literal `<store>`), and the raise runs as printed
 
@@ -62,6 +63,9 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 	m.Lore(pc.Dir, "member", "add", "--email", wubMember.Email, "--name", wubMember.Name, "--handle", "mo", "--role", "member", "--yes").OK(t)
 	m.Lore(m.Home, "org", "config", "set", "--org", wOrg, "--key", "own", "--add", "github.com/acme-co/*", "--yes").OK(t)
 	m.Lore(pc.Dir, "store", "folder", "add", "team", wubFolder).OK(t)
+	// devco D-694: a member adds rules and notes only in the folder of a
+	// team they are on; Mo is on @web, whose folder is web
+	m.Lore(pc.Dir, "team", "add", "--handle", "@"+wubFolder, "--members", "mo").OK(t)
 	wc := m.Clone(web, "web")
 	m.MoveClone(t, wc, filepath.Join(m.Home, "code", "web"))
 	m.Lore(wc.Dir, "org", "link", "--org", wOrg, "--project", wubFolder, "--own", "--yes").OK(t)
@@ -198,18 +202,26 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		m.Lore(wc.Dir, "rule", "edit", "--id", company, "--severity", "should").OK(t)
 	})
 
-	s.Step("D-681/member-keeps-the-branch-choice", func() {
-		// devco D-681 regression: a teammate's own branch choice (the
-		// exact names lore branch share|isolate write) stays every
-		// member's in a company folder; the rule for every branch at once
-		// (branches.main_like) and the budget stay the admin's.
-		mo.Lore(mc.Dir, "branch", "share", "--branch", "feat/mo-share").OK(t).Says(t, "feat/mo-share", "branches.shared")
-		mo.Lore(mc.Dir, "branch", "isolate", "--branch", "feat/mo-own").OK(t).Says(t, "feat/mo-own", "branches.isolated")
-		mo.Lore(mc.Dir, "policy", "set", "--key", "branches.shared", "--value", "feat/mo-share,feat/mo-two", "--to", inWeb, "--yes").OK(t)
-		mo.Lore(mc.Dir, "branch", "share", "--branch", "feat/mo-share", "--undo").OK(t).Says(t, "removed the share choice")
-		mo.Lore(mc.Dir, "policy", "unset", "--key", "branches.isolated", "--to", inWeb, "--yes").OK(t)
+	s.Step("D-694/branch-choice-is-the-admins", func() {
+		// devco D-694 (owner use pass 5, reverses the D-681 exemption): a
+		// branch's mode in a company folder is a policy for everyone in
+		// it, so a member's lore branch share|isolate, their --undo and a
+		// policy set|unset of any branches.* key are refused with the
+		// ask-an-admin hint; the admin may, with --yes.
+		mo.Lore(mc.Dir, "branch", "share", "--branch", "feat/mo-share", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name, "nothing was written")
+		mo.Lore(mc.Dir, "branch", "isolate", "--branch", "feat/mo-own", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name, "nothing was written")
+		mo.Lore(mc.Dir, "policy", "set", "--key", "branches.shared", "--value", "feat/mo-share,feat/mo-two", "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
 		mo.Lore(mc.Dir, "policy", "set", "--key", "branches.main_like", "--value", "feat/*", "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
 		mo.Lore(mc.Dir, "policy", "set", "--key", wubKey, "--value", "30000", "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
+		m.Lore(wc.Dir, "branch", "share", "--branch", "feat/mo-share", "--yes").OK(t).Says(t, "feat/mo-share", "branches.shared")
+		m.Lore(wc.Dir, "branch", "isolate", "--branch", "feat/mo-own", "--yes").OK(t).Says(t, "feat/mo-own", "branches.isolated")
+		m.Lore(wc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "branch", "share", "--branch", "feat/mo-share", "--undo", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
+		mo.Lore(mc.Dir, "branch", "isolate", "--branch", "feat/mo-own", "--undo", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
+		mo.Lore(mc.Dir, "policy", "unset", "--key", "branches.isolated", "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
+		m.Lore(wc.Dir, "branch", "share", "--branch", "feat/mo-share", "--undo", "--yes").OK(t).Says(t, "removed the share choice")
+		m.Lore(wc.Dir, "policy", "unset", "--key", "branches.isolated", "--to", inWeb, "--yes").OK(t)
 	})
 }
 

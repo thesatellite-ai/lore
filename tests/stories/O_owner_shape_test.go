@@ -480,6 +480,11 @@ func TestStoryOOwnerShape(t *testing.T) {
 		_, err := os.Stat(oStoreClone(mo, oNewOwner, "lore-ops"))
 		_, err2 := os.Stat(oStoreClone(mo, oOwner, "lore-ops"))
 		oCheck(t, "member-no-admin-store", err != nil && err2 != nil, "a member's machine cloned the admins-only store")
+		// devco D-694: a member adds notes only in the folder of a team
+		// they are on; Mo is on @web, whose folder is web
+		ada.LoreIn(pc, "team", "add", "--handle", "@"+oFolder, "--members", oMemOrg.Email, "--yes").OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		mo.LoreIn(mwc, "sync").OK(t)
 	})
 
 	s.Step("member/reads-writes-sync", func() {
@@ -487,6 +492,12 @@ func TestStoryOOwnerShape(t *testing.T) {
 		mo.LoreIn(mwc, "task", "list").OK(t)
 		mo.Lore(mo.Home, "memory", "list", "--store", oOrg).OK(t)
 		noPush(before, "member reads")
+		// devco D-694: the folder of a team Mo is not on is not his to write
+		ada.LoreIn(pc, "store", "folder", "add", "team", "api").OK(t)
+		ada.LoreIn(pc, "team", "add", "--handle", "@api", "--members", oAdminOrg.Email, "--yes").OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		mo.LoreIn(mwc, "sync").OK(t)
+		mo.LoreIn(mwc, "memory", "add", "--body", "member note for api", "--to", oOrg+"/api", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", "folder of a team they are on", oAdminOrg.Name, "nothing was written")
 		mo.LoreIn(mwc, "memory", "add", "--body", "member note", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
 		mo.LoreIn(mwc, "sync").OK(t)
 		clone := oStoreClone(mo, oNewOwner, "lore-team")
@@ -497,6 +508,30 @@ func TestStoryOOwnerShape(t *testing.T) {
 		for _, a := range team2.Authors("main") {
 			oCheck(t, "member-author", !strings.Contains(a, oMemPersonal.Email), "a commit on the org store is authored with the member's personal identity: %q", a)
 		}
+	})
+
+	// devco:D-694 (owner use pass 5 wrong 1 and 2): on the owner-shaped
+	// machine a member may not rewrite a company must rule (the org/
+	// folder's included) nor change a company folder's branch policy with
+	// branch share in a linked repo: refused with the ask-an-admin hint,
+	// and the member's store clone gets no commit.
+	s.Step("member/cannot-change-company-must-rule-or-branch-policy", func() {
+		org := wubRuleID.FindString(ada.LoreIn(pc, "rule", "add", "--to", oOrg+"/org", "--severity", "must", "--body", "coding agents never push unless a person asked", "--yes").OK(t).Out())
+		ada.LoreIn(pc, "sync").OK(t)
+		mo.LoreIn(mwc, "sync").OK(t)
+		clones, _ := filepath.Glob(filepath.Join(mo.Home, ".lore", "stores", "*", "lore-team"))
+		if len(clones) != 1 {
+			t.Fatalf("want one company store clone on the member's machine, got %v", clones)
+		}
+		clone := clones[0]
+		head := func() string { return strings.TrimSpace(s.Git(clone, "rev-parse", "HEAD")) }
+		before := head()
+		mo.LoreIn(mwc, "rule", "edit", "--id", org, "--body", "changed by member").Refused(t, "E_REFUSED", "only an admin of the org", oAdminOrg.Name, "nothing was written")
+		mo.LoreIn(mwc, "branch", "share", "--branch", "feat/member-share", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", oAdminOrg.Name, "nothing was written")
+		oCheck(t, "D-694/member-nothing-committed", head() == before, "a member's refused write committed to the store clone (%s -> %s)", before, head())
+		mo.LoreIn(mwc, "sync").OK(t)
+		ada.LoreIn(pc, "sync").OK(t)
+		ada.LoreIn(pc, "rule", "show", "--id", org).OK(t).Says(t, "coding agents never push unless a person asked").Never(t, "changed by member")
 	})
 
 	// devco:D-683, D-692: the member's machine has one org setup, so a

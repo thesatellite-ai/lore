@@ -198,9 +198,14 @@ func TestStoryWUOpsFolderGround(t *testing.T) {
 		}
 		bat := bulkDelete("member batch cell")
 		mo.Lore(mt.Dir, "sync").OK(t)
-		mo.Lore(moinfra, "trash", "restore", "--id", bat).OK(t)
+		// devco D-694: restoring a deleted company must rule changes it, so
+		// it is the admin's; Mo is refused, Ada restores
+		mo.Lore(moinfra, "trash", "restore", "--id", bat).Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name, "nothing was written")
+		m.Lore(minfra, "trash", "restore", "--id", bat).OK(t)
+		m.Lore(minfra, "sync").OK(t)
+		mo.Lore(mt.Dir, "sync").OK(t)
 		r := mo.Lore(moinfra, "batch", "undo", "--id", bat, "--yes")
-		if out := r.Out(); !strings.Contains(out, "nothing to undo") && !strings.Contains(out, "E_REFUSED") {
+		if out := r.Out(); !strings.Contains(out, "nothing to undo") && !strings.Contains(out, "E_REFUSED") && !strings.Contains(out, "E_NOT_FOUND") {
 			t.Fatalf("devco:D-681: a member's undo of an admin's batch did something:\n%s", out)
 		}
 		mo.Lore(moinfra, "rule", "list").OK(t).Says(t, "member batch cell 0", "member batch cell 1")

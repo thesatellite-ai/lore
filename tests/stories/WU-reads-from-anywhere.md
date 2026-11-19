@@ -53,3 +53,4 @@
 - `devco:D-666` (REGRESSIONS.md).
 - `devco:D-669`, `devco:D-670` (REGRESSIONS.md).
 - `devco:D-681` (REGRESSIONS.md).
+- `devco:D-694` (REGRESSIONS.md, `TestStoryWUBudgetWarn` step D-694/branch-choice-is-the-admins, `TestStoryWUOpsFolderGround`): a member's `branch share` / `branch isolate`, their `--undo` and every `branches.*` policy in a company folder are refused with the ask-an-admin hint (the owner reversed the D-681 exemption), the admin's work; Mo is on team `@web`, so his adds in `acme/web` stay his; a member's `trash restore` of a deleted company must rule is refused and the admin restores it.
