@@ -199,9 +199,17 @@ type fixCase struct {
 // TestEveryRunnableFixHasACase for the rows that cannot run unattended).
 var fixCases = []fixCase{
 	{
-		name: "pointer file missing: tool not in context.targets", tools: []string{"claude_code"},
+		// D-711: a setup tool the repo does not target and has no file of
+		// is skipped, not failed; the failing shape is a target whose file
+		// went missing.
+		name: "pointer file missing: target's file removed", tools: []string{"claude_code"},
 		step: onboard.StepTools, check: onboard.CheckToolsPointerFile,
-		prepare: func(w *fixWorld) { w.run("lore", "init", "--target", "codex") },
+		prepare: func(w *fixWorld) {
+			w.run("lore", "init", "--target", "claude_code")
+			if err := os.Remove(filepath.Join(w.repo, "CLAUDE.md")); err != nil {
+				w.t.Fatal(err)
+			}
+		},
 	},
 	{
 		name: "pointer file does not import LORE.md", tools: []string{"claude_code"},
@@ -221,7 +229,12 @@ var fixCases = []fixCase{
 	{
 		name: "tool with no skill folder: pointer file missing", tools: []string{"cursor"},
 		step: onboard.StepTools, check: onboard.CheckToolsPointerFile,
-		prepare: func(w *fixWorld) { w.run("lore", "init", "--target", "codex") },
+		prepare: func(w *fixWorld) {
+			w.run("lore", "init", "--target", "cursor")
+			if err := os.Remove(filepath.Join(w.repo, ".cursor", "rules", "lore.mdc")); err != nil {
+				w.t.Fatal(err)
+			}
+		},
 	},
 	{
 		// No version line AND other files: an older or hand-edited skill.

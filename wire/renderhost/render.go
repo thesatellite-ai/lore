@@ -676,12 +676,22 @@ func (h *Host) printTargetPick(w *strings.Builder, pick targetPick) {
 		}
 		fmt.Fprintf(w, "%s %s found but not wired to lore; add it with: %s\n", h.decor.muted("·"), p.PointerFile, hint)
 	}
+	h.skippedLines(w, pick)
 	// r3-targets (DECISION P2-OLDCLI-2): a file that carries lore's pointer
 	// but is not in context.targets is left as it is; say so and how to
 	// list it, instead of skipping it silently.
 	for _, p := range pick.sel.Unlisted {
 		fmt.Fprintf(w, "%s %s carries lore's pointer but %s does not name it, so render leaves it as is; list it with: lore policy set --key %s --value \"<profiles incl. %s>\" --yes\n",
 			h.decor.muted("·"), p.PointerFile, policy.KeyContextTargets, policy.KeyContextTargets, p.Name)
+	}
+}
+
+// skippedLines names each setup tool the repo does not use and the one
+// command that adds it (D-711): render --add-target saves it in the repo's
+// context.targets, so every later render keeps it.
+func (h *Host) skippedLines(w *strings.Builder, pick targetPick) {
+	for _, p := range pick.sel.Skipped {
+		fmt.Fprintf(w, "%s %s\n", h.decor.muted("·"), p.SkippedNote("lore render --add-target"))
 	}
 }
 
@@ -702,24 +712,21 @@ func (h *Host) resolveTargets(ctx context.Context, root string, values []string,
 		if serr != nil {
 			return targetPick{}, serr
 		}
-		if ok {
+		in := toolprofile.RepoTargetsIn{Row: names, RowSet: ok, Probe: rootProbe{root: root}}
+		if !ok {
+			// A-9 / D-711: no row, so the guided setup that applies here
+			// takes part (the same rule `lore init` and directive install use).
+			in.Setup, pick.setup = h.setupTools(ctx)
+		}
+		sel, selErr := reg.RepoTargets(in)
+		if selErr != nil {
 			// Q-R2-3: the row names the targets; an unknown profile in it
 			// (say a teammate's own profile this machine lacks) is refused,
 			// never silently skipped.
-			sel, selErr := reg.Select(names, rootProbe{root: root})
-			if selErr != nil {
-				return targetPick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(selErr).Error.Message, string(policy.KeyContextTargets)+": "), selErr).
-					WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
-			}
-			pick.sel = sel
-		} else {
-			pick.sel = reg.Resolve(rootProbe{root: root})
-			// A-9: no row, so the guided setup that applies here names the
-			// tools (the same ones `lore init` wires), before detection.
-			if names, setup := h.setupTools(ctx); len(names) > 0 {
-				pick.sel, pick.setup = reg.FromSetup(names, pick.sel, rootProbe{root: root}), setup
-			}
+			return targetPick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(selErr).Error.Message, string(policy.KeyContextTargets)+": "), selErr).
+				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
 		}
+		pick.sel = sel
 		for _, p := range pick.sel.Profiles {
 			pick.targets = append(pick.targets, contextTarget{profile: p, file: p.PointerFile, known: true})
 		}

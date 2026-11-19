@@ -182,10 +182,36 @@ func (h *Host) renderNoRepoFile(ctx context.Context, f *renderFlags, n noRepoFil
 	}
 	if !f.quiet {
 		fmt.Fprintf(f.out(), "%s %s\n%s %s\n", h.decor.muted("·"), n.line(), h.decor.muted("·"), n.how())
+		if !n.client {
+			h.skippedPrivateLines(ctx, f.out(), n.top)
+		}
 	}
 	// a client repo gets the files outside the checkout only: no tool's
 	// import file goes into it
 	return h.renderPrivateIn(ctx, f.out(), n.top, f.dryRun, f.quiet, !n.client)
+}
+
+// skippedPrivateLines names each setup tool that would get a private
+// import file here but that the linked own repo does not use (D-711: it
+// is not written unasked). Such a repo keeps no context.targets row (its
+// notes live in the store), so what adds the tool is the tool's own file
+// in the repo, which render then finds.
+func (h *Host) skippedPrivateLines(ctx context.Context, w *strings.Builder, root string) {
+	pick, err := h.resolveTargets(ctx, root, nil, h.coreContextTargets)
+	if err != nil {
+		return
+	}
+	for _, p := range pick.sel.Skipped {
+		if !p.HasPrivateFile() {
+			continue
+		}
+		own := p.PointerFile
+		if len(p.Detect) > 0 {
+			own = strings.Join(p.Detect, " or ")
+		}
+		fmt.Fprintf(w, "%s skipped %s (%s): your setup lists it but this repo does not use it, so it was not written; it is added once the tool's own file is here (%s)\n",
+			h.decor.muted("·"), p.Name, p.PrivateFile, own)
+	}
 }
 
 // noRepoFileJSON is render --report --json in a repo with no repo file.

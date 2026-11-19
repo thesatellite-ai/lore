@@ -156,21 +156,17 @@ func (a *App) DirectiveTargets(ctx context.Context, values []string) (opsdirecti
 	if note != "" {
 		pick.Notes = append(pick.Notes, note)
 	}
-	var sel toolprofile.Selection
-	if ok {
+	in := toolprofile.RepoTargetsIn{Row: names, RowSet: ok, Probe: repoProbe{root: root}}
+	if !ok {
+		// A-9 / D-711: no row, so the setup that applies here takes part,
+		// by the one rule render and init use.
+		in.Setup = a.SetupInitTools(ctx).Profiles
+	}
+	sel, err := reg.RepoTargets(in)
+	if err != nil {
 		// Q-R2-3: an unknown profile in the row is refused, never skipped.
-		sel, err = reg.Select(names, repoProbe{root: root})
-		if err != nil {
-			return opsdirective.Pick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(err).Error.Message, string(policy.KeyContextTargets)+": "), err).
-				WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
-		}
-	} else {
-		sel = reg.Resolve(repoProbe{root: root})
-		// A-9: no row, so the setup that applies here names the tools,
-		// as render and init read them.
-		if st := a.SetupInitTools(ctx); len(st.Profiles) > 0 {
-			sel = reg.FromSetup(st.Profiles, sel, repoProbe{root: root})
-		}
+		return opsdirective.Pick{}, errs.Wrap(errs.InvalidInput, "the repo's "+string(policy.KeyContextTargets)+" setting: "+strings.TrimPrefix(errs.EnvelopeOf(err).Error.Message, string(policy.KeyContextTargets)+": "), err).
+			WithHint("change it with: lore policy set --key " + string(policy.KeyContextTargets) + " --value <profiles> --yes, or add the profile under context.profiles in " + lorehome.Shown() + "/config.yaml")
 	}
 	for _, p := range sel.Profiles {
 		pick.Targets = append(pick.Targets, opsdirective.Target{File: p.PointerFile, Profile: p})
@@ -207,6 +203,9 @@ func targetPickNotes(sel toolprofile.Selection, targets []opsdirective.Target) [
 	}
 	for _, v := range sel.ViaImport { // I-14
 		out = append(out, "· "+v.Note())
+	}
+	for _, p := range sel.Skipped { // D-711: never written unasked; say how to add it
+		out = append(out, "· "+p.SkippedNote("lore render --add-target"))
 	}
 	key := string(policy.KeyContextTargets)
 	for _, p := range sel.Unwired {
