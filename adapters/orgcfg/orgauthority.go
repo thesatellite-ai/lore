@@ -36,6 +36,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/schema"
 )
 
@@ -163,6 +164,11 @@ type rosterRow struct {
 	OrgRole    string   `json:"org_role"`
 	CreatedBy  string   `json:"created_by"`
 	Deleted    bool     `json:"_deleted"`
+	// teams rows (D-727): the handle, its members and whether it left
+	Handle  string          `json:"handle"`
+	Members json.RawMessage `json:"member_actor_ids"`
+	Active  *bool           `json:"active"`
+	LeftAt  string          `json:"left_at"`
 }
 
 // orgAdminAt is whether email is an admin of the org at commit rev: the
@@ -185,52 +191,9 @@ func isOrgAdminAt(ctx context.Context, dir, rev, folder, email string) bool {
 	if rev == "" || email == "" {
 		return false
 	}
-	base := ""
-	if folder != "" && folder != "." {
-		base = folder + "/"
-	}
-	// rowsMatching reads the rows of table at rev whose file matches the
-	// extended regexp re (every row when re is "").
-	rowsMatching := func(table, re string) []rosterRow {
-		var files []string
-		if re == "" {
-			out, err := gitRun(ctx, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev, "--", base+table)
-			if err != nil {
-				return nil
-			}
-			files = strings.Split(out, "\x00")
-		} else {
-			out, err := gitRun(ctx, "-C", dir, "grep", "-l", "-i", "-E", "-e", re, rev, "--", base+table)
-			if err != nil {
-				return nil // exit 1: no match
-			}
-			for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
-				files = append(files, strings.TrimPrefix(l, rev+":"))
-			}
-		}
-		var rows []rosterRow
-		for _, f := range files {
-			if f == "" || path.Ext(f) != ".json" {
-				continue
-			}
-			raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", rev+":"+f)
-			if rerr != nil {
-				continue
-			}
-			var r rosterRow
-			if json.Unmarshal([]byte(raw), &r) == nil && !r.Deleted {
-				rows = append(rows, r)
-			}
-		}
-		return rows
-	}
-	key := "human:" + strings.ToLower(strings.TrimSpace(email))
-	var who []string
-	for _, a := range rowsMatching(schema.TableActors, regexp.QuoteMeta(key)) {
-		if strings.EqualFold(a.StableKey, key) || slices.ContainsFunc(a.KeyAliases, func(k string) bool { return strings.EqualFold(k, key) }) {
-			who = append(who, a.ID)
-		}
-	}
+	base := rosterBase(folder)
+	rowsMatching := func(table, re string) []rosterRow { return rosterRowsAt(ctx, dir, rev, base, table, re) }
+	who := actorIDsAt(ctx, dir, rev, base, email)
 	if len(who) == 0 {
 		if out, err := gitRun(ctx, "-C", dir, "ls-tree", "--name-only", rev, "--", base+schema.TableActors+"/"); err == nil && strings.TrimSpace(out) == "" {
 			// the org's first commits: no roster to check against yet. A
@@ -261,6 +224,133 @@ func isOrgAdminAt(ctx context.Context, dir, rev, folder, email string) bool {
 		}
 	}
 	return false
+}
+
+// rosterBase is the path prefix of the roster tables of org folder folder
+// in a store tree ("" for the store root).
+func rosterBase(folder string) string {
+	if folder != "" && folder != "." {
+		return folder + "/"
+	}
+	return ""
+}
+
+// rosterRowsAt reads the rows of table (under base) at rev whose file
+// matches the extended regexp re (every row when re is ""). It finds the
+// rows with git grep, so a big roster costs a few git calls, not one per
+// row (every lore command reads the org file).
+func rosterRowsAt(ctx context.Context, dir, rev, base, table, re string) []rosterRow {
+	var files []string
+	if re == "" {
+		out, err := gitRun(ctx, "-C", dir, "ls-tree", "-r", "-z", "--name-only", rev, "--", base+table)
+		if err != nil {
+			return nil
+		}
+		files = strings.Split(out, "\x00")
+	} else {
+		out, err := gitRun(ctx, "-C", dir, "grep", "-l", "-i", "-E", "-e", re, rev, "--", base+table)
+		if err != nil {
+			return nil // exit 1: no match
+		}
+		for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+			files = append(files, strings.TrimPrefix(l, rev+":"))
+		}
+	}
+	var rows []rosterRow
+	for _, f := range files {
+		if f == "" || path.Ext(f) != ".json" {
+			continue
+		}
+		raw, rerr := gitRun(ctx, "-C", dir, "cat-file", "blob", rev+":"+f)
+		if rerr != nil {
+			continue
+		}
+		var r rosterRow
+		if json.Unmarshal([]byte(raw), &r) == nil && !r.Deleted {
+			rows = append(rows, r)
+		}
+	}
+	return rows
+}
+
+// actorIDsAt is the ids of the roster actors (under base, at rev) whose
+// stable key or a key alias is human:<email>.
+func actorIDsAt(ctx context.Context, dir, rev, base, email string) []string {
+	key := "human:" + strings.ToLower(strings.TrimSpace(email))
+	var who []string
+	for _, a := range rosterRowsAt(ctx, dir, rev, base, schema.TableActors, regexp.QuoteMeta(key)) {
+		if strings.EqualFold(a.StableKey, key) || slices.ContainsFunc(a.KeyAliases, func(k string) bool { return strings.EqualFold(k, key) }) {
+			who = append(who, a.ID)
+		}
+	}
+	return who
+}
+
+// teamsAt is the handles (no @) of the active roster teams of org folder
+// folder, at rev, that list the person with email as a member (devco
+// D-727: a team store is that team's). A team that left (active false or
+// left_at set) counts for nobody.
+func teamsAt(ctx context.Context, dir, rev, folder, email string) []string {
+	if rev == "" || email == "" {
+		return nil
+	}
+	base := rosterBase(folder)
+	who := actorIDsAt(ctx, dir, rev, base, email)
+	if len(who) == 0 {
+		return nil
+	}
+	var out []string
+	for _, t := range rosterRowsAt(ctx, dir, rev, base, schema.TableTeams, "") {
+		if t.Handle == "" || t.LeftAt != "" || (t.Active != nil && !*t.Active) {
+			continue
+		}
+		if slices.ContainsFunc(t.memberIDs(), func(id string) bool { return slices.Contains(who, id) }) && !slices.Contains(out, t.Handle) {
+			out = append(out, t.Handle)
+		}
+	}
+	return out
+}
+
+// TeamHandles is the handles (no @) of the active roster teams of org
+// folder folder in this machine's clone of the store at storeURL, at its
+// HEAD: what a team audience may name (D-727). Empty when the clone or
+// its roster has none.
+func TeamHandles(ctx context.Context, home, storeURL, folder string) []string {
+	norm, err := repourl.NormalizeStore(storeURL)
+	if err != nil {
+		return nil
+	}
+	dir, _ := cloneDir(home, norm)
+	return teamHandlesIn(ctx, dir, folder)
+}
+
+// teamHandlesIn is TeamHandles of the clone dir.
+func teamHandlesIn(ctx context.Context, dir, folder string) []string {
+	var out []string
+	for _, t := range rosterRowsAt(ctx, dir, "HEAD", rosterBase(folder), schema.TableTeams, "") {
+		if t.Handle != "" && t.LeftAt == "" && (t.Active == nil || *t.Active) && !slices.Contains(out, t.Handle) {
+			out = append(out, t.Handle)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// memberIDs is a teams row's member_actor_ids: a JSON list of act_ ids,
+// or (v0.1.17 rows) a string holding that JSON list.
+func (r rosterRow) memberIDs() []string {
+	if len(r.Members) == 0 {
+		return nil
+	}
+	var ids []string
+	if json.Unmarshal(r.Members, &ids) == nil {
+		return ids
+	}
+	var s string
+	if json.Unmarshal(r.Members, &s) == nil && json.Unmarshal([]byte(s), &ids) == nil {
+		return ids
+	}
+	return nil
 }
 
 // hasActorsAnywhere reports whether the tree at rev holds an actor row in

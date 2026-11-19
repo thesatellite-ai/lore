@@ -58,8 +58,8 @@ func (h *standaloneOrg) OrgConfigGet(ctx context.Context, in opsorgcmd.ConfigGet
 		Own: nonNil(sg.Doc.Own), Repos: nonNil(sg.Doc.Repos), Stores: []string{}}
 	for _, st := range sg.Doc.Stores {
 		s := st.URL
-		if !orgconf.Audience(st.Audience).ForMembers() {
-			s += " (admins)"
+		if a := orgconf.Audience(st.Audience); !a.ForMembers() {
+			s += " (" + a.String() + ")"
 		}
 		out.Stores = append(out.Stores, s)
 	}

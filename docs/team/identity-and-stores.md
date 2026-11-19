@@ -272,6 +272,18 @@ Decisions (devco D-442):
 - **An `audience:` value lore does not know** is read as admins-only, so a member never tries a store the file does not plainly open to them; `lore config check` refuses it in `config.yaml`.
 - **An older lore ignores the key** and treats the store as before (every member tries it): upgrade the team before relying on it.
 
+## Team stores
+
+A store can also be kept to one roster team, for example a client's notes that only the people working for that client may read: `lore org store add --org acme --url git@github.com:acme/lore-secret.git --audience team:@secret --push --yes` (or `lore org store audience --org acme --url git@github.com:acme/lore-secret.git --audience team:@secret --push --yes` for a store the org already lists). The store's entry in `lore-org.yaml` gets `audience: team:@secret`. Only an admin sets it (a member is refused with the same line as for `--audience admins`), and the team must already be on the org's roster (`lore team add --handle @secret --members @lee`, then `lore sync`); a team the roster does not hold is refused, naming the teams it does hold. As for admins-only stores, give only that team access to the repo on the git host.
+
+What each person's lore does with it:
+
+- **A member of @secret, and every admin**: the org entry lists it like any other store; reads, writes (`--to lore-secret/<folder>`), sync and links work as usual, and repos may be linked to its folders. `lore store list` shows `team:@secret` in its AUDIENCE column.
+- **A member outside @secret**: the copy of `lore-org.yaml` in their org entry leaves the store out, so their lore never clones, fetches, syncs, searches or renders it, and no command names it (not `lore whoami`, `lore doctor` or sync output): they have no reason to know it exists.
+- **Added to the team** (`lore team member add --handle @secret --members @ann`): their next sync after the roster change reaches them copies the entry again with the store in it. **Removed from the team**: their next sync drops it; a clone already on disk stays there and is no longer read.
+
+Decisions (devco D-727): team membership is read from the roster's `teams` rows in the org store's clone, at the commit `lore-org.yaml` was read at, in the same copy step as the admin check, so every reader follows it; a team that left (inactive) counts for nobody; the org folder's store is never a team store.
+
 ## What lore takes from a store, and from whom
 
 A store is a plain git repo, and everyone who can push to it can commit anything there with git alone. So lore checks what it reads instead of trusting the branch as it stands:

@@ -42124,7 +42124,7 @@
                 "properties": {
                   "audience": {
                     "type": "string",
-                    "description": "who uses the store: everyone (default) or admins (servers, domains, accounts: members' lore never reads it)"
+                    "description": "who uses the store: everyone (default), admins (servers, domains, accounts: members' lore never reads it) or team:@\u003cteam\u003e (only that roster team's members and the admins; admin only)"
                   },
                   "branch": {
                     "type": "string",
@@ -42267,7 +42267,7 @@
     "/v1/org/stores/audience": {
       "post": {
         "operationId": "org.store.audience",
-        "summary": "Set who in an org uses one of its stores (admin only): admins (members' lore never reads it) or everyone",
+        "summary": "Set who in an org uses one of its stores (admin only): admins (members' lore never reads it), team:@\u003cteam\u003e (only that team and the admins) or everyone",
         "tags": [
           "org"
         ],
@@ -42280,7 +42280,7 @@
                 "properties": {
                   "audience": {
                     "type": "string",
-                    "description": "who uses the store: admins (only the org's admins; members' lore never reads it) or everyone (required)"
+                    "description": "who uses the store: admins (only the org's admins; members' lore never reads it), team:@\u003cteam\u003e (only that roster team's members and the admins) or everyone (required)"
                   },
                   "org": {
                     "type": "string",
