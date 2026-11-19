@@ -79,26 +79,50 @@ func RequireAdminForRows(ctx context.Context, env PlaceEnv, rows []Placed, verb,
 			cands = append(cands, cand{id: p.Row.ID.String(), src: src, lv: lv})
 		}
 	}
-	if len(cands) == 0 {
-		return nil
+	// each row is judged by its own store's roster (openRoster, devco
+	// D-681): a batch can span the company store and the ops store, whose
+	// admins differ; the first roster that refuses answers
+	byOrg := map[string][]cand{}
+	var orgs []string
+	for _, c := range cands {
+		o := orgOf(c.src)
+		if _, seen := byOrg[o]; !seen {
+			orgs = append(orgs, o)
+		}
+		byOrg[o] = append(byOrg[o], c)
 	}
-	r, done, ok := openRoster(ctx, env)
+	for _, o := range orgs {
+		group := byOrg[o]
+		if err := requireAdminForGroup(ctx, env, group[0].src, verb, line, narrow, func(org string) ([]string, store.Source) {
+			var hit []string
+			var at store.Source
+			for _, c := range group {
+				if !CompanyGround(c.lv, c.src, org) {
+					continue
+				}
+				hit = append(hit, c.id)
+				if at == "" {
+					at = c.src
+				}
+			}
+			return hit, at
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// requireAdminForGroup is RequireAdminForRows for rows of one store: the
+// roster src is judged by (openRoster), the rows that are company ground
+// of its org (ground), and the refusal when its caller may not.
+func requireAdminForGroup(ctx context.Context, env PlaceEnv, src store.Source, verb, line, narrow string, ground func(org string) ([]string, store.Source)) error {
+	r, done, ok := openRoster(ctx, env, src)
 	defer done()
 	if !ok {
 		return nil
 	}
-	org := orgOf(r.Source())
-	var hit []string
-	var at store.Source
-	for _, c := range cands {
-		if !CompanyGround(c.lv, c.src, org) {
-			continue
-		}
-		hit = append(hit, c.id)
-		if at == "" {
-			at = c.src
-		}
-	}
+	hit, at := ground(orgOf(r.Source()))
 	if len(hit) == 0 {
 		return nil
 	}
