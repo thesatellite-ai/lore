@@ -1155,5 +1155,13 @@ func (ap setupApplier) memberOrg(ctx context.Context, host orgcmd.Host, answer s
 	if org == "" {
 		return "", "", errs.New(errs.Internal, "setup join: org import of "+answer+" made no org entry")
 	}
+	// devco D-680: the join goes on with the store url the entry this
+	// import made holds (the answer's spelling for the answer's store), so
+	// the join's own entry check never refuses that entry as "another
+	// store" (a refusal that, undone, named an entry that no longer
+	// existed, with an `org rename` hint that failed)
+	if o, oerr := ap.a.TeamOrigin(ctx, org); oerr == nil && o.Store != "" && sameStoreAs(answer) != nil && sameStoreAs(answer)(o.Store) {
+		return org, o.Store, nil
+	}
 	return org, answer, nil
 }

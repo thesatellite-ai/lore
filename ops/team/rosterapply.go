@@ -551,7 +551,20 @@ func sameStore(a, b string) bool {
 	ra, ea := gitbackend.RemoteOfRaw(strings.TrimSpace(a))
 	rb, eb := gitbackend.RemoteOfRaw(strings.TrimSpace(b))
 	if ea == nil && eb == nil {
-		return ra.Norm == rb.Norm
+		if ra.Norm == rb.Norm {
+			return true
+		}
+		// devco D-680: Norm resolves an alias only when the ssh config lore
+		// reads names it; an alias git reaches by url.<base>.insteadOf (or a
+		// HOME whose ssh config lore cannot read) kept its own host, and the
+		// join refused the org entry its own import had just made. The rule
+		// the clone folder and every org lookup use (wire sameStoreAs)
+		// decides here too: one path on one host under two names.
+		local := gitbackend.LocalHost + "/"
+		if strings.HasPrefix(ra.Norm, local) || strings.HasPrefix(rb.Norm, local) {
+			return false
+		}
+		return gitbackend.SameRepoViaAlias(ra, rb)
 	}
 	norm := func(s string) string {
 		return strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(s), "/"), gitSuffix)

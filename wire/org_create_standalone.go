@@ -307,6 +307,19 @@ func suggestedStores(ctx context.Context, entry *orgconf.Org, sg orgcfg.Suggesti
 	if len(entry.Stores) == 0 {
 		entry.Stores = []orgconf.Store{{URL: url, OrgFolder: sg.Folder}}
 	}
+	// devco D-680: the store the person imported by keeps the spelling
+	// they gave (https, ssh://, an alias git reaches by insteadOf), not
+	// the one the shared file lists: that spelling is the one this machine
+	// reaches; the file's (often git@github.com:…) may need a key it lacks.
+	// An alias the ssh config resolves arrives here canonical, with the
+	// access rule that routes it (canonicalTyped, brief 3.7).
+	if same := sameStoreAs(url); same != nil {
+		for i := range entry.Stores {
+			if same(entry.Stores[i].URL) {
+				entry.Stores[i].URL = url
+			}
+		}
+	}
 	if len(sg.Doc.Defaults.ClientRepos) > 0 {
 		entry.Defaults.ClientRepos = sg.Doc.Defaults.ClientRepos
 	}
