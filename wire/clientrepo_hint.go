@@ -22,6 +22,7 @@ import (
 
 	"github.com/thesatellite-ai/lore/logic/orgconf"
 	"github.com/thesatellite-ai/lore/logic/orgresolve"
+	"github.com/thesatellite-ai/lore/logic/repourl"
 	"github.com/thesatellite-ai/lore/model/errs"
 )
 
@@ -40,8 +41,9 @@ type ClientRepo struct {
 	// client repo" from lore fix, setup --agent-hooks and whoami with no
 	// cause and no way out; each of them now names both (UnlistedOwnStep).
 	Unlisted string
-	// Remote is the checkout's hosted remote (host/owner/repo) when
-	// Unlisted is set: the own: pattern that would make it an own repo.
+	// Remote is the checkout's remote (host/owner/repo, a server's
+	// host/path, or a path remote's _local/<path>) when Unlisted is set:
+	// the own: pattern that would make it an own repo.
 	Remote string
 }
 
@@ -54,7 +56,13 @@ func UnlistedOwnStep(c ClientRepo) string {
 		return ""
 	}
 	step := "no own: pattern of " + c.Unlisted + " matches this repo's remote " + c.Remote + ", so lore treats it as a client repo (fail closed); if it is " + c.Unlisted + "'s own repo: lore org config set --org " + c.Unlisted + " --key own --add " + c.Remote + " --yes"
-	if host, _, _ := strings.Cut(c.Remote, "/"); !strings.Contains(host, ".") {
+	host, _, _ := strings.Cut(c.Remote, "/")
+	switch {
+	case host == repourl.LocalStoreHost:
+		// devco D-706: a path remote (/srv/git/x.git) is matched by its
+		// classification-only key, never by the path as git spells it
+		step += " (" + c.Remote + " is how own:/repos: patterns name the path remote " + repourl.ShownStore(c.Remote) + " on this machine; a clone that reaches the repo by another url needs that spelling too)"
+	case !strings.Contains(host, "."):
 		// devco D-706: a server reached by its ssh name (host:/srv/git/x)
 		// has no forge host; the pattern names it the way this machine
 		// spells it, and a teammate who reaches it under another name
@@ -67,8 +75,10 @@ func UnlistedOwnStep(c ClientRepo) string {
 // UnlistedClientRepo is ClientRepo for a checkout that resolves to role
 // client: Unlisted and Remote set when no pattern or link of org claims
 // it as a client's (orgresolve.ClientByMatch is false), so the role is
-// the fail-closed default alone. Zero for a checkout with no hosted
-// remote (lore whoami names that place on its own).
+// the fail-closed default alone. remotes are the classification remotes
+// (Situation.ClassRemotes: a path remote by its _local/<path> key, devco
+// D-706). Zero for a checkout with no remote at all (lore whoami names
+// that place on its own).
 func UnlistedClientRepo(org *orgconf.Org, links []orgresolve.Link, remotes []string) ClientRepo {
 	if org == nil || len(remotes) == 0 || orgresolve.ClientByMatch(org, links, remotes) {
 		return ClientRepo{}

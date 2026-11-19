@@ -27,7 +27,7 @@ func (a *App) OwnOfferHere(ctx context.Context, setup onboard.SetupEntry) (opsse
 		return opssetup.OwnOffer{}, false
 	}
 	admin := setup.Kind == onboard.KindAdmin && isOrgAdmin(a.opts.Home, setup.Org)
-	o, ok := orgresolve.OwnOfferFor(sit.Config.FindOrg(setup.Org), sit.Result.Links, sit.Remotes, admin)
+	o, ok := orgresolve.OwnOfferFor(sit.Config.FindOrg(setup.Org), sit.Result.Links, sit.ClassRemotes(), admin)
 	if !ok {
 		return opssetup.OwnOffer{}, false
 	}

@@ -2,9 +2,11 @@ package repourl
 
 import (
 	"fmt"
-	"github.com/thesatellite-ai/lore/logic/fileuri"
+	"net/url"
 	"path"
 	"strings"
+
+	"github.com/thesatellite-ai/lore/logic/fileuri"
 )
 
 // LocalStoreHost is the host part NormalizeStore gives a store that is a
@@ -33,6 +35,37 @@ func NormalizeStore(raw string) (string, error) {
 		return "", fmt.Errorf("repourl: %q is not an absolute repository path", s)
 	}
 	return LocalStoreHost + "/" + rel, nil
+}
+
+// LocalRemoteKey is the classification-only name of a git remote that is a
+// path on this machine (/srv/git/acme/tools.git, file:///srv/git/acme/tools.git):
+// LocalStoreHost/<path without .git>, the spelling NormalizeStore gives the
+// same path as a store. ok is false for anything else (a hosted remote, a
+// relative path: the caller makes it absolute first).
+//
+// Why (devco D-706): Normalize refuses a local path because it cannot
+// identify a repo across clones, so a repo whose only remote is a path was
+// one no own: or repos: pattern could name, and it stayed a client repo by
+// the fail-closed default with no way out. The key is used only to match
+// own:/repos: patterns (and to print the own: command that names it),
+// never as a clone or fetch address, a link key or a project id.
+func LocalRemoteKey(raw string) (string, bool) {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(strings.ToLower(s), "file://") {
+		u, err := url.Parse(s)
+		if err != nil || (u.Host != "" && !strings.EqualFold(u.Host, "localhost")) {
+			return "", false
+		}
+		s = u.Path
+	}
+	if !IsLocalStorePath(s) {
+		return "", false
+	}
+	n, err := NormalizeStore(s)
+	if err != nil || !strings.HasPrefix(n, LocalStoreHost+"/") {
+		return "", false
+	}
+	return n, true
 }
 
 // IsLocalStorePath reports a store url written as a plain absolute path
