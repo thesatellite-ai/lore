@@ -72,8 +72,8 @@ func (a *App) lensFor(ctx context.Context, o sqlite.LensOptions, internal bool, 
 
 // lensPlaces labels every attached store as search and the lists do
 // (devco D-568): the `place` column of the `<table>_all` views, so `lore
-// sql` shows "acme/web" where search prints "[acme/web]" while `source`
-// stays the attached name queries filter on. Every store of the engine is
+// sql` shows "acme/web" where search prints "[acme/web]"; since D-685 the
+// `source` column carries the same label. Every store of the engine is
 // labelled, not only the lens's own sources, because a combined or
 // deleted-rows file holds rows of any of them under their own names; the
 // repo's own rows keep their source name (search gives them no label).
@@ -85,6 +85,22 @@ func (a *App) lensPlaces(st *state) map[string]string {
 		}
 		ref, _ := a.sourcePlace(name)
 		out[string(name)] = strings.Trim(opssearch.StoreLabel(ref), "[]")
+	}
+	return out
+}
+
+// placeLabels is names as the lens's source column prints them (the
+// lensPlaces labels, devco D-685), so the internal-stores note names the
+// same sources the rows carry.
+func (a *App) placeLabels(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		ref, _ := a.sourcePlace(store.Source(n))
+		if store.Source(n) == store.SourceRepo {
+			out = append(out, n)
+			continue
+		}
+		out = append(out, strings.Trim(opssearch.StoreLabel(ref), "[]"))
 	}
 	return out
 }
@@ -349,5 +365,5 @@ func (a *App) sqlOnce(ctx context.Context, r opssql.Request) (opssql.Result, err
 	if qerr != nil {
 		return opssql.Result{}, qerr
 	}
-	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: extra}, nil
+	return opssql.Result{Columns: res.Columns, Rows: res.Rows, Internal: a.placeLabels(extra)}, nil
 }

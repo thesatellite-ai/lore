@@ -626,17 +626,78 @@ func effectivePersonalURL(ctx context.Context, home, dir string, mc machineConfi
 }
 
 // checkPersonalTarget refuses `--to me` (and `me/<folder>`) under a setup
-// with personal_store: none (E_SETUP_NO_PERSONAL_STORE, 7.2).
-func checkPersonalTarget(ctx context.Context, home, dir, to string) error {
+// with personal_store: none (E_SETUP_NO_PERSONAL_STORE, 7.2). instead are
+// the --to values that do write in this placement, best first
+// (App.personalNoneTargets); the refusal offers only those.
+func checkPersonalTarget(ctx context.Context, home, dir, to string, instead func() []string) error {
 	base, _, _ := strings.Cut(to, targetSep)
 	if base != attach.ReservedMe {
 		return nil
 	}
 	if _, isNone, name := setupPersonal(ctx, home, dir); isNone {
-		return errs.New(errs.SetupNoPersonalStore, "setup "+name+" has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit --name "+name+" --personal-store <url>").
-			WithHint("--to repo, --to <org store>, or lore setup edit --name " + name + " --personal-store <url>")
+		edit := "lore setup edit --name " + name + " --personal-store <url>"
+		ways := instead()
+		if len(ways) == 0 {
+			return errs.New(errs.SetupNoPersonalStore, "setup "+name+" has no personal store (personal_store: none); name a store folder to write to, or set up a personal store").
+				WithHint("--to <org>/<folder> (lore setup list names the folders), or " + edit)
+		}
+		return errs.New(errs.SetupNoPersonalStore, "setup "+name+" has no personal store (personal_store: none); write here with "+ways[0]+" instead, or set up a personal store").
+			WithHint(strings.Join(ways, ", ") + ", or " + edit)
 	}
 	return nil
+}
+
+// personalNoneTargets are the --to values a write works with here when
+// `--to me` has no personal store, in the order to try them. Why (devco
+// D-690, owner use pass 4 weak 7): the refusal offered "--to repo" first,
+// which an own repo linked to a store folder refuses (its notes live in
+// the folder). A repo linked by its remote (no .lore/) offers its linked
+// folder as <org>/<folder>; a lore project offers repo, then its linked
+// folder when one is attached; anywhere else nothing is offered by name
+// (the caller prints the placeholder form and setup list).
+func (a *App) personalNoneTargets(ctx context.Context) []string {
+	top, err := a.repoTop(ctx)
+	if err != nil || top == "" {
+		return nil
+	}
+	linked := a.linkedFolderTarget(ctx, top)
+	if a.LinkedByRemote(ctx) != "" && !loreFolderAt(top) {
+		if linked != "" {
+			return []string{"--to " + linked}
+		}
+		return nil
+	}
+	if !loreFolderAt(top) {
+		return nil
+	}
+	out := []string{"--to " + attach.ReservedRepo}
+	if linked != "" {
+		out = append(out, "--to "+linked)
+	}
+	return out
+}
+
+// linkedFolderTarget is the <org>/<folder> --to of the store folder this
+// repo's org link attaches (the team entry of Options.OrgStores), else the
+// link's own --to (Options.RepoLinkTarget, set even when the folder is
+// not attached here); "" when no link names the repo.
+func (a *App) linkedFolderTarget(ctx context.Context, top string) string {
+	raw := rawOrgStores(ctx, a.opts)
+	for i, s := range renameOrgClashes(raw, top) {
+		if strings.Contains(string(raw[i].Name), targetSep) {
+			continue // the company (org/) folder, not the linked one
+		}
+		if strings.Contains(string(s.Name), targetSep) {
+			return string(s.Name)
+		}
+		if f := rootFolder(raw[i].Folder); f != "" {
+			return string(s.Name) + targetSep + f
+		}
+	}
+	if a.opts.RepoLinkTarget != nil {
+		return a.opts.RepoLinkTarget(ctx)
+	}
+	return ""
 }
 
 // optsProjectDir is App.projectDir for code that holds only Options.
@@ -656,7 +717,7 @@ func (a *App) checkMeTarget(ctx context.Context, e op.Entry, d op.Decoder) error
 	}
 	for _, tv := range in.Texts() {
 		if tv.Field == engine.InputTarget && tv.Text != "" {
-			return checkPersonalTarget(ctx, a.opts.Home, a.projectDir(), tv.Text)
+			return checkPersonalTarget(ctx, a.opts.Home, a.projectDir(), tv.Text, func() []string { return a.personalNoneTargets(ctx) })
 		}
 	}
 	return nil

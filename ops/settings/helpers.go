@@ -408,3 +408,16 @@ func place(src store.Source) string {
 	}
 	return string(src)
 }
+
+// place is src as a person reads it in a result or refusal line: "this
+// repo" for the repo store, else the <store>/<folder> label search and the
+// lists use (placeLabel). devco D-689 (owner use pass 4 weak 6): in a
+// linked repo the org store is attached under the bare org name, and
+// `policy set --to <org>/<folder>` said "(<org>, pol_…)"; the line now names
+// the folder the row went to.
+func (o ops) place(src store.Source) string {
+	if src == store.SourceRepo || src == "" {
+		return place(src)
+	}
+	return o.placeLabel(src)
+}

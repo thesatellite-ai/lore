@@ -272,7 +272,7 @@ func (o ops) metaLint(ctx context.Context, in MetaLintIn) (MetaLintOut, error) {
 		return MetaLintOut{}, err
 	}
 	for _, r := range over {
-		add(MetaFinding{Key: "(registry " + place(store.Source(r.Store)) + ")",
+		add(MetaFinding{Key: "(registry " + o.place(store.Source(r.Store)) + ")",
 			Problem: fmt.Sprintf("%d key rows, past meta.max_keys_per_registry %d; new keys are refused there", r.Keys, r.Cap), Fix: registryCapHint})
 	}
 	slices.SortStableFunc(out.Data, func(a, b MetaFinding) int { return strings.Compare(a.Key+a.Row, b.Key+b.Row) })

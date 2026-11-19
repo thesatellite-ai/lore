@@ -475,14 +475,14 @@ func (o ops) kindAdd(ctx context.Context, in KindAddIn) (RowOut, error) {
 	if ks, lerr := liveRows(ctx, o.env, []store.Source{target}, schema.TableKinds); lerr != nil {
 		return RowOut{}, lerr
 	} else if len(ks) >= maxKindsPerPlace {
-		return RowOut{}, kindLimit(place(target)+" has "+strconv.Itoa(len(ks))+" kinds", maxKindsPerPlace)
+		return RowOut{}, kindLimit(o.place(target)+" has "+strconv.Itoa(len(ks))+" kinds", maxKindsPerPlace)
 	}
 	w, err := create(ctx, o.env, target, schema.TableKinds, map[string]string{kName: in.Kind}, fields)
 	if err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("added kind %s %s in %s\n", short(w.Row.ID), in.Kind, place(target))}, nil
+		Human: fmt.Sprintf("added kind %s %s in %s\n", short(w.Row.ID), in.Kind, o.place(target))}, nil
 }
 
 func (o ops) kindEdit(ctx context.Context, in KindEditIn) (RowOut, error) {

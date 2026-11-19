@@ -95,8 +95,8 @@ func TestTeamActorNamerMatrix(t *testing.T) {
 		tomas:              "Tomas Ek",
 		agents[0].String(): "Tomas Ek via " + tool,
 		agents[1].String(): "Tomas Ek via " + tool,
-		unknown.String():   unknown.String(),
-		"not-an-actor-id":  "not-an-actor-id",
+		unknown.String():   unnamedWriter + unknown.String(), // D-688: labelled, never bare
+		"not-an-actor-id":  unnamedWriter + "not-an-actor-id",
 		"":                 unknownWriter,
 	} {
 		if got := name(in); got != want {

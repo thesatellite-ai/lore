@@ -318,11 +318,13 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "nope"; the setups on this machine: ag
 ```console
 # tomas, in agency/site
 $ lore --setup personal memory add --to me --body 'Renew the domain in March.'
-ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit --name personal --personal-store <url>
-  hint: --to repo, --to <org store>, or lore setup edit --name personal --personal-store <url>
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write here with --to repo instead, or set up a personal store
+  hint: --to repo, or lore setup edit --name personal --personal-store <url>
 (exit 20)
 ```
 <!-- /example -->
+
+The hint offers only the places a write works from where you are, best first: in a lore project `--to repo`, then the store folder linked to it; in a repo linked to a store folder (no `.lore/` of its own) only that folder, as `--to <org>/<folder>`, since `--to repo` is refused there; anywhere else `--to <org>/<folder>` with `lore setup list` to find the folders.
 
 - **GitHub:** lore's own git calls to stores use the setup's route ([Step 3](#step-3--let-lore-find-how-you-reach-github)), so each setup reaches GitHub with its own key or login.
 

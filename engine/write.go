@@ -1019,8 +1019,15 @@ func pickCopy(id ids.AnyID, found []copyHit) (copyHit, error) {
 	// move into a store that already holds the row only leaves a tombstone
 	// where the other copy was (Move, interrupted-move rule).
 	keep := parts[len(parts)-1]
-	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")+": two live copies of one row").
-		WithHint("keep one copy: `lore row move --id " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
+	// devco D-689: an id that repeats across folders (a natural id an older
+	// lore derived without the folder) is two rows, not two copies; the
+	// hint first says how to read each one, by its place
+	reads := make([]string, len(parts))
+	for i, p := range parts {
+		reads[i] = "`lore show --id " + id.String() + " --store " + p + "`"
+	}
+	return copyHit{}, errs.New(errs.AmbiguousID, ""+id.String()+" is in "+strings.Join(parts, " and ")+": two live rows with one id").
+		WithHint("read each with " + strings.Join(reads, " or ") + "; if they are copies of one row, `lore row move --id " + id.String() + " --to " + keep + "` keeps the copy in " + keep + " and leaves a tombstone in the other store; in a repo upgraded from lore 0.1.17, `lore fix` settles a row a newer lore moved")
 }
 
 // newestCopy is the copy an unqualified actor ref means when several

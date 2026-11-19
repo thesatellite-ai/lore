@@ -168,7 +168,7 @@ func (o ops) policyShow(ctx context.Context, in PolicyShowIn) (PolicyOut, error)
 			r.Level, r.Source = string(eff.Level), "machine ("+lorehome.Shown()+"/config.yaml policies)"
 		case !eff.IsDefault:
 			r.Level, r.Row, r.Store = string(eff.Level), eff.Source.String(), string(where[eff.Source])
-			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, place(where[eff.Source]), short(eff.Source))
+			r.Source = fmt.Sprintf("%s %s (%s)", eff.Level, o.place(where[eff.Source]), short(eff.Source))
 		}
 		out.Data = append(out.Data, r)
 	}
@@ -299,7 +299,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	}
 	if eff, _ := set.Get(d.Key); !eff.Source.IsZero() {
 		return RowOut{}, errs.New(errs.PolicyDenied, fmt.Sprintf("%s: %s sets %s, so %s may only set a value at least as strict",
-			in.Key, place(where[eff.Source]), display(eff.Value), place(target))).
+			in.Key, o.place(where[eff.Source]), display(eff.Value), o.place(target))).
 			WithHint(policyDeniedHint(in.Key, display(eff.Value), where[eff.Source]))
 	}
 	note, err := o.unitNote(ctx, d.Key, entries, v)
@@ -335,7 +335,7 @@ func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 		return RowOut{}, err
 	}
 	return RowOut{ID: w.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), place(target), short(w.Row.ID)) + note}, nil
+		Human: fmt.Sprintf("✓ %s = %s (%s, %s)\n", in.Key, display(v), o.place(target), short(w.Row.ID)) + note}, nil
 }
 
 // budgetNote is the warning line for a context.budget.<profile> value
@@ -424,14 +424,14 @@ func (o ops) policyUnset(ctx context.Context, in PolicyUnsetIn) (RowOut, error) 
 	}
 	hit := where2(rows, in.Key)
 	if hit == nil {
-		return RowOut{}, errs.New(errs.NotFound, in.Key+" is not set in "+place(target)).WithHint("lore policy show --id " + in.Key + " shows where it is set")
+		return RowOut{}, errs.New(errs.NotFound, in.Key+" is not set in "+o.place(target)).WithHint("lore policy show --id " + in.Key + " shows where it is set")
 	}
 	ctx = engine.WithDeleteReason(ctx, in.Reason) // E_REASON_REQUIRED under delete.require_reason
 	if _, err := o.env.Delete(ctx, engine.Ref{Store: target, Table: schema.TablePolicies, ID: hit.Row.ID}); err != nil {
 		return RowOut{}, err
 	}
 	return RowOut{ID: hit.Row.ID.String(), Store: string(target),
-		Human: fmt.Sprintf("✓ %s unset in %s (%s); the next level up or the default applies\n", in.Key, place(target), short(hit.Row.ID))}, nil
+		Human: fmt.Sprintf("✓ %s unset in %s (%s); the next level up or the default applies\n", in.Key, o.place(target), short(hit.Row.ID))}, nil
 }
 
 // policyDeniedHint is the way out of a looser value under a stricter

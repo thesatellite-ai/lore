@@ -51,8 +51,8 @@ ERROR: [E_SETUP_NOT_FOUND] no setup named "personal"; this machine has no setups
 
 ```console
 $ lore memory add --body 'x' --to me
-ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write to the repo or the org store, or lore setup edit personal --personal-store <url>
-  hint: --to repo, --to <org store>, or lore setup edit personal --personal-store <url>
+ERROR: [E_SETUP_NO_PERSONAL_STORE] setup personal has no personal store (personal_store: none); write here with --to repo instead, or set up a personal store
+  hint: --to repo, or lore setup edit --name personal --personal-store <url>
 ```
 
 **Fix:** write to the repo or the org store instead, or give the setup a personal store: `lore setup edit --name personal --personal-store git@github.com:tomas/lore-me.git` (or `inherit` for the top-level `personal.store`).

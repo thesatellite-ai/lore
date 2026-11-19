@@ -362,7 +362,7 @@ func open(ctx context.Context, opts Options, extra []attach.Store, repoOnly bool
 	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go: an org store's rows carry that org's identity (C19)
 	for _, o := range attached {
 		a := o.Attached
-		a.KeyNamespace = keyNamespace(a)
+		a.KeyNamespace = keyNamespace(a, o.Folder)
 		a.Place = placeOf(ctx, a) // FQ4: sto_ id (+ "/<folder prj_ id>") of a marked store; "" keeps the attached name
 		if as := st.storeWriterAs(a.Name); as != nil {
 			a.ActorAs = as
@@ -1122,16 +1122,26 @@ func linkedByRemote(ctx context.Context, opts Options) string {
 type markerBackend interface{ Marker() rowfs.Marker }
 
 // keyNamespace is an attached store's natural-id namespace: its marker's
-// sto_ id, plus "/<folder>" for a `<store>/<folder>` target ("" when the
-// backend has no marker id: such a store keeps v0.1.17's ids).
-func keyNamespace(a engine.Attached) string {
+// sto_ id, plus "/<folder>" for the data folder the attachment writes to
+// ("" when the backend has no marker id: such a store keeps v0.1.17's
+// ids). folder is the attached folder (attach.Store.Folder): a linked
+// repo attaches its org store under the bare org name at the linked
+// folder, and devco D-689 (owner use pass 4 weak 6) was that this folder
+// was left out, so `policy set` of one key in two linked folders gave
+// both rows one pol_ id, and the same folder got another id from $HOME
+// (`--to <org>/<folder>`). The folder of a `<store>/<folder>` name wins;
+// else the attached folder; the store root adds nothing.
+func keyNamespace(a engine.Attached, folder string) string {
 	mb, ok := concrete(a.Backend).(markerBackend)
 	if !ok || mb.Marker().ID.IsZero() {
 		return ""
 	}
 	ns := mb.Marker().ID.String()
-	if _, folder, has := strings.Cut(string(a.Name), "/"); has {
-		ns += "/" + folder
+	if _, named, has := strings.Cut(string(a.Name), "/"); has {
+		return ns + "/" + named
+	}
+	if f := rootFolder(folder); f != "" {
+		ns += "/" + f
 	}
 	return ns
 }
@@ -1166,16 +1176,26 @@ func placeOf(ctx context.Context, a engine.Attached) string {
 	}
 	fb, ok := c.(folderIDOf)
 	if !ok {
-		return keyNamespace(a)
+		return attachedNamespace(a)
 	}
 	pid, err := fb.FolderProjectID(ctx)
 	if err != nil {
-		return keyNamespace(a)
+		return attachedNamespace(a)
 	}
 	if pid.IsZero() {
 		return mb.Marker().ID.String() // the store root has no folder id
 	}
 	return mb.Marker().ID.String() + "/" + pid.String()
+}
+
+// attachedNamespace is a's natural-id namespace as open set it
+// (keyNamespace with the attached folder), else keyNamespace from its name
+// alone for an Attached built without it.
+func attachedNamespace(a engine.Attached) string {
+	if a.KeyNamespace != "" {
+		return a.KeyNamespace
+	}
+	return keyNamespace(a, "")
 }
 
 // sameURL reports whether two store entries name the same store url and
@@ -1416,7 +1436,7 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 	st.resolveStoreWriters(ctx, opts, attached) // orgstoreactor.go (C19)
 	for _, o := range attached {
 		a := o.Attached
-		a.KeyNamespace = keyNamespace(a)
+		a.KeyNamespace = keyNamespace(a, o.Folder)
 		a.Place = placeOf(ctx, a)
 		if as := st.storeWriterAs(a.Name); as != nil {
 			a.ActorAs = as

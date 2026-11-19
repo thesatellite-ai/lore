@@ -18,6 +18,7 @@ package wire
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -69,12 +70,17 @@ func (a *App) teamActorNamer(ctx context.Context) func(string) string {
 			}
 		}
 		if n == "" {
-			n = actor
+			n = unnamedWriter + actor
 		}
 		seen[actor] = n
 		return n
 	}
 }
+
+// unnamedWriter labels an actor id that no store row, no identity of this
+// machine and no roster agent names (D-688: never a bare id in Team
+// versions; the id stays so `lore actor show --id` can chase it).
+const unnamedWriter = "unnamed writer "
 
 // namedActorRow is the name of id's live actors row in the first attached
 // store whose row names it (a store that holds only a nameless row, or
@@ -207,23 +213,52 @@ const unscopedNote = ", outside any setup"
 // resolves outside any setup or org: the chain with no org entry and no
 // setup, run in the folder holding the lore home, named "<name> (<step>,
 // outside any setup)". A chain that does not resolve adds nothing.
+//
+// devco D-688 (owner use pass 4 weak 3): the chain is resolved in the
+// folder holding the lore home AND in the user's home folder (where
+// whoami and an agent session started in ~ resolve it; the two can
+// differ when the lore home lives elsewhere), and each resolved person's
+// detected agents are named too ("<name> via <tool>"): the home-folder
+// fallback agent saves machine-local rows only, no store holds its actors
+// row, and doctor printed its raw act_ id.
 func (a *App) addUnscopedActorName(ctx context.Context, out map[string]string) {
 	mc, err := readMachineConfig(a.opts.Home)
 	if err != nil {
 		return
 	}
-	r, err := identity.Resolve(ctx, identity.Inputs{Home: a.opts.Home, Config: mc.Config, Dir: filepath.Dir(a.opts.Home)})
-	if err != nil || r.StableKey == "" {
-		return
+	dirs := []string{filepath.Dir(a.opts.Home)}
+	if h, herr := os.UserHomeDir(); herr == nil && h != "" && h != dirs[0] {
+		dirs = append(dirs, h)
 	}
-	id, err := r.ActorID()
-	if err != nil {
-		return
+	for _, dir := range dirs {
+		r, rerr := identity.Resolve(ctx, identity.Inputs{Home: a.opts.Home, Config: mc.Config, Dir: dir})
+		if rerr != nil || r.StableKey == "" {
+			continue
+		}
+		id, ierr := r.ActorID()
+		if ierr != nil {
+			continue
+		}
+		if _, ok := out[id.String()]; !ok {
+			out[id.String()] = unscopedName(r)
+		}
+		addAgentNames(out, id, unscopedAgentOwner(r), knownAgentTools())
 	}
-	if _, ok := out[id.String()]; ok {
-		return
+}
+
+// unscopedAgentOwner is the owner part of an unscoped person's detected
+// agent name ("<owner> via <tool>"): the person's display name (else the
+// stable key) with the outside-any-setup note, or beforeIdentityName for a
+// machine-only identity, so the agent reads as the person's own.
+func unscopedAgentOwner(r identity.Resolved) string {
+	if machineFallbackStep(r.Step) {
+		return beforeIdentityName
 	}
-	out[id.String()] = unscopedName(r)
+	name := r.DisplayName
+	if name == "" {
+		name = r.StableKey
+	}
+	return name + " (" + unscopedNote[2:] + ")"
 }
 
 // unscopedName is how doctor names r, this machine's identity outside any

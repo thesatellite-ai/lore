@@ -94,8 +94,9 @@ type LensOptions struct {
 	// Places maps a source name to the readable label of its place, the
 	// one search and every list print ("acme/web" for the source "acme"
 	// attached at folder web: devco D-568). Each "<table>_all" view
-	// carries it as the `place` column beside `source`, which stays the
-	// name queries filter on. A source missing here is labelled by its
+	// carries it as both the `source` and the `place` column (devco D-685:
+	// one folder, one source name in every placement; `place` stays for
+	// queries written before). A source missing here is labelled by its
 	// name.
 	Places map[string]string
 }
@@ -424,9 +425,15 @@ func (l *Lens) createViews(ctx context.Context, n string, srcs []srcTable, m mas
 		if selErr != nil {
 			return selErr
 		}
-		head := "SELECT " + src + ` AS "source", `
+		// devco D-685 (owner use pass 4 weak 1): `source` is the place
+		// label too, so one folder has one source name in every placement
+		// (a linked repo attaches its org store as the bare org name at the
+		// linked folder, and `GROUP BY source` gave "<org>" there but
+		// "<org>/<folder>" at the store folder or from the home folder)
+		label := l.placeExpr(l.sources[st.src], src)
+		head := "SELECT " + label + ` AS "source", `
 		if withPlace {
-			head += l.placeExpr(l.sources[st.src], src) + ` AS "` + LensPlaceColumn + `", `
+			head += label + ` AS "` + LensPlaceColumn + `", `
 		}
 		part := head + sel + ` FROM "` + attachedName(st.src) + `".` + tq
 		if l.sources[st.src].Shared && !l.sources[st.src].ownSource() && slices.Contains(st.cols, colSource) {

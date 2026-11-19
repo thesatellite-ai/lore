@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -57,9 +58,17 @@ func TestLocateCopiesMatrix(t *testing.T) {
 				if !errs.Has(err, errs.AmbiguousID) {
 					t.Fatalf("got %s %v, want E_AMBIGUOUS_ID", src, err)
 				}
+				var te *errs.Error
+				if !errors.As(err, &te) {
+					t.Fatalf("%v is not a typed error", err)
+				}
 				for _, n := range c.ambiguous {
 					if !strings.Contains(err.Error(), string(n)) {
 						t.Fatalf("%v does not name %s", err, n)
+					}
+					// D-689: each row is readable by its place
+					if !strings.Contains(te.Hint, "lore show --id "+id.String()+" --store "+string(n)) {
+						t.Fatalf("hint %q gives no --store read of %s", te.Hint, n)
 					}
 				}
 				for _, cp := range c.copies {

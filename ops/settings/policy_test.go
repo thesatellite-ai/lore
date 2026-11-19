@@ -65,7 +65,9 @@ func TestPolicyLooseningMatrix(t *testing.T) {
 						t.Errorf("%s=%s at %s under %s=%s at %s: %v, want E_POLICY_DENIED", c.key, v, p.nearer, c.key, c.base, p.higher, err)
 						continue
 					}
-					if !strings.Contains(err.Error(), p.higher+" sets ") {
+					// D-689: the org store attached at the linked folder under
+					// its bare name is named by its folder label
+					if !strings.Contains(err.Error(), placeLabelOf(p.higher)+" sets ") {
 						t.Errorf("refusal does not name the higher place: %v", err)
 					}
 				}
@@ -77,6 +79,16 @@ func TestPolicyLooseningMatrix(t *testing.T) {
 			}
 		})
 	}
+}
+
+// placeLabelOf is the place label multiStore's attached name prints as: the
+// org store "agency" is attached at its linked folder client1 (devco D-689:
+// result and refusal lines name the folder, not the bare org name).
+func placeLabelOf(name string) string {
+	if name == "agency" {
+		return "agency/client1"
+	}
+	return name
 }
 
 // TestPolicyHigherMayBeLooser: the reverse order is allowed (a higher
@@ -92,7 +104,7 @@ func TestPolicyHigherMayBeLooser(t *testing.T) {
 	h.MustYes(settings.OpPolicySet, setIn("meta.max_bytes", "10", "repo"))
 	h.MustYes(settings.OpPolicySet, setIn("meta.max_bytes", "500", "kb"))
 	rules := showRules(t, h, "")
-	if r := rules["secrets.on_detect"]; r.Value != "refuse" || r.Level != "folder" || r.Store != "agency" || !strings.HasPrefix(r.Source, "folder agency (pol_…") {
+	if r := rules["secrets.on_detect"]; r.Value != "refuse" || r.Level != "folder" || r.Store != "agency" || !strings.HasPrefix(r.Source, "folder agency/client1 (pol_…") {
 		t.Errorf("on_detect %+v", r)
 	}
 	if r := rules["meta.max_bytes"]; r.Value != "10" || r.Level != "repo" || !strings.HasPrefix(r.Source, "repo this repo (pol_…") {
