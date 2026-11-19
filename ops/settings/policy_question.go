@@ -42,8 +42,8 @@ func (o ops) checkWritable(ctx context.Context, target store.Source) error {
 // (checkWritable), and company ground (the org folder, a store root, every
 // project folder of the company store, devco D-681) takes a policy from an
 // admin of the org only (devco D-637: the roster's
-// role rules; requirePolicyAdmin, which leaves the member keys of
-// policy.MemberWritable open). line is the command the admin runs.
+// role rules; requirePolicyAdmin, every key). line is the command the
+// admin runs.
 func (o ops) checkPolicyWrite(ctx context.Context, target store.Source, key policy.Key, line string) error {
 	if err := o.checkWritable(ctx, target); err != nil {
 		return err

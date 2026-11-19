@@ -1345,6 +1345,9 @@ func cacheFailed(rows []store.Row, cause error) error {
 // the tombstones and the purged ids (later 542): all land or none does.
 // Other backends get WritePurge and finishW records the audit after it.
 func (e *Engine) writePurge(ctx context.Context, st Attached, p Purger, changes []store.Change, purged []ids.AnyID, evs []Event) error {
+	if err := e.guardWrites(ctx, st, changes); err != nil {
+		return err // D-694: the role check of every write (writeguard.go)
+	}
 	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
 		return err // D-617: the run's first write lands where --store names (narrow.go)
 	}
@@ -1380,6 +1383,9 @@ func (e *Engine) journalRecords(ctx context.Context, st Attached, evs []Event) (
 // (CLEANUP Qs). Other backends get a plain Write and finish records the
 // audit after it, as before.
 func (e *Engine) writeChanges(ctx context.Context, st Attached, changes []store.Change, evs []Event) error {
+	if err := e.guardWrites(ctx, st, changes); err != nil {
+		return err // D-694: the role check of every write (writeguard.go)
+	}
 	if err := refuseNarrowedWrite(ctx, st, changes); err != nil {
 		return err // D-617: the run's first write lands where --store names (narrow.go)
 	}

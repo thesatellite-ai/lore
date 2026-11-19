@@ -57,11 +57,6 @@ func (a *App) PolicyPlaceJudged(ctx context.Context, key policy.Key, j *profiles
 	if !ok {
 		return to, false, profilestore.Admins{}, false
 	}
-	if policy.MemberWritable(key) {
-		// A member's own branch choice: the write's role check lets every
-		// teammate set it, so the place is never "ask an admin" (D-681).
-		return to, false, profilestore.Admins{}, true
-	}
 	place := store.Source(to)
 	if to == "" {
 		place = store.SourceRepo

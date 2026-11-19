@@ -246,13 +246,10 @@ const policyAdminDoes = "change a policy of a company folder (it applies to ever
 
 // requirePolicyAdmin is the role check of a policy write of key to target:
 // company ground takes it from an admin of the org only
-// (profilestore.RequireAdminAt), except the keys policy.MemberWritable
-// names (a teammate's own branch choice, which lore branch share|isolate
-// write for members; devco D-681). line is the command the admin runs.
-func (o ops) requirePolicyAdmin(ctx context.Context, target store.Source, key policy.Key, line string) error {
-	if policy.MemberWritable(key) {
-		return nil
-	}
+// (profilestore.RequireAdminAt), every key: the owner's role rule (devco
+// D-694) took branch share/isolate back from members, so no key is
+// exempt. line is the command the admin runs.
+func (o ops) requirePolicyAdmin(ctx context.Context, target store.Source, _ policy.Key, line string) error {
 	return profilestore.RequireAdminAt(ctx, o.env, target, policyAdminDoes, line)
 }
 
