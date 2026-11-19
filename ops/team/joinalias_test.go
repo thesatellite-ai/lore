@@ -79,3 +79,33 @@ func TestCheckJoinEntry(t *testing.T) {
 		}
 	}
 }
+
+// TestCheckJoinEntryAliasNoSSHConfig (devco D-680): on a machine whose ssh
+// config lore reads does not name the alias (git reaches the store by
+// url.<base>.insteadOf), the alias spelling of the entry's store is still
+// that store: the join refused it E_SETUP_ORG_MISMATCH against the entry
+// its own import had just made. A dotted host the ssh config does not
+// name stays another store.
+func TestCheckJoinEntryAliasNoSSHConfig(t *testing.T) {
+	gitbackend.SetAliasHosts(nil)
+	ctx := context.Background()
+	x := newFixture(t)
+	for _, c := range []struct {
+		store string
+		code  errs.Code
+	}{
+		{"git@work-gh:agency/lore-team.git", ""},
+		{"ssh://git@work-gh/agency/lore-team.git", ""},
+		{"git@git.other.example:agency/lore-team.git", errs.SetupOrgMismatch},
+		{"git@work-gh:other/lore-team.git", errs.SetupOrgMismatch},
+	} {
+		have, err := CheckJoinEntry(ctx, x.e, "agency", c.store)
+		if c.code != "" {
+			wantCode(t, c.store, err, c.code)
+			continue
+		}
+		if err != nil || !have {
+			t.Errorf("%s: have=%v err=%v, want the entry's own store", c.store, have, err)
+		}
+	}
+}
