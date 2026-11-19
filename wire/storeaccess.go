@@ -23,6 +23,7 @@ package wire
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -86,6 +87,24 @@ func init() {
 			}
 		}
 		return al.HostName, ok
+	})
+}
+
+// init gives the backend's same-store test git's own url rewrite
+// (gitbackend.SameRepoViaRewrite, devco D-680): the person's
+// url.<base>.insteadOf rules, read from git config (no network), cached
+// per git config home and url for the process. It is asked only when two
+// store spellings differ by host and the ssh config did not join them.
+func init() {
+	var cache sync.Map // HOME, GIT_CONFIG_GLOBAL, url → rewritten url
+	gitbackend.SetURLRewrite(func(raw string) string {
+		key := os.Getenv("HOME") + "\x00" + os.Getenv("GIT_CONFIG_GLOBAL") + "\x00" + raw
+		if v, ok := cache.Load(key); ok {
+			return v.(string)
+		}
+		w := orgcfg.GitRewrite(context.Background(), raw)
+		cache.Store(key, w)
+		return w
 	})
 }
 

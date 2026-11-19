@@ -355,6 +355,51 @@ func SetAliasHosts(f AliasHostFunc) {
 	aliasHosts.Store(&f)
 }
 
+// URLRewriteFunc answers a store url as git rewrites it before it connects
+// (url.<base>.insteadOf); raw itself when no rule applies.
+type URLRewriteFunc func(raw string) string
+
+// urlRewrite is the rewriter SameRepoViaRewrite asks (SetURLRewrite).
+var urlRewrite atomic.Pointer[URLRewriteFunc]
+
+// SetURLRewrite installs git's url rewrite SameRepoViaRewrite asks (wire
+// installs one reading the person's git config); nil removes it.
+func SetURLRewrite(f URLRewriteFunc) {
+	if f == nil {
+		urlRewrite.Store(nil)
+		return
+	}
+	urlRewrite.Store(&f)
+}
+
+// SameRepoViaRewrite reports two store urls (raw, as typed or stored) that
+// git itself rewrites to one repository: a url.<base>.insteadOf rule turns
+// at least one of them into the other's target (a mirror, or the canonical
+// host for an alias). It is the same-store signal for an alias the ssh
+// config lore reads does not name, dotted (github.com-work) or not (devco
+// D-680): SameRepoViaAlias trusts only a single-label host without the ssh
+// config. False without a rewriter or when no rule applies.
+func SameRepoViaRewrite(a, b string) bool {
+	f := urlRewrite.Load()
+	if f == nil {
+		return false
+	}
+	ta, tb := strings.TrimSpace(a), strings.TrimSpace(b)
+	wa, wb := (*f)(ta), (*f)(tb)
+	if wa == ta && wb == tb {
+		return false // git sends each where it says: nothing new to compare
+	}
+	ra, ea := RemoteOfRaw(wa)
+	rb, eb := RemoteOfRaw(wb)
+	if ea != nil || eb != nil {
+		return false
+	}
+	if ra.Norm == rb.Norm {
+		return true
+	}
+	return !ra.isLocal() && !rb.isLocal() && SameRepoViaAlias(ra, rb)
+}
+
 // OriginAt is the url of the origin remote in the git config of the clone
 // at dir, read from the file (no git process); "" when there is none.
 func OriginAt(dir string) string {

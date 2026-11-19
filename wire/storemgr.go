@@ -569,7 +569,8 @@ func sameStoreAs(raw string) func(other string) bool {
 		case wr == nil || r == nil || localRemote(*wr) || localRemote(*r):
 			return false // a folder store or a local path has no host alias
 		default:
-			return git.SameRepoViaAlias(*wr, *r)
+			// devco D-680: or git itself rewrites both to one target
+			return git.SameRepoViaAlias(*wr, *r) || git.SameRepoViaRewrite(raw, other)
 		}
 	}
 }

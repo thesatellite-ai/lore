@@ -136,6 +136,34 @@ func ResolveRemote(ctx context.Context, dir, raw string) (string, error) {
 	return normalizeRemote(raw, rules)
 }
 
+// GitRewrite is raw as git itself rewrites it before it connects: the
+// longest url.<base>.insteadOf prefix in the person's git config replaced
+// by its base (git's own rule), raw (trimmed) when no rule matches or git
+// cannot be asked. Two store spellings git rewrites to one target reach
+// one repository, whatever the ssh config lore reads names (devco D-680:
+// a dotted alias host such as github.com-work that only an insteadOf rule
+// routes was "another store").
+func GitRewrite(ctx context.Context, raw string) string {
+	out, err := gitRun(ctx, "config", "--get-regexp", insteadOfKeyPattern)
+	if err != nil { // exit 1 = no rule
+		return strings.TrimSpace(raw)
+	}
+	return rewriteURL(raw, insteadOfRules(strings.Split(strings.TrimSpace(out), "\n")))
+}
+
+// rewriteURL applies git's insteadOf rule to raw: the rule with the
+// longest matching From wins.
+func rewriteURL(raw string, rules []insteadOfRule) string {
+	s := strings.TrimSpace(raw)
+	out, best := s, 0
+	for _, r := range rules {
+		if len(r.From) > best && strings.HasPrefix(s, r.From) {
+			out, best = r.Base+s[len(r.From):], len(r.From)
+		}
+	}
+	return out
+}
+
 // PlainRemote is raw normalised the way lore keyed a code repo before
 // D-531/D-532 (repourl.Normalize, the alias host kept), "" when that is the
 // same as resolved: the spelling an older branch layer ref or remote-only
