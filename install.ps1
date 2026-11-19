@@ -3,9 +3,10 @@
 # Usage:
 #   irm https://raw.githubusercontent.com/thesatellite-ai/lore/main/install.ps1 | iex
 #
-# Downloads the latest released binary from GitHub Releases, installs it
-# to %LOCALAPPDATA%\lore, adds that dir to the user PATH, and
-# installs the Claude skill bundle to %USERPROFILE%\.claude\skills\lore.
+# Downloads the latest release's archive (lore_windows_<arch>.zip) from
+# GitHub Releases, checks it against the release's checksums.txt, installs
+# lore.exe to %LOCALAPPDATA%\lore, adds that dir to the user PATH, and
+# installs the agent skill bundle to %USERPROFILE%\.claude\skills\lore.
 
 $ErrorActionPreference = "Stop"
 
@@ -21,13 +22,31 @@ $arch = if ([Environment]::Is64BitOperatingSystem) {
 $asset = "${Binary}_windows_${arch}.zip"
 # /releases/latest/download/ redirects to the newest asset with no call
 # to the rate-limited GitHub API.
-$url   = "https://github.com/$Repo/releases/latest/download/$asset"
+$base  = "https://github.com/$Repo/releases/latest/download"
+$url   = "$base/$asset"
 
 Write-Host "Downloading latest $Binary for windows/$arch..."
 $tmp = Join-Path $env:TEMP ([System.IO.Path]::GetRandomFileName())
 New-Item -ItemType Directory -Path $tmp | Out-Null
 $zip = Join-Path $tmp "$asset"
-Invoke-WebRequest -Uri $url -OutFile $zip
+$sums = Join-Path $tmp "checksums.txt"
+Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+Invoke-WebRequest -UseBasicParsing -Uri "$base/checksums.txt" -OutFile $sums
+
+# Check the archive's sha256 against its line in checksums.txt (catches a
+# corrupt or truncated download) before anything is installed.
+$want = $null
+foreach ($line in Get-Content $sums) {
+  $parts = $line -split '\s+'
+  if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $asset) { $want = $parts[0].ToLower() }
+}
+$got = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLower()
+if (-not $want -or $want -ne $got) {
+  Remove-Item -Recurse -Force $tmp
+  throw "sha256 of $asset does not match checksums.txt; nothing installed."
+}
+Write-Host "sha256 ok"
+
 Expand-Archive -Path $zip -DestinationPath $tmp -Force
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
@@ -51,11 +70,12 @@ if (Test-Path $skillSrc) {
 Remove-Item -Recurse -Force $tmp
 
 Write-Host ""
-Write-Host "Installed. Next steps:"
-Write-Host "  cd <your-project>"
-Write-Host "  $Binary init                 # create .lore/ + sqlite db"
-Write-Host "  $Binary setup                # build FTS5 search index"
-Write-Host "  $Binary directive install    # add the agent-directive block to CLAUDE.md / AGENTS.md"
+Write-Host "Installed. Next steps (in a new terminal):"
+Write-Host "  $Binary version                          # check the install"
+Write-Host "  $Binary setup                            # optional: guided setup of this machine (identity, GitHub, stores)"
+Write-Host "  $Binary setup join --invite `"<invite>`"   # joining a team: the invite line or store url your admin sent"
+Write-Host "  cd <your-project>; $Binary init          # start lore in a code repo"
 Write-Host ""
-Write-Host "The Claude skill is at $SkillDest (restart Claude Code to load it)."
-Write-Host "Verify: $Binary version"
+Write-Host "The agent skill is at $SkillDest (restart your coding agent to load it);"
+Write-Host "$Binary skill install --all adds it for your other coding tools."
+Write-Host "Upgrading from 0.1.17? Every teammate installs 0.1.18 first, then one person runs $Binary migrate run in each repo."
