@@ -10,7 +10,7 @@ import (
 )
 
 // TestCoordOutsideRepoSaysWhereItLives (devco D-508, owner 2026-11-17):
-// mission status, the inbox and task next stay repo-only; from a folder
+// mission status and the inbox stay repo-only; from a folder
 // that is no repo and no store clone they refuse naming where missions
 // and the inbox live and to cd into the code repo, never "name a
 // --store" (--store does not apply to them).
@@ -20,8 +20,7 @@ func TestCoordOutsideRepoSaysWhereItLives(t *testing.T) {
 	for _, c := range []struct{ name, in string }{
 		{opscoord.OpInbox, `{}`},
 		{opscoord.OpMissionStatus, `{"id":"msn_00000000000000000000000000000000"}`},
-		{opscoord.OpTaskNext, `{}`},
-	} {
+	} { // task next ranks an org store from here too: TestTaskNextOutsideNamesStoreAndSetupD683
 		_, err := run(t, a, c.name, c.in, false)
 		if err == nil {
 			t.Fatalf("%s outside a repo: want a refusal", c.name)

@@ -989,6 +989,13 @@ func (a *App) Run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 		}
 	}
 	a.refreshMovedStores() // servestale.go: a serving App follows a store set-url made since it opened
+	// devco:D-683, D-692: task next and the roster ops where no org applies
+	// run on the only org setup of this machine (solesetup.go), decided
+	// before anything resolves the folder's org (that answer is kept)
+	ctx, err := a.routeSoleSetup(ctx, e, d)
+	if err != nil {
+		return op.Result{}, err
+	}
 	res, err := a.run(ctx, e, d, c)
 	err = fitHomeHint(ctx, e, err)        // hintflags.go (devco:D-539)
 	err = a.goneRowAnswer(ctx, e, d, err) // rowgone.go (devco:D-590)

@@ -79,11 +79,13 @@ type repoOnlyOp struct {
 var repoOnlyOps = map[string]repoOnlyOp{
 	opscoord.OpInbox:         coordRepoOnlyRead,
 	opscoord.OpMissionStatus: coordRepoOnlyRead,
-	opscoord.OpTaskNext:      coordRepoOnlyRead,
-	opsmigrate.OpStatus:      migrateRepoOnly,
-	opsmigrate.OpRun:         migrateRepoOnly,
-	opsmigrate.OpRollback:    migrateRepoOnly,
-	opsmigrate.OpUnlock:      migrateRepoOnly,
+	// task next is no repo-only read: --store <org> and --setup <setup>
+	// rank an org store's queue from anywhere (devco:D-666); outside a
+	// code repo with neither, routeSoleSetup routes or refuses (D-683)
+	opsmigrate.OpStatus:   migrateRepoOnly,
+	opsmigrate.OpRun:      migrateRepoOnly,
+	opsmigrate.OpRollback: migrateRepoOnly,
+	opsmigrate.OpUnlock:   migrateRepoOnly,
 	opssession.OpList: {
 		what: "the agent sessions of a repo (in its .lore/) live",
 		noun: "sessions",
@@ -147,8 +149,8 @@ var storesYAMLRepoOnly = repoOnlyOp{
 	inStore: true,
 }
 
-// coordRepoOnlyRead is the entry of mission status, the inbox and task
-// next (devco D-508): claims and the inbox live on the repo's remote.
+// coordRepoOnlyRead is the entry of mission status and the inbox (devco
+// D-508): missions and the inbox live on the repo's remote.
 var coordRepoOnlyRead = repoOnlyOp{
 	what: "missions, claims and the inbox live",
 	noun: "missions or inbox",

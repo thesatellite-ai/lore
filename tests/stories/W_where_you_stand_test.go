@@ -118,7 +118,15 @@ const (
 	// a-rowless: a read refuses because the place has no project row; a
 	// read never makes one (T-11), so it must answer from the rows there
 	wRuleRowless = "a-rowless"
+	// h-queue: task next ranks a queue wherever one is meant (devco:D-683):
+	// the home folder of a machine with one org setup, the store clone's
+	// top and a store folder answer; no place says a store is "attached
+	// twice" (one place opened twice is an internal fault, not a refusal)
+	wRuleQueue = "h-queue"
 )
+
+// wQueuePlaces is where task next must answer in story W (one org setup).
+var wQueuePlaces = map[string]bool{"home": true, "store-root": true, "store-folder": true}
 
 // wRowless is the refusal of a read at a place with no project row.
 const wRowless = "has no project row yet"
@@ -469,6 +477,13 @@ func wCheck(r wRead, p wPlace, res teamharness.Result, before, now wSnap, known 
 				add(wRuleHint, "(a) a not-here refusal ("+c[1]+") whose hint does not name --store and --setup")
 			}
 		}
+	}
+	// (h) task next ranks a queue where one is meant (devco:D-683)
+	if strings.Contains(out, "attached twice") {
+		add(wRuleQueue, `(h) says a store is "attached twice"`)
+	}
+	if r.Name == "task.next" && wQueuePlaces[p.Name] && res.Code != 0 {
+		add(wRuleQueue, "(h) task next refused where it ranks the org store's queue")
 	}
 	// (b) tracked files byte-identical
 	if now.tracked != before.tracked {

@@ -1368,10 +1368,17 @@ func openDetachedHere(ctx context.Context, opts Options, one *attach.Store, here
 		stores := []attach.Store{*one}
 		urlOf[one.Name] = one.URL
 		for _, s := range also {
-			raws = append(raws, s.URL)
 			if s.URL, err = canonical(s); err != nil {
 				return nil, errs.Prefix("wire: store "+string(s.Name), err)
 			}
+			if dup, same := samePlaceAttached(stores, s); dup {
+				if same {
+					continue // the same place named twice (devco:D-683)
+				}
+				return nil, errs.New(errs.ConfigInvalid, "store "+string(s.Name)+" attached twice, at two different places").
+					WithHint("`lore store list` shows where each store of this machine lives")
+			}
+			raws = append(raws, s.URL)
 			stores = append(stores, s)
 			urlOf[s.Name] = s.URL
 		}
@@ -1582,3 +1589,23 @@ func openDetachedCaches(ctx context.Context, home string, c *caches, attached []
 // detachedCombinedKey starts the key of a store-only open's combined cache
 // file, so it never shares a name with a repo's (keyed by the repo path).
 const detachedCombinedKey = "store-only\x00"
+
+// samePlaceAttached reports whether name s.Name is in stores already (dup) and,
+// if so, whether that entry is the same place (same: store place, by
+// placeKey, and folder). Why (devco:D-683): a world over every folder of a setup
+// lists the company folder among the folders and again as the level
+// above each folder (companyFolderOf), so `task next --setup <setup>`
+// from the home folder failed "store <org>/org attached twice" whenever a
+// folder sorted before the company one. One place named twice is
+// attached once; one name over two places stays a refusal.
+func samePlaceAttached(stores []attach.Store, s attach.Store) (dup, same bool) {
+	for _, have := range stores {
+		if have.Name != s.Name {
+			continue
+		}
+		k := placeKey(have.URL, have.Branch)
+		samePlace := (have.URL == s.URL && have.Branch == s.Branch) || (k != "" && k == placeKey(s.URL, s.Branch))
+		return true, samePlace && strings.Trim(have.Folder, "/") == strings.Trim(s.Folder, "/")
+	}
+	return false, false
+}
