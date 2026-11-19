@@ -8,7 +8,7 @@ package profilestore
 // `rule delete --where 'severity=must'` removed the company's must rules
 // the one-row form refuses).
 //
-//	rows ─► CompanyPinned(row) && CompanyPlace(env, src)? ─none─► pass
+//	rows ─► CompanyPinned(row) && CompanyGround(src)? ─none─► pass
 //	                    │ some
 //	                    ▼
 //	        roster admins ─► caller admin, or no admin yet ─► pass
@@ -20,10 +20,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/thesatellite-ai/lore/logic/policy"
 	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
-	"github.com/thesatellite-ai/lore/ops/internal/upgrade"
 	"github.com/thesatellite-ai/lore/schema"
 	"github.com/thesatellite-ai/lore/store"
 )
@@ -35,10 +35,10 @@ const fieldSeverity = "severity"
 const namedRows = 5
 
 // CompanyPinned reports whether r is a row every repo reading its place
-// gets in full: a must rule, a critical or high hotfix. In a company place
-// (CompanyPlace) lowering, archiving, deleting or moving one is an admin's
-// change; other rows, and these rows in a project folder, stay every
-// member's.
+// gets in full: a must rule, a critical or high hotfix. On company ground
+// (CompanyGround: the org folder, a store root, every project folder of
+// the company store, devco D-681) lowering, archiving, deleting, pinning
+// or moving one is an admin's change; other rows stay every member's.
 func CompanyPinned(r row.Row) bool {
 	sev := fieldText(r, fieldSeverity)
 	switch r.Table {
@@ -57,34 +57,49 @@ type Placed struct {
 }
 
 // RequireAdminForRows refuses a member's write that would change any
-// company pinned row of rows (CompanyPinned in a CompanyPlace): one
+// company pinned row of rows (CompanyPinned on CompanyGround): one
 // E_REFUSED naming those rows and the admins, before anything is written.
 // verb is what the write does ("delete", "archive"); line is the command
 // an admin runs; narrow is the hint for the member's own way on ("narrow
 // --where to leave them out"), "" for none. With no such row, no roster,
 // or a caller who may (Admins.May) it passes, as RequireAdminAt does.
 func RequireAdminForRows(ctx context.Context, env PlaceEnv, rows []Placed, verb, line, narrow string) error {
-	var hit []string
-	var at store.Source
+	type cand struct {
+		id  string
+		src store.Source
+		lv  policy.Level
+	}
+	var cands []cand
 	for _, p := range rows {
-		if !CompanyPinned(p.Row) || !CompanyPlace(env, p.Source) {
+		if !CompanyPinned(p.Row) {
 			continue
 		}
-		hit = append(hit, p.Row.ID.String())
-		if at == "" {
-			at = p.Source
+		src, lv := placeOf(ctx, env, p.Source)
+		if mayBeGround(src, lv) {
+			cands = append(cands, cand{id: p.Row.ID.String(), src: src, lv: lv})
 		}
 	}
-	if len(hit) == 0 {
+	if len(cands) == 0 {
 		return nil
 	}
-	s, ok := upgrade.As[Store](env)
+	r, done, ok := openRoster(ctx, env)
+	defer done()
 	if !ok {
 		return nil
 	}
-	r, done, err := s.Roster(ctx, false)
-	defer done()
-	if err != nil || r == nil || r.Source() == store.SourceRepo {
+	org := orgOf(r.Source())
+	var hit []string
+	var at store.Source
+	for _, c := range cands {
+		if !CompanyGround(c.lv, c.src, org) {
+			continue
+		}
+		hit = append(hit, c.id)
+		if at == "" {
+			at = c.src
+		}
+	}
+	if len(hit) == 0 {
 		return nil
 	}
 	a, err := ReadAdmins(ctx, r)
@@ -98,8 +113,8 @@ func RequireAdminForRows(ctx context.Context, env PlaceEnv, rows []Placed, verb,
 	if narrow != "" {
 		hint = narrow + "; or " + hint
 	}
-	return errs.New(errs.Refused, "only an admin of the org can "+verb+" "+rowList(hit)+" (a must rule or a critical/high hotfix of the company place "+string(at)+
-		", which every repo of the org reads), and you are not one on the roster of "+r.Where()+"; nothing was written").WithHint(hint)
+	return errs.New(errs.Refused, "only an admin of the org can "+verb+" "+rowList(hit)+" (a must rule or a critical/high hotfix of the company folder "+string(at)+
+		", which every repo reading it is told), and you are not one on the roster of "+r.Where()+"; nothing was written").WithHint(hint)
 }
 
 // rowList is "rul_a" / "rul_a, rul_b" / "rul_a, … and 3 more".

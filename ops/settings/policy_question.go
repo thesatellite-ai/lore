@@ -40,8 +40,9 @@ func (o ops) checkWritable(ctx context.Context, target store.Source) error {
 
 // checkPolicyWrite is every refusal a policy write to target gets before
 // anything is asked or written: the place must take writes
-// (checkWritable), and a company place (the org folder, a store root)
-// takes a policy from an admin of the org only (devco D-637: the roster's
+// (checkWritable), and company ground (the org folder, a store root, every
+// project folder of the company store, devco D-681) takes a policy from an
+// admin of the org only (devco D-637: the roster's
 // role rules; profilestore.RequireAdminAt). line is the command the admin
 // runs.
 func (o ops) checkPolicyWrite(ctx context.Context, target store.Source, line string) error {

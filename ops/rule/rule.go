@@ -650,12 +650,13 @@ func (o ops) delete(ctx context.Context, in DeleteIn) (WriteOut, error) {
 // (devco D-659).
 const keepMember = fieldSeverity + ":" + schema.RuleSeverityShould + "," + schema.RuleSeverityMay
 
-// guardCompanyMust refuses a member's change that takes a must rule of a
-// company place (the org folder, a store root) out of what every repo of
-// the org is told: a lower severity, archive, delete (devco D-637). Only
-// an admin of the org makes it (profilestore.RequireAdminAt); line is the
-// command the admin runs. A project folder's rule, a should/may rule and
-// a rewording pass. A bad or missing id passes: the op answers it.
+// guardCompanyMust refuses a member's change that takes a must rule of
+// company ground (the org folder, a store root, every project folder of
+// the company store: profilestore.CompanyGround) out of what every repo
+// reading it is told: a lower severity, archive, delete (devco D-637,
+// D-681). Only an admin of the org makes it (profilestore.RequireAdminAt);
+// line is the command the admin runs. A should/may rule and a rewording
+// pass. A bad or missing id passes: the op answers it.
 func (o ops) guardCompanyMust(ctx context.Context, id, does, line string) error {
 	it, err := kn.Show(ctx, o.env, noun, id)
 	if err != nil || kn.Field(it.Row, fieldSeverity) != schema.RuleSeverityMust {

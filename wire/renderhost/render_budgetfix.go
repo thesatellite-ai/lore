@@ -2,13 +2,15 @@ package renderhost
 
 // render_budgetfix.go — the fixes the private context's over-budget
 // warning offers, as commands that work where they are printed and only
-// to someone who may run them (devco D-636, D-637).
+// to someone who may run them (devco D-636, D-637, D-681).
 //
-//	pinned row of a company place (org folder, store root) ─┐
-//	budget set at a company place                           ├─▶ the caller is an admin (or the org
+//	pinned row on company ground (org folder, store root,  ─┐
+//	  any project folder of the company store)              │
+//	budget set on company ground                            ├─▶ the caller is an admin (or the org
 //	                                                        │   names none yet) ─▶ the command
 //	                                                        └─▶ a member ─▶ "ask an admin of <org>
-//	                                                                         (<names>) to …"
+//	                                                             (<names>) to …; the admin would
+//	                                                             run: `…`" (never as the member's fix)
 //	the raise ─▶ `lore policy set … --to <place> --yes` where the value is set
 //	             (a linked repo: its store folder, never the read-only repo)
 
@@ -25,7 +27,7 @@ import (
 type budgetFix struct {
 	// to is the --to of the raise; "" writes to the repo (the default).
 	to string
-	// raiseCompany is true when the raise goes to a company place.
+	// raiseCompany is true when the raise goes to company ground.
 	raiseCompany bool
 	// unplaced is true when the place the budget is set cannot be named
 	// here (a linked repo whose store folder is not attached and whose
@@ -33,7 +35,7 @@ type budgetFix struct {
 	// link's --to, devco D-675): no raise command is printed then, only
 	// `lore whoami` to find it (devco D-658).
 	unplaced bool
-	// company holds the ids of pinned rows kept in a company place.
+	// company holds the ids of pinned rows kept on company ground.
 	company map[string]bool
 	// admins is the org's admins and whether the caller is one; its zero
 	// value (no roster) refuses nobody.
@@ -72,12 +74,14 @@ func (f budgetFix) raiseText(coreBytes int) string {
 	if f.mayRaise() {
 		return "to raise it: `" + f.raiseCmd(coreBytes) + "`"
 	}
-	return "to raise it, ask " + f.admins.Who()
+	return "to raise it, ask " + f.admins.Who() + "; the admin would run `" + f.raiseCmd(coreBytes) + "`"
 }
 
-// planBudgetFix reads where the budget is set and, when a company place
-// is involved, the org's admins. Only called when the pinned part is over
-// the budget, so a render under budget never opens the roster.
+// planBudgetFix reads where the budget is set and the org's admins, and
+// which pinned rows are on company ground (profilestore.CompanyGround, the
+// answer the role check of each printed write gives). Only called when the
+// pinned part is over the budget, so a render under budget never opens
+// the roster.
 func (h *Host) planBudgetFix(ctx context.Context, bodies []privateBody) budgetFix {
 	var f budgetFix
 	if h.app == nil {
@@ -86,16 +90,18 @@ func (h *Host) planBudgetFix(ctx context.Context, bodies []privateBody) budgetFi
 	var placed bool
 	f.to, f.raiseCompany, placed = h.app.PolicyPlace(ctx, policy.KeyContextBudgetInternal)
 	f.unplaced = !placed
+	f.admins, _ = h.app.OrgAdmins(ctx)
 	f.company = map[string]bool{}
 	for _, b := range bodies {
 		for _, pin := range b.pins {
-			if lv, ok := h.app.StoreLevel(pin.src); ok && profilestore.CompanyLevel(lv) {
+			lv, ok := h.app.StoreLevel(pin.src)
+			if !ok {
+				lv = ""
+			}
+			if profilestore.CompanyGround(lv, pin.src, f.admins.Org) {
 				f.company[pin.id] = true
 			}
 		}
-	}
-	if f.raiseCompany || len(f.company) > 0 {
-		f.admins, _ = h.app.OrgAdmins(ctx)
 	}
 	return f
 }
@@ -116,17 +122,23 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 			hotfix = pin.id
 		}
 	}
-	var lower, ask []string
+	var lower, ask, adminRuns []string
+	ruleCmd := "lore rule edit --id " + rule + " --severity should"
 	if f.mayLower(rule) {
-		lower = append(lower, "`lore rule edit --id "+rule+" --severity should`")
+		lower = append(lower, "`"+ruleCmd+"`")
 	} else {
 		ask = append(ask, "lower "+rule)
+		if rule != "<rul_id>" {
+			adminRuns = append(adminRuns, "`"+ruleCmd+"`")
+		}
 	}
 	if hotfix != "" {
+		hotfixCmd := "lore hotfix edit --id " + hotfix + " --severity medium"
 		if f.mayLower(hotfix) {
-			lower = append(lower, "`lore hotfix edit --id "+hotfix+" --severity medium`")
+			lower = append(lower, "`"+hotfixCmd+"`")
 		} else {
 			ask = append(ask, "lower "+hotfix)
+			adminRuns = append(adminRuns, "`"+hotfixCmd+"`")
 		}
 	}
 	var can []string
@@ -140,13 +152,19 @@ func overCoreFix(coreBytes int, pins []privatePin, f budgetFix) string {
 		can = append(can, "raise the budget with `"+f.raiseCmd(coreBytes)+"`")
 	default:
 		ask = append(ask, fmt.Sprintf("raise %s to %d in %s", policy.KeyContextBudgetInternal, budgetToFit(coreBytes), f.to))
+		adminRuns = append(adminRuns, "`"+f.raiseCmd(coreBytes)+"`")
 	}
 	out := strings.Join(can, ", or ")
 	if len(ask) == 0 {
 		return out
 	}
-	// a company row or policy is an admin's change (devco D-637)
+	// company rows and policies are an admin's change (devco D-637,
+	// D-681): the member is told whom to ask, and the commands are labelled
+	// as the admin's, so none reads as the member's own next step
 	adm := "ask " + f.admins.Who() + " to " + strings.Join(ask, " or ") + " (company rows and policies are changed by an admin)"
+	if len(adminRuns) > 0 {
+		adm += "; the admin would run " + strings.Join(adminRuns, " or ")
+	}
 	if out == "" {
 		return adm
 	}

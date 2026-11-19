@@ -240,8 +240,9 @@ type MachinePolicySource interface {
 func rankOf(l policy.Level) int { return slices.Index(policy.Levels(), l) }
 
 // policyAdminDoes is what only an admin does, in the refusal of a member's
-// policy write to a company place (devco D-637).
-const policyAdminDoes = "change a policy of the org folder or a store root (it applies to every repo of the org)"
+// policy write to company ground (devco D-637, D-681: every folder of the
+// company store, not only its org folder).
+const policyAdminDoes = "change a policy of a company folder (it applies to every repo that reads the folder)"
 
 func (o ops) policySet(ctx context.Context, in PolicySetIn) (RowOut, error) {
 	d, ok := policy.Lookup(policy.Key(in.Key))

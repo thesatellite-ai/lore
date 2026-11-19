@@ -3,20 +3,27 @@ package profilestore
 // admins.go — who may make the org's admin-only changes, read from the
 // roster (open stints with org role admin), and the one refusal every
 // admin-only op answers (devco R-6 offboard, devco D-637 company rules
-// and policies).
+// and policies, devco D-681 every folder of the company store).
 //
-//	op ──▶ CompanyPlace(env, src)? ──no──▶ anyone may write
-//	          │ yes (the org folder or a store root: every repo of the org reads it)
+//	op ──▶ src: the repo, the personal store? ──yes──▶ anyone may write
+//	          │ no
 //	          ▼
-//	       env.Roster(read) ──▶ ReadAdmins ──▶ caller admin, or no admin yet ──▶ write
-//	                                       └─▶ else E_REFUSED naming the admins
+//	       env.Roster(read) ──▶ CompanyGround(level of src, src, roster's org)?
+//	          │ no (another store: a client's, a solo store) ──▶ anyone may write
+//	          ▼ yes (the org folder, a store root, or any project folder
+//	                 of the roster's own store)
+//	       ReadAdmins ──▶ caller admin, or no admin yet ──▶ write
+//	                  └─▶ else E_REFUSED naming the admins
 //
-// Why company places (devco D-637): a must rule or a policy of the org
-// folder reaches every repo of the org, so a member who demotes one to
-// quiet a local warning changes what every teammate's agent is told.
-// The roster already makes stints and memberships an admin's change; the
-// org's own rules and policies follow it. A project folder's rules and
-// policies stay every member's to change.
+// Why company ground (devco D-637, D-681): a must rule or a policy of the
+// org folder reaches every repo of the org, and one of a project folder
+// reaches every repo linked to that project, most of the company's rules
+// live there. A member who demotes one to quiet a local warning changes
+// what every teammate's agent is told. The roster already makes stints
+// and memberships an admin's change; the company store's rules and
+// policies, in every folder, follow it. D-637 guarded only the org folder,
+// so a member's `rule edit --severity should` on a project folder's must
+// rule committed (owner use pass 4, wrong 2).
 
 import (
 	"context"
@@ -130,27 +137,6 @@ type Leveler interface {
 	StoreLevel(src store.Source) (policy.Level, bool)
 }
 
-// CompanyPlace reports whether a row of src reaches the whole org: the
-// org folder (`<store>/org`) or a store's root, whose rows every folder of
-// the store reads. A project folder, the repo and the personal store are
-// not. The Env's answer wins (a linked folder attached under the bare org
-// name is a folder); without one the name decides.
-func CompanyPlace(env PlaceEnv, src store.Source) bool {
-	if l, ok := upgrade.As[Leveler](env); ok {
-		if lv, known := l.StoreLevel(src); known && lv != "" {
-			return CompanyLevel(lv)
-		}
-	}
-	s := string(src)
-	switch {
-	case src == store.SourceRepo || s == personalStore:
-		return false
-	case strings.HasSuffix(s, "/"+orgFolder):
-		return true
-	}
-	return !strings.Contains(s, "/")
-}
-
 // PlaceEnv is what the company-place checks need from an ops package's
 // Env: every ops Env (memory, settings, row …) reads a row by ref, which
 // is the one method they all share; the optional Leveler and Store
@@ -166,23 +152,103 @@ func CompanyLevel(lv policy.Level) bool {
 	return lv == policy.LevelOrg || lv == policy.LevelStoreRoot
 }
 
-// RequireAdminAt refuses a member's change to a company place (devco
-// D-637): when CompanyPlace(env, src) and the Env opens a roster
-// (Store), the caller must be an admin of it (RequireAdmin). Anything
-// else passes. A roster that cannot be opened passes too: with no org
-// roster readable there are no roles to follow (a solo store, a machine
-// with no org), and refusing would lock its owner out of their own rules.
-func RequireAdminAt(ctx context.Context, env PlaceEnv, src store.Source, does, line string) error {
-	if !CompanyPlace(env, src) {
-		return nil
+// CompanyGround is the one answer to "is src company ground of org"
+// (devco D-681), shared by every role check and every printed fix: the
+// org folder and a store root always are (every repo of the org reads
+// them); a project folder is when its store is org's own store (the
+// roster's, Admins.Org: "acme/web" and the linked folder attached as
+// "acme" for org acme); the repo, the personal store and the machine are
+// not, nor a folder of another store (a client's, a solo store), whose
+// rows the roster has no say over. lv is src's settings level, "" when
+// unknown: the name decides then ("<store>/org" and a bare name are the
+// org's; "<store>/<folder>" is a folder of <store>).
+func CompanyGround(lv policy.Level, src store.Source, org string) bool {
+	switch lv {
+	case policy.LevelOrg, policy.LevelStoreRoot:
+		return true
+	case policy.LevelFolder:
+		return org != "" && orgOf(src) == org
+	case "":
+	default: // repo, personal, machine
+		return false
 	}
+	s := string(src)
+	switch {
+	case src == store.SourceRepo || s == personalStore:
+		return false
+	case strings.HasSuffix(s, "/"+orgFolder) || !strings.Contains(s, "/"):
+		return true
+	}
+	return org != "" && orgOf(src) == org
+}
+
+// RepoStander is the Env upgrade that names the store a write to the repo
+// store lands in inside a store clone's folder (wire.App RepoStandsFor;
+// "" in a code repo): a rule shown there carries the repo source, and the
+// role check must judge the folder it really is (devco D-681).
+type RepoStander interface {
+	RepoStandsFor(ctx context.Context) (store.Source, error)
+}
+
+// placeOf is src as the role check judges it: the store clone folder a
+// repo source stands for, and src's settings level ("" when the Env does
+// not know it).
+func placeOf(ctx context.Context, env PlaceEnv, src store.Source) (store.Source, policy.Level) {
+	if src == store.SourceRepo {
+		if rs, ok := upgrade.As[RepoStander](env); ok {
+			if here, err := rs.RepoStandsFor(ctx); err == nil && here != "" {
+				src = here
+			}
+		}
+	}
+	if l, ok := upgrade.As[Leveler](env); ok {
+		if lv, known := l.StoreLevel(src); known {
+			return src, lv
+		}
+	}
+	return src, ""
+}
+
+// mayBeGround is false for the places that are never company ground
+// whatever the roster says (the repo, the personal store, the machine),
+// so a write there never opens the roster.
+func mayBeGround(src store.Source, lv policy.Level) bool {
+	switch lv {
+	case policy.LevelRepo, policy.LevelPersonal, policy.LevelMachine:
+		return false
+	}
+	return src != store.SourceRepo && string(src) != personalStore
+}
+
+// openRoster opens the Env's org roster for a role check; ok is false when
+// none is readable (no Store upgrade, no org, the repo's own roster):
+// with no roster there are no roles to follow (a solo store, a machine
+// with no org), and refusing would lock its owner out of their own rules.
+func openRoster(ctx context.Context, env PlaceEnv) (Roster, func(), bool) {
 	s, ok := upgrade.As[Store](env)
 	if !ok {
-		return nil
+		return nil, func() {}, false
 	}
 	r, done, err := s.Roster(ctx, false)
-	defer done()
 	if err != nil || r == nil || r.Source() == store.SourceRepo {
+		done()
+		return nil, func() {}, false
+	}
+	return r, done, true
+}
+
+// RequireAdminAt refuses a member's change to company ground (devco
+// D-637, D-681): when src is CompanyGround of the Env's roster, the caller
+// must be an admin of it (RequireAdmin). Anything else passes, and so does
+// a roster that cannot be opened (openRoster).
+func RequireAdminAt(ctx context.Context, env PlaceEnv, src store.Source, does, line string) error {
+	src, lv := placeOf(ctx, env, src)
+	if !mayBeGround(src, lv) {
+		return nil
+	}
+	r, done, ok := openRoster(ctx, env)
+	defer done()
+	if !ok || !CompanyGround(lv, src, orgOf(r.Source())) {
 		return nil
 	}
 	return RequireAdmin(ctx, r, does, line)

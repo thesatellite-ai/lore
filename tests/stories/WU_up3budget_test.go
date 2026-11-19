@@ -13,7 +13,11 @@ package stories
 //	       given its command; a member's demotion of a company must rule or
 //	       policy write to the org folder is refused; a folder's stays theirs
 //	D-664: `pin set --context` / `pin unset` of a company must rule is an
-//	       admin's change; a project folder's must rule stays a member's
+//	       admin's change
+//	D-681: every folder of the company store is company ground: a member
+//	       in a linked project-folder repo is refused a demotion, a pin and
+//	       a policy write there, and the warning labels those commands as
+//	       the admin's
 //	D-658: a budget set at the store root names that store in its raise
 //	       (never the literal `<store>`), and the raise runs as printed
 
@@ -86,14 +90,21 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		m.Lore(wc.Dir, "policy", "set", "--key", wubKey, "--value", "1000", "--to", inWeb, "--yes").OK(t)
 		m.Lore(wc.Dir, "sync").OK(t)
 		out := mo.Lore(mc.Dir, "sync").OK(t).Out()
-		if strings.Contains(out, "lore rule edit --id "+company) {
+		if own, _, _ := strings.Cut(out, "the admin would run"); strings.Contains(own, "lore rule edit --id "+company) {
 			t.Fatalf("devco:D-637: a member is told to demote a company must rule:\n%s", out)
 		}
 		if !strings.Contains(out, "ask an admin of "+wOrg+" ("+wAdmin.Name+")") {
 			t.Fatalf("devco:D-637: the member is not told which admin to ask:\n%s", out)
 		}
-		// the folder's budget is the member's to raise, and works as printed
-		wubRun(t, mo, mc.Dir, wubPrinted(t, out, "raise the budget with `")).Says(t, wubKey)
+		// devco D-681: the project folder's budget is company ground too: the
+		// member gets no policy command of their own, only the admin's, labelled
+		own, admins, _ := strings.Cut(out, "the admin would run")
+		if strings.Contains(own, "lore policy set") || strings.Contains(own, "--severity should`") {
+			t.Fatalf("devco:D-681: a member is given a shared-setting command:\n%s", out)
+		}
+		raise := wubPrinted(t, admins, "`lore policy set")
+		mo.Lore(mc.Dir, wubFields(t, "lore policy set"+raise)...).Refused(t, "E_REFUSED", "only an admin of the org")
+		wubRun(t, m, wc.Dir, "lore policy set"+raise).Says(t, wubKey)
 	})
 
 	s.Step("D-658/store-root-budget-names-the-store", func() {
@@ -159,9 +170,9 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		mo.Lore(mc.Dir, "sync").OK(t)
 		mo.Lore(mc.Dir, "pin", "unset", "--id", company).Refused(t, "E_REFUSED", "only an admin of the org", "lore pin unset --id "+company)
 		m.Lore(wc.Dir, "pin", "unset", "--id", company).OK(t)
-		// a project folder's must rule stays every member's to pin
+		// devco D-681: a project folder's must rule is company ground too
 		own := wubRuleID.FindString(mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web forms validate on the server", "--yes").OK(t).Out())
-		mo.Lore(mc.Dir, "pin", "set", "--id", own, "--context", "line").OK(t).Says(t, "pinned")
+		mo.Lore(mc.Dir, "pin", "set", "--id", own, "--context", "line").Refused(t, "E_REFUSED", "only an admin of the org", "lore pin set --id "+own+" --context line")
 	})
 
 	s.Step("D-637/member-cannot-demote-company-rows", func() {
@@ -170,8 +181,16 @@ func TestStoryWUBudgetWarn(t *testing.T) {
 		mo.Lore(mc.Dir, "rule", "archive", "--id", company).Refused(t, "E_REFUSED", "only an admin of the org")
 		mo.Lore(mc.Dir, "policy", "set", "--key", wubKey, "--value", "30000", "--to", wOrg+"/org", "--yes").Refused(t, "E_REFUSED", "only an admin of the org")
 		mo.Lore(mc.Dir, "rule", "show", "--id", company).OK(t).Says(t, "must")
-		// a project folder's rule stays every member's
-		mo.Lore(mc.Dir, "rule", "edit", "--id", wubRuleIn(t, mo, mc.Dir, inWeb), "--severity", "should").OK(t)
+		// devco D-681: a project folder's must rule and policy are company ground too
+		web := wubRuleID.FindString(m.Lore(wc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web releases are tagged", "--yes").OK(t).Out())
+		m.Lore(wc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "sync").OK(t)
+		mo.Lore(mc.Dir, "rule", "edit", "--id", web, "--severity", "should").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name, "nothing was written")
+		mo.Lore(mc.Dir, "policy", "set", "--key", wubKey, "--value", "30000", "--to", inWeb, "--yes").Refused(t, "E_REFUSED", "only an admin of the org", wAdmin.Name)
+		mo.Lore(mc.Dir, "rule", "show", "--id", web).OK(t).Says(t, "must")
+		// a should rule stays every member's
+		should := wubRuleID.FindString(mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "should", "--body", "web copy uses sentence case", "--yes").OK(t).Out())
+		mo.Lore(mc.Dir, "rule", "edit", "--id", should, "--severity", "may").OK(t)
 		// the admin still may
 		m.Lore(wc.Dir, "rule", "edit", "--id", company, "--severity", "should").OK(t)
 	})
