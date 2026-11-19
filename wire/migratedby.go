@@ -1,11 +1,23 @@
 package wire
 
 // migratedby.go — who `lore migrate run` records as having raised a
-// project's format (T-1). It is the PERSON, "Name <email>", the same
-// identity a commit lore makes carries (owner bug 12: storeSigner.fallback),
-// never "<person> via <tool> (agent:auto/…)": a detected agent acts for its
-// person. The agent goes into migrated_via only, the audit counterpart of
-// the Lore-Agent commit trailer (gitcommit.AgentTrailer).
+// project's format (T-1). It is the PERSON, never "<person> via <tool>
+// (agent:auto/…)": a detected agent acts for its person; the agent goes
+// into migrated_via only, the audit counterpart of the Lore-Agent commit
+// trailer (gitcommit.AgentTrailer).
+//
+// devco:D-705: the person is recorded by display NAME only, never "Name
+// <email>" and never an actor id. _meta.json is a committed file of the
+// code repo, and in a client repo lore's own pre-commit leak check refuses
+// a commit whose non-row files name the email of a person on an org
+// store's roster (logic/leakcheck emailHits, F-4): an email there made
+// `lore migrate run` produce the one commit lore itself refuses. An actor
+// id is no way out: the same check refuses a roster actor id outside a row
+// file unless that actor's row file is in the same commit (idHits,
+// projectedActors), which a migration cannot promise. The name is what the
+// commit's author line shows anyway; the rule is the same in every repo
+// kind (one rule, no client/own branch). A _meta.json an earlier build
+// wrote with "Name <email>" still reads and is shown as written.
 
 import (
 	"strings"
@@ -13,20 +25,13 @@ import (
 	"github.com/thesatellite-ai/lore/adapters/identity"
 )
 
-// migratedBy splits who into the person who ran the migration ("Name
-// <email>", or the name alone when the person's key holds no address) and
-// the agent it ran through ("<tool> (<agent key>)", "" for the person, CI
-// or an agent with no tool label).
+// migratedBy splits who into the person who ran the migration (their
+// display name; "" when they have none, or it holds an address: no name is
+// ever made up from an email) and the agent it ran through ("<tool>
+// (<agent key>)", "" for the person, CI or an agent with no tool label).
 func migratedBy(who identity.Resolved) (by, via string) {
-	name, email := who.Person().CommitSignature()
-	name, email = strings.TrimSpace(name), strings.TrimSpace(email)
-	switch {
-	case email == "" || strings.HasSuffix(strings.ToLower(email), "@"+identity.CommitEmailDomain):
-		by = name // no address of a person: never a made-up lore.invalid one
-	case name == "":
-		by = "<" + email + ">"
-	default:
-		by = name + " <" + email + ">"
+	if name := strings.TrimSpace(who.Person().DisplayName); !strings.Contains(name, "@") {
+		by = name
 	}
 	if key := strings.TrimSpace(who.Agent); key != "" {
 		via = key

@@ -1,9 +1,11 @@
 package wire
 
 // migratedby_test.go — T-1: `lore migrate run` under an agent records the
-// PERSON in _meta.json's migrated_by ("Name <email>") and in the line migrate
-// status, doctor and where show; the agent is only in migrated_via (audit),
-// as a commit's Lore-Agent trailer. Made-up people only.
+// PERSON in _meta.json's migrated_by and in the line migrate status, doctor
+// and where show; the agent is only in migrated_via (audit), as a commit's
+// Lore-Agent trailer. devco:D-705: the person by display name only, never
+// an email or actor id (a client repo's leak check refuses either in the
+// migration commit). Made-up people only.
 
 import (
 	"context"
@@ -44,7 +46,7 @@ func TestMigrateRunRecordsThePersonNotTheAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const person = "Alice Example <alice@example.com>"
+	const person = "Alice Example"
 	if !strings.Contains(line, "(by "+person+", 2026-11-13T10:00:00Z)") || strings.Contains(line, "agent:") || strings.Contains(line, viaTool) {
 		t.Errorf("migrate run line names the agent, not the person: %s", line)
 	}
@@ -58,6 +60,11 @@ func TestMigrateRunRecordsThePersonNotTheAgent(t *testing.T) {
 	}
 	if pf.MigratedBy != person {
 		t.Errorf("migrated_by = %q, want %q:\n%s", pf.MigratedBy, person, b)
+	}
+	// devco:D-705: no address and no actor id of the person in the
+	// committed file (lore's own pre-commit refused the migration commit)
+	if strings.Contains(string(b), "@") || strings.Contains(string(b), "act_") {
+		t.Errorf("_meta.json names the person's email or actor id:\n%s", b)
 	}
 	if !strings.HasPrefix(pf.MigratedVia, "claude_code (agent:auto/claude_code/") {
 		t.Errorf("migrated_via = %q, want the agent (audit):\n%s", pf.MigratedVia, b)
@@ -76,10 +83,13 @@ func TestMigratedBy(t *testing.T) {
 		who     identity.Resolved
 		by, via string
 	}{
-		{"the person", alice, "Alice Example <alice@example.com>", ""},
+		{"the person", alice, "Alice Example", ""},
 		{"an agent for the person", identity.Resolved{StableKey: "agent:auto/codex/abc123", DisplayName: "Alice Example via codex", Kind: identity.KindAgent, Agent: "agent:auto/codex/abc123", Label: "codex", Owner: &alice},
-			"Alice Example <alice@example.com>", "codex (agent:auto/codex/abc123)"},
+			"Alice Example", "codex (agent:auto/codex/abc123)"},
 		{"a key with no address", identity.Resolved{StableKey: "human:bob", DisplayName: "Bob Example", Kind: identity.KindHuman}, "Bob Example", ""},
+		// devco:D-705: no display name records no one, never the address
+		{"a person with no name", identity.Resolved{StableKey: "human:carol@example.com", Kind: identity.KindHuman}, "", ""},
+		{"a name that is an address", identity.Resolved{StableKey: "human:dan@example.com", DisplayName: "dan@example.com", Kind: identity.KindHuman}, "", ""},
 	} {
 		if by, via := migratedBy(c.who); by != c.by || via != c.via {
 			t.Errorf("%s: by %q via %q, want %q %q", c.name, by, via, c.by, c.via)

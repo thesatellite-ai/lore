@@ -389,6 +389,8 @@ func (a *App) Finish(ctx context.Context, push opsmigrate.PushChoice, count int)
 	uncommitted := 0
 	changed := false
 	pushed := map[string]bool{}
+	listed := map[string]bool{} // clone dirs whose own store commits are listed
+	localStore := false         // a store commit of the run stayed local
 	for i := range j.Places {
 		p := &j.Places[i]
 		if p.TreeAfter, err = snaps.Snapshot(ctx, top, p.Dir, p.Data); err != nil {
@@ -476,8 +478,26 @@ func (a *App) Finish(ctx context.Context, push opsmigrate.PushChoice, count int)
 			line += ", store commit " + shortOID(p.TipAfter) + ", pushed"
 		case p.Clone && p.ownTip():
 			line += ", store commit " + shortOID(p.TipAfter) + " " + a.notPushedWhy(ctx, push, p.Name)
+			localStore = true
 		}
 		lines = append(lines, line)
+		if p.Clone && p.ownTip() && !listed[p.Dir] {
+			// devco:D-707: every store commit the run made in this clone,
+			// once per clone (two attached folders of one store share
+			// it): which store, which commit, what it holds; the run's
+			// org_defaults_to_policy commits too, not only the tip
+			listed[p.Dir] = true
+			state := "local"
+			if p.Pushed {
+				state = "pushed"
+			}
+			for _, c := range ownStoreCommits(ctx, *p) {
+				lines = append(lines, "  store commit "+c.short+" in "+p.Name+" ("+state+"): "+c.subject)
+			}
+		}
+	}
+	if localStore {
+		lines = append(lines, migrateLocalStoreLine)
 	}
 	if len(j.ConfigKeys) > 0 {
 		lines = append(lines, lorehome.Shown()+"/"+ConfigFile+": "+strconv.Itoa(len(j.ConfigKeys))+" personal settings set")
@@ -569,7 +589,41 @@ func (a *App) notPushedWhy(ctx context.Context, choice opsmigrate.PushChoice, na
 	if choice == opsmigrate.PushPerMode {
 		why = "store " + name + " is in push mode " + string(a.placePushMode(ctx, name))
 	}
-	return "(local, not pushed: " + why + "; push with: lore store push --store " + name + ")"
+	return "(local, not pushed: " + why + "; lore sync sends it; this store alone: lore store push --store " + name + ")"
+}
+
+// migrateLocalStoreLine follows a run whose store commits stayed local
+// (devco:D-707): nothing reaches a store's remote without an explicit
+// sync or push, and this names the one command that sends them all.
+const migrateLocalStoreLine = "the store commits above are local: lore sync sends them (lore migrate run pushes nothing unless asked: --push, or a store in push mode now)"
+
+// storeCommit is one commit a migration run made in a store clone.
+type storeCommit struct{ short, subject string }
+
+// maxListedStoreCommits caps the store commits listed per clone; a run
+// makes a handful (marker, roster, policy row, org file).
+const maxListedStoreCommits = 20
+
+// ownStoreCommits lists, oldest first, the commits the run made itself in
+// clone place p: those after its own base (ownBase: a teammate's commits
+// merged in during the run are not the run's). A git failure lists none:
+// the place's line already names the tip.
+func ownStoreCommits(ctx context.Context, p journalPlace) []storeCommit {
+	args := []string{"log", "--reverse", "--no-merges", "--format=%h%x09%s", "-n", strconv.Itoa(maxListedStoreCommits), p.TipAfter}
+	if base := p.ownBase(); base != "" {
+		args = append(args, "^"+base)
+	}
+	out, err := gitRun{dir: p.Dir, args: args}.output(ctx)
+	if err != nil {
+		return nil
+	}
+	var got []storeCommit
+	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if h, subj, ok := strings.Cut(l, "\t"); ok {
+			got = append(got, storeCommit{short: h, subject: subj})
+		}
+	}
+	return got
 }
 
 // syncPlace syncs (fetch, merge, push) the attached store name.
@@ -1139,8 +1193,17 @@ func (a *App) raiseProjectFormat(ctx context.Context, top string) (string, error
 	if _, err = rowfs.EnsureSignpost(data); err != nil {
 		return "", err
 	}
-	return "format: " + rowfs.FormatName(rowfs.ProjectFormatCurrent) + ", recorded in " + rowfs.RepoMetaPath + " (by " + m.By + ", " + m.At + "); " +
+	return "format: " + rowfs.FormatName(rowfs.ProjectFormatCurrent) + ", recorded in " + rowfs.RepoMetaPath + migratedByTail(m) + "; " +
 		rowfs.LoreDir + "/" + rowfs.DataDir + "/" + rowfs.SignpostFile + " tells teammates still on lore 0.1.17 to upgrade; once this commit reaches them, lore 0.1.17 cannot read this project and, where its own git hook is installed, refuses every git commit here, code too, until they upgrade; commit both with the rows", nil
+}
+
+// migratedByTail is the " (by <name>, <when>)" of raiseProjectFormat's
+// line; " (<when>)" when no name was recorded.
+func migratedByTail(m rowfs.ProjectMigration) string {
+	if m.By == "" {
+		return " (" + m.At + ")"
+	}
+	return " (by " + m.By + ", " + m.At + ")"
 }
 
 // metaFilesIn counts the format files (_meta.json) among a migration's
