@@ -73,9 +73,9 @@ func adoptLiveRef(ctx context.Context, top string) (*live.Ref, string, bool, err
 	if err != nil {
 		return nil, "", false, err
 	}
-	sig, ok := repo.GitIdentity(ctx)
+	sig, ok := repo.GitIdentity(ctx) // the repo's git identity, else the backend's last resort (D-714: one signer rule)
 	if !ok {
-		sig = gitref.Signature{Name: fallbackStoreName, Email: fallbackStoreEmail}
+		sig = gitref.Signature{Name: git.DefaultAuthor.Name, Email: git.DefaultAuthor.Email}
 	}
 	return &live.Ref{Repo: repo, Name: live.RefLive, Signature: sig,
 		StateDir: filepath.Join(strings.TrimSpace(string(common)), adoptLiveStateDir)}, folder, true, nil

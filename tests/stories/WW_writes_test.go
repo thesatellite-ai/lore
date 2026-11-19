@@ -993,6 +993,19 @@ func wwCheck(t testing.TB, w *wwWorld, o wwOp, p wwPlace, args []string, res tea
 			allowed[c] = true
 		}
 	}
+	// (a) and doctor agree (devco:D-714): rule (a) needs a store clone's
+	// git user.name AND user.email to be the org identity; doctor's
+	// store_identity check compares both too, so on a clone rule (a)
+	// accepts doctor names no finding (it once compared only the email,
+	// the story O identity-gaps step covers the other side)
+	if o.Name == "doctor.run" {
+		for c := range w.ident {
+			if len(wwIdentityOfClones(&wwWorld{s: w.s, ident: map[string]journeys.Person{c: w.ident[c]}, owner: w.owner})) == 0 &&
+				strings.Contains(out, "store clone "+c+" commit") {
+				add(wwRuleIdent, "(a) doctor flags the "+w.owner[c]+" store clone whose git user rule (a) accepts as the org identity")
+			}
+		}
+	}
 	// (a) new commits in a store clone are the org identity's
 	moved := 0
 	for _, c := range w.clones {

@@ -145,16 +145,23 @@ func TestDoctorStoreIdentityExpectsOwningSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 	mine := who.PersonEmails() // the work folder's identity: W
+	// gotName "" is the identity's own name; devco D-714: in an org store a
+	// git handle beside the right email is flagged (lore signs there with
+	// the identity's name and email), in a personal store it is the
+	// person's own choice
 	cases := []struct {
-		name, url, got string
-		ok             bool
+		name, url, got, gotName string
+		ok                      bool
 	}{
-		{"personal store committing as P", ownerPersonalURL, "pat@home.test", true},
-		{"personal store, P's other email set by hand", ownerPersonalURL, "pat@old-home.test", true},
-		{"personal store committing as W (the bug)", ownerPersonalURL, "pat@acme.test", false},
-		{"org store committing as W", ownerOrgURL, "pat@acme.test", true},
-		{"org store committing as P", ownerOrgURL, "pat@home.test", false},
-		{"freelance store committing as P", ownerFreelanceURL, "pat@home.test", false},
+		{"personal store committing as P", ownerPersonalURL, "pat@home.test", "", true},
+		{"personal store, P's other email set by hand", ownerPersonalURL, "pat@old-home.test", "", true},
+		{"personal store committing as W (the bug)", ownerPersonalURL, "pat@acme.test", "", false},
+		{"personal store, a git handle as the name", ownerPersonalURL, "pat@home.test", "pat-handle", true},
+		{"org store committing as W", ownerOrgURL, "pat@acme.test", "", true},
+		{"org store, W's email under a git handle", ownerOrgURL, "pat@acme.test", "pat-handle", false},
+		{"org store, W's email and no name", ownerOrgURL, "pat@acme.test", "-", false},
+		{"org store committing as P", ownerOrgURL, "pat@home.test", "", false},
+		{"freelance store committing as P", ownerFreelanceURL, "pat@home.test", "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -163,8 +170,12 @@ func TestDoctorStoreIdentityExpectsOwningSetup(t *testing.T) {
 			if want.Email != wantEmail {
 				t.Fatalf("doctor expects %s, want %s", want.Email, wantEmail)
 			}
-			if got := cloneIdentityAccepted(c.got, want.Email, accept, org); got != c.ok {
-				t.Fatalf("clone committing as %s accepted = %v, want %v", c.got, got, c.ok)
+			gotName := map[string]string{"": want.Name, "-": ""}[c.gotName]
+			if c.gotName != "" && c.gotName != "-" {
+				gotName = c.gotName
+			}
+			if got := cloneIdentityMatches(gotName, c.got, want, accept, org); got != c.ok {
+				t.Fatalf("clone committing as %q <%s> accepted = %v, want %v", gotName, c.got, got, c.ok)
 			}
 		})
 	}

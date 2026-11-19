@@ -143,7 +143,10 @@ type storeCommit struct {
 	Dir, Store, Branch string
 	// NoPush commits in the clone only (autopush off).
 	NoPush bool
-	// Message and Signature make the commit.
+	// Message and Signature make the commit. A Signature without a name
+	// or email (an org with no identity) is resolved at commit time by
+	// commitSignature: the clone's git identity, as the git backend's
+	// commits in that store (FLAG4).
 	Message   string
 	Signature gitref.Signature
 	// Change returns the files to put at tip; an empty map on the first
@@ -263,7 +266,7 @@ func commitStore(ctx context.Context, c storeCommit) (storeCommitResult, error) 
 		oid := tip
 		if len(put) > 0 {
 			cm, cerr := repo.MakeCommit(ctx, gitref.CommitRequest{Base: tip, Changes: gitref.Changes{Put: put},
-				Message: c.Message, Signature: c.Signature})
+				Message: c.Message, Signature: commitSignature(ctx, repo, c.Signature)})
 			if cerr != nil {
 				return res, fmt.Errorf("orgcfg: commit on %s: %w", branch, cerr)
 			}
@@ -613,4 +616,23 @@ func guardFromRemote(ctx context.Context, r Router, dir, branch, h string) error
 		return nil
 	}
 	return gitbackend.GuardPushGone(ctx, dir, branch, h, noHeads)
+}
+
+// commitSignature is the signer of an org-file commit in the clone repo:
+// sig when it names a name and an email (the org identity, D-714); else
+// the clone's own git identity, the same FLAG4 rule the git backend's
+// writes and merges in that store follow (devco D-714: an org with no
+// identity signed org link and org config commits "lore <lore@localhost>"
+// while every row commit there carried the person's git identity); else
+// the backend's last resort (gitbackend.DefaultAuthor). sig's When is kept.
+func commitSignature(ctx context.Context, repo *gitref.Repo, sig gitref.Signature) gitref.Signature {
+	if sig.Name != "" && sig.Email != "" {
+		return sig
+	}
+	when := sig.When
+	if id, ok := repo.GitIdentity(ctx); ok {
+		id.When = when
+		return id
+	}
+	return gitref.Signature{Name: gitbackend.DefaultAuthor.Name, Email: gitbackend.DefaultAuthor.Email, When: when}
 }

@@ -96,7 +96,8 @@ func TestJourneyStoreCommands(t *testing.T) {
 		// lore init in it stops at one note, D-20)
 		lee.Lore(app.Dir, "init", "--non-interactive", "--name=app").OK(t)
 		lee.OpenClone(tt.store, teamClone).Git("config", "user.email", tlLee.Email)
-		lee.Lore(app.Dir, "doctor").Says(t, "store_identity", teamClone+" commits as "+tlLee.Email,
+		// an org store: the finding names the clone's name and email (D-714)
+		lee.Lore(app.Dir, "doctor").Says(t, "store_identity", teamClone+" commits as ", " <"+tlLee.Email+"> (git config user.name/user.email there)",
 			"git -C "+teamClone+" config user.email "+jCmdsWorkEmail)
 		lee.Lore(app.Dir, "doctor", "--fix").Says(t, "store_identity", "now names "+tlLee.Name+" <"+jCmdsWorkEmail+">")
 		if got := localEmail(teamClone); got != jCmdsWorkEmail {
