@@ -66,6 +66,12 @@ func (e *Engine) Run(ctx context.Context, entry op.Entry, d op.Decoder, c op.Cal
 		return op.Result{}, err
 	}
 	cl := call{op: spec.Name, access: spec.Access, caller: c, target: e.target}
+	if spec.Access == op.AccessWrite && spec.Previews(in) {
+		// devco:D-682: a preview (--dry-run) writes nothing, so it runs as
+		// a read: no row made on first use (a store folder's project row,
+		// T-11) and no push. The writable check below still runs, as before.
+		cl.access = op.AccessRead
+	}
 	named := false
 	for _, tv := range in.Texts() {
 		if tv.Field == InputTarget && tv.Text != "" {

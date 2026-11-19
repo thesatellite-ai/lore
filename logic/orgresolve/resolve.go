@@ -54,6 +54,14 @@ const (
 	// closed) until the person re-links it here or, for a copy that is a
 	// different project, gives it a new id (`lore project reid`).
 	StepMovedLink Step = 8
+	// StepStore is a remote that is the url of a store an entry attaches:
+	// the repo is that store's clone, so it belongs to that entry whatever
+	// own: or repos: pattern also matches its remote (devco D-686: the ops
+	// store's clone, github.com/<owner>/lore-ops, matched the company's own
+	// pattern github.com/<owner>/* and whoami there named the company).
+	// Checked after the store links (a store clone has none) and before the
+	// patterns; one entry only: a store two entries attach falls through.
+	StepStore Step = 9
 )
 
 // String is the short name printed after "matched by:".
@@ -73,6 +81,8 @@ func (s Step) String() string {
 		return "setup"
 	case StepMovedLink:
 		return "store link at an old remote"
+	case StepStore:
+		return "store url"
 	default:
 		return "nothing matched"
 	}
@@ -353,6 +363,16 @@ func Resolve(in Inputs) (Result, error) {
 		}
 		trace(StepLink, OutcomeHit, fmt.Sprintf("linked in %s (%s)", o.Name, describeLinks(ls)))
 		choose(o, StepLink, fmt.Sprintf("link in %s, project id + remote", describeLinks(ls)), role)
+	}
+
+	// ── A store's own clone (D-686) ────────────────────────────────────
+	// Traced only when it decides, so the F10 trace keeps its six lines
+	// for every code repo.
+	if !decided {
+		if o, url, ok := storeOfRemotes(cfg, staging, in.Remotes); ok {
+			trace(StepStore, OutcomeHit, fmt.Sprintf("%s attaches the store %s, this clone's remote", o.Name, url))
+			choose(o, StepStore, fmt.Sprintf("store url %s of %s (this is its clone)", url, o.Name), RoleOwn)
+		}
 	}
 
 	// ── Rule 5: own: / repos: patterns ─────────────────────────────────
@@ -764,4 +784,29 @@ func nonEmpty(s, fallback string) string {
 		return fallback
 	}
 	return s
+}
+
+// storeOfRemotes is the one entry (staging entries skipped) that attaches a
+// store whose url is one of remotes, and that url as the entry spells it;
+// ok is false when none does or more than one does (the patterns decide).
+func storeOfRemotes(cfg *orgconf.Config, staging map[string]bool, remotes []string) (*orgconf.Org, string, bool) {
+	var hit *orgconf.Org
+	var url string
+	for i := range cfg.Orgs {
+		o := &cfg.Orgs[i]
+		if staging[o.Name] {
+			continue
+		}
+		for _, sc := range o.Stores {
+			n, err := repourl.Normalize(sc.URL)
+			if err != nil || !anyIn([]string{n}, remotes) {
+				continue
+			}
+			if hit != nil && hit.Name != o.Name {
+				return nil, "", false
+			}
+			hit, url = o, sc.URL
+		}
+	}
+	return hit, url, hit != nil
 }

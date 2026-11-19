@@ -897,6 +897,12 @@ var (
 	wwInvite = regexp.MustCompile(`lore-invite:\S+`)
 	wwHex    = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
 	wwDigits = regexp.MustCompile(`\d+`)
+	// wwPad is alignment inside a line (two or more spaces after text):
+	// columns are padded to the names they hold (doctor pads an area name to
+	// 12 and puts 3 spaces after a longer one, so "store acme" and "store
+	// acmeops" end in 2 and 3 spaces), and the twins hold names of different
+	// lengths, so the padding differs by name only (D-687).
+	wwPad = regexp.MustCompile(`(\S) {2,}`)
 	// each place's world lives under its own temp folder
 	wwRoot = regexp.MustCompile(`/[^\s"'\x60]*?/homes/`)
 )
@@ -922,6 +928,7 @@ func wwNormalize(out string) string {
 	out = wwIDs.ReplaceAllString(out, "ID")
 	out = wwHex.ReplaceAllString(out, "SHA")
 	out = wwDigits.ReplaceAllString(out, "N")
+	out = wwPad.ReplaceAllString(out, "$1 ")
 	return strings.TrimSpace(out)
 }
 

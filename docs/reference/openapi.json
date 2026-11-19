@@ -75458,8 +75458,15 @@
                             "not_git",
                             "not_lore",
                             "match",
-                            "no_match"
+                            "no_match",
+                            "store_clone"
                           ]
+                        },
+                        "store_folder": {
+                          "type": "string"
+                        },
+                        "store_name": {
+                          "type": "string"
                         },
                         "stores": {
                           "type": "array",

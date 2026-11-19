@@ -113,6 +113,35 @@ type Spec struct {
 	// operation may not ask (NewRegistry refuses Local with a Confirm
 	// rule). P3-CFG-1.
 	Local bool
+	// ReadModes are the bool input fields (json names) that turn this
+	// operation into a pure preview: set, it writes nothing (render's
+	// --check, --report, --trend). --dry-run (InputDryRun) is one for every
+	// operation without being named here. Why: devco D-682, a preview ran
+	// as a write, so the store-here open made and committed the folder's
+	// project row ("lore: project add prj_…") for render --dry-run; a
+	// preview now runs with read access (Previews).
+	ReadModes []string
+}
+
+// InputDryRun is the json name of --dry-run: every operation that has it
+// promises to write nothing when it is set (Spec.Previews).
+const InputDryRun = "dry_run"
+
+// Previews reports whether in asks s for a preview only: --dry-run, or
+// one of s.ReadModes, is set. The host and the engine run a preview as a
+// read (engine.WithAccess op.AccessRead), so nothing that only a write may
+// do runs: no row made on first use (a store folder's project row, T-11),
+// no push.
+func (s Spec) Previews(in Input) bool {
+	if on, _ := in.Bool(InputDryRun); on {
+		return true
+	}
+	for _, f := range s.ReadModes {
+		if on, _ := in.Bool(f); on {
+			return true
+		}
+	}
+	return false
 }
 
 // namePart is one snake_case segment of an operation name.

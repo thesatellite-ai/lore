@@ -125,6 +125,10 @@ func (h *host) initCommand(wd string) *cobra.Command {
 			}
 			// the rows init writes are named like any write's (wire/host
 			// writeloc.go: lore repo init runs through that hook)
+			// devco D-682: never in a store clone (wire/storeclone_setup.go)
+			if err := h.app.StoreCloneSetUpRefusal(wd, repoinit.OpRepoInit); err != nil {
+				return err
+			}
 			// I-13: in a client repo init asks first (clientrepo_hint.go)
 			if err := h.app.ConfirmClientRepoInit(cmd.Context(), yes); err != nil {
 				return err

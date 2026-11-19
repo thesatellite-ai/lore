@@ -1034,6 +1034,13 @@ func (a *App) run(ctx context.Context, e op.Entry, d op.Decoder, c op.Caller) (o
 	}
 	// P3-CFG-1: a Local operation opens nothing, not even the
 	// agent detection's repo state (wire/localops.go).
+	// devco D-682: init, a writing render and org link/unlink in a store clone
+	// refuse before anything opens (storeclone_setup.go): init there
+	// committed a policy into the store folder and wrote pointer files and
+	// hooks into the clone
+	if err := a.storeCloneSetUp(e, d); err != nil {
+		return op.Result{}, err
+	}
 	if e.Spec().Name == opsrepoinit.OpRepoInit {
 		if err := a.ConfirmClientRepoInit(ctx, c.Yes); err != nil { // I-13 (clientrepo_hint.go)
 			return op.Result{}, err
