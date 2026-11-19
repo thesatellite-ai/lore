@@ -499,6 +499,8 @@ func TestStoryOOwnerShape(t *testing.T) {
 		mo.LoreIn(mwc, "sync").OK(t)
 		mo.LoreIn(mwc, "memory", "add", "--body", "member note for api", "--to", oOrg+"/api", "--yes").Refused(t, "E_REFUSED", "only an admin of the org", "folder of a team they are on", oAdminOrg.Name, "nothing was written")
 		mo.LoreIn(mwc, "memory", "add", "--body", "member note", "--to", oOrg+"/"+oFolder, "--yes").OK(t)
+		// the linked folder's bare alias names the same team folder
+		mo.LoreIn(mwc, "rule", "add", "--severity", "must", "--body", "member must rule for web", "--to", oOrg, "--yes").OK(t)
 		mo.LoreIn(mwc, "sync").OK(t)
 		clone := oStoreClone(mo, oNewOwner, "lore-team")
 		if _, err := os.Stat(clone); err == nil {

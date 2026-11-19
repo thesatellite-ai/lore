@@ -112,17 +112,20 @@ func (g WriteGuard) GuardWrite(ctx context.Context, target store.Source, writes 
 	if err != nil || a.May() {
 		return err
 	}
+	// place is the real <org>/<folder>: a linked repo attaches its folder
+	// under the bare org name, which names no folder (devco D-694).
+	place := store.Source(labelOf(g.Env, src))
 	onlyAdds := !slices.ContainsFunc(kinds, func(k string) bool { return k != ChangeAdd })
 	if onlyAdds {
 		teams, terr := callerTeams(ctx, r)
 		if terr != nil {
 			return terr
 		}
-		if slices.Contains(teams, folderOf(src)) {
+		if slices.Contains(teams, folderOf(place)) {
 			return nil
 		}
 	}
-	return refusal(ctx, r, a, src, kinds[0], hit)
+	return refusal(ctx, r, a, place, kinds[0], hit)
 }
 
 // refusal is the E_REFUSED of the guard: the command's wording (WithAsk)
@@ -187,7 +190,9 @@ func onTeam(t row.Row, id string) bool {
 	return strings.Contains(v.String(), id)
 }
 
-// folderOf is the folder name of a store source ("web" of "acme/web").
+// folderOf is the folder name of a placed store source ("web" of
+// "acme/web"; labelOf gives that name for a linked folder attached as
+// "acme"), "" for a store root.
 func folderOf(src store.Source) string {
 	_, f, _ := strings.Cut(string(src), "/")
 	return f

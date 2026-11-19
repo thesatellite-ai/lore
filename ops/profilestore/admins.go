@@ -161,6 +161,15 @@ type Labeler interface {
 // stays "repo".
 func PlaceTo(ctx context.Context, env PlaceEnv, src store.Source) string {
 	src, _ = placeOf(ctx, env, src)
+	return labelOf(env, src)
+}
+
+// labelOf is the full name of an already placed source (placeOf): the
+// "<store>/<folder>" a linked folder is attached under its bare store name
+// as, else src unchanged. The role checks judge and name this place, never
+// the attachment alias (devco D-694: a member on the team @web was refused
+// an add in a repo linked to acme/web, attached as "acme").
+func labelOf(env PlaceEnv, src store.Source) string {
 	if l, ok := upgrade.As[Labeler](env); ok && src != store.SourceRepo {
 		return l.StoreLabel(src)
 	}
