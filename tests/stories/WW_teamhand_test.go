@@ -9,9 +9,10 @@ package stories
 //	team belongs to, `lore team member add` refuses him on his machine, so
 //	he edits the team's row by hand in his clone of the org store and
 //	commits it past every hook. His own lore sync holds the commit back
-//	with the admin-only reason, the team stays as the admin made it for
-//	everyone (the remote's teams row included), and the admin's own team
-//	change through lore goes through.
+//	with the admin-only reason and keeps it on his machine (never pushed:
+//	the remote's teams row stays the admin's), the admin's own team
+//	change through lore goes through, and the git revert the line prints
+//	is the way out.
 //	a member's note in a store of their own that no org lists passes: the
 //	store Mo made with `lore store init --name notes` is not company
 //	ground, so the role rule (adds only in a folder of a team he is on)
@@ -144,26 +145,46 @@ func TestStoryWWTeamHandAndOwnStore(t *testing.T) {
 		short := strings.TrimSpace(s.Git(clone, "rev-parse", "--short=7", "HEAD"))
 
 		r := mo.Lore(mc.Dir, "sync")
-		r.Says(t, "held back", "commit "+short, wubMember.Email, "changes who is on a team", "only an admin changes the teams")
+		r.Says(t, "held back", "commit "+short, wubMember.Email, "changes who is on a team", "only an admin changes the teams",
+			"kept on this machine, not pushed", "an admin makes that change with lore", "git -C "+clone+" revert --no-edit "+short)
 		mo.Lore(mc.Dir, "team", "show", "--handle", "@"+wrcOther).OK(t).Never(t, "@mo")
-		// sync still sends the commit (the remote's row file carries Mo);
-		// every reader's lore holds it back, so for everyone the team is
-		// the one the admin made (see the LEFT of devco D-694 up5team3)
-		if !strings.Contains(s.Git(store.Dir, "show", "main:"+gitPath), moID) {
-			t.Logf("devco:D-694: the held team commit stayed on Mo's machine")
+		// the held commit never reaches the remote (devco D-694 up5team4):
+		// the remote's team row stays the admin's
+		if got := s.Git(store.Dir, "show", "main:"+gitPath); strings.Contains(got, moID) {
+			t.Fatalf("the remote's row of @%s carries Mo's held change:\n%s", wrcOther, got)
 		}
-		m.Lore(wc.Dir, "sync").OK(t).Says(t, "held back in "+wOrg, "commit "+short, "only an admin changes the teams", "1 change(s) held back")
+		if strings.Contains(s.Git(store.Dir, "log", "--format=%H", "main"), strings.TrimSpace(s.Git(clone, "rev-parse", "HEAD"))) {
+			t.Fatalf("Mo's held commit %s is on the remote", short)
+		}
+		// so the admin never meets it: nothing held back on their side
+		m.Lore(wc.Dir, "sync").OK(t).Never(t, "commit "+short, "held back")
 		m.Lore(wc.Dir, "team", "show", "--handle", "@"+wrcOther).OK(t).Never(t, "@mo")
 		// the add right stays the admin's to give
 		mo.Lore(mc.Dir, "memory", "add", "--to", wOrg+"/"+wrcOther, "--body", "api pages are cached", "--yes").
 			Refused(t, "E_REFUSED", "only an admin of the org", "folder of a team they are on")
 
-		// the admin's own team change goes through
+		// the admin's own team change goes through, Mo's commit still waits
 		m.Lore(wc.Dir, "team", "add", "--handle", "@ops", "--members", "@mo").OK(t)
-		// read by everyone: still the one held change (Mo's), never the admin's
-		m.Lore(wc.Dir, "sync").OK(t).Says(t, "1 change(s) held back")
-		mo.Lore(mc.Dir, "sync").OK(t).Says(t, "1 change(s) held back")
+		m.Lore(wc.Dir, "sync").OK(t).Never(t, "held back")
+		mo.Lore(mc.Dir, "sync").OK(t).Says(t, "1 change(s) held back", "kept on this machine, not pushed")
 		mo.Lore(mc.Dir, "team", "show", "--handle", "@ops").OK(t).Says(t, "@mo")
+
+		// the way out the line names, run exactly as printed: Mo undoes
+		// his commit, and the next sync sends both, nothing held
+		out := mo.Lore(mc.Dir, "sync").Out()
+		_, line, found := strings.Cut(out, "to drop yours run: ")
+		line, _, _ = strings.Cut(line, ", then lore sync")
+		fields := strings.Fields(line)
+		if !found || len(fields) < 5 || fields[0] != "git" {
+			t.Fatalf("no drop line in Mo's sync:\n%s", out)
+		}
+		s.Git(mc.Dir, fields[1:]...)
+		mo.Lore(mc.Dir, "sync").OK(t).Never(t, "held back", "kept on this machine")
+		if got := s.Git(store.Dir, "show", "main:"+gitPath); strings.Contains(got, moID) {
+			t.Fatalf("after the revert the remote's row of @%s carries Mo:\n%s", wrcOther, got)
+		}
+		m.Lore(wc.Dir, "sync").OK(t).Never(t, "held back")
+		m.Lore(wc.Dir, "team", "show", "--handle", "@"+wrcOther).OK(t).Never(t, "@mo")
 	})
 
 	s.Step("D-694/a-members-note-in-a-store-of-their-own-passes", func() {

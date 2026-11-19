@@ -36,6 +36,7 @@ const (
 	pushLostRace                    // another writer moved the branch first: fetch, merge, retry
 	pushOffline                     // no verdict: the remote was not reached
 	pushRefused                     // the remote refused for good (hook, protection, permission)
+	pushKept                        // not sent: a local commit made a change every reader holds back (authorityHold)
 )
 
 // Porcelain flags of `git push --porcelain` (git-push(1) "Output").
@@ -157,10 +158,11 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 			if !o.NoPush && !b.pushHeld(ctx, remote) {
 				// devco O-5: the rows that did not clash go out now; the
 				// clashing ones stay held and named (sendPartial)
-				sentTip, perr := b.sendPartial(ctx, remote, partial)
+				sentTip, kept, perr := b.sendPartial(ctx, remote, partial)
 				if perr != nil {
 					return rep, perr
 				}
+				rep.Held = kept // devco D-694: the partial send carried a held change
 				if sentTip != "" {
 					b.markHeld(rep.Refused)
 					return b.countSent(ctx, rep, before, remote, sentTip)
@@ -209,6 +211,8 @@ func (b *Backend) syncClone(ctx context.Context, o SyncOptions) (rep store.SyncR
 			rep.Offline, rep.OfflineDetail = true, msg
 		case pushRefused:
 			rep.Refused = append(rep.Refused, b.refusedRows(ctx, remote, h, "the remote refused the push: "+msg)...)
+		case pushKept:
+			rep.Held = msg
 		case pushLostRace:
 			if attempt+1 < MaxPushAttempts {
 				continue
@@ -577,30 +581,38 @@ const rowFileMode = "100644"
 // O-5: one clashing row held back every other offline edit of the store,
 // and nothing said so). It returns the pushed commit, or "" when nothing
 // went out (no tree, nothing that differs from the remote, offline, a
-// lost race or a refusal: the next sync tries again). The next merge of
+// lost race or a refusal: the next sync tries again; kept is the reason
+// when the commit carried a change every reader holds back, authorityHold).
+// The next merge of
 // the local branch meets the sent changes on both sides, so only the
 // clashing rows conflict again.
-func (b *Backend) sendPartial(ctx context.Context, remote, partial string) (string, error) {
+func (b *Backend) sendPartial(ctx context.Context, remote, partial string) (sent, kept string, err error) {
 	if partial == "" || remote == "" {
-		return "", nil
+		return "", "", nil
 	}
 	rt, err := b.git.run(ctx, call{dir: b.work, args: []string{"rev-parse", remote + "^{tree}"}})
 	if err != nil || trimmed(rt) == partial {
-		return "", nil
+		return "", "", nil
 	}
 	env, err := b.commitEnv(ctx, Signature{})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	c, err := b.commitTree(ctx, partial, []string{remote}, b.cfg.withTrailers(ctx, partialSubject), env)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	verdict, _, err := b.push(ctx, c)
-	if err != nil || verdict != pushApplied {
-		return "", err
+	verdict, msg, err := b.push(ctx, c)
+	if err != nil {
+		return "", "", err
 	}
-	return c, nil
+	switch verdict {
+	case pushApplied:
+		return c, "", nil
+	case pushKept:
+		return "", msg, nil // the held change rode in the partial commit: nothing went out
+	}
+	return "", "", nil
 }
 
 // partialSubject is the subject of sendPartial's commit.
@@ -748,6 +760,11 @@ func checkMerged(rel string, doc []byte) error {
 // push sends the local tip to the store branch as a fast-forward and reads
 // git's verdict from --porcelain. msg is git's summary for a refusal.
 func (b *Backend) push(ctx context.Context, tip string) (pushVerdict, string, error) {
+	if why, err := b.authorityHold(ctx, tip); err != nil {
+		return 0, "", err
+	} else if why != "" {
+		return pushKept, why, nil // devco D-694: never publish what the store's authority holds back
+	}
 	b.pushed()                                                  // the open's fetch no longer stands for the remote (OpenFetchReuse)
 	before, _ := b.resolve(ctx, b.work, trackingRefNS+b.branch) // display only: "" counts every row at tip
 	dst := headsPrefix + b.branch
