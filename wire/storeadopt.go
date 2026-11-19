@@ -32,6 +32,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -176,8 +177,15 @@ func (a *App) Adopt(ctx context.Context, in opsstores.AdoptIn, name, folderName 
 		out.Pushed, out.Note = pushed, note
 	}
 	if in.RemoveSource {
-		if out.Removed, err = removeAdopted(top, adopted); err != nil {
-			return out, errs.Prefix(adoptVerb+": the rows are in "+label+"/"+folderName+" but the repo's copies could not all be removed", err).
+		removed, rerr := removeAdopted(top, adopted)
+		out.Removed = len(removed)
+		// D-710: the hook commits these deletions (the rows live in the
+		// store now) instead of refusing them as removed by hand
+		if merr := RecordMovedOut(ctx, top, label+"/"+folderName, removed); merr != nil && rerr == nil {
+			rerr = merr
+		}
+		if rerr != nil {
+			return out, errs.Prefix(adoptVerb+": the rows are in "+label+"/"+folderName+" but the repo's copies could not all be removed", rerr).
 				WithHint("rerun the same command: it writes nothing new and removes what is left")
 		}
 	}
@@ -538,22 +546,24 @@ func countPresent(top string, adopted []store.Key) int {
 }
 
 // removeAdopted deletes the adopted branch row files from the repo at top
-// (--remove-source) and returns how many it deleted. A file already gone
-// counts nothing (a rerun finishes the job).
-func removeAdopted(top string, adopted []store.Key) (int, error) {
-	data := filepath.Join(top, filepath.FromSlash(rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)))
-	n := 0
+// (--remove-source) and returns the ones it deleted (slash paths from
+// top, for RecordMovedOut). A file already gone is not listed (a rerun
+// finishes the job).
+func removeAdopted(top string, adopted []store.Key) ([]string, error) {
+	data := rowfs.LayoutRepo.DataPath(rowfs.FolderRoot)
+	var removed []string
 	for _, k := range adopted {
-		p := filepath.Join(data, filepath.FromSlash(rowfs.RowPath(k.Table, k.ID)))
+		rel := path.Join(data, rowfs.RowPath(k.Table, k.ID))
+		p := filepath.Join(top, filepath.FromSlash(rel))
 		switch err := os.Remove(p); {
 		case err == nil:
-			n++
+			removed = append(removed, rel)
 		case errors.Is(err, fs.ErrNotExist):
 		default:
-			return n, errs.Wrap(errs.Internal, "remove "+p, err)
+			return removed, errs.Wrap(errs.Internal, "remove "+p, err)
 		}
 	}
-	return n, nil
+	return removed, nil
 }
 
 // adoptRelink moves the --supersedes links lore 0.1.16 and older wrote on

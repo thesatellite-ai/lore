@@ -178,7 +178,7 @@ $ git status --short
 
 - The repo is not changed: run it again and it writes nothing (no commit), so it is safe to rerun after a failed push or once the repo got new notes (only rows newer than the folder's copy are written; a row edited or deleted in the folder since is kept).
 - `--dry-run` counts what would move, per table, and what stays in the repo and why.
-- `--remove-source` then deletes the adopted row files from the repo's `.lore/data` as an ordinary diff you review and commit (the project's `_meta.json` and project row stay). Rows that were only on a lore 0.1.17 live ref stay on that ref.
+- `--remove-source` then deletes the adopted row files from the repo's `.lore/data` as an ordinary diff you review and commit (the project's `_meta.json` and project row stay). adopt prints the two git commands that commit it; lore's pre-commit hook knows those rows now live in the store folder, so it commits the removal (saying where the rows went) instead of refusing it as rows deleted by hand, and `lore doctor` shows it as a note until it is committed. Rows that were only on a lore 0.1.17 live ref stay on that ref.
 - A v0.1.17 repo needs no `lore migrate run` first: its rows are read as migrate would write them (format steps, tags folded into `tag_ids`, an agent's live stamp `…/agent` read as a stable actor).
 - Moving a single row is still `lore move --id <id> --to <store>/<folder>`.
 
