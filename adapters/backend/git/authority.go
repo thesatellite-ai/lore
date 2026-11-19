@@ -881,23 +881,26 @@ func (s *rosterState) addsPerson(c replayCommit, actor string, docOf func(string
 }
 
 // membershipRefusal judges a non-admin's change of one project_members
-// or teams row (devco D-328): a lead of the row's project may make it;
-// otherwise only a person taking up their own pending invite (their own
-// membership of a project the invite names, with roles it or the stint
-// already gave; or adding only themselves to a team it names). Anything
-// else, a person's own row included, is held back: a hand-made
-// membership row would otherwise open another project's folders to a
-// contractor.
+// or teams row (devco D-328): a lead of the row's project may change who
+// is on that project; a team row is an admin's change only (devco D-694:
+// who is on a team decides in which company folder they add rules and
+// notes, the same rule the local write guard keeps, so a lead's team
+// change refused on their machine is not taken from a hand-made commit
+// at sync). Past that only a person taking up their own pending invite
+// is read (their own membership of a project the invite names, with
+// roles it or the stint already gave; or adding only themselves to a
+// team it names). Anything else, a person's own row included, is held
+// back: a hand-made membership row would otherwise open another
+// project's folders to a contractor.
 func (s *rosterState) membershipRefusal(author, actor, table string, old rosterDoc, hadOld bool, next rosterDoc, hasNext bool) string {
-	what := "who is on a project"
+	why := "changes who is on a project and " + author + " is neither an admin nor a lead of that project"
 	if table == schema.TableTeams {
-		what = "who is on a team"
+		why = "changes who is on a team and " + author + " is not an admin (only an admin changes the teams)"
 	}
-	why := "changes " + what + " and " + author + " is neither an admin nor a lead of that project"
 	if actor == "" {
 		return why
 	}
-	if (hadOld || hasNext) && (!hadOld || s.leads(actor, old.ProjectID)) && (!hasNext || s.leads(actor, next.ProjectID)) {
+	if table == schema.TableProjectMembers && (hadOld || hasNext) && (!hadOld || s.leads(actor, old.ProjectID)) && (!hasNext || s.leads(actor, next.ProjectID)) {
 		return ""
 	}
 	inv, ok := s.pendingInvite(author)

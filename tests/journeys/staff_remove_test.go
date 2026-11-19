@@ -35,7 +35,9 @@ func TestJourneyStaffRemove(t *testing.T) {
 	tt := newTLTeam(t)
 	w := tt.w
 	lee := tt.person(tlLee)
-	orgStore := tlOrg + "/org"
+	// D-694: a member adds notes only in a folder of a team they are on
+	// (org/ is the admin's); Ann is on @web, so she writes in acmeteam/web
+	orgStore := tlOrg + "/web"
 	mainRef := "refs/heads/main"
 	liveRef := "refs/lore/live"
 
@@ -43,6 +45,7 @@ func TestJourneyStaffRemove(t *testing.T) {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
 		tt.lore(tlLee, "team", "add", "@web", "--members", "@lee").OK(t)
 		tt.lore(tlLee, "member", "add", tlAnn.Email, "--name", tlAnn.Name, "--team", "@web", "--yes").OK(t)
+		tt.lore(tlLee, "store", "folder", "add", "--store", tlOrg, "--folder", "web").OK(t)
 		tt.lore(tlLee, "sync").OK(t) // C5: the roster reaches the team store with Lee's sync
 	})
 

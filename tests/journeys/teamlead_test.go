@@ -302,6 +302,12 @@ func TestJourneyTeamLeadTeam(t *testing.T) {
 
 	w.Step("week2/ann-offline-a-week", func() {
 		w.AdvanceDays(1)
+		// D-694: a member adds notes only in a folder of a team they are
+		// on: the lead gives Ann and Cat (who writes there in week 4) the
+		// platform folder's team first
+		tt.lore(tlLee, "team", "add", "--handle", "@"+tlProject, "--members", tlAnn.Email+","+tlCat.Email, "--yes").OK(t)
+		tt.lore(tlLee, "sync", "run").OK(t)
+		tt.lore(tlAnn, "sync", "run").OK(t)
 		ann := tt.m[tlAnn.Email]
 		ann.Offline()
 		r := tt.lore(tlAnn, "memory", "add", "flaky checkout test: retry once", "--to", tlOrg+"/"+tlProject, "--json").OK(t)
