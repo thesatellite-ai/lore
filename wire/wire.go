@@ -796,6 +796,20 @@ func (a *App) finishOpen(ctx context.Context, st *state) error {
 	return st.pickUpThenSync(ctx, a.opts)
 }
 
+// armEngine installs the App's hooks on st's engine: the write-time
+// store-then-rotate task (D21, wire/secretmgrs.go) and the role rule of
+// every row write (D-694, ops/profilestore/writeguard.go). Every open of
+// an App's state calls it, the full open and each open beside it (one
+// store or folder outside a repo, an org folder, the machine store).
+// Why: those opens set only the redact hook, so a member's write
+// `--to <org>/<folder>` from a folder with no lore project (a repo no org
+// matches) skipped the role rule and landed in a folder of a team the
+// member is not on (devco D-694).
+func (a *App) armEngine(st *state) {
+	st.eng.SetRedactHook(a.redactTask)
+	st.eng.SetWriteGuard(profilestore.WriteGuard{Env: a})
+}
+
 // openState is state's open under a.mu. finish reports that this call
 // must run finishOpen (once per opened state); a rowsOnly call (rowState)
 // never claims it, so the next state call does.
@@ -811,9 +825,8 @@ func (a *App) openState(ctx context.Context, rowsOnly bool) (st *state, finish b
 		a.st, a.err = open(ctx, a.opts, a.extra, false)
 		if a.err == nil {
 			a.st.unfinished = true
-			a.st.eng.SetRedactHook(a.redactTask)                    // D21: write-time store-then-rotate task (wire/secretmgrs.go)
-			a.st.eng.SetWriteGuard(profilestore.WriteGuard{Env: a}) // D-694: the role rule of every row write (ops/profilestore/writeguard.go)
-			a.notePlaces(a.st)                                      // servestale.go
+			a.armEngine(a.st)
+			a.notePlaces(a.st) // servestale.go
 		}
 		if a.err == nil && a.opts.Notice != nil {
 			a.healedNotices(a.st)

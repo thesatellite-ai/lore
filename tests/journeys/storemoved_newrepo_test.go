@@ -33,8 +33,12 @@ func TestJourneyTeamLeadStoreMovedToNewRepo(t *testing.T) {
 
 	w.Step("day1/team-with-a-member", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
+		// D-694: a member adds notes only in a folder of a team they are on
+		// (org/ is the admin's): Ann's invite puts her on @web
+		tt.lore(tlLee, "team", "add", "--handle", "@web", "--members", "@lee").OK(t)
+		tt.lore(tlLee, "store", "folder", "add", "--store", tlOrg, "--folder", "web").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
-		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email)
+		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email, "--team", "@web")
 		ann = tt.person(tlAnn)
 		tlJoin(t, ann, tt.repo[tlAnn.Email].Dir, tlTeamSetup, line, tlAnn, []string{tlFolders})
 		annCode = filepath.Join(ann.Home, "code")
@@ -72,7 +76,7 @@ func TestJourneyTeamLeadStoreMovedToNewRepo(t *testing.T) {
 		if !strings.Contains(string(cfg), moved.SSHURL()) {
 			t.Fatalf("[devco:D-699] Ann's config does not follow the move to %s:\n%s", moved.SSHURL(), cfg)
 		}
-		tt.lore(tlAnn, "memory", "add", "--body", "written after the move", "--to", tlOrg+"/org", "--yes").OK(t)
+		tt.lore(tlAnn, "memory", "add", "--body", "written after the move", "--to", tlOrg+"/web", "--yes").OK(t)
 		ann.Lore(annCode, "sync").OK(t)
 		if got := w.Git(moved.Dir, "log", "-5", "--format=%ae", "refs/heads/main"); !strings.Contains(got, tlAnn.Email) {
 			t.Fatalf("[devco:D-699] Ann's note did not reach the new repo (authors %q)", got)
@@ -161,8 +165,15 @@ func storeMovedTeammatePushedToOldRepo(t *testing.T, follow string) {
 
 	w.Step("day1/team-with-a-member", func() {
 		tlStartTeam(t, lee, tt.repo[tlLee.Email].Dir, tlLeadSetup, tlOrg, tt.store.SSHURL(), tlLee, []string{tlFolders})
+		// D-694: a member adds notes only in a folder of a team they are on
+		// (org/ is the admin's): Ann's invite puts her on @web
+		tt.lore(tlLee, "team", "add", "--handle", "@web", "--members", "@lee").OK(t)
+		tt.lore(tlLee, "store", "folder", "add", "--store", tlOrg, "--folder", "web").OK(t)
+		// the folder's first write also gives it its project row (its own
+		// commit), so Ann's one note below is one commit
+		tt.lore(tlLee, "memory", "add", "--body", "web folder opened", "--to", tlOrg+"/web", "--yes").OK(t)
 		tt.lore(tlLee, "sync").OK(t)
-		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email)
+		_, line := tlInvite(t, lee, tt.repo[tlLee.Email].Dir, tlAnn.Email, "--team", "@web")
 		ann = tt.person(tlAnn)
 		tlJoin(t, ann, tt.repo[tlAnn.Email].Dir, tlTeamSetup, line, tlAnn, []string{tlFolders})
 		annCode = filepath.Join(ann.Home, "code")
@@ -181,11 +192,11 @@ func storeMovedTeammatePushedToOldRepo(t *testing.T, follow string) {
 	w.Step("day2/the-teammate-pushes-then-the-admin-moves-without-a-sync", func() {
 		w.AdvanceDays(1)
 		w.Git(tt.store.Dir, "push", "-q", "--mirror", moved.Dir) // the new repo: a copy from before Ann's note
-		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo before the move", "--to", tlOrg+"/org", "--yes").OK(t)
+		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo before the move", "--to", tlOrg+"/web", "--yes").OK(t)
 		ann.Lore(annCode, "sync").OK(t)
 		r := lee.Lore(lee.Home, "store", "set-url", "--name", tlOrg, "--url", moved.SSHURL(), "--yes").OK(t)
 		r.Says(t, "took in 1 commit a teammate pushed to the old address "+tt.store.SSHURL()+" before following the move")
-		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo after the move", "--to", tlOrg+"/org", "--yes").OK(t)
+		ann.Lore(annCode, "memory", "add", "--body", "pushed to the old repo after the move", "--to", tlOrg+"/web", "--yes").OK(t)
 		ann.Lore(annCode, "sync").OK(t)
 	})
 

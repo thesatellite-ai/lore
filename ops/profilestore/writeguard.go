@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/thesatellite-ai/lore/engine"
+	"github.com/thesatellite-ai/lore/model/errs"
 	"github.com/thesatellite-ai/lore/model/row"
 	"github.com/thesatellite-ai/lore/model/value"
 	"github.com/thesatellite-ai/lore/schema"
@@ -176,8 +177,15 @@ func (g WriteGuard) GuardWrite(ctx context.Context, target store.Source, writes 
 	if !mayBeGround(src, lv) {
 		return nil
 	}
-	r, done, ok := openRoster(ctx, g.Env, src)
+	r, done, ok, rerr := openRosterOf(ctx, g.Env, src)
 	defer done()
+	if rerr != nil && (!ok || orgOf(r.Source()) != orgOf(src)) {
+		// fail closed (devco D-694): the org keeps a roster but it could
+		// not be read, so this write into its store is not judged by a
+		// guess (no roster, or another org's)
+		return errs.Wrap(errs.Refused, "the roster of "+orgOf(src)+" could not be read, so this change to "+labelOf(g.Env, src)+" cannot be checked against the role rule; nothing was written", rerr).
+			WithHint("run lore sync, then the same command again")
+	}
 	if !ok || !CompanyGround(lv, src, orgOf(r.Source())) {
 		return nil
 	}
