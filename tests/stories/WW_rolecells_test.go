@@ -234,5 +234,9 @@ func TestStoryWWRoleCellPerOp(t *testing.T) {
 		// to web (must included) is his to add
 		mo.Lore(mc.Dir, "rule", "add", "--to", inWeb, "--severity", "must", "--body", "web forms validate on the server", "--yes").OK(t)
 		mo.Lore(mc.Dir, "memory", "add", "--to", inWeb, "--body", "web deploys go out on tuesdays", "--yes").OK(t)
+		// the bare --to the linked folder is attached under in this repo is
+		// the same folder web: the guard judged that alias, found no folder
+		// in it and refused Mo ("company folder acme")
+		mo.Lore(mc.Dir, "rule", "add", "--to", wOrg, "--severity", "must", "--body", "web forms escape every field", "--yes").OK(t)
 	})
 }
