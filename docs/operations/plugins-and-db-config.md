@@ -53,7 +53,7 @@ trash.retention_days	365	repo this repo (pol_…03df)
 ```
 <!-- /example -->
 
-A policy can be set at several levels: the repo (the default), a folder of a linked store, the store's `org/` folder (`--to <store>/org`, one rule for every repo of the org) or the store root. When two levels set the same key, the stricter value wins, so a repo can tighten what its org set but never loosen it. A `policies:` block in your own `~/.lore/config.yaml` adds one more level, for this machine only, that can also only tighten. `lore policy set` always asks before it writes; in a script or an agent session, pass `--yes`.
+A policy can be set at several levels: the repo (the default), a folder of a linked store, the store's `org/` folder (`--to <store>/org`, one rule for every repo of the org) or the store root. When two levels set the same key, the stricter value wins, so a repo can tighten what its org set but never loosen it. A `policies:` block in your own `~/.lore/config.yaml` adds one more level, for this machine only, that can also only tighten. `lore policy set` always asks before it writes; in a script or an agent session, pass `--yes`. Read from a place that covers several folders, such as `lore policy show --setup <setup>` in your home folder, no single folder level applies: a key that folders set prints once per such folder with that folder's own value (`context.budget.internal  22000  folder acme/sync (pol_…ae78)`), and the value of the levels above prints once more, ending `, in every other folder`, when some read folders set nothing; in a linked repo or a store folder the one folder read gives one line.
 
 ## Step 3 — Let lore refuse a bad setting, then check the whole file
 

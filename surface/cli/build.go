@@ -720,6 +720,15 @@ func changed(cmd *cobra.Command, name string, aliases []string) bool {
 //
 // Exit 20 and the --json rule are usageError's.
 func (cfg config) flagError(cmd *cobra.Command, err error, fields []op.FieldInfo) error {
+	// devco:D-702: on the root or a group, a word typed before the flag
+	// names no command (it would be the leaf otherwise), so that word is
+	// the real mistake: `lore delete --id mem_…` said "unknown flag: --id"
+	// while plain `lore delete` named the commands called delete.
+	if isGroup(cmd) {
+		if args := cmd.Flags().Args(); len(args) > 0 {
+			return unknownWord(cmd, cfg, args[0])
+		}
+	}
 	hint := cmd.CommandPath() + " --help lists its flags"
 	if h := flagHint(cmd.CommandPath(), unknownFlag(err), fields); h != "" {
 		hint = h
@@ -728,6 +737,12 @@ func (cfg config) flagError(cmd *cobra.Command, err error, fields []op.FieldInfo
 		return printUsage(cmd, cfg, e)
 	}
 	return printUsage(cmd, cfg, errs.Wrap(UsageCode, err.Error(), err).WithHint(hint))
+}
+
+// isGroup reports whether cmd is the root or a generated noun group: a
+// command that only runs to refuse a word naming none of its commands.
+func isGroup(cmd *cobra.Command) bool {
+	return !cmd.HasParent() || (ours(cmd) && cmd.HasSubCommands())
 }
 
 // badFlagValueRe matches pflag's message for a value its own parser

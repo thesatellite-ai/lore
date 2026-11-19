@@ -120,7 +120,7 @@ func (h *Host) contextAnswer(ctx context.Context, f *contextFlags, stdin io.Read
 		}
 		return contextop.Answer{Text: b.String()}, nil
 	case f.topics:
-		topics, err := h.loadTopicIndex(ctx)
+		topics, err := h.contextTopicIndex(ctx)
 		if err != nil {
 			return contextop.Answer{}, err
 		}
@@ -482,7 +482,13 @@ func (h *Host) contextForFileTool(ctx context.Context, p, tool string) (contextR
 
 // contextForTopic returns every row tagged name.
 func (h *Host) contextForTopic(ctx context.Context, name string) (contextResult, error) {
-	tags, err := h.renderLiveRows(ctx, schema.TableTags)
+	// devco:D-700: the tags of every store context reads, so a topic of
+	// the org folder is found in a linked repo as --topics lists it
+	srcs, err := h.contextSources(ctx)
+	if err != nil {
+		return contextResult{}, err
+	}
+	tags, err := h.liveRowsFrom(ctx, srcs, schema.TableTags)
 	if err != nil {
 		return contextResult{}, err
 	}

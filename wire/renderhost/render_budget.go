@@ -137,10 +137,34 @@ var indexKinds = []struct{ table, label, one string }{
 // noTopic is the index row of untagged rows.
 const noTopic = "(no topic)"
 
-// loadTopicIndex counts live rows per tag and kind (6.10); untagged rows
-// go under "(no topic)". Sorted by name, "(no topic)" last.
+// loadTopicIndex counts live rows per tag and kind (6.10) across the
+// render sources, for the committed render's index; untagged rows go
+// under "(no topic)". Sorted by name, "(no topic)" last.
 func (h *Host) loadTopicIndex(ctx context.Context) ([]topicLine, error) {
-	tags, err := h.renderLiveRows(ctx, schema.TableTags)
+	srcs, err := h.renderSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return h.topicIndexFrom(ctx, srcs, false)
+}
+
+// contextTopicIndex is the index `lore context --topics` prints: the rows
+// lore context reads (contextSources, superseded rows left out, as
+// loadKnowledge does). Why (devco:D-700): in a linked repo --topics
+// counted only the linked folder (52 rules) while rule list and
+// --for-prompt read the org folder too (67).
+func (h *Host) contextTopicIndex(ctx context.Context) ([]topicLine, error) {
+	srcs, err := h.contextSources(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return h.topicIndexFrom(ctx, srcs, true)
+}
+
+// topicIndexFrom counts the live rows of srcs per tag and kind; with
+// skipSuperseded a superseded row is not counted.
+func (h *Host) topicIndexFrom(ctx context.Context, srcs []store.Source, skipSuperseded bool) ([]topicLine, error) {
+	tags, err := h.liveRowsFrom(ctx, srcs, schema.TableTags)
 	if err != nil {
 		return nil, err
 	}
@@ -156,11 +180,14 @@ func (h *Host) loadTopicIndex(ctx context.Context) ([]topicLine, error) {
 		byName[topic][kind]++
 	}
 	for _, k := range indexKinds {
-		rows, err := h.renderLiveRows(ctx, row.Table(k.table))
+		rows, err := h.liveRowsFrom(ctx, srcs, row.Table(k.table))
 		if err != nil {
 			return nil, err
 		}
 		for _, r := range rows {
+			if skipSuperseded && renderField(r.Row, renderFieldSuperseded) != "" {
+				continue
+			}
 			ids := renderTagIDs(r.Row)
 			tagged := false
 			for _, id := range ids {
