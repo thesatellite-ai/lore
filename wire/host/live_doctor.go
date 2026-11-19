@@ -203,7 +203,7 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 	missing := missingRideHooks(dir)
 	if len(missing) == 0 {
 		note("post-commit and pre-push hook blocks installed")
-		s.doctorHookBuild(dir, shared, warn, note)
+		s.doctorHookBuild(ctx, dir, shared, warn, note)
 		return
 	}
 	what := "git hook block missing in " + strings.Join(missing, ", ") + " (rows cannot ride along on a protected " + branch + ")"
@@ -218,7 +218,13 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 		// M-5: every teammate's fresh clone read DEGRADED, as if broken; a
 		// clone lore has not set up yet is a note (the merge driver's is one
 		// too), and its first lore write, sync or fix sets it up
-		note(what + "; this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it")
+		// D-709: a hooks folder committed with the repo takes the flag;
+		// a write, sync and plain fix leave it alone there
+		if cmd := s.hookBlocksCommand(ctx, dir); cmd == trackedHooksCommand {
+			note(what + "; this clone is not set up for lore yet (a fresh clone) and " + dir + " is committed with the repo: `" + cmd + "` installs it (then commit the blocks)")
+		} else {
+			note(what + "; this clone is not set up for lore yet (a fresh clone): the next lore write here, `lore sync` or `lore fix` installs it")
+		}
 		return
 	}
 	if !fix && len(s.guardOff(ctx, dir)) > 0 {
@@ -267,13 +273,17 @@ func (s *liveSession) doctorHooks(ctx context.Context, branch string, fix bool, 
 // run the first lore on PATH, which may be too old for this clone's rows)
 // is a warning; another build, pinned or first on PATH, is a note. Both
 // name the step that points the blocks at this build.
-func (s *liveSession) doctorHookBuild(dir string, shared bool, warn, note func(string)) {
+func (s *liveSession) doctorHookBuild(ctx context.Context, dir string, shared bool, warn, note func(string)) {
 	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, hookPrePush)))
 	if err != nil {
 		return
 	}
 	want := hookPinFor(s.top, dir, shared)
 	fix := "; `doctor --fix` run with the build you want points them at it"
+	if cmd := s.hookBlocksCommand(ctx, dir); cmd == trackedHooksCommand {
+		// D-709: doctor --fix leaves a folder committed with the repo alone
+		fix = "; `" + cmd + "` run with the build you want points them at it (then commit the blocks)"
+	}
 	got, pinned := pinnedHookProgram(string(b))
 	switch {
 	case pinned && !executableHookFile(filepath.FromSlash(got.prog)):

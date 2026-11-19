@@ -103,14 +103,35 @@ func (s *liveSession) guardOffText(ctx context.Context, dir string, missing []st
 // plain `lore fix` leaves it alone, so the step is `lore fix
 // --tracked-hooks` (with the local way in trackedHooksSkipped).
 func (s *liveSession) guardNextStep(ctx context.Context) string {
-	step := "; run `lore fix` to restore them"
-	if dir, _, err := s.hooksFolder(ctx); err == nil && s.trackedHooksFolder(ctx, dir) {
-		step = "; run `lore fix --" + fixTrackedHooksFlag + "` to restore them (" + dir + " is committed with the repo: commit the blocks after; to keep them on this machine only, copy that folder's hooks into .git/hooks, run `git config --local core.hooksPath .git/hooks`, then `lore fix`)"
+	dir, _, err := s.hooksFolder(ctx)
+	if err != nil {
+		return "; run `lore fix` to restore them"
+	}
+	cmd := s.hookBlocksCommand(ctx, dir)
+	step := "; run `" + cmd + "` to restore them"
+	if cmd == trackedHooksCommand {
+		step += " (" + dir + " is committed with the repo: commit the blocks after; to keep them on this machine only, copy that folder's hooks into .git/hooks, run `git config --local core.hooksPath .git/hooks`, then `lore fix`)"
 	}
 	if out, err := s.repo.Run(ctx, gitref.Invocation{Args: []string{"config", "--get", "core.hooksPath"}}); err == nil && strings.TrimSpace(string(out)) != "" {
-		step += " (core.hooksPath belongs to a hook manager: run `lore fix` again after it reinstalls its hooks)"
+		// D-709: a tracked folder needs the flag again after a reinstall
+		step += " (core.hooksPath belongs to a hook manager: run `" + cmd + "` again after it reinstalls its hooks)"
 	}
 	return step
+}
+
+// hookBlocksCommand is the one answer every line gives to "which command
+// puts lore's hook blocks into dir" (devco D-709): `lore fix` for a hooks
+// folder lore may write, `lore fix --tracked-hooks` for one committed with
+// the repo, where `lore sync`, a write, init, doctor --fix and plain
+// `lore fix` all leave the blocks out (D-501). A line that named one of
+// those there sent the person round a loop: sync refused, the pre-commit
+// named sync again. Every hint about missing or stale hook blocks asks
+// this function, so the command printed is one that works where printed.
+func (s *liveSession) hookBlocksCommand(ctx context.Context, dir string) string {
+	if s.trackedHooksFolder(ctx, dir) {
+		return trackedHooksCommand
+	}
+	return "lore fix"
 }
 
 // guardOff lists the missing guard hooks of dir when doctor's leak-guard
@@ -224,6 +245,9 @@ const trackedHooksSkipped = "lore did not %s in %s: that folder is in the work t
 // lore's hook blocks into a hooks folder committed with the repo (D-501).
 const fixTrackedHooksFlag = "tracked-hooks"
 
+// trackedHooksCommand is the command giving that yes, as hints print it.
+const trackedHooksCommand = "lore fix --" + fixTrackedHooksFlag
+
 // trackedHooksKey marks a context whose run said yes to tracked hooks.
 type trackedHooksKey struct{}
 
@@ -313,7 +337,11 @@ func (s *liveSession) unguardedLeaks(ctx context.Context) string {
 		return ""
 	}
 	if c > maxUnguardedCommits {
-		return n + " commit(s) here are on no remote and were not scanned now; once `lore fix` restores the pre-push block, `git push` checks them"
+		cmd := "lore fix"
+		if dir, _, herr := s.hooksFolder(ctx); herr == nil {
+			cmd = s.hookBlocksCommand(ctx, dir) // D-709
+		}
+		return n + " commit(s) here are on no remote and were not scanned now; once `" + cmd + "` restores the pre-push block, `git push` checks them"
 	}
 	updates := []pushUpdate{{localRef: "HEAD", localSHA: head, remoteRef: "HEAD", remoteSHA: strings.Repeat("0", len(head))}}
 	sets, err := pushDocs(ctx, s.repo, remote, updates)

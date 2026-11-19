@@ -615,12 +615,28 @@ func (s *liveSession) readWiring(ctx context.Context, root, hooks string, shared
 			stale = append(stale, n)
 		}
 	}
+	// D-709: a hooks folder committed with the repo takes only `lore fix
+	// --tracked-hooks` (hookBlocksCommand): `lore sync` and a write leave
+	// it alone, so the note never names them for its hook blocks.
+	var steps []string
+	tracked := ""
 	if len(stale) > 0 && !guardSays {
 		sort.Strings(stale)
-		missing = append(missing, "hook blocks in "+hooks+" ("+strings.Join(stale, ", ")+")")
+		what := "hook blocks in " + hooks + " (" + strings.Join(stale, ", ") + ")"
+		if cmd := s.hookBlocksCommand(ctx, hooks); cmd == trackedHooksCommand {
+			tracked = "`" + cmd + "` sets up " + what + "; that folder is committed with the repo, so a sync or a write leaves it alone: commit the blocks after"
+		} else {
+			missing = append(missing, what)
+		}
 	}
-	if len(missing) > 0 && !s.ci && !wire.ProjectFormatOld(root) { // live_still.go: a CI job never runs lore sync; fmt1: lore sync and writes set nothing up there before lore migrate run
-		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone: `lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
+	if len(missing) > 0 {
+		steps = append(steps, "`lore sync` (or the next lore write here) sets up "+strings.Join(missing, "; "))
+	}
+	if tracked != "" {
+		steps = append(steps, tracked)
+	}
+	if len(steps) > 0 && !s.ci && !wire.ProjectFormatOld(root) { // live_still.go: a CI job never runs lore sync; fmt1: lore sync and writes set nothing up there before lore migrate run
+		s.cmdNotice(ctx, "git is not set up for lore's row files in this clone: "+strings.Join(steps, "; "))
 	}
 	if data {
 		switch still, err := stillIgnoredData(ctx, root, false); {
