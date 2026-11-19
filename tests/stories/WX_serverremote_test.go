@@ -77,3 +77,52 @@ func TestStoryWXServerRemote(t *testing.T) {
 		}
 	})
 }
+
+// TestStoryWXPathRemote is D-706's follow-up: a repo whose only remote is
+// a path on this machine (/…/srv/git/acme/tools.git) was one no own:
+// pattern could name ("not a hosted remote, ignored"), so it stayed a
+// client repo by the fail-closed default with no way out. Its path now
+// has a classification-only key, _local/<path>: whoami and the hook's
+// mark line name it in the own: command, the command works as printed,
+// and after it the repo is own and the next commit removes the mark.
+func TestStoryWXPathRemote(t *testing.T) {
+	s := &Story{World: journeys.NewWorld(t), ID: "WX"}
+	store := s.Remote(wStoreSlug)
+	app := s.Seed(s.Remote(wAppSlug), func(dir string) { PlainRepo(t, dir) })
+	tools := s.Seed(s.Remote("github.com/acme-co/tools"), func(dir string) { PlainRepo(t, dir) })
+	m := s.Persona(wAdmin.Name, wAdmin.Email).Laptop()
+	journeys.GitHubLogin(t, s.World, m, wAdmin.Login)
+	pc := m.Clone(app, "platform")
+	m.MoveClone(t, pc, filepath.Join(m.Home, "code", "platform"))
+	journeys.StartTeam(t, m, pc.Dir, wSetup, wOrg, store.SSHURL(), wAdmin, []string{wFolders})
+
+	tc := m.Clone(tools, "tools")
+	m.MoveClone(t, tc, filepath.Join(m.Home, "code", "tools"))
+	origin := filepath.Join(m.Home, "srv", "git", "acme", "tools.git")
+	tc.Git("remote", "set-url", "origin", origin)
+	key := "_local" + filepath.ToSlash(strings.TrimSuffix(origin, ".git"))
+	declare := "lore org config set --org " + wOrg + " --key own --add " + key + " --yes"
+	cause := "no own: pattern of " + wOrg + " matches this repo's remote " + key + ", so lore treats it as a client repo"
+
+	s.Step("D-706/path-remote-says-why-and-the-way-out", func() {
+		m.Lore(tc.Dir, "whoami").OK(t).Says(t, "git repo with no hosted remote  (treated as a client repo", cause, declare, "is how own:/repos: patterns name the path remote")
+		m.LoreIn(tc, "init", "--yes").OK(t)
+		tc.Git("add", "-A")
+		r := tc.TryGit("commit", "-q", "-m", "lore setup")
+		if r.Code != 0 {
+			t.Fatalf("commit in the path-remote repo: exit %d\n%s%s", r.Code, r.Stdout, r.Stderr)
+		}
+		r.Says(t, "set lore.clientrepo=true", cause, declare)
+	})
+
+	s.Step("D-706/path-remote-declared-own-as-printed", func() {
+		args := strings.Fields(strings.TrimPrefix(declare, "lore "))
+		m.Lore(tc.Dir, args...).OK(t)
+		m.Lore(tc.Dir, "whoami").OK(t).Says(t, "(own: no client guards)").Never(t, "client repo")
+		r := tc.TryGit("commit", "-q", "--allow-empty", "-m", "after own")
+		if r.Code != 0 {
+			t.Fatalf("commit after own: exit %d\n%s%s", r.Code, r.Stdout, r.Stderr)
+		}
+		r.Says(t, "removed lore.clientrepo")
+	})
+}

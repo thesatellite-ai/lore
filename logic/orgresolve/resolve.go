@@ -23,6 +23,7 @@ package orgresolve
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -133,6 +134,12 @@ type Inputs struct {
 	// Remotes are the repo's remotes, already normalised (repourl.Normalize),
 	// deduplicated. Empty for a repo with no remote.
 	Remotes []string
+	// LocalRemotes are the classification-only keys (_local/<path>,
+	// repourl.LocalRemoteKey) of the repo's remotes that are paths on this
+	// machine (devco D-706). Only the own:/repos: patterns see them (rules
+	// 3 and 5, and the role of an entry chosen on purpose); a repo whose
+	// path remote no pattern names resolves exactly as with none.
+	LocalRemotes []string
 	// Committed is the parsed `.lore/org.yaml`, nil when absent.
 	Committed *orgconf.OrgFile
 	// Links is the link source's answer for (ProjectID, Remotes).
@@ -265,6 +272,11 @@ func Resolve(in Inputs) (Result, error) {
 		}
 	}
 	linkedEntries := entriesOf(links)
+	// the remotes the patterns are matched against (devco D-706)
+	classRemotes := in.Remotes
+	if len(in.LocalRemotes) > 0 {
+		classRemotes = append(slices.Clone(in.Remotes), in.LocalRemotes...)
+	}
 
 	decided := false
 	trace := func(s Step, o Outcome, reason string) {
@@ -288,7 +300,7 @@ func Resolve(in Inputs) (Result, error) {
 				Candidates: cfg.OrgNames()}
 		}
 		trace(StepEnv, OutcomeHit, fmt.Sprintf("LORE_ORG=%s", in.EnvOrg))
-		choose(o, StepEnv, "LORE_ORG="+in.EnvOrg, explicitRole(o, links, in.Remotes))
+		choose(o, StepEnv, "LORE_ORG="+in.EnvOrg, explicitRole(o, links, classRemotes))
 	} else {
 		trace(StepEnv, OutcomeMiss, "LORE_ORG is not set")
 	}
@@ -331,7 +343,7 @@ func Resolve(in Inputs) (Result, error) {
 				break
 			}
 			trace(StepRepoOrgs, OutcomeHit, fmt.Sprintf("repo_orgs[%s] = %s", in.ProjectID, ro.Org))
-			choose(o, StepRepoOrgs, "lore org use (this machine)", explicitRole(o, links, in.Remotes))
+			choose(o, StepRepoOrgs, "lore org use (this machine)", explicitRole(o, links, classRemotes))
 		}
 	}
 
@@ -347,10 +359,10 @@ func Resolve(in Inputs) (Result, error) {
 		switch {
 		case o == nil:
 			trace(StepCommitted, OutcomeMiss, fmt.Sprintf(".lore/org.yaml names %q, which is not an entry in your config", name))
-		case len(in.Remotes) == 0:
+		case len(classRemotes) == 0:
 			trace(StepCommitted, OutcomeMiss, fmt.Sprintf(".lore/org.yaml names %s, but this repo has no remote, so it cannot be shown to be one of %s's own repos", name, name))
-		case !matchesAny(o.Own, in.Remotes):
-			trace(StepCommitted, OutcomeMiss, fmt.Sprintf(".lore/org.yaml names %s, but no remote (%s) matches its own: patterns; ignored (only an org's own repos may name it)", name, strings.Join(in.Remotes, ", ")))
+		case !matchesAny(o.Own, classRemotes):
+			trace(StepCommitted, OutcomeMiss, fmt.Sprintf(".lore/org.yaml names %s, but no remote (%s) matches its own: patterns; ignored (only an org's own repos may name it)", name, strings.Join(classRemotes, ", ")))
 		case hasClientLink(links):
 			msg := fmt.Sprintf(".lore/org.yaml names %s, but a store links this repo as a CLIENT repo; refused (a client repo cannot steer the guards)", name)
 			trace(StepCommitted, OutcomeMiss, msg)
@@ -407,16 +419,18 @@ func Resolve(in Inputs) (Result, error) {
 			if staging[o.Name] {
 				continue
 			}
-			if c := ClassifyRemote(o, in.Remotes); c.Role != RoleNone {
+			if c := ClassifyRemote(o, classRemotes); c.Role != RoleNone {
 				hits[o.Name], hitPattern[o.Name] = c.Role, c.Pattern // fail closed: client wins over own
 			}
 		}
 		names := sortedKeys(hits)
 		switch {
-		case len(in.Remotes) == 0:
+		case len(classRemotes) == 0:
 			trace(StepPattern, OutcomeMiss, "this repo has no remote")
+		case len(names) == 0 && len(in.Remotes) == 0:
+			trace(StepPattern, OutcomeMiss, fmt.Sprintf("this repo has no hosted remote; no entry's own: or repos: pattern matches its path remote %s", strings.Join(classRemotes, ", ")))
 		case len(names) == 0:
-			trace(StepPattern, OutcomeMiss, fmt.Sprintf("no entry's own: or repos: pattern matches %s", strings.Join(in.Remotes, ", ")))
+			trace(StepPattern, OutcomeMiss, fmt.Sprintf("no entry's own: or repos: pattern matches %s", strings.Join(classRemotes, ", ")))
 		case len(names) > 1:
 			trace(StepPattern, OutcomeMiss, fmt.Sprintf("patterns of %d entries match: %s", len(names), strings.Join(names, ", ")))
 			return r, &Error{Kind: KindAmbiguous,
@@ -429,7 +443,7 @@ func Resolve(in Inputs) (Result, error) {
 			if hits[o.Name] == RoleOwn {
 				kind = "own"
 			}
-			trace(StepPattern, OutcomeHit, fmt.Sprintf("%s's %s: pattern %s matches %s", o.Name, kind, hitPattern[o.Name], strings.Join(in.Remotes, ", ")))
+			trace(StepPattern, OutcomeHit, fmt.Sprintf("%s's %s: pattern %s matches %s", o.Name, kind, hitPattern[o.Name], strings.Join(classRemotes, ", ")))
 			// Spec §F10 whoami example: "matched by: own pattern github.com/betalabs/*".
 			choose(o, StepPattern, fmt.Sprintf("%s pattern %s of %s", kind, hitPattern[o.Name], o.Name), hits[o.Name])
 		}
@@ -467,7 +481,7 @@ func Resolve(in Inputs) (Result, error) {
 			trace(StepSetup, OutcomeMiss, fmt.Sprintf("setup %s names org %q, which is not an entry", hint.Name, hint.Org))
 		default:
 			trace(StepSetup, OutcomeHit, fmt.Sprintf("setup %s (%s) is org %s", hint.Name, hint.Why, hint.Org))
-			choose(o, StepSetup, "setup "+hint.Name+" ("+hint.Why+")", explicitRole(o, links, in.Remotes))
+			choose(o, StepSetup, "setup "+hint.Name+" ("+hint.Why+")", explicitRole(o, links, classRemotes))
 		}
 	}
 

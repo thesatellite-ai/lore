@@ -112,7 +112,12 @@ type Situation struct {
 	Remotes []string
 	// RemoteNotes are remotes that could not be normalised (local paths).
 	RemoteNotes []string
-	Committed   *orgconf.OrgFile
+	// LocalRemotes are the classification-only keys (_local/<path>) of the
+	// remotes that are paths on this machine (devco D-706): own:/repos:
+	// patterns match them, nothing else uses them (no link, project id or
+	// address). See ClassRemotes.
+	LocalRemotes []string
+	Committed    *orgconf.OrgFile
 	// CommittedErr is a .lore/org.yaml that exists but is invalid; it is
 	// ignored (never steers resolution) and reported.
 	CommittedErr error
@@ -305,9 +310,19 @@ func projectRootUnder(top, dir, home string) (root string, ok bool) {
 // host it stands for (normalizeRemote), so classification, identity and
 // every printed remote name github.com/<owner>/<repo> (D-531).
 func Remotes(ctx context.Context, dir string) (norm, notes []string) {
+	norm, _, notes = readRemotes(ctx, dir)
+	return norm, notes
+}
+
+// readRemotes is Remotes plus local: the classification-only key
+// (repourl.LocalRemoteKey, _local/<path>) of each remote that is a path on
+// this machine (devco D-706). Gather keeps local apart from norm so a path
+// remote never becomes a link key, a project id or an address; only the
+// own:/repos: patterns see it.
+func readRemotes(ctx context.Context, dir string) (norm, local, notes []string) {
 	out, err := gitRun(ctx, "-C", dir, "config", "--get-regexp", rawRemoteKeyPattern)
 	if err != nil {
-		return nil, nil // exit 1 = no remote configured
+		return nil, nil, nil // exit 1 = no remote configured
 	}
 	seen := map[string]bool{}
 	seenNote := map[string]bool{}
@@ -326,6 +341,13 @@ func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 		n, err := normalizeRemote(val, rules)
 		if err != nil {
 			note := fmt.Sprintf("%s (%s): not a hosted remote, ignored", name, val)
+			if lk, ok := localRemoteKey(ctx, dir, val); ok {
+				note = fmt.Sprintf("%s (%s): a path on this machine, not a hosted remote; only own:/repos: patterns see it, as %s", name, val, lk)
+				if !seen[lk] {
+					seen[lk] = true
+					local = append(local, lk)
+				}
+			}
 			if !seenNote[note] {
 				seenNote[note] = true
 				notes = append(notes, note)
@@ -338,7 +360,34 @@ func Remotes(ctx context.Context, dir string) (norm, notes []string) {
 		}
 	}
 	sort.Strings(norm)
-	return norm, notes
+	sort.Strings(local)
+	return norm, local, notes
+}
+
+// localRemoteKey is repourl.LocalRemoteKey for a remote url of the repo at
+// dir: a relative path (../x.git, ./x) is resolved against the work tree
+// top, the folder git itself runs a fetch of it from, and ~/ against the
+// home folder, so every spelling of one path gives one key.
+func localRemoteKey(ctx context.Context, dir, val string) (string, bool) {
+	if !repourl.IsLocalRemote(val) {
+		return "", false
+	}
+	p := val
+	switch {
+	case strings.HasPrefix(p, "~/"):
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", false
+		}
+		p = filepath.Join(home, p[2:])
+	case strings.HasPrefix(p, "./") || strings.HasPrefix(p, "../"):
+		top, ok := workTreeTop(ctx, dir)
+		if !ok {
+			return "", false
+		}
+		p = filepath.Join(top, p)
+	}
+	return repourl.LocalRemoteKey(p)
 }
 
 // repoTopProjectID is the project id of the git top of the checkout root
@@ -415,11 +464,22 @@ func scopeOrgs(cfg *orgconf.Config, s *Situation, in In) map[string]bool {
 		return nil
 	}
 	for i := range cfg.Orgs {
-		if entryMatches(&cfg.Orgs[i], s.Remotes) {
+		if entryMatches(&cfg.Orgs[i], s.ClassRemotes()) {
 			only[cfg.Orgs[i].Name] = true
 		}
 	}
 	return only
+}
+
+// ClassRemotes are the remotes own:/repos: patterns are matched against:
+// the hosted remotes and the path remotes' _local/<path> keys (devco
+// D-706). Only classification and the own: command a person is shown use
+// them; links, project ids and addresses use Remotes alone.
+func (s *Situation) ClassRemotes() []string {
+	if len(s.LocalRemotes) == 0 {
+		return s.Remotes
+	}
+	return append(slices.Clone(s.Remotes), s.LocalRemotes...)
 }
 
 // Gather reads the machine and runs F10. A broken config is an error
@@ -436,7 +496,7 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 	root, inTree := projectDir(ctx, in.Dir, in.Home)
 	s.NotGitRepo = !inTree
 	s.ProjectID = ProjectID(root)
-	s.Remotes, s.RemoteNotes = Remotes(ctx, in.Dir)
+	s.Remotes, s.LocalRemotes, s.RemoteNotes = readRemotes(ctx, in.Dir)
 	if committed, cerr := LoadOrgFile(root); cerr != nil {
 		s.CommittedErr = cerr
 	} else {
@@ -536,6 +596,7 @@ func Gather(ctx context.Context, in In) (*Situation, error) {
 		EnvOrg:             strings.TrimSpace(in.EnvOrg),
 		ProjectID:          s.ProjectID,
 		Remotes:            s.Remotes,
+		LocalRemotes:       s.LocalRemotes,
 		Committed:          s.Committed,
 		Links:              lr,
 		StoreDefaultBranch: defBranch,

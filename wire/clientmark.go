@@ -56,7 +56,7 @@ func markClientRepo(ctx context.Context, root string, res *OrgResolution) {
 		client = s.Result.Role == orgresolve.RoleClient
 		// devco D-706: client only by the fail-closed default (no repos:
 		// pattern or client link names it) says why and how to mark it own
-		why = UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.Remotes))
+		why = UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.ClassRemotes()))
 	}
 	cur, _ := gitRun{dir: top, args: []string{"config", "--local", "--get", ClientRepoGitKey}}.output(ctx)
 	on := strings.TrimSpace(string(cur)) == clientRepoMarkOn

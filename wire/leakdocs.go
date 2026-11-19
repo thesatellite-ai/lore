@@ -146,7 +146,7 @@ func (a *App) LeakCheckDocsExplain(ctx context.Context, res *OrgResolution, wher
 	if moved {
 		return leakBlocked(leakWhereMove, fs, explain)
 	}
-	return withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.Remotes)))
+	return withUnlistedHint(leakBlocked(where, fs, explain), UnlistedOwnStep(UnlistedClientRepo(s.Result.Org, s.Result.Links, s.ClassRemotes())))
 }
 
 // withUnlistedHint adds why (UnlistedOwnStep) to a client repo's leak

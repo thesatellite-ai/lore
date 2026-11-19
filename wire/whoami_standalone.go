@@ -435,10 +435,18 @@ func whoamiRepoRow(s *orgcfg.Situation) string {
 	}
 	switch r.Role {
 	case orgresolve.RoleClient:
+		why := ""
+		if !s.NotGitRepo {
+			// devco D-706: a path remote (_local/<path>) is named too
+			why = UnlistedOwnStep(UnlistedClientRepo(r.Org, r.Links, s.ClassRemotes()))
+		}
 		if place != "" {
+			if why != "" {
+				return place + "  (treated as a client repo: guards on: " + why + ")"
+			}
 			return place + "  (treated as a client repo: guards on)"
 		}
-		if why := UnlistedOwnStep(UnlistedClientRepo(r.Org, r.Links, s.Remotes)); why != "" {
+		if why != "" {
 			return "treated as a client repo  (guards on: " + why + ")"
 		}
 		return "client repo  (guards on)"

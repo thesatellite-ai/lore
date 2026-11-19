@@ -6,10 +6,13 @@ package orgresolve
 // inside it is offered its remote's owner as an own: pattern.
 //
 //	admin? ── no ─▶ no offer (members never change lore-org.yaml)
-//	hosted remote (host/owner/repo)? ── no ─▶ no offer
 //	a repos: or own: pattern, or any link of the org, names it ─▶ no offer
 //	                (an explicit client listing is never overridden; own already)
-//	else ─▶ offer host/owner/*
+//	forge remote (host.tld/owner/repo)? ─▶ offer host.tld/owner/*
+//	server remote (myhost/srv/git/acme/tools) or path remote
+//	(_local/srv/git/acme/tools), three segments or more?
+//	                ─▶ offer the folder holding it: myhost/srv/git/acme/*
+//	else ─▶ no offer
 
 import (
 	"strings"
@@ -21,9 +24,12 @@ import (
 type OwnOffer struct {
 	// Org is the org entry the pattern goes into.
 	Org string
-	// Remote is the repo's hosted remote (host/owner/repo).
+	// Remote is the repo's remote the pattern is made from: a hosted
+	// host/owner/repo, a server's host/path or a path remote's
+	// _local/<path> (devco D-706).
 	Remote string
-	// Pattern is the owner's pattern (host/owner/*).
+	// Pattern is the owner's pattern (host/owner/*), or for a server or
+	// path remote the folder holding the repo (host/srv/git/acme/*).
 	Pattern string
 }
 
@@ -45,7 +51,31 @@ func OwnOfferFor(o *orgconf.Org, links []Link, remotes []string, admin bool) (Ow
 			return OwnOffer{Org: o.Name, Remote: r, Pattern: p}, true
 		}
 	}
+	// devco D-706: no forge remote; a server reached by its ssh name or a
+	// path on this machine is offered the folder holding the repo
+	for _, r := range remotes {
+		if p, ok := folderPattern(r); ok {
+			return OwnOffer{Org: o.Name, Remote: r, Pattern: p}, true
+		}
+	}
 	return OwnOffer{}, false
+}
+
+// folderPattern is ownerPattern for a remote with no forge host: a server
+// by its ssh name (myhost/srv/git/acme/tools) or a path remote's key
+// (_local/srv/git/acme/tools). It needs a host, a folder and the repo, so
+// the offer never covers a whole server (myhost/*) or every path (_local/*).
+func folderPattern(remote string) (string, bool) {
+	parts := strings.Split(remote, "/")
+	if len(parts) < 3 || strings.Contains(parts[0], ".") {
+		return "", false
+	}
+	for _, p := range parts {
+		if p == "" || strings.ContainsAny(p, "*?[] \\") {
+			return "", false
+		}
+	}
+	return ownerPattern(remote), true
 }
 
 // hostedOwnerPattern is ownerPattern for a hosted remote host/owner/repo; ok is

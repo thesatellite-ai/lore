@@ -29,6 +29,14 @@ func TestOwnOfferFor(t *testing.T) {
 		{"no remote", &orgconf.Org{Name: "lumen"}, nil, nil, true, ""},
 		{"not hosted shape", &orgconf.Org{Name: "lumen"}, nil, []string{"gitlab.example/group/sub/atlas"}, true, ""},
 		{"no org", nil, nil, []string{remote}, true, ""},
+		// devco D-706: a server by its ssh name and a path remote's key are
+		// offered the folder holding the repo; a forge remote still wins,
+		// and a bare host/repo is never offered the whole server
+		{"dotless server", &orgconf.Org{Name: "lumen"}, nil, []string{"buildbox/srv/git/lumen/atlas"}, true, "buildbox/srv/git/lumen/*"},
+		{"path remote", &orgconf.Org{Name: "lumen"}, nil, []string{"_local/srv/git/lumen/atlas"}, true, "_local/srv/git/lumen/*"},
+		{"forge first", &orgconf.Org{Name: "lumen"}, nil, []string{"_local/srv/git/lumen/atlas", remote}, true, "github.com/lumen-co/*"},
+		{"whole server", &orgconf.Org{Name: "lumen"}, nil, []string{"buildbox/atlas"}, true, ""},
+		{"path pattern matches", &orgconf.Org{Name: "lumen", Own: []string{"_local/srv/git/lumen/*"}}, nil, []string{"_local/srv/git/lumen/atlas"}, true, ""},
 	}
 	for _, c := range cases {
 		got, ok := OwnOfferFor(c.org, c.links, c.remotes, c.admin)
