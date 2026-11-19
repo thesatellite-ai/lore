@@ -22,6 +22,7 @@ package journeys
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -138,6 +139,76 @@ func TestJourneyTrackedHooksFolderNeedsTheFlag(t *testing.T) {
 		b, err := os.ReadFile(filepath.Join(hooks, "pre-push"))
 		if err != nil || !strings.Contains(string(b), "lore-sync:live") || !strings.Contains(string(b), "echo team pre-push") {
 			t.Fatalf("lore fix --tracked-hooks did not chain its block into the team's pre-push (%v):\n%s", err, b)
+		}
+	})
+}
+
+// TestJourneyTrackedHooksNoSyncLoop (devco D-709): with the hooks folder
+// committed with the repo and lore's blocks there older than this lore,
+// `lore sync` said it would not add blocks to the tracked folder while
+// the pre-commit's check then said "`lore sync` … sets up hook blocks": a
+// loop. Now the commit names `lore fix --tracked-hooks`; run exactly as
+// printed it brings the blocks current, and the next commit is quiet.
+func TestJourneyTrackedHooksNoSyncLoop(t *testing.T) {
+	t.Parallel()
+	w := NewWorld(t)
+	kim := w.Persona("Kim Ardent", "kim@gadgets.example")
+	lap := kim.Laptop()
+	c := twRepo(t, w, lap, "loop", "bin/\n")
+	hooks := filepath.Join(c.Dir, ".githooks")
+	const setUpLine = "git is not set up for lore's row files"
+
+	w.Step("day1/blocks-in-the-tracked-folder-committed", func() {
+		lap.LoreIn(c, "init").OK(t)
+		lap.LoreIn(c, "fix", "--yes", "--tracked-hooks").Says(t, "hook blocks in "+hooks)
+		c.Git("add", "-A")
+		c.TryGit("commit", "-q", "-m", "lore and its hook blocks").OK(t)
+	})
+
+	var printed string
+	w.Step("day30/older-blocks-sync-then-commit-names-the-flag", func() {
+		ents, err := os.ReadDir(hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range ents { // the blocks as an older lore wrote them
+			p := filepath.Join(hooks, e.Name())
+			b, rerr := os.ReadFile(p)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			if werr := os.WriteFile(p, []byte(strings.ReplaceAll(string(b), "lore sync hook", "lore  sync hook")), 0o755); werr != nil { // #nosec G306 -- a hook git runs
+				t.Fatal(werr)
+			}
+		}
+		lap.LoreIn(c, "sync").Says(t, "`lore fix --tracked-hooks`")
+		c.WriteFile("main.go", "package main\n\nfunc main() {}\n")
+		c.Git("add", "-A")
+		r := c.TryGit("commit", "-q", "-m", "older blocks").OK(t)
+		out := r.Out()
+		if strings.Contains(out, "`lore sync` (or the next lore write here) sets up hook blocks") {
+			t.Fatalf("the commit sends the person to lore sync, which refuses the tracked folder:\n%s", out)
+		}
+		i := strings.Index(out, setUpLine)
+		if i < 0 {
+			t.Fatalf("the commit does not say the blocks are stale:\n%s", out)
+		}
+		m := regexp.MustCompile("`(lore [^`]+)` sets up hook blocks in " + regexp.QuoteMeta(hooks)).FindStringSubmatch(out[i:])
+		if m == nil || m[1] != "lore fix --tracked-hooks" {
+			t.Fatalf("the commit's step for the hook blocks is %q, want lore fix --tracked-hooks:\n%s", m, out)
+		}
+		printed = m[1]
+	})
+
+	w.Step("day30/the-printed-command-works-and-the-next-commit-is-quiet", func() {
+		args := strings.Fields(printed)[1:]
+		lap.LoreIn(c, args...).Says(t, "hook blocks in "+hooks) // exactly as printed
+		c.Git("add", "-A")
+		c.TryGit("commit", "-q", "-m", "current blocks").OK(t)
+		c.WriteFile("main.go", "package main\n\nfunc main() { _ = 1 }\n")
+		c.Git("add", "-A")
+		if r := c.TryGit("commit", "-q", "-m", "after").OK(t); strings.Contains(r.Out(), setUpLine) {
+			t.Fatalf("after %s the commit still says the blocks are not set up:\n%s", printed, r.Out())
 		}
 	})
 }

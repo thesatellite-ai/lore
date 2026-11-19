@@ -84,8 +84,10 @@ func TestJourneyHookManagers(t *testing.T) {
 		// devco:Q-16: one cause, one line, one next step: no "git is not
 		// set up for lore's row files … lore sync" opener and no second
 		// "git hook block missing … (or lore sync)" warning.
-		r.Never(t, "git is not set up for lore's row files", "git hook block missing").
-			Says(t, "core.hooksPath=.husky", "run `lore fix` again after it reinstalls its hooks")
+		// devco D-709: the reminder names the command that works in a
+		// tracked .husky, never plain `lore fix`, which leaves it alone
+		r.Never(t, "git is not set up for lore's row files", "git hook block missing", "run `lore fix` again").
+			Says(t, "core.hooksPath=.husky", "run `lore fix --tracked-hooks` again after it reinstalls its hooks")
 	})
 
 	w.Step("day2/a-key-slips-through-and-the-next-command-names-it", func() {
