@@ -478,8 +478,8 @@ A **leak** is internal or personal content reaching anything the client can read
  3. checks            id rule:   a row of another project, or a pointer to an internal/personal row
                       text rule: 8 or more consecutive words that also appear in an internal or personal row
                       secrets:   credential patterns
-                      run at: pre-commit (all staged files), commit-msg, pre-push (every commit
-                      and file version the push sends), every write to the client's live ref,
+                      run at: commit (the lines the staged files add; a match names file:line),
+                      pre-push (every commit and file version the push sends), live-ref writes,
                       every landing commit, `lore check pr-body`; unsure → block
  4. one deliberate    `lore move` shows the text, asks, moves the row with the same id
     step to share     (one home: never a second copy)
@@ -491,7 +491,7 @@ A **leak** is internal or personal content reaching anything the client can read
 $ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 $ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
+  commit src/notes.ts:1                    matches internal note mem_c0f3…b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 ```

@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/thesatellite-ai/lore/adapters/backend/rowfs"
@@ -222,7 +223,11 @@ func leakBlocked(where string, fs []leakcheck.Finding, explain bool) error {
 	seen := map[string]bool{}
 	for _, f := range fs {
 		detail := f.Describe(explain)
-		fmt.Fprintf(&b, "\n  %-40s %s", f.Where, detail)
+		at := f.Where
+		if f.Line > 0 && f.Path != "" && f.Path != where {
+			at += ":" + strconv.Itoa(f.Line) // devco:D-720: name the line that matched
+		}
+		fmt.Fprintf(&b, "\n  %-40s %s", at, detail)
 		if f.Rule == leakcheck.RuleActor {
 			continue // its detail says what to remove; `lore actor delete` is refused (v0.1.17 leakFix gives none)
 		}

@@ -140,7 +140,7 @@ alice (work/website)$ git status --short
 alice (work/website)$ mkdir -p src && echo '// they approve estimates faster when we send them on WhatsApp' > src/notes.ts && git add src/notes.ts
 alice (work/website)$ git commit -m 'add notes'
 ERROR: [E_LEAK_BLOCKED] blocked, this commit would share internal content with the client repo:
-  commit src/notes.ts                      matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
+  commit src/notes.ts:1                    matches internal note mem_c0f3c11a5724b0cfd74b256190d9b5b8 (10 words in a row; the check blocks a verbatim copy of 8 or more words)
   hint: Remove the internal text from src/notes.ts
 (exit 1)
 alice (work/website)$ git reset -q src/notes.ts && rm -rf src
